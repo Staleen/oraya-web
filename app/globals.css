@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-gold: #C5A46D;
+  --color-white: #FFFFFF;
+  --color-beige: #EAE3D9;
+  --color-beige-light: #F5F1EB;
+  --color-charcoal: #2E2E2E;
+  --color-midnight: #1F2B38;
+  --color-muted: #8a8070;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  color: var(--color-charcoal);
+  background: var(--color-white);
+  font-family: var(--font-lato), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(28px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulseLine {
+  0%, 100% { opacity: 0.3; }
+  50%       { opacity: 1; }
+}
+
+.animate-fade-up {
+  animation: fadeUp 1.2s ease both;
+}
+
+.animate-pulse-line {
+  animation: pulseLine 2s ease-in-out infinite;
+}
