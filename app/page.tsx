@@ -1,32 +1,56 @@
 "use client";
-import { Fragment } from "react";
+import { Fragment, useState, useEffect } from "react";
 import OrayaEmblem from "@/components/OrayaEmblem";
 import OrayaLogoFull from "@/components/OrayaLogoFull";
+import { supabase } from "@/lib/supabase";
 
-const GOLD    = "#C5A46D";
-const WHITE   = "#FFFFFF";
-const BEIGE   = "#EAE3D9";
+// ── PLACEHOLDER IMAGES — swap these constants with real photo URLs ────────────
+// Recommended sizes: hero 1920×1080, villa cards 800×600
+const IMG_HERO     = ""; // e.g. "/photos/hero.jpg"
+const IMG_MECHMECH = ""; // e.g. "/photos/mechmech-card.jpg"
+const IMG_BYBLOS   = ""; // e.g. "/photos/byblos-card.jpg"
+
+// Branded gradient fallbacks (used when IMG_* is empty)
+const GRAD_HERO     = "linear-gradient(145deg, #1a2a38 0%, #243444 45%, #1c2e3e 75%, #111e2a 100%)";
+const GRAD_MECHMECH = "linear-gradient(160deg, #1b3a2f 0%, #2b5040 45%, #162a20 80%, #0e1e17 100%)";
+const GRAD_BYBLOS   = "linear-gradient(160deg, #283520 0%, #3a5028 45%, #1e2e14 80%, #131d0c 100%)";
+
+function villaBg(img: string, gradient: string): React.CSSProperties {
+  return img
+    ? { backgroundImage: `url(${img})`, backgroundSize: "cover", backgroundPosition: "center" }
+    : { backgroundImage: gradient };
+}
+
+const GOLD       = "#C5A46D";
+const WHITE      = "#FFFFFF";
+const BEIGE      = "#EAE3D9";
 const BEIGELIGHT = "#F5F1EB";
-const CHARCOAL = "#2E2E2E";
-const MIDNIGHT = "#1F2B38";
-const MUTED   = "#8a8070";
-const PLAYFAIR = "'Playfair Display', Georgia, serif";
-const LATO    = "'Lato', system-ui, sans-serif";
+const CHARCOAL   = "#2E2E2E";
+const MIDNIGHT   = "#1F2B38";
+const MUTED      = "#8a8070";
+const PLAYFAIR   = "'Playfair Display', Georgia, serif";
+const LATO       = "'Lato', system-ui, sans-serif";
 
 const villas = [
   {
-    tag: "Nature retreat",
-    name: "Villa Mechmech",
-    loc: "Mechmech, North Lebanon",
-    feats: ["Private villa", "Mountain views", "Events"],
-    href: "/villas/mechmech",
+    tag:      "Nature retreat",
+    name:     "Villa Mechmech",
+    loc:      "Mechmech, North Lebanon",
+    feats:    ["Private villa", "Mountain views", "Events"],
+    href:     "/villas/mechmech",
+    img:      IMG_MECHMECH,
+    gradient: GRAD_MECHMECH,
+    label:    "Mountain retreat · North Lebanon",
   },
   {
-    tag: "Cultural elegance",
-    name: "Villa Byblos",
-    loc: "Jbeil, Byblos, Lebanon",
-    feats: ["Private villa", "Historic setting", "Events"],
-    href: "/villas/byblos",
+    tag:      "Cultural elegance",
+    name:     "Villa Byblos",
+    loc:      "Jbeil, Byblos, Lebanon",
+    feats:    ["Private villa", "Historic setting", "Events"],
+    href:     "/villas/byblos",
+    img:      IMG_BYBLOS,
+    gradient: GRAD_BYBLOS,
+    label:    "Garden estate · Byblos coast",
   },
 ];
 
@@ -53,6 +77,38 @@ const values = [
 ];
 
 export default function Home() {
+  const [isLoggedIn, setIsLoggedIn]   = useState(false);
+  const [memberName, setMemberName]   = useState("");
+  const [authReady, setAuthReady]     = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (user) {
+        setIsLoggedIn(true);
+        const { data } = await supabase
+          .from("members")
+          .select("full_name")
+          .eq("id", user.id)
+          .single();
+        if (data?.full_name) setMemberName(data.full_name.split(" ")[0]);
+      }
+      setAuthReady(true);
+    });
+  }, []);
+
+  async function signOut() {
+    await supabase.auth.signOut();
+    setIsLoggedIn(false);
+    setMemberName("");
+  }
+
+  const navLinks = [
+    { href: "#villas",     label: "Our villas" },
+    { href: "#experience", label: "Experience" },
+    { href: "#events",     label: "Events" },
+    ...(!isLoggedIn ? [{ href: "#membership", label: "Membership" }] : []),
+  ];
+
   return (
     <>
       {/* ── Nav ── */}
@@ -69,16 +125,11 @@ export default function Home() {
         </a>
 
         <ul className="hidden md:flex gap-10 list-none">
-          {[
-            { href: "#villas",     label: "Our villas" },
-            { href: "#experience", label: "Experience" },
-            { href: "#events",     label: "Events" },
-            { href: "#membership", label: "Membership" },
-          ].map(({ href, label }) => (
+          {navLinks.map(({ href, label }) => (
             <li key={href}>
               <a
                 href={href}
-                className="no-underline transition-colors duration-200"
+                className="no-underline"
                 style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: CHARCOAL }}
                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = GOLD; }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = CHARCOAL; }}
@@ -89,39 +140,70 @@ export default function Home() {
           ))}
         </ul>
 
-        <a
-          href="/book"
-          className="no-underline transition-all duration-200"
-          style={{
-            fontFamily: LATO,
-            fontSize: "11px",
-            letterSpacing: "2px",
-            textTransform: "uppercase",
-            color: GOLD,
-            border: "0.5px solid #C5A46D",
-            padding: "10px 28px",
-            backgroundColor: "transparent",
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.backgroundColor = GOLD;
-            (e.currentTarget as HTMLElement).style.color = WHITE;
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
-            (e.currentTarget as HTMLElement).style.color = GOLD;
-          }}
-        >
-          Reserve
-        </a>
+        {/* Auth-aware nav CTA — hidden until auth resolves to avoid flash */}
+        {authReady && (
+          isLoggedIn ? (
+            <div style={{ display: "flex", alignItems: "center", gap: "18px" }}>
+              <span style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "1.5px", color: MUTED }}>
+                {memberName ? `Hi, ${memberName}` : "My Account"}
+              </span>
+              <button
+                onClick={signOut}
+                style={{
+                  fontFamily: LATO, fontSize: "10px", letterSpacing: "2px",
+                  textTransform: "uppercase", color: MUTED,
+                  backgroundColor: "transparent", border: "none",
+                  cursor: "pointer", padding: 0,
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = CHARCOAL; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = MUTED; }}
+              >
+                Sign out
+              </button>
+            </div>
+          ) : (
+            <a
+              href="/book"
+              className="no-underline"
+              style={{
+                fontFamily: LATO, fontSize: "11px", letterSpacing: "2px",
+                textTransform: "uppercase", color: GOLD,
+                border: "0.5px solid #C5A46D", padding: "10px 28px",
+                backgroundColor: "transparent",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.backgroundColor = GOLD;
+                (e.currentTarget as HTMLElement).style.color = WHITE;
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
+                (e.currentTarget as HTMLElement).style.color = GOLD;
+              }}
+            >
+              Reserve
+            </a>
+          )
+        )}
       </nav>
 
       {/* ── Hero ── */}
       <section
         className="min-h-screen flex items-center justify-center relative overflow-hidden"
-        style={{ backgroundColor: MIDNIGHT }}
+        style={{
+          backgroundColor: MIDNIGHT,
+          ...(IMG_HERO
+            ? { backgroundImage: `url(${IMG_HERO})`, backgroundSize: "cover", backgroundPosition: "center" }
+            : { backgroundImage: GRAD_HERO }),
+        }}
       >
+        {/* Overlay to ensure text legibility over photo */}
         <div
-          className="absolute inset-0 opacity-[0.03]"
+          className="absolute inset-0"
+          style={{ backgroundColor: "rgba(15,25,35,0.55)" }}
+        />
+        {/* Subtle texture */}
+        <div
+          className="absolute inset-0 opacity-[0.025]"
           style={{ backgroundImage: "repeating-linear-gradient(45deg,#C5A46D 0,#C5A46D 1px,transparent 1px,transparent 60px)" }}
         />
 
@@ -145,30 +227,61 @@ export default function Home() {
           </p>
 
           <div className="flex gap-4 justify-center flex-wrap">
-            <a
-              href="#villas"
-              className="no-underline inline-block transition-colors duration-200"
-              style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: WHITE, backgroundColor: GOLD, padding: "15px 44px" }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
-            >
-              Explore our villas
-            </a>
-            <a
-              href="/join"
-              className="no-underline inline-block transition-all duration-200"
-              style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: WHITE, border: "0.5px solid rgba(255,255,255,0.3)", padding: "15px 44px", backgroundColor: "transparent" }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.borderColor = GOLD;
-                (e.currentTarget as HTMLElement).style.color = GOLD;
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.3)";
-                (e.currentTarget as HTMLElement).style.color = WHITE;
-              }}
-            >
-              Join as member
-            </a>
+            {isLoggedIn ? (
+              <>
+                <a
+                  href="/book"
+                  className="no-underline inline-block"
+                  style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: WHITE, backgroundColor: GOLD, padding: "15px 44px" }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
+                >
+                  Book your stay
+                </a>
+                <a
+                  href="#villas"
+                  className="no-underline inline-block"
+                  style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: WHITE, border: "0.5px solid rgba(255,255,255,0.3)", padding: "15px 44px", backgroundColor: "transparent" }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLElement).style.borderColor = GOLD;
+                    (e.currentTarget as HTMLElement).style.color = GOLD;
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.3)";
+                    (e.currentTarget as HTMLElement).style.color = WHITE;
+                  }}
+                >
+                  Explore our villas
+                </a>
+              </>
+            ) : (
+              <>
+                <a
+                  href="#villas"
+                  className="no-underline inline-block"
+                  style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: WHITE, backgroundColor: GOLD, padding: "15px 44px" }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
+                >
+                  Explore our villas
+                </a>
+                <a
+                  href="/join"
+                  className="no-underline inline-block"
+                  style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: WHITE, border: "0.5px solid rgba(255,255,255,0.3)", padding: "15px 44px", backgroundColor: "transparent" }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLElement).style.borderColor = GOLD;
+                    (e.currentTarget as HTMLElement).style.color = GOLD;
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.3)";
+                    (e.currentTarget as HTMLElement).style.color = WHITE;
+                  }}
+                >
+                  Join as member
+                </a>
+              </>
+            )}
           </div>
         </div>
 
@@ -241,7 +354,7 @@ export default function Home() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 max-w-[1100px] mx-auto" style={{ gap: "2px" }}>
-          {villas.map(({ tag, name, loc, feats, href }) => (
+          {villas.map(({ tag, name, loc, feats, href, img, gradient, label }) => (
             <a
               key={name}
               href={href}
@@ -261,22 +374,36 @@ export default function Home() {
                 (e.currentTarget as HTMLElement).style.boxShadow = "none";
               }}
             >
-              {/* Image area — tall placeholder */}
+              {/* Image area */}
               <div style={{
                 height: "360px",
-                backgroundColor: BEIGE,
+                position: "relative",
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
                 justifyContent: "center",
-                gap: "14px",
+                gap: "12px",
+                ...villaBg(img, gradient),
               }}>
-                <div style={{ width: "64px", opacity: 0.12 }}>
-                  <OrayaEmblem />
-                </div>
-                <span style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, opacity: 0.5 }}>
-                  Photos coming soon
-                </span>
+                {/* Placeholder overlay — hidden once real photo is set */}
+                {!img && (
+                  <>
+                    <div style={{ width: "52px", opacity: 0.2 }}>
+                      <OrayaEmblem />
+                    </div>
+                    <span style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: "rgba(255,255,255,0.3)" }}>
+                      {label}
+                    </span>
+                  </>
+                )}
+                {/* Bottom gradient fade into content panel */}
+                <div style={{
+                  position: "absolute",
+                  bottom: 0, left: 0, right: 0,
+                  height: "80px",
+                  background: "linear-gradient(to bottom, transparent, rgba(255,255,255,0.06))",
+                  pointerEvents: "none",
+                }} />
               </div>
 
               {/* Content panel */}
@@ -347,63 +474,93 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── Membership ── */}
-      <section
-        id="membership"
-        className="text-center"
-        style={{ backgroundColor: BEIGELIGHT, padding: "7rem 3rem" }}
-      >
-        <p
-          className="uppercase mb-4"
-          style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "3px", color: GOLD }}
-        >
-          Oraya membership
-        </p>
-        <h2
-          style={{ fontFamily: PLAYFAIR, fontWeight: 400, color: CHARCOAL, lineHeight: 1.2, fontSize: "clamp(1.8rem, 3.5vw, 3rem)" }}
-        >
-          Join the Oraya circle
-        </h2>
-        <div style={{ width: "40px", height: "0.5px", background: GOLD, margin: "1.5rem auto" }} />
-        <p
-          style={{ fontFamily: LATO, fontSize: "15px", color: MUTED, lineHeight: 1.85, fontWeight: 300, maxWidth: "480px", margin: "0 auto", textAlign: "center" }}
-        >
-          Create your guest profile and access exclusive member rates, priority booking, and a more personal experience with every stay.
-        </p>
-
-        <div
-          className="mx-auto text-left"
-          style={{ maxWidth: "540px", marginTop: "3rem", backgroundColor: WHITE, border: "0.5px solid rgba(197,164,109,0.2)", padding: "3rem" }}
-        >
-          <span
-            className="inline-block uppercase mb-6"
-            style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", color: GOLD, border: "0.5px solid #C5A46D", padding: "5px 16px" }}
-          >
-            Member benefits
-          </span>
-          <ul className="list-none" style={{ margin: "1.5rem 0 2rem" }}>
-            {memberPerks.map((perk) => (
-              <li
-                key={perk}
-                className="flex items-center"
-                style={{ fontFamily: LATO, fontSize: "14px", color: MUTED, fontWeight: 300, padding: "10px 0", borderBottom: "0.5px solid #EAE3D9", gap: "12px" }}
-              >
-                <span className="shrink-0" style={{ display: "inline-block", width: "20px", height: "0.5px", background: GOLD }} />
-                {perk}
-              </li>
-            ))}
-          </ul>
+      {/* ── Events ── */}
+      <section id="events" style={{ backgroundColor: BEIGELIGHT, padding: "6rem 3rem" }}>
+        <div className="max-w-[1100px] mx-auto" style={{ textAlign: "center" }}>
+          <p className="uppercase mb-4" style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "3px", color: GOLD }}>
+            Private events
+          </p>
+          <h2 style={{ fontFamily: PLAYFAIR, fontWeight: 400, color: CHARCOAL, lineHeight: 1.2, fontSize: "clamp(1.8rem, 3.5vw, 3rem)" }}>
+            Celebrate in<br />intimate luxury
+          </h2>
+          <div style={{ width: "40px", height: "0.5px", background: GOLD, margin: "1.5rem auto" }} />
+          <p style={{ fontFamily: LATO, fontSize: "15px", color: MUTED, lineHeight: 1.85, fontWeight: 300, maxWidth: "520px", margin: "0 auto 2.5rem" }}>
+            Weddings, baptisms, and private gatherings for small groups — hosted in complete privacy across our villas.
+          </p>
           <a
-            href="#"
-            className="no-underline block text-center transition-colors duration-200 uppercase"
-            style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", color: WHITE, backgroundColor: GOLD, padding: "15px 44px" }}
+            href="/book"
+            style={{
+              display: "inline-block", fontFamily: LATO, fontSize: "11px", letterSpacing: "2.5px",
+              textTransform: "uppercase", color: CHARCOAL, backgroundColor: GOLD,
+              padding: "15px 44px", textDecoration: "none",
+            }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
           >
-            Create your member account
+            Enquire about events
           </a>
         </div>
       </section>
+
+      {/* ── Membership — hidden when logged in ── */}
+      {!isLoggedIn && (
+        <section
+          id="membership"
+          className="text-center"
+          style={{ backgroundColor: WHITE, padding: "7rem 3rem" }}
+        >
+          <p
+            className="uppercase mb-4"
+            style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "3px", color: GOLD }}
+          >
+            Oraya membership
+          </p>
+          <h2
+            style={{ fontFamily: PLAYFAIR, fontWeight: 400, color: CHARCOAL, lineHeight: 1.2, fontSize: "clamp(1.8rem, 3.5vw, 3rem)" }}
+          >
+            Join the Oraya circle
+          </h2>
+          <div style={{ width: "40px", height: "0.5px", background: GOLD, margin: "1.5rem auto" }} />
+          <p
+            style={{ fontFamily: LATO, fontSize: "15px", color: MUTED, lineHeight: 1.85, fontWeight: 300, maxWidth: "480px", margin: "0 auto", textAlign: "center" }}
+          >
+            Create your guest profile and access exclusive member rates, priority booking, and a more personal experience with every stay.
+          </p>
+
+          <div
+            className="mx-auto text-left"
+            style={{ maxWidth: "540px", marginTop: "3rem", backgroundColor: BEIGELIGHT, border: "0.5px solid rgba(197,164,109,0.2)", padding: "3rem" }}
+          >
+            <span
+              className="inline-block uppercase mb-6"
+              style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", color: GOLD, border: "0.5px solid #C5A46D", padding: "5px 16px" }}
+            >
+              Member benefits
+            </span>
+            <ul className="list-none" style={{ margin: "1.5rem 0 2rem" }}>
+              {memberPerks.map((perk) => (
+                <li
+                  key={perk}
+                  className="flex items-center"
+                  style={{ fontFamily: LATO, fontSize: "14px", color: MUTED, fontWeight: 300, padding: "10px 0", borderBottom: "0.5px solid #EAE3D9", gap: "12px" }}
+                >
+                  <span className="shrink-0" style={{ display: "inline-block", width: "20px", height: "0.5px", background: GOLD }} />
+                  {perk}
+                </li>
+              ))}
+            </ul>
+            <a
+              href="/join"
+              className="no-underline block text-center uppercase"
+              style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", color: WHITE, backgroundColor: GOLD, padding: "15px 44px" }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
+            >
+              Create your member account
+            </a>
+          </div>
+        </section>
+      )}
 
       {/* ── Social Strip ── */}
       <div className="text-center" style={{ backgroundColor: CHARCOAL, padding: "3rem" }}>
@@ -418,7 +575,7 @@ export default function Home() {
             <a
               key={social}
               href="#"
-              className="no-underline uppercase transition-all"
+              className="no-underline uppercase"
               style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", color: GOLD, borderBottom: "0.5px solid rgba(197,164,109,0.25)", paddingBottom: "2px" }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderBottomColor = GOLD; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderBottomColor = "rgba(197,164,109,0.25)"; }}
@@ -461,7 +618,7 @@ export default function Home() {
                   <li key={label} style={{ marginBottom: "8px" }}>
                     <a
                       href={href}
-                      className="no-underline transition-colors duration-200"
+                      className="no-underline"
                       style={{ fontFamily: LATO, fontSize: "13px", fontWeight: 300, color: "rgba(255,255,255,0.35)" }}
                       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = GOLD; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.35)"; }}

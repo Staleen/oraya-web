@@ -3,6 +3,11 @@ import SiteNav from "@/components/SiteNav";
 import SiteFooter from "@/components/SiteFooter";
 import OrayaEmblem from "@/components/OrayaEmblem";
 
+// ── PLACEHOLDER IMAGE — swap with real photo URL when ready ──────────────────
+// Recommended: 1920×800, landscape orientation
+const HERO_IMG      = ""; // e.g. "/photos/byblos-hero.jpg"
+const HERO_GRADIENT = "linear-gradient(160deg, #283520 0%, #3a5028 35%, #1e2e14 65%, #111a0a 100%)";
+
 const GOLD       = "#C5A46D";
 const WHITE      = "#FFFFFF";
 const BEIGE      = "#EAE3D9";
@@ -38,24 +43,39 @@ export default function VillaByblosPage() {
       <SiteNav base="/" />
 
       {/* ── Hero ── */}
-      <section style={{ paddingTop: "80px", backgroundColor: MIDNIGHT, minHeight: "60vh", display: "flex", flexDirection: "column" }}>
-        {/* Image placeholder */}
-        <div style={{ flex: 1, minHeight: "420px", backgroundColor: BEIGE, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "16px", position: "relative" }}>
-          <div style={{ width: "64px", opacity: 0.15 }}>
-            <OrayaEmblem />
-          </div>
-          <span style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "3px", textTransform: "uppercase", color: MUTED, opacity: 0.6 }}>
-            Photos coming soon
-          </span>
+      <section style={{ paddingTop: "80px", backgroundColor: MIDNIGHT, minHeight: "65vh", display: "flex", flexDirection: "column" }}>
+        <div style={{
+          flex: 1,
+          minHeight: "520px",
+          position: "relative",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          ...(HERO_IMG
+            ? { backgroundImage: `url(${HERO_IMG})`, backgroundSize: "cover", backgroundPosition: "center" }
+            : { backgroundImage: HERO_GRADIENT }),
+        }}>
+          {/* Placeholder text — hidden once HERO_IMG is set */}
+          {!HERO_IMG && (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "14px", opacity: 0.25 }}>
+              <div style={{ width: "64px" }}>
+                <OrayaEmblem />
+              </div>
+              <span style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: WHITE }}>
+                Villa photography coming soon
+              </span>
+            </div>
+          )}
 
-          {/* Overlay card */}
+          {/* Bottom overlay */}
           <div style={{
             position: "absolute",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            backgroundColor: "rgba(31,43,56,0.92)",
-            padding: "2rem 3rem",
+            bottom: 0, left: 0, right: 0,
+            background: HERO_IMG
+              ? "linear-gradient(to top, rgba(10,20,28,0.95) 0%, rgba(10,20,28,0.6) 50%, transparent 100%)"
+              : "linear-gradient(to top, rgba(8,14,6,0.98) 0%, rgba(8,14,6,0.7) 55%, transparent 100%)",
+            padding: "2.5rem 3rem 2rem",
             display: "flex",
             alignItems: "flex-end",
             justifyContent: "space-between",
@@ -74,15 +94,10 @@ export default function VillaByblosPage() {
             <a
               href="/book?villa=Villa+Byblos"
               style={{
-                fontFamily: LATO,
-                fontSize: "11px",
-                letterSpacing: "2.5px",
-                textTransform: "uppercase",
-                color: CHARCOAL,
-                backgroundColor: GOLD,
-                padding: "14px 36px",
-                textDecoration: "none",
-                flexShrink: 0,
+                fontFamily: LATO, fontSize: "11px", letterSpacing: "2.5px",
+                textTransform: "uppercase", color: CHARCOAL,
+                backgroundColor: GOLD, padding: "14px 36px",
+                textDecoration: "none", flexShrink: 0,
               }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
