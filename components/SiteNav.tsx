@@ -96,6 +96,7 @@ export default function SiteNav({ base = "" }: Props) {
                 cursor: "pointer", display: "flex", alignItems: "center", gap: "6px",
                 padding: "10px 0",
               }}
+              onClick={() => setDropOpen((o) => !o)}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = "0.8"; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
             >
@@ -104,14 +105,18 @@ export default function SiteNav({ base = "" }: Props) {
             </button>
 
             {dropOpen && (
+              /* Outer wrapper starts flush at button bottom — paddingTop creates
+                 an invisible hover bridge so mouse never exits the parent zone */
               <div style={{
                 position: "absolute", top: "100%", right: 0,
+                paddingTop: "6px",
+                minWidth: "180px",
+                zIndex: 200,
+              }}>
+              <div style={{
                 backgroundColor: WHITE,
                 border: "0.5px solid rgba(197,164,109,0.25)",
                 boxShadow: "0 8px 32px rgba(0,0,0,0.1)",
-                minWidth: "180px",
-                zIndex: 200,
-                marginTop: "6px",
               }}>
                 <a
                   href="/profile"
@@ -153,6 +158,7 @@ export default function SiteNav({ base = "" }: Props) {
                 >
                   Sign Out
                 </button>
+              </div>
               </div>
             )}
           </div>
