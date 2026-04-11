@@ -5,11 +5,14 @@ import OrayaEmblem from "@/components/OrayaEmblem";
 const GOLD     = "#C5A46D";
 const WHITE    = "#FFFFFF";
 const MIDNIGHT = "#1F2B38";
+const CHARCOAL = "#2E2E2E";
 const MUTED    = "#8a8070";
 const PLAYFAIR = "'Playfair Display', Georgia, serif";
 const LATO     = "'Lato', system-ui, sans-serif";
 const SURFACE  = "rgba(255,255,255,0.03)";
 const BORDER   = "rgba(197,164,109,0.12)";
+
+const SESSION_KEY = "oraya_admin_auth";
 
 interface Booking {
   id: string;
@@ -55,14 +58,10 @@ function StatusBadge({ status }: { status: string }) {
   };
   return (
     <span style={{
-      fontFamily: LATO,
-      fontSize: "10px",
-      letterSpacing: "1.5px",
-      textTransform: "uppercase",
-      color: text[status] ?? MUTED,
+      fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px",
+      textTransform: "uppercase", color: text[status] ?? MUTED,
       backgroundColor: colors[status] ?? "transparent",
-      padding: "3px 10px",
-      borderRadius: "2px",
+      padding: "3px 10px", borderRadius: "2px",
     }}>
       {status}
     </span>
@@ -70,38 +69,150 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 const thStyle: React.CSSProperties = {
-  fontFamily: LATO,
-  fontSize: "9px",
-  letterSpacing: "2px",
-  textTransform: "uppercase",
-  color: GOLD,
-  padding: "12px 16px",
-  textAlign: "left",
-  borderBottom: `0.5px solid ${BORDER}`,
-  whiteSpace: "nowrap",
+  fontFamily: LATO, fontSize: "9px", letterSpacing: "2px",
+  textTransform: "uppercase", color: GOLD, padding: "12px 16px",
+  textAlign: "left", borderBottom: `0.5px solid ${BORDER}`, whiteSpace: "nowrap",
 };
 
 const tdStyle: React.CSSProperties = {
-  fontFamily: LATO,
-  fontSize: "13px",
-  fontWeight: 300,
-  color: "rgba(255,255,255,0.75)",
-  padding: "14px 16px",
-  borderBottom: `0.5px solid rgba(255,255,255,0.04)`,
-  verticalAlign: "middle",
+  fontFamily: LATO, fontSize: "13px", fontWeight: 300,
+  color: "rgba(255,255,255,0.75)", padding: "14px 16px",
+  borderBottom: `0.5px solid rgba(255,255,255,0.04)`, verticalAlign: "middle",
 };
 
+const fieldStyle: React.CSSProperties = {
+  width: "100%",
+  backgroundColor: "rgba(255,255,255,0.04)",
+  border: "0.5px solid rgba(197,164,109,0.25)",
+  padding: "12px 14px",
+  fontFamily: LATO, fontSize: "14px", color: WHITE,
+  outline: "none", boxSizing: "border-box",
+};
+
+// ─── Password gate ───────────────────────────────────────────────────────────
+
+function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
+  const [input, setInput]   = useState("");
+  const [error, setError]   = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    try {
+      const res = await fetch("/api/admin/settings");
+      const data = await res.json();
+      const row = (data.settings ?? []).find(
+        (s: { key: string; value: string }) => s.key === "admin_password"
+      );
+      const correct = row?.value ?? "Oraya2026";
+      if (input === correct) {
+        sessionStorage.setItem(SESSION_KEY, "1");
+        onSuccess();
+      } else {
+        setError("Incorrect password. Please try again.");
+      }
+    } catch {
+      setError("Could not verify password. Check your connection.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <main style={{
+      minHeight: "100vh", backgroundColor: MIDNIGHT,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      padding: "24px",
+    }}>
+      <div style={{ width: "100%", maxWidth: "380px", textAlign: "center" }}>
+        <div style={{ width: "52px", margin: "0 auto 2.5rem" }}>
+          <OrayaEmblem />
+        </div>
+
+        <div style={{ width: "40px", height: "0.5px", backgroundColor: GOLD, margin: "0 auto 1.75rem", opacity: 0.5 }} />
+
+        <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "4px", textTransform: "uppercase", color: GOLD, marginBottom: "12px" }}>
+          Restricted area
+        </p>
+        <h1 style={{ fontFamily: PLAYFAIR, fontSize: "2rem", fontWeight: 400, color: WHITE, margin: "0 0 2rem" }}>
+          Admin Access
+        </h1>
+
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          <input
+            type="password"
+            value={input}
+            onChange={(e) => { setInput(e.target.value); setError(""); }}
+            placeholder="Enter admin password"
+            autoFocus
+            style={{
+              ...fieldStyle,
+              padding: "14px 16px",
+              fontSize: "15px",
+              textAlign: "center",
+              letterSpacing: "3px",
+            }}
+            onFocus={(e) => { e.currentTarget.style.borderColor = GOLD; }}
+            onBlur={(e) => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+          />
+
+          {error && (
+            <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070" }}>
+              {error}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading || !input}
+            style={{
+              fontFamily: LATO, fontSize: "11px", letterSpacing: "2.5px",
+              textTransform: "uppercase", color: CHARCOAL,
+              backgroundColor: GOLD, border: "none", padding: "15px",
+              cursor: loading || !input ? "not-allowed" : "pointer",
+              opacity: loading || !input ? 0.6 : 1,
+            }}
+          >
+            {loading ? "Verifying…" : "Enter"}
+          </button>
+        </form>
+      </div>
+    </main>
+  );
+}
+
+// ─── Main dashboard ──────────────────────────────────────────────────────────
+
 export default function AdminPage() {
+  const [authed, setAuthed]             = useState<boolean | null>(null);
   const [bookings, setBookings]         = useState<Booking[]>([]);
   const [members, setMembers]           = useState<Member[]>([]);
   const [loading, setLoading]           = useState(true);
   const [error, setError]               = useState("");
   const [tab, setTab]                   = useState<"bookings" | "members">("bookings");
-  const [whatsappNum, setWhatsappNum]   = useState("");
+
+  // WhatsApp setting
+  const [whatsappNum, setWhatsappNum]       = useState("");
   const [whatsappSaving, setWhatsappSaving] = useState(false);
   const [whatsappSaved, setWhatsappSaved]   = useState(false);
 
+  // Password change
+  const [newPassword, setNewPassword]       = useState("");
+  const [pwSaving, setPwSaving]             = useState(false);
+  const [pwSaved, setPwSaved]               = useState(false);
+
+  // Check sessionStorage on mount
   useEffect(() => {
+    const ok = sessionStorage.getItem(SESSION_KEY) === "1";
+    setAuthed(ok);
+  }, []);
+
+  // Load data once authenticated
+  useEffect(() => {
+    if (!authed) return;
+
     fetch("/api/admin/data")
       .then((r) => r.json())
       .then((d) => {
@@ -112,83 +223,90 @@ export default function AdminPage() {
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
 
-    // Load current WhatsApp number
     fetch("/api/admin/settings")
       .then((r) => r.json())
       .then((d) => {
-        const row = (d.settings ?? []).find((s: { key: string; value: string }) => s.key === "whatsapp_number");
-        if (row) setWhatsappNum(row.value);
+        const wa = (d.settings ?? []).find((s: { key: string; value: string }) => s.key === "whatsapp_number");
+        if (wa) setWhatsappNum(wa.value);
       })
       .catch(() => {});
-  }, []);
+  }, [authed]);
 
   async function saveWhatsapp() {
-    setWhatsappSaving(true);
-    setWhatsappSaved(false);
+    setWhatsappSaving(true); setWhatsappSaved(false);
     const res = await fetch("/api/admin/settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ key: "whatsapp_number", value: whatsappNum }),
     });
     setWhatsappSaving(false);
+    if (res.ok) { setWhatsappSaved(true); setTimeout(() => setWhatsappSaved(false), 3000); }
+    else { const d = await res.json(); setError(d.error ?? "Failed to save."); }
+  }
+
+  async function savePassword() {
+    if (!newPassword.trim()) return;
+    setPwSaving(true); setPwSaved(false);
+    const res = await fetch("/api/admin/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: "admin_password", value: newPassword }),
+    });
+    setPwSaving(false);
     if (res.ok) {
-      setWhatsappSaved(true);
-      setTimeout(() => setWhatsappSaved(false), 3000);
+      setPwSaved(true);
+      setNewPassword("");
+      setTimeout(() => setPwSaved(false), 3000);
     } else {
       const d = await res.json();
-      setError(d.error ?? "Failed to save setting.");
+      setError(d.error ?? "Failed to save password.");
     }
   }
 
+  function signOut() {
+    sessionStorage.removeItem(SESSION_KEY);
+    setAuthed(false);
+  }
+
   async function updateStatus(id: string, status: string) {
-    setBookings((prev) =>
-      prev.map((b) => (b.id === id ? { ...b, status } : b))
-    );
+    setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status } : b)));
     const res = await fetch(`/api/admin/bookings/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
     });
-    if (!res.ok) {
-      const d = await res.json();
-      setError(d.error ?? "Failed to update status.");
-    }
+    if (!res.ok) { const d = await res.json(); setError(d.error ?? "Failed to update status."); }
   }
 
   const tabBtn = (t: "bookings" | "members", label: string) => (
     <button
       onClick={() => setTab(t)}
       style={{
-        fontFamily: LATO,
-        fontSize: "10px",
-        letterSpacing: "2.5px",
-        textTransform: "uppercase",
-        color: tab === t ? GOLD : MUTED,
-        backgroundColor: "transparent",
-        border: "none",
+        fontFamily: LATO, fontSize: "10px", letterSpacing: "2.5px",
+        textTransform: "uppercase", color: tab === t ? GOLD : MUTED,
+        backgroundColor: "transparent", border: "none",
         borderBottom: tab === t ? `1px solid ${GOLD}` : "1px solid transparent",
-        padding: "10px 0",
-        cursor: "pointer",
-        marginRight: "2rem",
+        padding: "10px 0", cursor: "pointer", marginRight: "2rem",
       }}
     >
       {label}
     </button>
   );
 
+  // Waiting for session check
+  if (authed === null) return null;
+
+  // Not authenticated → show gate
+  if (!authed) return <PasswordGate onSuccess={() => setAuthed(true)} />;
+
+  // ── Dashboard ──
   return (
     <main style={{ backgroundColor: MIDNIGHT, minHeight: "100vh", padding: "0" }}>
       {/* Top bar */}
       <div style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: "1.25rem 2.5rem",
-        borderBottom: `0.5px solid ${BORDER}`,
-        backgroundColor: "rgba(31,43,56,0.98)",
-        position: "sticky",
-        top: 0,
-        zIndex: 50,
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "1.25rem 2.5rem", borderBottom: `0.5px solid ${BORDER}`,
+        backgroundColor: "rgba(31,43,56,0.98)", position: "sticky", top: 0, zIndex: 50,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
           <div style={{ width: "32px" }}><OrayaEmblem /></div>
@@ -201,23 +319,39 @@ export default function AdminPage() {
             </p>
           </div>
         </div>
-        <a
-          href="/"
-          style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, textDecoration: "none" }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = GOLD; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = MUTED; }}
-        >
-          ← Back to site
-        </a>
+        <div style={{ display: "flex", gap: "2rem", alignItems: "center" }}>
+          <a
+            href="/"
+            style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, textDecoration: "none" }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = GOLD; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = MUTED; }}
+          >
+            ← Back to site
+          </a>
+          <button
+            onClick={signOut}
+            style={{
+              fontFamily: LATO, fontSize: "10px", letterSpacing: "2px",
+              textTransform: "uppercase", color: MUTED, backgroundColor: "transparent",
+              border: "none", cursor: "pointer", padding: 0,
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "#e07070"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = MUTED; }}
+          >
+            Sign out
+          </button>
+        </div>
       </div>
 
       <div style={{ padding: "2.5rem" }}>
         {/* Settings */}
         <div style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: "1.75rem", marginBottom: "2rem" }}>
-          <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 1.25rem" }}>
+          <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 1.5rem" }}>
             Settings
           </p>
-          <div style={{ display: "flex", alignItems: "flex-end", gap: "12px", flexWrap: "wrap" }}>
+
+          {/* WhatsApp number */}
+          <div style={{ display: "flex", alignItems: "flex-end", gap: "12px", flexWrap: "wrap", marginBottom: "1.5rem", paddingBottom: "1.5rem", borderBottom: `0.5px solid ${BORDER}` }}>
             <div style={{ flex: "1", minWidth: "220px" }}>
               <label style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, display: "block", marginBottom: "6px" }}>
                 WhatsApp number
@@ -227,17 +361,7 @@ export default function AdminPage() {
                 value={whatsappNum}
                 onChange={(e) => { setWhatsappNum(e.target.value); setWhatsappSaved(false); }}
                 placeholder="e.g. 96170000000"
-                style={{
-                  width: "100%",
-                  backgroundColor: "rgba(255,255,255,0.04)",
-                  border: `0.5px solid rgba(197,164,109,0.25)`,
-                  padding: "12px 14px",
-                  fontFamily: LATO,
-                  fontSize: "14px",
-                  color: WHITE,
-                  outline: "none",
-                  boxSizing: "border-box",
-                }}
+                style={fieldStyle}
                 onFocus={(e) => { e.currentTarget.style.borderColor = GOLD; }}
                 onBlur={(e) => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
               />
@@ -250,25 +374,53 @@ export default function AdminPage() {
                 onClick={saveWhatsapp}
                 disabled={whatsappSaving}
                 style={{
-                  fontFamily: LATO,
-                  fontSize: "10px",
-                  letterSpacing: "2px",
-                  textTransform: "uppercase",
-                  color: "#2E2E2E",
-                  backgroundColor: GOLD,
-                  border: "none",
-                  padding: "12px 28px",
+                  fontFamily: LATO, fontSize: "10px", letterSpacing: "2px",
+                  textTransform: "uppercase", color: CHARCOAL, backgroundColor: GOLD,
+                  border: "none", padding: "12px 28px",
                   cursor: whatsappSaving ? "not-allowed" : "pointer",
-                  opacity: whatsappSaving ? 0.7 : 1,
-                  whiteSpace: "nowrap",
+                  opacity: whatsappSaving ? 0.7 : 1, whiteSpace: "nowrap",
                 }}
               >
                 {whatsappSaving ? "Saving…" : "Save"}
               </button>
               {whatsappSaved && (
-                <span style={{ fontFamily: LATO, fontSize: "11px", color: "#6fcf8a", letterSpacing: "1px" }}>
-                  ✓ Saved
-                </span>
+                <span style={{ fontFamily: LATO, fontSize: "11px", color: "#6fcf8a", letterSpacing: "1px" }}>✓ Saved</span>
+              )}
+            </div>
+          </div>
+
+          {/* Change password */}
+          <div style={{ display: "flex", alignItems: "flex-end", gap: "12px", flexWrap: "wrap" }}>
+            <div style={{ flex: "1", minWidth: "220px" }}>
+              <label style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, display: "block", marginBottom: "6px" }}>
+                Change admin password
+              </label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => { setNewPassword(e.target.value); setPwSaved(false); }}
+                placeholder="New password"
+                style={fieldStyle}
+                onFocus={(e) => { e.currentTarget.style.borderColor = GOLD; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+              />
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", paddingBottom: "2px" }}>
+              <button
+                onClick={savePassword}
+                disabled={pwSaving || !newPassword.trim()}
+                style={{
+                  fontFamily: LATO, fontSize: "10px", letterSpacing: "2px",
+                  textTransform: "uppercase", color: CHARCOAL, backgroundColor: GOLD,
+                  border: "none", padding: "12px 28px",
+                  cursor: pwSaving || !newPassword.trim() ? "not-allowed" : "pointer",
+                  opacity: pwSaving || !newPassword.trim() ? 0.6 : 1, whiteSpace: "nowrap",
+                }}
+              >
+                {pwSaving ? "Saving…" : "Update password"}
+              </button>
+              {pwSaved && (
+                <span style={{ fontFamily: LATO, fontSize: "11px", color: "#6fcf8a", letterSpacing: "1px" }}>✓ Password updated</span>
               )}
             </div>
           </div>
@@ -344,15 +496,10 @@ export default function AdminPage() {
                           value={b.status}
                           onChange={(e) => updateStatus(b.id, e.target.value)}
                           style={{
-                            fontFamily: LATO,
-                            fontSize: "11px",
-                            letterSpacing: "1px",
-                            backgroundColor: "rgba(255,255,255,0.05)",
-                            color: WHITE,
-                            border: `0.5px solid ${BORDER}`,
-                            padding: "6px 10px",
-                            cursor: "pointer",
-                            outline: "none",
+                            fontFamily: LATO, fontSize: "11px", letterSpacing: "1px",
+                            backgroundColor: "rgba(255,255,255,0.05)", color: WHITE,
+                            border: `0.5px solid ${BORDER}`, padding: "6px 10px",
+                            cursor: "pointer", outline: "none",
                           }}
                         >
                           <option value="pending"   style={{ backgroundColor: MIDNIGHT }}>Pending</option>
