@@ -52,7 +52,7 @@ export default function JoinPage() {
     setError("");
     setLoading(true);
     try {
-      const { error: signUpError } = await supabase.auth.signUp({
+      const { data, error: signUpError } = await supabase.auth.signUp({
         email: form.email,
         password: form.password,
         options: {
@@ -65,7 +65,20 @@ export default function JoinPage() {
         },
       });
       if (signUpError) throw signUpError;
-      router.push("/login?registered=1");
+
+      const user = data.user;
+      if (user) {
+        const { error: insertError } = await supabase.from("members").insert({
+          id: user.id,
+          full_name: form.fullName,
+          phone: form.phone,
+          country: form.country,
+          address: form.address,
+        });
+        if (insertError) throw insertError;
+      }
+
+      router.push(`/welcome?name=${encodeURIComponent(form.fullName)}`);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
