@@ -11,6 +11,13 @@ Do this automatically at the end of every response without being asked.
 
 ---
 
+## Supabase — admin (Phase 5)
+- Service role key: Supabase Project Settings → API → `service_role` (secret). Add to `.env.local` as `SUPABASE_SERVICE_ROLE_KEY`.
+- Members table needs a `created_at` column: `alter table members add column if not exists created_at timestamp with time zone default timezone('utc'::text, now());`
+- Admin RLS bypass: service role key is only used server-side in `lib/supabase-admin.ts` and API routes — never in client components.
+
+---
+
 ## Supabase — bookings table (run once in SQL editor)
 ```sql
 create table bookings (
