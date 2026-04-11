@@ -80,6 +80,7 @@ export default function Home() {
   const [isLoggedIn, setIsLoggedIn]   = useState(false);
   const [memberName, setMemberName]   = useState("");
   const [authReady, setAuthReady]     = useState(false);
+  const [dropOpen, setDropOpen]       = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
@@ -143,45 +144,92 @@ export default function Home() {
         {/* Auth-aware nav CTA — hidden until auth resolves to avoid flash */}
         {authReady && (
           isLoggedIn ? (
-            <div style={{ display: "flex", alignItems: "center", gap: "18px" }}>
-              <span style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "1.5px", color: MUTED }}>
-                {memberName ? `Hi, ${memberName}` : "My Account"}
-              </span>
-              <button
-                onClick={signOut}
-                style={{
-                  fontFamily: LATO, fontSize: "10px", letterSpacing: "2px",
-                  textTransform: "uppercase", color: MUTED,
-                  backgroundColor: "transparent", border: "none",
-                  cursor: "pointer", padding: 0,
-                }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = CHARCOAL; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = MUTED; }}
-              >
-                Sign out
+            /* Logged-in dropdown */
+            <div
+              style={{ position: "relative" }}
+              onMouseEnter={() => setDropOpen(true)}
+              onMouseLeave={() => setDropOpen(false)}
+            >
+              <button style={{
+                fontFamily: LATO, fontSize: "11px", letterSpacing: "1.5px",
+                textTransform: "uppercase", color: GOLD,
+                backgroundColor: "transparent", border: "none",
+                cursor: "pointer", display: "flex", alignItems: "center", gap: "6px",
+                padding: "10px 0",
+              }}>
+                Hi, {memberName || "Member"}
+                <span style={{ fontSize: "7px", opacity: 0.5, marginTop: "1px" }}>▾</span>
               </button>
+              {dropOpen && (
+                <div style={{
+                  position: "absolute", top: "100%", right: 0,
+                  backgroundColor: WHITE,
+                  border: "0.5px solid rgba(197,164,109,0.25)",
+                  boxShadow: "0 8px 32px rgba(0,0,0,0.1)",
+                  minWidth: "180px", zIndex: 200, marginTop: "6px",
+                }}>
+                  <a
+                    href="/profile"
+                    style={{
+                      display: "block", padding: "13px 20px",
+                      fontFamily: LATO, fontSize: "10px", letterSpacing: "2px",
+                      textTransform: "uppercase", color: CHARCOAL, textDecoration: "none",
+                      borderBottom: "0.5px solid rgba(197,164,109,0.15)",
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(197,164,109,0.07)"; (e.currentTarget as HTMLElement).style.color = GOLD; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; (e.currentTarget as HTMLElement).style.color = CHARCOAL; }}
+                  >
+                    My Profile
+                  </a>
+                  <button
+                    onClick={signOut}
+                    style={{
+                      display: "block", width: "100%", padding: "13px 20px", textAlign: "left",
+                      fontFamily: LATO, fontSize: "10px", letterSpacing: "2px",
+                      textTransform: "uppercase", color: MUTED,
+                      backgroundColor: "transparent", border: "none", cursor: "pointer",
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(197,164,109,0.07)"; (e.currentTarget as HTMLElement).style.color = CHARCOAL; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; (e.currentTarget as HTMLElement).style.color = MUTED; }}
+                  >
+                    Sign Out
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
-            <a
-              href="/book"
-              className="no-underline"
-              style={{
-                fontFamily: LATO, fontSize: "11px", letterSpacing: "2px",
-                textTransform: "uppercase", color: GOLD,
-                border: "0.5px solid #C5A46D", padding: "10px 28px",
-                backgroundColor: "transparent",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.backgroundColor = GOLD;
-                (e.currentTarget as HTMLElement).style.color = WHITE;
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
-                (e.currentTarget as HTMLElement).style.color = GOLD;
-              }}
-            >
-              Reserve
-            </a>
+            /* Logged-out: Sign In + Reserve */
+            <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+              <a
+                href="/login"
+                className="no-underline"
+                style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: CHARCOAL }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = GOLD; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = CHARCOAL; }}
+              >
+                Sign In
+              </a>
+              <a
+                href="/book"
+                className="no-underline"
+                style={{
+                  fontFamily: LATO, fontSize: "11px", letterSpacing: "2px",
+                  textTransform: "uppercase", color: GOLD,
+                  border: "0.5px solid #C5A46D", padding: "10px 28px",
+                  backgroundColor: "transparent",
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLElement).style.backgroundColor = GOLD;
+                  (e.currentTarget as HTMLElement).style.color = WHITE;
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
+                  (e.currentTarget as HTMLElement).style.color = GOLD;
+                }}
+              >
+                Reserve
+              </a>
+            </div>
           )
         )}
       </nav>
