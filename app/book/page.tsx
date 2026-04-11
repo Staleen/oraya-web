@@ -251,39 +251,54 @@ export default function BookPage() {
 
     setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user }, error: authErr } = await supabase.auth.getUser();
+      if (authErr) console.error("[book] auth.getUser error:", authErr);
 
-      const insertData: Record<string, unknown> = {
-        villa:          form.villa,
-        check_in:       form.checkIn,
-        check_out:      form.checkOut,
-        sleeping_guests: parseInt(form.sleepingGuests, 10),
-        day_visitors:   parseInt(form.dayVisitors, 10),
-        event_type:     form.eventType || null,
-        message:        form.message || null,
-        status:         "pending",
+      // Get session token for member bookings (so server can verify identity)
+      let accessToken: string | null = null;
+      if (user) {
+        const { data: { session } } = await supabase.auth.getSession();
+        accessToken = session?.access_token ?? null;
+      }
+
+      const body: Record<string, unknown> = {
+        villa:           form.villa,
+        check_in:        form.checkIn,
+        check_out:       form.checkOut,
+        sleeping_guests: form.sleepingGuests,
+        day_visitors:    form.dayVisitors,
+        event_type:      form.eventType || null,
+        message:         form.message   || null,
       };
 
       if (user) {
-        insertData.member_id = user.id;
+        body.member_id = user.id;
       } else {
-        insertData.member_id    = null;
-        insertData.guest_name   = guest.fullName.trim();
-        insertData.guest_email  = guest.email.trim();
-        insertData.guest_phone  = guest.phoneNumber
+        body.guest_name    = guest.fullName.trim();
+        body.guest_email   = guest.email.trim();
+        body.guest_phone   = guest.phoneNumber
           ? `${guest.dialCode}${guest.phoneNumber}`
           : null;
-        insertData.guest_country = guest.country || null;
+        body.guest_country = guest.country || null;
       }
 
-      const { data, error: insertError } = await supabase
-        .from("bookings")
-        .insert(insertData)
-        .select()
-        .single();
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
 
-      if (insertError) throw insertError;
+      const res = await fetch("/api/bookings", {
+        method:  "POST",
+        headers,
+        body:    JSON.stringify(body),
+      });
 
+      const json = await res.json();
+
+      if (!res.ok) {
+        console.error("[book] booking API error:", json);
+        throw new Error(json.error ?? "Failed to submit booking.");
+      }
+
+      const booking     = json.booking;
       const displayName = user ? memberName : guest.fullName;
       const params = new URLSearchParams({
         villa:         form.villa,
@@ -292,16 +307,14 @@ export default function BookPage() {
         sleepingGuests:form.sleepingGuests,
         dayVisitors:   form.dayVisitors,
         eventType:     form.eventType,
-        id:            data?.id ?? "",
+        id:            booking?.id ?? "",
         ...(displayName ? { name: displayName } : {}),
       });
       router.push(`/booking-confirmed?${params.toString()}`);
     } catch (err: unknown) {
-      if (err && typeof err === "object" && "message" in err) {
-        setError(friendlyError(String((err as { message: unknown }).message)));
-      } else {
-        setError("Something went wrong. Please try again.");
-      }
+      const msg = err instanceof Error ? err.message : "Something went wrong. Please try again.";
+      console.error("[book] submission error:", err);
+      setError(friendlyError(msg));
     } finally {
       setLoading(false);
     }
