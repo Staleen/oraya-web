@@ -890,7 +890,7 @@ export default function ProfilePage() {
                       {isConfirmed && (
                         <div style={{ marginTop: "1.25rem", paddingTop: "1rem", borderTop: `0.5px solid ${BORDER}` }}>
                           <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "0 0 10px", lineHeight: 1.6 }}>
-                            To modify a confirmed booking, please contact us via WhatsApp.
+                            To modify or cancel a confirmed booking, please contact us via WhatsApp.
                           </p>
                           <a
                             href={waUrl}
