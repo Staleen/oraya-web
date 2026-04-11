@@ -187,14 +187,23 @@ export default function JoinPage() {
 
       const user = data.user;
       if (user) {
-        const { error: insertError } = await supabase.from("members").insert({
-          id: user.id,
-          full_name: form.fullName,
-          phone,
-          country: form.country,
-          address: form.address,
+        // Insert via server-side API so service role bypasses RLS
+        // (anon client can't insert when email confirmation is pending)
+        const res = await fetch("/api/members", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id:        user.id,
+            full_name: form.fullName,
+            phone,
+            country:   form.country,
+            address:   form.address,
+          }),
         });
-        if (insertError) throw insertError;
+        if (!res.ok) {
+          const d = await res.json();
+          throw new Error(d.error ?? "Failed to save member profile.");
+        }
       }
 
       router.push(`/welcome?name=${encodeURIComponent(form.fullName)}`);
