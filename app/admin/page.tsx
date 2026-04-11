@@ -92,11 +92,14 @@ const tdStyle: React.CSSProperties = {
 };
 
 export default function AdminPage() {
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [members, setMembers]   = useState<Member[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [error, setError]       = useState("");
-  const [tab, setTab]           = useState<"bookings" | "members">("bookings");
+  const [bookings, setBookings]         = useState<Booking[]>([]);
+  const [members, setMembers]           = useState<Member[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [error, setError]               = useState("");
+  const [tab, setTab]                   = useState<"bookings" | "members">("bookings");
+  const [whatsappNum, setWhatsappNum]   = useState("");
+  const [whatsappSaving, setWhatsappSaving] = useState(false);
+  const [whatsappSaved, setWhatsappSaved]   = useState(false);
 
   useEffect(() => {
     fetch("/api/admin/data")
@@ -108,7 +111,34 @@ export default function AdminPage() {
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
+
+    // Load current WhatsApp number
+    fetch("/api/admin/settings")
+      .then((r) => r.json())
+      .then((d) => {
+        const row = (d.settings ?? []).find((s: { key: string; value: string }) => s.key === "whatsapp_number");
+        if (row) setWhatsappNum(row.value);
+      })
+      .catch(() => {});
   }, []);
+
+  async function saveWhatsapp() {
+    setWhatsappSaving(true);
+    setWhatsappSaved(false);
+    const res = await fetch("/api/admin/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: "whatsapp_number", value: whatsappNum }),
+    });
+    setWhatsappSaving(false);
+    if (res.ok) {
+      setWhatsappSaved(true);
+      setTimeout(() => setWhatsappSaved(false), 3000);
+    } else {
+      const d = await res.json();
+      setError(d.error ?? "Failed to save setting.");
+    }
+  }
 
   async function updateStatus(id: string, status: string) {
     setBookings((prev) =>
@@ -182,6 +212,68 @@ export default function AdminPage() {
       </div>
 
       <div style={{ padding: "2.5rem" }}>
+        {/* Settings */}
+        <div style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: "1.75rem", marginBottom: "2rem" }}>
+          <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 1.25rem" }}>
+            Settings
+          </p>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: "12px", flexWrap: "wrap" }}>
+            <div style={{ flex: "1", minWidth: "220px" }}>
+              <label style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, display: "block", marginBottom: "6px" }}>
+                WhatsApp number
+              </label>
+              <input
+                type="tel"
+                value={whatsappNum}
+                onChange={(e) => { setWhatsappNum(e.target.value); setWhatsappSaved(false); }}
+                placeholder="e.g. 96170000000"
+                style={{
+                  width: "100%",
+                  backgroundColor: "rgba(255,255,255,0.04)",
+                  border: `0.5px solid rgba(197,164,109,0.25)`,
+                  padding: "12px 14px",
+                  fontFamily: LATO,
+                  fontSize: "14px",
+                  color: WHITE,
+                  outline: "none",
+                  boxSizing: "border-box",
+                }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = GOLD; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+              />
+              <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, marginTop: "5px" }}>
+                Include country code, no + or spaces (e.g. 96170123456)
+              </p>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", paddingBottom: "22px" }}>
+              <button
+                onClick={saveWhatsapp}
+                disabled={whatsappSaving}
+                style={{
+                  fontFamily: LATO,
+                  fontSize: "10px",
+                  letterSpacing: "2px",
+                  textTransform: "uppercase",
+                  color: "#2E2E2E",
+                  backgroundColor: GOLD,
+                  border: "none",
+                  padding: "12px 28px",
+                  cursor: whatsappSaving ? "not-allowed" : "pointer",
+                  opacity: whatsappSaving ? 0.7 : 1,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {whatsappSaving ? "Saving…" : "Save"}
+              </button>
+              {whatsappSaved && (
+                <span style={{ fontFamily: LATO, fontSize: "11px", color: "#6fcf8a", letterSpacing: "1px" }}>
+                  ✓ Saved
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* Stats row */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px", marginBottom: "2.5rem" }}>
           {[

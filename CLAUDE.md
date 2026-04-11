@@ -11,6 +11,19 @@ Do this automatically at the end of every response without being asked.
 
 ---
 
+## Supabase — settings table (run once in SQL editor)
+```sql
+create table settings (
+  key text primary key,
+  value text
+);
+-- RLS intentionally disabled (admin-only access via service role)
+insert into settings (key, value) values ('whatsapp_number', '0000000000')
+  on conflict (key) do nothing;
+```
+
+---
+
 ## Supabase — admin (Phase 5)
 - Service role key: Supabase Project Settings → API → `service_role` (secret). Add to `.env.local` as `SUPABASE_SERVICE_ROLE_KEY`.
 - Members table needs a `created_at` column: `alter table members add column if not exists created_at timestamp with time zone default timezone('utc'::text, now());`
