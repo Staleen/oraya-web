@@ -22,9 +22,9 @@ export default function WelcomePage() {
     >
       <div style={{ width: "100%", maxWidth: "520px", textAlign: "center" }}>
         {/* Emblem */}
-        <div style={{ width: "64px", margin: "0 auto 2.5rem" }}>
+        <a href="/" style={{ display: "block", width: "64px", margin: "0 auto 2.5rem", cursor: "pointer" }}>
           <OrayaEmblem />
-        </div>
+        </a>
 
         {/* Gold rule */}
         <div style={{ width: "40px", height: "0.5px", backgroundColor: GOLD, margin: "0 auto 2rem", opacity: 0.6 }} />
@@ -67,25 +67,52 @@ export default function WelcomePage() {
           ))}
         </ul>
 
-        {/* CTA */}
-        <a
-          href="/"
-          style={{
-            display: "inline-block",
-            fontFamily: LATO,
-            fontSize: "11px",
-            letterSpacing: "2.5px",
-            textTransform: "uppercase",
-            color: CHARCOAL,
-            backgroundColor: GOLD,
-            padding: "15px 44px",
-            textDecoration: "none",
-          }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
-        >
-          Explore our villas
-        </a>
+        {/* CTAs */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
+          <a
+            href="/book"
+            style={{
+              display: "inline-block",
+              fontFamily: LATO,
+              fontSize: "11px",
+              letterSpacing: "2.5px",
+              textTransform: "uppercase",
+              color: CHARCOAL,
+              backgroundColor: GOLD,
+              padding: "15px 44px",
+              textDecoration: "none",
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
+          >
+            Book now
+          </a>
+          <a
+            href="/"
+            style={{
+              display: "inline-block",
+              fontFamily: LATO,
+              fontSize: "11px",
+              letterSpacing: "2.5px",
+              textTransform: "uppercase",
+              color: GOLD,
+              backgroundColor: "transparent",
+              border: "0.5px solid rgba(197,164,109,0.4)",
+              padding: "15px 44px",
+              textDecoration: "none",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.borderColor = GOLD;
+              (e.currentTarget as HTMLElement).style.color = WHITE;
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.borderColor = "rgba(197,164,109,0.4)";
+              (e.currentTarget as HTMLElement).style.color = GOLD;
+            }}
+          >
+            Explore our villas
+          </a>
+        </div>
 
         {/* Sign-in note */}
         <p style={{ fontFamily: LATO, fontSize: "11px", color: "rgba(255,255,255,0.2)", marginTop: "2rem" }}>

@@ -232,9 +232,9 @@ export default function JoinPage() {
     >
       <div style={{ width: "100%", maxWidth: "480px" }}>
         {/* Logo */}
-        <div style={{ width: "52px", margin: "0 auto 2.5rem" }}>
+        <a href="/" style={{ display: "block", width: "52px", margin: "0 auto 2.5rem", cursor: "pointer" }}>
           <OrayaEmblem />
-        </div>
+        </a>
 
         {/* Heading */}
         <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>

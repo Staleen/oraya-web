@@ -64,7 +64,7 @@ export default function Home() {
           borderBottom: "0.5px solid rgba(197,164,109,0.2)",
         }}
       >
-        <a href="#" className="w-11 h-11 shrink-0 block">
+        <a href="/" className="w-11 h-11 shrink-0 block" style={{ cursor: "pointer" }}>
           <OrayaEmblem />
         </a>
 
@@ -90,7 +90,7 @@ export default function Home() {
         </ul>
 
         <a
-          href="#membership"
+          href="/book"
           className="no-underline transition-all duration-200"
           style={{
             fontFamily: LATO,

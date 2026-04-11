@@ -54,7 +54,7 @@ export default function SiteNav({ base = "" }: Props) {
       </ul>
 
       <a
-        href="/join"
+        href="/book"
         style={{
           fontFamily: LATO,
           fontSize: "11px",

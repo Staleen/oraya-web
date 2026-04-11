@@ -131,9 +131,9 @@ function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
       padding: "24px",
     }}>
       <div style={{ width: "100%", maxWidth: "380px", textAlign: "center" }}>
-        <div style={{ width: "52px", margin: "0 auto 2.5rem" }}>
+        <a href="/" style={{ display: "block", width: "52px", margin: "0 auto 2.5rem", cursor: "pointer" }}>
           <OrayaEmblem />
-        </div>
+        </a>
 
         <div style={{ width: "40px", height: "0.5px", backgroundColor: GOLD, margin: "0 auto 1.75rem", opacity: 0.5 }} />
 
@@ -313,7 +313,7 @@ export default function AdminPage() {
         backgroundColor: "rgba(31,43,56,0.98)", position: "sticky", top: 0, zIndex: 50,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-          <div style={{ width: "32px" }}><OrayaEmblem /></div>
+          <a href="/" style={{ display: "block", width: "32px", cursor: "pointer" }}><OrayaEmblem /></a>
           <div>
             <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
               Oraya

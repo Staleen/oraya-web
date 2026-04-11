@@ -57,9 +57,9 @@ export default function BookingConfirmedPage() {
     >
       <div style={{ width: "100%", maxWidth: "520px", textAlign: "center" }}>
         {/* Emblem */}
-        <div style={{ width: "60px", margin: "0 auto 2.5rem" }}>
+        <a href="/" style={{ display: "block", width: "60px", margin: "0 auto 2.5rem", cursor: "pointer" }}>
           <OrayaEmblem />
-        </div>
+        </a>
 
         {/* Gold rule */}
         <div style={{ width: "40px", height: "0.5px", backgroundColor: GOLD, margin: "0 auto 2rem", opacity: 0.6 }} />
