@@ -34,6 +34,70 @@ const labelStyle: React.CSSProperties = {
   marginBottom: "6px",
 };
 
+const COUNTRIES = [
+  // Gulf priority
+  { label: "Saudi Arabia", value: "Saudi Arabia" },
+  { label: "UAE",           value: "UAE" },
+  { label: "Qatar",         value: "Qatar" },
+  { label: "Kuwait",        value: "Kuwait" },
+  { label: "Bahrain",       value: "Bahrain" },
+  { label: "Oman",          value: "Oman" },
+  // Lebanon
+  { label: "Lebanon",       value: "Lebanon" },
+  // Other priority
+  { label: "France",        value: "France" },
+  { label: "Australia",     value: "Australia" },
+  { label: "United States", value: "United States" },
+  { label: "Canada",        value: "Canada" },
+  { label: "United Kingdom",value: "United Kingdom" },
+  { label: "Germany",       value: "Germany" },
+  // Divider
+  { label: "──────────────", value: "" },
+  // Rest alphabetical
+  { label: "Algeria",       value: "Algeria" },
+  { label: "Argentina",     value: "Argentina" },
+  { label: "Austria",       value: "Austria" },
+  { label: "Belgium",       value: "Belgium" },
+  { label: "Brazil",        value: "Brazil" },
+  { label: "China",         value: "China" },
+  { label: "Cyprus",        value: "Cyprus" },
+  { label: "Denmark",       value: "Denmark" },
+  { label: "Egypt",         value: "Egypt" },
+  { label: "Finland",       value: "Finland" },
+  { label: "Greece",        value: "Greece" },
+  { label: "India",         value: "India" },
+  { label: "Indonesia",     value: "Indonesia" },
+  { label: "Iraq",          value: "Iraq" },
+  { label: "Ireland",       value: "Ireland" },
+  { label: "Italy",         value: "Italy" },
+  { label: "Japan",         value: "Japan" },
+  { label: "Jordan",        value: "Jordan" },
+  { label: "Malaysia",      value: "Malaysia" },
+  { label: "Mexico",        value: "Mexico" },
+  { label: "Morocco",       value: "Morocco" },
+  { label: "Netherlands",   value: "Netherlands" },
+  { label: "New Zealand",   value: "New Zealand" },
+  { label: "Nigeria",       value: "Nigeria" },
+  { label: "Norway",        value: "Norway" },
+  { label: "Pakistan",      value: "Pakistan" },
+  { label: "Palestine",     value: "Palestine" },
+  { label: "Poland",        value: "Poland" },
+  { label: "Portugal",      value: "Portugal" },
+  { label: "Russia",        value: "Russia" },
+  { label: "Senegal",       value: "Senegal" },
+  { label: "South Africa",  value: "South Africa" },
+  { label: "South Korea",   value: "South Korea" },
+  { label: "Spain",         value: "Spain" },
+  { label: "Sudan",         value: "Sudan" },
+  { label: "Sweden",        value: "Sweden" },
+  { label: "Switzerland",   value: "Switzerland" },
+  { label: "Syria",         value: "Syria" },
+  { label: "Tunisia",       value: "Tunisia" },
+  { label: "Turkey",        value: "Turkey" },
+  { label: "Ukraine",       value: "Ukraine" },
+  { label: "Yemen",         value: "Yemen" },
+];
+
 // Priority countries first, then alphabetical rest
 const DIAL_CODES = [
   { flag: "🇱🇧", label: "Lebanon",      code: "+961" },
@@ -92,7 +156,7 @@ export default function JoinPage() {
   const [form, setForm] = useState({
     fullName: "", email: "", password: "",
     dialCode: "+961", phoneNumber: "",
-    country: "", address: "",
+    country: "Lebanon", address: "",
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -260,13 +324,26 @@ export default function JoinPage() {
 
           <div>
             <label style={labelStyle}>Country</label>
-            <input
-              name="country" type="text"
-              value={form.country} onChange={handleChange}
-              placeholder="Lebanon"
-              style={inputStyle}
-              onFocus={focusBorder} onBlur={blurBorder}
-            />
+            <select
+              name="country"
+              value={form.country}
+              onChange={handleChange}
+              onFocus={focusBorder}
+              onBlur={blurBorder}
+              style={{ ...inputStyle, cursor: "pointer", appearance: "none" }}
+            >
+              {COUNTRIES.map((c, i) =>
+                c.value === "" ? (
+                  <option key={`div-${i}`} disabled value="" style={{ backgroundColor: MIDNIGHT, color: MUTED }}>
+                    {c.label}
+                  </option>
+                ) : (
+                  <option key={c.value} value={c.value} style={{ backgroundColor: MIDNIGHT }}>
+                    {c.label}
+                  </option>
+                )
+              )}
+            </select>
           </div>
 
           <div>
