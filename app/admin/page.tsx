@@ -207,6 +207,9 @@ export default function AdminPage() {
   const [pwSaving, setPwSaving]             = useState(false);
   const [pwSaved, setPwSaved]               = useState(false);
 
+  // Member deletion
+  const [deletingId, setDeletingId]         = useState<string | null>(null);
+
   // Check sessionStorage on mount
   useEffect(() => {
     const ok = sessionStorage.getItem(SESSION_KEY) === "1";
@@ -270,6 +273,19 @@ export default function AdminPage() {
   function signOut() {
     sessionStorage.removeItem(SESSION_KEY);
     setAuthed(false);
+  }
+
+  async function deleteMember(id: string, name: string) {
+    if (!confirm(`Delete member "${name}"? This will permanently remove their account and they will not be able to sign in again.`)) return;
+    setDeletingId(id);
+    const res = await fetch(`/api/admin/members/${id}`, { method: "DELETE" });
+    setDeletingId(null);
+    if (res.ok) {
+      setMembers((prev) => prev.filter((m) => m.id !== id));
+    } else {
+      const d = await res.json();
+      setError(d.error ?? "Failed to delete member.");
+    }
   }
 
   async function updateStatus(id: string, status: string) {
@@ -559,7 +575,7 @@ export default function AdminPage() {
               <table style={{ width: "100%", borderCollapse: "collapse", backgroundColor: SURFACE, border: `0.5px solid ${BORDER}` }}>
                 <thead>
                   <tr>
-                    {["Name", "Email", "Phone", "Country", "Address", "Joined"].map((h) => (
+                    {["Name", "Email", "Phone", "Country", "Address", "Joined", ""].map((h) => (
                       <th key={h} style={thStyle}>{h}</th>
                     ))}
                   </tr>
@@ -576,6 +592,24 @@ export default function AdminPage() {
                       <td style={tdStyle}>{m.country || "—"}</td>
                       <td style={{ ...tdStyle, color: MUTED }}>{m.address || "—"}</td>
                       <td style={{ ...tdStyle, color: MUTED, fontSize: "11px" }}>{fmt(m.created_at)}</td>
+                      <td style={{ ...tdStyle, textAlign: "center" }}>
+                        <button
+                          onClick={() => deleteMember(m.id, m.full_name || m.email || m.id)}
+                          disabled={deletingId === m.id}
+                          style={{
+                            fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px",
+                            textTransform: "uppercase", color: "#e07070",
+                            backgroundColor: "transparent",
+                            border: "0.5px solid rgba(224,112,112,0.3)",
+                            padding: "5px 12px", cursor: deletingId === m.id ? "not-allowed" : "pointer",
+                            opacity: deletingId === m.id ? 0.5 : 1,
+                          }}
+                          onMouseEnter={(e) => { if (deletingId !== m.id) (e.currentTarget as HTMLElement).style.borderColor = "#e07070"; }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(224,112,112,0.3)"; }}
+                        >
+                          {deletingId === m.id ? "Deleting…" : "Delete"}
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

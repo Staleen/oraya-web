@@ -10,10 +10,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "User ID is required." }, { status: 400 });
     }
 
-    // Upsert so duplicate calls (e.g. double-submit) don't error
+    // Insert only — ignore if row already exists so login calls don't overwrite good data
     const { error } = await supabaseAdmin
       .from("members")
-      .upsert({ id, full_name, phone, country, address }, { onConflict: "id" });
+      .upsert({ id, full_name, phone, country, address }, { onConflict: "id", ignoreDuplicates: true });
 
     if (error) {
       console.error("[api/members] insert error:", error);

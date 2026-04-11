@@ -57,7 +57,27 @@ export default function LoginPage() {
         password: form.password,
       });
       if (signInError) throw signInError;
-      router.push("/");
+
+      // Silently backfill members row using auth metadata in case it was never created.
+      // ignoreDuplicates: true in the API means existing rows are never overwritten.
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const meta = user.user_metadata ?? {};
+        fetch("/api/members", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id:        user.id,
+            full_name: meta.full_name  ?? "",
+            phone:     meta.phone      ?? "",
+            country:   meta.country    ?? "",
+            address:   meta.address    ?? "",
+          }),
+        }).catch(() => {}); // fire-and-forget, never block the redirect
+      }
+
+      const redirect = searchParams.get("redirect");
+      router.push(redirect && redirect.startsWith("/") ? redirect : "/");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {

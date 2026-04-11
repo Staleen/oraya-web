@@ -208,10 +208,14 @@ export default function JoinPage() {
 
       router.push(`/welcome?name=${encodeURIComponent(form.fullName)}`);
     } catch (err: unknown) {
-      if (err && typeof err === "object" && "message" in err) {
-        setError(String((err as { message: unknown }).message));
+      const msg = err && typeof err === "object" && "message" in err
+        ? String((err as { message: unknown }).message)
+        : JSON.stringify(err);
+
+      if (msg.toLowerCase().includes("already registered") || msg.toLowerCase().includes("user already")) {
+        setError("__already_registered__");
       } else {
-        setError(JSON.stringify(err));
+        setError(msg);
       }
     } finally {
       setLoading(false);
@@ -366,11 +370,17 @@ export default function JoinPage() {
             />
           </div>
 
-          {error && (
+          {error === "__already_registered__" ? (
+            <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070", textAlign: "center", lineHeight: 1.7 }}>
+              This email is already registered.{" "}
+              <a href="/login" style={{ color: GOLD, textDecoration: "underline" }}>Sign in instead</a>
+              {" "}— or contact us if you need help accessing your account.
+            </p>
+          ) : error ? (
             <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070", textAlign: "center" }}>
               {error}
             </p>
-          )}
+          ) : null}
 
           <button
             type="submit"
