@@ -80,7 +80,11 @@ export default function JoinPage() {
 
       router.push(`/welcome?name=${encodeURIComponent(form.fullName)}`);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
+      if (err && typeof err === "object" && "message" in err) {
+        setError(String((err as { message: unknown }).message));
+      } else {
+        setError(JSON.stringify(err));
+      }
     } finally {
       setLoading(false);
     }
