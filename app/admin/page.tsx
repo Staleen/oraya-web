@@ -219,25 +219,41 @@ export default function AdminPage() {
 
   // Load data once authenticated
   useEffect(() => {
-    if (!authed) return;
+    if (authed !== true) return;
 
-    fetch("/api/admin/data")
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.error) { setError(d.error); return; }
-        setBookings(d.bookings);
-        setMembers(d.members);
+    fetch("/api/admin/data", { cache: "no-store" })
+      .then(async (r) => {
+        const text = await r.text();
+        console.log("[admin] /api/admin/data raw response:", text);
+        try {
+          return JSON.parse(text);
+        } catch {
+          throw new Error(`Non-JSON response (${r.status}): ${text.slice(0, 200)}`);
+        }
       })
-      .catch((e) => setError(e.message))
+      .then((d) => {
+        if (d.error) {
+          console.error("[admin] data error from API:", d.error);
+          setError(d.error);
+          return;
+        }
+        console.log(`[admin] loaded ${d.bookings?.length ?? 0} bookings, ${d.members?.length ?? 0} members`);
+        setBookings(d.bookings ?? []);
+        setMembers(d.members ?? []);
+      })
+      .catch((e) => {
+        console.error("[admin] fetch error:", e);
+        setError(e.message);
+      })
       .finally(() => setLoading(false));
 
-    fetch("/api/admin/settings")
+    fetch("/api/admin/settings", { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => {
         const wa = (d.settings ?? []).find((s: { key: string; value: string }) => s.key === "whatsapp_number");
         if (wa) setWhatsappNum(wa.value);
       })
-      .catch(() => {});
+      .catch((e) => console.error("[admin] settings fetch error:", e));
   }, [authed]);
 
   async function saveWhatsapp() {
