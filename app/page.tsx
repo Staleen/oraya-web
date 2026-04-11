@@ -153,7 +153,7 @@ export default function Home() {
               Explore our villas
             </a>
             <a
-              href="#membership"
+              href="/join"
               className="no-underline inline-block transition-all duration-200"
               style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: WHITE, border: "0.5px solid rgba(255,255,255,0.3)", padding: "15px 44px", backgroundColor: "transparent" }}
               onMouseEnter={(e) => {
@@ -432,9 +432,9 @@ export default function Home() {
           </div>
 
           {[
-            { title: "Explore",  links: ["Villa Mechmech", "Villa Byblos", "Gallery", "Events"] },
-            { title: "Members",  links: ["Join Oraya", "Sign in", "My bookings", "My profile"] },
-            { title: "Contact",  links: ["hello@oraya.com", "WhatsApp", "Instagram", "Lebanon"] },
+            { title: "Explore",  links: [{ label: "Villa Mechmech", href: "#villas" }, { label: "Villa Byblos", href: "#villas" }, { label: "Gallery", href: "#" }, { label: "Events", href: "#" }] },
+            { title: "Members",  links: [{ label: "Join Oraya", href: "/join" }, { label: "Sign in", href: "/login" }, { label: "My bookings", href: "#" }, { label: "My profile", href: "#" }] },
+            { title: "Contact",  links: [{ label: "hello@oraya.com", href: "mailto:hello@oraya.com" }, { label: "WhatsApp", href: "#" }, { label: "Instagram", href: "#" }, { label: "Lebanon", href: "#" }] },
           ].map(({ title, links }) => (
             <div key={title}>
               <p
@@ -444,16 +444,16 @@ export default function Home() {
                 {title}
               </p>
               <ul className="list-none">
-                {links.map((link) => (
-                  <li key={link} style={{ marginBottom: "8px" }}>
+                {links.map(({ label, href }) => (
+                  <li key={label} style={{ marginBottom: "8px" }}>
                     <a
-                      href="#"
+                      href={href}
                       className="no-underline transition-colors duration-200"
                       style={{ fontFamily: LATO, fontSize: "13px", fontWeight: 300, color: "rgba(255,255,255,0.35)" }}
                       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = GOLD; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.35)"; }}
                     >
-                      {link}
+                      {label}
                     </a>
                   </li>
                 ))}
