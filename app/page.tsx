@@ -4,13 +4,7 @@ import OrayaEmblem from "@/components/OrayaEmblem";
 import OrayaLogoFull from "@/components/OrayaLogoFull";
 import { supabase } from "@/lib/supabase";
 
-// ── PLACEHOLDER IMAGES — swap these constants with real photo URLs ────────────
-// Recommended sizes: hero 1920×1080, villa cards 800×600
-const IMG_HERO     = ""; // e.g. "/photos/hero.jpg"
-const IMG_MECHMECH = ""; // e.g. "/photos/mechmech-card.jpg"
-const IMG_BYBLOS   = ""; // e.g. "/photos/byblos-card.jpg"
-
-// Branded gradient fallbacks (used when IMG_* is empty)
+// Branded gradient fallbacks
 const GRAD_HERO     = "linear-gradient(145deg, #1a2a38 0%, #243444 45%, #1c2e3e 75%, #111e2a 100%)";
 const GRAD_MECHMECH = "linear-gradient(160deg, #1b3a2f 0%, #2b5040 45%, #162a20 80%, #0e1e17 100%)";
 const GRAD_BYBLOS   = "linear-gradient(160deg, #283520 0%, #3a5028 45%, #1e2e14 80%, #131d0c 100%)";
@@ -31,24 +25,24 @@ const MUTED      = "#8a8070";
 const PLAYFAIR   = "'Playfair Display', Georgia, serif";
 const LATO       = "'Lato', system-ui, sans-serif";
 
-const villas = [
+const villaMeta = [
   {
+    key:      "mechmech",
     tag:      "Nature retreat",
     name:     "Villa Mechmech",
     loc:      "Mechmech, North Lebanon",
     feats:    ["Private villa", "Mountain views", "Events"],
     href:     "/villas/mechmech",
-    img:      IMG_MECHMECH,
     gradient: GRAD_MECHMECH,
     label:    "Mountain retreat · North Lebanon",
   },
   {
+    key:      "byblos",
     tag:      "Cultural elegance",
     name:     "Villa Byblos",
     loc:      "Jbeil, Byblos, Lebanon",
     feats:    ["Private villa", "Historic setting", "Events"],
     href:     "/villas/byblos",
-    img:      IMG_BYBLOS,
     gradient: GRAD_BYBLOS,
     label:    "Garden estate · Byblos coast",
   },
@@ -82,6 +76,11 @@ export default function Home() {
   const [authReady, setAuthReady]     = useState(false);
   const [dropOpen, setDropOpen]       = useState(false);
 
+  // Dynamic images from villa_media
+  const [heroImg,      setHeroImg]      = useState("");
+  const [mechmechImg,  setMechmechImg]  = useState("");
+  const [byblosImg,    setByblosImg]    = useState("");
+
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (user) {
@@ -95,6 +94,17 @@ export default function Home() {
       }
       setAuthReady(true);
     });
+
+    // Fetch cover images
+    Promise.all([
+      fetch("/api/media?villa=general&limit=1").then((r) => r.json()),
+      fetch("/api/media?villa=mechmech&limit=1").then((r) => r.json()),
+      fetch("/api/media?villa=byblos&limit=1").then((r) => r.json()),
+    ]).then(([gen, mech, byb]) => {
+      if (gen.media?.[0]?.file_url)   setHeroImg(gen.media[0].file_url);
+      if (mech.media?.[0]?.file_url)  setMechmechImg(mech.media[0].file_url);
+      if (byb.media?.[0]?.file_url)   setByblosImg(byb.media[0].file_url);
+    }).catch(() => {});
   }, []);
 
   async function signOut() {
@@ -239,8 +249,8 @@ export default function Home() {
         className="min-h-screen flex items-center justify-center relative overflow-hidden"
         style={{
           backgroundColor: MIDNIGHT,
-          ...(IMG_HERO
-            ? { backgroundImage: `url(${IMG_HERO})`, backgroundSize: "cover", backgroundPosition: "center" }
+          ...(heroImg
+            ? { backgroundImage: `url(${heroImg})`, backgroundSize: "cover", backgroundPosition: "center" }
             : { backgroundImage: GRAD_HERO }),
         }}
       >
@@ -402,7 +412,9 @@ export default function Home() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 max-w-[1100px] mx-auto" style={{ gap: "2px" }}>
-          {villas.map(({ tag, name, loc, feats, href, img, gradient, label }) => (
+          {villaMeta.map(({ key, tag, name, loc, feats, href, gradient, label }) => {
+            const img = key === "mechmech" ? mechmechImg : byblosImg;
+            return (
             <a
               key={name}
               href={href}
@@ -474,7 +486,8 @@ export default function Home() {
                 </span>
               </div>
             </a>
-          ))}
+            );
+          })}
         </div>
       </section>
 

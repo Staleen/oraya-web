@@ -1,32 +1,29 @@
 "use client";
+import { useState, useEffect } from "react";
 import SiteNav from "@/components/SiteNav";
 import SiteFooter from "@/components/SiteFooter";
 import OrayaEmblem from "@/components/OrayaEmblem";
 
-// ── PLACEHOLDER IMAGE — swap with real photo URL when ready ──────────────────
-// Recommended: 1920×800, landscape orientation
-const HERO_IMG      = ""; // e.g. "/photos/mechmech-hero.jpg"
 const HERO_GRADIENT = "linear-gradient(160deg, #1b3a2f 0%, #2b5040 35%, #1a2f24 65%, #0f1e17 100%)";
 
-const GOLD      = "#C5A46D";
-const WHITE     = "#FFFFFF";
-const BEIGE     = "#EAE3D9";
+const GOLD       = "#C5A46D";
+const WHITE      = "#FFFFFF";
 const BEIGELIGHT = "#F5F1EB";
-const CHARCOAL  = "#2E2E2E";
-const MIDNIGHT  = "#1F2B38";
-const MUTED     = "#8a8070";
-const PLAYFAIR  = "'Playfair Display', Georgia, serif";
-const LATO      = "'Lato', system-ui, sans-serif";
+const CHARCOAL   = "#2E2E2E";
+const MIDNIGHT   = "#1F2B38";
+const MUTED      = "#8a8070";
+const PLAYFAIR   = "'Playfair Display', Georgia, serif";
+const LATO       = "'Lato', system-ui, sans-serif";
 
 const details = [
-  { label: "Bedrooms",   value: "3 (master with en-suite)" },
-  { label: "Bathrooms",  value: "3" },
-  { label: "Pool",       value: "Heated private pool" },
-  { label: "Terrace",    value: "Rooftop terrace" },
-  { label: "Winter room",value: "Panoramic — converts to open-air" },
-  { label: "Outdoor",    value: "BBQ & stamped concrete terraces" },
-  { label: "Parking",    value: "Private parking" },
-  { label: "Amenities",  value: "Towels, robes, slippers, toiletries" },
+  { label: "Bedrooms",    value: "3 (master with en-suite)" },
+  { label: "Bathrooms",   value: "3" },
+  { label: "Pool",        value: "Heated private pool" },
+  { label: "Terrace",     value: "Rooftop terrace" },
+  { label: "Winter room", value: "Panoramic — converts to open-air" },
+  { label: "Outdoor",     value: "BBQ & stamped concrete terraces" },
+  { label: "Parking",     value: "Private parking" },
+  { label: "Amenities",   value: "Towels, robes, slippers, toiletries" },
 ];
 
 const highlights = [
@@ -36,7 +33,26 @@ const highlights = [
   "Sleeps 6 (up to 8 with extra bedding), up to 25 day visitors",
 ];
 
+interface VillaMedia {
+  id: string;
+  category: string;
+  file_url: string;
+  display_order: number;
+}
+
 export default function VillaMechmechPage() {
+  const [villaMedia, setVillaMedia] = useState<VillaMedia[]>([]);
+
+  useEffect(() => {
+    fetch("/api/media?villa=mechmech")
+      .then((r) => r.json())
+      .then((d) => { if (d.media) setVillaMedia(d.media); })
+      .catch(() => {});
+  }, []);
+
+  const heroImg = villaMedia[0]?.file_url ?? "";
+  const galleryMedia = villaMedia.slice(1);
+
   return (
     <>
       <SiteNav base="/" />
@@ -51,27 +67,25 @@ export default function VillaMechmechPage() {
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          ...(HERO_IMG
-            ? { backgroundImage: `url(${HERO_IMG})`, backgroundSize: "cover", backgroundPosition: "center" }
+          ...(heroImg
+            ? { backgroundImage: `url(${heroImg})`, backgroundSize: "cover", backgroundPosition: "center" }
             : { backgroundImage: HERO_GRADIENT }),
         }}>
-          {/* Placeholder text — hidden once HERO_IMG is set */}
-          {!HERO_IMG && (
+          {/* Placeholder — hidden once real image loads */}
+          {!heroImg && (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "14px", opacity: 0.25 }}>
-              <div style={{ width: "64px" }}>
-                <OrayaEmblem />
-              </div>
+              <div style={{ width: "64px" }}><OrayaEmblem /></div>
               <span style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: WHITE }}>
                 Villa photography coming soon
               </span>
             </div>
           )}
 
-          {/* Bottom overlay — gradient for photos, solid-ish for gradient bg */}
+          {/* Bottom overlay */}
           <div style={{
             position: "absolute",
             bottom: 0, left: 0, right: 0,
-            background: HERO_IMG
+            background: heroImg
               ? "linear-gradient(to top, rgba(10,20,28,0.95) 0%, rgba(10,20,28,0.6) 50%, transparent 100%)"
               : "linear-gradient(to top, rgba(10,18,25,0.98) 0%, rgba(10,18,25,0.7) 55%, transparent 100%)",
             padding: "2.5rem 3rem 2rem",
@@ -106,6 +120,48 @@ export default function VillaMechmechPage() {
           </div>
         </div>
       </section>
+
+      {/* ── Photo gallery strip (when 2+ images exist) ── */}
+      {galleryMedia.length > 0 && (
+        <section style={{ backgroundColor: "#141f28", overflow: "hidden" }}>
+          <div style={{
+            display: "flex",
+            overflowX: "auto",
+            gap: "2px",
+            scrollbarWidth: "thin",
+            scrollbarColor: `rgba(197,164,109,0.3) transparent`,
+          }}>
+            {galleryMedia.map((img) => (
+              <div
+                key={img.id}
+                style={{
+                  flexShrink: 0,
+                  width: "260px",
+                  height: "190px",
+                  position: "relative",
+                  overflow: "hidden",
+                }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={img.file_url}
+                  alt={img.category}
+                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                />
+                <div style={{
+                  position: "absolute", bottom: 0, left: 0, right: 0,
+                  background: "linear-gradient(to top, rgba(0,0,0,0.65) 0%, transparent 100%)",
+                  padding: "6px 10px",
+                }}>
+                  <span style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "rgba(255,255,255,0.55)" }}>
+                    {img.category}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ── Description ── */}
       <section style={{ backgroundColor: WHITE, padding: "5rem 3rem" }}>
@@ -164,18 +220,13 @@ export default function VillaMechmechPage() {
               </li>
             ))}
           </ul>
-
           <a
             href="/book?villa=Villa+Mechmech"
             style={{
               display: "inline-block",
-              fontFamily: LATO,
-              fontSize: "11px",
-              letterSpacing: "2.5px",
-              textTransform: "uppercase",
-              color: CHARCOAL,
-              backgroundColor: GOLD,
-              padding: "15px 44px",
+              fontFamily: LATO, fontSize: "11px", letterSpacing: "2.5px",
+              textTransform: "uppercase", color: CHARCOAL,
+              backgroundColor: GOLD, padding: "15px 44px",
               textDecoration: "none",
             }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}

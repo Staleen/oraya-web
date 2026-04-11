@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import OrayaEmblem from "@/components/OrayaEmblem";
+import MediaManager from "@/components/MediaManager";
 
 const GOLD     = "#C5A46D";
 const WHITE    = "#FFFFFF";
@@ -445,6 +446,9 @@ export default function AdminPage() {
             </div>
           </div>
         </div>
+
+        {/* Media Manager */}
+        <MediaManager />
 
         {/* Stats row */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px", marginBottom: "2.5rem" }}>
