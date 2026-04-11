@@ -16,7 +16,8 @@ interface Booking {
   villa: string;
   check_in: string;
   check_out: string;
-  guests: number;
+  sleeping_guests: number;
+  day_visitors: number;
   event_type: string | null;
   message: string | null;
   status: string;
@@ -223,7 +224,7 @@ export default function AdminPage() {
               <table style={{ width: "100%", borderCollapse: "collapse", backgroundColor: SURFACE, border: `0.5px solid ${BORDER}` }}>
                 <thead>
                   <tr>
-                    {["Ref", "Villa", "Check-in", "Check-out", "Guests", "Event", "Status", "Submitted"].map((h) => (
+                    {["Ref", "Villa", "Check-in", "Check-out", "Sleeping", "Visitors", "Event", "Status", "Submitted"].map((h) => (
                       <th key={h} style={thStyle}>{h}</th>
                     ))}
                     <th style={{ ...thStyle, textAlign: "center" }}>Update status</th>
@@ -241,7 +242,8 @@ export default function AdminPage() {
                       <td style={tdStyle}>{b.villa}</td>
                       <td style={tdStyle}>{fmt(b.check_in)}</td>
                       <td style={tdStyle}>{fmt(b.check_out)}</td>
-                      <td style={{ ...tdStyle, textAlign: "center" }}>{b.guests}</td>
+                      <td style={{ ...tdStyle, textAlign: "center" }}>{b.sleeping_guests}</td>
+                      <td style={{ ...tdStyle, textAlign: "center" }}>{b.day_visitors}</td>
                       <td style={{ ...tdStyle, color: MUTED }}>{b.event_type ?? "—"}</td>
                       <td style={tdStyle}><StatusBadge status={b.status} /></td>
                       <td style={{ ...tdStyle, color: MUTED, fontSize: "11px" }}>{fmt(b.created_at)}</td>

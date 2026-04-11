@@ -34,16 +34,70 @@ const labelStyle: React.CSSProperties = {
   marginBottom: "6px",
 };
 
+// Priority countries first, then alphabetical rest
+const DIAL_CODES = [
+  { flag: "🇱🇧", label: "Lebanon",      code: "+961" },
+  { flag: "🇸🇦", label: "Saudi Arabia", code: "+966" },
+  { flag: "🇦🇪", label: "UAE",          code: "+971" },
+  { flag: "🇫🇷", label: "France",       code: "+33"  },
+  { flag: "🇺🇸", label: "United States",code: "+1"   },
+  { flag: "──", label: "──────────────", code: "" }, // divider
+  { flag: "🇩🇿", label: "Algeria",      code: "+213" },
+  { flag: "🇦🇷", label: "Argentina",    code: "+54"  },
+  { flag: "🇦🇺", label: "Australia",    code: "+61"  },
+  { flag: "🇦🇹", label: "Austria",      code: "+43"  },
+  { flag: "🇧🇪", label: "Belgium",      code: "+32"  },
+  { flag: "🇧🇷", label: "Brazil",       code: "+55"  },
+  { flag: "🇨🇦", label: "Canada",       code: "+1"   },
+  { flag: "🇨🇳", label: "China",        code: "+86"  },
+  { flag: "🇨🇾", label: "Cyprus",       code: "+357" },
+  { flag: "🇩🇰", label: "Denmark",      code: "+45"  },
+  { flag: "🇪🇬", label: "Egypt",        code: "+20"  },
+  { flag: "🇩🇪", label: "Germany",      code: "+49"  },
+  { flag: "🇬🇷", label: "Greece",       code: "+30"  },
+  { flag: "🇮🇳", label: "India",        code: "+91"  },
+  { flag: "🇮🇶", label: "Iraq",         code: "+964" },
+  { flag: "🇮🇪", label: "Ireland",      code: "+353" },
+  { flag: "🇮🇹", label: "Italy",        code: "+39"  },
+  { flag: "🇯🇴", label: "Jordan",       code: "+962" },
+  { flag: "🇰🇼", label: "Kuwait",       code: "+965" },
+  { flag: "🇲🇽", label: "Mexico",       code: "+52"  },
+  { flag: "🇲🇦", label: "Morocco",      code: "+212" },
+  { flag: "🇳🇱", label: "Netherlands",  code: "+31"  },
+  { flag: "🇳🇿", label: "New Zealand",  code: "+64"  },
+  { flag: "🇳🇬", label: "Nigeria",      code: "+234" },
+  { flag: "🇳🇴", label: "Norway",       code: "+47"  },
+  { flag: "🇴🇲", label: "Oman",         code: "+968" },
+  { flag: "🇵🇰", label: "Pakistan",     code: "+92"  },
+  { flag: "🇵🇸", label: "Palestine",    code: "+970" },
+  { flag: "🇵🇱", label: "Poland",       code: "+48"  },
+  { flag: "🇵🇹", label: "Portugal",     code: "+351" },
+  { flag: "🇶🇦", label: "Qatar",        code: "+974" },
+  { flag: "🇷🇺", label: "Russia",       code: "+7"   },
+  { flag: "🇸🇳", label: "Senegal",      code: "+221" },
+  { flag: "🇿🇦", label: "South Africa", code: "+27"  },
+  { flag: "🇪🇸", label: "Spain",        code: "+34"  },
+  { flag: "🇸🇩", label: "Sudan",        code: "+249" },
+  { flag: "🇸🇪", label: "Sweden",       code: "+46"  },
+  { flag: "🇨🇭", label: "Switzerland",  code: "+41"  },
+  { flag: "🇸🇾", label: "Syria",        code: "+963" },
+  { flag: "🇹🇳", label: "Tunisia",      code: "+216" },
+  { flag: "🇹🇷", label: "Turkey",       code: "+90"  },
+  { flag: "🇬🇧", label: "United Kingdom",code: "+44" },
+  { flag: "🇾🇪", label: "Yemen",        code: "+967" },
+];
+
 export default function JoinPage() {
   const router = useRouter();
   const [form, setForm] = useState({
     fullName: "", email: "", password: "",
-    phone: "", country: "", address: "",
+    dialCode: "+961", phoneNumber: "",
+    country: "", address: "",
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
   }
 
@@ -51,6 +105,7 @@ export default function JoinPage() {
     e.preventDefault();
     setError("");
     setLoading(true);
+    const phone = form.phoneNumber ? `${form.dialCode}${form.phoneNumber}` : "";
     try {
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: form.email,
@@ -58,7 +113,7 @@ export default function JoinPage() {
         options: {
           data: {
             full_name: form.fullName,
-            phone: form.phone,
+            phone,
             country: form.country,
             address: form.address,
           },
@@ -71,7 +126,7 @@ export default function JoinPage() {
         const { error: insertError } = await supabase.from("members").insert({
           id: user.id,
           full_name: form.fullName,
-          phone: form.phone,
+          phone,
           country: form.country,
           address: form.address,
         });
@@ -89,6 +144,13 @@ export default function JoinPage() {
       setLoading(false);
     }
   }
+
+  const focusBorder = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) => {
+    e.currentTarget.style.borderColor = GOLD;
+  };
+  const blurBorder = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) => {
+    e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)";
+  };
 
   return (
     <main
@@ -116,91 +178,105 @@ export default function JoinPage() {
 
         {/* Form */}
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+
           <div>
             <label style={labelStyle}>Full name</label>
             <input
-              name="fullName"
-              type="text"
-              required
-              value={form.fullName}
-              onChange={handleChange}
+              name="fullName" type="text" required
+              value={form.fullName} onChange={handleChange}
               placeholder="Your full name"
               style={inputStyle}
-              onFocus={(e) => { e.currentTarget.style.borderColor = GOLD; }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+              onFocus={focusBorder} onBlur={blurBorder}
             />
           </div>
 
           <div>
             <label style={labelStyle}>Email address</label>
             <input
-              name="email"
-              type="email"
-              required
-              value={form.email}
-              onChange={handleChange}
+              name="email" type="email" required
+              value={form.email} onChange={handleChange}
               placeholder="you@example.com"
               style={inputStyle}
-              onFocus={(e) => { e.currentTarget.style.borderColor = GOLD; }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+              onFocus={focusBorder} onBlur={blurBorder}
             />
           </div>
 
           <div>
             <label style={labelStyle}>Password</label>
             <input
-              name="password"
-              type="password"
-              required
-              minLength={8}
-              value={form.password}
-              onChange={handleChange}
+              name="password" type="password" required minLength={8}
+              value={form.password} onChange={handleChange}
               placeholder="Minimum 8 characters"
               style={inputStyle}
-              onFocus={(e) => { e.currentTarget.style.borderColor = GOLD; }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+              onFocus={focusBorder} onBlur={blurBorder}
             />
           </div>
 
+          {/* Phone with dial code */}
           <div>
             <label style={labelStyle}>Phone number</label>
-            <input
-              name="phone"
-              type="tel"
-              value={form.phone}
-              onChange={handleChange}
-              placeholder="+961 ..."
-              style={inputStyle}
-              onFocus={(e) => { e.currentTarget.style.borderColor = GOLD; }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
-            />
+            <div style={{ display: "flex", gap: "0" }}>
+              <select
+                name="dialCode"
+                value={form.dialCode}
+                onChange={handleChange}
+                onFocus={focusBorder}
+                onBlur={blurBorder}
+                style={{
+                  ...inputStyle,
+                  width: "auto",
+                  flexShrink: 0,
+                  paddingRight: "10px",
+                  borderRight: "none",
+                  cursor: "pointer",
+                  appearance: "none",
+                  minWidth: "120px",
+                }}
+              >
+                {DIAL_CODES.map((d, i) =>
+                  d.code === "" ? (
+                    <option key={`div-${i}`} disabled value="" style={{ backgroundColor: MIDNIGHT, color: MUTED }}>
+                      {d.label}
+                    </option>
+                  ) : (
+                    <option key={`${d.code}-${d.label}`} value={d.code} style={{ backgroundColor: MIDNIGHT }}>
+                      {d.flag} {d.code}
+                    </option>
+                  )
+                )}
+              </select>
+              <input
+                name="phoneNumber"
+                type="tel"
+                value={form.phoneNumber}
+                onChange={handleChange}
+                placeholder="70 000 000"
+                style={{ ...inputStyle, flex: 1 }}
+                onFocus={focusBorder}
+                onBlur={blurBorder}
+              />
+            </div>
           </div>
 
           <div>
             <label style={labelStyle}>Country</label>
             <input
-              name="country"
-              type="text"
-              value={form.country}
-              onChange={handleChange}
+              name="country" type="text"
+              value={form.country} onChange={handleChange}
               placeholder="Lebanon"
               style={inputStyle}
-              onFocus={(e) => { e.currentTarget.style.borderColor = GOLD; }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+              onFocus={focusBorder} onBlur={blurBorder}
             />
           </div>
 
           <div>
             <label style={labelStyle}>Address</label>
             <input
-              name="address"
-              type="text"
-              value={form.address}
-              onChange={handleChange}
+              name="address" type="text"
+              value={form.address} onChange={handleChange}
               placeholder="City, region"
               style={inputStyle}
-              onFocus={(e) => { e.currentTarget.style.borderColor = GOLD; }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+              onFocus={focusBorder} onBlur={blurBorder}
             />
           </div>
 
@@ -231,7 +307,6 @@ export default function JoinPage() {
           </button>
         </form>
 
-        {/* Sign in link */}
         <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, textAlign: "center", marginTop: "2rem" }}>
           Already a member?{" "}
           <a

@@ -44,7 +44,8 @@ export default function BookPage() {
     villa: "",
     checkIn: "",
     checkOut: "",
-    guests: "2",
+    sleepingGuests: "2",
+    dayVisitors: "0",
     eventType: "",
     message: "",
   });
@@ -80,7 +81,8 @@ export default function BookPage() {
         villa: form.villa,
         check_in: form.checkIn,
         check_out: form.checkOut,
-        guests: parseInt(form.guests, 10),
+        sleeping_guests: parseInt(form.sleepingGuests, 10),
+        day_visitors: parseInt(form.dayVisitors, 10),
         event_type: form.eventType || null,
         message: form.message || null,
         status: "pending",
@@ -92,7 +94,8 @@ export default function BookPage() {
         villa: form.villa,
         checkIn: form.checkIn,
         checkOut: form.checkOut,
-        guests: form.guests,
+        sleepingGuests: form.sleepingGuests,
+        dayVisitors: form.dayVisitors,
         eventType: form.eventType,
         id: data?.id ?? "",
       });
@@ -107,6 +110,8 @@ export default function BookPage() {
       setLoading(false);
     }
   }
+
+  const sleepingCount = parseInt(form.sleepingGuests, 10) || 0;
 
   return (
     <main
@@ -138,12 +143,9 @@ export default function BookPage() {
           <div>
             <label style={labelStyle}>Villa</label>
             <select
-              name="villa"
-              required
-              value={form.villa}
-              onChange={handleChange}
-              onFocus={focusGold}
-              onBlur={blurGold}
+              name="villa" required
+              value={form.villa} onChange={handleChange}
+              onFocus={focusGold} onBlur={blurGold}
               style={{ ...inputStyle, cursor: "pointer" }}
             >
               <option value="" disabled style={{ backgroundColor: MIDNIGHT }}>Select a villa</option>
@@ -158,13 +160,9 @@ export default function BookPage() {
             <div>
               <label style={labelStyle}>Check-in</label>
               <input
-                name="checkIn"
-                type="date"
-                required
-                value={form.checkIn}
-                onChange={handleChange}
-                onFocus={focusGold}
-                onBlur={blurGold}
+                name="checkIn" type="date" required
+                value={form.checkIn} onChange={handleChange}
+                onFocus={focusGold} onBlur={blurGold}
                 min={new Date().toISOString().split("T")[0]}
                 style={{ ...inputStyle, colorScheme: "dark" }}
               />
@@ -172,34 +170,42 @@ export default function BookPage() {
             <div>
               <label style={labelStyle}>Check-out</label>
               <input
-                name="checkOut"
-                type="date"
-                required
-                value={form.checkOut}
-                onChange={handleChange}
-                onFocus={focusGold}
-                onBlur={blurGold}
+                name="checkOut" type="date" required
+                value={form.checkOut} onChange={handleChange}
+                onFocus={focusGold} onBlur={blurGold}
                 min={form.checkIn || new Date().toISOString().split("T")[0]}
                 style={{ ...inputStyle, colorScheme: "dark" }}
               />
             </div>
           </div>
 
-          {/* Guests */}
-          <div>
-            <label style={labelStyle}>Number of guests</label>
-            <input
-              name="guests"
-              type="number"
-              required
-              min={1}
-              max={50}
-              value={form.guests}
-              onChange={handleChange}
-              onFocus={focusGold}
-              onBlur={blurGold}
-              style={inputStyle}
-            />
+          {/* Guest fields row */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+            <div>
+              <label style={labelStyle}>Guests staying overnight</label>
+              <input
+                name="sleepingGuests" type="number" required
+                min={1} max={8}
+                value={form.sleepingGuests} onChange={handleChange}
+                onFocus={focusGold} onBlur={blurGold}
+                style={inputStyle}
+              />
+              {sleepingCount > 6 && (
+                <p style={{ fontFamily: LATO, fontSize: "11px", color: GOLD, marginTop: "6px", lineHeight: 1.5 }}>
+                  Extra bedding will be arranged for additional guests.
+                </p>
+              )}
+            </div>
+            <div>
+              <label style={labelStyle}>Expected visitors</label>
+              <input
+                name="dayVisitors" type="number" required
+                min={0} max={25}
+                value={form.dayVisitors} onChange={handleChange}
+                onFocus={focusGold} onBlur={blurGold}
+                style={inputStyle}
+              />
+            </div>
           </div>
 
           {/* Event type */}
@@ -207,10 +213,8 @@ export default function BookPage() {
             <label style={labelStyle}>Event type <span style={{ color: "rgba(138,128,112,0.5)", letterSpacing: 0 }}>(optional)</span></label>
             <select
               name="eventType"
-              value={form.eventType}
-              onChange={handleChange}
-              onFocus={focusGold}
-              onBlur={blurGold}
+              value={form.eventType} onChange={handleChange}
+              onFocus={focusGold} onBlur={blurGold}
               style={{ ...inputStyle, cursor: "pointer" }}
             >
               <option value="" style={{ backgroundColor: MIDNIGHT }}>Select type</option>
@@ -225,17 +229,11 @@ export default function BookPage() {
             <label style={labelStyle}>Special requests <span style={{ color: "rgba(138,128,112,0.5)", letterSpacing: 0 }}>(optional)</span></label>
             <textarea
               name="message"
-              value={form.message}
-              onChange={handleChange}
-              onFocus={focusGold}
-              onBlur={blurGold}
+              value={form.message} onChange={handleChange}
+              onFocus={focusGold} onBlur={blurGold}
               rows={4}
               placeholder="Any special requirements, dietary needs, or occasion details…"
-              style={{
-                ...inputStyle,
-                resize: "vertical",
-                lineHeight: 1.6,
-              }}
+              style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6 }}
             />
           </div>
 

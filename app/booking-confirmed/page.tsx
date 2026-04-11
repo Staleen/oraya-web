@@ -19,21 +19,23 @@ function formatDate(iso: string) {
 
 export default function BookingConfirmedPage() {
   const p = useSearchParams();
-  const villa     = p.get("villa") ?? "—";
-  const checkIn   = p.get("checkIn") ?? "";
-  const checkOut  = p.get("checkOut") ?? "";
-  const guests    = p.get("guests") ?? "—";
-  const eventType = p.get("eventType") ?? "";
-  const id        = p.get("id") ?? "";
+  const villa          = p.get("villa") ?? "—";
+  const checkIn        = p.get("checkIn") ?? "";
+  const checkOut       = p.get("checkOut") ?? "";
+  const sleepingGuests = p.get("sleepingGuests") ?? "—";
+  const dayVisitors    = p.get("dayVisitors") ?? "0";
+  const eventType      = p.get("eventType") ?? "";
+  const id             = p.get("id") ?? "";
 
   const details = [
-    { label: "Villa",      value: villa },
-    { label: "Check-in",   value: formatDate(checkIn) },
-    { label: "Check-out",  value: formatDate(checkOut) },
-    { label: "Guests",     value: guests },
+    { label: "Villa",                  value: villa },
+    { label: "Check-in",               value: formatDate(checkIn) },
+    { label: "Check-out",              value: formatDate(checkOut) },
+    { label: "Guests staying",         value: sleepingGuests },
+    { label: "Expected visitors",      value: dayVisitors },
     ...(eventType ? [{ label: "Event type", value: eventType }] : []),
-    { label: "Status",     value: "Pending confirmation" },
-    ...(id ? [{ label: "Reference",  value: id.slice(0, 8).toUpperCase() }] : []),
+    { label: "Status",                 value: "Pending confirmation" },
+    ...(id ? [{ label: "Reference",    value: id.slice(0, 8).toUpperCase() }] : []),
   ];
 
   return (
@@ -69,25 +71,14 @@ export default function BookingConfirmedPage() {
         <div style={{ width: "40px", height: "0.5px", backgroundColor: GOLD, margin: "0 auto 2.5rem", opacity: 0.4 }} />
 
         {/* Booking details card */}
-        <div style={{
-          border: "0.5px solid rgba(197,164,109,0.2)",
-          padding: "2rem",
-          marginBottom: "2.5rem",
-          textAlign: "left",
-        }}>
+        <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", padding: "2rem", marginBottom: "2.5rem", textAlign: "left" }}>
           <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, marginBottom: "1.25rem" }}>
             Booking summary
           </p>
           {details.map(({ label, value }) => (
             <div
               key={label}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "baseline",
-                padding: "10px 0",
-                borderBottom: "0.5px solid rgba(255,255,255,0.05)",
-              }}
+              style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "10px 0", borderBottom: "0.5px solid rgba(255,255,255,0.05)" }}
             >
               <span style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED }}>
                 {label}
@@ -103,17 +94,7 @@ export default function BookingConfirmedPage() {
         <div style={{ display: "flex", gap: "12px", justifyContent: "center", flexWrap: "wrap" }}>
           <a
             href="/"
-            style={{
-              display: "inline-block",
-              fontFamily: LATO,
-              fontSize: "11px",
-              letterSpacing: "2.5px",
-              textTransform: "uppercase",
-              color: CHARCOAL,
-              backgroundColor: GOLD,
-              padding: "15px 36px",
-              textDecoration: "none",
-            }}
+            style={{ display: "inline-block", fontFamily: LATO, fontSize: "11px", letterSpacing: "2.5px", textTransform: "uppercase", color: CHARCOAL, backgroundColor: GOLD, padding: "15px 36px", textDecoration: "none" }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
           >
@@ -121,18 +102,7 @@ export default function BookingConfirmedPage() {
           </a>
           <a
             href="/book"
-            style={{
-              display: "inline-block",
-              fontFamily: LATO,
-              fontSize: "11px",
-              letterSpacing: "2.5px",
-              textTransform: "uppercase",
-              color: GOLD,
-              backgroundColor: "transparent",
-              border: "0.5px solid rgba(197,164,109,0.4)",
-              padding: "15px 36px",
-              textDecoration: "none",
-            }}
+            style={{ display: "inline-block", fontFamily: LATO, fontSize: "11px", letterSpacing: "2.5px", textTransform: "uppercase", color: GOLD, backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.4)", padding: "15px 36px", textDecoration: "none" }}
             onMouseEnter={(e) => {
               (e.currentTarget as HTMLElement).style.borderColor = GOLD;
               (e.currentTarget as HTMLElement).style.color = WHITE;
