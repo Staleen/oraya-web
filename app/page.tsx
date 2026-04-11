@@ -146,7 +146,7 @@ export default function Home() {
 
           <div className="flex gap-4 justify-center flex-wrap">
             <a
-              href="/book"
+              href="#villas"
               className="no-underline inline-block transition-colors duration-200"
               style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: WHITE, backgroundColor: GOLD, padding: "15px 44px" }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
@@ -242,36 +242,51 @@ export default function Home() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 max-w-[1100px] mx-auto" style={{ gap: "2px" }}>
           {villas.map(({ tag, name, loc, feats, href }) => (
-            <div
+            <a
               key={name}
-              className="relative flex flex-col justify-end overflow-hidden"
-              style={{ backgroundColor: BEIGE, minHeight: "520px" }}
+              href={href}
+              style={{
+                display: "block",
+                textDecoration: "none",
+                overflow: "hidden",
+                cursor: "pointer",
+                transition: "transform 0.25s ease, box-shadow 0.25s ease",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.transform = "translateY(-4px)";
+                (e.currentTarget as HTMLElement).style.boxShadow = "0 20px 56px rgba(0,0,0,0.13)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
+                (e.currentTarget as HTMLElement).style.boxShadow = "none";
+              }}
             >
-              <div className="absolute inset-0 flex items-center justify-center flex-col gap-4">
-                <div style={{ width: "60px", opacity: 0.12 }}>
+              {/* Image area — tall placeholder */}
+              <div style={{
+                height: "360px",
+                backgroundColor: BEIGE,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "14px",
+              }}>
+                <div style={{ width: "64px", opacity: 0.12 }}>
                   <OrayaEmblem />
                 </div>
-                <span
-                  className="uppercase"
-                  style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", color: MUTED, opacity: 0.5 }}
-                >
+                <span style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, opacity: 0.5 }}>
                   Photos coming soon
                 </span>
               </div>
 
-              <div
-                className="relative z-[2]"
-                style={{ backgroundColor: WHITE, padding: "1.75rem 2rem", borderTop: "0.5px solid rgba(197,164,109,0.2)" }}
-              >
-                <p
-                  className="uppercase mb-1"
-                  style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2.5px", color: GOLD }}
-                >
+              {/* Content panel */}
+              <div style={{ backgroundColor: WHITE, padding: "1.75rem 2rem", borderTop: "0.5px solid rgba(197,164,109,0.2)" }}>
+                <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: GOLD, marginBottom: "4px" }}>
                   {tag}
                 </p>
                 <p style={{ fontFamily: PLAYFAIR, fontSize: "22px", color: CHARCOAL, marginBottom: "3px" }}>{name}</p>
                 <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, fontWeight: 300, marginBottom: "10px" }}>{loc}</p>
-                <div className="flex" style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, gap: "10px" }}>
+                <div style={{ display: "flex", fontFamily: LATO, fontSize: "11px", color: MUTED, gap: "10px" }}>
                   {feats.map((f, i) => (
                     <Fragment key={f}>
                       {i > 0 && <span>·</span>}
@@ -279,15 +294,11 @@ export default function Home() {
                     </Fragment>
                   ))}
                 </div>
-                <a
-                  href={href}
-                  className="inline-block no-underline uppercase"
-                  style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", color: GOLD, marginTop: "12px", borderBottom: "0.5px solid #C5A46D", paddingBottom: "2px" }}
-                >
+                <span style={{ display: "inline-block", fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, marginTop: "12px", borderBottom: "0.5px solid #C5A46D", paddingBottom: "2px" }}>
                   Explore this villa →
-                </a>
+                </span>
               </div>
-            </div>
+            </a>
           ))}
         </div>
       </section>
