@@ -1,6 +1,6 @@
 "use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import OrayaEmblem from "@/components/OrayaEmblem";
 import { supabase } from "@/lib/supabase";
 
@@ -40,6 +40,7 @@ const EVENT_TYPES = ["Stay", "Wedding", "Baptism", "Corporate"];
 
 export default function BookPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [form, setForm] = useState({
     villa: "",
     checkIn: "",
@@ -51,6 +52,11 @@ export default function BookPage() {
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const v = searchParams.get("villa");
+    if (v && VILLAS.includes(v)) setForm((f) => ({ ...f, villa: v }));
+  }, [searchParams]);
 
   function handleChange(
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>

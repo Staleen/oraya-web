@@ -19,12 +19,14 @@ const villas = [
     name: "Villa Mechmech",
     loc: "Mechmech, North Lebanon",
     feats: ["Private villa", "Mountain views", "Events"],
+    href: "/villas/mechmech",
   },
   {
     tag: "Cultural elegance",
     name: "Villa Byblos",
     loc: "Jbeil, Byblos, Lebanon",
     feats: ["Private villa", "Historic setting", "Events"],
+    href: "/villas/byblos",
   },
 ];
 
@@ -239,7 +241,7 @@ export default function Home() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 max-w-[1100px] mx-auto" style={{ gap: "2px" }}>
-          {villas.map(({ tag, name, loc, feats }) => (
+          {villas.map(({ tag, name, loc, feats, href }) => (
             <div
               key={name}
               className="relative flex flex-col justify-end overflow-hidden"
@@ -278,7 +280,7 @@ export default function Home() {
                   ))}
                 </div>
                 <a
-                  href="#"
+                  href={href}
                   className="inline-block no-underline uppercase"
                   style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", color: GOLD, marginTop: "12px", borderBottom: "0.5px solid #C5A46D", paddingBottom: "2px" }}
                 >
@@ -432,7 +434,7 @@ export default function Home() {
           </div>
 
           {[
-            { title: "Explore",  links: [{ label: "Villa Mechmech", href: "#villas" }, { label: "Villa Byblos", href: "#villas" }, { label: "Gallery", href: "#" }, { label: "Events", href: "#" }] },
+            { title: "Explore",  links: [{ label: "Villa Mechmech", href: "/villas/mechmech" }, { label: "Villa Byblos", href: "/villas/byblos" }, { label: "Gallery", href: "#" }, { label: "Events", href: "#" }] },
             { title: "Members",  links: [{ label: "Join Oraya", href: "/join" }, { label: "Sign in", href: "/login" }, { label: "My bookings", href: "#" }, { label: "My profile", href: "#" }] },
             { title: "Contact",  links: [{ label: "hello@oraya.com", href: "mailto:hello@oraya.com" }, { label: "WhatsApp", href: "#" }, { label: "Instagram", href: "#" }, { label: "Lebanon", href: "#" }] },
           ].map(({ title, links }) => (

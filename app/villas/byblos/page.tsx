@@ -1,0 +1,178 @@
+"use client";
+import SiteNav from "@/components/SiteNav";
+import SiteFooter from "@/components/SiteFooter";
+import OrayaEmblem from "@/components/OrayaEmblem";
+
+const GOLD       = "#C5A46D";
+const WHITE      = "#FFFFFF";
+const BEIGE      = "#EAE3D9";
+const BEIGELIGHT = "#F5F1EB";
+const CHARCOAL   = "#2E2E2E";
+const MIDNIGHT   = "#1F2B38";
+const MUTED      = "#8a8070";
+const PLAYFAIR   = "'Playfair Display', Georgia, serif";
+const LATO       = "'Lato', system-ui, sans-serif";
+
+const details = [
+  { label: "Bedrooms",   value: "3 (master with en-suite)" },
+  { label: "Bathrooms",  value: "3" },
+  { label: "Pool",       value: "Private pool" },
+  { label: "Garden",     value: "Lush garden with fruit trees" },
+  { label: "Olive grove",value: "Breakfast zone beneath olive trees" },
+  { label: "Shade tree", value: "Grand umbrella tree lounge" },
+  { label: "Parking",    value: "Private parking" },
+  { label: "Amenities",  value: "Towels, robes, slippers, toiletries" },
+];
+
+const highlights = [
+  "Breakfast zone nestled in an olive grove",
+  "Pool surrounded by fruit trees and flowers",
+  "Grand umbrella tree shading the outdoor lounge",
+  "10 minutes from Byblos Old Souk and harbour",
+  "Sleeps 6 (up to 8 with extra bedding), up to 25 day visitors",
+];
+
+export default function VillaByblosPage() {
+  return (
+    <>
+      <SiteNav base="/" />
+
+      {/* ── Hero ── */}
+      <section style={{ paddingTop: "80px", backgroundColor: MIDNIGHT, minHeight: "60vh", display: "flex", flexDirection: "column" }}>
+        {/* Image placeholder */}
+        <div style={{ flex: 1, minHeight: "420px", backgroundColor: BEIGE, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "16px", position: "relative" }}>
+          <div style={{ width: "64px", opacity: 0.15 }}>
+            <OrayaEmblem />
+          </div>
+          <span style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "3px", textTransform: "uppercase", color: MUTED, opacity: 0.6 }}>
+            Photos coming soon
+          </span>
+
+          {/* Overlay card */}
+          <div style={{
+            position: "absolute",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            backgroundColor: "rgba(31,43,56,0.92)",
+            padding: "2rem 3rem",
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "1rem",
+          }}>
+            <div>
+              <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "4px", textTransform: "uppercase", color: GOLD, marginBottom: "6px" }}>
+                Cultural elegance · Jbeil, Byblos, Lebanon
+              </p>
+              <h1 style={{ fontFamily: PLAYFAIR, fontSize: "clamp(1.8rem, 4vw, 3rem)", fontWeight: 400, color: WHITE, margin: 0, lineHeight: 1.15 }}>
+                Villa Byblos<br />
+                <span style={{ fontStyle: "italic", opacity: 0.7 }}>Mediterranean Garden Estate</span>
+              </h1>
+            </div>
+            <a
+              href="/book?villa=Villa+Byblos"
+              style={{
+                fontFamily: LATO,
+                fontSize: "11px",
+                letterSpacing: "2.5px",
+                textTransform: "uppercase",
+                color: CHARCOAL,
+                backgroundColor: GOLD,
+                padding: "14px 36px",
+                textDecoration: "none",
+                flexShrink: 0,
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
+            >
+              Book this villa
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Description ── */}
+      <section style={{ backgroundColor: WHITE, padding: "5rem 3rem" }}>
+        <div style={{ maxWidth: "760px", margin: "0 auto" }}>
+          <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "4px", textTransform: "uppercase", color: GOLD, marginBottom: "1rem" }}>
+            About the villa
+          </p>
+          <h2 style={{ fontFamily: PLAYFAIR, fontSize: "clamp(1.5rem, 3vw, 2.2rem)", fontWeight: 400, color: CHARCOAL, lineHeight: 1.25, marginBottom: "1.5rem" }}>
+            Nature and elegance<br />in perfect harmony
+          </h2>
+          <div style={{ width: "40px", height: "0.5px", backgroundColor: GOLD, marginBottom: "1.75rem" }} />
+          <p style={{ fontFamily: LATO, fontSize: "15px", color: MUTED, lineHeight: 1.9, fontWeight: 300 }}>
+            A lush garden escape near the historic coast of Byblos. Breakfast under olive trees, lounging beneath a grand umbrella tree, and a pool framed by fruit trees and flowers. Nature and elegance in perfect harmony. 10 minutes from Byblos Old Souk.
+          </p>
+        </div>
+      </section>
+
+      {/* ── Details ── */}
+      <section style={{ backgroundColor: BEIGELIGHT, padding: "5rem 3rem" }}>
+        <div style={{ maxWidth: "1100px", margin: "0 auto" }}>
+          <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "4px", textTransform: "uppercase", color: GOLD, marginBottom: "1rem" }}>
+            Villa details
+          </p>
+          <h2 style={{ fontFamily: PLAYFAIR, fontSize: "clamp(1.4rem, 2.5vw, 2rem)", fontWeight: 400, color: CHARCOAL, marginBottom: "2.5rem" }}>
+            Everything included
+          </h2>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "1px", backgroundColor: "rgba(197,164,109,0.15)" }}>
+            {details.map(({ label, value }) => (
+              <div key={label} style={{ backgroundColor: WHITE, padding: "1.5rem 1.75rem" }}>
+                <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2.5px", textTransform: "uppercase", color: GOLD, marginBottom: "6px" }}>
+                  {label}
+                </p>
+                <p style={{ fontFamily: LATO, fontSize: "14px", color: CHARCOAL, fontWeight: 300, lineHeight: 1.5 }}>
+                  {value}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Highlights ── */}
+      <section style={{ backgroundColor: MIDNIGHT, padding: "5rem 3rem" }}>
+        <div style={{ maxWidth: "760px", margin: "0 auto" }}>
+          <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "4px", textTransform: "uppercase", color: GOLD, marginBottom: "1rem" }}>
+            Why Byblos
+          </p>
+          <h2 style={{ fontFamily: PLAYFAIR, fontSize: "clamp(1.4rem, 2.5vw, 2rem)", fontWeight: 400, color: WHITE, marginBottom: "2.5rem" }}>
+            What makes it special
+          </h2>
+          <ul style={{ listStyle: "none", padding: 0, margin: "0 0 3rem", display: "flex", flexDirection: "column", gap: "16px" }}>
+            {highlights.map((h) => (
+              <li key={h} style={{ display: "flex", alignItems: "flex-start", gap: "14px" }}>
+                <span style={{ color: GOLD, fontSize: "10px", marginTop: "4px", flexShrink: 0 }}>◆</span>
+                <span style={{ fontFamily: LATO, fontSize: "15px", color: "rgba(255,255,255,0.65)", fontWeight: 300, lineHeight: 1.7 }}>{h}</span>
+              </li>
+            ))}
+          </ul>
+
+          <a
+            href="/book?villa=Villa+Byblos"
+            style={{
+              display: "inline-block",
+              fontFamily: LATO,
+              fontSize: "11px",
+              letterSpacing: "2.5px",
+              textTransform: "uppercase",
+              color: CHARCOAL,
+              backgroundColor: GOLD,
+              padding: "15px 44px",
+              textDecoration: "none",
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
+          >
+            Book this villa
+          </a>
+        </div>
+      </section>
+
+      <SiteFooter />
+    </>
+  );
+}
