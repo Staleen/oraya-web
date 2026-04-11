@@ -26,6 +26,10 @@ interface Booking {
   status: string;
   created_at: string;
   member_id: string | null;
+  guest_name: string | null;
+  guest_email: string | null;
+  guest_phone: string | null;
+  guest_country: string | null;
 }
 
 interface Member {
@@ -468,47 +472,76 @@ export default function AdminPage() {
               <table style={{ width: "100%", borderCollapse: "collapse", backgroundColor: SURFACE, border: `0.5px solid ${BORDER}` }}>
                 <thead>
                   <tr>
-                    {["Ref", "Villa", "Check-in", "Check-out", "Sleeping", "Visitors", "Event", "Status", "Submitted"].map((h) => (
+                    {["Ref", "Guest / Member", "Contact", "Villa", "Check-in", "Check-out", "Sleeping", "Visitors", "Event", "Status", "Submitted"].map((h) => (
                       <th key={h} style={thStyle}>{h}</th>
                     ))}
                     <th style={{ ...thStyle, textAlign: "center" }}>Update status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {bookings.map((b) => (
-                    <tr key={b.id}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.02)"; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
-                    >
-                      <td style={{ ...tdStyle, fontFamily: "monospace", fontSize: "11px", color: MUTED }}>
-                        {b.id.slice(0, 8).toUpperCase()}
-                      </td>
-                      <td style={tdStyle}>{b.villa}</td>
-                      <td style={tdStyle}>{fmt(b.check_in)}</td>
-                      <td style={tdStyle}>{fmt(b.check_out)}</td>
-                      <td style={{ ...tdStyle, textAlign: "center" }}>{b.sleeping_guests}</td>
-                      <td style={{ ...tdStyle, textAlign: "center" }}>{b.day_visitors}</td>
-                      <td style={{ ...tdStyle, color: MUTED }}>{b.event_type ?? "—"}</td>
-                      <td style={tdStyle}><StatusBadge status={b.status} /></td>
-                      <td style={{ ...tdStyle, color: MUTED, fontSize: "11px" }}>{fmt(b.created_at)}</td>
-                      <td style={{ ...tdStyle, textAlign: "center" }}>
-                        <select
-                          value={b.status}
-                          onChange={(e) => updateStatus(b.id, e.target.value)}
-                          style={{
-                            fontFamily: LATO, fontSize: "11px", letterSpacing: "1px",
-                            backgroundColor: "rgba(255,255,255,0.05)", color: WHITE,
-                            border: `0.5px solid ${BORDER}`, padding: "6px 10px",
-                            cursor: "pointer", outline: "none",
-                          }}
-                        >
-                          <option value="pending"   style={{ backgroundColor: MIDNIGHT }}>Pending</option>
-                          <option value="confirmed" style={{ backgroundColor: MIDNIGHT }}>Confirmed</option>
-                          <option value="cancelled" style={{ backgroundColor: MIDNIGHT }}>Cancelled</option>
-                        </select>
-                      </td>
-                    </tr>
-                  ))}
+                  {bookings.map((b) => {
+                    const isGuest = !b.member_id;
+                    const displayName  = isGuest ? (b.guest_name ?? "Guest") : "Member";
+                    const displayEmail = isGuest ? (b.guest_email ?? "—") : "—";
+                    return (
+                      <tr key={b.id}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.02)"; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
+                      >
+                        <td style={{ ...tdStyle, fontFamily: "monospace", fontSize: "11px", color: MUTED }}>
+                          {b.id.slice(0, 8).toUpperCase()}
+                        </td>
+                        <td style={tdStyle}>
+                          <span style={{ color: isGuest ? "rgba(255,255,255,0.65)" : GOLD }}>
+                            {displayName}
+                          </span>
+                          {isGuest && (
+                            <span style={{ display: "block", fontFamily: LATO, fontSize: "10px", letterSpacing: "1px", color: MUTED, marginTop: "2px" }}>
+                              guest
+                            </span>
+                          )}
+                          {!isGuest && (
+                            <span style={{ display: "block", fontFamily: LATO, fontSize: "10px", letterSpacing: "1px", color: GOLD, marginTop: "2px", opacity: 0.6 }}>
+                              member
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ ...tdStyle, color: MUTED, fontSize: "12px" }}>
+                          <span style={{ display: "block" }}>{displayEmail}</span>
+                          {isGuest && b.guest_phone && (
+                            <span style={{ display: "block", fontSize: "11px", marginTop: "2px" }}>{b.guest_phone}</span>
+                          )}
+                          {isGuest && b.guest_country && (
+                            <span style={{ display: "block", fontSize: "11px", marginTop: "2px" }}>{b.guest_country}</span>
+                          )}
+                        </td>
+                        <td style={tdStyle}>{b.villa}</td>
+                        <td style={tdStyle}>{fmt(b.check_in)}</td>
+                        <td style={tdStyle}>{fmt(b.check_out)}</td>
+                        <td style={{ ...tdStyle, textAlign: "center" }}>{b.sleeping_guests}</td>
+                        <td style={{ ...tdStyle, textAlign: "center" }}>{b.day_visitors}</td>
+                        <td style={{ ...tdStyle, color: MUTED }}>{b.event_type ?? "—"}</td>
+                        <td style={tdStyle}><StatusBadge status={b.status} /></td>
+                        <td style={{ ...tdStyle, color: MUTED, fontSize: "11px" }}>{fmt(b.created_at)}</td>
+                        <td style={{ ...tdStyle, textAlign: "center" }}>
+                          <select
+                            value={b.status}
+                            onChange={(e) => updateStatus(b.id, e.target.value)}
+                            style={{
+                              fontFamily: LATO, fontSize: "11px", letterSpacing: "1px",
+                              backgroundColor: "rgba(255,255,255,0.05)", color: WHITE,
+                              border: `0.5px solid ${BORDER}`, padding: "6px 10px",
+                              cursor: "pointer", outline: "none",
+                            }}
+                          >
+                            <option value="pending"   style={{ backgroundColor: MIDNIGHT }}>Pending</option>
+                            <option value="confirmed" style={{ backgroundColor: MIDNIGHT }}>Confirmed</option>
+                            <option value="cancelled" style={{ backgroundColor: MIDNIGHT }}>Cancelled</option>
+                          </select>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             )}

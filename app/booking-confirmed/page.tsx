@@ -36,16 +36,18 @@ export default function BookingConfirmedPage() {
   const dayVisitors    = p.get("dayVisitors") ?? "0";
   const eventType      = p.get("eventType") ?? "";
   const id             = p.get("id") ?? "";
+  const name           = p.get("name") ?? "";
 
   const details = [
-    { label: "Villa",                  value: villa },
-    { label: "Check-in",               value: formatDate(checkIn) },
-    { label: "Check-out",              value: formatDate(checkOut) },
-    { label: "Guests staying",         value: sleepingGuests },
-    { label: "Expected visitors",      value: dayVisitors },
+    ...(name ? [{ label: "Name",            value: name }] : []),
+    { label: "Villa",                        value: villa },
+    { label: "Check-in",                     value: formatDate(checkIn) },
+    { label: "Check-out",                    value: formatDate(checkOut) },
+    { label: "Guests staying",               value: sleepingGuests },
+    { label: "Expected visitors",            value: dayVisitors },
     ...(eventType ? [{ label: "Event type", value: eventType }] : []),
-    { label: "Status",                 value: "Pending confirmation" },
-    ...(id ? [{ label: "Reference",    value: id.slice(0, 8).toUpperCase() }] : []),
+    { label: "Status",                       value: "Pending confirmation" },
+    ...(id ? [{ label: "Reference",          value: id.slice(0, 8).toUpperCase() }] : []),
   ];
 
   return (
