@@ -144,7 +144,7 @@ export default function Home() {
 
           <div className="flex gap-4 justify-center flex-wrap">
             <a
-              href="#villas"
+              href="/book"
               className="no-underline inline-block transition-colors duration-200"
               style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: WHITE, backgroundColor: GOLD, padding: "15px 44px" }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
