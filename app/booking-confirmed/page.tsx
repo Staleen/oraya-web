@@ -76,7 +76,7 @@ export default function BookingConfirmedPage() {
         </h1>
 
         <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, lineHeight: 1.8, marginBottom: "2.5rem" }}>
-          We've received your booking request and will be in touch within 24 hours to confirm availability and arrange your stay.
+          We&apos;ve received your booking request and will be in touch within 24 hours to confirm availability and arrange your stay.
         </p>
 
         {/* Gold rule */}

@@ -355,7 +355,7 @@ export default function BookPage() {
             Request a booking
           </h1>
           <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, marginTop: "10px", lineHeight: 1.7 }}>
-            Submit your dates and we'll confirm availability within 24 hours.
+            Submit your dates and we&apos;ll confirm availability within 24 hours.
           </p>
         </div>
 
