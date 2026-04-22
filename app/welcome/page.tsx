@@ -90,7 +90,7 @@ function WelcomePageInner() {
             Book now
           </a>
           <a
-            href="/villas"
+            href="/#villas"
             style={{
               display: "inline-block",
               fontFamily: LATO,
