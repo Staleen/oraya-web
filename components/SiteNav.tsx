@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import OrayaEmblem from "@/components/OrayaEmblem";
 import { supabase } from "@/lib/supabase";
 
@@ -19,6 +19,15 @@ export default function SiteNav({ base = "" }: Props) {
   const [firstName, setFirstName]   = useState("");
   const [authReady, setAuthReady]   = useState(false);
   const [dropOpen, setDropOpen]     = useState(false);
+  const closeTimer                  = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function openDrop() {
+    if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; }
+    setDropOpen(true);
+  }
+  function scheduleDrop() {
+    closeTimer.current = setTimeout(() => setDropOpen(false), 200);
+  }
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
@@ -85,8 +94,8 @@ export default function SiteNav({ base = "" }: Props) {
           /* ── Logged-in dropdown ── */
           <div
             style={{ position: "relative" }}
-            onMouseEnter={() => setDropOpen(true)}
-            onMouseLeave={() => setDropOpen(false)}
+            onMouseEnter={openDrop}
+            onMouseLeave={scheduleDrop}
           >
             <button
               style={{
@@ -105,11 +114,8 @@ export default function SiteNav({ base = "" }: Props) {
             </button>
 
             {dropOpen && (
-              /* Outer wrapper starts flush at button bottom — paddingTop creates
-                 an invisible hover bridge so mouse never exits the parent zone */
               <div style={{
                 position: "absolute", top: "100%", right: 0,
-                paddingTop: "6px",
                 minWidth: "180px",
                 zIndex: 200,
               }}>
