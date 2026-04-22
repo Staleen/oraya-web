@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { sendBookingEmail } from "@/lib/send-booking-email";
 
 export async function PATCH(
   request: NextRequest,
@@ -56,6 +57,61 @@ export async function PATCH(
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // Send notification email on confirmed or cancelled — fire-and-forget, never blocks the response
+  if (status === "confirmed" || status === "cancelled") {
+    (async () => {
+      try {
+        // Fetch the full booking row
+        const { data: bk } = await supabaseAdmin
+          .from("bookings")
+          .select("villa, check_in, check_out, member_id, guest_name, guest_email")
+          .eq("id", params.id)
+          .single();
+
+        if (!bk) return;
+
+        let recipientEmail: string | null = null;
+        let recipientName:  string       = "Member";
+
+        if (bk.member_id) {
+          // Member booking — look up email from auth.users
+          const { data: { user } } = await supabaseAdmin.auth.admin.getUserById(bk.member_id);
+          if (user?.email) {
+            recipientEmail = user.email;
+            // Also try to get their full name from members table
+            const { data: member } = await supabaseAdmin
+              .from("members")
+              .select("full_name")
+              .eq("id", bk.member_id)
+              .single();
+            if (member?.full_name) recipientName = member.full_name;
+          }
+        } else if (bk.guest_email) {
+          // Guest booking
+          recipientEmail = bk.guest_email;
+          if (bk.guest_name) recipientName = bk.guest_name;
+        }
+
+        if (!recipientEmail) {
+          console.warn(`[api/admin/bookings] no email address for booking ${params.id} — skipping notification`);
+          return;
+        }
+
+        await sendBookingEmail({
+          to:         recipientEmail,
+          name:       recipientName,
+          status:     status as "confirmed" | "cancelled",
+          villa:      bk.villa,
+          check_in:   bk.check_in,
+          check_out:  bk.check_out,
+          booking_id: params.id,
+        });
+      } catch (emailErr) {
+        console.error("[api/admin/bookings] email notification error:", emailErr);
+      }
+    })();
   }
 
   return NextResponse.json({ ok: true });
