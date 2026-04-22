@@ -220,35 +220,34 @@ export default function AdminPage() {
     setAuthed(ok);
   }, []);
 
+  // Fetch bookings + members — called on auth and after status changes
+  async function loadData() {
+    setLoading(true);
+    try {
+      const r    = await fetch("/api/admin/data", { cache: "no-store" });
+      const text = await r.text();
+      console.log("[admin] /api/admin/data raw response:", text);
+      let d: Record<string, unknown>;
+      try { d = JSON.parse(text); }
+      catch { throw new Error(`Non-JSON response (${r.status}): ${text.slice(0, 200)}`); }
+      if (d.error) { console.error("[admin] data error from API:", d.error); setError(d.error as string); return; }
+      console.log(`[admin] loaded ${(d.bookings as unknown[])?.length ?? 0} bookings, ${(d.members as unknown[])?.length ?? 0} members`);
+      setBookings((d.bookings as Booking[]) ?? []);
+      setMembers((d.members as Member[]) ?? []);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[admin] fetch error:", msg);
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   // Load data once authenticated
   useEffect(() => {
     if (authed !== true) return;
 
-    fetch("/api/admin/data", { cache: "no-store" })
-      .then(async (r) => {
-        const text = await r.text();
-        console.log("[admin] /api/admin/data raw response:", text);
-        try {
-          return JSON.parse(text);
-        } catch {
-          throw new Error(`Non-JSON response (${r.status}): ${text.slice(0, 200)}`);
-        }
-      })
-      .then((d) => {
-        if (d.error) {
-          console.error("[admin] data error from API:", d.error);
-          setError(d.error);
-          return;
-        }
-        console.log(`[admin] loaded ${d.bookings?.length ?? 0} bookings, ${d.members?.length ?? 0} members`);
-        setBookings(d.bookings ?? []);
-        setMembers(d.members ?? []);
-      })
-      .catch((e) => {
-        console.error("[admin] fetch error:", e);
-        setError(e.message);
-      })
-      .finally(() => setLoading(false));
+    loadData();
 
     fetch("/api/admin/settings", { cache: "no-store" })
       .then((r) => r.json())
@@ -257,6 +256,7 @@ export default function AdminPage() {
         if (wa) setWhatsappNum(wa.value);
       })
       .catch((e) => console.error("[admin] settings fetch error:", e));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authed]);
 
   async function saveWhatsapp() {
@@ -311,20 +311,28 @@ export default function AdminPage() {
   async function updateStatus(id: string, status: "confirmed" | "cancelled") {
     const label = status === "confirmed" ? "confirm" : "cancel";
     if (!confirm(`Are you sure you want to ${label} this booking?`)) return;
+
+    // Capture original status before optimistic update so we can revert correctly
+    const originalStatus = bookings.find((b) => b.id === id)?.status ?? "pending";
+
     setUpdatingId(id);
-    // Optimistic update
     setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status } : b)));
+
     const res = await fetch(`/api/admin/bookings/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
     });
     setUpdatingId(null);
+
     if (!res.ok) {
       const d = await res.json();
       setError(d.error ?? "Failed to update status.");
-      // Revert optimistic update
-      setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: b.status } : b)));
+      // Revert optimistic update to the captured original status
+      setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: originalStatus } : b)));
+    } else {
+      // Re-fetch from server to ensure UI reflects the persisted DB state
+      await loadData();
     }
   }
 
@@ -533,8 +541,12 @@ export default function AdminPage() {
                     const isConfirmed = b.status === "confirmed";
                     const isPending   = b.status === "pending";
                     const isUpdating  = updatingId === b.id;
-                    const displayName  = isGuest ? (b.guest_name ?? "Guest") : "Member";
-                    const displayEmail = isGuest ? (b.guest_email ?? "—") : "—";
+                    // For member bookings, resolve contact details from the members list
+                    const memberInfo   = !isGuest ? members.find((m) => m.id === b.member_id) : null;
+                    const displayName  = isGuest ? (b.guest_name ?? "Guest") : (memberInfo?.full_name ?? "Member");
+                    const displayEmail = isGuest ? (b.guest_email ?? "—") : (memberInfo?.email ?? "—");
+                    const displayPhone   = isGuest ? b.guest_phone   : (memberInfo?.phone   ?? null);
+                    const displayCountry = isGuest ? b.guest_country : (memberInfo?.country ?? null);
                     const rowOpacity   = isCancelled ? 0.4 : 1;
                     return (
                       <tr
@@ -556,11 +568,11 @@ export default function AdminPage() {
                         </td>
                         <td style={{ ...tdStyle, color: MUTED, fontSize: "12px" }}>
                           <span style={{ display: "block" }}>{displayEmail}</span>
-                          {isGuest && b.guest_phone && (
-                            <span style={{ display: "block", fontSize: "11px", marginTop: "2px" }}>{b.guest_phone}</span>
+                          {displayPhone && (
+                            <span style={{ display: "block", fontSize: "11px", marginTop: "2px" }}>{displayPhone}</span>
                           )}
-                          {isGuest && b.guest_country && (
-                            <span style={{ display: "block", fontSize: "11px", marginTop: "2px" }}>{b.guest_country}</span>
+                          {displayCountry && (
+                            <span style={{ display: "block", fontSize: "11px", marginTop: "2px" }}>{displayCountry}</span>
                           )}
                         </td>
                         <td style={tdStyle}>{b.villa}</td>
