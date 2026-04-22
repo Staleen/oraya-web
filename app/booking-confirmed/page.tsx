@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import OrayaEmblem from "@/components/OrayaEmblem";
 
@@ -18,7 +18,7 @@ function formatDate(iso: string) {
   return `${parseInt(d)} ${months[parseInt(m) - 1]} ${y}`;
 }
 
-export default function BookingConfirmedPage() {
+function BookingConfirmedPageInner() {
   const p = useSearchParams();
   const [whatsappNumber, setWhatsappNumber] = useState<string | null>(null);
 
@@ -162,5 +162,13 @@ export default function BookingConfirmedPage() {
         </p>
       </div>
     </main>
+  );
+}
+
+export default function BookingConfirmedPage() {
+  return (
+    <Suspense fallback={null}>
+      <BookingConfirmedPageInner />
+    </Suspense>
   );
 }

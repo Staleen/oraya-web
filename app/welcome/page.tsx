@@ -1,5 +1,7 @@
 "use client";
+import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+
 import OrayaEmblem from "@/components/OrayaEmblem";
 
 const GOLD     = "#C5A46D";
@@ -10,7 +12,7 @@ const CHARCOAL = "#2E2E2E";
 const PLAYFAIR = "'Playfair Display', Georgia, serif";
 const LATO     = "'Lato', system-ui, sans-serif";
 
-export default function WelcomePage() {
+function WelcomePageInner() {
   const searchParams = useSearchParams();
   const name = searchParams.get("name") ?? "Member";
   const firstName = name.split(" ")[0];
@@ -120,5 +122,13 @@ export default function WelcomePage() {
         </p>
       </div>
     </main>
+  );
+}
+
+export default function WelcomePage() {
+  return (
+    <Suspense fallback={null}>
+      <WelcomePageInner />
+    </Suspense>
   );
 }

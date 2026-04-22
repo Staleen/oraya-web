@@ -211,6 +211,9 @@ export default function AdminPage() {
   // Member deletion
   const [deletingId, setDeletingId]         = useState<string | null>(null);
 
+  // Booking status updating
+  const [updatingId, setUpdatingId]         = useState<string | null>(null);
+
   // Check sessionStorage on mount
   useEffect(() => {
     const ok = sessionStorage.getItem(SESSION_KEY) === "1";
@@ -305,14 +308,24 @@ export default function AdminPage() {
     }
   }
 
-  async function updateStatus(id: string, status: string) {
+  async function updateStatus(id: string, status: "confirmed" | "cancelled") {
+    const label = status === "confirmed" ? "confirm" : "cancel";
+    if (!confirm(`Are you sure you want to ${label} this booking?`)) return;
+    setUpdatingId(id);
+    // Optimistic update
     setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status } : b)));
     const res = await fetch(`/api/admin/bookings/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
     });
-    if (!res.ok) { const d = await res.json(); setError(d.error ?? "Failed to update status."); }
+    setUpdatingId(null);
+    if (!res.ok) {
+      const d = await res.json();
+      setError(d.error ?? "Failed to update status.");
+      // Revert optimistic update
+      setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: b.status } : b)));
+    }
   }
 
   const tabBtn = (t: "bookings" | "members", label: string) => (
@@ -508,20 +521,26 @@ export default function AdminPage() {
               <table style={{ width: "100%", borderCollapse: "collapse", backgroundColor: SURFACE, border: `0.5px solid ${BORDER}` }}>
                 <thead>
                   <tr>
-                    {["Ref", "Guest / Member", "Contact", "Villa", "Check-in", "Check-out", "Sleeping", "Visitors", "Event", "Status", "Submitted"].map((h) => (
-                      <th key={h} style={thStyle}>{h}</th>
+                    {["Ref", "Guest / Member", "Contact", "Villa", "Check-in", "Check-out", "Sleeping", "Visitors", "Event", "Status", "Submitted", "Actions"].map((h) => (
+                      <th key={h} style={{ ...thStyle, textAlign: h === "Actions" ? "center" : "left" }}>{h}</th>
                     ))}
-                    <th style={{ ...thStyle, textAlign: "center" }}>Update status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {bookings.map((b) => {
-                    const isGuest = !b.member_id;
+                    const isGuest     = !b.member_id;
+                    const isCancelled = b.status === "cancelled";
+                    const isConfirmed = b.status === "confirmed";
+                    const isPending   = b.status === "pending";
+                    const isUpdating  = updatingId === b.id;
                     const displayName  = isGuest ? (b.guest_name ?? "Guest") : "Member";
                     const displayEmail = isGuest ? (b.guest_email ?? "—") : "—";
+                    const rowOpacity   = isCancelled ? 0.4 : 1;
                     return (
-                      <tr key={b.id}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.02)"; }}
+                      <tr
+                        key={b.id}
+                        style={{ opacity: rowOpacity, transition: "opacity 0.2s" }}
+                        onMouseEnter={(e) => { if (!isCancelled) (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.02)"; }}
                         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
                       >
                         <td style={{ ...tdStyle, fontFamily: "monospace", fontSize: "11px", color: MUTED }}>
@@ -531,16 +550,9 @@ export default function AdminPage() {
                           <span style={{ color: isGuest ? "rgba(255,255,255,0.65)" : GOLD }}>
                             {displayName}
                           </span>
-                          {isGuest && (
-                            <span style={{ display: "block", fontFamily: LATO, fontSize: "10px", letterSpacing: "1px", color: MUTED, marginTop: "2px" }}>
-                              guest
-                            </span>
-                          )}
-                          {!isGuest && (
-                            <span style={{ display: "block", fontFamily: LATO, fontSize: "10px", letterSpacing: "1px", color: GOLD, marginTop: "2px", opacity: 0.6 }}>
-                              member
-                            </span>
-                          )}
+                          <span style={{ display: "block", fontFamily: LATO, fontSize: "10px", letterSpacing: "1px", color: isGuest ? MUTED : GOLD, marginTop: "2px", opacity: isGuest ? 1 : 0.6 }}>
+                            {isGuest ? "guest" : "member"}
+                          </span>
                         </td>
                         <td style={{ ...tdStyle, color: MUTED, fontSize: "12px" }}>
                           <span style={{ display: "block" }}>{displayEmail}</span>
@@ -560,20 +572,52 @@ export default function AdminPage() {
                         <td style={tdStyle}><StatusBadge status={b.status} /></td>
                         <td style={{ ...tdStyle, color: MUTED, fontSize: "11px" }}>{fmt(b.created_at)}</td>
                         <td style={{ ...tdStyle, textAlign: "center" }}>
-                          <select
-                            value={b.status}
-                            onChange={(e) => updateStatus(b.id, e.target.value)}
-                            style={{
-                              fontFamily: LATO, fontSize: "11px", letterSpacing: "1px",
-                              backgroundColor: "rgba(255,255,255,0.05)", color: WHITE,
-                              border: `0.5px solid ${BORDER}`, padding: "6px 10px",
-                              cursor: "pointer", outline: "none",
-                            }}
-                          >
-                            <option value="pending"   style={{ backgroundColor: MIDNIGHT }}>Pending</option>
-                            <option value="confirmed" style={{ backgroundColor: MIDNIGHT }}>Confirmed</option>
-                            <option value="cancelled" style={{ backgroundColor: MIDNIGHT }}>Cancelled</option>
-                          </select>
+                          {isCancelled ? (
+                            <span style={{ fontFamily: LATO, fontSize: "10px", color: MUTED }}>—</span>
+                          ) : (
+                            <div style={{ display: "flex", gap: "6px", justifyContent: "center", flexWrap: "nowrap" }}>
+                              {isPending && (
+                                <button
+                                  onClick={() => updateStatus(b.id, "confirmed")}
+                                  disabled={isUpdating}
+                                  style={{
+                                    fontFamily: LATO, fontSize: "10px", letterSpacing: "1px",
+                                    textTransform: "uppercase",
+                                    color: "#2E2E2E",
+                                    backgroundColor: isUpdating ? "rgba(80,180,100,0.5)" : "#6fcf8a",
+                                    border: "none",
+                                    padding: "5px 12px",
+                                    cursor: isUpdating ? "not-allowed" : "pointer",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                  onMouseEnter={(e) => { if (!isUpdating) (e.currentTarget as HTMLElement).style.backgroundColor = "#50c472"; }}
+                                  onMouseLeave={(e) => { if (!isUpdating) (e.currentTarget as HTMLElement).style.backgroundColor = "#6fcf8a"; }}
+                                >
+                                  Confirm
+                                </button>
+                              )}
+                              {(isPending || isConfirmed) && (
+                                <button
+                                  onClick={() => updateStatus(b.id, "cancelled")}
+                                  disabled={isUpdating}
+                                  style={{
+                                    fontFamily: LATO, fontSize: "10px", letterSpacing: "1px",
+                                    textTransform: "uppercase",
+                                    color: WHITE,
+                                    backgroundColor: isUpdating ? "rgba(224,112,112,0.5)" : "#e07070",
+                                    border: "none",
+                                    padding: "5px 12px",
+                                    cursor: isUpdating ? "not-allowed" : "pointer",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                  onMouseEnter={(e) => { if (!isUpdating) (e.currentTarget as HTMLElement).style.backgroundColor = "#c85a5a"; }}
+                                  onMouseLeave={(e) => { if (!isUpdating) (e.currentTarget as HTMLElement).style.backgroundColor = "#e07070"; }}
+                                >
+                                  Cancel
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </td>
                       </tr>
                     );

@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import OrayaEmblem from "@/components/OrayaEmblem";
 import { supabase } from "@/lib/supabase";
@@ -167,7 +167,7 @@ function friendlyError(msg: string): string {
   return msg;
 }
 
-export default function BookPage() {
+function BookPageInner() {
   const router      = useRouter();
   const searchParams = useSearchParams();
 
@@ -707,5 +707,13 @@ export default function BookPage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function BookPage() {
+  return (
+    <Suspense fallback={null}>
+      <BookPageInner />
+    </Suspense>
   );
 }
