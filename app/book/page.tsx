@@ -151,6 +151,14 @@ const DIAL_CODES = [
 
 type AuthStatus = "loading" | "member" | "none";
 
+interface ConfirmedRange { check_in: string; check_out: string; }
+
+function fmtDate(iso: string) {
+  const [y, m, d] = iso.split("-");
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return `${parseInt(d)} ${months[parseInt(m) - 1]} ${y}`;
+}
+
 function friendlyError(msg: string): string {
   if (msg.includes("row-level security") || msg.includes("policy") || msg.includes("42501")) {
     return "Unable to submit booking. Please try again or contact us directly.";
@@ -193,8 +201,9 @@ function BookPageInner() {
     message:       "",
   });
 
-  const [error,   setError]   = useState("");
-  const [loading, setLoading] = useState(false);
+  const [error,           setError]           = useState("");
+  const [loading,         setLoading]         = useState(false);
+  const [confirmedRanges, setConfirmedRanges] = useState<ConfirmedRange[]>([]);
 
   // Pre-select villa from query param
   useEffect(() => {
@@ -218,6 +227,37 @@ function BookPageInner() {
       }
     });
   }, []);
+
+  // Fetch confirmed date ranges whenever villa changes
+  useEffect(() => {
+    if (!form.villa) { setConfirmedRanges([]); return; }
+    fetch(`/api/bookings/availability?villa=${encodeURIComponent(form.villa)}`)
+      .then((r) => r.json())
+      .then((d) => setConfirmedRanges(Array.isArray(d.ranges) ? d.ranges : []))
+      .catch(() => setConfirmedRanges([]));
+  }, [form.villa]);
+
+  // Max allowed check-out: the check_in of the nearest confirmed booking that
+  // starts on or after the selected check-in (user can check out on that day).
+  const checkOutMax: string | undefined = (() => {
+    if (!form.checkIn) return undefined;
+    const next = confirmedRanges
+      .filter((r) => r.check_in >= form.checkIn)
+      .sort((a, b) => a.check_in.localeCompare(b.check_in))[0];
+    return next?.check_in;
+  })();
+
+  // Inline warning when selected range overlaps any confirmed booking.
+  // Overlap condition: checkIn < r.check_out AND checkOut > r.check_in
+  const dateConflict: string = (() => {
+    if (!form.checkIn || !form.checkOut) return "";
+    for (const r of confirmedRanges) {
+      if (form.checkIn < r.check_out && form.checkOut > r.check_in) {
+        return `${form.villa} is already confirmed from ${fmtDate(r.check_in)} to ${fmtDate(r.check_out)}. Please choose different dates.`;
+      }
+    }
+    return "";
+  })();
 
   function handleFormChange(
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -246,6 +286,7 @@ function BookPageInner() {
     if (!form.checkIn)                      { setError("Please select a check-in date.");            return; }
     if (!form.checkOut)                     { setError("Please select a check-out date.");           return; }
     if (form.checkOut <= form.checkIn)      { setError("Check-out must be after check-in.");         return; }
+    if (dateConflict)                       { setError(dateConflict);                                return; }
     if (guestMode && !guest.fullName.trim()){ setError("Please enter your full name.");              return; }
     if (guestMode && !guest.email.trim())   { setError("Please enter a valid email address.");       return; }
 
@@ -588,10 +629,18 @@ function BookPageInner() {
                 value={form.checkOut} onChange={handleFormChange}
                 onFocus={focusGold} onBlur={blurGold}
                 min={form.checkIn || new Date().toISOString().split("T")[0]}
+                {...(checkOutMax ? { max: checkOutMax } : {})}
                 style={{ ...inputStyle, colorScheme: "dark" }}
               />
             </div>
           </div>
+
+          {/* Availability conflict warning */}
+          {dateConflict && (
+            <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070", lineHeight: 1.6, margin: "-8px 0 0" }}>
+              ⚠ {dateConflict}
+            </p>
+          )}
 
           {/* Guest fields row */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
