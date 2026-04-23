@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
-export const dynamic = "force-dynamic";
+export const dynamic    = "force-dynamic";
+export const fetchCache = "force-no-store";  // prevent Next.js Data Cache on internal fetches
 
 export async function GET() {
   console.log("[api/admin/data] GET called");
@@ -66,8 +67,8 @@ export async function GET() {
   console.log(
     `[api/admin/data] returning ${bookings?.length ?? 0} bookings, ${membersWithEmail.length} members`
   );
-  return NextResponse.json({
-    bookings: bookings ?? [],
-    members:  membersWithEmail,
-  });
+  return NextResponse.json(
+    { bookings: bookings ?? [], members: membersWithEmail },
+    { headers: { "Cache-Control": "no-store" } }
+  );
 }
