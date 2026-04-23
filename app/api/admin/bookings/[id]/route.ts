@@ -50,13 +50,19 @@ export async function PATCH(
     }
   }
 
-  const { error } = await supabaseAdmin
+  const { data: updated, error } = await supabaseAdmin
     .from("bookings")
     .update({ status })
-    .eq("id", params.id);
+    .eq("id", params.id)
+    .select()
+    .single();
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error || !updated) {
+    console.error("[api/admin/bookings] update error or no row matched:", error);
+    return NextResponse.json(
+      { error: error?.message ?? "Booking not found or could not be updated." },
+      { status: error ? 500 : 404 }
+    );
   }
 
   // Send notification email on confirmed or cancelled — fire-and-forget, never blocks the response
