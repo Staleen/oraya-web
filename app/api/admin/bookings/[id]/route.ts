@@ -77,19 +77,19 @@ export async function PATCH(
     );
   }
 
-  // Send notification email on confirmed or cancelled — fire-and-forget, never blocks the response
+  // Send notification email on confirmed or cancelled — awaited before response
   if (status === "confirmed" || status === "cancelled") {
-    (async () => {
-      try {
-        // Fetch the full booking row
-        const { data: bk } = await db
-          .from("bookings")
-          .select("villa, check_in, check_out, member_id, guest_name, guest_email")
-          .eq("id", params.id)
-          .single();
+    try {
+      // Fetch the full booking row
+      const { data: bk } = await db
+        .from("bookings")
+        .select("villa, check_in, check_out, member_id, guest_name, guest_email")
+        .eq("id", params.id)
+        .single();
 
-        if (!bk) return;
-
+      if (!bk) {
+        console.warn(`[api/admin/bookings] booking ${params.id} not found for email — skipping`);
+      } else {
         let recipientEmail: string | null = null;
         let recipientName:  string       = "Member";
 
@@ -114,22 +114,21 @@ export async function PATCH(
 
         if (!recipientEmail) {
           console.warn(`[api/admin/bookings] no email address for booking ${params.id} — skipping notification`);
-          return;
+        } else {
+          await sendBookingEmail({
+            to:         recipientEmail,
+            name:       recipientName,
+            status:     status as "confirmed" | "cancelled",
+            villa:      bk.villa,
+            check_in:   bk.check_in,
+            check_out:  bk.check_out,
+            booking_id: params.id,
+          });
         }
-
-        await sendBookingEmail({
-          to:         recipientEmail,
-          name:       recipientName,
-          status:     status as "confirmed" | "cancelled",
-          villa:      bk.villa,
-          check_in:   bk.check_in,
-          check_out:  bk.check_out,
-          booking_id: params.id,
-        });
-      } catch (emailErr) {
-        console.error("[api/admin/bookings] email notification error:", emailErr);
       }
-    })();
+    } catch (emailErr) {
+      console.error("[api/admin/bookings] email notification error:", emailErr);
+    }
   }
 
   return NextResponse.json({ ok: true, booking: updated });

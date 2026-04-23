@@ -4,6 +4,9 @@ import { sendBookingRequestEmail } from "@/lib/send-booking-request-email";
 import { createActionToken } from "@/lib/booking-action-token";
 import { SITE_URL } from "@/lib/brand";
 
+const ALLOWED_VILLAS = ["Villa Mechmech", "Villa Byblos"];
+const ISO_DATE_RE    = /^\d{4}-\d{2}-\d{2}$/;
+
 // POST — create a new booking (member or guest)
 // Uses service role to bypass RLS entirely — avoids anon-client policy issues
 export async function POST(request: Request) {
@@ -31,6 +34,12 @@ export async function POST(request: Request) {
     // Basic server-side validation
     if (!villa || !check_in || !check_out) {
       return NextResponse.json({ error: "villa, check_in, and check_out are required." }, { status: 400 });
+    }
+    if (!ALLOWED_VILLAS.includes(villa)) {
+      return NextResponse.json({ error: "Invalid villa selection." }, { status: 400 });
+    }
+    if (!ISO_DATE_RE.test(check_in) || !ISO_DATE_RE.test(check_out)) {
+      return NextResponse.json({ error: "Dates must be in YYYY-MM-DD format." }, { status: 400 });
     }
     if (check_out <= check_in) {
       return NextResponse.json({ error: "check_out must be after check_in." }, { status: 400 });
@@ -62,12 +71,18 @@ export async function POST(request: Request) {
     // If a member_id is supplied, verify it matches the auth token
     if (member_id) {
       const token = request.headers.get("Authorization")?.replace("Bearer ", "");
-      if (token) {
-        const { data: { user } } = await supabaseAdmin.auth.getUser(token);
-        if (!user || user.id !== member_id) {
-          return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-        }
+      if (!token) {
+        return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
       }
+      const { data: { user } } = await supabaseAdmin.auth.getUser(token);
+      if (!user || user.id !== member_id) {
+        return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+      }
+    }
+
+    // Guest email format check
+    if (guest_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(guest_email))) {
+      return NextResponse.json({ error: "Invalid email address." }, { status: 400 });
     }
 
     const insertData: Record<string, unknown> = {
