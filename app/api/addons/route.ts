@@ -13,30 +13,21 @@ export interface Addon {
   pricing_model: "flat_fee" | "per_night" | "per_person_per_day" | "per_unit";
 }
 
-// Shipped defaults — used when no admin overrides are saved yet.
-// Prices are intentionally null until set by the admin.
-const DEFAULT_ADDONS: Addon[] = [
-  { id: "heated_pool",      label: "Heated Pool",      enabled: true, currency: "USD", price: null, pricing_model: "flat_fee"           },
-  { id: "breakfast",        label: "Breakfast",        enabled: true, currency: "USD", price: null, pricing_model: "per_person_per_day" },
-  { id: "fireplace_diesel", label: "Fireplace Diesel", enabled: true, currency: "USD", price: null, pricing_model: "per_unit"           },
-  { id: "extra_bedding",    label: "Extra Bedding",    enabled: true, currency: "USD", price: null, pricing_model: "per_unit"           },
-];
-
+// Single source of truth: the `addons` table.
+// No fallback defaults — if the table is empty the response is an empty array.
 export async function GET() {
   const { data, error } = await supabaseAdmin
-    .from("settings")
-    .select("value")
-    .eq("key", "addons")
-    .single();
+    .from("addons")
+    .select("id, label, enabled, currency, price, pricing_model")
+    .order("created_at", { ascending: true });
 
-  if (error || !data?.value) {
-    return NextResponse.json({ addons: DEFAULT_ADDONS });
+  if (error) {
+    console.error("[api/addons] query error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  try {
-    const addons = JSON.parse(data.value) as Addon[];
-    return NextResponse.json({ addons });
-  } catch {
-    return NextResponse.json({ addons: DEFAULT_ADDONS });
-  }
+  return NextResponse.json(
+    { addons: data ?? [] },
+    { headers: { "Cache-Control": "no-store" } }
+  );
 }

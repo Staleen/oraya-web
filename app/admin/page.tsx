@@ -326,10 +326,10 @@ export default function AdminPage() {
 
   async function saveAddons() {
     setAddonsSaving(true); setAddonsSaved(false);
-    const res = await fetch("/api/admin/settings", {
+    const res = await fetch("/api/admin/addons", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key: "addons", value: JSON.stringify(addons) }),
+      body: JSON.stringify({ addons }),
     });
     setAddonsSaving(false);
     if (res.ok) { setAddonsSaved(true); setTimeout(() => setAddonsSaved(false), 3000); }

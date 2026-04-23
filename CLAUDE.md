@@ -31,6 +31,29 @@ insert into settings (key, value) values ('whatsapp_number', '0000000000')
 
 ---
 
+## Supabase — addons table (run once in SQL editor)
+```sql
+-- Add-ons table: single source of truth for add-on definitions
+create table if not exists addons (
+  id            text primary key,
+  label         text not null,
+  currency      text not null default 'USD',
+  price         numeric,
+  pricing_model text not null default 'flat_fee',
+  enabled       boolean not null default true,
+  created_at    timestamp with time zone default timezone('utc', now()),
+  updated_at    timestamp with time zone default timezone('utc', now())
+);
+
+-- Seed defaults (safe to re-run)
+insert into addons (id, label, currency, pricing_model) values
+  ('heated_pool',      'Heated Pool',      'USD', 'flat_fee'),
+  ('breakfast',        'Breakfast',        'USD', 'per_person_per_day'),
+  ('fireplace_diesel', 'Fireplace Diesel', 'USD', 'per_unit'),
+  ('extra_bedding',    'Extra Bedding',    'USD', 'per_unit')
+on conflict (id) do nothing;
+```
+
 ## Supabase — bookings addons column (run once in SQL editor)
 ```sql
 alter table bookings
