@@ -84,14 +84,14 @@ const CALENDAR_EXPORTS = [
 ];
 
 function fmt(iso: string) {
-  if (!iso) return "—";
+  if (!iso) return "-";
   const [y, m, d] = iso.split("T")[0].split("-");
   const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   return `${parseInt(d)} ${months[parseInt(m)-1]} ${y}`;
 }
 
 function fmtDateTime(iso: string) {
-  if (!iso) return "—";
+  if (!iso) return "-";
   const dt = new Date(iso);
   const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const date = `${dt.getDate()} ${months[dt.getMonth()]} ${dt.getFullYear()}`;
@@ -99,6 +99,13 @@ function fmtDateTime(iso: string) {
   const mm   = String(dt.getMinutes()).padStart(2, "0");
   const ss   = String(dt.getSeconds()).padStart(2, "0");
   return `${date} ${hh}:${mm}:${ss}`;
+}
+
+function formatSyncStatus(status: string | null) {
+  if (status === "success") return "Success";
+  if (status === "failed") return "Failed";
+  if (status === "syncing") return "Syncing";
+  return "Never run";
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -231,7 +238,7 @@ function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
               opacity: loading || !input ? 0.6 : 1,
             }}
           >
-            {loading ? "Verifying…" : "Enter"}
+            {loading ? "Verifying..." : "Enter"}
           </button>
         </form>
       </div>
@@ -298,7 +305,7 @@ export default function AdminPage() {
     return () => window.removeEventListener("resize", syncViewport);
   }, []);
 
-  // Fetch bookings + members — called on auth and after status changes.
+  // Fetch bookings + members - called on auth and after status changes.
   // Pass silent=true to skip the global loading state (used for background refreshes).
   async function loadData(silent = false) {
     if (!silent) setLoading(true);
@@ -450,7 +457,7 @@ export default function AdminPage() {
         else delete next[id];
         return next;
       });
-      // Update the single row immediately from the confirmed DB value — no full-table flicker
+      // Update the single row immediately from the confirmed DB value - no full-table flicker
       if (d.booking) {
         setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: d.booking.status } : b)));
       }
@@ -597,7 +604,7 @@ export default function AdminPage() {
                   opacity: whatsappSaving ? 0.7 : 1, whiteSpace: "nowrap",
                 }}
               >
-                {whatsappSaving ? "Saving…" : "Save"}
+                {whatsappSaving ? "Saving..." : "Save"}
               </button>
               {whatsappSaved && (
                 <span style={{ fontFamily: LATO, fontSize: "11px", color: "#6fcf8a", letterSpacing: "1px" }}>✓ Saved</span>
@@ -633,7 +640,7 @@ export default function AdminPage() {
                   opacity: pwSaving || !newPassword.trim() ? 0.6 : 1, whiteSpace: "nowrap",
                 }}
               >
-                {pwSaving ? "Saving…" : "Update password"}
+                {pwSaving ? "Saving..." : "Update password"}
               </button>
               {pwSaved && (
                 <span style={{ fontFamily: LATO, fontSize: "11px", color: "#6fcf8a", letterSpacing: "1px" }}>✓ Password updated</span>
@@ -672,7 +679,7 @@ export default function AdminPage() {
                   opacity: notifSaving ? 0.7 : 1, whiteSpace: "nowrap",
                 }}
               >
-                {notifSaving ? "Saving…" : "Save"}
+                {notifSaving ? "Saving..." : "Save"}
               </button>
               {notifSaved && (
                 <span style={{ fontFamily: LATO, fontSize: "11px", color: "#6fcf8a", letterSpacing: "1px" }}>✓ Saved</span>
@@ -696,7 +703,7 @@ export default function AdminPage() {
                 disabled={addonsSaving}
                 style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: CHARCOAL, backgroundColor: GOLD, border: "none", padding: "10px 24px", cursor: addonsSaving ? "not-allowed" : "pointer", opacity: addonsSaving ? 0.7 : 1 }}
               >
-                {addonsSaving ? "Saving…" : "Save"}
+                {addonsSaving ? "Saving..." : "Save"}
               </button>
             </div>
           </div>
@@ -753,7 +760,7 @@ export default function AdminPage() {
                 min={0}
                 value={addon.price ?? ""}
                 onChange={e => updateAddon(addon.id, { price: e.target.value === "" ? null : parseFloat(e.target.value) })}
-                placeholder="—"
+                placeholder="-"
                 style={{ ...fieldStyle, padding: "8px 10px", fontSize: "13px", opacity: addon.enabled ? 1 : 0.5 }}
                 onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
                 onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
@@ -785,10 +792,10 @@ export default function AdminPage() {
         {/* Stats row */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px", marginBottom: "2.5rem" }}>
           {[
-            { label: "Total bookings", value: loading ? "—" : bookings.length },
-            { label: "Pending",        value: loading ? "—" : bookings.filter((b) => b.status === "pending").length },
-            { label: "Confirmed",      value: loading ? "—" : bookings.filter((b) => b.status === "confirmed").length },
-            { label: "Total members",  value: loading ? "—" : members.length },
+            { label: "Total bookings", value: loading ? "-" : bookings.length },
+            { label: "Pending",        value: loading ? "-" : bookings.filter((b) => b.status === "pending").length },
+            { label: "Confirmed",      value: loading ? "-" : bookings.filter((b) => b.status === "confirmed").length },
+            { label: "Total members",  value: loading ? "-" : members.length },
           ].map(({ label, value }) => (
             <div key={label} style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: "1.5rem" }}>
               <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2.5px", textTransform: "uppercase", color: MUTED, margin: "0 0 8px" }}>
@@ -808,7 +815,7 @@ export default function AdminPage() {
                 Calendar Sync
               </p>
               <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0 }}>
-                Export confirmed Oraya bookings per villa and review external feed sync status.
+                Export confirmed Oraya bookings per villa and review external feed sync status. Sync also runs automatically every 10 minutes.
               </p>
             </div>
             <button
@@ -821,7 +828,7 @@ export default function AdminPage() {
                 opacity: syncingCalendars ? 0.7 : 1,
               }}
             >
-              {syncingCalendars ? "Syncingâ€¦" : "Run sync"}
+              {syncingCalendars ? "Syncing..." : "Run sync"}
             </button>
           </div>
 
@@ -875,17 +882,17 @@ export default function AdminPage() {
                       </td>
                       <td style={tdStyle}>
                         <span style={{ color: source.last_sync_status === "success" ? "#6fcf8a" : source.last_sync_status === "failed" ? "#e07070" : MUTED }}>
-                          {source.last_sync_status ?? "never run"}
+                          {formatSyncStatus(source.last_sync_status)}
                         </span>
                         {!source.is_enabled && (
                           <span style={{ display: "block", fontSize: "11px", color: MUTED, marginTop: "4px" }}>
-                            disabled
+                            Disabled
                           </span>
                         )}
                       </td>
-                      <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>{source.last_synced_at ? fmtDateTime(source.last_synced_at) : "â€”"}</td>
+                      <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>{source.last_synced_at ? fmtDateTime(source.last_synced_at) : "-"}</td>
                       <td style={{ ...tdStyle, color: source.last_error ? "#e0b070" : MUTED }}>
-                        {source.last_error ?? "â€”"}
+                        {source.last_error?.trim() || "-"}
                       </td>
                     </tr>
                   ))}
@@ -968,7 +975,7 @@ export default function AdminPage() {
             </div>
             <div style={{ overflowX: isMobile ? "visible" : "auto" }}>
             {loading ? (
-              <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED }}>Loading…</p>
+              <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED }}>Loading...</p>
             ) : filteredBookings.length === 0 ? (
               <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED }}>No bookings match the current filters.</p>
             ) : (
@@ -993,7 +1000,7 @@ export default function AdminPage() {
                     // For member bookings, resolve contact details from the members list
                     const memberInfo   = !isGuest ? members.find((m) => m.id === b.member_id) : null;
                     const displayName  = isGuest ? (b.guest_name ?? "Guest") : (memberInfo?.full_name ?? "Member");
-                    const displayEmail = isGuest ? (b.guest_email ?? "—") : (memberInfo?.email ?? "—");
+                    const displayEmail = isGuest ? (b.guest_email ?? "-") : (memberInfo?.email ?? "-");
                     const displayPhone   = isGuest ? b.guest_phone   : (memberInfo?.phone   ?? null);
                     const displayCountry = isGuest ? b.guest_country : (memberInfo?.country ?? null);
                     const rowOpacity     = isCancelled ? 0.72 : 1;
@@ -1065,7 +1072,7 @@ export default function AdminPage() {
                         )}
                         <td style={{ ...tdStyle, textAlign: "center" }}>
                           {isCancelled ? (
-                            <span style={{ fontFamily: LATO, fontSize: "10px", color: MUTED }}>—</span>
+                            <span style={{ fontFamily: LATO, fontSize: "10px", color: MUTED }}>-</span>
                           ) : (
                             <div style={{ display: "flex", gap: "6px", justifyContent: "center", flexWrap: isMobile ? "wrap" : "nowrap" }}>
                               {isPending && (
@@ -1130,7 +1137,7 @@ export default function AdminPage() {
         {tab === "members" && (
           <div style={{ overflowX: "auto" }}>
             {loading ? (
-              <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED }}>Loading…</p>
+              <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED }}>Loading...</p>
             ) : members.length === 0 ? (
               <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED }}>No members yet.</p>
             ) : (
@@ -1148,11 +1155,11 @@ export default function AdminPage() {
                       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.02)"; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
                     >
-                      <td style={tdStyle}>{m.full_name || "—"}</td>
-                      <td style={{ ...tdStyle, color: MUTED }}>{m.email || "—"}</td>
-                      <td style={{ ...tdStyle, color: MUTED }}>{m.phone || "—"}</td>
-                      <td style={tdStyle}>{m.country || "—"}</td>
-                      <td style={{ ...tdStyle, color: MUTED }}>{m.address || "—"}</td>
+                      <td style={tdStyle}>{m.full_name || "-"}</td>
+                      <td style={{ ...tdStyle, color: MUTED }}>{m.email || "-"}</td>
+                      <td style={{ ...tdStyle, color: MUTED }}>{m.phone || "-"}</td>
+                      <td style={tdStyle}>{m.country || "-"}</td>
+                      <td style={{ ...tdStyle, color: MUTED }}>{m.address || "-"}</td>
                       <td style={{ ...tdStyle, color: MUTED, fontSize: "11px" }}>{fmt(m.created_at)}</td>
                       <td style={{ ...tdStyle, textAlign: "center" }}>
                         <button
@@ -1169,7 +1176,7 @@ export default function AdminPage() {
                           onMouseEnter={(e) => { if (deletingId !== m.id) (e.currentTarget as HTMLElement).style.borderColor = "#e07070"; }}
                           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(224,112,112,0.3)"; }}
                         >
-                          {deletingId === m.id ? "Deleting…" : "Delete"}
+                          {deletingId === m.id ? "Deleting..." : "Delete"}
                         </button>
                       </td>
                     </tr>

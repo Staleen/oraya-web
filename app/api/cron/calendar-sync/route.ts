@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { runCalendarSync } from "@/lib/calendar/sync";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +13,17 @@ function toErrorMessage(error: unknown) {
   }
 }
 
-export async function POST() {
+function isAuthorized(request: NextRequest) {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return false;
+  return request.headers.get("authorization") === `Bearer ${secret}`;
+}
+
+export async function GET(request: NextRequest) {
+  if (!isAuthorized(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const summary = await runCalendarSync();
     return NextResponse.json({
