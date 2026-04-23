@@ -96,23 +96,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Fire-and-forget: send admin notification email (never blocks the response)
-    ;(async () => {
-      try {
-        const { data: settingsRows } = await supabaseAdmin
-          .from("settings")
-          .select("value")
-          .eq("key", "notification_emails")
-          .single();
+    // Send admin notification email — awaited so it completes before the serverless
+    // function exits. Errors are caught and logged but never block the booking response.
+    try {
+      const { data: settingsRows, error: settingsErr } = await supabaseAdmin
+        .from("settings")
+        .select("value")
+        .eq("key", "notification_emails")
+        .single();
 
-        const rawEmails = settingsRows?.value ?? "";
-        const recipients = rawEmails
-          .split(",")
-          .map((e: string) => e.trim())
-          .filter(Boolean);
+      if (settingsErr) {
+        console.warn("[api/bookings] notification_emails lookup error:", settingsErr.message);
+      }
 
-        if (recipients.length === 0) return;
+      const rawEmails  = settingsRows?.value ?? "";
+      const recipients = rawEmails.split(",").map((e: string) => e.trim()).filter(Boolean);
 
+      console.log(`[api/bookings] notification recipients (${recipients.length}):`, recipients);
+
+      if (recipients.length > 0) {
         // Resolve requester identity
         let requesterName  = data.guest_name  ?? "Guest";
         let requesterEmail = data.guest_email ?? "";
@@ -131,12 +133,12 @@ export async function POST(request: Request) {
               requesterName  = memberRow.full_name ?? requesterName;
               requesterPhone = memberRow.phone     ?? requesterPhone;
             }
-          } catch {
-            // best-effort — fall back to guest fields
+          } catch (memberErr) {
+            console.warn("[api/bookings] member lookup error (falling back to guest fields):", memberErr);
           }
         }
 
-        const adminUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? "") + "/admin";
+        const adminUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://stayoraya.com") + "/admin";
 
         await sendBookingRequestEmail({
           recipients,
@@ -154,10 +156,10 @@ export async function POST(request: Request) {
           created_at:      data.created_at,
           admin_url:       adminUrl,
         });
-      } catch (emailErr) {
-        console.error("[api/bookings] notification email error:", emailErr);
       }
-    })();
+    } catch (emailErr) {
+      console.error("[api/bookings] notification email error:", emailErr);
+    }
 
     return NextResponse.json({ booking: data });
   } catch (err) {
