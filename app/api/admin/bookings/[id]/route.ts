@@ -1,11 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase-admin";
+import { createClient } from "@supabase/supabase-js";
 import { sendBookingEmail } from "@/lib/send-booking-email";
+
+// Initialise service-role client directly so RLS is bypassed for every query in this route.
+// Validated at call time so a missing key surfaces immediately in the logs.
+function makeAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    throw new Error("[api/admin/bookings] NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is not set");
+  }
+  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+}
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const db = makeAdminClient();
   const { status } = await request.json();
 
   const allowed = ["pending", "confirmed", "cancelled"];
@@ -16,7 +28,7 @@ export async function PATCH(
   // Overlap guard — only runs when confirming a booking
   if (status === "confirmed") {
     // 1. Fetch the booking being confirmed
-    const { data: booking, error: fetchErr } = await supabaseAdmin
+    const { data: booking, error: fetchErr } = await db
       .from("bookings")
       .select("villa, check_in, check_out")
       .eq("id", params.id)
@@ -27,7 +39,7 @@ export async function PATCH(
     }
 
     // 2. Check for overlapping confirmed bookings on the same villa (exclude self)
-    const { data: conflicts, error: conflictErr } = await supabaseAdmin
+    const { data: conflicts, error: conflictErr } = await db
       .from("bookings")
       .select("id, check_in, check_out")
       .eq("villa", booking.villa)
@@ -50,7 +62,7 @@ export async function PATCH(
     }
   }
 
-  const { data: updated, error } = await supabaseAdmin
+  const { data: updated, error } = await db
     .from("bookings")
     .update({ status })
     .eq("id", params.id)
@@ -70,7 +82,7 @@ export async function PATCH(
     (async () => {
       try {
         // Fetch the full booking row
-        const { data: bk } = await supabaseAdmin
+        const { data: bk } = await db
           .from("bookings")
           .select("villa, check_in, check_out, member_id, guest_name, guest_email")
           .eq("id", params.id)
@@ -83,11 +95,11 @@ export async function PATCH(
 
         if (bk.member_id) {
           // Member booking — look up email from auth.users
-          const { data: { user } } = await supabaseAdmin.auth.admin.getUserById(bk.member_id);
+          const { data: { user } } = await db.auth.admin.getUserById(bk.member_id);
           if (user?.email) {
             recipientEmail = user.email;
             // Also try to get their full name from members table
-            const { data: member } = await supabaseAdmin
+            const { data: member } = await db
               .from("members")
               .select("full_name")
               .eq("id", bk.member_id)
