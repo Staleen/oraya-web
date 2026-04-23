@@ -31,6 +31,14 @@ insert into settings (key, value) values ('whatsapp_number', '0000000000')
 
 ---
 
+## Supabase — bookings addons column (run once in SQL editor)
+```sql
+alter table bookings
+  add column if not exists addons jsonb default '[]'::jsonb;
+```
+
+---
+
 ## Supabase — bookings table (run once in SQL editor)
 ```sql
 create table bookings (

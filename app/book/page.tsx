@@ -159,6 +159,22 @@ const labelStyle: React.CSSProperties = {
 type AuthStatus = "loading" | "member" | "none";
 interface ConfirmedRange { check_in: string; check_out: string; }
 
+interface Addon {
+  id:            string;
+  label:         string;
+  enabled:       boolean;
+  currency:      string;
+  price:         number | null;
+  pricing_model: "flat_fee" | "per_night" | "per_person_per_day" | "per_unit";
+}
+
+const PRICING_MODEL_LABELS: Record<string, string> = {
+  flat_fee:            "Flat fee",
+  per_night:           "Per night",
+  per_person_per_day:  "Per person / day",
+  per_unit:            "Per unit",
+};
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Local-date-aware ISO formatter — avoids UTC timezone shifts. */
@@ -365,6 +381,11 @@ function BookPageInner() {
   // Availability
   const [confirmedRanges, setConfirmedRanges] = useState<ConfirmedRange[]>([]);
 
+  // Add-ons
+  const [addons,         setAddons]         = useState<Addon[]>([]);
+  const [addonsLoading,  setAddonsLoading]  = useState(false);
+  const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
+
   // UI
   const [error,   setError]   = useState("");
   const [loading, setLoading] = useState(false);
@@ -388,6 +409,17 @@ function BookPageInner() {
       }
     });
   }, []);
+
+  // Fetch enabled add-ons the first time the user reaches step 3
+  useEffect(() => {
+    if (step !== 3 || addons.length > 0) return;
+    setAddonsLoading(true);
+    fetch("/api/addons")
+      .then(r => r.json())
+      .then(d => setAddons((d.addons as Addon[] ?? []).filter(a => a.enabled)))
+      .catch(() => setAddons([]))
+      .finally(() => setAddonsLoading(false));
+  }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reload availability whenever villa changes; also clear the date selection
   useEffect(() => {
@@ -466,6 +498,12 @@ function BookPageInner() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  function toggleAddon(id: string) {
+    setSelectedAddons(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  }
+
   function goBack() {
     setError("");
     setStep(s => s - 1);
@@ -485,6 +523,14 @@ function BookPageInner() {
         accessToken = session?.access_token ?? null;
       }
 
+      // Build structured addons payload (id + label + metadata, no price calculation)
+      const selectedAddonObjects = selectedAddons
+        .map(id => addons.find(a => a.id === id))
+        .filter((a): a is Addon => Boolean(a))
+        .map(({ id, label, pricing_model, currency, price }) => ({
+          id, label, pricing_model, currency, price,
+        }));
+
       const body: Record<string, unknown> = {
         villa:           form.villa,
         check_in:        checkIn,
@@ -493,6 +539,7 @@ function BookPageInner() {
         day_visitors:    form.dayVisitors,
         event_type:      form.eventType || null,
         message:         form.message   || null,
+        addons:          selectedAddonObjects,
       };
       if (user) {
         body.member_id = user.id;
@@ -885,39 +932,117 @@ function BookPageInner() {
           )}
 
           {/* ════════════════════════════════════════════════════════════════
-              STEP 3 — Review & Submit
+              STEP 3 — Add-ons & Review
           ════════════════════════════════════════════════════════════════ */}
           {step === 3 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
 
-              {/* Summary card */}
-              <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", padding: "1.75rem" }}>
-                <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 1.25rem" }}>
-                  Booking Summary
+              {/* ── Add-ons ─────────────────────────────────────────────── */}
+              <div>
+                <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 14px" }}>
+                  Add-ons
                 </p>
 
-                {(
-                  [
-                    ["Villa",           form.villa],
-                    ["Check-in",        fmtDate(checkIn)],
-                    ["Check-out",       fmtDate(checkOut)],
-                    ["Duration",        `${nights} ${nights === 1 ? "night" : "nights"}`],
-                    ["Sleeping guests", form.sleepingGuests],
-                    ["Day visitors",    form.dayVisitors],
-                    ...(form.eventType  ? [["Event type", form.eventType]]  : []),
-                    ...(form.message    ? [["Notes",      form.message]]     : []),
-                    ...(guestMode       ? [["Name",       guest.fullName], ["Email", guest.email]] : []),
-                  ] as [string, string][]
-                ).map(([label, value]) => (
-                  <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "10px 0", borderBottom: "0.5px solid rgba(255,255,255,0.05)" }}>
-                    <span style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED, flexShrink: 0, paddingRight: "16px" }}>
-                      {label}
-                    </span>
-                    <span style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, fontWeight: 300, textAlign: "right" }}>
-                      {value}
-                    </span>
+                {addonsLoading ? (
+                  <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED }}>Loading…</p>
+                ) : addons.length === 0 ? (
+                  <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED }}>
+                    No add-ons are available for this booking.
+                  </p>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {addons.map(addon => {
+                      const selected = selectedAddons.includes(addon.id);
+                      return (
+                        <button
+                          key={addon.id}
+                          type="button"
+                          onClick={() => toggleAddon(addon.id)}
+                          style={{
+                            display: "flex", alignItems: "center", justifyContent: "space-between",
+                            width: "100%", textAlign: "left",
+                            padding: "14px 18px",
+                            border: `0.5px solid ${selected ? GOLD : "rgba(197,164,109,0.18)"}`,
+                            backgroundColor: selected ? "rgba(197,164,109,0.07)" : "rgba(255,255,255,0.02)",
+                            cursor: "pointer",
+                            transition: "border-color 0.15s, background-color 0.15s",
+                          }}
+                        >
+                          {/* Checkbox indicator + label */}
+                          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                            <div style={{
+                              width: "16px", height: "16px", flexShrink: 0,
+                              border: `1px solid ${selected ? GOLD : "rgba(197,164,109,0.3)"}`,
+                              backgroundColor: selected ? GOLD : "transparent",
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              transition: "background-color 0.15s, border-color 0.15s",
+                            }}>
+                              {selected && (
+                                <span style={{ color: CHARCOAL, fontSize: "10px", fontWeight: 700, lineHeight: 1 }}>✓</span>
+                              )}
+                            </div>
+                            <span style={{ fontFamily: LATO, fontSize: "13px", color: selected ? WHITE : "rgba(255,255,255,0.7)", fontWeight: selected ? 400 : 300 }}>
+                              {addon.label}
+                            </span>
+                          </div>
+
+                          {/* Pricing metadata */}
+                          <div style={{ textAlign: "right", flexShrink: 0, paddingLeft: "16px" }}>
+                            <span style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1px", color: MUTED, display: "block" }}>
+                              {PRICING_MODEL_LABELS[addon.pricing_model] ?? addon.pricing_model}
+                            </span>
+                            {addon.price !== null ? (
+                              <span style={{ fontFamily: LATO, fontSize: "12px", color: selected ? GOLD : MUTED }}>
+                                {addon.price.toLocaleString()} {addon.currency}
+                              </span>
+                            ) : (
+                              <span style={{ fontFamily: LATO, fontSize: "11px", color: "rgba(138,128,112,0.5)", fontStyle: "italic" }}>
+                                Price on request
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
-                ))}
+                )}
+              </div>
+
+              {/* Divider */}
+              <div style={{ height: "0.5px", backgroundColor: "rgba(197,164,109,0.12)" }} />
+
+              {/* ── Booking Summary ──────────────────────────────────────── */}
+              <div>
+                <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 14px" }}>
+                  Booking Summary
+                </p>
+                <div style={{ border: "0.5px solid rgba(197,164,109,0.18)", padding: "1.5rem" }}>
+                  {(
+                    [
+                      ["Villa",           form.villa],
+                      ["Check-in",        fmtDate(checkIn)],
+                      ["Check-out",       fmtDate(checkOut)],
+                      ["Duration",        `${nights} ${nights === 1 ? "night" : "nights"}`],
+                      ["Sleeping guests", form.sleepingGuests],
+                      ["Day visitors",    form.dayVisitors],
+                      ...(form.eventType ? [["Event type", form.eventType]] : []),
+                      ...(form.message   ? [["Notes",      form.message]]   : []),
+                      ...(guestMode      ? [["Name",       guest.fullName], ["Email", guest.email]] : []),
+                      ...(selectedAddons.length > 0
+                        ? [["Add-ons", selectedAddons.map(id => addons.find(a => a.id === id)?.label ?? id).join(", ")]]
+                        : []),
+                    ] as [string, string][]
+                  ).map(([label, value]) => (
+                    <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "9px 0", borderBottom: "0.5px solid rgba(255,255,255,0.05)" }}>
+                      <span style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED, flexShrink: 0, paddingRight: "16px" }}>
+                        {label}
+                      </span>
+                      <span style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, fontWeight: 300, textAlign: "right" }}>
+                        {value}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.8, textAlign: "center", margin: 0 }}>

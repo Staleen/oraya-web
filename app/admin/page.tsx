@@ -43,6 +43,24 @@ interface Member {
   created_at: string;
 }
 
+interface Addon {
+  id:            string;
+  label:         string;
+  enabled:       boolean;
+  currency:      string;
+  price:         number | null;
+  pricing_model: "flat_fee" | "per_night" | "per_person_per_day" | "per_unit";
+}
+
+const PRICING_MODELS: { value: Addon["pricing_model"]; label: string }[] = [
+  { value: "flat_fee",           label: "Flat fee"          },
+  { value: "per_night",          label: "Per night"         },
+  { value: "per_person_per_day", label: "Per person / day"  },
+  { value: "per_unit",           label: "Per unit"          },
+];
+
+const CURRENCIES = ["USD", "EUR", "GBP", "LBP"];
+
 function fmt(iso: string) {
   if (!iso) return "—";
   const [y, m, d] = iso.split("T")[0].split("-");
@@ -208,6 +226,11 @@ export default function AdminPage() {
   const [pwSaving, setPwSaving]             = useState(false);
   const [pwSaved, setPwSaved]               = useState(false);
 
+  // Add-ons management
+  const [addons,        setAddons]        = useState<Addon[]>([]);
+  const [addonsSaving,  setAddonsSaving]  = useState(false);
+  const [addonsSaved,   setAddonsSaved]   = useState(false);
+
   // Member deletion
   const [deletingId, setDeletingId]         = useState<string | null>(null);
 
@@ -257,6 +280,11 @@ export default function AdminPage() {
         if (wa) setWhatsappNum(wa.value);
       })
       .catch((e) => console.error("[admin] settings fetch error:", e));
+
+    fetch("/api/addons", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => { if (Array.isArray(d.addons)) setAddons(d.addons); })
+      .catch((e) => console.error("[admin] addons fetch error:", e));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authed]);
 
@@ -289,6 +317,23 @@ export default function AdminPage() {
       const d = await res.json();
       setError(d.error ?? "Failed to save password.");
     }
+  }
+
+  function updateAddon(id: string, patch: Partial<Addon>) {
+    setAddons(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a));
+    setAddonsSaved(false);
+  }
+
+  async function saveAddons() {
+    setAddonsSaving(true); setAddonsSaved(false);
+    const res = await fetch("/api/admin/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: "addons", value: JSON.stringify(addons) }),
+    });
+    setAddonsSaving(false);
+    if (res.ok) { setAddonsSaved(true); setTimeout(() => setAddonsSaved(false), 3000); }
+    else { const d = await res.json(); setError(d.error ?? "Failed to save add-ons."); }
   }
 
   function signOut() {
@@ -483,6 +528,104 @@ export default function AdminPage() {
               )}
             </div>
           </div>
+        </div>
+
+        {/* Add-ons management */}
+        <div style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: "1.75rem", marginBottom: "2rem" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem", flexWrap: "wrap", gap: "12px" }}>
+            <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+              Add-ons
+            </p>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              {addonsSaved && (
+                <span style={{ fontFamily: LATO, fontSize: "11px", color: "#6fcf8a", letterSpacing: "1px" }}>✓ Saved</span>
+              )}
+              <button
+                onClick={saveAddons}
+                disabled={addonsSaving}
+                style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: CHARCOAL, backgroundColor: GOLD, border: "none", padding: "10px 24px", cursor: addonsSaving ? "not-allowed" : "pointer", opacity: addonsSaving ? 0.7 : 1 }}
+              >
+                {addonsSaving ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+
+          {/* Column headers */}
+          <div style={{ display: "grid", gridTemplateColumns: "40px 1fr 90px 110px 160px", gap: "10px", alignItems: "center", paddingBottom: "10px", borderBottom: `0.5px solid ${BORDER}`, marginBottom: "8px" }}>
+            {["On", "Name", "Currency", "Price", "Pricing model"].map(h => (
+              <span key={h} style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED }}>{h}</span>
+            ))}
+          </div>
+
+          {/* Addon rows */}
+          {addons.map(addon => (
+            <div
+              key={addon.id}
+              style={{ display: "grid", gridTemplateColumns: "40px 1fr 90px 110px 160px", gap: "10px", alignItems: "center", padding: "10px 0", borderBottom: `0.5px solid rgba(255,255,255,0.03)` }}
+            >
+              {/* Enabled toggle */}
+              <div style={{ display: "flex", alignItems: "center" }}>
+                <input
+                  type="checkbox"
+                  checked={addon.enabled}
+                  onChange={e => updateAddon(addon.id, { enabled: e.target.checked })}
+                  style={{ accentColor: GOLD, width: "16px", height: "16px", cursor: "pointer" }}
+                />
+              </div>
+
+              {/* Label */}
+              <input
+                type="text"
+                value={addon.label}
+                onChange={e => updateAddon(addon.id, { label: e.target.value })}
+                style={{ ...fieldStyle, padding: "8px 10px", fontSize: "13px", opacity: addon.enabled ? 1 : 0.5 }}
+                onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
+                onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+              />
+
+              {/* Currency */}
+              <select
+                value={addon.currency}
+                onChange={e => updateAddon(addon.id, { currency: e.target.value })}
+                style={{ ...fieldStyle, padding: "8px 10px", fontSize: "13px", cursor: "pointer", opacity: addon.enabled ? 1 : 0.5 }}
+                onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
+                onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+              >
+                {CURRENCIES.map(c => (
+                  <option key={c} value={c} style={{ backgroundColor: MIDNIGHT }}>{c}</option>
+                ))}
+              </select>
+
+              {/* Price */}
+              <input
+                type="number"
+                min={0}
+                value={addon.price ?? ""}
+                onChange={e => updateAddon(addon.id, { price: e.target.value === "" ? null : parseFloat(e.target.value) })}
+                placeholder="—"
+                style={{ ...fieldStyle, padding: "8px 10px", fontSize: "13px", opacity: addon.enabled ? 1 : 0.5 }}
+                onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
+                onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+              />
+
+              {/* Pricing model */}
+              <select
+                value={addon.pricing_model}
+                onChange={e => updateAddon(addon.id, { pricing_model: e.target.value as Addon["pricing_model"] })}
+                style={{ ...fieldStyle, padding: "8px 10px", fontSize: "13px", cursor: "pointer", opacity: addon.enabled ? 1 : 0.5 }}
+                onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
+                onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+              >
+                {PRICING_MODELS.map(pm => (
+                  <option key={pm.value} value={pm.value} style={{ backgroundColor: MIDNIGHT }}>{pm.label}</option>
+                ))}
+              </select>
+            </div>
+          ))}
+
+          {addons.length === 0 && (
+            <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED }}>No add-ons loaded.</p>
+          )}
         </div>
 
         {/* Media Manager */}

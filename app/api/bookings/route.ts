@@ -15,6 +15,7 @@ export async function POST(request: Request) {
       day_visitors,
       event_type,
       message,
+      addons,
       // member fields
       member_id,
       // guest fields
@@ -74,6 +75,7 @@ export async function POST(request: Request) {
       day_visitors:    parseInt(day_visitors,    10) || 0,
       event_type:      event_type  || null,
       message:         message     || null,
+      addons:          Array.isArray(addons) ? addons : [],
       status:          "pending",
       member_id:       member_id   || null,
       guest_name:      guest_name  || null,
