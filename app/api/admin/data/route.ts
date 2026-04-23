@@ -11,7 +11,7 @@ export async function GET() {
   const { data: bookings, error: bookingsError } = await supabaseAdmin
     .from("bookings")
     .select(
-      "id, member_id, villa, check_in, check_out, sleeping_guests, day_visitors, event_type, message, status, created_at, guest_name, guest_email, guest_phone, guest_country"
+      "id, member_id, villa, check_in, check_out, sleeping_guests, day_visitors, event_type, message, addons, status, created_at, guest_name, guest_email, guest_phone, guest_country"
     )
     .order("created_at", { ascending: false });
 

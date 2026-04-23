@@ -15,6 +15,11 @@ const BORDER   = "rgba(197,164,109,0.12)";
 
 const SESSION_KEY = "oraya_admin_auth";
 
+interface BookingAddon {
+  id:    string;
+  label: string;
+}
+
 interface Booking {
   id: string;
   villa: string;
@@ -24,6 +29,7 @@ interface Booking {
   day_visitors: number;
   event_type: string | null;
   message: string | null;
+  addons: BookingAddon[] | null;
   status: string;
   created_at: string;
   member_id: string | null;
@@ -66,6 +72,17 @@ function fmt(iso: string) {
   const [y, m, d] = iso.split("T")[0].split("-");
   const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   return `${parseInt(d)} ${months[parseInt(m)-1]} ${y}`;
+}
+
+function fmtDateTime(iso: string) {
+  if (!iso) return "—";
+  const dt = new Date(iso);
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const date = `${dt.getDate()} ${months[dt.getMonth()]} ${dt.getFullYear()}`;
+  const hh   = String(dt.getHours()).padStart(2, "0");
+  const mm   = String(dt.getMinutes()).padStart(2, "0");
+  const ss   = String(dt.getSeconds()).padStart(2, "0");
+  return `${date} ${hh}:${mm}:${ss}`;
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -231,6 +248,11 @@ export default function AdminPage() {
   const [addonsSaving,  setAddonsSaving]  = useState(false);
   const [addonsSaved,   setAddonsSaved]   = useState(false);
 
+  // Notification emails
+  const [notifEmails,  setNotifEmails]  = useState("");
+  const [notifSaving,  setNotifSaving]  = useState(false);
+  const [notifSaved,   setNotifSaved]   = useState(false);
+
   // Member deletion
   const [deletingId, setDeletingId]         = useState<string | null>(null);
 
@@ -276,8 +298,11 @@ export default function AdminPage() {
     fetch("/api/admin/settings", { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => {
-        const wa = (d.settings ?? []).find((s: { key: string; value: string }) => s.key === "whatsapp_number");
+        const rows = d.settings ?? [];
+        const wa = rows.find((s: { key: string; value: string }) => s.key === "whatsapp_number");
         if (wa) setWhatsappNum(wa.value);
+        const ne = rows.find((s: { key: string; value: string }) => s.key === "notification_emails");
+        if (ne) setNotifEmails(ne.value);
       })
       .catch((e) => console.error("[admin] settings fetch error:", e));
 
@@ -317,6 +342,18 @@ export default function AdminPage() {
       const d = await res.json();
       setError(d.error ?? "Failed to save password.");
     }
+  }
+
+  async function saveNotifEmails() {
+    setNotifSaving(true); setNotifSaved(false);
+    const res = await fetch("/api/admin/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: "notification_emails", value: notifEmails }),
+    });
+    setNotifSaving(false);
+    if (res.ok) { setNotifSaved(true); setTimeout(() => setNotifSaved(false), 3000); }
+    else { const d = await res.json(); setError(d.error ?? "Failed to save notification emails."); }
   }
 
   function updateAddon(id: string, patch: Partial<Addon>) {
@@ -494,7 +531,7 @@ export default function AdminPage() {
           </div>
 
           {/* Change password */}
-          <div style={{ display: "flex", alignItems: "flex-end", gap: "12px", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: "12px", flexWrap: "wrap", marginBottom: "1.5rem", paddingBottom: "1.5rem", borderBottom: `0.5px solid ${BORDER}` }}>
             <div style={{ flex: "1", minWidth: "220px" }}>
               <label style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, display: "block", marginBottom: "6px" }}>
                 Change admin password
@@ -525,6 +562,45 @@ export default function AdminPage() {
               </button>
               {pwSaved && (
                 <span style={{ fontFamily: LATO, fontSize: "11px", color: "#6fcf8a", letterSpacing: "1px" }}>✓ Password updated</span>
+              )}
+            </div>
+          </div>
+
+          {/* Notification emails */}
+          <div style={{ display: "flex", alignItems: "flex-end", gap: "12px", flexWrap: "wrap" }}>
+            <div style={{ flex: "1", minWidth: "220px" }}>
+              <label style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, display: "block", marginBottom: "6px" }}>
+                Booking notification recipients
+              </label>
+              <input
+                type="text"
+                value={notifEmails}
+                onChange={(e) => { setNotifEmails(e.target.value); setNotifSaved(false); }}
+                placeholder="e.g. admin@oraya.com, ops@oraya.com"
+                style={fieldStyle}
+                onFocus={(e) => { e.currentTarget.style.borderColor = GOLD; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+              />
+              <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, marginTop: "5px" }}>
+                Comma-separated. These addresses receive an email when a new booking request is submitted.
+              </p>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", paddingBottom: "22px" }}>
+              <button
+                onClick={saveNotifEmails}
+                disabled={notifSaving}
+                style={{
+                  fontFamily: LATO, fontSize: "10px", letterSpacing: "2px",
+                  textTransform: "uppercase", color: CHARCOAL, backgroundColor: GOLD,
+                  border: "none", padding: "12px 28px",
+                  cursor: notifSaving ? "not-allowed" : "pointer",
+                  opacity: notifSaving ? 0.7 : 1, whiteSpace: "nowrap",
+                }}
+              >
+                {notifSaving ? "Saving…" : "Save"}
+              </button>
+              {notifSaved && (
+                <span style={{ fontFamily: LATO, fontSize: "11px", color: "#6fcf8a", letterSpacing: "1px" }}>✓ Saved</span>
               )}
             </div>
           </div>
@@ -673,7 +749,7 @@ export default function AdminPage() {
               <table style={{ width: "100%", borderCollapse: "collapse", backgroundColor: SURFACE, border: `0.5px solid ${BORDER}` }}>
                 <thead>
                   <tr>
-                    {["Ref", "Guest / Member", "Contact", "Villa", "Check-in", "Check-out", "Sleeping", "Visitors", "Event", "Status", "Submitted", "Actions"].map((h) => (
+                    {["Ref", "Guest / Member", "Contact", "Villa", "Check-in", "Check-out", "Sleeping", "Visitors", "Event", "Add-ons", "Status", "Submitted", "Actions"].map((h) => (
                       <th key={h} style={{ ...thStyle, textAlign: h === "Actions" ? "center" : "left" }}>{h}</th>
                     ))}
                   </tr>
@@ -725,8 +801,13 @@ export default function AdminPage() {
                         <td style={{ ...tdStyle, textAlign: "center" }}>{b.sleeping_guests}</td>
                         <td style={{ ...tdStyle, textAlign: "center" }}>{b.day_visitors}</td>
                         <td style={{ ...tdStyle, color: MUTED }}>{b.event_type ?? "—"}</td>
+                        <td style={{ ...tdStyle, color: MUTED, fontSize: "12px" }}>
+                          {b.addons && b.addons.length > 0
+                            ? b.addons.map(a => a.label).join(", ")
+                            : "—"}
+                        </td>
                         <td style={tdStyle}><StatusBadge status={b.status} /></td>
-                        <td style={{ ...tdStyle, color: MUTED, fontSize: "11px" }}>{fmt(b.created_at)}</td>
+                        <td style={{ ...tdStyle, color: MUTED, fontSize: "11px", whiteSpace: "nowrap" }}>{fmtDateTime(b.created_at)}</td>
                         <td style={{ ...tdStyle, textAlign: "center" }}>
                           {isCancelled ? (
                             <span style={{ fontFamily: LATO, fontSize: "10px", color: MUTED }}>—</span>

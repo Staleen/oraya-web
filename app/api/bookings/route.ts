@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { sendBookingRequestEmail } from "@/lib/send-booking-request-email";
 
 // POST — create a new booking (member or guest)
 // Uses service role to bypass RLS entirely — avoids anon-client policy issues
@@ -94,6 +95,69 @@ export async function POST(request: Request) {
       console.error("[api/bookings] insert error:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    // Fire-and-forget: send admin notification email (never blocks the response)
+    ;(async () => {
+      try {
+        const { data: settingsRows } = await supabaseAdmin
+          .from("settings")
+          .select("value")
+          .eq("key", "notification_emails")
+          .single();
+
+        const rawEmails = settingsRows?.value ?? "";
+        const recipients = rawEmails
+          .split(",")
+          .map((e: string) => e.trim())
+          .filter(Boolean);
+
+        if (recipients.length === 0) return;
+
+        // Resolve requester identity
+        let requesterName  = data.guest_name  ?? "Guest";
+        let requesterEmail = data.guest_email ?? "";
+        let requesterPhone = data.guest_phone ?? null;
+
+        if (data.member_id) {
+          try {
+            const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(data.member_id);
+            requesterEmail = authUser?.user?.email ?? requesterEmail;
+            const { data: memberRow } = await supabaseAdmin
+              .from("members")
+              .select("full_name, phone")
+              .eq("id", data.member_id)
+              .single();
+            if (memberRow) {
+              requesterName  = memberRow.full_name ?? requesterName;
+              requesterPhone = memberRow.phone     ?? requesterPhone;
+            }
+          } catch {
+            // best-effort — fall back to guest fields
+          }
+        }
+
+        const adminUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? "") + "/admin";
+
+        await sendBookingRequestEmail({
+          recipients,
+          booking_id:      data.id,
+          requester_name:  requesterName,
+          requester_email: requesterEmail,
+          requester_phone: requesterPhone,
+          villa:           data.villa,
+          check_in:        data.check_in,
+          check_out:       data.check_out,
+          sleeping_guests: data.sleeping_guests,
+          day_visitors:    data.day_visitors,
+          event_type:      data.event_type ?? null,
+          addons:          Array.isArray(data.addons) ? data.addons : [],
+          created_at:      data.created_at,
+          admin_url:       adminUrl,
+        });
+      } catch (emailErr) {
+        console.error("[api/bookings] notification email error:", emailErr);
+      }
+    })();
 
     return NextResponse.json({ booking: data });
   } catch (err) {
