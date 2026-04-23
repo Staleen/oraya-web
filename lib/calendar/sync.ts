@@ -16,6 +16,23 @@ export interface CalendarSyncSummary {
   upserted: number;
 }
 
+function normalizeSyncError(error: unknown) {
+  const raw = error instanceof Error ? error.message : String(error);
+  const trimmed = raw.trim();
+
+  if (!trimmed) return null;
+
+  const collapsed = trimmed
+    .replace(/[^\x20-\x7E]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!collapsed) return null;
+  if (collapsed === "-" || collapsed === "--" || collapsed === "...") return null;
+
+  return collapsed;
+}
+
 async function syncSource(source: ExternalCalendarSourceRow): Promise<{ upserted: number }> {
   const nowIso = new Date().toISOString();
   const response = await fetch(source.feed_url, { cache: "no-store" });
@@ -114,7 +131,7 @@ export async function runCalendarSync(): Promise<CalendarSyncSummary> {
       summary.upserted += result.upserted;
     } catch (syncError) {
       summary.failed++;
-      const message = syncError instanceof Error ? syncError.message : String(syncError);
+      const message = normalizeSyncError(syncError);
       await supabaseAdmin
         .from("external_calendar_sources")
         .update({

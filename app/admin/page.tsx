@@ -108,6 +108,13 @@ function formatSyncStatus(status: string | null) {
   return "Never run";
 }
 
+function formatSyncError(lastError: string | null) {
+  const value = lastError?.trim();
+  if (!value) return "-";
+  if (["-", "--", "...", "â€”", "â€¦", "—", "…"].includes(value)) return "-";
+  return value;
+}
+
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, string> = {
     pending:   "rgba(197,164,109,0.15)",
@@ -891,8 +898,8 @@ export default function AdminPage() {
                         )}
                       </td>
                       <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>{source.last_synced_at ? fmtDateTime(source.last_synced_at) : "-"}</td>
-                      <td style={{ ...tdStyle, color: source.last_error ? "#e0b070" : MUTED }}>
-                        {source.last_error?.trim() || "-"}
+                      <td style={{ ...tdStyle, color: formatSyncError(source.last_error) === "-" ? MUTED : "#e0b070" }}>
+                        {formatSyncError(source.last_error)}
                       </td>
                     </tr>
                   ))}
