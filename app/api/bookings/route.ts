@@ -143,10 +143,17 @@ export async function POST(request: Request) {
         const base     = process.env.NEXT_PUBLIC_SITE_URL || SITE_URL;
         const adminUrl = base + "/admin";
 
-        const confirmToken = createActionToken(data.id, "confirmed");
-        const cancelToken  = createActionToken(data.id, "cancelled");
-        const confirmUrl   = `${base}/api/booking-action?token=${confirmToken}`;
-        const cancelUrl    = `${base}/api/booking-action?token=${cancelToken}`;
+        const { token: confirmToken, jti: confirmJti, exp: confirmExp } = createActionToken(data.id, "confirmed");
+        const { token: cancelToken,  jti: cancelJti,  exp: cancelExp  } = createActionToken(data.id, "cancelled");
+
+        // Persist token rows for DB-backed single-use enforcement
+        await supabaseAdmin.from("booking_action_tokens").insert([
+          { jti: confirmJti, booking_id: data.id, action: "confirmed", expires_at: new Date(confirmExp * 1000).toISOString() },
+          { jti: cancelJti,  booking_id: data.id, action: "cancelled", expires_at: new Date(cancelExp  * 1000).toISOString() },
+        ]);
+
+        const confirmUrl = `${base}/api/booking-action?token=${confirmToken}`;
+        const cancelUrl  = `${base}/api/booking-action?token=${cancelToken}`;
 
         await sendBookingRequestEmail({
           recipients,

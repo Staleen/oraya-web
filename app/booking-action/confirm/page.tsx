@@ -26,11 +26,23 @@ export default async function BookingActionConfirmPage({
   const token = searchParams.token;
   if (!token) redirect("/booking-action/result?state=invalid");
 
-  // Verify token signature + expiry (read-only — no DB writes here)
+  // 1. Verify signature + expiry (crypto only — no DB)
   const result = verifyActionToken(token);
   if (!result.ok) redirect(`/booking-action/result?state=${result.reason}`);
 
-  const { booking_id, action } = result;
+  const { booking_id, action, jti } = result;
+
+  // 2. DB-backed token check: row must exist, not yet consumed, payload must match
+  //    This is read-only — no writes on GET
+  const { data: tokenRow } = await supabaseAdmin
+    .from("booking_action_tokens")
+    .select("used_at, booking_id, action")
+    .eq("jti", jti)
+    .single();
+
+  if (!tokenRow)                                                      redirect("/booking-action/result?state=invalid");
+  if (tokenRow.used_at)                                               redirect("/booking-action/result?state=already_processed");
+  if (tokenRow.booking_id !== booking_id || tokenRow.action !== action) redirect("/booking-action/result?state=invalid");
 
   // Fetch booking details for display (read-only)
   const { data: booking } = await supabaseAdmin
