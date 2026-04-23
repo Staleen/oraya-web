@@ -220,9 +220,10 @@ export default function AdminPage() {
     setAuthed(ok);
   }, []);
 
-  // Fetch bookings + members — called on auth and after status changes
-  async function loadData() {
-    setLoading(true);
+  // Fetch bookings + members — called on auth and after status changes.
+  // Pass silent=true to skip the global loading state (used for background refreshes).
+  async function loadData(silent = false) {
+    if (!silent) setLoading(true);
     try {
       const r    = await fetch("/api/admin/data", { cache: "no-store" });
       const text = await r.text();
@@ -239,7 +240,7 @@ export default function AdminPage() {
       console.error("[admin] fetch error:", msg);
       setError(msg);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }
 
@@ -312,27 +313,27 @@ export default function AdminPage() {
     const label = status === "confirmed" ? "confirm" : "cancel";
     if (!confirm(`Are you sure you want to ${label} this booking?`)) return;
 
-    // Capture original status before optimistic update so we can revert correctly
-    const originalStatus = bookings.find((b) => b.id === id)?.status ?? "pending";
-
+    setError("");
     setUpdatingId(id);
-    setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status } : b)));
 
     const res = await fetch(`/api/admin/bookings/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
     });
+
+    const d = await res.json();
     setUpdatingId(null);
 
     if (!res.ok) {
-      const d = await res.json();
       setError(d.error ?? "Failed to update status.");
-      // Revert optimistic update to the captured original status
-      setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: originalStatus } : b)));
     } else {
-      // Re-fetch from server to ensure UI reflects the persisted DB state
-      await loadData();
+      // Update the single row immediately from the confirmed DB value — no full-table flicker
+      if (d.booking) {
+        setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: d.booking.status } : b)));
+      }
+      // Then silently re-fetch all data in the background to stay in sync
+      loadData(true);
     }
   }
 

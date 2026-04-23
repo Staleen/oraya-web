@@ -132,5 +132,5 @@ export async function PATCH(
     })();
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, booking: updated });
 }
