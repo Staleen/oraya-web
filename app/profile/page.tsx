@@ -178,6 +178,22 @@ function fmtDate(iso: string) {
   return `${parseInt(d)} ${months[parseInt(m) - 1]} ${y}`;
 }
 
+function fmtDateTime(iso: string) {
+  if (!iso) return "—";
+  const dt = new Date(iso);
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const date = `${dt.getDate()} ${months[dt.getMonth()]} ${dt.getFullYear()}`;
+  const hh   = String(dt.getHours()).padStart(2, "0");
+  const mm   = String(dt.getMinutes()).padStart(2, "0");
+  const ss   = String(dt.getSeconds()).padStart(2, "0");
+  return `${date} ${hh}:${mm}:${ss}`;
+}
+
+interface BookingAddon {
+  id:    string;
+  label: string;
+}
+
 interface Booking {
   id: string;
   villa: string;
@@ -187,6 +203,7 @@ interface Booking {
   day_visitors: number;
   event_type: string | null;
   message: string | null;
+  addons: BookingAddon[] | null;
   status: string;
   created_at: string;
 }
@@ -271,7 +288,7 @@ export default function ProfilePage() {
       // Fetch this member's bookings
       const { data: bookingData } = await supabase
         .from("bookings")
-        .select("id, villa, check_in, check_out, sleeping_guests, day_visitors, event_type, message, status, created_at")
+        .select("id, villa, check_in, check_out, sleeping_guests, day_visitors, event_type, message, addons, status, created_at")
         .eq("member_id", user.id)
         .order("created_at", { ascending: false });
 
@@ -692,7 +709,7 @@ export default function ProfilePage() {
                           { label: "Guests staying", value: String(b.sleeping_guests) },
                           { label: "Day visitors",   value: String(b.day_visitors) },
                           ...(b.event_type ? [{ label: "Event type", value: b.event_type }] : []),
-                          { label: "Submitted",      value: fmtDate(b.created_at) },
+                          { label: "Submitted",      value: fmtDateTime(b.created_at) },
                         ].map(({ label, value }) => (
                           <div key={label}>
                             <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, margin: "0 0 3px" }}>
@@ -704,6 +721,33 @@ export default function ProfilePage() {
                           </div>
                         ))}
                       </div>
+
+                      {/* Add-ons — only shown when at least one was selected */}
+                      {b.addons && b.addons.length > 0 && (
+                        <div style={{ marginTop: "14px" }}>
+                          <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, margin: "0 0 7px" }}>
+                            Add-ons
+                          </p>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                            {b.addons.map((addon) => (
+                              <span
+                                key={addon.id}
+                                style={{
+                                  fontFamily: LATO,
+                                  fontSize: "10px",
+                                  letterSpacing: "1px",
+                                  color: GOLD,
+                                  border: "0.5px solid rgba(197,164,109,0.3)",
+                                  padding: "3px 10px",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                {addon.label}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       {/* ── Modify form (pending + expanded) ── */}
                       {isPending && isExpanded && ef && (
