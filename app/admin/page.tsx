@@ -152,7 +152,7 @@ const fieldStyle: React.CSSProperties = {
   outline: "none", boxSizing: "border-box",
 };
 
-// ─── Password gate ───────────────────────────────────────────────────────────
+// --- Password gate -----------------------------------------------------------
 
 function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
   const [input, setInput]   = useState("");
@@ -246,7 +246,7 @@ function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
   );
 }
 
-// ─── Main dashboard ──────────────────────────────────────────────────────────
+// --- Main dashboard ----------------------------------------------------------
 
 export default function AdminPage() {
   const [authed, setAuthed]             = useState<boolean | null>(null);
@@ -519,10 +519,10 @@ export default function AdminPage() {
   // Waiting for session check
   if (authed === null) return null;
 
-  // Not authenticated → show gate
+  // Not authenticated: show gate
   if (!authed) return <PasswordGate onSuccess={() => setAuthed(true)} />;
 
-  // ── Dashboard ──
+  // Dashboard
   return (
     <main style={{ backgroundColor: MIDNIGHT, minHeight: "100vh", padding: "0" }}>
       {/* Top bar */}
@@ -549,7 +549,7 @@ export default function AdminPage() {
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = GOLD; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = MUTED; }}
           >
-            ← Back to site
+            Back to site
           </a>
           <button
             onClick={signOut}
@@ -607,7 +607,7 @@ export default function AdminPage() {
                 {whatsappSaving ? "Saving..." : "Save"}
               </button>
               {whatsappSaved && (
-                <span style={{ fontFamily: LATO, fontSize: "11px", color: "#6fcf8a", letterSpacing: "1px" }}>✓ Saved</span>
+                <span style={{ fontFamily: LATO, fontSize: "11px", color: "#6fcf8a", letterSpacing: "1px" }}>Saved</span>
               )}
             </div>
           </div>
@@ -643,7 +643,7 @@ export default function AdminPage() {
                 {pwSaving ? "Saving..." : "Update password"}
               </button>
               {pwSaved && (
-                <span style={{ fontFamily: LATO, fontSize: "11px", color: "#6fcf8a", letterSpacing: "1px" }}>✓ Password updated</span>
+                <span style={{ fontFamily: LATO, fontSize: "11px", color: "#6fcf8a", letterSpacing: "1px" }}>Password updated</span>
               )}
             </div>
           </div>
@@ -682,7 +682,7 @@ export default function AdminPage() {
                 {notifSaving ? "Saving..." : "Save"}
               </button>
               {notifSaved && (
-                <span style={{ fontFamily: LATO, fontSize: "11px", color: "#6fcf8a", letterSpacing: "1px" }}>✓ Saved</span>
+                <span style={{ fontFamily: LATO, fontSize: "11px", color: "#6fcf8a", letterSpacing: "1px" }}>Saved</span>
               )}
             </div>
           </div>
@@ -696,7 +696,7 @@ export default function AdminPage() {
             </p>
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
               {addonsSaved && (
-                <span style={{ fontFamily: LATO, fontSize: "11px", color: "#6fcf8a", letterSpacing: "1px" }}>✓ Saved</span>
+                <span style={{ fontFamily: LATO, fontSize: "11px", color: "#6fcf8a", letterSpacing: "1px" }}>Saved</span>
               )}
               <button
                 onClick={saveAddons}
