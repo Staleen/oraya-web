@@ -232,6 +232,11 @@ export default function AdminPage() {
   const [loading, setLoading]           = useState(true);
   const [error, setError]               = useState("");
   const [tab, setTab]                   = useState<"bookings" | "members">("bookings");
+  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "confirmed" | "cancelled">("all");
+  const [villaFilter, setVillaFilter]   = useState("all");
+  const [dateFilter, setDateFilter]     = useState("");
+  const [emailWarnings, setEmailWarnings] = useState<Record<string, string>>({});
+  const [isMobile, setIsMobile]         = useState(false);
 
   // WhatsApp setting
   const [whatsappNum, setWhatsappNum]       = useState("");
@@ -263,6 +268,15 @@ export default function AdminPage() {
   useEffect(() => {
     const ok = sessionStorage.getItem(SESSION_KEY) === "1";
     setAuthed(ok);
+  }, []);
+
+  useEffect(() => {
+    function syncViewport() {
+      setIsMobile(window.innerWidth <= 768);
+    }
+    syncViewport();
+    window.addEventListener("resize", syncViewport);
+    return () => window.removeEventListener("resize", syncViewport);
   }, []);
 
   // Fetch bookings + members — called on auth and after status changes.
@@ -410,6 +424,12 @@ export default function AdminPage() {
     if (!res.ok) {
       setError(d.error ?? "Failed to update status.");
     } else {
+      setEmailWarnings((prev) => {
+        const next = { ...prev };
+        if (d.email_sent === false) next[id] = "Booking updated but email was not sent";
+        else delete next[id];
+        return next;
+      });
       // Update the single row immediately from the confirmed DB value — no full-table flicker
       if (d.booking) {
         setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: d.booking.status } : b)));
@@ -433,6 +453,20 @@ export default function AdminPage() {
       {label}
     </button>
   );
+
+  const villaOptions = Array.from(new Set(bookings.map((b) => b.villa))).sort();
+  const filteredBookings = bookings.filter((b) => {
+    if (statusFilter !== "all" && b.status !== statusFilter) return false;
+    if (villaFilter !== "all" && b.villa !== villaFilter) return false;
+    if (dateFilter && b.check_in !== dateFilter) return false;
+    return true;
+  });
+
+  function clearFilters() {
+    setStatusFilter("all");
+    setVillaFilter("all");
+    setDateFilter("");
+  }
 
   // Waiting for session check
   if (authed === null) return null;
@@ -740,22 +774,82 @@ export default function AdminPage() {
 
         {/* Bookings table */}
         {tab === "bookings" && (
-          <div style={{ overflowX: "auto" }}>
+          <div>
+            <div style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: "1rem", marginBottom: "1rem" }}>
+              <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "flex-end" }}>
+                <div style={{ minWidth: isMobile ? "100%" : "180px", flex: "1 1 180px" }}>
+                  <label style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, display: "block", marginBottom: "6px" }}>
+                    Status
+                  </label>
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value as "all" | "pending" | "confirmed" | "cancelled")}
+                    style={{ ...fieldStyle, cursor: "pointer" }}
+                  >
+                    <option value="all" style={{ backgroundColor: MIDNIGHT }}>All</option>
+                    <option value="pending" style={{ backgroundColor: MIDNIGHT }}>Pending</option>
+                    <option value="confirmed" style={{ backgroundColor: MIDNIGHT }}>Confirmed</option>
+                    <option value="cancelled" style={{ backgroundColor: MIDNIGHT }}>Cancelled</option>
+                  </select>
+                </div>
+                <div style={{ minWidth: isMobile ? "100%" : "220px", flex: "1 1 220px" }}>
+                  <label style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, display: "block", marginBottom: "6px" }}>
+                    Villa
+                  </label>
+                  <select
+                    value={villaFilter}
+                    onChange={(e) => setVillaFilter(e.target.value)}
+                    style={{ ...fieldStyle, cursor: "pointer" }}
+                  >
+                    <option value="all" style={{ backgroundColor: MIDNIGHT }}>All villas</option>
+                    {villaOptions.map((villa) => (
+                      <option key={villa} value={villa} style={{ backgroundColor: MIDNIGHT }}>{villa}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ minWidth: isMobile ? "100%" : "180px", flex: "1 1 180px" }}>
+                  <label style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, display: "block", marginBottom: "6px" }}>
+                    Check-in
+                  </label>
+                  <input
+                    type="date"
+                    value={dateFilter}
+                    onChange={(e) => setDateFilter(e.target.value)}
+                    style={fieldStyle}
+                  />
+                </div>
+                <button
+                  onClick={clearFilters}
+                  style={{
+                    fontFamily: LATO, fontSize: "10px", letterSpacing: "2px",
+                    textTransform: "uppercase", color: MUTED, backgroundColor: "transparent",
+                    border: `0.5px solid ${BORDER}`, padding: "12px 18px", cursor: "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+            <div style={{ overflowX: isMobile ? "visible" : "auto" }}>
             {loading ? (
               <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED }}>Loading…</p>
-            ) : bookings.length === 0 ? (
-              <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED }}>No bookings yet.</p>
+            ) : filteredBookings.length === 0 ? (
+              <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED }}>No bookings match the current filters.</p>
             ) : (
               <table style={{ width: "100%", borderCollapse: "collapse", backgroundColor: SURFACE, border: `0.5px solid ${BORDER}` }}>
                 <thead>
                   <tr>
-                    {["Ref", "Guest / Member", "Contact", "Villa", "Check-in", "Check-out", "Sleeping", "Visitors", "Event", "Add-ons", "Status", "Submitted", "Actions"].map((h) => (
+                    {(isMobile
+                      ? ["Guest / Member", "Villa", "Dates", "Message", "Status", "Actions"]
+                      : ["Ref", "Guest / Member", "Contact", "Villa", "Check-in", "Check-out", "Sleeping", "Visitors", "Event", "Message", "Add-ons", "Status", "Submitted", "Actions"]
+                    ).map((h) => (
                       <th key={h} style={{ ...thStyle, textAlign: h === "Actions" ? "center" : "left" }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {bookings.map((b) => {
+                  {filteredBookings.map((b) => {
                     const isGuest     = !b.member_id;
                     const isCancelled = b.status === "cancelled";
                     const isConfirmed = b.status === "confirmed";
@@ -767,17 +861,20 @@ export default function AdminPage() {
                     const displayEmail = isGuest ? (b.guest_email ?? "—") : (memberInfo?.email ?? "—");
                     const displayPhone   = isGuest ? b.guest_phone   : (memberInfo?.phone   ?? null);
                     const displayCountry = isGuest ? b.guest_country : (memberInfo?.country ?? null);
-                    const rowOpacity   = isCancelled ? 0.4 : 1;
+                    const rowOpacity     = isCancelled ? 0.72 : 1;
+                    const rowBackground  = isPending ? "rgba(197,164,109,0.05)" : "transparent";
                     return (
                       <tr
                         key={b.id}
-                        style={{ opacity: rowOpacity, transition: "opacity 0.2s" }}
-                        onMouseEnter={(e) => { if (!isCancelled) (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.02)"; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
+                        style={{ opacity: rowOpacity, transition: "opacity 0.2s", backgroundColor: rowBackground }}
+                        onMouseEnter={(e) => { if (!isCancelled) (e.currentTarget as HTMLElement).style.backgroundColor = isPending ? "rgba(197,164,109,0.08)" : "rgba(255,255,255,0.02)"; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = rowBackground; }}
                       >
-                        <td style={{ ...tdStyle, fontFamily: "monospace", fontSize: "11px", color: MUTED }}>
-                          {b.id.slice(0, 8).toUpperCase()}
-                        </td>
+                        {!isMobile && (
+                          <td style={{ ...tdStyle, fontFamily: "monospace", fontSize: "11px", color: MUTED }}>
+                            {b.id.slice(0, 8).toUpperCase()}
+                          </td>
+                        )}
                         <td style={tdStyle}>
                           <span style={{ color: isGuest ? "rgba(255,255,255,0.65)" : GOLD }}>
                             {displayName}
@@ -785,34 +882,57 @@ export default function AdminPage() {
                           <span style={{ display: "block", fontFamily: LATO, fontSize: "10px", letterSpacing: "1px", color: isGuest ? MUTED : GOLD, marginTop: "2px", opacity: isGuest ? 1 : 0.6 }}>
                             {isGuest ? "guest" : "member"}
                           </span>
-                        </td>
-                        <td style={{ ...tdStyle, color: MUTED, fontSize: "12px" }}>
-                          <span style={{ display: "block" }}>{displayEmail}</span>
-                          {displayPhone && (
-                            <span style={{ display: "block", fontSize: "11px", marginTop: "2px" }}>{displayPhone}</span>
-                          )}
-                          {displayCountry && (
-                            <span style={{ display: "block", fontSize: "11px", marginTop: "2px" }}>{displayCountry}</span>
+                          {isMobile && (
+                            <span style={{ display: "block", fontSize: "11px", marginTop: "4px", color: MUTED, lineHeight: 1.5 }}>
+                              {displayEmail}
+                            </span>
                           )}
                         </td>
+                        {!isMobile && (
+                          <td style={{ ...tdStyle, color: MUTED, fontSize: "12px" }}>
+                            <span style={{ display: "block" }}>{displayEmail}</span>
+                            {displayPhone && (
+                              <span style={{ display: "block", fontSize: "11px", marginTop: "2px" }}>{displayPhone}</span>
+                            )}
+                            {displayCountry && (
+                              <span style={{ display: "block", fontSize: "11px", marginTop: "2px" }}>{displayCountry}</span>
+                            )}
+                          </td>
+                        )}
                         <td style={tdStyle}>{b.villa}</td>
-                        <td style={tdStyle}>{fmt(b.check_in)}</td>
-                        <td style={tdStyle}>{fmt(b.check_out)}</td>
-                        <td style={{ ...tdStyle, textAlign: "center" }}>{b.sleeping_guests}</td>
-                        <td style={{ ...tdStyle, textAlign: "center" }}>{b.day_visitors}</td>
-                        <td style={{ ...tdStyle, color: MUTED }}>{b.event_type ?? "—"}</td>
-                        <td style={{ ...tdStyle, color: MUTED, fontSize: "12px" }}>
-                          {b.addons && b.addons.length > 0
-                            ? b.addons.map(a => a.label).join(", ")
-                            : "—"}
+                        {isMobile ? (
+                          <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
+                            <span style={{ display: "block" }}>{fmt(b.check_in)}</span>
+                            <span style={{ display: "block", fontSize: "11px", color: MUTED, marginTop: "4px" }}>
+                              to {fmt(b.check_out)}
+                            </span>
+                          </td>
+                        ) : (
+                          <td style={tdStyle}>{fmt(b.check_in)}</td>
+                        )}
+                        {!isMobile && <td style={tdStyle}>{fmt(b.check_out)}</td>}
+                        {!isMobile && <td style={{ ...tdStyle, textAlign: "center" }}>{b.sleeping_guests}</td>}
+                        {!isMobile && <td style={{ ...tdStyle, textAlign: "center" }}>{b.day_visitors}</td>}
+                        {!isMobile && <td style={{ ...tdStyle, color: MUTED }}>{b.event_type ?? "-"}</td>}
+                        <td style={{ ...tdStyle, color: MUTED, fontSize: "12px", maxWidth: isMobile ? "180px" : "240px", whiteSpace: "normal", lineHeight: 1.5 }}>
+                          {b.message?.trim() || "-"}
                         </td>
+                        {!isMobile && (
+                          <td style={{ ...tdStyle, color: MUTED, fontSize: "12px" }}>
+                            {b.addons && b.addons.length > 0
+                              ? b.addons.map(a => a.label).join(", ")
+                              : "-"}
+                          </td>
+                        )}
                         <td style={tdStyle}><StatusBadge status={b.status} /></td>
-                        <td style={{ ...tdStyle, color: MUTED, fontSize: "11px", whiteSpace: "nowrap" }}>{fmtDateTime(b.created_at)}</td>
+                        {!isMobile && (
+                          <td style={{ ...tdStyle, color: MUTED, fontSize: "11px", whiteSpace: "nowrap" }}>{fmtDateTime(b.created_at)}</td>
+                        )}
                         <td style={{ ...tdStyle, textAlign: "center" }}>
                           {isCancelled ? (
                             <span style={{ fontFamily: LATO, fontSize: "10px", color: MUTED }}>—</span>
                           ) : (
-                            <div style={{ display: "flex", gap: "6px", justifyContent: "center", flexWrap: "nowrap" }}>
+                            <div style={{ display: "flex", gap: "6px", justifyContent: "center", flexWrap: isMobile ? "wrap" : "nowrap" }}>
                               {isPending && (
                                 <button
                                   onClick={() => updateStatus(b.id, "confirmed")}
@@ -853,6 +973,11 @@ export default function AdminPage() {
                                   Cancel
                                 </button>
                               )}
+                              {emailWarnings[b.id] && (
+                                <span style={{ display: "block", width: "100%", fontFamily: LATO, fontSize: "10px", color: "#e0b070", marginTop: "4px", lineHeight: 1.4 }}>
+                                  {emailWarnings[b.id]}
+                                </span>
+                              )}
                             </div>
                           )}
                         </td>
@@ -862,6 +987,7 @@ export default function AdminPage() {
                 </tbody>
               </table>
             )}
+          </div>
           </div>
         )}
 
@@ -922,3 +1048,4 @@ export default function AdminPage() {
     </main>
   );
 }
+
