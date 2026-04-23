@@ -104,6 +104,7 @@ export async function POST(request: NextRequest) {
   }
 
   // ── Step 7: Send guest notification email ────────────────────────────────
+  let emailFailed = false;
   try {
     let recipientEmail: string | null = null;
     let recipientName:  string        = "Guest";
@@ -139,7 +140,11 @@ export async function POST(request: NextRequest) {
     }
   } catch (emailErr) {
     console.error("[api/booking-action] guest email error:", emailErr);
+    emailFailed = true;
   }
 
-  return toResult(request, action);
+  const resultPath = emailFailed
+    ? `/booking-action/result?state=${action}&email=failed`
+    : `/booking-action/result?state=${action}`;
+  return NextResponse.redirect(new URL(resultPath, request.url));
 }

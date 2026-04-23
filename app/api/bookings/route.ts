@@ -123,7 +123,7 @@ export async function POST(request: Request) {
         .single();
 
       if (settingsErr) {
-        console.warn("[api/bookings] notification_emails lookup error:", settingsErr.message);
+        console.error("[api/bookings] notification_emails lookup error:", settingsErr.message);
       }
 
       const rawEmails  = settingsRows?.value ?? "";
@@ -162,13 +162,18 @@ export async function POST(request: Request) {
         const { token: cancelToken,  jti: cancelJti,  exp: cancelExp  } = createActionToken(data.id, "cancelled");
 
         // Persist token rows for DB-backed single-use enforcement
-        await supabaseAdmin.from("booking_action_tokens").insert([
+        const { error: tokenInsertErr } = await supabaseAdmin.from("booking_action_tokens").insert([
           { jti: confirmJti, booking_id: data.id, action: "confirmed", expires_at: new Date(confirmExp * 1000).toISOString() },
           { jti: cancelJti,  booking_id: data.id, action: "cancelled", expires_at: new Date(cancelExp  * 1000).toISOString() },
         ]);
+        if (tokenInsertErr) {
+          console.error("[api/bookings] token row insert failed — action links omitted from email:", tokenInsertErr.message);
+        }
 
-        const confirmUrl = `${base}/api/booking-action?token=${confirmToken}`;
-        const cancelUrl  = `${base}/api/booking-action?token=${cancelToken}`;
+        // Only include action URLs when token rows are confirmed persisted.
+        // If insert failed, both URLs are undefined so the template falls back to "Review in Admin".
+        const confirmUrl = tokenInsertErr ? undefined : `${base}/api/booking-action?token=${confirmToken}`;
+        const cancelUrl  = tokenInsertErr ? undefined : `${base}/api/booking-action?token=${cancelToken}`;
 
         await sendBookingRequestEmail({
           recipients,

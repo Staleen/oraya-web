@@ -58,10 +58,11 @@ const FALLBACK: StateConfig = {
 export default function BookingActionResultPage({
   searchParams,
 }: {
-  searchParams: { state?: string };
+  searchParams: { state?: string; email?: string };
 }) {
-  const state  = searchParams.state ?? "invalid";
-  const config = STATES[state] ?? FALLBACK;
+  const state       = searchParams.state ?? "invalid";
+  const emailFailed = searchParams.email === "failed";
+  const config      = STATES[state] ?? FALLBACK;
 
   return (
     <main
@@ -108,6 +109,13 @@ export default function BookingActionResultPage({
         >
           Go to Admin
         </a>
+
+        {emailFailed && (
+          <p style={{ fontFamily: LATO, fontSize: "11px", color: "#e07070",
+                      marginTop: "1.5rem", lineHeight: 1.6 }}>
+            Booking updated but guest notification failed. Please contact them manually.
+          </p>
+        )}
 
         <p style={{ fontFamily: LATO, fontSize: "11px", color: "rgba(255,255,255,0.2)", marginTop: "2.5rem" }}>
           Oraya · Luxury Boutique Villas · Lebanon

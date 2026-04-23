@@ -78,6 +78,7 @@ export async function PATCH(
   }
 
   // Send notification email on confirmed or cancelled — awaited before response
+  let emailSent = false;
   if (status === "confirmed" || status === "cancelled") {
     try {
       // Fetch the full booking row
@@ -124,6 +125,7 @@ export async function PATCH(
             check_out:  bk.check_out,
             booking_id: params.id,
           });
+          emailSent = true;
         }
       }
     } catch (emailErr) {
@@ -131,5 +133,5 @@ export async function PATCH(
     }
   }
 
-  return NextResponse.json({ ok: true, booking: updated });
+  return NextResponse.json({ ok: true, booking: updated, email_sent: emailSent });
 }
