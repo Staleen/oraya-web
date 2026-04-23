@@ -724,21 +724,22 @@ export default function ProfilePage() {
 
                       {/* Add-ons — only shown when at least one was selected */}
                       {b.addons && b.addons.length > 0 && (
-                        <div style={{ marginTop: "14px" }}>
-                          <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, margin: "0 0 7px" }}>
-                            Add-ons
+                        <div style={{ marginTop: "16px", paddingTop: "14px", borderTop: `0.5px solid rgba(255,255,255,0.04)` }}>
+                          <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, margin: "0 0 9px" }}>
+                            Add-ons requested
                           </p>
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
                             {b.addons.map((addon) => (
                               <span
                                 key={addon.id}
                                 style={{
                                   fontFamily: LATO,
-                                  fontSize: "10px",
-                                  letterSpacing: "1px",
+                                  fontSize: "11px",
+                                  letterSpacing: "0.5px",
                                   color: GOLD,
-                                  border: "0.5px solid rgba(197,164,109,0.3)",
-                                  padding: "3px 10px",
+                                  backgroundColor: "rgba(197,164,109,0.06)",
+                                  border: "0.5px solid rgba(197,164,109,0.28)",
+                                  padding: "5px 13px",
                                   whiteSpace: "nowrap",
                                 }}
                               >
@@ -880,7 +881,11 @@ export default function ProfilePage() {
 
                       {/* ── Pending actions (not expanded) ── */}
                       {isPending && !isExpanded && (
-                        <div style={{ display: "flex", gap: "10px", marginTop: "1.25rem", paddingTop: "1rem", borderTop: `0.5px solid ${BORDER}` }}>
+                        <div style={{ marginTop: "1.25rem", paddingTop: "1rem", borderTop: `0.5px solid ${BORDER}` }}>
+                          <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "0 0 12px", lineHeight: 1.65 }}>
+                            Your request is under review. We will confirm your booking within 24 hours.
+                          </p>
+                          <div style={{ display: "flex", gap: "10px" }}>
                           <button
                             onClick={() => openModify(b)}
                             style={{
@@ -927,14 +932,15 @@ export default function ProfilePage() {
                           >
                             {isCancelling ? "Cancelling…" : "Cancel"}
                           </button>
+                          </div>
                         </div>
                       )}
 
                       {/* ── Confirmed: WhatsApp contact ── */}
                       {isConfirmed && (
                         <div style={{ marginTop: "1.25rem", paddingTop: "1rem", borderTop: `0.5px solid ${BORDER}` }}>
-                          <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "0 0 10px", lineHeight: 1.6 }}>
-                            To modify or cancel a confirmed booking, please contact us via WhatsApp.
+                          <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "0 0 10px", lineHeight: 1.65 }}>
+                            Your booking is confirmed. To make any changes or cancel, please reach out to us via WhatsApp.
                           </p>
                           <a
                             href={waUrl}
@@ -967,6 +973,24 @@ export default function ProfilePage() {
                             </svg>
                             WhatsApp
                           </a>
+                        </div>
+                      )}
+
+                      {/* ── Cancelled: guidance note ── */}
+                      {isCancelled && (
+                        <div style={{ marginTop: "1.25rem", paddingTop: "1rem", borderTop: `0.5px solid ${BORDER}` }}>
+                          <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0, lineHeight: 1.65 }}>
+                            This booking was cancelled. If you have any questions or would like to rebook, please contact us via{" "}
+                            <a
+                              href={waUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ color: MUTED, textDecoration: "underline", textDecorationColor: "rgba(138,128,112,0.4)" }}
+                            >
+                              WhatsApp
+                            </a>
+                            .
+                          </p>
                         </div>
                       )}
                     </div>
