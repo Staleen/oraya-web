@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { LOGO_URL } from "@/lib/brand";
 
 const GOLD = "#C5A46D";
 const MIDNIGHT = "#1F2B38";
@@ -55,12 +56,15 @@ export async function sendBookingEmail(payload: BookingEmailPayload): Promise<vo
       <td align="center">
         <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
 
-          <!-- Logo wordmark -->
+          <!-- Logo -->
           <tr>
             <td align="center" style="padding-bottom:32px;">
-              <p style="margin:0;font-size:18px;letter-spacing:6px;text-transform:uppercase;color:${GOLD};font-weight:400;">
-                ORAYA
-              </p>
+              <img src="${LOGO_URL}"
+                   alt="Oraya"
+                   width="140"
+                   height="140"
+                   border="0"
+                   style="display:block;margin:0 auto;border:0;outline:none;text-decoration:none;" />
             </td>
           </tr>
 
