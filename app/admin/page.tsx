@@ -49,6 +49,18 @@ interface Member {
   created_at: string;
 }
 
+interface CalendarSource {
+  id: string;
+  villa: string;
+  source_name: string;
+  feed_url: string;
+  is_enabled: boolean;
+  last_synced_at: string | null;
+  last_sync_status: string | null;
+  last_error: string | null;
+  created_at: string;
+}
+
 interface Addon {
   id:            string;
   label:         string;
@@ -66,6 +78,10 @@ const PRICING_MODELS: { value: Addon["pricing_model"]; label: string }[] = [
 ];
 
 const CURRENCIES = ["USD", "EUR", "GBP", "LBP"];
+const CALENDAR_EXPORTS = [
+  { villa: "Villa Mechmech", slug: "mechmech" },
+  { villa: "Villa Byblos", slug: "byblos" },
+];
 
 function fmt(iso: string) {
   if (!iso) return "—";
@@ -229,6 +245,7 @@ export default function AdminPage() {
   const [authed, setAuthed]             = useState<boolean | null>(null);
   const [bookings, setBookings]         = useState<Booking[]>([]);
   const [members, setMembers]           = useState<Member[]>([]);
+  const [calendarSources, setCalendarSources] = useState<CalendarSource[]>([]);
   const [loading, setLoading]           = useState(true);
   const [error, setError]               = useState("");
   const [tab, setTab]                   = useState<"bookings" | "members">("bookings");
@@ -263,6 +280,8 @@ export default function AdminPage() {
 
   // Booking status updating
   const [updatingId, setUpdatingId]         = useState<string | null>(null);
+  const [syncingCalendars, setSyncingCalendars] = useState(false);
+  const [syncMessage, setSyncMessage]         = useState("");
 
   // Check sessionStorage on mount
   useEffect(() => {
@@ -294,6 +313,7 @@ export default function AdminPage() {
       console.log(`[admin] loaded ${(d.bookings as unknown[])?.length ?? 0} bookings, ${(d.members as unknown[])?.length ?? 0} members`);
       setBookings((d.bookings as Booking[]) ?? []);
       setMembers((d.members as Member[]) ?? []);
+      setCalendarSources((d.calendar_sources as CalendarSource[]) ?? []);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error("[admin] fetch error:", msg);
@@ -436,6 +456,27 @@ export default function AdminPage() {
       }
       // Then silently re-fetch all data in the background to stay in sync
       loadData(true);
+    }
+  }
+
+  async function runCalendarSync() {
+    setSyncingCalendars(true);
+    setSyncMessage("");
+    setError("");
+    try {
+      const res = await fetch("/api/admin/calendar-sync/run", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Calendar sync failed.");
+      } else {
+        setSyncMessage(`Synced ${data.sources_processed} source(s), upserted ${data.blocks_upserted} block(s), ${data.sources_failed} failed.`);
+        loadData(true);
+      }
+    } catch (syncError) {
+      const message = syncError instanceof Error ? syncError.message : String(syncError);
+      setError(message);
+    } finally {
+      setSyncingCalendars(false);
     }
   }
 
@@ -758,6 +799,100 @@ export default function AdminPage() {
               </p>
             </div>
           ))}
+        </div>
+
+        <div style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: "1.75rem", marginBottom: "2rem" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap", marginBottom: "1rem" }}>
+            <div>
+              <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 8px" }}>
+                Calendar Sync
+              </p>
+              <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0 }}>
+                Export confirmed Oraya bookings per villa and review external feed sync status.
+              </p>
+            </div>
+            <button
+              onClick={runCalendarSync}
+              disabled={syncingCalendars}
+              style={{
+                fontFamily: LATO, fontSize: "10px", letterSpacing: "2px",
+                textTransform: "uppercase", color: CHARCOAL, backgroundColor: GOLD,
+                border: "none", padding: "10px 20px", cursor: syncingCalendars ? "not-allowed" : "pointer",
+                opacity: syncingCalendars ? 0.7 : 1,
+              }}
+            >
+              {syncingCalendars ? "Syncingâ€¦" : "Run sync"}
+            </button>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "12px", marginBottom: "1rem" }}>
+            {CALENDAR_EXPORTS.map((item) => (
+              <div key={item.slug} style={{ border: `0.5px solid ${BORDER}`, padding: "14px 16px" }}>
+                <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: "0 0 6px" }}>
+                  {item.villa}
+                </p>
+                <a
+                  href={`/api/calendar/${item.slug}.ics`}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ fontFamily: LATO, fontSize: "12px", color: WHITE, textDecoration: "none", wordBreak: "break-all" }}
+                >
+                  {`/api/calendar/${item.slug}.ics`}
+                </a>
+              </div>
+            ))}
+          </div>
+
+          {syncMessage && (
+            <p style={{ fontFamily: LATO, fontSize: "12px", color: "#6fcf8a", marginBottom: "1rem" }}>
+              {syncMessage}
+            </p>
+          )}
+
+          {calendarSources.length === 0 ? (
+            <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0 }}>
+              No external calendar sources configured yet.
+            </p>
+          ) : (
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", border: `0.5px solid ${BORDER}` }}>
+                <thead>
+                  <tr>
+                    {["Villa", "Source", "Status", "Last sync", "Error"].map((heading) => (
+                      <th key={heading} style={thStyle}>{heading}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {calendarSources.map((source) => (
+                    <tr key={source.id}>
+                      <td style={tdStyle}>{source.villa}</td>
+                      <td style={tdStyle}>
+                        <span style={{ display: "block", color: WHITE }}>{source.source_name}</span>
+                        <span style={{ display: "block", fontSize: "11px", color: MUTED, marginTop: "4px", wordBreak: "break-all" }}>
+                          {source.feed_url}
+                        </span>
+                      </td>
+                      <td style={tdStyle}>
+                        <span style={{ color: source.last_sync_status === "success" ? "#6fcf8a" : source.last_sync_status === "failed" ? "#e07070" : MUTED }}>
+                          {source.last_sync_status ?? "never run"}
+                        </span>
+                        {!source.is_enabled && (
+                          <span style={{ display: "block", fontSize: "11px", color: MUTED, marginTop: "4px" }}>
+                            disabled
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>{source.last_synced_at ? fmtDateTime(source.last_synced_at) : "â€”"}</td>
+                      <td style={{ ...tdStyle, color: source.last_error ? "#e0b070" : MUTED }}>
+                        {source.last_error ?? "â€”"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {error && (

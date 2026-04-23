@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { sendBookingEmail } from "@/lib/send-booking-email";
+import { findAvailabilityConflict } from "@/lib/calendar/availability";
 
-// Initialise service-role client directly so RLS is bypassed for every query in this route.
-// Validated at call time so a missing key surfaces immediately in the logs.
 function makeAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -25,9 +24,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid status value." }, { status: 400 });
   }
 
-  // Overlap guard — only runs when confirming a booking
   if (status === "confirmed") {
-    // 1. Fetch the booking being confirmed
     const { data: booking, error: fetchErr } = await db
       .from("bookings")
       .select("villa, check_in, check_out")
@@ -38,27 +35,17 @@ export async function PATCH(
       return NextResponse.json({ error: "Booking not found." }, { status: 404 });
     }
 
-    // 2. Check for overlapping confirmed bookings on the same villa (exclude self)
-    const { data: conflicts, error: conflictErr } = await db
-      .from("bookings")
-      .select("id, check_in, check_out")
-      .eq("villa", booking.villa)
-      .eq("status", "confirmed")
-      .neq("id", params.id)
-      .lt("check_in", booking.check_out)
-      .gt("check_out", booking.check_in);
-
-    if (conflictErr) {
+    try {
+      const conflict = await findAvailabilityConflict(booking.villa, booking.check_in, booking.check_out, params.id);
+      if (conflict) {
+        return NextResponse.json(
+          { error: `Cannot confirm — ${booking.villa} already has a blocked stay from ${conflict.check_in} to ${conflict.check_out} that overlaps these dates.` },
+          { status: 409 }
+        );
+      }
+    } catch (conflictErr) {
       console.error("[api/admin/bookings] conflict check error:", conflictErr);
       return NextResponse.json({ error: "Could not verify availability. Please try again." }, { status: 500 });
-    }
-
-    if (conflicts && conflicts.length > 0) {
-      const c = conflicts[0];
-      return NextResponse.json(
-        { error: `Cannot confirm — ${booking.villa} already has a confirmed booking from ${c.check_in} to ${c.check_out} that overlaps these dates.` },
-        { status: 409 }
-      );
     }
   }
 
@@ -77,11 +64,9 @@ export async function PATCH(
     );
   }
 
-  // Send notification email on confirmed or cancelled — awaited before response
   let emailSent = false;
   if (status === "confirmed" || status === "cancelled") {
     try {
-      // Fetch the full booking row
       const { data: bk } = await db
         .from("bookings")
         .select("villa, check_in, check_out, member_id, guest_name, guest_email")
@@ -92,14 +77,12 @@ export async function PATCH(
         console.warn(`[api/admin/bookings] booking ${params.id} not found for email — skipping`);
       } else {
         let recipientEmail: string | null = null;
-        let recipientName:  string       = "Member";
+        let recipientName = "Member";
 
         if (bk.member_id) {
-          // Member booking — look up email from auth.users
           const { data: { user } } = await db.auth.admin.getUserById(bk.member_id);
           if (user?.email) {
             recipientEmail = user.email;
-            // Also try to get their full name from members table
             const { data: member } = await db
               .from("members")
               .select("full_name")
@@ -108,7 +91,6 @@ export async function PATCH(
             if (member?.full_name) recipientName = member.full_name;
           }
         } else if (bk.guest_email) {
-          // Guest booking
           recipientEmail = bk.guest_email;
           if (bk.guest_name) recipientName = bk.guest_name;
         }
@@ -117,12 +99,12 @@ export async function PATCH(
           console.warn(`[api/admin/bookings] no email address for booking ${params.id} — skipping notification`);
         } else {
           await sendBookingEmail({
-            to:         recipientEmail,
-            name:       recipientName,
-            status:     status as "confirmed" | "cancelled",
-            villa:      bk.villa,
-            check_in:   bk.check_in,
-            check_out:  bk.check_out,
+            to: recipientEmail,
+            name: recipientName,
+            status: status as "confirmed" | "cancelled",
+            villa: bk.villa,
+            check_in: bk.check_in,
+            check_out: bk.check_out,
             booking_id: params.id,
           });
           emailSent = true;

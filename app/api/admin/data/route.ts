@@ -64,11 +64,21 @@ export async function GET() {
     email: emailMap[m.id] ?? "",
   }));
 
+  const { data: calendarSources, error: calendarSourcesError } = await supabaseAdmin
+    .from("external_calendar_sources")
+    .select("id, villa, source_name, feed_url, is_enabled, last_synced_at, last_sync_status, last_error, created_at")
+    .order("created_at", { ascending: false });
+
+  if (calendarSourcesError) {
+    console.error("[api/admin/data] external_calendar_sources query error:", JSON.stringify(calendarSourcesError));
+    return NextResponse.json({ error: calendarSourcesError.message }, { status: 500 });
+  }
+
   console.log(
-    `[api/admin/data] returning ${bookings?.length ?? 0} bookings, ${membersWithEmail.length} members`
+    `[api/admin/data] returning ${bookings?.length ?? 0} bookings, ${membersWithEmail.length} members, ${calendarSources?.length ?? 0} calendar sources`
   );
   return NextResponse.json(
-    { bookings: bookings ?? [], members: membersWithEmail },
+    { bookings: bookings ?? [], members: membersWithEmail, calendar_sources: calendarSources ?? [] },
     { headers: { "Cache-Control": "no-store" } }
   );
 }

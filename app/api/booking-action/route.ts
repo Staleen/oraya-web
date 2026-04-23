@@ -2,16 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyActionToken } from "@/lib/booking-action-token";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { sendBookingEmail } from "@/lib/send-booking-email";
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
+import { findAvailabilityConflict } from "@/lib/calendar/availability";
 
 function toResult(request: NextRequest, state: string) {
   return NextResponse.redirect(new URL(`/booking-action/result?state=${state}`, request.url));
 }
-
-// ── GET — safe redirect only, zero mutations ──────────────────────────────────
-// Email scanners and link-preview bots follow GET links automatically.
-// This handler never touches the DB — it only redirects to the human confirm page.
 
 export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get("token");
@@ -21,32 +16,26 @@ export async function GET(request: NextRequest) {
   );
 }
 
-// ── POST — mutation, only reachable via explicit human form submit ─────────────
-
 export async function POST(request: NextRequest) {
-  // Token arrives from the hidden form field in /booking-action/confirm
   const formData = await request.formData();
-  const token    = formData.get("token");
+  const token = formData.get("token");
   if (typeof token !== "string" || !token) return toResult(request, "invalid");
 
-  // ── Step 1: Crypto verify (signature + expiry) ────────────────────────────
   const result = verifyActionToken(token);
   if (!result.ok) return toResult(request, result.reason);
 
   const { booking_id, action, jti } = result;
 
-  // ── Step 2: DB token row check (row must exist, not yet consumed, payload match)
   const { data: tokenRow } = await supabaseAdmin
     .from("booking_action_tokens")
     .select("used_at, booking_id, action")
     .eq("jti", jti)
     .single();
 
-  if (!tokenRow)                                                        return toResult(request, "invalid");
-  if (tokenRow.used_at)                                                 return toResult(request, "already_processed");
+  if (!tokenRow) return toResult(request, "invalid");
+  if (tokenRow.used_at) return toResult(request, "already_processed");
   if (tokenRow.booking_id !== booking_id || tokenRow.action !== action) return toResult(request, "invalid");
 
-  // ── Step 3: Fetch booking ─────────────────────────────────────────────────
   const { data: booking, error: fetchErr } = await supabaseAdmin
     .from("bookings")
     .select("villa, check_in, check_out, status, member_id, guest_name, guest_email")
@@ -54,29 +43,18 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (fetchErr || !booking) return toResult(request, "invalid");
-
-  // Guard: only act on pending bookings
   if (booking.status !== "pending") return toResult(request, "already_processed");
 
-  // ── Step 4: Overlap check (confirm only) — reuses same logic as admin PATCH ─
   if (action === "confirmed") {
-    const { data: conflicts, error: conflictErr } = await supabaseAdmin
-      .from("bookings")
-      .select("id")
-      .eq("villa", booking.villa)
-      .eq("status", "confirmed")
-      .neq("id", booking_id)
-      .lt("check_in", booking.check_out)
-      .gt("check_out", booking.check_in);
-
-    if (conflictErr) {
+    try {
+      const conflict = await findAvailabilityConflict(booking.villa, booking.check_in, booking.check_out, booking_id);
+      if (conflict) return toResult(request, "overlap_conflict");
+    } catch (conflictErr) {
       console.error("[api/booking-action] conflict check error:", conflictErr);
       return toResult(request, "invalid");
     }
-    if (conflicts && conflicts.length > 0) return toResult(request, "overlap_conflict");
   }
 
-  // ── Step 5: Update booking status (.eq("status","pending") = DB-level guard) ─
   const { error: updateErr } = await supabaseAdmin
     .from("bookings")
     .update({ status: action })
@@ -88,9 +66,6 @@ export async function POST(request: NextRequest) {
     return toResult(request, "invalid");
   }
 
-  // ── Step 6: Race-safe single-use enforcement ──────────────────────────────
-  // Guarded update: only succeeds if used_at is still null.
-  // If two concurrent requests both pass Step 2, exactly one wins here.
   const { data: marked } = await supabaseAdmin
     .from("booking_action_tokens")
     .update({ used_at: new Date().toISOString() })
@@ -99,15 +74,13 @@ export async function POST(request: NextRequest) {
     .select("jti");
 
   if (!marked || marked.length === 0) {
-    // Another request already consumed this token — treat as replay
     return toResult(request, "already_processed");
   }
 
-  // ── Step 7: Send guest notification email ────────────────────────────────
   let emailFailed = false;
   try {
     let recipientEmail: string | null = null;
-    let recipientName:  string        = "Guest";
+    let recipientName = "Guest";
 
     if (booking.member_id) {
       const { data: { user } } = await supabaseAdmin.auth.admin.getUserById(booking.member_id);
@@ -127,12 +100,12 @@ export async function POST(request: NextRequest) {
 
     if (recipientEmail) {
       await sendBookingEmail({
-        to:         recipientEmail,
-        name:       recipientName,
-        status:     action,
-        villa:      booking.villa,
-        check_in:   booking.check_in,
-        check_out:  booking.check_out,
+        to: recipientEmail,
+        name: recipientName,
+        status: action,
+        villa: booking.villa,
+        check_in: booking.check_in,
+        check_out: booking.check_out,
         booking_id,
       });
     } else {

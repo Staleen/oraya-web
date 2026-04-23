@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase-admin";
+import { getMergedAvailabilityRanges } from "@/lib/calendar/availability";
 
 export const dynamic = "force-dynamic";
 
@@ -13,16 +13,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "villa is required." }, { status: 400 });
   }
 
-  const { data, error } = await supabaseAdmin
-    .from("bookings")
-    .select("check_in, check_out")
-    .eq("villa", villa)
-    .eq("status", "confirmed");
-
-  if (error) {
+  try {
+    const data = await getMergedAvailabilityRanges(villa);
+    return NextResponse.json({ ranges: data ?? [] });
+  } catch (error) {
     console.error("[api/bookings/availability] query error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const message = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  return NextResponse.json({ ranges: data ?? [] });
 }
