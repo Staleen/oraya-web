@@ -38,6 +38,8 @@ export interface BookingRequestEmailPayload {
   addons:          Array<{ label: string }>;
   created_at:      string;
   admin_url:       string;             // link to /admin — empty string = no button
+  confirm_url?:    string;             // signed action link — confirm booking
+  cancel_url?:     string;             // signed action link — cancel booking
 }
 
 export async function sendBookingRequestEmail(
@@ -85,16 +87,49 @@ export async function sendBookingRequestEmail(
       </tr>
     </table>`).join("");
 
-  const adminBtn = payload.admin_url
+  // Action buttons — prefer signed confirm/cancel links; fall back to generic admin link
+  const adminBtn = (payload.confirm_url || payload.cancel_url)
     ? `<tr><td align="center" style="padding-top:28px;">
-         <a href="${payload.admin_url}"
-            style="display:inline-block;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;
-                   font-size:11px;letter-spacing:2.5px;text-transform:uppercase;
-                   color:#2E2E2E;background-color:${GOLD};text-decoration:none;padding:14px 32px;">
-           Review in Admin
-         </a>
+         <table cellpadding="0" cellspacing="0" style="margin:0 auto;">
+           <tr>
+             ${payload.confirm_url ? `
+             <td style="padding-right:10px;">
+               <a href="${payload.confirm_url}"
+                  style="display:inline-block;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;
+                         font-size:11px;letter-spacing:2.5px;text-transform:uppercase;
+                         color:#2E2E2E;background-color:${GOLD};text-decoration:none;padding:14px 32px;">
+                 Confirm
+               </a>
+             </td>` : ""}
+             ${payload.cancel_url ? `
+             <td>
+               <a href="${payload.cancel_url}"
+                  style="display:inline-block;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;
+                         font-size:11px;letter-spacing:2.5px;text-transform:uppercase;
+                         color:${GOLD};background-color:transparent;
+                         border:0.5px solid ${GOLD};text-decoration:none;padding:14px 32px;">
+                 Cancel
+               </a>
+             </td>` : ""}
+           </tr>
+         </table>
+         ${payload.admin_url ? `
+         <p style="margin:12px 0 0;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;
+                   font-size:10px;letter-spacing:1px;color:rgba(255,255,255,0.25);">
+           or <a href="${payload.admin_url}"
+                 style="color:rgba(197,164,109,0.6);text-decoration:underline;">open admin dashboard</a>
+         </p>` : ""}
        </td></tr>`
-    : "";
+    : payload.admin_url
+      ? `<tr><td align="center" style="padding-top:28px;">
+           <a href="${payload.admin_url}"
+              style="display:inline-block;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;
+                     font-size:11px;letter-spacing:2.5px;text-transform:uppercase;
+                     color:#2E2E2E;background-color:${GOLD};text-decoration:none;padding:14px 32px;">
+             Review in Admin
+           </a>
+         </td></tr>`
+      : "";
 
   const html = `<!DOCTYPE html>
 <html lang="en">

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { sendBookingRequestEmail } from "@/lib/send-booking-request-email";
+import { createActionToken } from "@/lib/booking-action-token";
 import { SITE_URL } from "@/lib/brand";
 
 // POST — create a new booking (member or guest)
@@ -139,7 +140,13 @@ export async function POST(request: Request) {
           }
         }
 
-        const adminUrl = (process.env.NEXT_PUBLIC_SITE_URL || SITE_URL) + "/admin";
+        const base     = process.env.NEXT_PUBLIC_SITE_URL || SITE_URL;
+        const adminUrl = base + "/admin";
+
+        const confirmToken = createActionToken(data.id, "confirmed");
+        const cancelToken  = createActionToken(data.id, "cancelled");
+        const confirmUrl   = `${base}/api/booking-action?token=${confirmToken}`;
+        const cancelUrl    = `${base}/api/booking-action?token=${cancelToken}`;
 
         await sendBookingRequestEmail({
           recipients,
@@ -156,6 +163,8 @@ export async function POST(request: Request) {
           addons:          Array.isArray(data.addons) ? data.addons : [],
           created_at:      data.created_at,
           admin_url:       adminUrl,
+          confirm_url:     confirmUrl,
+          cancel_url:      cancelUrl,
         });
       }
     } catch (emailErr) {
