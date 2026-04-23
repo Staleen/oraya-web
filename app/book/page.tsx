@@ -19,6 +19,7 @@ const LATO     = "'Lato', system-ui, sans-serif";
 // ─── Static data ──────────────────────────────────────────────────────────────
 const VILLAS      = ["Villa Mechmech", "Villa Byblos"];
 const EVENT_TYPES = ["Stay", "Wedding", "Baptism", "Corporate"];
+const EMAIL_RE    = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const COUNTRIES = [
   { label: "Saudi Arabia",   value: "Saudi Arabia" },
@@ -208,10 +209,14 @@ function nightCount(checkIn: string, checkOut: string): number {
 function friendlyError(msg: string): string {
   if (msg.includes("row-level security") || msg.includes("policy") || msg.includes("42501"))
     return "Unable to submit booking. Please try again or contact us directly.";
+  if (msg.includes("Invalid email address"))
+    return "Please enter a valid email address so we can contact you about your booking.";
   if (msg.includes("check_in") || msg.includes("check_out"))
-    return "Invalid dates selected. Please check your check-in and check-out.";
+    return "Please review your check-in and check-out dates before submitting.";
   if (msg.includes("JWT") || msg.includes("auth"))
     return "Session error. Please refresh the page and try again.";
+  if (msg.includes("unavailable"))
+    return "Those dates are no longer available. Please choose different dates and try again.";
   return msg;
 }
 
@@ -453,6 +458,8 @@ function BookPageInner() {
   const checkIn  = dateRange?.from ? toISO(dateRange.from) : "";
   const checkOut = dateRange?.to   ? toISO(dateRange.to)   : "";
   const nights   = nightCount(checkIn, checkOut);
+  const guestEmail = guest.email.trim();
+  const guestEmailInvalid = guestMode && guestEmail.length > 0 && !EMAIL_RE.test(guestEmail);
 
   const dateConflict: string = (() => {
     if (!checkIn || !checkOut) return "";
@@ -482,17 +489,18 @@ function BookPageInner() {
   function goNext() {
     setError("");
     if (step === 1) {
-      if (!form.villa)         { setError("Please select a villa.");                           return; }
-      if (!checkIn)            { setError("Please select your check-in and check-out dates."); return; }
-      if (!checkOut)           { setError("Please also select a check-out date.");             return; }
-      if (checkOut <= checkIn) { setError("Check-out must be after check-in.");                return; }
-      if (dateConflict)        { setError(dateConflict);                                       return; }
+      if (!form.villa)         { setError("Please select a villa before continuing.");                          return; }
+      if (!checkIn)            { setError("Please select your check-in and check-out dates to continue.");     return; }
+      if (!checkOut)           { setError("Please select a check-out date to complete your stay details.");    return; }
+      if (checkOut <= checkIn) { setError("Your check-out date must be after your check-in date.");            return; }
+      if (dateConflict)        { setError(dateConflict);                                                        return; }
     }
     if (step === 2) {
-      if (guestMode && !guest.fullName.trim()) { setError("Please enter your full name.");      return; }
-      if (guestMode && !guest.email.trim())    { setError("Please enter your email address.");  return; }
+      if (guestMode && !guest.fullName.trim()) { setError("Please enter your full name so we know who the booking request is for."); return; }
+      if (guestMode && !guestEmail)            { setError("Please enter your email address so we can contact you about your booking."); return; }
+      if (guestMode && !EMAIL_RE.test(guestEmail)) { setError("Please enter a valid email address so we can contact you about your booking."); return; }
       const sleeping = parseInt(form.sleepingGuests, 10);
-      if (!sleeping || sleeping < 1)           { setError("At least 1 sleeping guest is required."); return; }
+      if (!sleeping || sleeping < 1)           { setError("Please enter at least 1 overnight guest before continuing."); return; }
     }
     setStep(s => s + 1);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -514,6 +522,10 @@ function BookPageInner() {
     setError("");
     setLoading(true);
     try {
+      if (guestMode && !EMAIL_RE.test(guestEmail)) {
+        throw new Error("Invalid email address.");
+      }
+
       const { data: { user }, error: authErr } = await supabase.auth.getUser();
       if (authErr) console.error("[book] auth.getUser error:", authErr);
 
@@ -723,7 +735,7 @@ function BookPageInner() {
               {form.villa ? (
                 <div>
                   <p style={{ ...labelStyle, marginBottom: "14px" }}>Select dates</p>
-                  <div style={{ border: "0.5px solid rgba(197,164,109,0.15)", backgroundColor: "rgba(255,255,255,0.015)", padding: "1.5rem" }}>
+                  <div style={{ border: "0.5px solid rgba(197,164,109,0.12)", backgroundColor: "rgba(255,255,255,0.01)", padding: "1.25rem" }}>
                     <div className="oraya-cal">
                       <DayPicker
                         mode="range"
@@ -819,7 +831,17 @@ function BookPageInner() {
                   <div>
                     <label style={labelStyle}>Email address</label>
                     <input name="email" type="email" required value={guest.email} onChange={handleGuestChange}
-                      placeholder="you@example.com" style={inputStyle} onFocus={focusGold} onBlur={blurGold} />
+                      placeholder="you@example.com"
+                      style={{
+                        ...inputStyle,
+                        borderColor: guestEmailInvalid ? "#e07070" : "rgba(197,164,109,0.25)",
+                      }}
+                      onFocus={focusGold} onBlur={blurGold} />
+                    {guestEmailInvalid && (
+                      <p style={{ fontFamily: LATO, fontSize: "11px", color: "#e07070", marginTop: "6px", lineHeight: 1.5 }}>
+                        Please enter a valid email address so we can contact you about your booking.
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -1016,7 +1038,7 @@ function BookPageInner() {
                 <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 14px" }}>
                   Booking Summary
                 </p>
-                <div style={{ border: "0.5px solid rgba(197,164,109,0.18)", padding: "1.5rem" }}>
+                <div style={{ border: "0.5px solid rgba(197,164,109,0.18)", padding: "1.25rem", backgroundColor: "rgba(255,255,255,0.015)" }}>
                   {(
                     [
                       ["Villa",           form.villa],
@@ -1033,11 +1055,26 @@ function BookPageInner() {
                         : []),
                     ] as [string, string][]
                   ).map(([label, value]) => (
-                    <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "9px 0", borderBottom: "0.5px solid rgba(255,255,255,0.05)" }}>
+                    <div key={label} style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "flex-start",
+                      padding: label === "Check-in" || label === "Check-out" || label === "Sleeping guests" || label === "Day visitors" ? "12px 0" : "9px 0",
+                      borderBottom: "0.5px solid rgba(255,255,255,0.05)",
+                      gap: "16px",
+                    }}>
                       <span style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED, flexShrink: 0, paddingRight: "16px" }}>
                         {label}
                       </span>
-                      <span style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, fontWeight: 300, textAlign: "right" }}>
+                      <span style={{
+                        fontFamily: LATO,
+                        fontSize: label === "Check-in" || label === "Check-out" || label === "Sleeping guests" || label === "Day visitors" ? "14px" : "13px",
+                        color: label === "Check-in" || label === "Check-out" || label === "Sleeping guests" || label === "Day visitors" ? GOLD : WHITE,
+                        fontWeight: label === "Check-in" || label === "Check-out" || label === "Sleeping guests" || label === "Day visitors" ? 400 : 300,
+                        textAlign: "right",
+                        lineHeight: 1.5,
+                        maxWidth: "60%",
+                      }}>
                         {value}
                       </span>
                     </div>

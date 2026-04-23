@@ -71,12 +71,12 @@ function BookingConfirmedPageInner() {
 
         {/* Heading */}
         <h1 style={{ fontFamily: PLAYFAIR, fontSize: "2.4rem", fontWeight: 400, color: WHITE, margin: "0 0 1rem", lineHeight: 1.2 }}>
-          Your request<br />
-          <span style={{ fontStyle: "italic" }}>is confirmed.</span>
+          Your booking request<br />
+          <span style={{ fontStyle: "italic" }}>has been received.</span>
         </h1>
 
         <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, lineHeight: 1.8, marginBottom: "2.5rem" }}>
-          We&apos;ve received your booking request and will be in touch within 24 hours to confirm availability and arrange your stay.
+          Your booking is currently pending confirmation. We&apos;ll be in touch within 24 hours to confirm availability and arrange your stay.
         </p>
 
         {/* Gold rule */}
@@ -158,7 +158,7 @@ function BookingConfirmedPageInner() {
         )}
 
         <p style={{ fontFamily: LATO, fontSize: "11px", color: "rgba(255,255,255,0.2)", marginTop: "2.5rem" }}>
-          A confirmation email will be sent to your registered address.
+          You&apos;ll receive an email once your booking has been reviewed.
         </p>
       </div>
     </main>
