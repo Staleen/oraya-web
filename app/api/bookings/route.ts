@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { sendBookingRequestEmail } from "@/lib/send-booking-request-email";
+import { SITE_URL } from "@/lib/brand";
 
 // POST — create a new booking (member or guest)
 // Uses service role to bypass RLS entirely — avoids anon-client policy issues
@@ -138,7 +139,7 @@ export async function POST(request: Request) {
           }
         }
 
-        const adminUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://stayoraya.com") + "/admin";
+        const adminUrl = (process.env.NEXT_PUBLIC_SITE_URL || SITE_URL) + "/admin";
 
         await sendBookingRequestEmail({
           recipients,
