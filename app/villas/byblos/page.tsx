@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import SiteNav from "@/components/SiteNav";
 import SiteFooter from "@/components/SiteFooter";
 import OrayaEmblem from "@/components/OrayaEmblem";
+import { VILLA_FROM_PRICE_MICROLABEL, formatVillaFromPrice } from "@/lib/admin-pricing";
 
 const HERO_GRADIENT = "linear-gradient(160deg, #283520 0%, #3a5028 35%, #1e2e14 65%, #111a0a 100%)";
 
@@ -33,6 +34,8 @@ const highlights = [
   "10 minutes from Byblos Old Souk and harbour",
   "Sleeps 6 (up to 8 with extra bedding), up to 25 day visitors",
 ];
+
+const FROM_PRICE = formatVillaFromPrice("Villa Byblos");
 
 interface VillaMedia {
   id: string;
@@ -104,6 +107,16 @@ export default function VillaByblosPage() {
                 Villa Byblos<br />
                 <span style={{ fontStyle: "italic", opacity: 0.7 }}>Mediterranean Garden Estate</span>
               </h1>
+              {FROM_PRICE && (
+                <div style={{ marginTop: "14px" }}>
+                  <p style={{ fontFamily: PLAYFAIR, fontSize: "clamp(1.2rem, 2.8vw, 1.7rem)", color: WHITE, margin: "0 0 4px" }}>
+                    {FROM_PRICE}
+                  </p>
+                  <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1px", color: "rgba(255,255,255,0.7)", margin: 0 }}>
+                    {VILLA_FROM_PRICE_MICROLABEL}
+                  </p>
+                </div>
+              )}
             </div>
             <a
               href="/book?villa=Villa+Byblos"

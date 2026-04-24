@@ -2,6 +2,7 @@
 import { Fragment, useState, useEffect } from "react";
 import OrayaEmblem from "@/components/OrayaEmblem";
 import OrayaLogoFull from "@/components/OrayaLogoFull";
+import { VILLA_FROM_PRICE_MICROLABEL, formatVillaFromPrice } from "@/lib/admin-pricing";
 import { supabase } from "@/lib/supabase";
 
 // Branded gradient fallbacks
@@ -46,7 +47,10 @@ const villaMeta = [
     gradient: GRAD_BYBLOS,
     label:    "Garden estate · Byblos coast",
   },
-];
+].map((villa) => ({
+  ...villa,
+  fromPrice: formatVillaFromPrice(villa.name),
+}));
 
 const experiences = [
   { num: "01", name: "Curated amenities",  desc: "Branded linens, robes, and bespoke toiletries throughout every villa" },
@@ -412,7 +416,7 @@ export default function Home() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 max-w-[1100px] mx-auto" style={{ gap: "2px" }}>
-          {villaMeta.map(({ key, tag, name, loc, feats, href, gradient, label }) => {
+          {villaMeta.map(({ key, tag, name, loc, feats, href, gradient, label, fromPrice }) => {
             const img = key === "mechmech" ? mechmechImg : byblosImg;
             return (
             <a
@@ -473,6 +477,16 @@ export default function Home() {
                 </p>
                 <p style={{ fontFamily: PLAYFAIR, fontSize: "22px", color: CHARCOAL, marginBottom: "3px" }}>{name}</p>
                 <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, fontWeight: 300, marginBottom: "10px" }}>{loc}</p>
+                {fromPrice && (
+                  <div style={{ marginBottom: "10px" }}>
+                    <p style={{ fontFamily: PLAYFAIR, fontSize: "20px", color: CHARCOAL, margin: "0 0 4px" }}>
+                      {fromPrice}
+                    </p>
+                    <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: 0 }}>
+                      {VILLA_FROM_PRICE_MICROLABEL}
+                    </p>
+                  </div>
+                )}
                 <div style={{ display: "flex", fontFamily: LATO, fontSize: "11px", color: MUTED, gap: "10px" }}>
                   {feats.map((f, i) => (
                     <Fragment key={f}>

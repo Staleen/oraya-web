@@ -73,3 +73,15 @@ export function parseVillaPricingSetting(raw: string | null | undefined): VillaB
 export function stringifyVillaPricingSetting(pricing: VillaBasePricing[]) {
   return JSON.stringify(pricing);
 }
+
+export function getVillaBasePrice(villa: string): number | null {
+  return DEFAULT_BASE_PRICES[villa] ?? null;
+}
+
+export function formatVillaFromPrice(villa: string): string | null {
+  const price = getVillaBasePrice(villa);
+  if (price === null) return null;
+  return `From $${price} / night`;
+}
+
+export const VILLA_FROM_PRICE_MICROLABEL = "Weekday base rate, excludes add-ons";
