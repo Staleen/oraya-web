@@ -68,7 +68,7 @@ export default function SettingsSections({
               textTransform: "uppercase", color: CHARCOAL, backgroundColor: GOLD,
               border: "none", padding: "12px 28px",
               cursor: whatsappSaving ? "not-allowed" : "pointer",
-              opacity: whatsappSaving ? 0.7 : 1, whiteSpace: "nowrap",
+              opacity: whatsappSaving ? 0.7 : 1, whiteSpace: "nowrap", width: isMobile ? "100%" : "auto",
             }}
           >
             {whatsappSaving ? "Saving..." : "Save"}
@@ -103,7 +103,7 @@ export default function SettingsSections({
               textTransform: "uppercase", color: CHARCOAL, backgroundColor: GOLD,
               border: "none", padding: "12px 28px",
               cursor: pwSaving || !newPassword.trim() ? "not-allowed" : "pointer",
-              opacity: pwSaving || !newPassword.trim() ? 0.6 : 1, whiteSpace: "nowrap",
+              opacity: pwSaving || !newPassword.trim() ? 0.6 : 1, whiteSpace: "nowrap", width: isMobile ? "100%" : "auto",
             }}
           >
             {pwSaving ? "Saving..." : "Update password"}
@@ -141,7 +141,7 @@ export default function SettingsSections({
               textTransform: "uppercase", color: CHARCOAL, backgroundColor: GOLD,
               border: "none", padding: "12px 28px",
               cursor: notifSaving ? "not-allowed" : "pointer",
-              opacity: notifSaving ? 0.7 : 1, whiteSpace: "nowrap",
+              opacity: notifSaving ? 0.7 : 1, whiteSpace: "nowrap", width: isMobile ? "100%" : "auto",
             }}
           >
             {notifSaving ? "Saving..." : "Save"}

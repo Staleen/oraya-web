@@ -86,6 +86,40 @@ export default function CalendarSyncPanel({
         <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0 }}>
           No external calendar sources configured yet.
         </p>
+      ) : isMobile ? (
+        <div style={{ display: "grid", gap: "12px" }}>
+          {calendarSources.map((source) => (
+            <div key={source.id} style={{ border: `0.5px solid ${BORDER}`, padding: "14px 16px" }}>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px", marginBottom: "10px" }}>
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: "0 0 6px" }}>
+                    {source.villa}
+                  </p>
+                  <p style={{ fontFamily: "Playfair Display, Georgia, serif", fontSize: "1rem", color: WHITE, margin: 0 }}>
+                    {source.source_name}
+                  </p>
+                </div>
+                <span style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: source.last_sync_status === "success" ? "#6fcf8a" : source.last_sync_status === "failed" ? "#e07070" : MUTED }}>
+                  {formatSyncStatus(source.last_sync_status)}
+                </span>
+              </div>
+              <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "0 0 8px", wordBreak: "break-all" }}>
+                {source.feed_url}
+              </p>
+              <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "0 0 6px" }}>
+                {source.last_synced_at ? formatBeirutRelative(source.last_synced_at) : "-"}
+              </p>
+              {!source.is_enabled && (
+                <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "0 0 6px" }}>
+                  Disabled
+                </p>
+              )}
+              <p style={{ fontFamily: LATO, fontSize: "11px", color: formatSyncError(source.last_error) === "-" ? MUTED : "#e0b070", margin: 0 }}>
+                {formatSyncError(source.last_error)}
+              </p>
+            </div>
+          ))}
+        </div>
       ) : (
         <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
           <table style={{ width: "100%", minWidth: isMobile ? "640px" : "100%", borderCollapse: "collapse", border: `0.5px solid ${BORDER}` }}>

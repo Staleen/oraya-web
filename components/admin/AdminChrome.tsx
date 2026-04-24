@@ -40,10 +40,10 @@ export default function AdminChrome({ children }: { children: React.ReactNode })
             </p>
           </div>
         </div>
-        <div style={{ display: "flex", gap: isMobile ? "1rem" : "2rem", alignItems: "center", flexWrap: "wrap", justifyContent: isMobile ? "flex-start" : "flex-end", width: isMobile ? "100%" : "auto" }}>
+        <div style={{ display: "flex", gap: isMobile ? "0.75rem" : "2rem", alignItems: "center", flexWrap: "wrap", justifyContent: isMobile ? "flex-start" : "flex-end", width: isMobile ? "100%" : "auto" }}>
           <a
             href="/"
-            style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, textDecoration: "none" }}
+            style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, textDecoration: "none", padding: isMobile ? "10px 0" : 0 }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = GOLD; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = MUTED; }}
           >
@@ -54,7 +54,7 @@ export default function AdminChrome({ children }: { children: React.ReactNode })
             style={{
               fontFamily: LATO, fontSize: "10px", letterSpacing: "2px",
               textTransform: "uppercase", color: MUTED, backgroundColor: "transparent",
-              border: "none", cursor: "pointer", padding: 0,
+              border: "none", cursor: "pointer", padding: isMobile ? "10px 0" : 0,
             }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "#e07070"; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = MUTED; }}
@@ -76,7 +76,7 @@ export default function AdminChrome({ children }: { children: React.ReactNode })
                 textTransform: "uppercase", color: pathname === item.href ? GOLD : MUTED,
                 textDecoration: "none",
                 borderBottom: pathname === item.href ? `1px solid ${GOLD}` : "1px solid transparent",
-                padding: "10px 0", whiteSpace: "nowrap",
+                padding: isMobile ? "14px 0" : "10px 0", whiteSpace: "nowrap",
               }}
             >
               {item.label}
