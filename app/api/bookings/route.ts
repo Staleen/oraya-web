@@ -150,7 +150,12 @@ export async function POST(request: Request) {
           { jti: cancelJti, booking_id: data.id, action: "cancelled", expires_at: new Date(cancelExp * 1000).toISOString() },
         ]);
         if (tokenInsertErr) {
-          console.error("[api/bookings] token row insert failed — action links omitted from email:", tokenInsertErr.message);
+          console.error("[api/bookings] token row insert failed — action links omitted from email.", {
+            message: tokenInsertErr.message,
+            code:    tokenInsertErr.code,
+            details: tokenInsertErr.details,
+            hint:    tokenInsertErr.hint,
+          });
         }
 
         const confirmUrl = tokenInsertErr ? undefined : `${base}/api/booking-action?token=${confirmToken}`;
