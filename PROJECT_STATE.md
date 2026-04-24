@@ -1,4 +1,4 @@
-# ORAYA PROJECT STATE â€” SOURCE OF TRUTH
+# ORAYA PROJECT STATE - SOURCE OF TRUTH
 
 This file defines the current system architecture, constraints, and rules.
 
@@ -9,19 +9,20 @@ STOP and ask before proceeding.
 
 ## CURRENT PHASE
 
-Phase 7 â€” Admin Console Restructure
+Phase 8 - Pricing Foundation
 
 ---
 
 ## COMPLETED PHASES
 
-Phase 1 â€” Brand Identity  
-Phase 2 â€” Public Website  
-Phase 3 â€” Booking System Core  
-Phase 3B â€” Secure Email Actions  
-Phase 4 â€” Production Hardening  
-Phase 5 â€” Calendar Sync & Availability  
-Phase 6 â€” Customer Experience Layer  
+Phase 1 - Brand Identity  
+Phase 2 - Public Website  
+Phase 3 - Booking System Core  
+Phase 3B - Secure Email Actions  
+Phase 4 - Production Hardening  
+Phase 5 - Calendar Sync & Availability  
+Phase 6 - Customer Experience Layer  
+Phase 7 - Admin Console Restructure  
 
 Completed stabilization work:
 - Booking reliability: overlap protection, confirm/cancel persistence
@@ -29,14 +30,14 @@ Completed stabilization work:
 - Booking UX: 3-step booking flow
 - Calendar automation: cron-job.org sync every 10 minutes
 - Timezone standardization: Asia/Beirut display, UTC storage
-- Phase 7 â€” Step 2: Admin Component Extraction
-- Phase 7 â€” Step 3: Admin Layout + Shared Data Provider
+- Phase 7 - Step 2: Admin Component Extraction
+- Phase 7 - Step 3: Admin Layout + Shared Data Provider
 
 ---
 
 ## CURRENT STEP
 
-Phase 7 â€” Step 4: Split Admin Routes (IN PROGRESS)
+Phase 7 - Step 4: Split Admin Routes (IN PROGRESS)
 
 Rules:
 - No UI change
@@ -103,11 +104,11 @@ UI:
 
 ---
 
-## LOCKED SYSTEMS â€” DO NOT MODIFY
+## LOCKED SYSTEMS - DO NOT MODIFY
 
 The following systems are production-stable and must not be changed unless explicitly approved:
 
-- `/api/bookings` â€” submission, validation, overlap logic
+- `/api/bookings` - submission, validation, overlap logic
 - `/api/bookings/availability`
 - `/api/booking-action/*`
 - `/api/calendar/*`
