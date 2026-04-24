@@ -118,7 +118,7 @@ The following systems are production-stable and must not be changed unless expli
 - No calendar sync logic changes
 - No database schema changes
 - No authentication changes
-- No pricing engine implementation yet
+- Pricing engine implementation is allowed during Phase 8, but must remain display-only and must not enforce booking totals server-side yet.
 - No new features during restructuring
 - No duplicate data sources
 - Booking must work with or without add-ons

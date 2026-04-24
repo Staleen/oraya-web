@@ -5,8 +5,9 @@ import { DayPicker } from "react-day-picker";
 import type { DateRange, Matcher } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 import OrayaEmblem from "@/components/OrayaEmblem";
-import { getVillaBasePrice } from "@/lib/admin-pricing";
+import { getVillaBasePrice, getVillaPricing } from "@/lib/admin-pricing";
 import { usePublicPricing } from "@/lib/public-pricing";
+import { calculateStayPricing } from "@/lib/pricing/engine";
 import { supabase } from "@/lib/supabase";
 
 // ─── Brand constants ──────────────────────────────────────────────────────────
@@ -467,7 +468,20 @@ function BookPageInner() {
   const nights   = nightCount(checkIn, checkOut);
   const sleepingGuestsCount = parseInt(form.sleepingGuests, 10) || 0;
   const nightlyBasePrice = form.villa ? getVillaBasePrice(form.villa, pricing) : null;
-  const staySubtotal = nightlyBasePrice !== null ? nightlyBasePrice * nights : null;
+  const villaPricingConfig = form.villa ? getVillaPricing(pricing, form.villa) : null;
+  const pricingResult = villaPricingConfig && checkIn && checkOut
+    ? calculateStayPricing(
+        {
+          base_price:    villaPricingConfig.base_price,
+          weekday_price: villaPricingConfig.weekday_price,
+          weekend_price: villaPricingConfig.weekend_price,
+          minimum_stay:  villaPricingConfig.minimum_stay,
+        },
+        { check_in: checkIn, check_out: checkOut },
+      )
+    : null;
+  const staySubtotal = pricingResult?.subtotal
+    ?? (nightlyBasePrice !== null && nights > 0 ? nightlyBasePrice * nights : null);
   const selectedAddonDetails = selectedAddons
     .map(id => addons.find(a => a.id === id))
     .filter((a): a is Addon => Boolean(a));
