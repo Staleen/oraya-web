@@ -5,9 +5,11 @@ import { createActionToken } from "@/lib/booking-action-token";
 const GOLD     = "#C5A46D";
 const MIDNIGHT = "#1F2B38";
 const MUTED    = "#8a8070";
+const FROM_EMAIL = "Oraya Reservations <bookings@stayoraya.com>";
+const REPLY_TO = "bookings@stayoraya.com";
 
 function fmtDate(iso: string) {
-  if (!iso) return "—";
+  if (!iso) return "-";
   const [y, m, d] = iso.split("-");
   const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   return `${parseInt(d)} ${months[parseInt(m) - 1]} ${y}`;
@@ -30,12 +32,11 @@ export interface BookingPendingEmailPayload {
 export async function sendBookingPendingEmail(payload: BookingPendingEmailPayload): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
-    console.warn("[sendBookingPendingEmail] RESEND_API_KEY not set — skipping email.");
+    console.warn("[sendBookingPendingEmail] RESEND_API_KEY not set - skipping email.");
     return;
   }
 
   const resend    = new Resend(apiKey);
-  const fromEmail = process.env.RESEND_FROM_EMAIL ?? "reservations@oraya.com";
   const base      = process.env.NEXT_PUBLIC_SITE_URL || SITE_URL;
 
   const { token } = createActionToken(payload.booking_id, "view", {
@@ -45,7 +46,7 @@ export async function sendBookingPendingEmail(payload: BookingPendingEmailPayloa
 
   const ref       = payload.booking_id.slice(0, 8).toUpperCase();
   const firstName = payload.name.split(" ")[0] || "Guest";
-  const subject   = "Oraya — Booking Request Received";
+  const subject   = "Oraya - Booking Request Received";
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -101,7 +102,7 @@ export async function sendBookingPendingEmail(payload: BookingPendingEmailPayloa
           <tr>
             <td align="center" style="padding-bottom:32px;">
               <p style="margin:0;font-size:13px;color:${MUTED};line-height:1.8;max-width:400px;">
-                We've received your booking request and will confirm availability shortly. You can review your booking details using the link below at any time.
+                This is a transactional email to confirm we received your booking request. We will review availability shortly. You can use the link below to review your booking details at any time.
               </p>
             </td>
           </tr>
@@ -159,7 +160,7 @@ export async function sendBookingPendingEmail(payload: BookingPendingEmailPayloa
           <tr>
             <td align="center" style="padding-top:32px;">
               <p style="margin:0;font-size:11px;color:rgba(255,255,255,0.2);">
-                Oraya · Luxury Boutique Villas · Lebanon
+                Oraya - Luxury Boutique Villas - Lebanon
               </p>
             </td>
           </tr>
@@ -171,16 +172,36 @@ export async function sendBookingPendingEmail(payload: BookingPendingEmailPayloa
 </body>
 </html>`;
 
+  const text = [
+    subject,
+    "",
+    `Hello ${firstName},`,
+    "",
+    "This is a transactional email to confirm we received your booking request.",
+    "",
+    `Villa: ${payload.villa}`,
+    `Check-in: ${fmtDate(payload.check_in)}`,
+    `Check-out: ${fmtDate(payload.check_out)}`,
+    "Status: Pending",
+    `Reference: ${ref}`,
+    "",
+    `View your booking: ${viewUrl}`,
+    "",
+    "Oraya - Luxury Boutique Villas - Lebanon",
+  ].join("\n");
+
   const { error } = await resend.emails.send({
-    from:    fromEmail,
+    from:    FROM_EMAIL,
     to:      payload.to,
+    replyTo: REPLY_TO,
     subject,
     html,
+    text,
   });
 
   if (error) {
     console.error("[sendBookingPendingEmail] Resend error:", error);
   } else {
-    console.log(`[sendBookingPendingEmail] email sent → ${payload.to} (${subject})`);
+    console.log(`[sendBookingPendingEmail] email sent -> ${payload.to} (${subject})`);
   }
 }

@@ -5,9 +5,11 @@ import { createActionToken } from "@/lib/booking-action-token";
 const GOLD = "#C5A46D";
 const MIDNIGHT = "#1F2B38";
 const MUTED = "#8a8070";
+const FROM_EMAIL = "Oraya Reservations <bookings@stayoraya.com>";
+const REPLY_TO = "bookings@stayoraya.com";
 
 function fmtDate(iso: string) {
-  if (!iso) return "—";
+  if (!iso) return "-";
   const [y, m, d] = iso.split("-");
   const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   return `${parseInt(d)} ${months[parseInt(m) - 1]} ${y}`;
@@ -30,7 +32,7 @@ export interface BookingEmailPayload {
 export async function sendBookingEmail(payload: BookingEmailPayload): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
-    console.warn("[sendBookingEmail] RESEND_API_KEY not set — skipping email.");
+    console.warn("[sendBookingEmail] RESEND_API_KEY not set - skipping email.");
     return;
   }
 
@@ -38,15 +40,13 @@ export async function sendBookingEmail(payload: BookingEmailPayload): Promise<vo
 
   const isConfirmed = payload.status === "confirmed";
   const subject = isConfirmed
-    ? "Oraya — Booking Confirmed"
-    : "Oraya — Booking Cancelled";
+    ? "Oraya - Booking Confirmed"
+    : "Oraya - Booking Cancelled";
 
   const statusLabel  = isConfirmed ? "Confirmed" : "Cancelled";
   const statusColor  = isConfirmed ? "#6fcf8a" : "#e07070";
   const ref          = payload.booking_id.slice(0, 8).toUpperCase();
   const firstName    = payload.name.split(" ")[0];
-
-  const fromEmail = process.env.RESEND_FROM_EMAIL ?? "reservations@oraya.com";
 
   // View link is only offered on the confirmation email; a cancelled booking
   // has no further details to track.
@@ -116,8 +116,8 @@ export async function sendBookingEmail(payload: BookingEmailPayload): Promise<vo
             <td align="center" style="padding-bottom:32px;">
               <p style="margin:0;font-size:13px;color:${MUTED};line-height:1.8;max-width:400px;">
                 ${isConfirmed
-                  ? "We look forward to welcoming you. Please don't hesitate to reach out if you have any questions before your arrival."
-                  : "Your booking request has been cancelled. If you believe this is an error, please contact us directly."}
+                  ? "This is a transactional confirmation for your Oraya booking. We look forward to welcoming you, and you can reply to this email if you need anything before arrival."
+                  : "This is a transactional update for your Oraya booking. Your booking has been cancelled. If you believe this is an error, please reply to this email."}
               </p>
             </td>
           </tr>
@@ -176,7 +176,7 @@ export async function sendBookingEmail(payload: BookingEmailPayload): Promise<vo
           <tr>
             <td align="center" style="padding-top:32px;">
               <p style="margin:0;font-size:11px;color:rgba(255,255,255,0.2);">
-                Oraya · Luxury Boutique Villas · Lebanon
+                Oraya - Luxury Boutique Villas - Lebanon
               </p>
             </td>
           </tr>
@@ -188,16 +188,39 @@ export async function sendBookingEmail(payload: BookingEmailPayload): Promise<vo
 </body>
 </html>`;
 
+  const text = [
+    subject,
+    "",
+    isConfirmed
+      ? `Hello ${firstName},`
+      : `Hello ${firstName},`,
+    "",
+    isConfirmed
+      ? "This is a transactional confirmation for your Oraya booking."
+      : "This is a transactional update for your Oraya booking.",
+    "",
+    `Villa: ${payload.villa}`,
+    `Check-in: ${fmtDate(payload.check_in)}`,
+    `Check-out: ${fmtDate(payload.check_out)}`,
+    `Status: ${statusLabel}`,
+    `Reference: ${ref}`,
+    ...(viewUrl ? ["", `View your booking: ${viewUrl}`] : []),
+    "",
+    "Oraya - Luxury Boutique Villas - Lebanon",
+  ].join("\n");
+
   const { error } = await resend.emails.send({
-    from:    fromEmail,
+    from:    FROM_EMAIL,
     to:      payload.to,
+    replyTo: REPLY_TO,
     subject,
     html,
+    text,
   });
 
   if (error) {
     console.error("[sendBookingEmail] Resend error:", error);
   } else {
-    console.log(`[sendBookingEmail] email sent → ${payload.to} (${subject})`);
+    console.log(`[sendBookingEmail] email sent -> ${payload.to} (${subject})`);
   }
 }

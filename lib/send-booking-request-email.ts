@@ -4,16 +4,17 @@ import { LOGO_URL } from "@/lib/brand";
 const GOLD    = "#C5A46D";
 const MIDNIGHT = "#1F2B38";
 const MUTED   = "#8a8070";
+const FROM_EMAIL = "Oraya Reservations <bookings@stayoraya.com>";
 
 function fmtDate(iso: string): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   const [y, m, d] = iso.split("-");
   const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   return `${parseInt(d)} ${months[parseInt(m) - 1]} ${y}`;
 }
 
 function fmtDateTime(iso: string): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   const d = new Date(iso);
   const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const date   = `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
@@ -37,9 +38,9 @@ export interface BookingRequestEmailPayload {
   event_type:      string | null;
   addons:          Array<{ label: string }>;
   created_at:      string;
-  admin_url:       string;             // link to /admin — empty string = no button
-  confirm_url?:    string;             // signed action link — confirm booking
-  cancel_url?:     string;             // signed action link — cancel booking
+  admin_url:       string;             // link to /admin - empty string = no button
+  confirm_url?:    string;             // signed action link - confirm booking
+  cancel_url?:     string;             // signed action link - cancel booking
 }
 
 export async function sendBookingRequestEmail(
@@ -47,12 +48,11 @@ export async function sendBookingRequestEmail(
 ): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
-    console.warn("[sendBookingRequestEmail] RESEND_API_KEY not set — skipping email.");
+    console.warn("[sendBookingRequestEmail] RESEND_API_KEY not set - skipping email.");
     return;
   }
 
   const resend    = new Resend(apiKey);
-  const fromEmail = process.env.RESEND_FROM_EMAIL ?? "reservations@oraya.com";
   const ref       = payload.booking_id.slice(0, 8).toUpperCase();
   const addonsList = payload.addons.length > 0
     ? payload.addons.map(a => a.label).join(", ")
@@ -87,7 +87,7 @@ export async function sendBookingRequestEmail(
       </tr>
     </table>`).join("");
 
-  // Action buttons — prefer signed confirm/cancel links; fall back to generic admin link
+  // Action buttons - prefer signed confirm/cancel links; fall back to generic admin link
   const adminBtn = (payload.confirm_url || payload.cancel_url)
     ? `<tr><td align="center" style="padding-top:28px;">
          <table cellpadding="0" cellspacing="0" style="margin:0 auto;">
@@ -169,7 +169,7 @@ export async function sendBookingRequestEmail(
         <!-- Heading -->
         <tr><td align="center" style="padding-bottom:24px;">
           <h1 style="margin:0;font-size:24px;font-weight:400;color:#ffffff;line-height:1.35;">
-            A new request has been<br/><em>submitted for your review.</em>
+            A new booking request has been<br/><em>submitted for review.</em>
           </h1>
         </td></tr>
 
@@ -191,7 +191,7 @@ export async function sendBookingRequestEmail(
         <!-- Footer -->
         <tr><td align="center" style="padding-top:28px;">
           <p style="margin:0;font-size:11px;color:rgba(255,255,255,0.2);">
-            Oraya · Luxury Boutique Villas · Lebanon
+            Oraya - Luxury Boutique Villas - Lebanon
           </p>
         </td></tr>
 
@@ -201,16 +201,30 @@ export async function sendBookingRequestEmail(
 </body>
 </html>`;
 
+  const text = [
+    `Oraya - New Booking Request [${ref}]`,
+    "",
+    "A new booking request has been submitted for review.",
+    "",
+    ...rows.map(([label, value]) => `${label}: ${value.replace(/<[^>]+>/g, "")}`),
+    ...(payload.confirm_url ? ["", `Confirm: ${payload.confirm_url}`] : []),
+    ...(payload.cancel_url ? [`Cancel: ${payload.cancel_url}`] : []),
+    ...(payload.admin_url ? [`Admin: ${payload.admin_url}`] : []),
+    "",
+    "Oraya - Luxury Boutique Villas - Lebanon",
+  ].join("\n");
+
   const { error } = await resend.emails.send({
-    from:    fromEmail,
+    from:    FROM_EMAIL,
     to:      payload.recipients,
-    subject: `Oraya — New Booking Request [${ref}]`,
+    subject: `Oraya - New Booking Request [${ref}]`,
     html,
+    text,
   });
 
   if (error) {
     console.error("[sendBookingRequestEmail] Resend error:", error);
   } else {
-    console.log(`[sendBookingRequestEmail] sent → ${payload.recipients.join(", ")}`);
+    console.log(`[sendBookingRequestEmail] sent -> ${payload.recipients.join(", ")}`);
   }
 }
