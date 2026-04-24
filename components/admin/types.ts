@@ -1,0 +1,54 @@
+export interface BookingAddon {
+  id:    string;
+  label: string;
+}
+
+export interface Booking {
+  id: string;
+  villa: string;
+  check_in: string;
+  check_out: string;
+  sleeping_guests: number;
+  day_visitors: number;
+  event_type: string | null;
+  message: string | null;
+  addons: BookingAddon[] | null;
+  status: string;
+  created_at: string;
+  member_id: string | null;
+  guest_name: string | null;
+  guest_email: string | null;
+  guest_phone: string | null;
+  guest_country: string | null;
+}
+
+export interface Member {
+  id: string;
+  full_name: string;
+  email: string;
+  phone: string | null;
+  country: string | null;
+  address: string | null;
+  created_at: string;
+}
+
+export interface CalendarSource {
+  id: string;
+  villa: string;
+  source_name: string;
+  feed_url: string;
+  is_enabled: boolean;
+  last_synced_at: string | null;
+  last_sync_status: string | null;
+  last_error: string | null;
+  created_at: string;
+}
+
+export interface Addon {
+  id:            string;
+  label:         string;
+  enabled:       boolean;
+  currency:      string;
+  price:         number | null;
+  pricing_model: "flat_fee" | "per_night" | "per_person_per_day" | "per_unit";
+}
