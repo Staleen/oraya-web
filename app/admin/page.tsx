@@ -101,6 +101,28 @@ function fmtDateTime(iso: string) {
   return `${date} ${hh}:${mm}:${ss}`;
 }
 
+function fmtSyncTime(iso: string): string {
+  if (!iso) return "-";
+  const dt = new Date(iso);
+  if (isNaN(dt.getTime())) return "-";
+
+  const time = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Beirut",
+    hour:     "2-digit",
+    minute:   "2-digit",
+    hour12:   false,
+  }).format(dt);
+
+  const diffSec = Math.max(0, Math.floor((Date.now() - dt.getTime()) / 1000));
+  let rel: string;
+  if (diffSec < 45)           rel = "just now";
+  else if (diffSec < 3600)    rel = `${Math.round(diffSec / 60)} min ago`;
+  else if (diffSec < 86400)   rel = `${Math.round(diffSec / 3600)} hr ago`;
+  else                        rel = `${Math.round(diffSec / 86400)} d ago`;
+
+  return `${time} (Beirut) — ${rel}`;
+}
+
 function formatSyncStatus(status: string | null) {
   if (status === "success") return "Success";
   if (status === "failed") return "Failed";
@@ -897,7 +919,7 @@ export default function AdminPage() {
                           </span>
                         )}
                       </td>
-                      <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>{source.last_synced_at ? fmtDateTime(source.last_synced_at) : "-"}</td>
+                      <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>{source.last_synced_at ? fmtSyncTime(source.last_synced_at) : "-"}</td>
                       <td style={{ ...tdStyle, color: formatSyncError(source.last_error) === "-" ? MUTED : "#e0b070" }}>
                         {formatSyncError(source.last_error)}
                       </td>
