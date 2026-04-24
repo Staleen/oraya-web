@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import SiteNav from "@/components/SiteNav";
 import OrayaEmblem from "@/components/OrayaEmblem";
 import { supabase } from "@/lib/supabase";
+import { formatBeirutDateTime } from "@/lib/format-date";
 
 const GOLD       = "#C5A46D";
 const WHITE      = "#FFFFFF";
@@ -176,17 +177,6 @@ function fmtDate(iso: string) {
   const [y, m, d] = (iso.split("T")[0]).split("-");
   const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   return `${parseInt(d)} ${months[parseInt(m) - 1]} ${y}`;
-}
-
-function fmtDateTime(iso: string) {
-  if (!iso) return "—";
-  const dt = new Date(iso);
-  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  const date = `${dt.getDate()} ${months[dt.getMonth()]} ${dt.getFullYear()}`;
-  const hh   = String(dt.getHours()).padStart(2, "0");
-  const mm   = String(dt.getMinutes()).padStart(2, "0");
-  const ss   = String(dt.getSeconds()).padStart(2, "0");
-  return `${date} ${hh}:${mm}:${ss}`;
 }
 
 interface BookingAddon {
@@ -709,7 +699,7 @@ export default function ProfilePage() {
                           { label: "Guests staying", value: String(b.sleeping_guests) },
                           { label: "Day visitors",   value: String(b.day_visitors) },
                           ...(b.event_type ? [{ label: "Event type", value: b.event_type }] : []),
-                          { label: "Submitted",      value: fmtDateTime(b.created_at) },
+                          { label: "Submitted",      value: formatBeirutDateTime(b.created_at) },
                         ].map(({ label, value }) => (
                           <div key={label}>
                             <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, margin: "0 0 3px" }}>

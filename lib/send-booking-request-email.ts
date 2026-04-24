@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { LOGO_URL } from "@/lib/brand";
+import { formatBeirutDateTime } from "@/lib/format-date";
 
 const GOLD    = "#C5A46D";
 const MIDNIGHT = "#1F2B38";
@@ -11,17 +12,6 @@ function fmtDate(iso: string): string {
   const [y, m, d] = iso.split("-");
   const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   return `${parseInt(d)} ${months[parseInt(m) - 1]} ${y}`;
-}
-
-function fmtDateTime(iso: string): string {
-  if (!iso) return "-";
-  const d = new Date(iso);
-  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  const date   = `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
-  const hh     = String(d.getHours()).padStart(2, "0");
-  const mm     = String(d.getMinutes()).padStart(2, "0");
-  const ss     = String(d.getSeconds()).padStart(2, "0");
-  return `${date} ${hh}:${mm}:${ss}`;
 }
 
 export interface BookingRequestEmailPayload {
@@ -70,7 +60,7 @@ export async function sendBookingRequestEmail(
     ["Day visitors",    String(payload.day_visitors)],
     ...(payload.event_type ? [["Event type", payload.event_type] as [string, string]] : []),
     ["Add-ons",         addonsList],
-    ["Submitted",       fmtDateTime(payload.created_at)],
+    ["Submitted",       formatBeirutDateTime(payload.created_at)],
   ];
 
   const rowsHtml = rows.map(([label, value]) => `
