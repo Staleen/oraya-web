@@ -35,20 +35,6 @@ Completed stabilization work:
 
 ---
 
-## CURRENT STEP
-
-Phase 7 - Step 4: Split Admin Routes (IN PROGRESS)
-
-Rules:
-- No UI change
-- No logic change
-- No API change
-- No route change
-- No styling change
-- Preserve DOM structure and rendering order
-
----
-
 ## ARCHITECTURE DECISIONS
 
 - Frontend: Next.js App Router
@@ -97,7 +83,7 @@ Admin rules:
 - Settings contains system configuration only
 
 UI:
-- Inline styles only during current admin restructure
+- Admin UI follows the existing inline-style system unless explicitly changed.
 - Do not replace existing styling with Tailwind utilities
 - Time display uses `Asia/Beirut`
 - Admin time format is 24-hour
@@ -138,21 +124,6 @@ The following systems are production-stable and must not be changed unless expli
 - Booking must work with or without add-ons
 - Add-ons must not affect booking core flow
 - Keep changes minimal, surgical, and reversible
-
----
-
-## CURRENT STEP UI CONSTRAINTS
-
-During Phase 7 Step 2:
-
-- Preserve exact DOM structure
-- Preserve rendering order
-- Preserve current visual design
-- No visual redesign
-- No layout changes
-- No sidebar introduction yet
-- No route splitting yet
-- Component extraction only
 
 ---
 
