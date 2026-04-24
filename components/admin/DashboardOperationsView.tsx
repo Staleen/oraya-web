@@ -75,6 +75,7 @@ export default function DashboardOperationsView({
   villaPricing: VillaBasePricing[];
   loading: boolean;
 }) {
+  const isMobile = typeof window !== "undefined" ? window.innerWidth <= 768 : false;
   const activeBookings = bookings.filter((booking) => booking.status !== "cancelled");
   const recentBookings = [...activeBookings].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 5);
   const pendingBookings = [...bookings]
@@ -96,7 +97,7 @@ export default function DashboardOperationsView({
 
   return (
     <>
-      <section style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: "1.5rem", marginBottom: "2rem" }}>
+      <section style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: isMobile ? "1rem" : "1.5rem", marginBottom: "2rem" }}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "16px", flexWrap: "wrap", marginBottom: "1rem" }}>
           <div>
             <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 8px" }}>
@@ -127,12 +128,12 @@ export default function DashboardOperationsView({
         ) : villaRows.length === 0 ? (
           <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: 0 }}>No active bookings available for the timeline preview.</p>
         ) : (
-          <div style={{ overflowX: "auto", paddingBottom: "6px" }}>
-            <div style={{ minWidth: `${VILLA_COLUMN_WIDTH + timelineWidth}px` }}>
+          <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", paddingBottom: "6px" }}>
+            <div style={{ minWidth: `${(isMobile ? 110 : VILLA_COLUMN_WIDTH) + timelineWidth}px` }}>
               <div style={{ display: "flex", borderBottom: `0.5px solid ${BORDER}`, marginBottom: "12px" }}>
                 <div style={{
-                  width: `${VILLA_COLUMN_WIDTH}px`,
-                  minWidth: `${VILLA_COLUMN_WIDTH}px`,
+                  width: `${isMobile ? 110 : VILLA_COLUMN_WIDTH}px`,
+                  minWidth: `${isMobile ? 110 : VILLA_COLUMN_WIDTH}px`,
                   padding: "0 14px 14px 0",
                   position: "sticky",
                   left: 0,
@@ -145,7 +146,7 @@ export default function DashboardOperationsView({
                 </div>
                 <div style={{ display: "flex", width: `${timelineWidth}px` }}>
                   {timelineDates.map((date) => (
-                    <div key={date} style={{ width: `${DAY_WIDTH}px`, minWidth: `${DAY_WIDTH}px`, paddingBottom: "14px", borderLeft: `0.5px solid rgba(255,255,255,0.03)` }}>
+                  <div key={date} style={{ width: `${DAY_WIDTH}px`, minWidth: `${DAY_WIDTH}px`, paddingBottom: "14px", borderLeft: `0.5px solid rgba(255,255,255,0.03)` }}>
                       <span style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", color: MUTED, display: "block", textAlign: "center" }}>
                         {formatTimelineDayLabel(date)}
                       </span>
@@ -162,15 +163,15 @@ export default function DashboardOperationsView({
                 return (
                   <div key={villa} style={{ display: "flex", marginBottom: rowIndex === villaRows.length - 1 ? 0 : "12px" }}>
                     <div style={{
-                      width: `${VILLA_COLUMN_WIDTH}px`,
-                      minWidth: `${VILLA_COLUMN_WIDTH}px`,
+                      width: `${isMobile ? 110 : VILLA_COLUMN_WIDTH}px`,
+                      minWidth: `${isMobile ? 110 : VILLA_COLUMN_WIDTH}px`,
                       padding: "14px 14px 0 0",
                       position: "sticky",
                       left: 0,
                       backgroundColor: SURFACE,
                       zIndex: 2,
                     }}>
-                      <p style={{ fontFamily: PLAYFAIR, fontSize: "18px", color: WHITE, margin: "0 0 4px", whiteSpace: "nowrap" }}>
+                      <p style={{ fontFamily: PLAYFAIR, fontSize: isMobile ? "15px" : "18px", color: WHITE, margin: "0 0 4px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                         {villa}
                       </p>
                       <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0 }}>
@@ -182,7 +183,7 @@ export default function DashboardOperationsView({
                       position: "relative",
                       width: `${timelineWidth}px`,
                       minWidth: `${timelineWidth}px`,
-                      height: "76px",
+                      height: isMobile ? "68px" : "76px",
                       backgroundImage: `repeating-linear-gradient(to right, rgba(255,255,255,0.04), rgba(255,255,255,0.04) 1px, transparent 1px, transparent ${DAY_WIDTH}px)`,
                       borderTop: `0.5px solid rgba(255,255,255,0.04)`,
                       borderBottom: `0.5px solid rgba(255,255,255,0.04)`,
@@ -203,10 +204,10 @@ export default function DashboardOperationsView({
                             style={{
                               position: "absolute",
                               left: `${startOffset * DAY_WIDTH + 4}px`,
-                              top: "10px",
+                              top: isMobile ? "8px" : "10px",
                               width: `${widthDays * DAY_WIDTH - 8}px`,
                               minWidth: `${Math.max(84, widthDays * DAY_WIDTH - 8)}px`,
-                              height: "56px",
+                              height: isMobile ? "50px" : "56px",
                               backgroundColor: tone.background,
                               border: `0.5px solid ${tone.color}`,
                               padding: "8px 10px",
@@ -216,7 +217,7 @@ export default function DashboardOperationsView({
                           >
                             <p style={{
                               fontFamily: PLAYFAIR,
-                              fontSize: "15px",
+                              fontSize: isMobile ? "13px" : "15px",
                               color: WHITE,
                               margin: "0 0 4px",
                               whiteSpace: "nowrap",
@@ -250,8 +251,8 @@ export default function DashboardOperationsView({
         )}
       </section>
 
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.2fr) minmax(280px, 0.8fr)", gap: "16px", marginBottom: "2rem" }}>
-        <section style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: "1.5rem" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1.2fr) minmax(280px, 0.8fr)", gap: "16px", marginBottom: "2rem" }}>
+        <section style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: isMobile ? "1rem" : "1.5rem" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", marginBottom: "1rem", flexWrap: "wrap" }}>
             <div>
               <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 8px" }}>
@@ -318,7 +319,7 @@ export default function DashboardOperationsView({
           )}
         </section>
 
-        <section style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: "1.5rem" }}>
+        <section style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: isMobile ? "1rem" : "1.5rem" }}>
           <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 8px" }}>
             Pending approvals
           </p>
@@ -369,7 +370,7 @@ export default function DashboardOperationsView({
         </section>
       </div>
 
-      <section style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: "1.5rem", marginBottom: "2rem" }}>
+      <section style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: isMobile ? "1rem" : "1.5rem", marginBottom: "2rem" }}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "16px", flexWrap: "wrap", marginBottom: "1rem" }}>
           <div>
             <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 8px" }}>
@@ -438,7 +439,7 @@ export default function DashboardOperationsView({
               Read-only nightly pricing snapshot from the manual pricing foundation.
             </p>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
             {villaPricing.map((item) => (
               <div key={item.villa} style={{ border: `0.5px solid ${BORDER}`, padding: "14px 16px" }}>
                 <p style={{ fontFamily: PLAYFAIR, fontSize: "1.2rem", color: WHITE, margin: "0 0 10px" }}>

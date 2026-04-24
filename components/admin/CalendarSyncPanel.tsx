@@ -34,7 +34,7 @@ export default function CalendarSyncPanel({
   runCalendarSync: () => void;
 }) {
   return (
-    <div style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: "1.75rem", marginBottom: "2rem" }}>
+    <div style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: isMobile ? "1rem" : "1.75rem", marginBottom: "2rem" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap", marginBottom: "1rem" }}>
         <div>
           <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 8px" }}>
@@ -87,8 +87,8 @@ export default function CalendarSyncPanel({
           No external calendar sources configured yet.
         </p>
       ) : (
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", border: `0.5px solid ${BORDER}` }}>
+        <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+          <table style={{ width: "100%", minWidth: isMobile ? "640px" : "100%", borderCollapse: "collapse", border: `0.5px solid ${BORDER}` }}>
             <thead>
               <tr>
                 {["Villa", "Source", "Status", "Last sync", "Error"].map((heading) => (

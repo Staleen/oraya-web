@@ -13,14 +13,15 @@ export default function MembersTable({
   deletingId: string | null;
   deleteMember: (id: string, name: string) => void;
 }) {
+  const isMobile = typeof window !== "undefined" ? window.innerWidth <= 768 : false;
   return (
-    <div style={{ overflowX: "auto" }}>
+    <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
       {loading ? (
         <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED }}>Loading...</p>
       ) : members.length === 0 ? (
         <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED }}>No members yet.</p>
       ) : (
-        <table style={{ width: "100%", borderCollapse: "collapse", backgroundColor: SURFACE, border: `0.5px solid ${BORDER}` }}>
+        <table style={{ width: "100%", minWidth: isMobile ? "720px" : "100%", borderCollapse: "collapse", backgroundColor: SURFACE, border: `0.5px solid ${BORDER}` }}>
           <thead>
             <tr>
               {["Name", "Email", "Phone", "Country", "Address", "Joined", ""].map((h) => (

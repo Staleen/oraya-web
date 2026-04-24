@@ -18,12 +18,15 @@ const NAV_ITEMS = [
 export default function AdminChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { signOut } = useAdminData();
+  const isMobile = typeof window !== "undefined" ? window.innerWidth <= 768 : false;
 
   return (
-    <main style={{ backgroundColor: "#1F2B38", minHeight: "100vh", padding: "0" }}>
+    <main style={{ backgroundColor: "#1F2B38", minHeight: "100vh", padding: "0", overflowX: "hidden" }}>
       <div style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "1.25rem 2.5rem", borderBottom: `0.5px solid ${BORDER}`,
+        display: "flex", alignItems: isMobile ? "flex-start" : "center", justifyContent: "space-between",
+        flexWrap: "wrap",
+        gap: "14px",
+        padding: isMobile ? "1rem 1rem 0.9rem" : "1.25rem 2.5rem", borderBottom: `0.5px solid ${BORDER}`,
         backgroundColor: "rgba(31,43,56,0.98)", position: "sticky", top: 0, zIndex: 50,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
@@ -37,7 +40,7 @@ export default function AdminChrome({ children }: { children: React.ReactNode })
             </p>
           </div>
         </div>
-        <div style={{ display: "flex", gap: "2rem", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: isMobile ? "1rem" : "2rem", alignItems: "center", flexWrap: "wrap", justifyContent: isMobile ? "flex-start" : "flex-end", width: isMobile ? "100%" : "auto" }}>
           <a
             href="/"
             style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, textDecoration: "none" }}
@@ -61,26 +64,28 @@ export default function AdminChrome({ children }: { children: React.ReactNode })
         </div>
       </div>
 
-      <div style={{ padding: "0 2.5rem", borderBottom: `0.5px solid ${BORDER}` }}>
-        {NAV_ITEMS.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            style={{
-              display: "inline-block",
-              fontFamily: LATO, fontSize: "10px", letterSpacing: "2.5px",
-              textTransform: "uppercase", color: pathname === item.href ? GOLD : MUTED,
-              textDecoration: "none",
-              borderBottom: pathname === item.href ? `1px solid ${GOLD}` : "1px solid transparent",
-              padding: "10px 0", marginRight: "2rem",
-            }}
-          >
-            {item.label}
-          </Link>
-        ))}
+      <div style={{ padding: isMobile ? "0 1rem" : "0 2.5rem", borderBottom: `0.5px solid ${BORDER}`, overflowX: "auto", overflowY: "hidden" }}>
+        <div style={{ display: "flex", gap: isMobile ? "1.25rem" : "2rem", minWidth: "max-content" }}>
+          {NAV_ITEMS.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              style={{
+                display: "inline-block",
+                fontFamily: LATO, fontSize: "10px", letterSpacing: "2.5px",
+                textTransform: "uppercase", color: pathname === item.href ? GOLD : MUTED,
+                textDecoration: "none",
+                borderBottom: pathname === item.href ? `1px solid ${GOLD}` : "1px solid transparent",
+                padding: "10px 0", whiteSpace: "nowrap",
+              }}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </div>
       </div>
 
-      <div style={{ padding: "2.5rem" }}>
+      <div style={{ padding: isMobile ? "1rem" : "2.5rem", overflowX: "hidden" }}>
         {children}
       </div>
     </main>

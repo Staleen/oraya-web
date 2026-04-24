@@ -61,7 +61,7 @@ export default function BookingsTable({
 }) {
   return (
     <div>
-      <div style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: "1rem", marginBottom: "1rem" }}>
+      <div style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: isMobile ? "0.85rem" : "1rem", marginBottom: "1rem" }}>
         <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "flex-end" }}>
           <div style={{ minWidth: isMobile ? "100%" : "180px", flex: "1 1 180px" }}>
             <label style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, display: "block", marginBottom: "6px" }}>
@@ -109,7 +109,7 @@ export default function BookingsTable({
             style={{
               fontFamily: LATO, fontSize: "10px", letterSpacing: "2px",
               textTransform: "uppercase", color: MUTED, backgroundColor: "transparent",
-              border: `0.5px solid ${BORDER}`, padding: "12px 18px", cursor: "pointer",
+              border: `0.5px solid ${BORDER}`, padding: isMobile ? "12px 16px" : "12px 18px", cursor: "pointer",
               whiteSpace: "nowrap",
             }}
           >
@@ -117,13 +117,13 @@ export default function BookingsTable({
           </button>
         </div>
       </div>
-      <div style={{ overflowX: isMobile ? "visible" : "auto" }}>
+      <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
         {loading ? (
           <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED }}>Loading...</p>
         ) : filteredBookings.length === 0 ? (
           <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED }}>No bookings match the current filters.</p>
         ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse", backgroundColor: SURFACE, border: `0.5px solid ${BORDER}` }}>
+          <table style={{ width: "100%", minWidth: isMobile ? "760px" : "100%", borderCollapse: "collapse", backgroundColor: SURFACE, border: `0.5px solid ${BORDER}` }}>
             <thead>
               <tr>
                 {(isMobile

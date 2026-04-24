@@ -34,13 +34,14 @@ export default function SettingsSections({
   notifSaved: boolean;
   saveNotifEmails: () => void;
 }) {
+  const isMobile = typeof window !== "undefined" ? window.innerWidth <= 768 : false;
   return (
-    <div style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: "1.75rem", marginBottom: "2rem" }}>
+    <div style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: isMobile ? "1rem" : "1.75rem", marginBottom: "2rem" }}>
       <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 1.5rem" }}>
         Settings
       </p>
 
-      <div style={{ display: "flex", alignItems: "flex-end", gap: "12px", flexWrap: "wrap", marginBottom: "1.5rem", paddingBottom: "1.5rem", borderBottom: `0.5px solid ${BORDER}` }}>
+      <div style={{ display: "flex", alignItems: isMobile ? "stretch" : "flex-end", gap: "12px", flexWrap: "wrap", marginBottom: "1.5rem", paddingBottom: "1.5rem", borderBottom: `0.5px solid ${BORDER}` }}>
         <div style={{ flex: "1", minWidth: "220px" }}>
           <label style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, display: "block", marginBottom: "6px" }}>
             WhatsApp number
@@ -58,7 +59,7 @@ export default function SettingsSections({
             Include country code, no + or spaces (e.g. 96170123456)
           </p>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px", paddingBottom: "22px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", paddingBottom: isMobile ? "0" : "22px", width: isMobile ? "100%" : "auto", flexWrap: "wrap" }}>
           <button
             onClick={saveWhatsapp}
             disabled={whatsappSaving}
@@ -78,7 +79,7 @@ export default function SettingsSections({
         </div>
       </div>
 
-      <div style={{ display: "flex", alignItems: "flex-end", gap: "12px", flexWrap: "wrap", marginBottom: "1.5rem", paddingBottom: "1.5rem", borderBottom: `0.5px solid ${BORDER}` }}>
+      <div style={{ display: "flex", alignItems: isMobile ? "stretch" : "flex-end", gap: "12px", flexWrap: "wrap", marginBottom: "1.5rem", paddingBottom: "1.5rem", borderBottom: `0.5px solid ${BORDER}` }}>
         <div style={{ flex: "1", minWidth: "220px" }}>
           <label style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, display: "block", marginBottom: "6px" }}>
             Change admin password
@@ -93,7 +94,7 @@ export default function SettingsSections({
             onBlur={(e) => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
           />
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px", paddingBottom: "2px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", paddingBottom: isMobile ? "0" : "2px", width: isMobile ? "100%" : "auto", flexWrap: "wrap" }}>
           <button
             onClick={savePassword}
             disabled={pwSaving || !newPassword.trim()}
@@ -113,7 +114,7 @@ export default function SettingsSections({
         </div>
       </div>
 
-      <div style={{ display: "flex", alignItems: "flex-end", gap: "12px", flexWrap: "wrap" }}>
+      <div style={{ display: "flex", alignItems: isMobile ? "stretch" : "flex-end", gap: "12px", flexWrap: "wrap" }}>
         <div style={{ flex: "1", minWidth: "220px" }}>
           <label style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, display: "block", marginBottom: "6px" }}>
             Booking notification recipients
@@ -131,7 +132,7 @@ export default function SettingsSections({
             Comma-separated. These addresses receive an email when a new booking request is submitted.
           </p>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px", paddingBottom: "22px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", paddingBottom: isMobile ? "0" : "22px", width: isMobile ? "100%" : "auto", flexWrap: "wrap" }}>
           <button
             onClick={saveNotifEmails}
             disabled={notifSaving}
