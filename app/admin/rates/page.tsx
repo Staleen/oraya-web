@@ -97,7 +97,7 @@ export default function AdminRatesPage() {
           Rates
         </p>
         <p style={{ fontFamily: LATO, fontSize: "12px", color: "#8a8070", margin: 0 }}>
-          Configure base villa pricing first, then manage add-ons below. These values are stored for admin use only and do not affect booking calculations yet.
+          Configure base villa pricing first, then manage add-ons below. These values are stored in admin settings only and do not affect booking calculations yet.
         </p>
       </div>
       <BasePricingEditor
@@ -112,7 +112,7 @@ export default function AdminRatesPage() {
           Add-ons
         </p>
         <p style={{ fontFamily: LATO, fontSize: "12px", color: "#8a8070", margin: 0 }}>
-          Existing optional extras remain separate from base villa pricing.
+          Existing optional extras remain separate from base villa pricing and continue to use their current admin flow.
         </p>
       </div>
       <AddonsEditor
