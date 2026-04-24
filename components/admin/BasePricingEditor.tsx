@@ -28,7 +28,7 @@ export default function BasePricingEditor({
             Base pricing
           </p>
           <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0 }}>
-            Manual nightly pricing foundation only. Seasonal overrides are stored structurally for future use, with no booking flow integration yet.
+            Admin-only nightly pricing foundation. Base price is required per villa, while weekend and weekday values remain optional overrides.
           </p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -65,6 +65,7 @@ export default function BasePricingEditor({
                 <input
                   type="number"
                   min={0}
+                  required
                   value={priceInputValue(villaPricing.base_price)}
                   onChange={(e) => updatePricing(villaPricing.villa, { base_price: e.target.value === "" ? null : Number(e.target.value) })}
                   placeholder="-"
@@ -121,6 +122,15 @@ export default function BasePricingEditor({
                   onBlur={(e) => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
                 />
               </div>
+            </div>
+
+            <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: `0.5px solid rgba(255,255,255,0.04)` }}>
+              <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, margin: "0 0 6px" }}>
+                Seasonal overrides
+              </p>
+              <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0 }}>
+                Stored structurally for future use. Editing seasonal periods is not part of this phase.
+              </p>
             </div>
           </div>
         ))}

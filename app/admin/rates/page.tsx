@@ -61,8 +61,15 @@ export default function AdminRatesPage() {
   }
 
   async function savePricing() {
+    const missingBasePrice = villaPricing.find((item) => item.base_price === null);
+    if (missingBasePrice) {
+      setError(`Base price is required for ${missingBasePrice.villa}.`);
+      return;
+    }
+
     setPricingSaving(true);
     setPricingSaved(false);
+    setError("");
     const res = await fetch("/api/admin/settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -85,6 +92,14 @@ export default function AdminRatesPage() {
           Error: {error}
         </p>
       )}
+      <div style={{ marginBottom: "1rem" }}>
+        <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: "#C5A46D", margin: "0 0 8px" }}>
+          Rates
+        </p>
+        <p style={{ fontFamily: LATO, fontSize: "12px", color: "#8a8070", margin: 0 }}>
+          Configure base villa pricing first, then manage add-ons below. These values are stored for admin use only and do not affect booking calculations yet.
+        </p>
+      </div>
       <BasePricingEditor
         pricing={villaPricing}
         pricingSaving={pricingSaving}
@@ -92,6 +107,14 @@ export default function AdminRatesPage() {
         updatePricing={updatePricing}
         savePricing={savePricing}
       />
+      <div style={{ marginBottom: "1rem" }}>
+        <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: "#C5A46D", margin: "0 0 8px" }}>
+          Add-ons
+        </p>
+        <p style={{ fontFamily: LATO, fontSize: "12px", color: "#8a8070", margin: 0 }}>
+          Existing optional extras remain separate from base villa pricing.
+        </p>
+      </div>
       <AddonsEditor
         addons={addons}
         addonsSaving={addonsSaving}
