@@ -20,6 +20,37 @@ export default function MembersTable({
         <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED }}>Loading...</p>
       ) : members.length === 0 ? (
         <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED }}>No members yet.</p>
+      ) : isMobile ? (
+        <div style={{ display: "grid", gap: "12px" }}>
+          {members.map((m) => (
+            <div key={m.id} style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: "1rem" }}>
+              <p style={{ fontFamily: "Playfair Display, Georgia, serif", fontSize: "1.15rem", color: "#FFFFFF", margin: "0 0 10px" }}>
+                {m.full_name || "-"}
+              </p>
+              <div style={{ display: "grid", gap: "8px", marginBottom: "12px" }}>
+                <p style={{ ...tdStyle, padding: 0, borderBottom: "none", color: MUTED }}>{m.email || "-"}</p>
+                <p style={{ ...tdStyle, padding: 0, borderBottom: "none", color: MUTED }}>{m.phone || "-"}</p>
+                <p style={{ ...tdStyle, padding: 0, borderBottom: "none" }}>{m.country || "-"}</p>
+                <p style={{ ...tdStyle, padding: 0, borderBottom: "none", color: MUTED }}>{m.address || "-"}</p>
+                <p style={{ ...tdStyle, padding: 0, borderBottom: "none", color: MUTED, fontSize: "11px" }}>{fmt(m.created_at)}</p>
+              </div>
+              <button
+                onClick={() => deleteMember(m.id, m.full_name || m.email || m.id)}
+                disabled={deletingId === m.id}
+                style={{
+                  fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px",
+                  textTransform: "uppercase", color: "#e07070",
+                  backgroundColor: "transparent",
+                  border: "0.5px solid rgba(224,112,112,0.3)",
+                  padding: "10px 14px", cursor: deletingId === m.id ? "not-allowed" : "pointer",
+                  opacity: deletingId === m.id ? 0.5 : 1,
+                }}
+              >
+                {deletingId === m.id ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          ))}
+        </div>
       ) : (
         <table style={{ width: "100%", minWidth: isMobile ? "720px" : "100%", borderCollapse: "collapse", backgroundColor: SURFACE, border: `0.5px solid ${BORDER}` }}>
           <thead>

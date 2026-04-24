@@ -3,9 +3,11 @@ import { formatBeirutRelative } from "@/lib/format-date";
 import type { Booking, CalendarSource, Member } from "@/components/admin/types";
 import { BORDER, GOLD, LATO, MUTED, PLAYFAIR, SURFACE, WHITE, fmt } from "@/components/admin/theme";
 
-const DAY_WIDTH = 92;
+const DESKTOP_DAY_WIDTH = 92;
+const MOBILE_DAY_WIDTH = 54;
 const TIMELINE_DAYS = 90;
 const TIMELINE_VISIBLE_LABEL = 30;
+const TIMELINE_VISIBLE_LABEL_MOBILE = 6;
 const VILLA_COLUMN_WIDTH = 170;
 
 function startOfTodayUtcIso() {
@@ -90,7 +92,8 @@ export default function DashboardOperationsView({
   const startDate = startOfTodayUtcIso();
   const timelineDates = Array.from({ length: TIMELINE_DAYS }, (_, index) => toIsoDate(addUtcDays(startDate, index)));
   const timelineEndExclusive = toIsoDate(addUtcDays(startDate, TIMELINE_DAYS));
-  const timelineWidth = timelineDates.length * DAY_WIDTH;
+  const dayWidth = isMobile ? MOBILE_DAY_WIDTH : DESKTOP_DAY_WIDTH;
+  const timelineWidth = timelineDates.length * dayWidth;
 
   return (
     <>
@@ -101,7 +104,7 @@ export default function DashboardOperationsView({
               Master calendar preview
             </p>
             <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0 }}>
-              Read-only timeline showing the next {TIMELINE_VISIBLE_LABEL} days by default, with horizontal scroll for a longer planning horizon.
+              Read-only timeline showing the next {isMobile ? TIMELINE_VISIBLE_LABEL_MOBILE : TIMELINE_VISIBLE_LABEL} days by default, with horizontal scroll for a longer planning horizon.
             </p>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
@@ -143,7 +146,7 @@ export default function DashboardOperationsView({
                 </div>
                 <div style={{ display: "flex", width: `${timelineWidth}px` }}>
                   {timelineDates.map((date) => (
-                  <div key={date} style={{ width: `${DAY_WIDTH}px`, minWidth: `${DAY_WIDTH}px`, paddingBottom: "14px", borderLeft: `0.5px solid rgba(255,255,255,0.03)` }}>
+                  <div key={date} style={{ width: `${dayWidth}px`, minWidth: `${dayWidth}px`, paddingBottom: "14px", borderLeft: `0.5px solid rgba(255,255,255,0.03)` }}>
                       <span style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", color: MUTED, display: "block", textAlign: "center" }}>
                         {formatTimelineDayLabel(date)}
                       </span>
@@ -181,7 +184,7 @@ export default function DashboardOperationsView({
                       width: `${timelineWidth}px`,
                       minWidth: `${timelineWidth}px`,
                       height: isMobile ? "68px" : "76px",
-                      backgroundImage: `repeating-linear-gradient(to right, rgba(255,255,255,0.04), rgba(255,255,255,0.04) 1px, transparent 1px, transparent ${DAY_WIDTH}px)`,
+                      backgroundImage: `repeating-linear-gradient(to right, rgba(255,255,255,0.04), rgba(255,255,255,0.04) 1px, transparent 1px, transparent ${dayWidth}px)`,
                       borderTop: `0.5px solid rgba(255,255,255,0.04)`,
                       borderBottom: `0.5px solid rgba(255,255,255,0.04)`,
                     }}>
@@ -200,10 +203,10 @@ export default function DashboardOperationsView({
                             title={title}
                             style={{
                               position: "absolute",
-                              left: `${startOffset * DAY_WIDTH + 4}px`,
+                              left: `${startOffset * dayWidth + 4}px`,
                               top: isMobile ? "8px" : "10px",
-                              width: `${widthDays * DAY_WIDTH - 8}px`,
-                              minWidth: `${Math.max(84, widthDays * DAY_WIDTH - 8)}px`,
+                              width: `${Math.max(dayWidth - 8, widthDays * dayWidth - 8)}px`,
+                              minWidth: `${Math.max(isMobile ? 68 : 84, widthDays * dayWidth - 8)}px`,
                               height: isMobile ? "50px" : "56px",
                               backgroundColor: tone.background,
                               border: `0.5px solid ${tone.color}`,

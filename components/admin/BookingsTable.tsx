@@ -1,7 +1,7 @@
 "use client";
 import { formatBeirutDateTime } from "@/lib/format-date";
 import type { Booking, Member } from "./types";
-import { GOLD, WHITE, MIDNIGHT, MUTED, LATO, SURFACE, BORDER, thStyle, tdStyle, fieldStyle, fmt } from "./theme";
+import { GOLD, WHITE, MIDNIGHT, MUTED, LATO, PLAYFAIR, SURFACE, BORDER, thStyle, tdStyle, fieldStyle, fmt } from "./theme";
 
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, string> = {
@@ -59,6 +59,10 @@ export default function BookingsTable({
   updateStatus: (id: string, status: "confirmed" | "cancelled") => void;
   emailWarnings: Record<string, string>;
 }) {
+  function getMember(booking: Booking) {
+    return booking.member_id ? members.find((m) => m.id === booking.member_id) : null;
+  }
+
   return (
     <div>
       <div style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: isMobile ? "0.85rem" : "1rem", marginBottom: "1rem" }}>
@@ -122,6 +126,108 @@ export default function BookingsTable({
           <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED }}>Loading...</p>
         ) : filteredBookings.length === 0 ? (
           <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED }}>No bookings match the current filters.</p>
+        ) : isMobile ? (
+          <div style={{ display: "grid", gap: "12px" }}>
+            {filteredBookings.map((b) => {
+              const isGuest = !b.member_id;
+              const isCancelled = b.status === "cancelled";
+              const isConfirmed = b.status === "confirmed";
+              const isPending = b.status === "pending";
+              const isUpdating = updatingId === b.id;
+              const memberInfo = getMember(b);
+              const displayName = isGuest ? (b.guest_name ?? "Guest") : (memberInfo?.full_name ?? "Member");
+              const displayEmail = isGuest ? (b.guest_email ?? "-") : (memberInfo?.email ?? "-");
+              const displayPhone = isGuest ? b.guest_phone : (memberInfo?.phone ?? null);
+              const displayCountry = isGuest ? b.guest_country : (memberInfo?.country ?? null);
+
+              return (
+                <div key={b.id} style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: "1rem", opacity: isCancelled ? 0.72 : 1 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start", marginBottom: "10px" }}>
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{ fontFamily: PLAYFAIR, fontSize: "1.15rem", color: isGuest ? WHITE : GOLD, margin: "0 0 4px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {displayName}
+                      </p>
+                      <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: isGuest ? MUTED : GOLD, margin: 0 }}>
+                        {isGuest ? "Guest" : "Member"}
+                      </p>
+                    </div>
+                    <StatusBadge status={b.status} />
+                  </div>
+
+                  <div style={{ display: "grid", gap: "8px", marginBottom: "12px" }}>
+                    <p style={{ fontFamily: LATO, fontSize: "12px", color: WHITE, margin: 0 }}>
+                      {b.villa}
+                    </p>
+                    <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0 }}>
+                      {fmt(b.check_in)} to {fmt(b.check_out)}
+                    </p>
+                    <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+                      {displayEmail}
+                      {displayPhone ? ` | ${displayPhone}` : ""}
+                      {displayCountry ? ` | ${displayCountry}` : ""}
+                    </p>
+                    <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0 }}>
+                      {b.sleeping_guests} sleeping
+                      {b.day_visitors > 0 ? ` | ${b.day_visitors} visitors` : ""}
+                    </p>
+                    <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+                      {b.message?.trim() || "-"}
+                    </p>
+                  </div>
+
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+                    {isCancelled ? (
+                      <span style={{ fontFamily: LATO, fontSize: "10px", color: MUTED }}>-</span>
+                    ) : (
+                      <>
+                        {isPending && (
+                          <button
+                            onClick={() => updateStatus(b.id, "confirmed")}
+                            disabled={isUpdating}
+                            style={{
+                              fontFamily: LATO, fontSize: "10px", letterSpacing: "1px",
+                              textTransform: "uppercase",
+                              color: "#2E2E2E",
+                              backgroundColor: isUpdating ? "rgba(80,180,100,0.5)" : "#6fcf8a",
+                              border: "none",
+                              padding: "10px 14px",
+                              cursor: isUpdating ? "not-allowed" : "pointer",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            Confirm
+                          </button>
+                        )}
+                        {(isPending || isConfirmed) && (
+                          <button
+                            onClick={() => updateStatus(b.id, "cancelled")}
+                            disabled={isUpdating}
+                            style={{
+                              fontFamily: LATO, fontSize: "10px", letterSpacing: "1px",
+                              textTransform: "uppercase",
+                              color: WHITE,
+                              backgroundColor: isUpdating ? "rgba(224,112,112,0.5)" : "#e07070",
+                              border: "none",
+                              padding: "10px 14px",
+                              cursor: isUpdating ? "not-allowed" : "pointer",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        )}
+                        {emailWarnings[b.id] && (
+                          <span style={{ display: "block", width: "100%", fontFamily: LATO, fontSize: "10px", color: "#e0b070", lineHeight: 1.4 }}>
+                            {emailWarnings[b.id]}
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         ) : (
           <table style={{ width: "100%", minWidth: isMobile ? "760px" : "100%", borderCollapse: "collapse", backgroundColor: SURFACE, border: `0.5px solid ${BORDER}` }}>
             <thead>

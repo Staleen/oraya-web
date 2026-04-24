@@ -11,7 +11,7 @@ export default function StatsStrip({
 }) {
   const isMobile = typeof window !== "undefined" ? window.innerWidth <= 768 : false;
   return (
-    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px", marginBottom: "2rem" }}>
+    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px", marginBottom: "2rem" }}>
       {[
         { label: "Total bookings", value: loading ? "-" : bookings.length },
         { label: "Pending",        value: loading ? "-" : bookings.filter((b) => b.status === "pending").length },
