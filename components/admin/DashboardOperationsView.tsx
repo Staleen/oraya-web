@@ -1,5 +1,6 @@
 "use client";
 import { formatBeirutRelative } from "@/lib/format-date";
+import type { VillaBasePricing } from "@/lib/admin-pricing";
 import type { Booking, CalendarSource, Member } from "@/components/admin/types";
 import { BORDER, GOLD, LATO, MUTED, PLAYFAIR, SURFACE, WHITE, fmt } from "@/components/admin/theme";
 
@@ -57,11 +58,13 @@ export default function DashboardOperationsView({
   bookings,
   members,
   calendarSources,
+  villaPricing,
   loading,
 }: {
   bookings: Booking[];
   members: Member[];
   calendarSources: CalendarSource[];
+  villaPricing: VillaBasePricing[];
   loading: boolean;
 }) {
   const activeBookings = bookings.filter((booking) => booking.status !== "cancelled");
@@ -261,6 +264,38 @@ export default function DashboardOperationsView({
             ))}
           </div>
         )}
+      </section>
+
+      <section style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: "1.5rem", marginBottom: "2rem" }}>
+        <div style={{ marginBottom: "1rem" }}>
+          <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 8px" }}>
+            Base rates
+          </p>
+          <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0 }}>
+            Read-only nightly pricing snapshot from the manual pricing foundation.
+          </p>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
+          {villaPricing.map((item) => (
+            <div key={item.villa} style={{ border: `0.5px solid ${BORDER}`, padding: "14px 16px" }}>
+              <p style={{ fontFamily: PLAYFAIR, fontSize: "1.2rem", color: WHITE, margin: "0 0 10px" }}>
+                {item.villa}
+              </p>
+              <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "0 0 4px" }}>
+                Base rate: {item.base_price ?? "-"}
+              </p>
+              <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "0 0 4px" }}>
+                Weekend: {item.weekend_price ?? "-"}
+              </p>
+              <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "0 0 4px" }}>
+                Weekday override: {item.weekday_price ?? "-"}
+              </p>
+              <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0 }}>
+                Minimum stay: {item.minimum_stay ?? "-"}
+              </p>
+            </div>
+          ))}
+        </div>
       </section>
 
       <section style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: "1.5rem" }}>

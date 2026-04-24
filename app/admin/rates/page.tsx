@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import AddonsEditor from "@/components/admin/AddonsEditor";
+import BasePricingEditor from "@/components/admin/BasePricingEditor";
+import { VILLA_BASE_PRICING_KEY, parseVillaPricingSetting, stringifyVillaPricingSetting, type VillaBasePricing } from "@/lib/admin-pricing";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
 import { LATO } from "@/components/admin/theme";
 import type { Addon } from "@/components/admin/types";
@@ -10,12 +12,24 @@ export default function AdminRatesPage() {
   const [addons, setAddons] = useState<Addon[]>([]);
   const [addonsSaving, setAddonsSaving] = useState(false);
   const [addonsSaved, setAddonsSaved] = useState(false);
+  const [villaPricing, setVillaPricing] = useState<VillaBasePricing[]>(parseVillaPricingSetting(null));
+  const [pricingSaving, setPricingSaving] = useState(false);
+  const [pricingSaved, setPricingSaved] = useState(false);
 
   useEffect(() => {
     fetch("/api/addons", { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => { if (Array.isArray(d.addons)) setAddons(d.addons); })
       .catch((e) => console.error("[admin] addons fetch error:", e));
+
+    fetch("/api/admin/settings", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        const rows = d.settings ?? [];
+        const pricingRow = rows.find((row: { key: string; value: string }) => row.key === VILLA_BASE_PRICING_KEY);
+        setVillaPricing(parseVillaPricingSetting(pricingRow?.value));
+      })
+      .catch((e) => console.error("[admin] pricing settings fetch error:", e));
   }, []);
 
   function updateAddon(id: string, patch: Partial<Addon>) {
@@ -41,6 +55,29 @@ export default function AdminRatesPage() {
     }
   }
 
+  function updatePricing(villa: string, patch: Partial<VillaBasePricing>) {
+    setVillaPricing((prev) => prev.map((item) => item.villa === villa ? { ...item, ...patch } : item));
+    setPricingSaved(false);
+  }
+
+  async function savePricing() {
+    setPricingSaving(true);
+    setPricingSaved(false);
+    const res = await fetch("/api/admin/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: VILLA_BASE_PRICING_KEY, value: stringifyVillaPricingSetting(villaPricing) }),
+    });
+    setPricingSaving(false);
+    if (res.ok) {
+      setPricingSaved(true);
+      setTimeout(() => setPricingSaved(false), 3000);
+    } else {
+      const d = await res.json();
+      setError(d.error ?? "Failed to save base pricing.");
+    }
+  }
+
   return (
     <>
       {error && (
@@ -48,6 +85,13 @@ export default function AdminRatesPage() {
           Error: {error}
         </p>
       )}
+      <BasePricingEditor
+        pricing={villaPricing}
+        pricingSaving={pricingSaving}
+        pricingSaved={pricingSaved}
+        updatePricing={updatePricing}
+        savePricing={savePricing}
+      />
       <AddonsEditor
         addons={addons}
         addonsSaving={addonsSaving}
