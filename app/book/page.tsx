@@ -6,6 +6,7 @@ import type { DateRange, Matcher } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 import OrayaEmblem from "@/components/OrayaEmblem";
 import { getVillaBasePrice } from "@/lib/admin-pricing";
+import { usePublicPricing } from "@/lib/public-pricing";
 import { supabase } from "@/lib/supabase";
 
 // ─── Brand constants ──────────────────────────────────────────────────────────
@@ -360,6 +361,7 @@ function StepIndicator({ step }: { step: number }) {
 function BookPageInner() {
   const router       = useRouter();
   const searchParams = useSearchParams();
+  const pricing = usePublicPricing();
 
   // Auth
   const [authStatus, setAuthStatus] = useState<AuthStatus>("loading");
@@ -464,7 +466,7 @@ function BookPageInner() {
   const checkOut = dateRange?.to   ? toISO(dateRange.to)   : "";
   const nights   = nightCount(checkIn, checkOut);
   const sleepingGuestsCount = parseInt(form.sleepingGuests, 10) || 0;
-  const nightlyBasePrice = form.villa ? getVillaBasePrice(form.villa) : null;
+  const nightlyBasePrice = form.villa ? getVillaBasePrice(form.villa, pricing) : null;
   const staySubtotal = nightlyBasePrice !== null ? nightlyBasePrice * nights : null;
   const selectedAddonDetails = selectedAddons
     .map(id => addons.find(a => a.id === id))

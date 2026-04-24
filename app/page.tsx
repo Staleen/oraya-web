@@ -3,6 +3,7 @@ import { Fragment, useState, useEffect } from "react";
 import OrayaEmblem from "@/components/OrayaEmblem";
 import OrayaLogoFull from "@/components/OrayaLogoFull";
 import { VILLA_FROM_PRICE_MICROLABEL, formatVillaFromPrice } from "@/lib/admin-pricing";
+import { usePublicPricing } from "@/lib/public-pricing";
 import { supabase } from "@/lib/supabase";
 
 // Branded gradient fallbacks
@@ -47,10 +48,7 @@ const villaMeta = [
     gradient: GRAD_BYBLOS,
     label:    "Garden estate · Byblos coast",
   },
-].map((villa) => ({
-  ...villa,
-  fromPrice: formatVillaFromPrice(villa.name),
-}));
+];
 
 const experiences = [
   { num: "01", name: "Curated amenities",  desc: "Branded linens, robes, and bespoke toiletries throughout every villa" },
@@ -75,6 +73,7 @@ const values = [
 ];
 
 export default function Home() {
+  const pricing = usePublicPricing();
   const [isLoggedIn, setIsLoggedIn]   = useState(false);
   const [memberName, setMemberName]   = useState("");
   const [authReady, setAuthReady]     = useState(false);
@@ -416,8 +415,9 @@ export default function Home() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 max-w-[1100px] mx-auto" style={{ gap: "2px" }}>
-          {villaMeta.map(({ key, tag, name, loc, feats, href, gradient, label, fromPrice }) => {
+          {villaMeta.map(({ key, tag, name, loc, feats, href, gradient, label }) => {
             const img = key === "mechmech" ? mechmechImg : byblosImg;
+            const fromPrice = formatVillaFromPrice(name, pricing);
             return (
             <a
               key={name}

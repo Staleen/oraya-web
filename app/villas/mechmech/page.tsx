@@ -4,6 +4,7 @@ import SiteNav from "@/components/SiteNav";
 import SiteFooter from "@/components/SiteFooter";
 import OrayaEmblem from "@/components/OrayaEmblem";
 import { VILLA_FROM_PRICE_MICROLABEL, formatVillaFromPrice } from "@/lib/admin-pricing";
+import { usePublicPricing } from "@/lib/public-pricing";
 
 const HERO_GRADIENT = "linear-gradient(160deg, #1b3a2f 0%, #2b5040 35%, #1a2f24 65%, #0f1e17 100%)";
 
@@ -34,8 +35,6 @@ const highlights = [
   "Sleeps 6 (up to 8 with extra bedding), up to 25 day visitors",
 ];
 
-const FROM_PRICE = formatVillaFromPrice("Villa Mechmech");
-
 interface VillaMedia {
   id: string;
   category: string;
@@ -44,6 +43,7 @@ interface VillaMedia {
 }
 
 export default function VillaMechmechPage() {
+  const pricing = usePublicPricing();
   const [villaMedia, setVillaMedia] = useState<VillaMedia[]>([]);
 
   useEffect(() => {
@@ -55,6 +55,7 @@ export default function VillaMechmechPage() {
 
   const heroImg = villaMedia[0]?.file_url ?? "";
   const galleryMedia = villaMedia.slice(1);
+  const fromPrice = formatVillaFromPrice("Villa Mechmech", pricing);
 
   return (
     <>
@@ -106,10 +107,10 @@ export default function VillaMechmechPage() {
                 Villa Mechmech<br />
                 <span style={{ fontStyle: "italic", opacity: 0.7 }}>Modern Mountain Retreat</span>
               </h1>
-              {FROM_PRICE && (
+              {fromPrice && (
                 <div style={{ marginTop: "14px" }}>
                   <p style={{ fontFamily: PLAYFAIR, fontSize: "clamp(1.2rem, 2.8vw, 1.7rem)", color: WHITE, margin: "0 0 4px" }}>
-                    {FROM_PRICE}
+                    {fromPrice}
                   </p>
                   <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1px", color: "rgba(255,255,255,0.7)", margin: 0 }}>
                     {VILLA_FROM_PRICE_MICROLABEL}

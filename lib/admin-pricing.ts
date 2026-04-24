@@ -74,12 +74,17 @@ export function stringifyVillaPricingSetting(pricing: VillaBasePricing[]) {
   return JSON.stringify(pricing);
 }
 
-export function getVillaBasePrice(villa: string): number | null {
-  return DEFAULT_BASE_PRICES[villa] ?? null;
+export function getVillaPricing(pricing: VillaBasePricing[] | null | undefined, villa: string): VillaBasePricing {
+  return pricing?.find((item) => item.villa === villa) ?? createDefaultVillaPricing(villa);
 }
 
-export function formatVillaFromPrice(villa: string): string | null {
-  const price = getVillaBasePrice(villa);
+export function getVillaBasePrice(villa: string, pricing?: VillaBasePricing[] | null): number | null {
+  const item = getVillaPricing(pricing, villa);
+  return item.weekday_price ?? item.base_price ?? DEFAULT_BASE_PRICES[villa] ?? null;
+}
+
+export function formatVillaFromPrice(villa: string, pricing?: VillaBasePricing[] | null): string | null {
+  const price = getVillaBasePrice(villa, pricing);
   if (price === null) return null;
   return `From $${price} / night`;
 }
