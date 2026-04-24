@@ -682,6 +682,23 @@ function BookPageInner() {
           {selectedAddonQuoteCount} selected add-on{selectedAddonQuoteCount === 1 ? "" : "s"} with price on request are excluded from this estimate.
         </p>
       )}
+      {pricingResult?.warnings.map((warning, i) => {
+        const message =
+          warning.kind === "minimum_stay"
+            ? `Minimum stay is ${warning.required} ${warning.required === 1 ? "night" : "nights"}. Your current selection is ${warning.actual} ${warning.actual === 1 ? "night" : "nights"}; Oraya will confirm whether it can be accommodated.`
+            : warning.kind === "unpriced_nights"
+              ? `${warning.count} ${warning.count === 1 ? "night has" : "nights have"} no nightly rate configured and ${warning.count === 1 ? "is" : "are"} excluded from this subtotal.`
+              : null;
+        if (!message) return null;
+        return (
+          <p
+            key={`${warning.kind}-${i}`}
+            style={{ fontFamily: LATO, fontSize: "10px", color: "#e0b070", margin: "8px 0 0", lineHeight: 1.6 }}
+          >
+            {message}
+          </p>
+        );
+      })}
     </div>
   ) : null;
 
