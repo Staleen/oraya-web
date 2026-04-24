@@ -3,22 +3,29 @@ import { useEffect, useState } from "react";
 import OrayaEmblem from "@/components/OrayaEmblem";
 import MediaManager from "@/components/MediaManager";
 import AddonsEditor from "@/components/admin/AddonsEditor";
+import { useAdminData } from "@/components/admin/AdminDataProvider";
 import BookingsTable from "@/components/admin/BookingsTable";
 import CalendarSyncPanel from "@/components/admin/CalendarSyncPanel";
 import MembersTable from "@/components/admin/MembersTable";
-import PasswordGate from "@/components/admin/PasswordGate";
 import SettingsSections from "@/components/admin/SettingsSections";
 import StatsStrip from "@/components/admin/StatsStrip";
-import { BORDER, GOLD, MUTED, PLAYFAIR, SESSION_KEY, SURFACE, WHITE, LATO } from "@/components/admin/theme";
-import type { Addon, Booking, CalendarSource, Member } from "@/components/admin/types";
+import { BORDER, GOLD, MUTED, PLAYFAIR, WHITE, LATO } from "@/components/admin/theme";
+import type { Addon } from "@/components/admin/types";
 
 export default function AdminPage() {
-  const [authed, setAuthed] = useState<boolean | null>(null);
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [members, setMembers] = useState<Member[]>([]);
-  const [calendarSources, setCalendarSources] = useState<CalendarSource[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const {
+    authed,
+    bookings,
+    setBookings,
+    members,
+    setMembers,
+    calendarSources,
+    loading,
+    error,
+    setError,
+    loadData,
+    signOut,
+  } = useAdminData();
   const [tab, setTab] = useState<"bookings" | "members">("bookings");
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "confirmed" | "cancelled">("all");
   const [villaFilter, setVillaFilter] = useState("all");
@@ -48,11 +55,6 @@ export default function AdminPage() {
   const [syncMessage, setSyncMessage] = useState("");
 
   useEffect(() => {
-    const ok = sessionStorage.getItem(SESSION_KEY) === "1";
-    setAuthed(ok);
-  }, []);
-
-  useEffect(() => {
     function syncViewport() {
       setIsMobile(window.innerWidth <= 768);
     }
@@ -61,40 +63,8 @@ export default function AdminPage() {
     return () => window.removeEventListener("resize", syncViewport);
   }, []);
 
-  async function loadData(silent = false) {
-    if (!silent) setLoading(true);
-    try {
-      const r = await fetch("/api/admin/data", { cache: "no-store" });
-      const text = await r.text();
-      console.log("[admin] /api/admin/data raw response:", text);
-      let d: Record<string, unknown>;
-      try {
-        d = JSON.parse(text);
-      } catch {
-        throw new Error(`Non-JSON response (${r.status}): ${text.slice(0, 200)}`);
-      }
-      if (d.error) {
-        console.error("[admin] data error from API:", d.error);
-        setError(d.error as string);
-        return;
-      }
-      console.log(`[admin] loaded ${(d.bookings as unknown[])?.length ?? 0} bookings, ${(d.members as unknown[])?.length ?? 0} members`);
-      setBookings((d.bookings as Booking[]) ?? []);
-      setMembers((d.members as Member[]) ?? []);
-      setCalendarSources((d.calendar_sources as CalendarSource[]) ?? []);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      console.error("[admin] fetch error:", msg);
-      setError(msg);
-    } finally {
-      if (!silent) setLoading(false);
-    }
-  }
-
   useEffect(() => {
     if (authed !== true) return;
-
-    loadData();
 
     fetch("/api/admin/settings", { cache: "no-store" })
       .then((r) => r.json())
@@ -111,7 +81,6 @@ export default function AdminPage() {
       .then((r) => r.json())
       .then((d) => { if (Array.isArray(d.addons)) setAddons(d.addons); })
       .catch((e) => console.error("[admin] addons fetch error:", e));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authed]);
 
   async function saveWhatsapp() {
@@ -191,11 +160,6 @@ export default function AdminPage() {
       const d = await res.json();
       setError(d.error ?? "Failed to save add-ons.");
     }
-  }
-
-  function signOut() {
-    sessionStorage.removeItem(SESSION_KEY);
-    setAuthed(false);
   }
 
   async function deleteMember(id: string, name: string) {
@@ -292,9 +256,6 @@ export default function AdminPage() {
     setVillaFilter("all");
     setDateFilter("");
   }
-
-  if (authed === null) return null;
-  if (!authed) return <PasswordGate onSuccess={() => setAuthed(true)} />;
 
   return (
     <main style={{ backgroundColor: "#1F2B38", minHeight: "100vh", padding: "0" }}>
