@@ -28,7 +28,7 @@ export default function BasePricingEditor({
             Base pricing
           </p>
           <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0 }}>
-            Admin-only nightly pricing foundation. Base price is required per villa, while weekend price, weekday price, and minimum stay remain optional.
+            Admin-only nightly pricing foundation in USD. Base price is required per villa, while weekday price, weekend price, and minimum stay remain optional.
           </p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "12px", width: isMobile ? "100%" : "auto", flexWrap: "wrap" }}>
@@ -53,7 +53,7 @@ export default function BasePricingEditor({
                 {villaPricing.villa}
               </p>
               <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0 }}>
-                Seasonal overrides stored: {villaPricing.seasonal_overrides.length}
+                Currency: USD | Seasonal overrides stored: {villaPricing.seasonal_overrides.length}
               </p>
             </div>
 

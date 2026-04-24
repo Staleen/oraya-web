@@ -1,6 +1,10 @@
 import { KNOWN_VILLAS } from "@/lib/calendar/villas";
 
 export const VILLA_BASE_PRICING_KEY = "villa_base_pricing";
+const DEFAULT_BASE_PRICES: Record<string, number> = {
+  "Villa Mechmech": 400,
+  "Villa Byblos": 350,
+};
 
 export interface SeasonalOverride {
   id: string;
@@ -24,7 +28,7 @@ export interface VillaBasePricing {
 export function createDefaultVillaPricing(villa: string): VillaBasePricing {
   return {
     villa,
-    base_price: null,
+    base_price: DEFAULT_BASE_PRICES[villa] ?? null,
     weekend_price: null,
     weekday_price: null,
     minimum_stay: null,
