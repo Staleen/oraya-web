@@ -472,10 +472,11 @@ function BookPageInner() {
   const pricingResult = villaPricingConfig && checkIn && checkOut
     ? calculateStayPricing(
         {
-          base_price:    villaPricingConfig.base_price,
-          weekday_price: villaPricingConfig.weekday_price,
-          weekend_price: villaPricingConfig.weekend_price,
-          minimum_stay:  villaPricingConfig.minimum_stay,
+          base_price:         villaPricingConfig.base_price,
+          weekday_price:      villaPricingConfig.weekday_price,
+          weekend_price:      villaPricingConfig.weekend_price,
+          minimum_stay:       villaPricingConfig.minimum_stay,
+          seasonal_overrides: villaPricingConfig.seasonal_overrides,
         },
         { check_in: checkIn, check_out: checkOut },
       )

@@ -1,8 +1,19 @@
-export interface VillaPricingConfig {
+export interface SeasonalOverride {
+  id:            string;
+  start_date:    string;
+  end_date:      string;
   base_price:    number | null;
   weekday_price: number | null;
   weekend_price: number | null;
   minimum_stay:  number | null;
+}
+
+export interface VillaPricingConfig {
+  base_price:         number | null;
+  weekday_price:      number | null;
+  weekend_price:      number | null;
+  minimum_stay:       number | null;
+  seasonal_overrides?: SeasonalOverride[];
 }
 
 export interface PricingInput {

@@ -4,6 +4,7 @@ import type {
   PricingResult,
   NightlyBreakdown,
   PricingWarning,
+  SeasonalOverride,
 } from "./types";
 
 function parseDateOnlyUTC(s: string): Date | null {
@@ -31,7 +32,45 @@ function isWeekendUTC(d: Date): boolean {
   return day === 5 || day === 6;
 }
 
-function resolveNightlyPrice(config: VillaPricingConfig, isWeekend: boolean): number | null {
+function findSeasonalOverride(
+  overrides: SeasonalOverride[] | undefined,
+  dateStr: string,
+): SeasonalOverride | null {
+  if (!overrides || overrides.length === 0) return null;
+  for (const ov of overrides) {
+    if (
+      ov.start_date &&
+      ov.end_date &&
+      ov.start_date <= dateStr &&
+      dateStr <= ov.end_date
+    ) {
+      return ov;
+    }
+  }
+  return null;
+}
+
+function resolveNightlyPrice(
+  config: VillaPricingConfig,
+  dateStr: string,
+  isWeekend: boolean,
+): number | null {
+  // Priority 2: seasonal override (priority 1, manual override, is future work)
+  const seasonal = findSeasonalOverride(config.seasonal_overrides, dateStr);
+  if (seasonal) {
+    if (isWeekend && typeof seasonal.weekend_price === "number" && seasonal.weekend_price > 0) {
+      return seasonal.weekend_price;
+    }
+    if (!isWeekend && typeof seasonal.weekday_price === "number" && seasonal.weekday_price > 0) {
+      return seasonal.weekday_price;
+    }
+    if (typeof seasonal.base_price === "number" && seasonal.base_price > 0) {
+      return seasonal.base_price;
+    }
+    // Seasonal matched but declared no applicable rate — fall through to villa-level.
+  }
+
+  // Priority 3: villa weekday/weekend override.
   if (isWeekend) {
     if (typeof config.weekend_price === "number" && config.weekend_price > 0) {
       return config.weekend_price;
@@ -41,6 +80,8 @@ function resolveNightlyPrice(config: VillaPricingConfig, isWeekend: boolean): nu
       return config.weekday_price;
     }
   }
+
+  // Priority 4: villa base price.
   if (typeof config.base_price === "number" && config.base_price > 0) {
     return config.base_price;
   }
@@ -51,8 +92,8 @@ export function calculateStayPricing(
   config: VillaPricingConfig,
   input: PricingInput,
 ): PricingResult {
-  const nightly: NightlyBreakdown[]   = [];
-  const warnings: PricingWarning[]    = [];
+  const nightly: NightlyBreakdown[] = [];
+  const warnings: PricingWarning[]  = [];
 
   const start = parseDateOnlyUTC(input.check_in);
   const end   = parseDateOnlyUTC(input.check_out);
@@ -62,16 +103,17 @@ export function calculateStayPricing(
 
   const cursor = new Date(start.getTime());
   while (cursor.getTime() < end.getTime()) {
+    const dateStr    = formatDateOnlyUTC(cursor);
     const is_weekend = isWeekendUTC(cursor);
-    const price      = resolveNightlyPrice(config, is_weekend);
-    nightly.push({ date: formatDateOnlyUTC(cursor), is_weekend, price });
+    const price      = resolveNightlyPrice(config, dateStr, is_weekend);
+    nightly.push({ date: dateStr, is_weekend, price });
     cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
 
-  const nights         = nightly.length;
-  const pricedNights   = nightly.filter((n) => n.price !== null);
-  const hasAnyPrice    = pricedNights.length > 0;
-  const subtotal       = hasAnyPrice
+  const nights       = nightly.length;
+  const pricedNights = nightly.filter((n) => n.price !== null);
+  const hasAnyPrice  = pricedNights.length > 0;
+  const subtotal     = hasAnyPrice
     ? pricedNights.reduce((sum, n) => sum + (n.price ?? 0), 0)
     : null;
 
@@ -79,13 +121,25 @@ export function calculateStayPricing(
     warnings.push({ kind: "unpriced_nights", count: nights - pricedNights.length });
   }
 
-  if (
-    typeof config.minimum_stay === "number" &&
-    config.minimum_stay > 0 &&
-    nights > 0 &&
-    nights < config.minimum_stay
-  ) {
-    warnings.push({ kind: "minimum_stay", required: config.minimum_stay, actual: nights });
+  // Effective minimum stay = max of (villa-level, any seasonal minimum_stay that
+  // covers at least one night in the stay). Seasonal overrides can lengthen the
+  // required minimum but never shorten it below the villa-level baseline.
+  let effectiveMinStay: number | null =
+    typeof config.minimum_stay === "number" && config.minimum_stay > 0
+      ? config.minimum_stay
+      : null;
+  if (config.seasonal_overrides && config.seasonal_overrides.length > 0) {
+    for (const n of nightly) {
+      const ov = findSeasonalOverride(config.seasonal_overrides, n.date);
+      if (ov && typeof ov.minimum_stay === "number" && ov.minimum_stay > 0) {
+        effectiveMinStay = effectiveMinStay === null
+          ? ov.minimum_stay
+          : Math.max(effectiveMinStay, ov.minimum_stay);
+      }
+    }
+  }
+  if (effectiveMinStay !== null && nights > 0 && nights < effectiveMinStay) {
+    warnings.push({ kind: "minimum_stay", required: effectiveMinStay, actual: nights });
   }
 
   return { nights, subtotal, nightly, warnings };
