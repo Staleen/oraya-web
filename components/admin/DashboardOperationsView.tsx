@@ -4,10 +4,14 @@ import type { VillaBasePricing } from "@/lib/admin-pricing";
 import type { Booking, CalendarSource, Member } from "@/components/admin/types";
 import { BORDER, GOLD, LATO, MUTED, PLAYFAIR, SURFACE, WHITE, fmt } from "@/components/admin/theme";
 
+const DAY_WIDTH = 92;
+const TIMELINE_DAYS = 90;
+const TIMELINE_VISIBLE_LABEL = 30;
+const VILLA_COLUMN_WIDTH = 170;
+
 function startOfTodayUtcIso() {
   const now = new Date();
-  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  return start;
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 }
 
 function addUtcDays(date: Date, days: number) {
@@ -41,6 +45,10 @@ function getBookingEmail(booking: Booking, members: Member[]) {
   return members.find((member) => member.id === booking.member_id)?.email ?? "-";
 }
 
+function getBookingLabel(booking: Booking) {
+  return booking.member_id ? "Member" : "Guest";
+}
+
 function formatSyncStatus(status: string | null) {
   if (status === "success") return "Success";
   if (status === "failed") return "Failed";
@@ -50,7 +58,7 @@ function formatSyncStatus(status: string | null) {
 
 function getStatusTone(status: string) {
   if (status === "confirmed") return { color: "#6fcf8a", background: "rgba(80,180,100,0.14)" };
-  if (status === "pending") return { color: GOLD, background: "rgba(197,164,109,0.14)" };
+  if (status === "pending") return { color: "#d99644", background: "rgba(217,150,68,0.16)" };
   return { color: MUTED, background: "rgba(255,255,255,0.04)" };
 }
 
@@ -82,10 +90,166 @@ export default function DashboardOperationsView({
 
   const villaRows = Array.from(new Set(activeBookings.map((booking) => booking.villa))).sort();
   const startDate = startOfTodayUtcIso();
-  const timelineDates = Array.from({ length: 30 }, (_, index) => toIsoDate(addUtcDays(startDate, index)));
+  const timelineDates = Array.from({ length: TIMELINE_DAYS }, (_, index) => toIsoDate(addUtcDays(startDate, index)));
+  const timelineEndExclusive = toIsoDate(addUtcDays(startDate, TIMELINE_DAYS));
+  const timelineWidth = timelineDates.length * DAY_WIDTH;
 
   return (
     <>
+      <section style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: "1.5rem", marginBottom: "2rem" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "16px", flexWrap: "wrap", marginBottom: "1rem" }}>
+          <div>
+            <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 8px" }}>
+              Master calendar preview
+            </p>
+            <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0 }}>
+              Read-only timeline showing the next {TIMELINE_VISIBLE_LABEL} days by default, with horizontal scroll for a longer planning horizon.
+            </p>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+            <span style={{ fontFamily: LATO, fontSize: "11px", color: WHITE }}>
+              <span style={{ display: "inline-block", width: "10px", height: "10px", backgroundColor: "#6fcf8a", marginRight: "6px", verticalAlign: "middle" }} />
+              Confirmed
+            </span>
+            <span style={{ fontFamily: LATO, fontSize: "11px", color: WHITE }}>
+              <span style={{ display: "inline-block", width: "10px", height: "10px", backgroundColor: "#d99644", marginRight: "6px", verticalAlign: "middle" }} />
+              Pending
+            </span>
+          </div>
+        </div>
+
+        <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "0 0 1rem" }}>
+          External calendar blocks are not shown here because the current admin data context does not include imported external block rows.
+        </p>
+
+        {loading ? (
+          <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: 0 }}>Loading...</p>
+        ) : villaRows.length === 0 ? (
+          <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: 0 }}>No active bookings available for the timeline preview.</p>
+        ) : (
+          <div style={{ overflowX: "auto", paddingBottom: "6px" }}>
+            <div style={{ minWidth: `${VILLA_COLUMN_WIDTH + timelineWidth}px` }}>
+              <div style={{ display: "flex", borderBottom: `0.5px solid ${BORDER}`, marginBottom: "12px" }}>
+                <div style={{
+                  width: `${VILLA_COLUMN_WIDTH}px`,
+                  minWidth: `${VILLA_COLUMN_WIDTH}px`,
+                  padding: "0 14px 14px 0",
+                  position: "sticky",
+                  left: 0,
+                  backgroundColor: SURFACE,
+                  zIndex: 3,
+                }}>
+                  <span style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD }}>
+                    Villa
+                  </span>
+                </div>
+                <div style={{ display: "flex", width: `${timelineWidth}px` }}>
+                  {timelineDates.map((date) => (
+                    <div key={date} style={{ width: `${DAY_WIDTH}px`, minWidth: `${DAY_WIDTH}px`, paddingBottom: "14px", borderLeft: `0.5px solid rgba(255,255,255,0.03)` }}>
+                      <span style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", color: MUTED, display: "block", textAlign: "center" }}>
+                        {formatTimelineDayLabel(date)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {villaRows.map((villa, rowIndex) => {
+                const villaBookings = activeBookings
+                  .filter((booking) => booking.villa === villa && booking.check_in < timelineEndExclusive && booking.check_out > timelineDates[0])
+                  .sort((a, b) => a.check_in.localeCompare(b.check_in));
+
+                return (
+                  <div key={villa} style={{ display: "flex", marginBottom: rowIndex === villaRows.length - 1 ? 0 : "12px" }}>
+                    <div style={{
+                      width: `${VILLA_COLUMN_WIDTH}px`,
+                      minWidth: `${VILLA_COLUMN_WIDTH}px`,
+                      padding: "14px 14px 0 0",
+                      position: "sticky",
+                      left: 0,
+                      backgroundColor: SURFACE,
+                      zIndex: 2,
+                    }}>
+                      <p style={{ fontFamily: PLAYFAIR, fontSize: "18px", color: WHITE, margin: "0 0 4px", whiteSpace: "nowrap" }}>
+                        {villa}
+                      </p>
+                      <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0 }}>
+                        {villaBookings.length} active range{villaBookings.length === 1 ? "" : "s"}
+                      </p>
+                    </div>
+
+                    <div style={{
+                      position: "relative",
+                      width: `${timelineWidth}px`,
+                      minWidth: `${timelineWidth}px`,
+                      height: "76px",
+                      backgroundImage: `repeating-linear-gradient(to right, rgba(255,255,255,0.04), rgba(255,255,255,0.04) 1px, transparent 1px, transparent ${DAY_WIDTH}px)`,
+                      borderTop: `0.5px solid rgba(255,255,255,0.04)`,
+                      borderBottom: `0.5px solid rgba(255,255,255,0.04)`,
+                    }}>
+                      {villaBookings.map((booking) => {
+                        const clampedStart = booking.check_in > timelineDates[0] ? booking.check_in : timelineDates[0];
+                        const clampedEnd = booking.check_out < timelineEndExclusive ? booking.check_out : timelineEndExclusive;
+                        const startOffset = Math.max(0, timelineDates.indexOf(clampedStart));
+                        const endOffset = timelineDates.indexOf(clampedEnd);
+                        const widthDays = Math.max(1, (endOffset === -1 ? timelineDates.length : endOffset) - startOffset);
+                        const tone = getStatusTone(booking.status);
+                        const title = `${villa} | ${booking.status} | ${getBookingName(booking, members)} | ${fmt(booking.check_in)} to ${fmt(booking.check_out)}`;
+
+                        return (
+                          <div
+                            key={booking.id}
+                            title={title}
+                            style={{
+                              position: "absolute",
+                              left: `${startOffset * DAY_WIDTH + 4}px`,
+                              top: "10px",
+                              width: `${widthDays * DAY_WIDTH - 8}px`,
+                              minWidth: `${Math.max(84, widthDays * DAY_WIDTH - 8)}px`,
+                              height: "56px",
+                              backgroundColor: tone.background,
+                              border: `0.5px solid ${tone.color}`,
+                              padding: "8px 10px",
+                              boxSizing: "border-box",
+                              overflow: "hidden",
+                            }}
+                          >
+                            <p style={{
+                              fontFamily: PLAYFAIR,
+                              fontSize: "15px",
+                              color: WHITE,
+                              margin: "0 0 4px",
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                            }}>
+                              {getBookingName(booking, members)}
+                            </p>
+                            <p style={{
+                              fontFamily: LATO,
+                              fontSize: "10px",
+                              letterSpacing: "1.2px",
+                              textTransform: "uppercase",
+                              color: tone.color,
+                              margin: 0,
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                            }}>
+                              {getBookingLabel(booking)}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </section>
+
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.2fr) minmax(280px, 0.8fr)", gap: "16px", marginBottom: "2rem" }}>
         <section style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: "1.5rem" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", marginBottom: "1rem", flexWrap: "wrap" }}>
@@ -184,8 +348,8 @@ export default function DashboardOperationsView({
                       fontSize: "10px",
                       letterSpacing: "1.5px",
                       textTransform: "uppercase",
-                      color: GOLD,
-                      backgroundColor: "rgba(197,164,109,0.14)",
+                      color: "#d99644",
+                      backgroundColor: "rgba(217,150,68,0.16)",
                       padding: "4px 10px",
                       borderRadius: "2px",
                     }}>
@@ -237,11 +401,11 @@ export default function DashboardOperationsView({
         ) : calendarSources.length === 0 ? (
           <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: 0 }}>No calendar sources configured yet.</p>
         ) : staleSources.length === 0 ? (
-          <p style={{ fontFamily: LATO, fontSize: "13px", color: "#6fcf8a", margin: 0 }}>
+          <p style={{ fontFamily: LATO, fontSize: "13px", color: "#6fcf8a", margin: "0 0 1rem" }}>
             All configured sources are currently reporting healthy sync status.
           </p>
         ) : (
-          <div>
+          <div style={{ marginBottom: "1rem" }}>
             {staleSources.map((source, index) => (
               <div key={source.id} style={{ padding: "12px 0", borderTop: index === 0 ? "none" : `0.5px solid rgba(255,255,255,0.04)` }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
@@ -264,130 +428,38 @@ export default function DashboardOperationsView({
             ))}
           </div>
         )}
-      </section>
 
-      <section style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: "1.5rem", marginBottom: "2rem" }}>
-        <div style={{ marginBottom: "1rem" }}>
-          <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 8px" }}>
-            Base rates
-          </p>
-          <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0 }}>
-            Read-only nightly pricing snapshot from the manual pricing foundation.
-          </p>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
-          {villaPricing.map((item) => (
-            <div key={item.villa} style={{ border: `0.5px solid ${BORDER}`, padding: "14px 16px" }}>
-              <p style={{ fontFamily: PLAYFAIR, fontSize: "1.2rem", color: WHITE, margin: "0 0 10px" }}>
-                {item.villa}
-              </p>
-              <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "0 0 4px" }}>
-                Base rate: {item.base_price ?? "-"}
-              </p>
-              <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "0 0 4px" }}>
-                Weekend: {item.weekend_price ?? "-"}
-              </p>
-              <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "0 0 4px" }}>
-                Weekday override: {item.weekday_price ?? "-"}
-              </p>
-              <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0 }}>
-                Minimum stay: {item.minimum_stay ?? "-"}
-              </p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: "1.5rem" }}>
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "16px", flexWrap: "wrap", marginBottom: "1rem" }}>
-          <div>
+        <div style={{ borderTop: `0.5px solid ${BORDER}`, paddingTop: "1rem" }}>
+          <div style={{ marginBottom: "1rem" }}>
             <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 8px" }}>
-              Master calendar preview
+              Base rates
             </p>
             <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0 }}>
-              Read-only 30-day villa timeline. Confirmed stays are blocked and pending requests are highlighted for review.
+              Read-only nightly pricing snapshot from the manual pricing foundation.
             </p>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-            <span style={{ fontFamily: LATO, fontSize: "11px", color: WHITE }}>
-              <span style={{ display: "inline-block", width: "10px", height: "10px", backgroundColor: "#6fcf8a", marginRight: "6px", verticalAlign: "middle" }} />
-              Confirmed
-            </span>
-            <span style={{ fontFamily: LATO, fontSize: "11px", color: WHITE }}>
-              <span style={{ display: "inline-block", width: "10px", height: "10px", backgroundColor: GOLD, marginRight: "6px", verticalAlign: "middle" }} />
-              Pending
-            </span>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
+            {villaPricing.map((item) => (
+              <div key={item.villa} style={{ border: `0.5px solid ${BORDER}`, padding: "14px 16px" }}>
+                <p style={{ fontFamily: PLAYFAIR, fontSize: "1.2rem", color: WHITE, margin: "0 0 10px" }}>
+                  {item.villa}
+                </p>
+                <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "0 0 4px" }}>
+                  Base rate: {item.base_price ?? "-"}
+                </p>
+                <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "0 0 4px" }}>
+                  Weekend: {item.weekend_price ?? "-"}
+                </p>
+                <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "0 0 4px" }}>
+                  Weekday override: {item.weekday_price ?? "-"}
+                </p>
+                <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0 }}>
+                  Minimum stay: {item.minimum_stay ?? "-"}
+                </p>
+              </div>
+            ))}
           </div>
         </div>
-
-        <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "0 0 1rem" }}>
-          External calendar blocks are not shown here because the current admin data context does not include imported external block rows.
-        </p>
-
-        {loading ? (
-          <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: 0 }}>Loading...</p>
-        ) : villaRows.length === 0 ? (
-          <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: 0 }}>No active bookings available for the timeline preview.</p>
-        ) : (
-          <div style={{ overflowX: "auto", paddingBottom: "6px" }}>
-            <table style={{ borderCollapse: "collapse", minWidth: "1100px", width: "100%" }}>
-              <thead>
-                <tr>
-                  <th style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, padding: "0 14px 14px 0", textAlign: "left", position: "sticky", left: 0, backgroundColor: SURFACE, zIndex: 2 }}>
-                    Villa
-                  </th>
-                  {timelineDates.map((date) => (
-                    <th key={date} style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", color: MUTED, padding: "0 0 14px", minWidth: "32px" }}>
-                      {formatTimelineDayLabel(date)}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {villaRows.map((villa) => {
-                  const villaBookings = activeBookings.filter((booking) => booking.villa === villa);
-                  return (
-                    <tr key={villa}>
-                      <td style={{ fontFamily: PLAYFAIR, fontSize: "18px", color: WHITE, padding: "0 14px 0 0", whiteSpace: "nowrap", position: "sticky", left: 0, backgroundColor: SURFACE, zIndex: 1 }}>
-                        {villa}
-                      </td>
-                      {timelineDates.map((date) => {
-                        const activeRange = villaBookings.find((booking) => date >= booking.check_in && date < booking.check_out);
-                        const status = activeRange?.status;
-                        const backgroundColor = status === "confirmed"
-                          ? "#6fcf8a"
-                          : status === "pending"
-                            ? GOLD
-                            : "transparent";
-                        const borderColor = status
-                          ? "transparent"
-                          : "rgba(255,255,255,0.05)";
-                        const title = activeRange
-                          ? `${villa} | ${status} | ${fmt(activeRange.check_in)} to ${fmt(activeRange.check_out)}`
-                          : `${villa} | available`;
-
-                        return (
-                          <td key={`${villa}-${date}`} title={title} style={{ padding: "0 0 10px" }}>
-                            <div
-                              style={{
-                                width: "100%",
-                                minWidth: "32px",
-                                height: "28px",
-                                backgroundColor,
-                                border: `0.5px solid ${borderColor}`,
-                                opacity: status === "pending" ? 0.9 : 1,
-                              }}
-                            />
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
       </section>
     </>
   );
