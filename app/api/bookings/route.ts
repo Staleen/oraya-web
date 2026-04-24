@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { sendBookingRequestEmail } from "@/lib/send-booking-request-email";
+import { sendBookingPendingEmail } from "@/lib/send-booking-pending-email";
 import { createActionToken } from "@/lib/booking-action-token";
 import { SITE_URL } from "@/lib/brand";
 import { findAvailabilityConflict } from "@/lib/calendar/availability";
@@ -176,6 +177,39 @@ export async function POST(request: Request) {
       }
     } catch (emailErr) {
       console.error("[api/bookings] notification email error:", emailErr);
+    }
+
+    // Phase 6: best-effort guest "booking received" email with view link.
+    // Independent of admin notification; never blocks the response.
+    try {
+      let guestEmail: string | null = null;
+      let guestName  = data.guest_name ?? "Guest";
+
+      if (data.member_id) {
+        const { data: { user } } = await supabaseAdmin.auth.admin.getUserById(data.member_id);
+        if (user?.email) guestEmail = user.email;
+        const { data: memberRow } = await supabaseAdmin
+          .from("members")
+          .select("full_name")
+          .eq("id", data.member_id)
+          .single();
+        if (memberRow?.full_name) guestName = memberRow.full_name;
+      } else if (data.guest_email) {
+        guestEmail = data.guest_email;
+      }
+
+      if (guestEmail) {
+        await sendBookingPendingEmail({
+          to:         guestEmail,
+          name:       guestName,
+          villa:      data.villa,
+          check_in:   data.check_in,
+          check_out:  data.check_out,
+          booking_id: data.id,
+        });
+      }
+    } catch (pendingEmailErr) {
+      console.error("[api/bookings] guest pending email error:", pendingEmailErr);
     }
 
     return NextResponse.json({ booking: data });

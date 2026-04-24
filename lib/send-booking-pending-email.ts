@@ -2,9 +2,9 @@ import { Resend } from "resend";
 import { LOGO_URL, SITE_URL } from "@/lib/brand";
 import { createActionToken } from "@/lib/booking-action-token";
 
-const GOLD = "#C5A46D";
+const GOLD     = "#C5A46D";
 const MIDNIGHT = "#1F2B38";
-const MUTED = "#8a8070";
+const MUTED    = "#8a8070";
 
 function fmtDate(iso: string) {
   if (!iso) return "—";
@@ -13,51 +13,39 @@ function fmtDate(iso: string) {
   return `${parseInt(d)} ${months[parseInt(m) - 1]} ${y}`;
 }
 
+// Token expires at the end of the stay (UTC end-of-day on check_out).
 function checkOutExpiryUnix(check_out: string): number {
   return Math.floor(new Date(`${check_out}T23:59:59Z`).getTime() / 1000);
 }
 
-export interface BookingEmailPayload {
-  to:        string;
-  name:      string;
-  status:    "confirmed" | "cancelled";
-  villa:     string;
-  check_in:  string;
-  check_out: string;
+export interface BookingPendingEmailPayload {
+  to:         string;
+  name:       string;
+  villa:      string;
+  check_in:   string;
+  check_out:  string;
   booking_id: string;
 }
 
-export async function sendBookingEmail(payload: BookingEmailPayload): Promise<void> {
+export async function sendBookingPendingEmail(payload: BookingPendingEmailPayload): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
-    console.warn("[sendBookingEmail] RESEND_API_KEY not set — skipping email.");
+    console.warn("[sendBookingPendingEmail] RESEND_API_KEY not set — skipping email.");
     return;
   }
 
-  const resend = new Resend(apiKey);
-
-  const isConfirmed = payload.status === "confirmed";
-  const subject = isConfirmed
-    ? "Oraya — Booking Confirmed"
-    : "Oraya — Booking Cancelled";
-
-  const statusLabel  = isConfirmed ? "Confirmed" : "Cancelled";
-  const statusColor  = isConfirmed ? "#6fcf8a" : "#e07070";
-  const ref          = payload.booking_id.slice(0, 8).toUpperCase();
-  const firstName    = payload.name.split(" ")[0];
-
+  const resend    = new Resend(apiKey);
   const fromEmail = process.env.RESEND_FROM_EMAIL ?? "reservations@oraya.com";
+  const base      = process.env.NEXT_PUBLIC_SITE_URL || SITE_URL;
 
-  // View link is only offered on the confirmation email; a cancelled booking
-  // has no further details to track.
-  let viewUrl: string | null = null;
-  if (isConfirmed) {
-    const base = process.env.NEXT_PUBLIC_SITE_URL || SITE_URL;
-    const { token } = createActionToken(payload.booking_id, "view", {
-      expiresAt: checkOutExpiryUnix(payload.check_out),
-    });
-    viewUrl = `${base}/booking/view/${encodeURIComponent(token)}`;
-  }
+  const { token } = createActionToken(payload.booking_id, "view", {
+    expiresAt: checkOutExpiryUnix(payload.check_out),
+  });
+  const viewUrl = `${base}/booking/view/${encodeURIComponent(token)}`;
+
+  const ref       = payload.booking_id.slice(0, 8).toUpperCase();
+  const firstName = payload.name.split(" ")[0] || "Guest";
+  const subject   = "Oraya — Booking Request Received";
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -91,11 +79,11 @@ export async function sendBookingEmail(payload: BookingEmailPayload): Promise<vo
             </td>
           </tr>
 
-          <!-- Status eyebrow -->
+          <!-- Eyebrow -->
           <tr>
             <td align="center" style="padding-bottom:12px;">
               <p style="margin:0;font-size:10px;letter-spacing:4px;text-transform:uppercase;color:${GOLD};">
-                Booking ${statusLabel}
+                Booking Request Received
               </p>
             </td>
           </tr>
@@ -104,9 +92,7 @@ export async function sendBookingEmail(payload: BookingEmailPayload): Promise<vo
           <tr>
             <td align="center" style="padding-bottom:24px;">
               <h1 style="margin:0;font-size:28px;font-weight:400;color:#ffffff;line-height:1.25;">
-                ${isConfirmed
-                  ? `Your stay is<br/><em>confirmed, ${firstName}.</em>`
-                  : `Your booking<br/><em>has been cancelled.</em>`}
+                Thank you,<br/><em>${firstName}.</em>
               </h1>
             </td>
           </tr>
@@ -115,9 +101,7 @@ export async function sendBookingEmail(payload: BookingEmailPayload): Promise<vo
           <tr>
             <td align="center" style="padding-bottom:32px;">
               <p style="margin:0;font-size:13px;color:${MUTED};line-height:1.8;max-width:400px;">
-                ${isConfirmed
-                  ? "We look forward to welcoming you. Please don't hesitate to reach out if you have any questions before your arrival."
-                  : "Your booking request has been cancelled. If you believe this is an error, please contact us directly."}
+                We've received your booking request and will confirm availability shortly. You can review your booking details using the link below at any time.
               </p>
             </td>
           </tr>
@@ -129,7 +113,7 @@ export async function sendBookingEmail(payload: BookingEmailPayload): Promise<vo
             </td>
           </tr>
 
-          <!-- Booking details card -->
+          <!-- Booking summary card -->
           <tr>
             <td style="border:0.5px solid rgba(197,164,109,0.2);padding:28px;">
               <p style="margin:0 0 20px;font-size:9px;letter-spacing:3px;text-transform:uppercase;color:${GOLD};">
@@ -137,11 +121,11 @@ export async function sendBookingEmail(payload: BookingEmailPayload): Promise<vo
               </p>
 
               ${[
-                ["Villa",         payload.villa],
-                ["Check-in",      fmtDate(payload.check_in)],
-                ["Check-out",     fmtDate(payload.check_out)],
-                ["Status",        `<span style="color:${statusColor};">${statusLabel}</span>`],
-                ["Reference",     ref],
+                ["Villa",     payload.villa],
+                ["Check-in",  fmtDate(payload.check_in)],
+                ["Check-out", fmtDate(payload.check_out)],
+                ["Status",    `<span style="color:${GOLD};">Pending</span>`],
+                ["Reference", ref],
               ].map(([label, value]) => `
               <table width="100%" cellpadding="0" cellspacing="0"
                      style="border-bottom:0.5px solid rgba(255,255,255,0.05);">
@@ -159,7 +143,6 @@ export async function sendBookingEmail(payload: BookingEmailPayload): Promise<vo
             </td>
           </tr>
 
-          ${viewUrl ? `
           <!-- View CTA -->
           <tr>
             <td align="center" style="padding-top:28px;">
@@ -170,7 +153,7 @@ export async function sendBookingEmail(payload: BookingEmailPayload): Promise<vo
                 View Your Booking
               </a>
             </td>
-          </tr>` : ""}
+          </tr>
 
           <!-- Footer -->
           <tr>
@@ -196,8 +179,8 @@ export async function sendBookingEmail(payload: BookingEmailPayload): Promise<vo
   });
 
   if (error) {
-    console.error("[sendBookingEmail] Resend error:", error);
+    console.error("[sendBookingPendingEmail] Resend error:", error);
   } else {
-    console.log(`[sendBookingEmail] email sent → ${payload.to} (${subject})`);
+    console.log(`[sendBookingPendingEmail] email sent → ${payload.to} (${subject})`);
   }
 }
