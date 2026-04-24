@@ -5,6 +5,7 @@ import { DayPicker } from "react-day-picker";
 import type { DateRange, Matcher } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 import OrayaEmblem from "@/components/OrayaEmblem";
+import { getVillaBasePrice } from "@/lib/admin-pricing";
 import { supabase } from "@/lib/supabase";
 
 // ─── Brand constants ──────────────────────────────────────────────────────────
@@ -204,6 +205,10 @@ function nightCount(checkIn: string, checkOut: string): number {
   return Math.max(0, Math.round(
     (parseLocalISO(checkOut).getTime() - parseLocalISO(checkIn).getTime()) / 86_400_000
   ));
+}
+
+function formatUsd(amount: number): string {
+  return `$${amount.toLocaleString("en-US")}`;
 }
 
 function friendlyError(msg: string): string {
@@ -458,6 +463,20 @@ function BookPageInner() {
   const checkIn  = dateRange?.from ? toISO(dateRange.from) : "";
   const checkOut = dateRange?.to   ? toISO(dateRange.to)   : "";
   const nights   = nightCount(checkIn, checkOut);
+  const sleepingGuestsCount = parseInt(form.sleepingGuests, 10) || 0;
+  const nightlyBasePrice = form.villa ? getVillaBasePrice(form.villa) : null;
+  const staySubtotal = nightlyBasePrice !== null ? nightlyBasePrice * nights : null;
+  const selectedAddonDetails = selectedAddons
+    .map(id => addons.find(a => a.id === id))
+    .filter((a): a is Addon => Boolean(a));
+  const selectedAddonSubtotal = selectedAddonDetails.reduce((sum, addon) => {
+    if (addon.price === null) return sum;
+    if (addon.pricing_model === "per_night") return sum + addon.price * nights;
+    if (addon.pricing_model === "per_person_per_day") return sum + addon.price * sleepingGuestsCount * nights;
+    return sum + addon.price;
+  }, 0);
+  const selectedAddonQuoteCount = selectedAddonDetails.filter((addon) => addon.price === null).length;
+  const estimatedTotal = (staySubtotal ?? 0) + selectedAddonSubtotal;
   const guestEmail = guest.email.trim();
   const guestEmailInvalid = guestMode && guestEmail.length > 0 && !EMAIL_RE.test(guestEmail);
 
@@ -601,6 +620,55 @@ function BookPageInner() {
   }
 
   // ── Auth gate (not member, not yet chosen guest) ──────────────────────────
+  const estimatePanel = checkIn && checkOut && nightlyBasePrice !== null ? (
+    <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: "rgba(197,164,109,0.04)", padding: "1.25rem" }}>
+      <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 12px" }}>
+        Estimated stay price
+      </p>
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: "16px" }}>
+          <span style={{ fontFamily: LATO, fontSize: "11px", color: MUTED }}>Nightly base price</span>
+          <span style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, textAlign: "right" }}>{formatUsd(nightlyBasePrice)}</span>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: "16px" }}>
+          <span style={{ fontFamily: LATO, fontSize: "11px", color: MUTED }}>Number of nights</span>
+          <span style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, textAlign: "right" }}>
+            {nights} {nights === 1 ? "night" : "nights"}
+          </span>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: "16px" }}>
+          <span style={{ fontFamily: LATO, fontSize: "11px", color: MUTED }}>Estimated stay subtotal</span>
+          <span style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, textAlign: "right" }}>
+            {formatUsd(staySubtotal ?? 0)}
+          </span>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: "16px" }}>
+          <span style={{ fontFamily: LATO, fontSize: "11px", color: MUTED }}>Selected add-ons subtotal</span>
+          <span style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, textAlign: "right" }}>
+            {formatUsd(selectedAddonSubtotal)}
+          </span>
+        </div>
+        <div style={{ height: "0.5px", backgroundColor: "rgba(197,164,109,0.14)", margin: "4px 0" }} />
+        <div style={{ display: "flex", justifyContent: "space-between", gap: "16px" }}>
+          <span style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase", color: GOLD }}>
+            Estimated total - final confirmation by Oraya
+          </span>
+          <span style={{ fontFamily: PLAYFAIR, fontSize: "18px", color: GOLD, textAlign: "right" }}>
+            {formatUsd(estimatedTotal)}
+          </span>
+        </div>
+      </div>
+      <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: "12px 0 0", lineHeight: 1.6 }}>
+        Weekday base rate shown. Add-ons remain optional and final confirmation is handled by Oraya.
+      </p>
+      {selectedAddonQuoteCount > 0 && (
+        <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: "8px 0 0", lineHeight: 1.6 }}>
+          {selectedAddonQuoteCount} selected add-on{selectedAddonQuoteCount === 1 ? "" : "s"} with price on request are excluded from this estimate.
+        </p>
+      )}
+    </div>
+  ) : null;
+
   if (authStatus === "none" && !guestMode) {
     return (
       <main style={{ backgroundColor: MIDNIGHT, minHeight: "100vh", padding: "80px 24px", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -777,6 +845,12 @@ function BookPageInner() {
                     </div>
                   )}
 
+                  {estimatePanel && (
+                    <div style={{ marginTop: "14px" }}>
+                      {estimatePanel}
+                    </div>
+                  )}
+
                   {/* Conflict warning */}
                   {dateConflict && (
                     <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070", marginTop: "12px", lineHeight: 1.6 }}>
@@ -930,6 +1004,8 @@ function BookPageInner() {
                   style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6 }} />
               </div>
 
+              {estimatePanel}
+
               {error && (
                 <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070", textAlign: "center", lineHeight: 1.6, margin: 0 }}>
                   {error}
@@ -1081,6 +1157,8 @@ function BookPageInner() {
                   ))}
                 </div>
               </div>
+
+              {estimatePanel}
 
               <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.8, textAlign: "center", margin: 0 }}>
                 Your request will be reviewed and you&apos;ll receive a confirmation within 24 hours.
