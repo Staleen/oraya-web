@@ -36,8 +36,8 @@ function getAddonAuditResultLabel(input: {
   requires_approval: boolean;
   enforcement_mode: "strict" | "soft" | "none";
 }): "ok" | "requires_approval" | "soft_warning" | "strict_violation" {
-  if (input.requires_approval) return "requires_approval";
   if (input.enforcement_mode === "strict" && !input.available) return "strict_violation";
+  if (input.requires_approval) return "requires_approval";
   if (input.enforcement_mode === "soft" && input.has_time_warning) return "soft_warning";
   return "ok";
 }

@@ -9,9 +9,9 @@ STOP and ask before proceeding.
 
 ## CURRENT PHASE
 
-Phase 9 -> COMPLETE
+Phase 11 -> COMPLETE
 
-Next phase = Add-on Enforcement / Operations Layer
+Next phase = Phase 12
 
 ---
 
@@ -38,6 +38,20 @@ Phase 9 - Enforcement Layer:
 - 9E Pricing persistence snapshot
 - 9F Pricing consistency & snapshot safety
 - 9G Booking pricing enforcement
+Phase 10 - Add-on Operations Layer:
+- 10A Add-on preparation controls + server dry run
+- 10B Add-on availability UX + strict/soft model
+- 10C Add-on snapshot persistence
+- 10D Add-on approval status
+- 10E Admin operational visibility
+- 10F Dynamic add-ons management
+- 10G Add-on admin validation
+- 10H Add-ons admin UI cleanup
+Phase 11 - Add-on Operational Enforcement & Visibility:
+- 11A Add-on operational audit mode during booking creation
+- 11B Strict add-on operational enforcement
+- 11D Admin visibility for add-on operational flags
+- 11 Final operational polish
 
 Completed stabilization work:
 - Booking reliability: overlap protection, confirm/cancel persistence
@@ -61,7 +75,9 @@ Completed stabilization work:
 - Validation layer exists in admin and on the booking server path
 - Seasonal pricing integrated end-to-end
 - Pricing snapshots persist on new bookings
-- Add-ons still are not enforced server-side
+- Add-on snapshots persist on new bookings
+- Strict add-on operational violations are enforced server-side
+- Approval-required and soft-rule add-ons remain non-blocking
 
 ---
 
@@ -93,7 +109,7 @@ Email system:
 Add-ons:
 - Stored per booking as JSON snapshot (`bookings.addons`)
 - Source of truth is the Supabase `addons` table
-- Add-ons must remain optional and non-blocking
+- Add-ons remain optional, but strict operational violations can block booking creation
 - Add-ons belong under `/admin/rates`
 
 Admin architecture target:
@@ -156,7 +172,7 @@ The following systems are production-stable and must not be changed unless expli
 - No new features during restructuring
 - No duplicate data sources
 - Booking must work with or without add-ons
-- Add-ons must not affect booking core flow
+- Add-ons may block booking only for explicit strict operational violations
 - Keep changes minimal, surgical, and reversible
 
 ---
@@ -185,13 +201,10 @@ The following systems are production-stable and must not be changed unless expli
 
 ---
 
-## NEXT PHASE - ADD-ON ENFORCEMENT / OPERATIONS LAYER
+## NEXT PHASE - PHASE 12
 
 Goals:
-- Enforce add-on operational rules server-side
-- Validate preparation constraints at booking time
-- Introduce approval-aware add-on handling
-- Keep add-on operations aligned with booking creation
+- To be defined before implementation
 
 ---
 
