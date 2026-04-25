@@ -179,6 +179,7 @@ interface Addon {
   requires_approval?: boolean;
   category?: AddonCategory | null;
   enforcement_mode?: AddonEnforcementMode | null;
+  applicable_villas?: string[];
 }
 
 const PRICING_MODEL_LABELS: Record<string, string> = {

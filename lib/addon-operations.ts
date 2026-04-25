@@ -11,6 +11,7 @@ export interface AddonOperationalFields {
   requires_approval?: boolean;
   category?: AddonCategory | null;
   enforcement_mode?: AddonEnforcementMode | null;
+  applicable_villas?: string[];
 }
 
 export interface AddonOperationalSettingRow extends AddonOperationalFields {
@@ -96,6 +97,9 @@ function parseOperationalFields(value: unknown): AddonOperationalFields {
     VALID_ENFORCEMENT_MODES.has(item.enforcement_mode as AddonEnforcementMode)
       ? (item.enforcement_mode as AddonEnforcementMode)
       : null;
+  const applicableVillas = Array.isArray(item.applicable_villas)
+    ? item.applicable_villas.filter((villa): villa is string => typeof villa === "string" && villa.trim().length > 0)
+    : [];
 
   return {
     ...(preparationTimeHours !== null ? { preparation_time_hours: preparationTimeHours } : {}),
@@ -103,6 +107,7 @@ function parseOperationalFields(value: unknown): AddonOperationalFields {
     ...(requiresApproval ? { requires_approval: true } : {}),
     ...(category ? { category } : {}),
     ...(enforcementMode ? { enforcement_mode: enforcementMode } : {}),
+    ...(applicableVillas.length > 0 ? { applicable_villas: applicableVillas } : {}),
   };
 }
 
