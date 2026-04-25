@@ -111,6 +111,31 @@ export default function AddonsEditor({
     return { opacity: enabled ? 1 : 0.5 };
   }
 
+  function pricingModelLabel(value: Addon["pricing_model"]) {
+    return PRICING_MODELS.find((model) => model.value === value)?.label ?? value;
+  }
+
+  function managerSummary(addon: Addon) {
+    const parts: string[] = [];
+    const priceLabel = addon.price !== null
+      ? `${addon.currency} ${addon.price} ${pricingModelLabel(addon.pricing_model).toLowerCase()}`
+      : `Price on request ${pricingModelLabel(addon.pricing_model).toLowerCase()}`;
+    parts.push(priceLabel);
+
+    if (addon.preparation_time_hours && addon.preparation_time_hours > 0) {
+      const unit = addon.preparation_time_hours % 24 === 0 ? "days" : "hours";
+      const amount = unit === "days" ? addon.preparation_time_hours / 24 : addon.preparation_time_hours;
+      parts.push(`${amount} ${amount === 1 ? unit.slice(0, -1) : unit} advance notice`);
+    } else {
+      parts.push("No advance notice");
+    }
+
+    parts.push(`${getAddonEnforcementMode(addon.enforcement_mode).charAt(0).toUpperCase()}${getAddonEnforcementMode(addon.enforcement_mode).slice(1)} rule`);
+    parts.push(addon.requires_approval ? "Manager approval required" : "No manager approval");
+
+    return parts.join(" · ");
+  }
+
   const pricingGridColumns = isMobile ? "1fr" : "110px minmax(0, 1fr) minmax(0, 1.3fr)";
   const operationGridColumns = isMobile ? "1fr" : "minmax(0, 1.1fr) 110px minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr)";
 
@@ -163,7 +188,17 @@ export default function AddonsEditor({
                     onChange={e => updateAddon(addon.id, { enabled: e.target.checked })}
                     style={{ accentColor: GOLD, width: "16px", height: "16px", cursor: "pointer", flexShrink: 0 }}
                   />
-                  <span style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD }}>
+                  <span style={{
+                    fontFamily: LATO,
+                    fontSize: "10px",
+                    letterSpacing: "1.5px",
+                    textTransform: "uppercase",
+                    color: addon.enabled ? GOLD : MUTED,
+                    border: `0.5px solid ${addon.enabled ? "rgba(197,164,109,0.35)" : "rgba(138,128,112,0.28)"}`,
+                    backgroundColor: addon.enabled ? "rgba(197,164,109,0.08)" : "rgba(138,128,112,0.08)",
+                    padding: "4px 8px",
+                    whiteSpace: "nowrap",
+                  }}>
                     {addon.enabled ? "Enabled" : "Disabled"}
                   </span>
                 </div>
@@ -183,10 +218,14 @@ export default function AddonsEditor({
                   type="button"
                   onClick={() => removeAddon(addon.id)}
                   style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: "#d9a2a2", backgroundColor: "transparent", border: "none", padding: isMobile ? "2px 0" : 0, cursor: "pointer", justifySelf: isMobile ? "start" : "end" }}
-                >
-                  Remove
-                </button>
+                  >
+                    Remove
+                  </button>
               </div>
+
+              <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.6, margin: "0 0 16px" }}>
+                {managerSummary(addon)}
+              </p>
 
               <div style={{ display: "grid", gap: "10px", marginBottom: "16px" }}>
                 {fieldLabel("Pricing")}
@@ -237,9 +276,12 @@ export default function AddonsEditor({
 
               <div style={{ display: "grid", gap: "10px" }}>
                 {fieldLabel("Operations")}
+                <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, lineHeight: 1.6, margin: 0 }}>
+                  Strict blocks booking if the rule is not satisfied. Soft allows booking but warns admin/customer. None means no operational restriction.
+                </p>
                 <div style={{ display: "grid", gridTemplateColumns: operationGridColumns, gap: "10px" }}>
                   <div style={{ display: "grid", gap: "6px" }}>
-                    {fieldLabel("Preparation time")}
+                    {fieldLabel("Advance notice required")}
                     <input
                       type="number"
                       min={0}
@@ -280,7 +322,7 @@ export default function AddonsEditor({
                     </select>
                   </div>
                   <div style={{ display: "grid", gap: "6px" }}>
-                    {fieldLabel("Operational mode")}
+                    {fieldLabel("Booking rule")}
                     <select
                       value={getAddonEnforcementMode(addon.enforcement_mode)}
                       onChange={e => updateAddon(addon.id, { enforcement_mode: e.target.value as AddonEnforcementMode })}
@@ -296,7 +338,7 @@ export default function AddonsEditor({
                     </select>
                   </div>
                   <label style={{ display: "grid", gap: "8px", alignContent: "start", fontFamily: LATO, fontSize: "12px", color: addon.enabled ? MUTED : "rgba(138,128,112,0.5)", cursor: "pointer" }}>
-                    {fieldLabel("Requires approval")}
+                    {fieldLabel("Needs manager approval")}
                     <span style={{ display: "flex", alignItems: "center", gap: "10px", minHeight: "42px", padding: "0 2px" }}>
                       <input
                         type="checkbox"
@@ -304,7 +346,7 @@ export default function AddonsEditor({
                         onChange={e => updateAddon(addon.id, { requires_approval: e.target.checked })}
                         style={{ accentColor: GOLD, width: "16px", height: "16px", cursor: "pointer" }}
                       />
-                      <span>Requires approval</span>
+                      <span>Needs manager approval</span>
                     </span>
                   </label>
                 </div>
