@@ -77,6 +77,12 @@ function getAddonStatusTone(status: "confirmed" | "at_risk" | "pending_approval"
   return { color: "#9db7d9", background: "rgba(157,183,217,0.14)" };
 }
 
+function getOperationalBadgeTone(kind: "approval" | "soft" | "strict") {
+  if (kind === "strict") return { color: "#e78f8f", background: "rgba(224,112,112,0.14)" };
+  if (kind === "soft") return { color: "#e2ab5a", background: "rgba(226,171,90,0.15)" };
+  return { color: GOLD, background: "rgba(197,164,109,0.14)" };
+}
+
 function formatAddonPrice(price: number | null) {
   if (typeof price !== "number") return "Price on request";
   return `$${price.toLocaleString("en-US")}`;
@@ -84,6 +90,75 @@ function formatAddonPrice(price: number | null) {
 
 function bookingNeedsAddonAttention(booking: Booking) {
   return (booking.addons_snapshot ?? []).some((addon) => addon.status === "at_risk" || addon.status === "pending_approval");
+}
+
+function renderAddonOperationalBadges(booking: Booking, addon: NonNullable<Booking["addons_snapshot"]>[number]) {
+  const badges = [];
+
+  if (addon.requires_approval) {
+    const tone = getOperationalBadgeTone("approval");
+    badges.push(
+      <span
+        key={`${booking.id}-${addon.id}-approval`}
+        style={{
+          fontFamily: LATO,
+          fontSize: "9px",
+          letterSpacing: "1.2px",
+          textTransform: "uppercase",
+          color: tone.color,
+          backgroundColor: tone.background,
+          padding: "3px 7px",
+          borderRadius: "2px",
+        }}
+      >
+        Requires approval
+      </span>,
+    );
+  }
+
+  if (addon.enforcement_mode === "soft") {
+    const tone = getOperationalBadgeTone("soft");
+    badges.push(
+      <span
+        key={`${booking.id}-${addon.id}-soft`}
+        style={{
+          fontFamily: LATO,
+          fontSize: "9px",
+          letterSpacing: "1.2px",
+          textTransform: "uppercase",
+          color: tone.color,
+          backgroundColor: tone.background,
+          padding: "3px 7px",
+          borderRadius: "2px",
+        }}
+      >
+        Soft rule
+      </span>,
+    );
+  }
+
+  if (addon.enforcement_mode === "strict") {
+    const tone = getOperationalBadgeTone("strict");
+    badges.push(
+      <span
+        key={`${booking.id}-${addon.id}-strict`}
+        style={{
+          fontFamily: LATO,
+          fontSize: "9px",
+          letterSpacing: "1.2px",
+          textTransform: "uppercase",
+          color: tone.color,
+          backgroundColor: tone.background,
+          padding: "3px 7px",
+          borderRadius: "2px",
+        }}
+      >
+        Strict rule
+      </span>,
+    );
+  }
+
+  return badges;
 }
 
 function formatSyncStatus(status: string | null) {
@@ -725,6 +800,9 @@ export default function DashboardOperationsView({
                             <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.4 }}>
                               {formatAddonPrice(addon.price)}
                             </p>
+                            <div style={{ display: "flex", justifyContent: "flex-end", flexWrap: "wrap", gap: "6px", marginTop: "6px" }}>
+                              {renderAddonOperationalBadges(selectedBooking, addon)}
+                            </div>
                           </div>
                           <span style={{
                             fontFamily: LATO,

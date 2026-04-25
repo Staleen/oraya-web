@@ -36,6 +36,16 @@ function getAddonStatusTone(status: "confirmed" | "at_risk" | "pending_approval"
   return { color: "#9db7d9", backgroundColor: "rgba(157,183,217,0.14)" };
 }
 
+function getOperationalBadgeStyle(kind: "approval" | "soft" | "strict") {
+  if (kind === "strict") {
+    return { color: "#e78f8f", backgroundColor: "rgba(224,112,112,0.14)" };
+  }
+  if (kind === "soft") {
+    return { color: "#e2ab5a", backgroundColor: "rgba(226,171,90,0.15)" };
+  }
+  return { color: GOLD, backgroundColor: "rgba(197,164,109,0.14)" };
+}
+
 export default function BookingsTable({
   loading,
   filteredBookings,
@@ -81,6 +91,10 @@ export default function BookingsTable({
     return getAddonSnapshots(booking).some((addon) => addon.status === "at_risk" || addon.status === "pending_approval");
   }
 
+  function bookingHasAddonApproval(booking: Booking) {
+    return getAddonSnapshots(booking).some((addon) => addon.requires_approval);
+  }
+
   function getAddonAttentionBadge(booking: Booking) {
     if (!bookingNeedsAddonAttention(booking)) return null;
     return (
@@ -98,6 +112,90 @@ export default function BookingsTable({
         Add-on attention
       </span>
     );
+  }
+
+  function getAddonApprovalBadge(booking: Booking) {
+    if (!bookingHasAddonApproval(booking)) return null;
+    return (
+      <span style={{
+        display: "inline-block",
+        fontFamily: LATO,
+        fontSize: "9px",
+        letterSpacing: "1.5px",
+        textTransform: "uppercase",
+        color: GOLD,
+        backgroundColor: "rgba(197,164,109,0.14)",
+        padding: "3px 8px",
+        borderRadius: "2px",
+      }}>
+        Approval needed
+      </span>
+    );
+  }
+
+  function renderAddonOperationalBadges(booking: Booking, addon: NonNullable<Booking["addons_snapshot"]>[number]) {
+    const badges: JSX.Element[] = [];
+    if (addon.requires_approval) {
+      const tone = getOperationalBadgeStyle("approval");
+      badges.push(
+        <span
+          key={`${booking.id}-${addon.id}-approval`}
+          style={{
+            fontFamily: LATO,
+            fontSize: "9px",
+            letterSpacing: "1.2px",
+            textTransform: "uppercase",
+            color: tone.color,
+            backgroundColor: tone.backgroundColor,
+            padding: "3px 7px",
+            borderRadius: "2px",
+          }}
+        >
+          Requires approval
+        </span>,
+      );
+    }
+    if (addon.enforcement_mode === "soft") {
+      const tone = getOperationalBadgeStyle("soft");
+      badges.push(
+        <span
+          key={`${booking.id}-${addon.id}-soft`}
+          style={{
+            fontFamily: LATO,
+            fontSize: "9px",
+            letterSpacing: "1.2px",
+            textTransform: "uppercase",
+            color: tone.color,
+            backgroundColor: tone.backgroundColor,
+            padding: "3px 7px",
+            borderRadius: "2px",
+          }}
+        >
+          Soft rule
+        </span>,
+      );
+    }
+    if (addon.enforcement_mode === "strict") {
+      const tone = getOperationalBadgeStyle("strict");
+      badges.push(
+        <span
+          key={`${booking.id}-${addon.id}-strict`}
+          style={{
+            fontFamily: LATO,
+            fontSize: "9px",
+            letterSpacing: "1.2px",
+            textTransform: "uppercase",
+            color: tone.color,
+            backgroundColor: tone.backgroundColor,
+            padding: "3px 7px",
+            borderRadius: "2px",
+          }}
+        >
+          Strict rule
+        </span>,
+      );
+    }
+    return badges;
   }
 
   function formatAddonPrice(price: number | null) {
@@ -196,6 +294,7 @@ export default function BookingsTable({
                     <div style={{ display: "grid", gap: "6px", justifyItems: "end" }}>
                       <StatusBadge status={b.status} />
                       {getAddonAttentionBadge(b)}
+                      {getAddonApprovalBadge(b)}
                     </div>
                   </div>
 
@@ -244,6 +343,9 @@ export default function BookingsTable({
                               <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0 }}>
                                 {formatAddonPrice(addon.price)}
                               </p>
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "6px" }}>
+                                {renderAddonOperationalBadges(b, addon)}
+                              </div>
                             </div>
                             <span style={{
                               fontFamily: LATO,
@@ -403,7 +505,10 @@ export default function BookingsTable({
                         {getAddonSnapshots(b).length > 0 ? (
                           <div style={{ display: "grid", gap: "6px" }}>
                             <span>{getAddonSnapshots(b).map((a) => a.label).join(", ")}</span>
-                            {getAddonAttentionBadge(b)}
+                            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                              {getAddonAttentionBadge(b)}
+                              {getAddonApprovalBadge(b)}
+                            </div>
                           </div>
                         ) : b.addons && b.addons.length > 0 ? (
                           b.addons.map((a) => a.label).join(", ")
