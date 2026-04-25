@@ -7,7 +7,7 @@ import { ADDON_OPERATIONAL_SETTINGS_KEY, mergeAddonsWithOperationalSettings, par
 import { validatePricing } from "@/lib/pricing/validation";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
 import { LATO } from "@/components/admin/theme";
-import type { Addon } from "@/components/admin/types";
+import type { Addon, AddonValidationIssue } from "@/components/admin/types";
 
 function createAddonId() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -21,6 +21,7 @@ export default function AdminRatesPage() {
   const [addons, setAddons] = useState<Addon[]>([]);
   const [addonsSaving, setAddonsSaving] = useState(false);
   const [addonsSaved, setAddonsSaved] = useState(false);
+  const [addonValidationAttempted, setAddonValidationAttempted] = useState(false);
   const [villaPricing, setVillaPricing] = useState<VillaBasePricing[]>(parseVillaPricingSetting(null));
   const [pricingSaving, setPricingSaving] = useState(false);
   const [pricingSaved, setPricingSaved] = useState(false);
@@ -94,9 +95,115 @@ export default function AdminRatesPage() {
     setAddonsSaved(false);
   }
 
+  function validateAddons(items: Addon[]): AddonValidationIssue[] {
+    const issues: AddonValidationIssue[] = [];
+    const labelCounts = new Map<string, number>();
+
+    for (const addon of items) {
+      const normalizedLabel = addon.label.trim().toLocaleLowerCase();
+      if (normalizedLabel) {
+        labelCounts.set(normalizedLabel, (labelCounts.get(normalizedLabel) ?? 0) + 1);
+      }
+    }
+
+    for (const addon of items) {
+      const label = addon.label.trim();
+      const enforcementMode = addon.enforcement_mode ?? null;
+      const price = addon.price;
+      const prep = addon.preparation_time_hours ?? null;
+
+      if (!label) {
+        issues.push({ addon_id: addon.id, level: "error", field: "label", message: "Label is required." });
+      } else if ((labelCounts.get(label.toLocaleLowerCase()) ?? 0) > 1) {
+        issues.push({ addon_id: addon.id, level: "error", field: "label", message: "Label must be unique." });
+      }
+
+      if (price !== null && !Number.isFinite(price)) {
+        issues.push({ addon_id: addon.id, level: "error", field: "price", message: "Price is invalid." });
+      } else if (price !== null && price < 0) {
+        issues.push({ addon_id: addon.id, level: "error", field: "price", message: "Price cannot be negative." });
+      }
+
+      if (prep !== null && !Number.isFinite(prep)) {
+        issues.push({
+          addon_id: addon.id,
+          level: "error",
+          field: "preparation_time_hours",
+          message: "Preparation time is invalid.",
+        });
+      } else if (prep !== null && prep < 0) {
+        issues.push({
+          addon_id: addon.id,
+          level: "error",
+          field: "preparation_time_hours",
+          message: "Preparation time cannot be negative.",
+        });
+      }
+
+      if (!addon.pricing_model) {
+        issues.push({
+          addon_id: addon.id,
+          level: "error",
+          field: "pricing_model",
+          message: "Pricing model is required.",
+        });
+      }
+
+      if (!enforcementMode) {
+        issues.push({
+          addon_id: addon.id,
+          level: "error",
+          field: "enforcement_mode",
+          message: "Operational mode is required.",
+        });
+      }
+
+      if (addon.enabled && price === 0) {
+        issues.push({
+          addon_id: addon.id,
+          level: "warning",
+          field: "price",
+          message: "Enabled add-on with price 0 will appear free.",
+        });
+      }
+
+      if (enforcementMode === "strict" && (prep === null || prep <= 0)) {
+        issues.push({
+          addon_id: addon.id,
+          level: "warning",
+          field: "preparation_time_hours",
+          message: "Strict add-ons usually need a preparation time.",
+        });
+      }
+
+      if (addon.requires_approval && enforcementMode === "none") {
+        issues.push({
+          addon_id: addon.id,
+          level: "warning",
+          field: "enforcement_mode",
+          message: "Requires approval is unusual when operational mode is None.",
+        });
+      }
+    }
+
+    return issues;
+  }
+
+  const addonValidationIssues = validateAddons(addons);
+
   async function saveAddons() {
+    const hasBlockingAddonErrors = addonValidationIssues.some((issue) => issue.level === "error");
+    if (hasBlockingAddonErrors) {
+      setAddonValidationAttempted(true);
+      setAddonsSaved(false);
+      setError("");
+      return;
+    }
+
+    setAddonValidationAttempted(false);
     setAddonsSaving(true);
     setAddonsSaved(false);
+    setError("");
     const baseAddonsRes = await fetch("/api/admin/addons", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -209,6 +316,8 @@ export default function AdminRatesPage() {
         updateAddon={updateAddon}
         addAddon={addAddon}
         removeAddon={removeAddon}
+        validationIssues={addonValidationIssues}
+        validationAttempted={addonValidationAttempted}
         saveAddons={saveAddons}
       />
     </>

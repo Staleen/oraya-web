@@ -71,3 +71,19 @@ export interface Addon {
   category?: AddonCategory | null;
   enforcement_mode?: AddonEnforcementMode | null;
 }
+
+export type AddonValidationLevel = "error" | "warning";
+
+export type AddonValidationField =
+  | "label"
+  | "price"
+  | "preparation_time_hours"
+  | "pricing_model"
+  | "enforcement_mode";
+
+export interface AddonValidationIssue {
+  addon_id: string;
+  level: AddonValidationLevel;
+  field?: AddonValidationField;
+  message: string;
+}

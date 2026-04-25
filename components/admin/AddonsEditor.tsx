@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import type { Addon } from "./types";
+import type { Addon, AddonValidationIssue } from "./types";
 import {
   ADDON_CATEGORY_LABELS,
   ADDON_CUTOFF_LABELS,
@@ -39,7 +39,7 @@ const ENFORCEMENT_OPTIONS: Array<{ value: AddonEnforcementMode; label: string; h
 ];
 
 export default function AddonsEditor({
-  addons, addonsSaving, addonsSaved, updateAddon, addAddon, removeAddon, saveAddons,
+  addons, addonsSaving, addonsSaved, updateAddon, addAddon, removeAddon, validationIssues, validationAttempted, saveAddons,
 }: {
   addons: Addon[];
   addonsSaving: boolean;
@@ -47,6 +47,8 @@ export default function AddonsEditor({
   updateAddon: (id: string, patch: Partial<Addon>) => void;
   addAddon: () => void;
   removeAddon: (id: string) => void;
+  validationIssues: AddonValidationIssue[];
+  validationAttempted: boolean;
   saveAddons: () => void;
 }) {
   const [preparationUnits, setPreparationUnits] = useState<Record<string, PreparationUnit>>({});
@@ -85,6 +87,26 @@ export default function AddonsEditor({
     setPreparationUnits((prev) => ({ ...prev, [addon.id]: unit }));
   }
 
+  function getAddonIssues(addonId: string, level?: "error" | "warning") {
+    return validationIssues.filter((issue) =>
+      issue.addon_id === addonId && (!level || issue.level === level)
+    );
+  }
+
+  function getFieldStatusStyle(
+    addonId: string,
+    field: AddonValidationIssue["field"],
+    enabled: boolean,
+  ) {
+    if (validationAttempted && validationIssues.some((issue) => issue.addon_id === addonId && issue.level === "error" && issue.field === field)) {
+      return { borderColor: "#e07070" };
+    }
+    if (validationIssues.some((issue) => issue.addon_id === addonId && issue.level === "warning" && issue.field === field)) {
+      return { borderColor: "rgba(226,171,90,0.55)" };
+    }
+    return { opacity: enabled ? 1 : 0.5 };
+  }
+
   return (
     <div style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: isMobile ? "1rem" : "1.75rem", marginBottom: "2rem" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem", flexWrap: "wrap", gap: "12px" }}>
@@ -114,8 +136,11 @@ export default function AddonsEditor({
 
       {isMobile ? (
         <div style={{ display: "grid", gap: "12px" }}>
-          {addons.map((addon) => (
-            <div key={addon.id} style={{ border: `0.5px solid rgba(255,255,255,0.03)`, padding: "12px" }}>
+          {addons.map((addon) => {
+            const addonErrors = getAddonIssues(addon.id, "error");
+            const addonWarnings = getAddonIssues(addon.id, "warning");
+            return (
+            <div key={addon.id} style={{ border: `0.5px solid ${validationAttempted && addonErrors.length > 0 ? "rgba(224,112,112,0.45)" : "rgba(255,255,255,0.03)"}`, padding: "12px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", marginBottom: "12px" }}>
                 <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
                   {addon.label.trim() || "New add-on"}
@@ -141,7 +166,7 @@ export default function AddonsEditor({
                   type="text"
                   value={addon.label}
                   onChange={e => updateAddon(addon.id, { label: e.target.value })}
-                  style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", opacity: addon.enabled ? 1 : 0.5 }}
+                  style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", ...getFieldStatusStyle(addon.id, "label", addon.enabled) }}
                   onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
                   onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
                 />
@@ -162,14 +187,14 @@ export default function AddonsEditor({
                   value={addon.price ?? ""}
                   onChange={e => updateAddon(addon.id, { price: e.target.value === "" ? null : parseFloat(e.target.value) })}
                   placeholder="-"
-                  style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", opacity: addon.enabled ? 1 : 0.5 }}
+                  style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", ...getFieldStatusStyle(addon.id, "price", addon.enabled) }}
                   onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
                   onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
                 />
                 <select
                   value={addon.pricing_model}
                   onChange={e => updateAddon(addon.id, { pricing_model: e.target.value as Addon["pricing_model"] })}
-                  style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", cursor: "pointer", opacity: addon.enabled ? 1 : 0.5 }}
+                  style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", cursor: "pointer", ...getFieldStatusStyle(addon.id, "pricing_model", addon.enabled) }}
                   onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
                   onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
                 >
@@ -184,7 +209,7 @@ export default function AddonsEditor({
                     value={getAmount(addon)}
                     onChange={e => updatePreparationAmount(addon, e.target.value)}
                     placeholder="Preparation time"
-                    style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", opacity: addon.enabled ? 1 : 0.5 }}
+                    style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", ...getFieldStatusStyle(addon.id, "preparation_time_hours", addon.enabled) }}
                     onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
                     onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
                   />
@@ -226,7 +251,7 @@ export default function AddonsEditor({
                 <select
                   value={getAddonEnforcementMode(addon.enforcement_mode)}
                   onChange={e => updateAddon(addon.id, { enforcement_mode: e.target.value as AddonEnforcementMode })}
-                  style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", cursor: "pointer", opacity: addon.enabled ? 1 : 0.5 }}
+                  style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", cursor: "pointer", ...getFieldStatusStyle(addon.id, "enforcement_mode", addon.enabled) }}
                   onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
                   onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
                 >
@@ -245,9 +270,27 @@ export default function AddonsEditor({
                   />
                   Requires approval
                 </label>
+                {validationAttempted && addonErrors.length > 0 && (
+                  <div style={{ display: "grid", gap: "4px" }}>
+                    {addonErrors.map((issue, index) => (
+                      <p key={`${issue.message}-${index}`} style={{ fontFamily: LATO, fontSize: "11px", color: "#e07070", margin: 0, lineHeight: 1.5 }}>
+                        {issue.message}
+                      </p>
+                    ))}
+                  </div>
+                )}
+                {addonWarnings.length > 0 && (
+                  <div style={{ display: "grid", gap: "4px" }}>
+                    {addonWarnings.map((issue, index) => (
+                      <p key={`${issue.message}-${index}`} style={{ fontFamily: LATO, fontSize: "11px", color: "#e2ab5a", margin: 0, lineHeight: 1.5 }}>
+                        {issue.message}
+                      </p>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
-          ))}
+          )})}
         </div>
       ) : (
         <>
@@ -257,8 +300,11 @@ export default function AddonsEditor({
             ))}
           </div>
 
-          {addons.map(addon => (
-            <div key={addon.id} style={{ padding: "10px 0", borderBottom: `0.5px solid rgba(255,255,255,0.03)` }}>
+          {addons.map(addon => {
+            const addonErrors = getAddonIssues(addon.id, "error");
+            const addonWarnings = getAddonIssues(addon.id, "warning");
+            return (
+            <div key={addon.id} style={{ padding: "10px 0", borderBottom: `0.5px solid ${validationAttempted && addonErrors.length > 0 ? "rgba(224,112,112,0.3)" : "rgba(255,255,255,0.03)"}` }}>
               <div style={{ display: "grid", gridTemplateColumns: "40px 1fr 90px 110px 160px", gap: "10px", alignItems: "center" }}>
                 <div style={{ display: "flex", alignItems: "center" }}>
                   <input
@@ -272,7 +318,7 @@ export default function AddonsEditor({
                   type="text"
                   value={addon.label}
                   onChange={e => updateAddon(addon.id, { label: e.target.value })}
-                  style={{ ...fieldStyle, padding: "8px 10px", fontSize: "13px", opacity: addon.enabled ? 1 : 0.5 }}
+                  style={{ ...fieldStyle, padding: "8px 10px", fontSize: "13px", ...getFieldStatusStyle(addon.id, "label", addon.enabled) }}
                   onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
                   onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
                 />
@@ -293,14 +339,14 @@ export default function AddonsEditor({
                   value={addon.price ?? ""}
                   onChange={e => updateAddon(addon.id, { price: e.target.value === "" ? null : parseFloat(e.target.value) })}
                   placeholder="-"
-                  style={{ ...fieldStyle, padding: "8px 10px", fontSize: "13px", opacity: addon.enabled ? 1 : 0.5 }}
+                  style={{ ...fieldStyle, padding: "8px 10px", fontSize: "13px", ...getFieldStatusStyle(addon.id, "price", addon.enabled) }}
                   onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
                   onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
                 />
                 <select
                   value={addon.pricing_model}
                   onChange={e => updateAddon(addon.id, { pricing_model: e.target.value as Addon["pricing_model"] })}
-                  style={{ ...fieldStyle, padding: "8px 10px", fontSize: "13px", cursor: "pointer", opacity: addon.enabled ? 1 : 0.5 }}
+                  style={{ ...fieldStyle, padding: "8px 10px", fontSize: "13px", cursor: "pointer", ...getFieldStatusStyle(addon.id, "pricing_model", addon.enabled) }}
                   onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
                   onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
                 >
@@ -329,7 +375,7 @@ export default function AddonsEditor({
                     value={getAmount(addon)}
                     onChange={e => updatePreparationAmount(addon, e.target.value)}
                     placeholder="Preparation time"
-                    style={{ ...fieldStyle, padding: "8px 10px", fontSize: "13px", opacity: addon.enabled ? 1 : 0.5 }}
+                    style={{ ...fieldStyle, padding: "8px 10px", fontSize: "13px", ...getFieldStatusStyle(addon.id, "preparation_time_hours", addon.enabled) }}
                     onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
                     onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
                   />
@@ -371,7 +417,7 @@ export default function AddonsEditor({
                 <select
                   value={getAddonEnforcementMode(addon.enforcement_mode)}
                   onChange={e => updateAddon(addon.id, { enforcement_mode: e.target.value as AddonEnforcementMode })}
-                  style={{ ...fieldStyle, padding: "8px 10px", fontSize: "13px", cursor: "pointer", opacity: addon.enabled ? 1 : 0.5 }}
+                  style={{ ...fieldStyle, padding: "8px 10px", fontSize: "13px", cursor: "pointer", ...getFieldStatusStyle(addon.id, "enforcement_mode", addon.enabled) }}
                   onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
                   onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
                 >
@@ -391,8 +437,22 @@ export default function AddonsEditor({
                   Requires approval
                 </label>
               </div>
+              {(validationAttempted && addonErrors.length > 0) || addonWarnings.length > 0 ? (
+                <div style={{ display: "grid", gap: "4px", marginTop: "10px", paddingLeft: "40px" }}>
+                  {validationAttempted && addonErrors.map((issue, index) => (
+                    <p key={`error-${issue.message}-${index}`} style={{ fontFamily: LATO, fontSize: "11px", color: "#e07070", margin: 0, lineHeight: 1.5 }}>
+                      {issue.message}
+                    </p>
+                  ))}
+                  {addonWarnings.map((issue, index) => (
+                    <p key={`warning-${issue.message}-${index}`} style={{ fontFamily: LATO, fontSize: "11px", color: "#e2ab5a", margin: 0, lineHeight: 1.5 }}>
+                      {issue.message}
+                    </p>
+                  ))}
+                </div>
+              ) : null}
             </div>
-          ))}
+          )})}
         </>
       )}
 
