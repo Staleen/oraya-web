@@ -74,6 +74,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid email address." }, { status: 400 });
     }
 
+    let pricingSnapshotData: {
+      pricing_subtotal: number;
+      pricing_nights: ReturnType<typeof runPricingAudit>["nights"];
+      pricing_warnings: string[];
+      pricing_snapshot: {
+        subtotal: number;
+        nights: ReturnType<typeof runPricingAudit>["nights"];
+        warnings: string[];
+        violations: ReturnType<typeof runPricingAudit>["violations"];
+        would_block_reasons: ReturnType<typeof runPricingAudit>["would_block_reasons"];
+        calculated_at: string;
+        source: "server-audit";
+      };
+    } | null = null;
+
     const insertData: Record<string, unknown> = {
       villa,
       check_in,
@@ -89,6 +104,10 @@ export async function POST(request: Request) {
       guest_email:     guest_email || null,
       guest_phone:     guest_phone || null,
       guest_country:   guest_country || null,
+      pricing_subtotal: null,
+      pricing_nights: null,
+      pricing_warnings: null,
+      pricing_snapshot: null,
     };
 
     try {
@@ -111,6 +130,21 @@ export async function POST(request: Request) {
         check_out,
       });
 
+      pricingSnapshotData = {
+        pricing_subtotal: pricingAudit.subtotal,
+        pricing_nights: pricingAudit.nights,
+        pricing_warnings: pricingAudit.warnings,
+        pricing_snapshot: {
+          subtotal: pricingAudit.subtotal,
+          nights: pricingAudit.nights,
+          warnings: pricingAudit.warnings,
+          violations: pricingAudit.violations,
+          would_block_reasons: pricingAudit.would_block_reasons,
+          calculated_at: new Date().toISOString(),
+          source: "server-audit",
+        },
+      };
+
       if (process.env.NODE_ENV !== "production") {
         console.debug("[pricing-dry-run]", {
           ok: pricingAudit.ok,
@@ -122,6 +156,13 @@ export async function POST(request: Request) {
       if (process.env.NODE_ENV !== "production") {
         console.debug("[api/bookings] pricing audit skipped", pricingAuditError);
       }
+    }
+
+    if (pricingSnapshotData) {
+      insertData.pricing_subtotal = pricingSnapshotData.pricing_subtotal;
+      insertData.pricing_nights = pricingSnapshotData.pricing_nights;
+      insertData.pricing_warnings = pricingSnapshotData.pricing_warnings;
+      insertData.pricing_snapshot = pricingSnapshotData.pricing_snapshot;
     }
 
     const { data, error } = await supabaseAdmin
