@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import type { Addon, AddonValidationIssue } from "./types";
 import {
   ADDON_CATEGORY_LABELS,
-  ADDON_CUTOFF_LABELS,
   ADDON_ENFORCEMENT_LABELS,
   derivePreparationUnit,
   getAddonEnforcementMode,
@@ -29,11 +28,8 @@ const CATEGORY_OPTIONS: Array<{ value: AddonCategory; label: string }> = [
   { value: "logistics", label: ADDON_CATEGORY_LABELS.logistics },
   { value: "service", label: ADDON_CATEGORY_LABELS.service },
 ];
-const CUTOFF_OPTIONS = [
-  { value: "before_checkin", label: ADDON_CUTOFF_LABELS.before_checkin },
-] as const;
 const ENFORCEMENT_OPTIONS: Array<{ value: AddonEnforcementMode; label: string; help: string }> = [
-  { value: "strict", label: ADDON_ENFORCEMENT_LABELS.strict, help: "Disable if not enough preparation time" },
+  { value: "strict", label: ADDON_ENFORCEMENT_LABELS.strict, help: "Unavailable if prep time is too short" },
   { value: "soft", label: ADDON_ENFORCEMENT_LABELS.soft, help: "Allow with warning" },
   { value: "none", label: ADDON_ENFORCEMENT_LABELS.none, help: "Always available" },
 ];
@@ -87,6 +83,14 @@ export default function AddonsEditor({
     setPreparationUnits((prev) => ({ ...prev, [addon.id]: unit }));
   }
 
+  function fieldLabel(label: string) {
+    return (
+      <span style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED }}>
+        {label}
+      </span>
+    );
+  }
+
   function getAddonIssues(addonId: string, level?: "error" | "warning") {
     return validationIssues.filter((issue) =>
       issue.addon_id === addonId && (!level || issue.level === level)
@@ -106,6 +110,9 @@ export default function AddonsEditor({
     }
     return { opacity: enabled ? 1 : 0.5 };
   }
+
+  const cardGridColumns = isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))";
+  const operationGridColumns = isMobile ? "1fr" : "minmax(0, 1.1fr) 110px minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr)";
 
   return (
     <div style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: isMobile ? "1rem" : "1.75rem", marginBottom: "2rem" }}>
@@ -134,231 +141,32 @@ export default function AddonsEditor({
         </div>
       </div>
 
-      {isMobile ? (
-        <div style={{ display: "grid", gap: "12px" }}>
-          {addons.map((addon) => {
-            const addonErrors = getAddonIssues(addon.id, "error");
-            const addonWarnings = getAddonIssues(addon.id, "warning");
-            return (
-            <div key={addon.id} style={{ border: `0.5px solid ${validationAttempted && addonErrors.length > 0 ? "rgba(224,112,112,0.45)" : "rgba(255,255,255,0.03)"}`, padding: "12px" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", marginBottom: "12px" }}>
-                <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
-                  {addon.label.trim() || "New add-on"}
-                </p>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                  <button
-                    type="button"
-                    onClick={() => removeAddon(addon.id)}
-                    style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: "#d9a2a2", backgroundColor: "transparent", border: "none", padding: 0, cursor: "pointer" }}
-                  >
-                    Remove
-                  </button>
+      <div style={{ display: "grid", gap: "14px" }}>
+        {addons.map((addon) => {
+          const addonErrors = getAddonIssues(addon.id, "error");
+          const addonWarnings = getAddonIssues(addon.id, "warning");
+          const showErrors = validationAttempted && addonErrors.length > 0;
+          return (
+            <div
+              key={addon.id}
+              style={{
+                border: `0.5px solid ${showErrors ? "rgba(224,112,112,0.45)" : "rgba(255,255,255,0.06)"}`,
+                backgroundColor: "rgba(255,255,255,0.02)",
+                padding: isMobile ? "14px" : "18px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: isMobile ? "flex-start" : "center", justifyContent: "space-between", gap: "14px", flexWrap: "wrap", marginBottom: "16px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
                   <input
                     type="checkbox"
                     checked={addon.enabled}
                     onChange={e => updateAddon(addon.id, { enabled: e.target.checked })}
-                    style={{ accentColor: GOLD, width: "16px", height: "16px", cursor: "pointer" }}
+                    style={{ accentColor: GOLD, width: "16px", height: "16px", cursor: "pointer", flexShrink: 0 }}
                   />
+                  <span style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD }}>
+                    {addon.enabled ? "Enabled" : "Disabled"}
+                  </span>
                 </div>
-              </div>
-              <div style={{ display: "grid", gap: "10px" }}>
-                <input
-                  type="text"
-                  value={addon.label}
-                  onChange={e => updateAddon(addon.id, { label: e.target.value })}
-                  style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", ...getFieldStatusStyle(addon.id, "label", addon.enabled) }}
-                  onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
-                  onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
-                />
-                <select
-                  value={addon.currency}
-                  onChange={e => updateAddon(addon.id, { currency: e.target.value })}
-                  style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", cursor: "pointer", opacity: addon.enabled ? 1 : 0.5 }}
-                  onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
-                  onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
-                >
-                  {CURRENCIES.map(c => (
-                    <option key={c} value={c} style={{ backgroundColor: MIDNIGHT }}>{c}</option>
-                  ))}
-                </select>
-                <input
-                  type="number"
-                  min={0}
-                  value={addon.price ?? ""}
-                  onChange={e => updateAddon(addon.id, { price: e.target.value === "" ? null : parseFloat(e.target.value) })}
-                  placeholder="-"
-                  style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", ...getFieldStatusStyle(addon.id, "price", addon.enabled) }}
-                  onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
-                  onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
-                />
-                <select
-                  value={addon.pricing_model}
-                  onChange={e => updateAddon(addon.id, { pricing_model: e.target.value as Addon["pricing_model"] })}
-                  style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", cursor: "pointer", ...getFieldStatusStyle(addon.id, "pricing_model", addon.enabled) }}
-                  onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
-                  onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
-                >
-                  {PRICING_MODELS.map(pm => (
-                    <option key={pm.value} value={pm.value} style={{ backgroundColor: MIDNIGHT }}>{pm.label}</option>
-                  ))}
-                </select>
-                <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 100px", gap: "10px" }}>
-                  <input
-                    type="number"
-                    min={0}
-                    value={getAmount(addon)}
-                    onChange={e => updatePreparationAmount(addon, e.target.value)}
-                    placeholder="Preparation time"
-                    style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", ...getFieldStatusStyle(addon.id, "preparation_time_hours", addon.enabled) }}
-                    onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
-                    onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
-                  />
-                  <select
-                    value={getUnit(addon)}
-                    onChange={e => updatePreparationUnit(addon, e.target.value as PreparationUnit)}
-                    style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", cursor: "pointer", opacity: addon.enabled ? 1 : 0.5 }}
-                    onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
-                    onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
-                  >
-                    <option value="hours" style={{ backgroundColor: MIDNIGHT }}>hours</option>
-                    <option value="days" style={{ backgroundColor: MIDNIGHT }}>days</option>
-                  </select>
-                </div>
-                <select
-                  value={addon.cutoff_type ?? ""}
-                  onChange={e => updateAddon(addon.id, { cutoff_type: e.target.value === "" ? null : "before_checkin" })}
-                  style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", cursor: "pointer", opacity: addon.enabled ? 1 : 0.5 }}
-                  onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
-                  onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
-                >
-                  <option value="" style={{ backgroundColor: MIDNIGHT }}>Cutoff type</option>
-                  {CUTOFF_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value} style={{ backgroundColor: MIDNIGHT }}>{option.label}</option>
-                  ))}
-                </select>
-                <select
-                  value={addon.category ?? ""}
-                  onChange={e => updateAddon(addon.id, { category: e.target.value === "" ? null : e.target.value as AddonCategory })}
-                  style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", cursor: "pointer", opacity: addon.enabled ? 1 : 0.5 }}
-                  onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
-                  onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
-                >
-                  <option value="" style={{ backgroundColor: MIDNIGHT }}>Category</option>
-                  {CATEGORY_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value} style={{ backgroundColor: MIDNIGHT }}>{option.label}</option>
-                  ))}
-                </select>
-                <select
-                  value={getAddonEnforcementMode(addon.enforcement_mode)}
-                  onChange={e => updateAddon(addon.id, { enforcement_mode: e.target.value as AddonEnforcementMode })}
-                  style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", cursor: "pointer", ...getFieldStatusStyle(addon.id, "enforcement_mode", addon.enabled) }}
-                  onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
-                  onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
-                >
-                  {ENFORCEMENT_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value} style={{ backgroundColor: MIDNIGHT }}>
-                      {option.label} - {option.help}
-                    </option>
-                  ))}
-                </select>
-                <label style={{ display: "flex", alignItems: "center", gap: "10px", fontFamily: LATO, fontSize: "12px", color: addon.enabled ? MUTED : "rgba(138,128,112,0.5)", cursor: "pointer" }}>
-                  <input
-                    type="checkbox"
-                    checked={addon.requires_approval ?? false}
-                    onChange={e => updateAddon(addon.id, { requires_approval: e.target.checked })}
-                    style={{ accentColor: GOLD, width: "16px", height: "16px", cursor: "pointer" }}
-                  />
-                  Requires approval
-                </label>
-                {validationAttempted && addonErrors.length > 0 && (
-                  <div style={{ display: "grid", gap: "4px" }}>
-                    {addonErrors.map((issue, index) => (
-                      <p key={`${issue.message}-${index}`} style={{ fontFamily: LATO, fontSize: "11px", color: "#e07070", margin: 0, lineHeight: 1.5 }}>
-                        {issue.message}
-                      </p>
-                    ))}
-                  </div>
-                )}
-                {addonWarnings.length > 0 && (
-                  <div style={{ display: "grid", gap: "4px" }}>
-                    {addonWarnings.map((issue, index) => (
-                      <p key={`${issue.message}-${index}`} style={{ fontFamily: LATO, fontSize: "11px", color: "#e2ab5a", margin: 0, lineHeight: 1.5 }}>
-                        {issue.message}
-                      </p>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )})}
-        </div>
-      ) : (
-        <>
-          <div style={{ display: "grid", gridTemplateColumns: "40px 1fr 90px 110px 160px", gap: "10px", alignItems: "center", paddingBottom: "10px", borderBottom: `0.5px solid ${BORDER}`, marginBottom: "8px" }}>
-            {["On", "Name", "Currency", "Price", "Pricing model"].map(h => (
-              <span key={h} style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED }}>{h}</span>
-            ))}
-          </div>
-
-          {addons.map(addon => {
-            const addonErrors = getAddonIssues(addon.id, "error");
-            const addonWarnings = getAddonIssues(addon.id, "warning");
-            return (
-            <div key={addon.id} style={{ padding: "10px 0", borderBottom: `0.5px solid ${validationAttempted && addonErrors.length > 0 ? "rgba(224,112,112,0.3)" : "rgba(255,255,255,0.03)"}` }}>
-              <div style={{ display: "grid", gridTemplateColumns: "40px 1fr 90px 110px 160px", gap: "10px", alignItems: "center" }}>
-                <div style={{ display: "flex", alignItems: "center" }}>
-                  <input
-                    type="checkbox"
-                    checked={addon.enabled}
-                    onChange={e => updateAddon(addon.id, { enabled: e.target.checked })}
-                    style={{ accentColor: GOLD, width: "16px", height: "16px", cursor: "pointer" }}
-                  />
-                </div>
-                <input
-                  type="text"
-                  value={addon.label}
-                  onChange={e => updateAddon(addon.id, { label: e.target.value })}
-                  style={{ ...fieldStyle, padding: "8px 10px", fontSize: "13px", ...getFieldStatusStyle(addon.id, "label", addon.enabled) }}
-                  onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
-                  onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
-                />
-                <select
-                  value={addon.currency}
-                  onChange={e => updateAddon(addon.id, { currency: e.target.value })}
-                  style={{ ...fieldStyle, padding: "8px 10px", fontSize: "13px", cursor: "pointer", opacity: addon.enabled ? 1 : 0.5 }}
-                  onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
-                  onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
-                >
-                  {CURRENCIES.map(c => (
-                    <option key={c} value={c} style={{ backgroundColor: MIDNIGHT }}>{c}</option>
-                  ))}
-                </select>
-                <input
-                  type="number"
-                  min={0}
-                  value={addon.price ?? ""}
-                  onChange={e => updateAddon(addon.id, { price: e.target.value === "" ? null : parseFloat(e.target.value) })}
-                  placeholder="-"
-                  style={{ ...fieldStyle, padding: "8px 10px", fontSize: "13px", ...getFieldStatusStyle(addon.id, "price", addon.enabled) }}
-                  onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
-                  onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
-                />
-                <select
-                  value={addon.pricing_model}
-                  onChange={e => updateAddon(addon.id, { pricing_model: e.target.value as Addon["pricing_model"] })}
-                  style={{ ...fieldStyle, padding: "8px 10px", fontSize: "13px", cursor: "pointer", ...getFieldStatusStyle(addon.id, "pricing_model", addon.enabled) }}
-                  onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
-                  onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
-                >
-                  {PRICING_MODELS.map(pm => (
-                    <option key={pm.value} value={pm.value} style={{ backgroundColor: MIDNIGHT }}>{pm.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", marginTop: "10px", paddingLeft: "40px" }}>
-                <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
-                  {addon.label.trim() || "New add-on"}
-                </p>
                 <button
                   type="button"
                   onClick={() => removeAddon(addon.id)}
@@ -367,79 +175,145 @@ export default function AddonsEditor({
                   Remove
                 </button>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: "10px", marginTop: "10px", paddingLeft: "40px" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 100px", gap: "10px" }}>
-                  <input
-                    type="number"
-                    min={0}
-                    value={getAmount(addon)}
-                    onChange={e => updatePreparationAmount(addon, e.target.value)}
-                    placeholder="Preparation time"
-                    style={{ ...fieldStyle, padding: "8px 10px", fontSize: "13px", ...getFieldStatusStyle(addon.id, "preparation_time_hours", addon.enabled) }}
-                    onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
-                    onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
-                  />
-                  <select
-                    value={getUnit(addon)}
-                    onChange={e => updatePreparationUnit(addon, e.target.value as PreparationUnit)}
-                    style={{ ...fieldStyle, padding: "8px 10px", fontSize: "13px", cursor: "pointer", opacity: addon.enabled ? 1 : 0.5 }}
-                    onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
-                    onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
-                  >
-                    <option value="hours" style={{ backgroundColor: MIDNIGHT }}>hours</option>
-                    <option value="days" style={{ backgroundColor: MIDNIGHT }}>days</option>
-                  </select>
-                </div>
-                <select
-                  value={addon.cutoff_type ?? ""}
-                  onChange={e => updateAddon(addon.id, { cutoff_type: e.target.value === "" ? null : "before_checkin" })}
-                  style={{ ...fieldStyle, padding: "8px 10px", fontSize: "13px", cursor: "pointer", opacity: addon.enabled ? 1 : 0.5 }}
+
+              <div style={{ display: "grid", gap: "10px", marginBottom: "16px" }}>
+                {fieldLabel("Add-on name")}
+                <input
+                  type="text"
+                  value={addon.label}
+                  onChange={e => updateAddon(addon.id, { label: e.target.value })}
+                  placeholder="Add-on name"
+                  style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", ...getFieldStatusStyle(addon.id, "label", addon.enabled) }}
                   onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
                   onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
-                >
-                  <option value="" style={{ backgroundColor: MIDNIGHT }}>Cutoff type</option>
-                  {CUTOFF_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value} style={{ backgroundColor: MIDNIGHT }}>{option.label}</option>
-                  ))}
-                </select>
-                <select
-                  value={addon.category ?? ""}
-                  onChange={e => updateAddon(addon.id, { category: e.target.value === "" ? null : e.target.value as AddonCategory })}
-                  style={{ ...fieldStyle, padding: "8px 10px", fontSize: "13px", cursor: "pointer", opacity: addon.enabled ? 1 : 0.5 }}
-                  onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
-                  onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
-                >
-                  <option value="" style={{ backgroundColor: MIDNIGHT }}>Category</option>
-                  {CATEGORY_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value} style={{ backgroundColor: MIDNIGHT }}>{option.label}</option>
-                  ))}
-                </select>
-                <select
-                  value={getAddonEnforcementMode(addon.enforcement_mode)}
-                  onChange={e => updateAddon(addon.id, { enforcement_mode: e.target.value as AddonEnforcementMode })}
-                  style={{ ...fieldStyle, padding: "8px 10px", fontSize: "13px", cursor: "pointer", ...getFieldStatusStyle(addon.id, "enforcement_mode", addon.enabled) }}
-                  onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
-                  onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
-                >
-                  {ENFORCEMENT_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value} style={{ backgroundColor: MIDNIGHT }}>
-                      {option.label} - {option.help}
-                    </option>
-                  ))}
-                </select>
-                <label style={{ display: "flex", alignItems: "center", gap: "10px", fontFamily: LATO, fontSize: "12px", color: addon.enabled ? MUTED : "rgba(138,128,112,0.5)", cursor: "pointer", minHeight: "40px" }}>
-                  <input
-                    type="checkbox"
-                    checked={addon.requires_approval ?? false}
-                    onChange={e => updateAddon(addon.id, { requires_approval: e.target.checked })}
-                    style={{ accentColor: GOLD, width: "16px", height: "16px", cursor: "pointer" }}
-                  />
-                  Requires approval
-                </label>
+                />
               </div>
-              {(validationAttempted && addonErrors.length > 0) || addonWarnings.length > 0 ? (
-                <div style={{ display: "grid", gap: "4px", marginTop: "10px", paddingLeft: "40px" }}>
-                  {validationAttempted && addonErrors.map((issue, index) => (
+
+              <div style={{ display: "grid", gap: "10px", marginBottom: "16px" }}>
+                {fieldLabel("Pricing")}
+                <div style={{ display: "grid", gridTemplateColumns: cardGridColumns, gap: "10px" }}>
+                  <div style={{ display: "grid", gap: "6px" }}>
+                    {fieldLabel("Currency")}
+                    <select
+                      value={addon.currency}
+                      onChange={e => updateAddon(addon.id, { currency: e.target.value })}
+                      style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", cursor: "pointer", opacity: addon.enabled ? 1 : 0.5 }}
+                      onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
+                      onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+                    >
+                      {CURRENCIES.map(c => (
+                        <option key={c} value={c} style={{ backgroundColor: MIDNIGHT }}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div style={{ display: "grid", gap: "6px" }}>
+                    {fieldLabel("Price")}
+                    <input
+                      type="number"
+                      min={0}
+                      value={addon.price ?? ""}
+                      onChange={e => updateAddon(addon.id, { price: e.target.value === "" ? null : parseFloat(e.target.value) })}
+                      placeholder="Price"
+                      style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", ...getFieldStatusStyle(addon.id, "price", addon.enabled) }}
+                      onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
+                      onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+                    />
+                  </div>
+                  <div style={{ display: "grid", gap: "6px", gridColumn: isMobile ? "auto" : "1 / -1" }}>
+                    {fieldLabel("Pricing model")}
+                    <select
+                      value={addon.pricing_model}
+                      onChange={e => updateAddon(addon.id, { pricing_model: e.target.value as Addon["pricing_model"] })}
+                      style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", cursor: "pointer", ...getFieldStatusStyle(addon.id, "pricing_model", addon.enabled) }}
+                      onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
+                      onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+                    >
+                      {PRICING_MODELS.map(pm => (
+                        <option key={pm.value} value={pm.value} style={{ backgroundColor: MIDNIGHT }}>{pm.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gap: "10px" }}>
+                {fieldLabel("Operations")}
+                <div style={{ display: "grid", gridTemplateColumns: operationGridColumns, gap: "10px" }}>
+                  <div style={{ display: "grid", gap: "6px" }}>
+                    {fieldLabel("Preparation time")}
+                    <input
+                      type="number"
+                      min={0}
+                      value={getAmount(addon)}
+                      onChange={e => updatePreparationAmount(addon, e.target.value)}
+                      placeholder="Prep time"
+                      style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", ...getFieldStatusStyle(addon.id, "preparation_time_hours", addon.enabled) }}
+                      onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
+                      onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+                    />
+                  </div>
+                  <div style={{ display: "grid", gap: "6px" }}>
+                    {fieldLabel("Unit")}
+                    <select
+                      value={getUnit(addon)}
+                      onChange={e => updatePreparationUnit(addon, e.target.value as PreparationUnit)}
+                      style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", cursor: "pointer", opacity: addon.enabled ? 1 : 0.5 }}
+                      onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
+                      onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+                    >
+                      <option value="hours" style={{ backgroundColor: MIDNIGHT }}>hours</option>
+                      <option value="days" style={{ backgroundColor: MIDNIGHT }}>days</option>
+                    </select>
+                  </div>
+                  <div style={{ display: "grid", gap: "6px" }}>
+                    {fieldLabel("Category")}
+                    <select
+                      value={addon.category ?? ""}
+                      onChange={e => updateAddon(addon.id, { category: e.target.value === "" ? null : e.target.value as AddonCategory })}
+                      style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", cursor: "pointer", opacity: addon.enabled ? 1 : 0.5 }}
+                      onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
+                      onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+                    >
+                      <option value="" style={{ backgroundColor: MIDNIGHT }}>Category</option>
+                      {CATEGORY_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value} style={{ backgroundColor: MIDNIGHT }}>{option.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div style={{ display: "grid", gap: "6px" }}>
+                    {fieldLabel("Operational mode")}
+                    <select
+                      value={getAddonEnforcementMode(addon.enforcement_mode)}
+                      onChange={e => updateAddon(addon.id, { enforcement_mode: e.target.value as AddonEnforcementMode })}
+                      style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", cursor: "pointer", ...getFieldStatusStyle(addon.id, "enforcement_mode", addon.enabled) }}
+                      onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
+                      onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+                    >
+                      {ENFORCEMENT_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value} style={{ backgroundColor: MIDNIGHT }}>
+                          {option.label} - {option.help}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <label style={{ display: "grid", gap: "8px", alignContent: "start", fontFamily: LATO, fontSize: "12px", color: addon.enabled ? MUTED : "rgba(138,128,112,0.5)", cursor: "pointer" }}>
+                    {fieldLabel("Requires approval")}
+                    <span style={{ display: "flex", alignItems: "center", gap: "10px", minHeight: "42px", padding: "0 2px" }}>
+                      <input
+                        type="checkbox"
+                        checked={addon.requires_approval ?? false}
+                        onChange={e => updateAddon(addon.id, { requires_approval: e.target.checked })}
+                        style={{ accentColor: GOLD, width: "16px", height: "16px", cursor: "pointer" }}
+                      />
+                      <span>Requires approval</span>
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              {showErrors || addonWarnings.length > 0 ? (
+                <div style={{ display: "grid", gap: "4px", marginTop: "14px" }}>
+                  {showErrors && addonErrors.map((issue, index) => (
                     <p key={`error-${issue.message}-${index}`} style={{ fontFamily: LATO, fontSize: "11px", color: "#e07070", margin: 0, lineHeight: 1.5 }}>
                       {issue.message}
                     </p>
@@ -452,9 +326,9 @@ export default function AddonsEditor({
                 </div>
               ) : null}
             </div>
-          )})}
-        </>
-      )}
+          );
+        })}
+      </div>
 
       {addons.length === 0 && (
         <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED }}>No add-ons loaded.</p>
