@@ -1,7 +1,7 @@
 export const ADDON_OPERATIONAL_SETTINGS_KEY = "addon_operational_settings";
 
 export type AddonCutoffType = "before_checkin" | "before_booking";
-export type AddonCategory = "comfort" | "experience" | "logistics" | "service";
+export type AddonCategory = string;
 export type PreparationUnit = "hours" | "days";
 export type AddonEnforcementMode = "strict" | "soft" | "none";
 
@@ -22,14 +22,15 @@ export interface AddonOperationalSettingRow extends AddonOperationalFields {
 }
 
 const VALID_CUTOFF_TYPES = new Set<AddonCutoffType>(["before_checkin", "before_booking"]);
-const VALID_CATEGORIES = new Set<AddonCategory>(["comfort", "experience", "logistics", "service"]);
 const VALID_ENFORCEMENT_MODES = new Set<AddonEnforcementMode>(["strict", "soft", "none"]);
 
-export const ADDON_CATEGORY_LABELS: Record<AddonCategory, string> = {
+export const ADDON_CATEGORY_LABELS: Record<string, string> = {
   comfort: "Comfort",
   experience: "Experience",
   logistics: "Logistics",
   service: "Service",
+  services: "Services",
+  essentials: "Essentials",
 };
 
 export const ADDON_CUTOFF_LABELS: Record<AddonCutoffType, string> = {
@@ -92,8 +93,8 @@ function parseOperationalFields(value: unknown): AddonOperationalFields {
       : null;
   const requiresApproval = item.requires_approval === true ? true : false;
   const category =
-    typeof item.category === "string" && VALID_CATEGORIES.has(item.category as AddonCategory)
-      ? (item.category as AddonCategory)
+    typeof item.category === "string" && item.category.trim().length > 0
+      ? item.category.trim()
       : null;
   const enforcementMode =
     typeof item.enforcement_mode === "string" &&

@@ -6,7 +6,7 @@ import type { DateRange, Matcher } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 import OrayaEmblem from "@/components/OrayaEmblem";
 import { getVillaBasePrice, getVillaPricing } from "@/lib/admin-pricing";
-import { ADDON_CATEGORY_LABELS, ADDON_OPERATIONAL_SETTINGS_KEY, formatPreparationTime, getAddonEnforcementMode, mergeAddonsWithOperationalSettings, parseAddonOperationalSetting, type AddonCategory, type AddonCutoffType, type AddonEnforcementMode } from "@/lib/addon-operations";
+import { ADDON_OPERATIONAL_SETTINGS_KEY, formatPreparationTime, getAddonEnforcementMode, mergeAddonsWithOperationalSettings, parseAddonOperationalSetting, type AddonCategory, type AddonCutoffType, type AddonEnforcementMode } from "@/lib/addon-operations";
 import { usePublicPricing } from "@/lib/public-pricing";
 import { calculateStayPricing } from "@/lib/pricing/engine";
 import type { NightSource } from "@/lib/pricing/types";
@@ -264,6 +264,19 @@ function isAddonApplicableToVilla(addon: Addon, villa: string): boolean {
   if (!villa) return true;
   if (applicableVillas.length === 0) return true;
   return applicableVillas.includes(villa);
+}
+
+function normalizeAddonCategory(category: string | null | undefined): string {
+  const value = category?.trim();
+  if (!value) return "Other";
+
+  const lower = value.toLowerCase();
+  if (lower === "comfort") return "Comfort";
+  if (lower === "experience") return "Experience";
+  if (lower === "services" || lower === "service") return "Services";
+  if (lower === "essentials") return "Essentials";
+  if (lower === "logistics") return "Services";
+  return value;
 }
 
 function sortAddonsForDisplay(addons: Addon[]): Addon[] {
@@ -596,13 +609,22 @@ function BookPageInner() {
   const estimatedTotal = (staySubtotal ?? 0) + selectedAddonSubtotal;
   const guestEmail = guest.email.trim();
   const guestEmailInvalid = guestMode && guestEmail.length > 0 && !EMAIL_RE.test(guestEmail);
-  const addonGroups = (["comfort", "experience", "logistics", "service", "other"] as const)
-    .map((category) => ({
-      category,
-      label: category === "other" ? "Other" : ADDON_CATEGORY_LABELS[category],
-      items: availableAddons.filter((addon) => (addon.category ?? "other") === category),
-    }))
-    .filter((group) => group.items.length > 0);
+  const addonGroupMap = new Map<string, Addon[]>();
+  for (const addon of availableAddons) {
+    const category = normalizeAddonCategory(addon.category);
+    const existing = addonGroupMap.get(category);
+    if (existing) {
+      existing.push(addon);
+    } else {
+      addonGroupMap.set(category, [addon]);
+    }
+  }
+  const addonGroups = Array.from(addonGroupMap.entries()).map(([category, items]) => ({
+    category,
+    label: category,
+    items,
+  }));
+  const showCategoryHeaders = addonGroups.length > 1 || addonGroups[0]?.category !== "Other";
 
   const dateConflict: string = (() => {
     if (!checkIn || !checkOut) return "";
@@ -1335,9 +1357,11 @@ function BookPageInner() {
                   <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                     {addonGroups.map((group) => (
                       <div key={group.category} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                        <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, margin: 0 }}>
-                          {group.label}
-                        </p>
+                        {showCategoryHeaders && (
+                          <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, margin: 0 }}>
+                            {group.label}
+                          </p>
+                        )}
                         {group.items.map((addon) => {
                           const selected = selectedAddons.includes(addon.id);
                           const availability = getAddonAvailability(addon);

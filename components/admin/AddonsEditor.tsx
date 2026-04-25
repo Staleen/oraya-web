@@ -25,10 +25,10 @@ const PRICING_MODELS: { value: Addon["pricing_model"]; label: string }[] = [
 
 const CURRENCIES = ["USD", "EUR", "GBP", "LBP"];
 const CATEGORY_OPTIONS: Array<{ value: AddonCategory; label: string }> = [
-  { value: "comfort", label: ADDON_CATEGORY_LABELS.comfort },
-  { value: "experience", label: ADDON_CATEGORY_LABELS.experience },
-  { value: "logistics", label: ADDON_CATEGORY_LABELS.logistics },
-  { value: "service", label: ADDON_CATEGORY_LABELS.service },
+  { value: "Comfort", label: "Comfort" },
+  { value: "Services", label: "Services" },
+  { value: "Experience", label: "Experience" },
+  { value: "Essentials", label: "Essentials" },
 ];
 const ENFORCEMENT_OPTIONS: Array<{ value: AddonEnforcementMode; label: string; help: string }> = [
   { value: "strict", label: ADDON_ENFORCEMENT_LABELS.strict, help: "Disable if not enough preparation time" },
@@ -693,18 +693,15 @@ export default function AddonsEditor({
                     <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1fr)", gap: "10px" }}>
                       <div style={{ display: "grid", gap: "6px" }}>
                         {fieldLabel("Category")}
-                        <select
+                        <input
+                          list="addon-category-options"
                           value={addon.category ?? ""}
-                          onChange={e => updateAddon(addon.id, { category: e.target.value === "" ? null : e.target.value as AddonCategory })}
-                          style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", cursor: "pointer", opacity: addon.enabled ? 1 : 0.5 }}
+                          onChange={e => updateAddon(addon.id, { category: e.target.value.trim() === "" ? null : e.target.value })}
+                          placeholder="Category"
+                          style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", opacity: addon.enabled ? 1 : 0.5 }}
                           onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
                           onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
-                        >
-                          <option value="" style={{ backgroundColor: MIDNIGHT }}>Category</option>
-                          {CATEGORY_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.value} style={{ backgroundColor: MIDNIGHT }}>{option.label}</option>
-                          ))}
-                        </select>
+                        />
                       </div>
                       {renderRecommendedField(addon, false)}
                       {renderDisplayOrderField(addon, false)}
@@ -888,18 +885,15 @@ export default function AddonsEditor({
                 <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "10px" }}>
                   <div style={{ display: "grid", gap: "6px" }}>
                     {fieldLabel("Category")}
-                    <select
+                    <input
+                      list="addon-category-options"
                       value={editingAddon.category ?? ""}
-                      onChange={e => updateAddon(editingAddon.id, { category: e.target.value === "" ? null : e.target.value as AddonCategory })}
-                      style={{ ...fieldStyle, width: "100%", boxSizing: "border-box", padding: "12px 14px", fontSize: "14px", cursor: "pointer", opacity: editingAddon.enabled ? 1 : 0.5, minHeight: "48px" }}
+                      onChange={e => updateAddon(editingAddon.id, { category: e.target.value.trim() === "" ? null : e.target.value })}
+                      placeholder="Category"
+                      style={{ ...fieldStyle, width: "100%", boxSizing: "border-box", padding: "12px 14px", fontSize: "14px", opacity: editingAddon.enabled ? 1 : 0.5, minHeight: "48px" }}
                       onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
                       onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
-                    >
-                      <option value="" style={{ backgroundColor: MIDNIGHT }}>Category</option>
-                      {CATEGORY_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value} style={{ backgroundColor: MIDNIGHT }}>{option.label}</option>
-                      ))}
-                    </select>
+                    />
                   </div>
                   {renderRecommendedField(editingAddon, true)}
                   {renderDisplayOrderField(editingAddon, true)}
@@ -958,6 +952,12 @@ export default function AddonsEditor({
       {addons.length === 0 && (
         <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED }}>No add-ons loaded.</p>
       )}
+
+      <datalist id="addon-category-options">
+        {CATEGORY_OPTIONS.map((option) => (
+          <option key={option.value} value={option.value} />
+        ))}
+      </datalist>
     </div>
   );
 }
