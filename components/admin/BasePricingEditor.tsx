@@ -267,6 +267,21 @@ export default function BasePricingEditor({
           const sampleNight = samplePreview(villaPricing);
           const isExpanded = !isMobile && expandedVilla === villaPricing.villa;
           const seasonalCount = villaPricing.seasonal_overrides.length;
+          const mobileLabelStyle = {
+            fontFamily: LATO,
+            fontSize: "8px",
+            letterSpacing: "1.6px",
+            textTransform: "uppercase" as const,
+            color: MUTED,
+            display: "block",
+            marginBottom: "4px",
+          };
+          const mobileValueStyle = {
+            fontFamily: LATO,
+            fontSize: "12px",
+            color: "#FFFFFF",
+            display: "block",
+          };
 
           return (
             <div
@@ -279,72 +294,126 @@ export default function BasePricingEditor({
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1.2fr) repeat(4, minmax(110px, 0.65fr)) minmax(130px, 0.8fr) auto",
+                  gridTemplateColumns: isMobile ? "minmax(0, 1.05fr) minmax(132px, 0.95fr)" : "minmax(0, 1.2fr) repeat(4, minmax(110px, 0.65fr)) minmax(130px, 0.8fr) auto",
                   alignItems: "center",
                   gap: "12px",
                   padding: isMobile ? "12px" : "12px 14px",
                 }}
               >
-                <div style={{ minWidth: 0 }}>
-                  <p style={{ fontFamily: PLAYFAIR, fontSize: "1.15rem", color: GOLD, margin: "0 0 4px" }}>
-                    {villaPricing.villa}
-                  </p>
-                  <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0 }}>
-                    {sampleNight
-                      ? `Sample ${sampleLabel(sampleNight.date)} -> ${sampleNight.price === null ? "Not priced" : `$${sampleNight.price.toLocaleString()}`} (${sampleSourceLabel(sampleNight.source)})`
-                      : "Sample preview unavailable"}
-                  </p>
-                </div>
-                <div>
-                  <span style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, display: "block", marginBottom: "4px" }}>
-                    Standard nightly rate
-                  </span>
-                  <span style={{ fontFamily: LATO, fontSize: "12px", color: "#FFFFFF" }}>
-                    {priceSummary(villaPricing.base_price)}
-                  </span>
-                </div>
-                <div>
-                  <span style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, display: "block", marginBottom: "4px" }}>
-                    Weekday rate
-                  </span>
-                  <span style={{ fontFamily: LATO, fontSize: "12px", color: "#FFFFFF" }}>
-                    {priceSummary(villaPricing.weekday_price)}
-                  </span>
-                </div>
-                <div>
-                  <span style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, display: "block", marginBottom: "4px" }}>
-                    Weekend rate
-                  </span>
-                  <span style={{ fontFamily: LATO, fontSize: "12px", color: "#FFFFFF" }}>
-                    {priceSummary(villaPricing.weekend_price)}
-                  </span>
-                </div>
-                <div>
-                  <span style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, display: "block", marginBottom: "4px" }}>
-                    Minimum nights
-                  </span>
-                  <span style={{ fontFamily: LATO, fontSize: "12px", color: "#FFFFFF" }}>
-                    {villaPricing.minimum_stay ?? "-"}
-                  </span>
-                </div>
-                <div>
-                  <span style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, display: "block", marginBottom: "4px" }}>
-                    Seasonal periods
-                  </span>
-                  <span style={{ fontFamily: LATO, fontSize: "12px", color: "#FFFFFF" }}>
-                    {seasonalCount}
-                    {issueCount > 0 && (
-                      <span style={{ color: WARN_AMBER }}> | {issueCount} issue{issueCount === 1 ? "" : "s"}</span>
-                    )}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => toggleVilla(villaPricing.villa)}
-                  style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: GOLD, backgroundColor: "transparent", border: "none", padding: 0, cursor: "pointer", justifySelf: isMobile ? "start" : "end" }}
-                >
-                  {expandedVilla === villaPricing.villa ? "Close" : "Edit"}
-                </button>
+                {isMobile ? (
+                  <>
+                    <div style={{ minWidth: 0, display: "grid", gap: "8px", alignContent: "start" }}>
+                      <div style={{ minWidth: 0 }}>
+                        <p style={{ fontFamily: PLAYFAIR, fontSize: "1.15rem", color: GOLD, margin: "0 0 4px", lineHeight: 1.2 }}>
+                          {villaPricing.villa}
+                        </p>
+                        <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.45 }}>
+                          {sampleNight
+                            ? `Sample ${sampleLabel(sampleNight.date)} -> ${sampleNight.price === null ? "Not priced" : `$${sampleNight.price.toLocaleString()}`} (${sampleSourceLabel(sampleNight.source)})`
+                            : "Sample preview unavailable"}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => toggleVilla(villaPricing.villa)}
+                        style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: GOLD, backgroundColor: "transparent", border: "none", padding: 0, cursor: "pointer", justifySelf: "start" }}
+                      >
+                        {expandedVilla === villaPricing.villa ? "Close" : "Edit"}
+                      </button>
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 12px", alignContent: "start" }}>
+                      <div>
+                        <span style={mobileLabelStyle}>Standard nightly rate</span>
+                        <span style={mobileValueStyle}>{priceSummary(villaPricing.base_price)}</span>
+                      </div>
+                      <div>
+                        <span style={mobileLabelStyle}>Weekday rate</span>
+                        <span style={mobileValueStyle}>{priceSummary(villaPricing.weekday_price)}</span>
+                      </div>
+                      <div>
+                        <span style={mobileLabelStyle}>Weekend rate</span>
+                        <span style={mobileValueStyle}>{priceSummary(villaPricing.weekend_price)}</span>
+                      </div>
+                      <div>
+                        <span style={mobileLabelStyle}>Minimum nights</span>
+                        <span style={mobileValueStyle}>{villaPricing.minimum_stay ?? "-"}</span>
+                      </div>
+                      <div style={{ gridColumn: "1 / -1" }}>
+                        <span style={mobileLabelStyle}>Seasonal periods</span>
+                        <span style={mobileValueStyle}>
+                          {seasonalCount}
+                          {issueCount > 0 && (
+                            <span style={{ color: WARN_AMBER }}> | {issueCount} issue{issueCount === 1 ? "" : "s"}</span>
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{ fontFamily: PLAYFAIR, fontSize: "1.15rem", color: GOLD, margin: "0 0 4px" }}>
+                        {villaPricing.villa}
+                      </p>
+                      <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0 }}>
+                        {sampleNight
+                          ? `Sample ${sampleLabel(sampleNight.date)} -> ${sampleNight.price === null ? "Not priced" : `$${sampleNight.price.toLocaleString()}`} (${sampleSourceLabel(sampleNight.source)})`
+                          : "Sample preview unavailable"}
+                      </p>
+                    </div>
+                    <div>
+                      <span style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, display: "block", marginBottom: "4px" }}>
+                        Standard nightly rate
+                      </span>
+                      <span style={{ fontFamily: LATO, fontSize: "12px", color: "#FFFFFF" }}>
+                        {priceSummary(villaPricing.base_price)}
+                      </span>
+                    </div>
+                    <div>
+                      <span style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, display: "block", marginBottom: "4px" }}>
+                        Weekday rate
+                      </span>
+                      <span style={{ fontFamily: LATO, fontSize: "12px", color: "#FFFFFF" }}>
+                        {priceSummary(villaPricing.weekday_price)}
+                      </span>
+                    </div>
+                    <div>
+                      <span style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, display: "block", marginBottom: "4px" }}>
+                        Weekend rate
+                      </span>
+                      <span style={{ fontFamily: LATO, fontSize: "12px", color: "#FFFFFF" }}>
+                        {priceSummary(villaPricing.weekend_price)}
+                      </span>
+                    </div>
+                    <div>
+                      <span style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, display: "block", marginBottom: "4px" }}>
+                        Minimum nights
+                      </span>
+                      <span style={{ fontFamily: LATO, fontSize: "12px", color: "#FFFFFF" }}>
+                        {villaPricing.minimum_stay ?? "-"}
+                      </span>
+                    </div>
+                    <div>
+                      <span style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, display: "block", marginBottom: "4px" }}>
+                        Seasonal periods
+                      </span>
+                      <span style={{ fontFamily: LATO, fontSize: "12px", color: "#FFFFFF" }}>
+                        {seasonalCount}
+                        {issueCount > 0 && (
+                          <span style={{ color: WARN_AMBER }}> | {issueCount} issue{issueCount === 1 ? "" : "s"}</span>
+                        )}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => toggleVilla(villaPricing.villa)}
+                      style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: GOLD, backgroundColor: "transparent", border: "none", padding: 0, cursor: "pointer", justifySelf: "end" }}
+                    >
+                      {expandedVilla === villaPricing.villa ? "Close" : "Edit"}
+                    </button>
+                  </>
+                )}
               </div>
 
               {isExpanded && (

@@ -223,67 +223,140 @@ export default function AddonsEditor({
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: isMobile ? "1fr" : "auto minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr) auto auto",
+                  gridTemplateColumns: isMobile ? "minmax(0, 1.02fr) minmax(126px, 0.98fr)" : "auto minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr) auto auto",
                   alignItems: "center",
                   gap: "12px",
                   padding: isMobile ? "12px" : "12px 14px",
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
-                  <input
-                    type="checkbox"
-                    checked={addon.enabled}
-                    onChange={e => updateAddon(addon.id, { enabled: e.target.checked })}
-                    style={{ accentColor: GOLD, width: "16px", height: "16px", cursor: "pointer", flexShrink: 0 }}
-                  />
-                  <span style={{
-                    fontFamily: LATO,
-                    fontSize: "10px",
-                    letterSpacing: "1.5px",
-                    textTransform: "uppercase",
-                    color: addon.enabled ? GOLD : MUTED,
-                    border: `0.5px solid ${addon.enabled ? "rgba(197,164,109,0.35)" : "rgba(138,128,112,0.28)"}`,
-                    backgroundColor: addon.enabled ? "rgba(197,164,109,0.08)" : "rgba(138,128,112,0.08)",
-                    padding: "4px 8px",
-                    whiteSpace: "nowrap",
-                  }}>
-                    {addon.enabled ? "Enabled" : "Disabled"}
-                  </span>
-                </div>
+                {isMobile ? (
+                  <>
+                    <div style={{ minWidth: 0, display: "grid", gap: "8px", alignContent: "start" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0, flexWrap: "wrap" }}>
+                        <input
+                          type="checkbox"
+                          checked={addon.enabled}
+                          onChange={e => updateAddon(addon.id, { enabled: e.target.checked })}
+                          style={{ accentColor: GOLD, width: "16px", height: "16px", cursor: "pointer", flexShrink: 0 }}
+                        />
+                        <span style={{
+                          fontFamily: LATO,
+                          fontSize: "10px",
+                          letterSpacing: "1.5px",
+                          textTransform: "uppercase",
+                          color: addon.enabled ? GOLD : MUTED,
+                          border: `0.5px solid ${addon.enabled ? "rgba(197,164,109,0.35)" : "rgba(138,128,112,0.28)"}`,
+                          backgroundColor: addon.enabled ? "rgba(197,164,109,0.08)" : "rgba(138,128,112,0.08)",
+                          padding: "4px 8px",
+                          whiteSpace: "nowrap",
+                        }}>
+                          {addon.enabled ? "Enabled" : "Disabled"}
+                        </span>
+                      </div>
 
-                <div style={{ minWidth: 0 }}>
-                  <span style={{ fontFamily: LATO, fontSize: isMobile ? "14px" : "13px", color: addon.enabled ? "#FFFFFF" : "rgba(255,255,255,0.55)", display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {addon.label.trim() || "New add-on"}
-                  </span>
-                </div>
+                      <div style={{ minWidth: 0 }}>
+                        <span style={{ fontFamily: LATO, fontSize: "14px", color: addon.enabled ? "#FFFFFF" : "rgba(255,255,255,0.55)", display: "block", lineHeight: 1.35, wordBreak: "break-word" }}>
+                          {addon.label.trim() || "New add-on"}
+                        </span>
+                      </div>
 
-                <div style={{ minWidth: 0 }}>
-                  <span style={{ fontFamily: LATO, fontSize: "11px", color: GOLD, display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {priceSummary(addon)}
-                  </span>
-                </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
+                        <button
+                          type="button"
+                          onClick={() => toggleExpanded(addon.id)}
+                          style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: GOLD, backgroundColor: "transparent", border: "none", padding: 0, cursor: "pointer" }}
+                        >
+                          {expandedAddonId === addon.id ? "Close" : "Edit"}
+                        </button>
 
-                <div style={{ minWidth: 0 }}>
-                  <span style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {operationalSummary(addon)}
-                  </span>
-                </div>
+                        <button
+                          type="button"
+                          onClick={() => removeAddon(addon.id)}
+                          style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: "#d9a2a2", backgroundColor: "transparent", border: "none", padding: 0, cursor: "pointer" }}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
 
-                <button
-                  type="button"
-                  onClick={() => toggleExpanded(addon.id)}
-                  style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: GOLD, backgroundColor: "transparent", border: "none", padding: 0, cursor: "pointer", justifySelf: isMobile ? "start" : "center" }}
-                >
-                  {expandedAddonId === addon.id ? "Close" : "Edit"}
-                </button>
+                    <div style={{ minWidth: 0, display: "grid", gap: "10px", alignContent: "start" }}>
+                      <div>
+                        <span style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "1.6px", textTransform: "uppercase", color: MUTED, display: "block", marginBottom: "4px" }}>
+                          Price summary
+                        </span>
+                        <span style={{ fontFamily: LATO, fontSize: "11px", color: GOLD, display: "block", lineHeight: 1.45, wordBreak: "break-word" }}>
+                          {priceSummary(addon)}
+                        </span>
+                      </div>
+                      <div>
+                        <span style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "1.6px", textTransform: "uppercase", color: MUTED, display: "block", marginBottom: "4px" }}>
+                          Operational summary
+                        </span>
+                        <span style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, display: "block", lineHeight: 1.45, wordBreak: "break-word" }}>
+                          {operationalSummary(addon)}
+                        </span>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
+                      <input
+                        type="checkbox"
+                        checked={addon.enabled}
+                        onChange={e => updateAddon(addon.id, { enabled: e.target.checked })}
+                        style={{ accentColor: GOLD, width: "16px", height: "16px", cursor: "pointer", flexShrink: 0 }}
+                      />
+                      <span style={{
+                        fontFamily: LATO,
+                        fontSize: "10px",
+                        letterSpacing: "1.5px",
+                        textTransform: "uppercase",
+                        color: addon.enabled ? GOLD : MUTED,
+                        border: `0.5px solid ${addon.enabled ? "rgba(197,164,109,0.35)" : "rgba(138,128,112,0.28)"}`,
+                        backgroundColor: addon.enabled ? "rgba(197,164,109,0.08)" : "rgba(138,128,112,0.08)",
+                        padding: "4px 8px",
+                        whiteSpace: "nowrap",
+                      }}>
+                        {addon.enabled ? "Enabled" : "Disabled"}
+                      </span>
+                    </div>
 
-                <button
-                  type="button"
-                  onClick={() => removeAddon(addon.id)}
-                  style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: "#d9a2a2", backgroundColor: "transparent", border: "none", padding: 0, cursor: "pointer", justifySelf: isMobile ? "start" : "end" }}
-                >
-                  Remove
-                </button>
+                    <div style={{ minWidth: 0 }}>
+                      <span style={{ fontFamily: LATO, fontSize: "13px", color: addon.enabled ? "#FFFFFF" : "rgba(255,255,255,0.55)", display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {addon.label.trim() || "New add-on"}
+                      </span>
+                    </div>
+
+                    <div style={{ minWidth: 0 }}>
+                      <span style={{ fontFamily: LATO, fontSize: "11px", color: GOLD, display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {priceSummary(addon)}
+                      </span>
+                    </div>
+
+                    <div style={{ minWidth: 0 }}>
+                      <span style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {operationalSummary(addon)}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => toggleExpanded(addon.id)}
+                      style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: GOLD, backgroundColor: "transparent", border: "none", padding: 0, cursor: "pointer", justifySelf: "center" }}
+                    >
+                      {expandedAddonId === addon.id ? "Close" : "Edit"}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => removeAddon(addon.id)}
+                      style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: "#d9a2a2", backgroundColor: "transparent", border: "none", padding: 0, cursor: "pointer", justifySelf: "end" }}
+                    >
+                      Remove
+                    </button>
+                  </>
+                )}
               </div>
 
               {isExpanded && (
