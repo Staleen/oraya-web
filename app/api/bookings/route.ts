@@ -303,6 +303,14 @@ export async function POST(request: Request) {
           addons: addonOperationalAudit,
         });
 
+        const strictViolations = addonOperationalAudit.filter((item) => item.audit_result === "strict_violation");
+        if (strictViolations.length > 0) {
+          return NextResponse.json(
+            { error: "One or more selected add-ons require more advance notice." },
+            { status: 400 }
+          );
+        }
+
         if (process.env.NODE_ENV !== "production") {
           console.debug("[addon-dry-run]", {
             ok: addonAudit.ok,
