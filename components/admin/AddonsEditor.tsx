@@ -1,6 +1,6 @@
 "use client";
 import type { Addon } from "./types";
-import { ADDON_CATEGORY_LABELS, ADDON_CUTOFF_LABELS, type AddonCategory, type AddonCutoffType } from "@/lib/addon-operations";
+import { ADDON_CATEGORY_LABELS, ADDON_CUTOFF_LABELS, type AddonCategory } from "@/lib/addon-operations";
 import { GOLD, CHARCOAL, MIDNIGHT, MUTED, LATO, SURFACE, BORDER, fieldStyle } from "./theme";
 
 const PRICING_MODELS: { value: Addon["pricing_model"]; label: string }[] = [
@@ -17,10 +17,9 @@ const CATEGORY_OPTIONS: Array<{ value: AddonCategory; label: string }> = [
   { value: "logistics", label: ADDON_CATEGORY_LABELS.logistics },
   { value: "service", label: ADDON_CATEGORY_LABELS.service },
 ];
-const CUTOFF_OPTIONS: Array<{ value: AddonCutoffType; label: string }> = [
+const CUTOFF_OPTIONS = [
   { value: "before_checkin", label: ADDON_CUTOFF_LABELS.before_checkin },
-  { value: "before_booking", label: ADDON_CUTOFF_LABELS.before_booking },
-];
+] as const;
 
 export default function AddonsEditor({
   addons, addonsSaving, addonsSaved, updateAddon, saveAddons,
@@ -120,7 +119,7 @@ export default function AddonsEditor({
                 />
                 <select
                   value={addon.cutoff_type ?? ""}
-                  onChange={e => updateAddon(addon.id, { cutoff_type: e.target.value === "" ? null : e.target.value as AddonCutoffType })}
+                  onChange={e => updateAddon(addon.id, { cutoff_type: e.target.value === "" ? null : "before_checkin" })}
                   style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", cursor: "pointer", opacity: addon.enabled ? 1 : 0.5 }}
                   onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
                   onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
@@ -228,7 +227,7 @@ export default function AddonsEditor({
                 />
                 <select
                   value={addon.cutoff_type ?? ""}
-                  onChange={e => updateAddon(addon.id, { cutoff_type: e.target.value === "" ? null : e.target.value as AddonCutoffType })}
+                  onChange={e => updateAddon(addon.id, { cutoff_type: e.target.value === "" ? null : "before_checkin" })}
                   style={{ ...fieldStyle, padding: "8px 10px", fontSize: "13px", cursor: "pointer", opacity: addon.enabled ? 1 : 0.5 }}
                   onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
                   onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}

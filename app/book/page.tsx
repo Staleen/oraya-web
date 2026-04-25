@@ -563,16 +563,6 @@ function BookPageInner() {
       return { available: true, warning: "" };
     }
 
-    if (addon.cutoff_type === "before_booking") {
-      const available = 0 >= preparationHours;
-      return {
-        available,
-        warning: available
-          ? ""
-          : `This add-on requires ${formatPreparationTime(preparationHours)} preparation and is not available when requested at booking time.`,
-      };
-    }
-
     if (!checkIn) {
       return { available: true, warning: "" };
     }
