@@ -21,6 +21,26 @@ export type PricingAuditResult = {
   >;
 };
 
+export type PricingSnapshot = {
+  subtotal: number;
+  nights: PricingAuditResult["nights"];
+  warnings: string[];
+  violations: PricingAuditResult["violations"];
+  would_block_reasons: PricingAuditResult["would_block_reasons"];
+  consistency: {
+    ok: boolean;
+    has_unpriced_nights: boolean;
+    violates_minimum_stay: boolean;
+    invalid_date_range: boolean;
+    pricing_config_missing: boolean;
+    client_subtotal?: number;
+    server_subtotal?: number;
+    subtotal_mismatch?: boolean;
+  };
+  calculated_at: string;
+  source: "server-audit";
+};
+
 export type PricingAuditInput = {
   config: VillaPricingConfig | null | undefined;
   check_in: string;
@@ -129,5 +149,39 @@ export function runPricingAudit(input: PricingAuditInput): PricingAuditResult {
       violates_minimum_stay: violatesMinimumStay,
     },
     would_block_reasons: wouldBlockReasons,
+  };
+}
+
+export function buildPricingSnapshot(
+  audit: PricingAuditResult,
+  options?: { clientSubtotal?: number | null | undefined }
+): PricingSnapshot {
+  const clientSubtotal =
+    typeof options?.clientSubtotal === "number" && Number.isFinite(options.clientSubtotal)
+      ? options.clientSubtotal
+      : undefined;
+
+  return {
+    subtotal: audit.subtotal,
+    nights: audit.nights,
+    warnings: audit.warnings,
+    violations: audit.violations,
+    would_block_reasons: audit.would_block_reasons,
+    consistency: {
+      ok: audit.ok,
+      has_unpriced_nights: audit.violations.has_unpriced_nights,
+      violates_minimum_stay: audit.violations.violates_minimum_stay,
+      invalid_date_range: audit.violations.invalid_date_range,
+      pricing_config_missing: audit.violations.pricing_config_missing,
+      ...(clientSubtotal !== undefined
+        ? {
+            client_subtotal: clientSubtotal,
+            server_subtotal: audit.subtotal,
+            subtotal_mismatch: clientSubtotal !== audit.subtotal,
+          }
+        : {}),
+    },
+    calculated_at: new Date().toISOString(),
+    source: "server-audit",
   };
 }

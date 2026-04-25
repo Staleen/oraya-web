@@ -6,7 +6,7 @@ import { createActionToken } from "@/lib/booking-action-token";
 import { SITE_URL } from "@/lib/brand";
 import { findAvailabilityConflict } from "@/lib/calendar/availability";
 import { getVillaPricing, parseVillaPricingSetting, VILLA_BASE_PRICING_KEY } from "@/lib/admin-pricing";
-import { runPricingAudit } from "@/lib/pricing/server-audit";
+import { buildPricingSnapshot, runPricingAudit } from "@/lib/pricing/server-audit";
 
 const ALLOWED_VILLAS = ["Villa Mechmech", "Villa Byblos"];
 const ISO_DATE_RE    = /^\d{4}-\d{2}-\d{2}$/;
@@ -31,6 +31,7 @@ export async function POST(request: Request) {
       guest_email,
       guest_phone,
       guest_country,
+      pricing_subtotal: clientPricingSubtotal,
     } = body;
 
     if (!villa || !check_in || !check_out) {
@@ -129,20 +130,15 @@ export async function POST(request: Request) {
         check_in,
         check_out,
       });
+      const pricingSnapshot = buildPricingSnapshot(pricingAudit, {
+        clientSubtotal: clientPricingSubtotal,
+      });
 
       pricingSnapshotData = {
         pricing_subtotal: pricingAudit.subtotal,
         pricing_nights: pricingAudit.nights,
         pricing_warnings: pricingAudit.warnings,
-        pricing_snapshot: {
-          subtotal: pricingAudit.subtotal,
-          nights: pricingAudit.nights,
-          warnings: pricingAudit.warnings,
-          violations: pricingAudit.violations,
-          would_block_reasons: pricingAudit.would_block_reasons,
-          calculated_at: new Date().toISOString(),
-          source: "server-audit",
-        },
+        pricing_snapshot: pricingSnapshot,
       };
 
       if (process.env.NODE_ENV !== "production") {
