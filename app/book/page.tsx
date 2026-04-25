@@ -487,15 +487,46 @@ function BookPageInner() {
    * We disable from check_in through (check_out - 1 day) inclusive so that
    * the check_out date itself remains selectable as a new check-in.
    */
+  const bookedRangeList: Array<{ from: Date; to: Date }> = confirmedRanges.flatMap(r => {
+    const from = parseLocalISO(r.check_in);
+    const to   = parseLocalISO(r.check_out);
+    to.setDate(to.getDate() - 1); // last occupied night, not checkout day
+    if (to < from) return []; // single-night stay edge case handled
+    return [{ from, to }];
+  });
+
+  /**
+   * Dead check-in guard.
+   * The -1 day logic above intentionally leaves each booking's check_out day
+   * open so a new guest can check in on the same day a prior guest checks out.
+   * However, if the very next night (or the first reachable checkout date given
+   * the minimum stay) is already inside another blocked range, that boundary day
+   * becomes a dead check-in — visually selectable but impossible to complete.
+   * We detect these and add them to the disabled set.
+   */
+  function isCalendarDateBlocked(d: Date): boolean {
+    if (d < today) return true;
+    return bookedRangeList.some(r => d >= r.from && d <= r.to);
+  }
+
+  const minStayNights =
+    (form.villa ? getVillaPricing(pricing, form.villa)?.minimum_stay : null) ?? 1;
+
+  const deadCheckInExtras: Date[] = confirmedRanges.flatMap(r => {
+    const checkoutDay = parseLocalISO(r.check_out); // boundary day left open by -1 logic
+    // Search up to 366 days ahead for any non-blocked checkout date.
+    for (let n = minStayNights; n <= 366; n++) {
+      const candidate = new Date(checkoutDay.getTime());
+      candidate.setDate(candidate.getDate() + n);
+      if (!isCalendarDateBlocked(candidate)) return []; // valid checkout exists
+    }
+    return [checkoutDay]; // no valid checkout found — disable this day
+  });
+
   const disabledDays: Matcher[] = [
     { before: today },
-    ...confirmedRanges.flatMap(r => {
-      const from = parseLocalISO(r.check_in);
-      const to   = parseLocalISO(r.check_out);
-      to.setDate(to.getDate() - 1); // last occupied night, not checkout day
-      if (to < from) return []; // single-night stay edge case handled
-      return [{ from, to } as Matcher];
-    }),
+    ...bookedRangeList,
+    ...deadCheckInExtras,
   ];
 
   const checkIn  = dateRange?.from ? toISO(dateRange.from) : "";
