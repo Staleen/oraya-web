@@ -49,6 +49,12 @@ function getOperationalBadgeStyle(kind: "approval" | "soft" | "strict") {
   return { color: GOLD, backgroundColor: "rgba(197,164,109,0.14)" };
 }
 
+function getAddonRiskWarning(addon: NonNullable<Booking["addons_snapshot"]>[number]) {
+  if (addon.same_day_warning === "same_day_checkout") return "Same-day checkout risk";
+  if (addon.same_day_warning === "same_day_checkin") return "Same-day check-in risk";
+  return null;
+}
+
 export default function BookingsTable({
   loading,
   filteredBookings,
@@ -367,6 +373,7 @@ export default function BookingsTable({
                         const addonKey = `${b.id}-${addon.id}`;
                         const isApproved = addon.admin_approved === true;
                         const isApproving = approvingAddonId === addonKey;
+                        const sameDayRiskWarning = getAddonRiskWarning(addon);
                         return (
                           <div key={addonKey} style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start" }}>
                             <div>
@@ -441,6 +448,17 @@ export default function BookingsTable({
                                 )}
                               </div>
                               {/* Mark as approved — hidden once approved, shows saving state */}
+                              {sameDayRiskWarning && (
+                                <p style={{
+                                  fontFamily: LATO,
+                                  fontSize: "10px",
+                                  color: "#e2ab5a",
+                                  margin: "6px 0 0",
+                                  lineHeight: 1.5,
+                                }}>
+                                  {sameDayRiskWarning}
+                                </p>
+                              )}
                               {addon.requires_approval && !isApproved && (
                                 <button
                                   type="button"

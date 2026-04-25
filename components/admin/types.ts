@@ -14,6 +14,7 @@ export interface BookingAddonSnapshot {
   enforcement_mode: AddonEnforcementMode | null;
   requires_approval: boolean;
   status: "confirmed" | "at_risk" | "pending_approval";
+  same_day_warning?: "same_day_checkout" | "same_day_checkin" | null;
   admin_approved?: boolean;
   admin_approved_at?: string | null;
 }
