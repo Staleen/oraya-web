@@ -292,16 +292,20 @@ export async function POST(request: Request) {
         const addonAuditItems = new Map(addonAudit.items.map((item) => [item.id, item]));
         addonsSnapshotData = mergedAddons
           .filter((addon) => selectedAddonIds.includes(addon.id))
-          .map((addon) => ({
-            id: addon.id,
-            label: addon.label,
-            price: addon.price ?? null,
-            category: addon.category ?? null,
-            preparation_time_hours: addon.preparation_time_hours ?? null,
-            enforcement_mode: addon.enforcement_mode ?? null,
-            requires_approval: addon.requires_approval ?? false,
-            status: addonStatuses.get(addon.id) ?? "confirmed",
-          }));
+          .map((addon) => {
+            const auditItem = addonAuditItems.get(addon.id);
+            return {
+              id: addon.id,
+              label: addon.label,
+              price: addon.price ?? null,
+              category: addon.category ?? null,
+              preparation_time_hours: addon.preparation_time_hours ?? null,
+              enforcement_mode: addon.enforcement_mode ?? null,
+              requires_approval: addon.requires_approval ?? false,
+              status: addonStatuses.get(addon.id) ?? "confirmed",
+              ...(auditItem?.same_day_warning ? { same_day_warning: auditItem.same_day_warning } : {}),
+            };
+          });
 
         const addonOperationalAudit = mergedAddons
           .filter((addon) => selectedAddonIds.includes(addon.id))
