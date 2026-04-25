@@ -11,6 +11,23 @@ import { buildPricingSnapshot, runPricingAudit } from "@/lib/pricing/server-audi
 const ALLOWED_VILLAS = ["Villa Mechmech", "Villa Byblos"];
 const ISO_DATE_RE    = /^\d{4}-\d{2}-\d{2}$/;
 
+const PRICING_ERROR_MESSAGES = {
+  invalid_date_range: "Invalid booking dates.",
+  pricing_config_missing: "Pricing is not available for this villa yet. Please contact us.",
+  unpriced_nights: "Pricing is not available for one or more selected nights. Please choose different dates or contact us.",
+  minimum_stay_violation: "Your selected dates do not meet the minimum stay requirement.",
+} as const;
+
+function getPricingValidationMessage(
+  reasons: ReturnType<typeof runPricingAudit>["would_block_reasons"]
+): string {
+  if (reasons.length === 1) {
+    return PRICING_ERROR_MESSAGES[reasons[0]];
+  }
+
+  return "Your selected dates could not be priced. Please review your stay details or contact us.";
+}
+
 // POST — create a new booking (member or guest)
 // Uses service role to bypass RLS entirely — avoids anon-client policy issues
 export async function POST(request: Request) {
@@ -134,13 +151,6 @@ export async function POST(request: Request) {
         clientSubtotal: clientPricingSubtotal,
       });
 
-      pricingSnapshotData = {
-        pricing_subtotal: pricingAudit.subtotal,
-        pricing_nights: pricingAudit.nights,
-        pricing_warnings: pricingAudit.warnings,
-        pricing_snapshot: pricingSnapshot,
-      };
-
       if (process.env.NODE_ENV !== "production") {
         console.debug("[pricing-dry-run]", {
           ok: pricingAudit.ok,
@@ -148,10 +158,29 @@ export async function POST(request: Request) {
           subtotal: pricingAudit.subtotal,
         });
       }
-    } catch (pricingAuditError) {
-      if (process.env.NODE_ENV !== "production") {
-        console.debug("[api/bookings] pricing audit skipped", pricingAuditError);
+
+      if (!pricingAudit.ok) {
+        return NextResponse.json(
+          {
+            error: getPricingValidationMessage(pricingAudit.would_block_reasons),
+            reasons: pricingAudit.would_block_reasons,
+          },
+          { status: 400 }
+        );
       }
+
+      pricingSnapshotData = {
+        pricing_subtotal: pricingAudit.subtotal,
+        pricing_nights: pricingAudit.nights,
+        pricing_warnings: pricingAudit.warnings,
+        pricing_snapshot: pricingSnapshot,
+      };
+    } catch (pricingAuditError) {
+      console.error("[api/bookings] pricing audit failed:", pricingAuditError);
+      return NextResponse.json(
+        { error: "Unable to validate pricing for this booking. Please try again or contact us." },
+        { status: 500 }
+      );
     }
 
     if (pricingSnapshotData) {
