@@ -177,6 +177,22 @@ export default function AddonsEditor({
   const expandedGridColumns = isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))";
   const operationsGridColumns = isMobile ? "1fr" : "minmax(0, 1.1fr) 110px minmax(0, 1.3fr) minmax(0, 1fr)";
   const editingAddon = expandedAddonId ? addons.find((addon) => addon.id === expandedAddonId) ?? null : null;
+  const mobileOverlayShell = {
+    width: "100%",
+    maxWidth: "100vw",
+    maxHeight: "92vh",
+    boxSizing: "border-box" as const,
+    overflow: "hidden" as const,
+    backgroundColor: MIDNIGHT,
+    borderTop: `0.5px solid ${BORDER}`,
+    borderLeft: `0.5px solid rgba(255,255,255,0.05)`,
+    borderRight: `0.5px solid rgba(255,255,255,0.05)`,
+    borderTopLeftRadius: "18px",
+    borderTopRightRadius: "18px",
+    display: "grid",
+    gridTemplateRows: "auto 1fr auto",
+    boxShadow: "0 -18px 48px rgba(0,0,0,0.38)",
+  };
 
   return (
     <div style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: isMobile ? "1rem" : "1.5rem", marginBottom: "2rem" }}>
@@ -225,14 +241,15 @@ export default function AddonsEditor({
                   display: "grid",
                   gridTemplateColumns: isMobile ? "minmax(0, 1.02fr) minmax(126px, 0.98fr)" : "auto minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr) auto auto",
                   alignItems: "center",
-                  gap: "12px",
-                  padding: isMobile ? "12px" : "12px 14px",
+                  gap: isMobile ? "10px" : "12px",
+                  padding: isMobile ? "10px 12px" : "12px 14px",
+                  boxSizing: "border-box",
                 }}
               >
                 {isMobile ? (
                   <>
-                    <div style={{ minWidth: 0, display: "grid", gap: "8px", alignContent: "start" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0, flexWrap: "wrap" }}>
+                    <div style={{ minWidth: 0, display: "grid", gap: "6px", alignContent: "start" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0, flexWrap: "wrap" }}>
                         <input
                           type="checkbox"
                           checked={addon.enabled}
@@ -255,16 +272,16 @@ export default function AddonsEditor({
                       </div>
 
                       <div style={{ minWidth: 0 }}>
-                        <span style={{ fontFamily: LATO, fontSize: "14px", color: addon.enabled ? "#FFFFFF" : "rgba(255,255,255,0.55)", display: "block", lineHeight: 1.35, wordBreak: "break-word" }}>
+                        <span style={{ fontFamily: LATO, fontSize: "13px", color: addon.enabled ? "#FFFFFF" : "rgba(255,255,255,0.55)", display: "block", lineHeight: 1.25, wordBreak: "break-word" }}>
                           {addon.label.trim() || "New add-on"}
                         </span>
                       </div>
 
-                      <div style={{ display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "14px", flexWrap: "wrap" }}>
                         <button
                           type="button"
                           onClick={() => toggleExpanded(addon.id)}
-                          style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: GOLD, backgroundColor: "transparent", border: "none", padding: 0, cursor: "pointer" }}
+                          style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: GOLD, backgroundColor: "transparent", border: "none", padding: "2px 0", cursor: "pointer" }}
                         >
                           {expandedAddonId === addon.id ? "Close" : "Edit"}
                         </button>
@@ -272,19 +289,19 @@ export default function AddonsEditor({
                         <button
                           type="button"
                           onClick={() => removeAddon(addon.id)}
-                          style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: "#d9a2a2", backgroundColor: "transparent", border: "none", padding: 0, cursor: "pointer" }}
+                          style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: "#d9a2a2", backgroundColor: "transparent", border: "none", padding: "2px 0", cursor: "pointer" }}
                         >
                           Remove
                         </button>
                       </div>
                     </div>
 
-                    <div style={{ minWidth: 0, display: "grid", gap: "10px", alignContent: "start" }}>
+                    <div style={{ minWidth: 0, display: "grid", gap: "8px", alignContent: "start" }}>
                       <div>
                         <span style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "1.6px", textTransform: "uppercase", color: MUTED, display: "block", marginBottom: "4px" }}>
                           Price summary
                         </span>
-                        <span style={{ fontFamily: LATO, fontSize: "11px", color: GOLD, display: "block", lineHeight: 1.45, wordBreak: "break-word" }}>
+                        <span style={{ fontFamily: LATO, fontSize: "11px", color: GOLD, display: "block", lineHeight: 1.3, wordBreak: "break-word" }}>
                           {priceSummary(addon)}
                         </span>
                       </div>
@@ -292,7 +309,7 @@ export default function AddonsEditor({
                         <span style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "1.6px", textTransform: "uppercase", color: MUTED, display: "block", marginBottom: "4px" }}>
                           Operational summary
                         </span>
-                        <span style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, display: "block", lineHeight: 1.45, wordBreak: "break-word" }}>
+                        <span style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, display: "block", lineHeight: 1.3, wordBreak: "break-word" }}>
                           {operationalSummary(addon)}
                         </span>
                       </div>
@@ -517,41 +534,33 @@ export default function AddonsEditor({
         <div style={{
           position: "fixed",
           inset: 0,
-          backgroundColor: "rgba(10,10,10,0.72)",
+          backgroundColor: "rgba(6,8,12,0.78)",
           zIndex: 1000,
           display: "flex",
           alignItems: "flex-end",
           justifyContent: "center",
         }}>
-          <div style={{
-            width: "100%",
-            maxHeight: "92vh",
-            backgroundColor: MIDNIGHT,
-            borderTop: `0.5px solid ${BORDER}`,
-            padding: "16px 16px 0",
-            display: "grid",
-            gridTemplateRows: "auto 1fr auto",
-            gap: "14px",
-          }}>
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px" }}>
-              <div style={{ minWidth: 0 }}>
+          <div style={mobileOverlayShell}>
+            <div style={{ position: "sticky", top: 0, zIndex: 2, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px", padding: "14px 16px 12px", backgroundColor: "rgba(31,43,56,0.98)", borderBottom: "0.5px solid rgba(255,255,255,0.06)", boxSizing: "border-box" }}>
+              <div style={{ minWidth: 0, paddingRight: "8px" }}>
                 <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 6px" }}>
                   Edit Add-on
                 </p>
-                <p style={{ fontFamily: LATO, fontSize: "16px", color: "#FFFFFF", margin: 0, lineHeight: 1.4, wordBreak: "break-word" }}>
+                <p style={{ fontFamily: LATO, fontSize: "16px", color: "#FFFFFF", margin: 0, lineHeight: 1.3, wordBreak: "break-word" }}>
                   {editingAddon.label.trim() || "New add-on"}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setExpandedAddonId(null)}
-                style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED, backgroundColor: "transparent", border: "none", padding: "4px 0", cursor: "pointer", flexShrink: 0 }}
+                aria-label="Close add-on editor"
+                style={{ fontFamily: LATO, fontSize: "12px", letterSpacing: "1.5px", textTransform: "uppercase", color: "#FFFFFF", backgroundColor: "rgba(255,255,255,0.05)", border: `0.5px solid rgba(255,255,255,0.1)`, borderRadius: "999px", width: "40px", height: "40px", padding: 0, cursor: "pointer", flexShrink: 0 }}
               >
-                Close
+                X
               </button>
             </div>
 
-            <div style={{ overflowY: "auto", display: "grid", gap: "16px", paddingBottom: "8px" }}>
+            <div style={{ overflowY: "auto", overflowX: "hidden", display: "grid", gap: "16px", padding: "14px 16px 8px", boxSizing: "border-box", minWidth: 0 }}>
               <div style={{ display: "grid", gap: "10px" }}>
                 {fieldLabel("Pricing")}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "10px" }}>
@@ -560,7 +569,7 @@ export default function AddonsEditor({
                     <select
                       value={editingAddon.currency}
                       onChange={e => updateAddon(editingAddon.id, { currency: e.target.value })}
-                      style={{ ...fieldStyle, padding: "12px 14px", fontSize: "14px", cursor: "pointer", opacity: editingAddon.enabled ? 1 : 0.5, minHeight: "48px" }}
+                      style={{ ...fieldStyle, width: "100%", boxSizing: "border-box", padding: "12px 14px", fontSize: "14px", cursor: "pointer", opacity: editingAddon.enabled ? 1 : 0.5, minHeight: "48px" }}
                       onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
                       onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
                     >
@@ -577,7 +586,7 @@ export default function AddonsEditor({
                       value={editingAddon.price ?? ""}
                       onChange={e => updateAddon(editingAddon.id, { price: e.target.value === "" ? null : parseFloat(e.target.value) })}
                       placeholder="Price"
-                      style={{ ...fieldStyle, padding: "12px 14px", fontSize: "14px", minHeight: "48px", ...getFieldStatusStyle(editingAddon.id, "price", editingAddon.enabled) }}
+                      style={{ ...fieldStyle, width: "100%", boxSizing: "border-box", padding: "12px 14px", fontSize: "14px", minHeight: "48px", ...getFieldStatusStyle(editingAddon.id, "price", editingAddon.enabled) }}
                       onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
                       onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
                     />
@@ -587,7 +596,7 @@ export default function AddonsEditor({
                     <select
                       value={editingAddon.pricing_model}
                       onChange={e => updateAddon(editingAddon.id, { pricing_model: e.target.value as Addon["pricing_model"] })}
-                      style={{ ...fieldStyle, padding: "12px 14px", fontSize: "14px", cursor: "pointer", minHeight: "48px", ...getFieldStatusStyle(editingAddon.id, "pricing_model", editingAddon.enabled) }}
+                      style={{ ...fieldStyle, width: "100%", boxSizing: "border-box", padding: "12px 14px", fontSize: "14px", cursor: "pointer", minHeight: "48px", ...getFieldStatusStyle(editingAddon.id, "pricing_model", editingAddon.enabled) }}
                       onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
                       onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
                     >
@@ -613,7 +622,7 @@ export default function AddonsEditor({
                       value={getAmount(editingAddon)}
                       onChange={e => updatePreparationAmount(editingAddon, e.target.value)}
                       placeholder="Prep time"
-                      style={{ ...fieldStyle, padding: "12px 14px", fontSize: "14px", minHeight: "48px", ...getFieldStatusStyle(editingAddon.id, "preparation_time_hours", editingAddon.enabled) }}
+                      style={{ ...fieldStyle, width: "100%", boxSizing: "border-box", padding: "12px 14px", fontSize: "14px", minHeight: "48px", ...getFieldStatusStyle(editingAddon.id, "preparation_time_hours", editingAddon.enabled) }}
                       onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
                       onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
                     />
@@ -623,7 +632,7 @@ export default function AddonsEditor({
                     <select
                       value={getUnit(editingAddon)}
                       onChange={e => updatePreparationUnit(editingAddon, e.target.value as PreparationUnit)}
-                      style={{ ...fieldStyle, padding: "12px 14px", fontSize: "14px", cursor: "pointer", opacity: editingAddon.enabled ? 1 : 0.5, minHeight: "48px" }}
+                      style={{ ...fieldStyle, width: "100%", boxSizing: "border-box", padding: "12px 14px", fontSize: "14px", cursor: "pointer", opacity: editingAddon.enabled ? 1 : 0.5, minHeight: "48px" }}
                       onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
                       onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
                     >
@@ -636,7 +645,7 @@ export default function AddonsEditor({
                     <select
                       value={getAddonEnforcementMode(editingAddon.enforcement_mode)}
                       onChange={e => updateAddon(editingAddon.id, { enforcement_mode: e.target.value as AddonEnforcementMode })}
-                      style={{ ...fieldStyle, padding: "12px 14px", fontSize: "14px", cursor: "pointer", minHeight: "48px", ...getFieldStatusStyle(editingAddon.id, "enforcement_mode", editingAddon.enabled) }}
+                      style={{ ...fieldStyle, width: "100%", boxSizing: "border-box", padding: "12px 14px", fontSize: "14px", cursor: "pointer", minHeight: "48px", ...getFieldStatusStyle(editingAddon.id, "enforcement_mode", editingAddon.enabled) }}
                       onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
                       onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
                     >
@@ -670,7 +679,7 @@ export default function AddonsEditor({
                     <select
                       value={editingAddon.category ?? ""}
                       onChange={e => updateAddon(editingAddon.id, { category: e.target.value === "" ? null : e.target.value as AddonCategory })}
-                      style={{ ...fieldStyle, padding: "12px 14px", fontSize: "14px", cursor: "pointer", opacity: editingAddon.enabled ? 1 : 0.5, minHeight: "48px" }}
+                      style={{ ...fieldStyle, width: "100%", boxSizing: "border-box", padding: "12px 14px", fontSize: "14px", cursor: "pointer", opacity: editingAddon.enabled ? 1 : 0.5, minHeight: "48px" }}
                       onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
                       onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
                     >
@@ -705,8 +714,10 @@ export default function AddonsEditor({
               display: "grid",
               gridTemplateColumns: "1fr 1fr",
               gap: "10px",
-              padding: "12px 0 16px",
-              backgroundColor: MIDNIGHT,
+              padding: "12px 16px 16px",
+              backgroundColor: "rgba(31,43,56,0.98)",
+              borderTop: "0.5px solid rgba(255,255,255,0.06)",
+              boxSizing: "border-box",
             }}>
               <button
                 type="button"

@@ -214,6 +214,22 @@ export default function BasePricingEditor({
   const editingVilla = isMobile && expandedVilla
     ? pricing.find((item) => item.villa === expandedVilla) ?? null
     : null;
+  const mobileOverlayShell = {
+    width: "100%",
+    maxWidth: "100vw",
+    maxHeight: "92vh",
+    boxSizing: "border-box" as const,
+    overflow: "hidden" as const,
+    backgroundColor: MIDNIGHT,
+    borderTop: `0.5px solid ${BORDER}`,
+    borderLeft: `0.5px solid rgba(255,255,255,0.05)`,
+    borderRight: `0.5px solid rgba(255,255,255,0.05)`,
+    borderTopLeftRadius: "18px",
+    borderTopRightRadius: "18px",
+    display: "grid",
+    gridTemplateRows: "auto 1fr auto",
+    boxShadow: "0 -18px 48px rgba(0,0,0,0.38)",
+  };
 
   return (
     <div style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: isMobile ? "1rem" : "1.5rem", marginBottom: "2rem" }}>
@@ -296,18 +312,19 @@ export default function BasePricingEditor({
                   display: "grid",
                   gridTemplateColumns: isMobile ? "minmax(0, 1.05fr) minmax(132px, 0.95fr)" : "minmax(0, 1.2fr) repeat(4, minmax(110px, 0.65fr)) minmax(130px, 0.8fr) auto",
                   alignItems: "center",
-                  gap: "12px",
-                  padding: isMobile ? "12px" : "12px 14px",
+                  gap: isMobile ? "10px" : "12px",
+                  padding: isMobile ? "10px 12px" : "12px 14px",
+                  boxSizing: "border-box",
                 }}
               >
                 {isMobile ? (
                   <>
-                    <div style={{ minWidth: 0, display: "grid", gap: "8px", alignContent: "start" }}>
+                    <div style={{ minWidth: 0, display: "grid", gap: "6px", alignContent: "start" }}>
                       <div style={{ minWidth: 0 }}>
-                        <p style={{ fontFamily: PLAYFAIR, fontSize: "1.15rem", color: GOLD, margin: "0 0 4px", lineHeight: 1.2 }}>
+                        <p style={{ fontFamily: PLAYFAIR, fontSize: "1.08rem", color: GOLD, margin: "0 0 3px", lineHeight: 1.15 }}>
                           {villaPricing.villa}
                         </p>
-                        <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.45 }}>
+                        <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: 0, lineHeight: 1.35 }}>
                           {sampleNight
                             ? `Sample ${sampleLabel(sampleNight.date)} -> ${sampleNight.price === null ? "Not priced" : `$${sampleNight.price.toLocaleString()}`} (${sampleSourceLabel(sampleNight.source)})`
                             : "Sample preview unavailable"}
@@ -316,13 +333,13 @@ export default function BasePricingEditor({
                       <button
                         type="button"
                         onClick={() => toggleVilla(villaPricing.villa)}
-                        style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: GOLD, backgroundColor: "transparent", border: "none", padding: 0, cursor: "pointer", justifySelf: "start" }}
+                        style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: GOLD, backgroundColor: "transparent", border: "none", padding: "2px 0", cursor: "pointer", justifySelf: "start" }}
                       >
                         {expandedVilla === villaPricing.villa ? "Close" : "Edit"}
                       </button>
                     </div>
 
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 12px", alignContent: "start" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 10px", alignContent: "start", minWidth: 0 }}>
                       <div>
                         <span style={mobileLabelStyle}>Standard nightly rate</span>
                         <span style={mobileValueStyle}>{priceSummary(villaPricing.base_price)}</span>
@@ -436,27 +453,28 @@ export default function BasePricingEditor({
       </div>
 
       {isMobile && editingVilla && (
-        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(10,10,10,0.72)", zIndex: 1000, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-          <div style={{ width: "100%", maxHeight: "92vh", backgroundColor: MIDNIGHT, borderTop: `0.5px solid ${BORDER}`, padding: "16px 16px 0", display: "grid", gridTemplateRows: "auto 1fr auto", gap: "14px" }}>
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px" }}>
-              <div style={{ minWidth: 0 }}>
+        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(6,8,12,0.78)", zIndex: 1000, display: "flex", alignItems: "flex-end", justifyContent: "center", padding: 0 }}>
+          <div style={mobileOverlayShell}>
+            <div style={{ position: "sticky", top: 0, zIndex: 2, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px", padding: "14px 16px 12px", backgroundColor: "rgba(31,43,56,0.98)", borderBottom: "0.5px solid rgba(255,255,255,0.06)", boxSizing: "border-box" }}>
+              <div style={{ minWidth: 0, paddingRight: "8px" }}>
                 <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 6px" }}>
                   Edit Villa Pricing
                 </p>
-                <p style={{ fontFamily: PLAYFAIR, fontSize: "1.2rem", color: GOLD, margin: 0 }}>
+                <p style={{ fontFamily: PLAYFAIR, fontSize: "1.1rem", color: GOLD, margin: 0, lineHeight: 1.25, wordBreak: "break-word" }}>
                   {editingVilla.villa}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setExpandedVilla(null)}
-                style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED, backgroundColor: "transparent", border: "none", padding: "4px 0", cursor: "pointer", flexShrink: 0 }}
+                aria-label="Close villa pricing editor"
+                style={{ fontFamily: LATO, fontSize: "12px", letterSpacing: "1.5px", textTransform: "uppercase", color: "#FFFFFF", backgroundColor: "rgba(255,255,255,0.05)", border: `0.5px solid rgba(255,255,255,0.1)`, borderRadius: "999px", width: "40px", height: "40px", padding: 0, cursor: "pointer", flexShrink: 0 }}
               >
-                Close
+                X
               </button>
             </div>
 
-            <div style={{ overflowY: "auto", display: "grid", gap: "16px", paddingBottom: "8px" }}>
+            <div style={{ overflowY: "auto", overflowX: "hidden", display: "grid", gap: "16px", padding: "14px 16px 8px", boxSizing: "border-box", minWidth: 0 }}>
               <VillaPricingFields
                 isMobile
                 villaPricing={editingVilla}
@@ -469,7 +487,7 @@ export default function BasePricingEditor({
               />
             </div>
 
-            <div style={{ position: "sticky", bottom: 0, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", padding: "12px 0 16px", backgroundColor: MIDNIGHT }}>
+            <div style={{ position: "sticky", bottom: 0, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", padding: "12px 16px 16px", backgroundColor: "rgba(31,43,56,0.98)", borderTop: "0.5px solid rgba(255,255,255,0.06)", boxSizing: "border-box" }}>
               <button
                 type="button"
                 onClick={() => setExpandedVilla(null)}
@@ -532,7 +550,7 @@ function VillaPricingFields({
 
       <div style={{ display: "grid", gap: "10px", paddingTop: isMobile ? 0 : "14px" }}>
         {sectionLabel("Base pricing")}
-        <div style={{ display: "grid", gridTemplateColumns: columns, gap: "10px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: columns, gap: "10px", minWidth: 0 }}>
           <div>
             {sectionLabel("Standard nightly rate")}
             <input
@@ -542,7 +560,7 @@ function VillaPricingFields({
               value={priceInputValue(villaPricing.base_price)}
               onChange={(e) => updatePricing(villaPricing.villa, { base_price: e.target.value === "" ? null : Number(e.target.value) })}
               placeholder="-"
-              style={{ ...fieldStyle, borderColor: baseIssue ? ERROR_RED : REST_BORDER, marginTop: "6px" }}
+              style={{ ...fieldStyle, width: "100%", boxSizing: "border-box", borderColor: baseIssue ? ERROR_RED : REST_BORDER, marginTop: "6px" }}
               onFocus={(e) => { e.currentTarget.style.borderColor = GOLD; }}
               onBlur={(e) => { e.currentTarget.style.borderColor = baseIssue ? ERROR_RED : REST_BORDER; }}
             />
@@ -556,7 +574,7 @@ function VillaPricingFields({
               value={priceInputValue(villaPricing.weekday_price)}
               onChange={(e) => updatePricing(villaPricing.villa, { weekday_price: e.target.value === "" ? null : Number(e.target.value) })}
               placeholder="-"
-              style={{ ...fieldStyle, borderColor: weekdayIssue ? ERROR_RED : REST_BORDER, marginTop: "6px" }}
+              style={{ ...fieldStyle, width: "100%", boxSizing: "border-box", borderColor: weekdayIssue ? ERROR_RED : REST_BORDER, marginTop: "6px" }}
               onFocus={(e) => { e.currentTarget.style.borderColor = GOLD; }}
               onBlur={(e) => { e.currentTarget.style.borderColor = weekdayIssue ? ERROR_RED : REST_BORDER; }}
             />
@@ -570,7 +588,7 @@ function VillaPricingFields({
               value={priceInputValue(villaPricing.weekend_price)}
               onChange={(e) => updatePricing(villaPricing.villa, { weekend_price: e.target.value === "" ? null : Number(e.target.value) })}
               placeholder="-"
-              style={{ ...fieldStyle, borderColor: weekendIssue ? ERROR_RED : REST_BORDER, marginTop: "6px" }}
+              style={{ ...fieldStyle, width: "100%", boxSizing: "border-box", borderColor: weekendIssue ? ERROR_RED : REST_BORDER, marginTop: "6px" }}
               onFocus={(e) => { e.currentTarget.style.borderColor = GOLD; }}
               onBlur={(e) => { e.currentTarget.style.borderColor = weekendIssue ? ERROR_RED : REST_BORDER; }}
             />
@@ -584,7 +602,7 @@ function VillaPricingFields({
               value={priceInputValue(villaPricing.minimum_stay)}
               onChange={(e) => updatePricing(villaPricing.villa, { minimum_stay: e.target.value === "" ? null : Number(e.target.value) })}
               placeholder="-"
-              style={{ ...fieldStyle, borderColor: minStayIssue ? ERROR_RED : REST_BORDER, marginTop: "6px" }}
+              style={{ ...fieldStyle, width: "100%", boxSizing: "border-box", borderColor: minStayIssue ? ERROR_RED : REST_BORDER, marginTop: "6px" }}
               onFocus={(e) => { e.currentTarget.style.borderColor = GOLD; }}
               onBlur={(e) => { e.currentTarget.style.borderColor = minStayIssue ? ERROR_RED : REST_BORDER; }}
             />
@@ -703,14 +721,14 @@ function VillaPricingFields({
                         </div>
                       )}
 
-                      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(150px, 1fr))", gap: "10px", marginTop: seasonIssues.length > 0 ? 0 : "12px" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(150px, 1fr))", gap: "10px", marginTop: seasonIssues.length > 0 ? 0 : "12px", minWidth: 0 }}>
                         <div>
                           {sectionLabel("Start date")}
                           <input
                             type="date"
                             value={season.start_date}
                             onChange={(e) => patchSeason({ start_date: e.target.value })}
-                            style={{ ...fieldStyle, borderColor: startIssue ? ERROR_RED : REST_BORDER, marginTop: "6px" }}
+                            style={{ ...fieldStyle, width: "100%", boxSizing: "border-box", borderColor: startIssue ? ERROR_RED : REST_BORDER, marginTop: "6px" }}
                             onFocus={(e) => { e.currentTarget.style.borderColor = GOLD; }}
                             onBlur={(e) => { e.currentTarget.style.borderColor = startIssue ? ERROR_RED : REST_BORDER; }}
                           />
@@ -722,7 +740,7 @@ function VillaPricingFields({
                             type="date"
                             value={season.end_date}
                             onChange={(e) => patchSeason({ end_date: e.target.value })}
-                            style={{ ...fieldStyle, borderColor: endIssue ? ERROR_RED : REST_BORDER, marginTop: "6px" }}
+                            style={{ ...fieldStyle, width: "100%", boxSizing: "border-box", borderColor: endIssue ? ERROR_RED : REST_BORDER, marginTop: "6px" }}
                             onFocus={(e) => { e.currentTarget.style.borderColor = GOLD; }}
                             onBlur={(e) => { e.currentTarget.style.borderColor = endIssue ? ERROR_RED : REST_BORDER; }}
                           />
@@ -736,7 +754,7 @@ function VillaPricingFields({
                             value={priceInputValue(season.base_price)}
                             onChange={(e) => patchSeason({ base_price: e.target.value === "" ? null : Number(e.target.value) })}
                             placeholder="-"
-                            style={{ ...fieldStyle, borderColor: sBaseIssue ? ERROR_RED : REST_BORDER, marginTop: "6px" }}
+                            style={{ ...fieldStyle, width: "100%", boxSizing: "border-box", borderColor: sBaseIssue ? ERROR_RED : REST_BORDER, marginTop: "6px" }}
                             onFocus={(e) => { e.currentTarget.style.borderColor = GOLD; }}
                             onBlur={(e) => { e.currentTarget.style.borderColor = sBaseIssue ? ERROR_RED : REST_BORDER; }}
                           />
@@ -750,7 +768,7 @@ function VillaPricingFields({
                             value={priceInputValue(season.weekday_price)}
                             onChange={(e) => patchSeason({ weekday_price: e.target.value === "" ? null : Number(e.target.value) })}
                             placeholder="-"
-                            style={{ ...fieldStyle, borderColor: sWeekdayIssue ? ERROR_RED : REST_BORDER, marginTop: "6px" }}
+                            style={{ ...fieldStyle, width: "100%", boxSizing: "border-box", borderColor: sWeekdayIssue ? ERROR_RED : REST_BORDER, marginTop: "6px" }}
                             onFocus={(e) => { e.currentTarget.style.borderColor = GOLD; }}
                             onBlur={(e) => { e.currentTarget.style.borderColor = sWeekdayIssue ? ERROR_RED : REST_BORDER; }}
                           />
@@ -764,7 +782,7 @@ function VillaPricingFields({
                             value={priceInputValue(season.weekend_price)}
                             onChange={(e) => patchSeason({ weekend_price: e.target.value === "" ? null : Number(e.target.value) })}
                             placeholder="-"
-                            style={{ ...fieldStyle, borderColor: sWeekendIssue ? ERROR_RED : REST_BORDER, marginTop: "6px" }}
+                            style={{ ...fieldStyle, width: "100%", boxSizing: "border-box", borderColor: sWeekendIssue ? ERROR_RED : REST_BORDER, marginTop: "6px" }}
                             onFocus={(e) => { e.currentTarget.style.borderColor = GOLD; }}
                             onBlur={(e) => { e.currentTarget.style.borderColor = sWeekendIssue ? ERROR_RED : REST_BORDER; }}
                           />
@@ -778,7 +796,7 @@ function VillaPricingFields({
                             value={priceInputValue(season.minimum_stay)}
                             onChange={(e) => patchSeason({ minimum_stay: e.target.value === "" ? null : Number(e.target.value) })}
                             placeholder="-"
-                            style={{ ...fieldStyle, borderColor: sMinStayIssue ? ERROR_RED : REST_BORDER, marginTop: "6px" }}
+                            style={{ ...fieldStyle, width: "100%", boxSizing: "border-box", borderColor: sMinStayIssue ? ERROR_RED : REST_BORDER, marginTop: "6px" }}
                             onFocus={(e) => { e.currentTarget.style.borderColor = GOLD; }}
                             onBlur={(e) => { e.currentTarget.style.borderColor = sMinStayIssue ? ERROR_RED : REST_BORDER; }}
                           />
