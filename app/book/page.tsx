@@ -6,6 +6,7 @@ import type { DateRange, Matcher } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 import OrayaEmblem from "@/components/OrayaEmblem";
 import { getVillaBasePrice, getVillaPricing } from "@/lib/admin-pricing";
+import { ADDON_CATEGORY_LABELS, ADDON_OPERATIONAL_SETTINGS_KEY, mergeAddonsWithOperationalSettings, parseAddonOperationalSetting, type AddonCategory, type AddonCutoffType } from "@/lib/addon-operations";
 import { usePublicPricing } from "@/lib/public-pricing";
 import { calculateStayPricing } from "@/lib/pricing/engine";
 import type { NightSource } from "@/lib/pricing/types";
@@ -171,6 +172,10 @@ interface Addon {
   currency:      string;
   price:         number | null;
   pricing_model: "flat_fee" | "per_night" | "per_person_per_day" | "per_unit";
+  preparation_time_hours?: number | null;
+  cutoff_type?: AddonCutoffType | null;
+  requires_approval?: boolean;
+  category?: AddonCategory | null;
 }
 
 const PRICING_MODEL_LABELS: Record<string, string> = {
@@ -212,6 +217,10 @@ function nightCount(checkIn: string, checkOut: string): number {
 
 function formatUsd(amount: number): string {
   return `$${amount.toLocaleString("en-US")}`;
+}
+
+function formatPreparationTime(hours: number): string {
+  return hours === 1 ? "1 hour" : `${hours} hours`;
 }
 
 const NIGHT_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -454,9 +463,17 @@ function BookPageInner() {
   useEffect(() => {
     if (step !== 3 || addons.length > 0) return;
     setAddonsLoading(true);
-    fetch("/api/addons")
-      .then(r => r.json())
-      .then(d => setAddons((d.addons as Addon[] ?? []).filter(a => a.enabled)))
+    Promise.all([
+      fetch("/api/addons").then(r => r.json()),
+      fetch(`/api/settings?key=${encodeURIComponent(ADDON_OPERATIONAL_SETTINGS_KEY)}`).then(r => r.json()),
+    ])
+      .then(([addonsData, addonSettingsData]) => {
+        const addonRows = Array.isArray(addonsData.addons) ? addonsData.addons as Addon[] : [];
+        const operationalSettings = parseAddonOperationalSetting(addonSettingsData.value);
+        setAddons(
+          mergeAddonsWithOperationalSettings(addonRows, operationalSettings).filter((addon) => addon.enabled),
+        );
+      })
       .catch(() => setAddons([]))
       .finally(() => setAddonsLoading(false));
   }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -523,6 +540,13 @@ function BookPageInner() {
   const estimatedTotal = (staySubtotal ?? 0) + selectedAddonSubtotal;
   const guestEmail = guest.email.trim();
   const guestEmailInvalid = guestMode && guestEmail.length > 0 && !EMAIL_RE.test(guestEmail);
+  const addonGroups = (["comfort", "experience", "logistics", "service", "other"] as const)
+    .map((category) => ({
+      category,
+      label: category === "other" ? "Other" : ADDON_CATEGORY_LABELS[category],
+      items: addons.filter((addon) => (addon.category ?? "other") === category),
+    }))
+    .filter((group) => group.items.length > 0);
 
   const dateConflict: string = (() => {
     if (!checkIn || !checkOut) return "";
@@ -532,6 +556,36 @@ function BookPageInner() {
     }
     return "";
   })();
+
+  function getAddonAvailability(addon: Addon) {
+    const preparationHours = addon.preparation_time_hours ?? null;
+    if (!preparationHours || preparationHours <= 0) {
+      return { available: true, warning: "" };
+    }
+
+    if (addon.cutoff_type === "before_booking") {
+      const available = 0 >= preparationHours;
+      return {
+        available,
+        warning: available
+          ? ""
+          : `This add-on requires ${formatPreparationTime(preparationHours)} preparation and is not available when requested at booking time.`,
+      };
+    }
+
+    if (!checkIn) {
+      return { available: true, warning: "" };
+    }
+
+    const hoursUntilCheckIn = (parseLocalISO(checkIn).getTime() - Date.now()) / 3_600_000;
+    const available = hoursUntilCheckIn >= preparationHours;
+    return {
+      available,
+      warning: available
+        ? ""
+        : `This add-on requires ${formatPreparationTime(preparationHours)} preparation and is not available for your selected dates.`,
+    };
+  }
 
   // ── Event handlers ────────────────────────────────────────────────────────
   function handleFormChange(
@@ -1144,29 +1198,39 @@ function BookPageInner() {
                     No add-ons are available for this booking.
                   </p>
                 ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                    {addons.map(addon => {
-                      const selected = selectedAddons.includes(addon.id);
-                      return (
-                        <button
+                  <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                    {addonGroups.map((group) => (
+                      <div key={group.category} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                        <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, margin: 0 }}>
+                          {group.label}
+                        </p>
+                        {group.items.map((addon) => {
+                          const selected = selectedAddons.includes(addon.id);
+                          const availability = getAddonAvailability(addon);
+                          const disableSelection = !selected && !availability.available;
+                          return (
+                            <button
                           key={addon.id}
                           type="button"
                           onClick={() => toggleAddon(addon.id)}
+                          disabled={disableSelection}
                           style={{
-                            display: "flex", alignItems: "center", justifyContent: "space-between",
+                            display: "flex", alignItems: "flex-start", justifyContent: "space-between",
                             width: "100%", textAlign: "left",
                             padding: "14px 18px",
-                            border: `0.5px solid ${selected ? GOLD : "rgba(197,164,109,0.18)"}`,
-                            backgroundColor: selected ? "rgba(197,164,109,0.07)" : "rgba(255,255,255,0.02)",
-                            cursor: "pointer",
+                            border: `0.5px solid ${selected ? GOLD : disableSelection ? "rgba(224,112,112,0.35)" : "rgba(197,164,109,0.18)"}`,
+                            backgroundColor: selected ? "rgba(197,164,109,0.07)" : disableSelection ? "rgba(224,112,112,0.06)" : "rgba(255,255,255,0.02)",
+                            cursor: disableSelection ? "not-allowed" : "pointer",
                             transition: "border-color 0.15s, background-color 0.15s",
+                            opacity: disableSelection ? 0.75 : 1,
+                            gap: "16px",
                           }}
                         >
                           {/* Checkbox indicator + label */}
-                          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                          <div style={{ display: "flex", alignItems: "flex-start", gap: "12px", flex: 1, minWidth: 0 }}>
                             <div style={{
-                              width: "16px", height: "16px", flexShrink: 0,
-                              border: `1px solid ${selected ? GOLD : "rgba(197,164,109,0.3)"}`,
+                              width: "16px", height: "16px", flexShrink: 0, marginTop: "2px",
+                              border: `1px solid ${selected ? GOLD : disableSelection ? "rgba(224,112,112,0.45)" : "rgba(197,164,109,0.3)"}`,
                               backgroundColor: selected ? GOLD : "transparent",
                               display: "flex", alignItems: "center", justifyContent: "center",
                               transition: "background-color 0.15s, border-color 0.15s",
@@ -1175,9 +1239,24 @@ function BookPageInner() {
                                 <span style={{ color: CHARCOAL, fontSize: "10px", fontWeight: 700, lineHeight: 1 }}>✓</span>
                               )}
                             </div>
-                            <span style={{ fontFamily: LATO, fontSize: "13px", color: selected ? WHITE : "rgba(255,255,255,0.7)", fontWeight: selected ? 400 : 300 }}>
-                              {addon.label}
-                            </span>
+                            <div style={{ minWidth: 0 }}>
+                              <span style={{ fontFamily: LATO, fontSize: "13px", color: selected ? WHITE : "rgba(255,255,255,0.7)", fontWeight: selected ? 400 : 300, display: "block" }}>
+                                {addon.label}
+                              </span>
+                              {(addon.requires_approval || addon.preparation_time_hours) && (
+                                <span style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, display: "block", marginTop: "4px", lineHeight: 1.5 }}>
+                                  {[
+                                    addon.requires_approval ? "Approval required" : "",
+                                    addon.preparation_time_hours ? `${formatPreparationTime(addon.preparation_time_hours)} prep` : "",
+                                  ].filter(Boolean).join(" - ")}
+                                </span>
+                              )}
+                              {!availability.available && (
+                                <span style={{ fontFamily: LATO, fontSize: "11px", color: "#e07070", display: "block", marginTop: "6px", lineHeight: 1.5 }}>
+                                  {availability.warning}
+                                </span>
+                              )}
+                            </div>
                           </div>
 
                           {/* Pricing metadata */}
@@ -1195,9 +1274,11 @@ function BookPageInner() {
                               </span>
                             )}
                           </div>
-                        </button>
-                      );
-                    })}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import AddonsEditor from "@/components/admin/AddonsEditor";
 import BasePricingEditor from "@/components/admin/BasePricingEditor";
 import { VILLA_BASE_PRICING_KEY, parseVillaPricingSetting, stringifyVillaPricingSetting, type VillaBasePricing } from "@/lib/admin-pricing";
+import { ADDON_OPERATIONAL_SETTINGS_KEY, mergeAddonsWithOperationalSettings, parseAddonOperationalSetting, stringifyAddonOperationalSetting } from "@/lib/addon-operations";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
 import { LATO } from "@/components/admin/theme";
 import type { Addon } from "@/components/admin/types";
@@ -17,19 +18,41 @@ export default function AdminRatesPage() {
   const [pricingSaved, setPricingSaved] = useState(false);
 
   useEffect(() => {
-    fetch("/api/addons", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((d) => { if (Array.isArray(d.addons)) setAddons(d.addons); })
-      .catch((e) => console.error("[admin] addons fetch error:", e));
+    let cancelled = false;
 
-    fetch("/api/admin/settings", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((d) => {
-        const rows = d.settings ?? [];
-        const pricingRow = rows.find((row: { key: string; value: string }) => row.key === VILLA_BASE_PRICING_KEY);
-        setVillaPricing(parseVillaPricingSetting(pricingRow?.value));
-      })
-      .catch((e) => console.error("[admin] pricing settings fetch error:", e));
+    async function loadRatesPageData() {
+      const [addonsResult, settingsResult] = await Promise.allSettled([
+        fetch("/api/addons", { cache: "no-store" }).then((r) => r.json()),
+        fetch("/api/admin/settings", { cache: "no-store" }).then((r) => r.json()),
+      ]);
+
+      if (cancelled) return;
+
+      if (addonsResult.status === "rejected") {
+        console.error("[admin] addons fetch error:", addonsResult.reason);
+      }
+
+      if (settingsResult.status === "rejected") {
+        console.error("[admin] pricing settings fetch error:", settingsResult.reason);
+        return;
+      }
+
+      const rows = settingsResult.value.settings ?? [];
+      const pricingRow = rows.find((row: { key: string; value: string }) => row.key === VILLA_BASE_PRICING_KEY);
+      const addonOperationsRow = rows.find((row: { key: string; value: string }) => row.key === ADDON_OPERATIONAL_SETTINGS_KEY);
+      const operationalSettings = parseAddonOperationalSetting(addonOperationsRow?.value);
+      const addonRows = addonsResult.status === "fulfilled" && Array.isArray(addonsResult.value.addons)
+        ? addonsResult.value.addons
+        : [];
+
+      setVillaPricing(parseVillaPricingSetting(pricingRow?.value));
+      setAddons(mergeAddonsWithOperationalSettings(addonRows, operationalSettings));
+    }
+
+    loadRatesPageData();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   function updateAddon(id: string, patch: Partial<Addon>) {
@@ -40,18 +63,43 @@ export default function AdminRatesPage() {
   async function saveAddons() {
     setAddonsSaving(true);
     setAddonsSaved(false);
-    const res = await fetch("/api/admin/addons", {
+    const baseAddonsRes = await fetch("/api/admin/addons", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ addons }),
+      body: JSON.stringify({
+        addons: addons.map(({ id, label, enabled, currency, price, pricing_model }) => ({
+          id,
+          label,
+          enabled,
+          currency,
+          price,
+          pricing_model,
+        })),
+      }),
     });
+    if (!baseAddonsRes.ok) {
+      setAddonsSaving(false);
+      const d = await baseAddonsRes.json();
+      setError(d.error ?? "Failed to save add-ons.");
+      return;
+    }
+
+    const addonSettingsRes = await fetch("/api/admin/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        key: ADDON_OPERATIONAL_SETTINGS_KEY,
+        value: stringifyAddonOperationalSetting(addons),
+      }),
+    });
+
     setAddonsSaving(false);
-    if (res.ok) {
+    if (addonSettingsRes.ok) {
       setAddonsSaved(true);
       setTimeout(() => setAddonsSaved(false), 3000);
     } else {
-      const d = await res.json();
-      setError(d.error ?? "Failed to save add-ons.");
+      const d = await addonSettingsRes.json();
+      setError(d.error ?? "Failed to save add-on preparation settings.");
     }
   }
 

@@ -1,3 +1,5 @@
+import type { AddonCategory, AddonCutoffType } from "@/lib/addon-operations";
+
 export interface BookingAddon {
   id:    string;
   label: string;
@@ -51,4 +53,8 @@ export interface Addon {
   currency:      string;
   price:         number | null;
   pricing_model: "flat_fee" | "per_night" | "per_person_per_day" | "per_unit";
+  preparation_time_hours?: number | null;
+  cutoff_type?: AddonCutoffType | null;
+  requires_approval?: boolean;
+  category?: AddonCategory | null;
 }
