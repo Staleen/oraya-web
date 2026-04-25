@@ -21,10 +21,13 @@ export interface PricingInput {
   check_out: string;
 }
 
+export type NightSource = "seasonal" | "weekday" | "weekend" | "base" | "unpriced";
+
 export interface NightlyBreakdown {
   date:       string;
   is_weekend: boolean;
   price:      number | null;
+  source:     NightSource;
 }
 
 export type PricingWarning =

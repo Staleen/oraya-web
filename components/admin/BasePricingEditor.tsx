@@ -2,6 +2,8 @@
 import { useMemo } from "react";
 import type { VillaBasePricing, SeasonalOverride } from "@/lib/admin-pricing";
 import { validatePricing, type ValidationIssue, type ValidationField } from "@/lib/pricing/validation";
+import { calculateStayPricing } from "@/lib/pricing/engine";
+import type { NightSource } from "@/lib/pricing/types";
 import { BORDER, CHARCOAL, GOLD, LATO, MUTED, PLAYFAIR, SURFACE, fieldStyle } from "./theme";
 
 const ERROR_RED   = "#e07070";
@@ -29,6 +31,35 @@ function blankSeason(): SeasonalOverride {
     weekend_price: null,
     minimum_stay:  null,
   };
+}
+
+// ── Sample preview (display-only) ──────────────────────────────────────────
+// Static reference night used to show admins how the engine resolves a
+// representative date with the current rates. 2026-08-14 is a Friday in UTC,
+// so it surfaces weekend / seasonal / base resolution with a single call.
+const SAMPLE_CHECK_IN  = "2026-08-14";
+const SAMPLE_CHECK_OUT = "2026-08-15";
+const SAMPLE_MONTHS    = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const SAMPLE_DAYS      = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+
+function sampleLabel(iso: string): string {
+  const parts = iso.split("-");
+  if (parts.length !== 3) return iso;
+  const y = Number(parts[0]);
+  const m = Number(parts[1]);
+  const d = Number(parts[2]);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return `${SAMPLE_MONTHS[date.getUTCMonth()]} ${date.getUTCDate()} (${SAMPLE_DAYS[date.getUTCDay()]})`;
+}
+
+function sampleSourceLabel(source: NightSource): string {
+  switch (source) {
+    case "seasonal": return "Seasonal";
+    case "weekend":  return "Weekend";
+    case "weekday":  return "Weekday";
+    case "base":     return "Base";
+    case "unpriced": return "Not priced";
+  }
 }
 
 function findFieldIssue(
@@ -113,6 +144,18 @@ export default function BasePricingEditor({
           const weekdayRest = weekdayIssue ? ERROR_RED : REST_BORDER;
           const minStayRest = minStayIssue ? ERROR_RED : REST_BORDER;
 
+          const sample = calculateStayPricing(
+            {
+              base_price:         villaPricing.base_price,
+              weekday_price:      villaPricing.weekday_price,
+              weekend_price:      villaPricing.weekend_price,
+              minimum_stay:       villaPricing.minimum_stay,
+              seasonal_overrides: villaPricing.seasonal_overrides,
+            },
+            { check_in: SAMPLE_CHECK_IN, check_out: SAMPLE_CHECK_OUT },
+          );
+          const sampleNight = sample.nightly[0] ?? null;
+
           return (
             <div key={villaPricing.villa} style={{ border: `0.5px solid ${BORDER}`, padding: "1.25rem" }}>
               <div style={{ marginBottom: "1rem" }}>
@@ -127,6 +170,11 @@ export default function BasePricingEditor({
                     </span>
                   )}
                 </p>
+                {sampleNight && (
+                  <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "4px 0 0" }}>
+                    Sample: {sampleLabel(sampleNight.date)} → {sampleNight.price === null ? "Not priced" : `$${sampleNight.price.toLocaleString()}`} ({sampleSourceLabel(sampleNight.source)})
+                  </p>
+                )}
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" }}>

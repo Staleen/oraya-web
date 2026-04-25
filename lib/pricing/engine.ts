@@ -5,6 +5,7 @@ import type {
   NightlyBreakdown,
   PricingWarning,
   SeasonalOverride,
+  NightSource,
 } from "./types";
 
 function parseDateOnlyUTC(s: string): Date | null {
@@ -54,18 +55,18 @@ function resolveNightlyPrice(
   config: VillaPricingConfig,
   dateStr: string,
   isWeekend: boolean,
-): number | null {
+): { price: number | null; source: NightSource } {
   // Priority 2: seasonal override (priority 1, manual override, is future work)
   const seasonal = findSeasonalOverride(config.seasonal_overrides, dateStr);
   if (seasonal) {
     if (isWeekend && typeof seasonal.weekend_price === "number" && seasonal.weekend_price > 0) {
-      return seasonal.weekend_price;
+      return { price: seasonal.weekend_price, source: "seasonal" };
     }
     if (!isWeekend && typeof seasonal.weekday_price === "number" && seasonal.weekday_price > 0) {
-      return seasonal.weekday_price;
+      return { price: seasonal.weekday_price, source: "seasonal" };
     }
     if (typeof seasonal.base_price === "number" && seasonal.base_price > 0) {
-      return seasonal.base_price;
+      return { price: seasonal.base_price, source: "seasonal" };
     }
     // Seasonal matched but declared no applicable rate — fall through to villa-level.
   }
@@ -73,19 +74,19 @@ function resolveNightlyPrice(
   // Priority 3: villa weekday/weekend override.
   if (isWeekend) {
     if (typeof config.weekend_price === "number" && config.weekend_price > 0) {
-      return config.weekend_price;
+      return { price: config.weekend_price, source: "weekend" };
     }
   } else {
     if (typeof config.weekday_price === "number" && config.weekday_price > 0) {
-      return config.weekday_price;
+      return { price: config.weekday_price, source: "weekday" };
     }
   }
 
   // Priority 4: villa base price.
   if (typeof config.base_price === "number" && config.base_price > 0) {
-    return config.base_price;
+    return { price: config.base_price, source: "base" };
   }
-  return null;
+  return { price: null, source: "unpriced" };
 }
 
 export function calculateStayPricing(
@@ -103,10 +104,10 @@ export function calculateStayPricing(
 
   const cursor = new Date(start.getTime());
   while (cursor.getTime() < end.getTime()) {
-    const dateStr    = formatDateOnlyUTC(cursor);
-    const is_weekend = isWeekendUTC(cursor);
-    const price      = resolveNightlyPrice(config, dateStr, is_weekend);
-    nightly.push({ date: dateStr, is_weekend, price });
+    const dateStr           = formatDateOnlyUTC(cursor);
+    const is_weekend        = isWeekendUTC(cursor);
+    const { price, source } = resolveNightlyPrice(config, dateStr, is_weekend);
+    nightly.push({ date: dateStr, is_weekend, price, source });
     cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
 

@@ -8,6 +8,7 @@ import OrayaEmblem from "@/components/OrayaEmblem";
 import { getVillaBasePrice, getVillaPricing } from "@/lib/admin-pricing";
 import { usePublicPricing } from "@/lib/public-pricing";
 import { calculateStayPricing } from "@/lib/pricing/engine";
+import type { NightSource } from "@/lib/pricing/types";
 import { supabase } from "@/lib/supabase";
 
 // ─── Brand constants ──────────────────────────────────────────────────────────
@@ -211,6 +212,32 @@ function nightCount(checkIn: string, checkOut: string): number {
 
 function formatUsd(amount: number): string {
   return `$${amount.toLocaleString("en-US")}`;
+}
+
+const NIGHT_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const NIGHT_DAYS   = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+
+/** Engine emits UTC-anchored YYYY-MM-DD; render with UTC accessors so the
+ *  weekday label matches the engine's weekend determination. */
+function fmtNightLabel(iso: string, includeDay: boolean): string {
+  const parts = iso.split("-");
+  if (parts.length !== 3) return iso;
+  const y = Number(parts[0]);
+  const m = Number(parts[1]);
+  const d = Number(parts[2]);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  const base = `${NIGHT_MONTHS[date.getUTCMonth()]} ${date.getUTCDate()}`;
+  return includeDay ? `${base} (${NIGHT_DAYS[date.getUTCDay()]})` : base;
+}
+
+function nightSourceLabel(source: NightSource): string {
+  switch (source) {
+    case "seasonal": return "Seasonal";
+    case "weekend":  return "Weekend";
+    case "weekday":  return "Weekday";
+    case "base":     return "Base";
+    case "unpriced": return "Not priced";
+  }
 }
 
 function friendlyError(msg: string): string {
@@ -700,6 +727,41 @@ function BookPageInner() {
           </p>
         );
       })}
+      {pricingResult && pricingResult.nightly.some((n) => n.source === "seasonal") && (
+        <p style={{ fontFamily: LATO, fontSize: "10px", color: "#e0b070", fontStyle: "italic", margin: "8px 0 0", lineHeight: 1.6 }}>
+          Seasonal pricing applied to part of your stay.
+        </p>
+      )}
+      {pricingResult && new Set(pricingResult.nightly.map((n) => n.source)).size > 1 && (
+        <p style={{ fontFamily: LATO, fontSize: "10px", color: "#e0b070", fontStyle: "italic", margin: "8px 0 0", lineHeight: 1.6 }}>
+          Mixed pricing applied across your stay.
+        </p>
+      )}
+      {pricingResult && pricingResult.nightly.length > 0 && (
+        <div style={{ marginTop: "12px", paddingTop: "10px", borderTop: "0.5px solid rgba(197,164,109,0.12)" }}>
+          <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, margin: "0 0 6px" }}>
+            Nightly breakdown
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+            {pricingResult.nightly.map((n) => (
+              <p
+                key={n.date}
+                style={{
+                  fontFamily: LATO,
+                  fontSize:   "10px",
+                  color:      n.source === "unpriced" ? "#e0b070" : MUTED,
+                  margin:     0,
+                  lineHeight: 1.5,
+                }}
+              >
+                {n.source === "unpriced"
+                  ? `${fmtNightLabel(n.date, false)} — Not priced`
+                  : `${fmtNightLabel(n.date, true)} — ${formatUsd(n.price ?? 0)} — ${nightSourceLabel(n.source)}`}
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   ) : null;
 
