@@ -6,7 +6,7 @@ import type { DateRange, Matcher } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 import OrayaEmblem from "@/components/OrayaEmblem";
 import { getVillaBasePrice, getVillaPricing } from "@/lib/admin-pricing";
-import { ADDON_OPERATIONAL_SETTINGS_KEY, formatPreparationTime, getAddonEnforcementMode, getAddonTimingType, mergeAddonsWithOperationalSettings, parseAddonOperationalSetting, type AddonCategory, type AddonCutoffType, type AddonEnforcementMode } from "@/lib/addon-operations";
+import { ADDON_OPERATIONAL_SETTINGS_KEY, formatPreparationTime, getAddonEnforcementMode, getAddonTimingType, mergeAddonsWithOperationalSettings, parseAddonOperationalSetting, type AddonCategory, type AddonCutoffType, type AddonEnforcementMode, type AddonPricingType } from "@/lib/addon-operations";
 import { usePublicPricing } from "@/lib/public-pricing";
 import { calculateStayPricing } from "@/lib/pricing/engine";
 import type { NightSource } from "@/lib/pricing/types";
@@ -183,6 +183,9 @@ interface Addon {
   description?: string;
   display_order?: number | null;
   recommended?: boolean;
+  /** Phase 12E: "fixed" uses price field; "percentage" uses percentage_value × stay total. */
+  pricing_type?: AddonPricingType;
+  percentage_value?: number | null;
 }
 
 const PRICING_MODEL_LABELS: Record<string, string> = {
@@ -615,17 +618,44 @@ function BookPageInner() {
     : null;
   const staySubtotal = pricingResult?.subtotal
     ?? (nightlyBasePrice !== null && nights > 0 ? nightlyBasePrice * nights : null);
+
+  /**
+   * Phase 12E: resolve the effective price for a single add-on.
+   * Percentage add-ons derive their price from the stay subtotal.
+   * All other add-ons use the existing fixed-price logic.
+   * Returns null when price cannot be determined (no base, no static price).
+   */
+  function computeAddonPrice(addon: Addon): number | null {
+    if (
+      addon.pricing_type === "percentage" &&
+      typeof addon.percentage_value === "number" &&
+      addon.percentage_value > 0
+    ) {
+      // Percentage: requires a computed stay subtotal
+      if (staySubtotal === null) return null;
+      return (addon.percentage_value / 100) * staySubtotal;
+    }
+    // Fixed (existing logic — unchanged)
+    if (addon.price === null) return null;
+    if (addon.pricing_model === "per_night") return addon.price * nights;
+    if (addon.pricing_model === "per_person_per_day") return addon.price * sleepingGuestsCount * nights;
+    return addon.price;
+  }
+
   const availableAddons = sortAddonsForDisplay(
     addons.filter((addon) => isAddonApplicableToVilla(addon, form.villa))
   );
   const selectedAddonDetails = availableAddons.filter((addon) => selectedAddons.includes(addon.id));
   const selectedAddonSubtotal = selectedAddonDetails.reduce((sum, addon) => {
-    if (addon.price === null) return sum;
-    if (addon.pricing_model === "per_night") return sum + addon.price * nights;
-    if (addon.pricing_model === "per_person_per_day") return sum + addon.price * sleepingGuestsCount * nights;
-    return sum + addon.price;
+    const price = computeAddonPrice(addon);
+    return price !== null ? sum + price : sum;
   }, 0);
-  const selectedAddonQuoteCount = selectedAddonDetails.filter((addon) => addon.price === null).length;
+  // Percentage add-ons without a base price (no dates yet) are excluded from the
+  // "price on request" note — they are deterministic, just awaiting date selection.
+  const selectedAddonQuoteCount = selectedAddonDetails.filter((addon) => {
+    if (addon.pricing_type === "percentage") return false;
+    return addon.price === null;
+  }).length;
   const estimatedTotal = (staySubtotal ?? 0) + selectedAddonSubtotal;
   const guestEmail = guest.email.trim();
   const guestEmailInvalid = guestMode && guestEmail.length > 0 && !EMAIL_RE.test(guestEmail);
@@ -1513,17 +1543,39 @@ function BookPageInner() {
 
                           {/* Pricing metadata */}
                           <div style={{ textAlign: "right", flexShrink: 0, paddingLeft: "16px" }}>
-                            <span style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1px", color: MUTED, display: "block" }}>
-                              {PRICING_MODEL_LABELS[addon.pricing_model] ?? addon.pricing_model}
-                            </span>
-                            {addon.price !== null ? (
-                              <span style={{ fontFamily: LATO, fontSize: "12px", color: selected ? GOLD : MUTED }}>
-                                {addon.price.toLocaleString()} {addon.currency}
-                              </span>
+                            {addon.pricing_type === "percentage" && typeof addon.percentage_value === "number" && addon.percentage_value > 0 ? (
+                              <>
+                                <span style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1px", color: MUTED, display: "block" }}>
+                                  {addon.percentage_value}% of stay
+                                </span>
+                                {(() => {
+                                  const computed = computeAddonPrice(addon);
+                                  return computed !== null ? (
+                                    <span style={{ fontFamily: LATO, fontSize: "12px", color: selected ? GOLD : MUTED }}>
+                                      {Math.round(computed).toLocaleString()} {addon.currency}
+                                    </span>
+                                  ) : (
+                                    <span style={{ fontFamily: LATO, fontSize: "11px", color: "rgba(138,128,112,0.4)", fontStyle: "italic" }}>
+                                      Select dates
+                                    </span>
+                                  );
+                                })()}
+                              </>
                             ) : (
-                              <span style={{ fontFamily: LATO, fontSize: "11px", color: "rgba(138,128,112,0.5)", fontStyle: "italic" }}>
-                                Price on request
-                              </span>
+                              <>
+                                <span style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1px", color: MUTED, display: "block" }}>
+                                  {PRICING_MODEL_LABELS[addon.pricing_model] ?? addon.pricing_model}
+                                </span>
+                                {addon.price !== null ? (
+                                  <span style={{ fontFamily: LATO, fontSize: "12px", color: selected ? GOLD : MUTED }}>
+                                    {addon.price.toLocaleString()} {addon.currency}
+                                  </span>
+                                ) : (
+                                  <span style={{ fontFamily: LATO, fontSize: "11px", color: "rgba(138,128,112,0.5)", fontStyle: "italic" }}>
+                                    Price on request
+                                  </span>
+                                )}
+                              </>
                             )}
                           </div>
                             </button>
