@@ -5,6 +5,17 @@ export interface BookingAddon {
   label: string;
 }
 
+export interface BookingAddonSnapshot {
+  id: string;
+  label: string;
+  price: number | null;
+  category: AddonCategory | null;
+  preparation_time_hours: number | null;
+  enforcement_mode: AddonEnforcementMode | null;
+  requires_approval: boolean;
+  status: "confirmed" | "at_risk" | "pending_approval";
+}
+
 export interface Booking {
   id: string;
   villa: string;
@@ -15,6 +26,7 @@ export interface Booking {
   event_type: string | null;
   message: string | null;
   addons: BookingAddon[] | null;
+  addons_snapshot?: BookingAddonSnapshot[] | null;
   status: string;
   created_at: string;
   member_id: string | null;

@@ -26,6 +26,16 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+function getAddonStatusTone(status: "confirmed" | "at_risk" | "pending_approval") {
+  if (status === "confirmed") {
+    return { color: "#6fcf8a", backgroundColor: "rgba(80,180,100,0.15)" };
+  }
+  if (status === "at_risk") {
+    return { color: "#e2ab5a", backgroundColor: "rgba(226,171,90,0.16)" };
+  }
+  return { color: "#9db7d9", backgroundColor: "rgba(157,183,217,0.14)" };
+}
+
 export default function BookingsTable({
   loading,
   filteredBookings,
@@ -61,6 +71,38 @@ export default function BookingsTable({
 }) {
   function getMember(booking: Booking) {
     return booking.member_id ? members.find((m) => m.id === booking.member_id) : null;
+  }
+
+  function getAddonSnapshots(booking: Booking) {
+    return booking.addons_snapshot ?? [];
+  }
+
+  function bookingNeedsAddonAttention(booking: Booking) {
+    return getAddonSnapshots(booking).some((addon) => addon.status === "at_risk" || addon.status === "pending_approval");
+  }
+
+  function getAddonAttentionBadge(booking: Booking) {
+    if (!bookingNeedsAddonAttention(booking)) return null;
+    return (
+      <span style={{
+        display: "inline-block",
+        fontFamily: LATO,
+        fontSize: "9px",
+        letterSpacing: "1.5px",
+        textTransform: "uppercase",
+        color: "#e2ab5a",
+        backgroundColor: "rgba(226,171,90,0.14)",
+        padding: "3px 8px",
+        borderRadius: "2px",
+      }}>
+        Add-on attention
+      </span>
+    );
+  }
+
+  function formatAddonPrice(price: number | null) {
+    if (typeof price !== "number") return "Price on request";
+    return `$${price.toLocaleString("en-US")}`;
   }
 
   return (
@@ -151,7 +193,10 @@ export default function BookingsTable({
                         {isGuest ? "Guest" : "Member"}
                       </p>
                     </div>
-                    <StatusBadge status={b.status} />
+                    <div style={{ display: "grid", gap: "6px", justifyItems: "end" }}>
+                      <StatusBadge status={b.status} />
+                      {getAddonAttentionBadge(b)}
+                    </div>
                   </div>
 
                   <div style={{ display: "grid", gap: "8px", marginBottom: "12px" }}>
@@ -174,6 +219,50 @@ export default function BookingsTable({
                       {b.message?.trim() || "-"}
                     </p>
                   </div>
+
+                  {bookingNeedsAddonAttention(b) && (
+                    <div style={{ border: "0.5px solid rgba(226,171,90,0.24)", backgroundColor: "rgba(226,171,90,0.08)", padding: "10px 12px", marginBottom: "12px" }}>
+                      <p style={{ fontFamily: LATO, fontSize: "11px", color: "#e2ab5a", margin: 0, lineHeight: 1.5 }}>
+                        This booking has add-ons requiring attention.
+                      </p>
+                    </div>
+                  )}
+
+                  {getAddonSnapshots(b).length > 0 && (
+                    <div style={{ display: "grid", gap: "8px", marginBottom: "12px" }}>
+                      <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED, margin: 0 }}>
+                        Add-ons
+                      </p>
+                      {getAddonSnapshots(b).map((addon) => {
+                        const tone = getAddonStatusTone(addon.status);
+                        return (
+                          <div key={`${b.id}-${addon.id}`} style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start" }}>
+                            <div>
+                              <p style={{ fontFamily: LATO, fontSize: "12px", color: WHITE, margin: "0 0 4px" }}>
+                                {addon.label}
+                              </p>
+                              <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0 }}>
+                                {formatAddonPrice(addon.price)}
+                              </p>
+                            </div>
+                            <span style={{
+                              fontFamily: LATO,
+                              fontSize: "9px",
+                              letterSpacing: "1.5px",
+                              textTransform: "uppercase",
+                              color: tone.color,
+                              backgroundColor: tone.backgroundColor,
+                              padding: "3px 8px",
+                              borderRadius: "2px",
+                              whiteSpace: "nowrap",
+                            }}>
+                              {addon.status.replace("_", " ")}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
 
                   <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
                     {isCancelled ? (
@@ -311,9 +400,14 @@ export default function BookingsTable({
                     </td>
                     {!isMobile && (
                       <td style={{ ...tdStyle, color: MUTED, fontSize: "12px" }}>
-                        {b.addons && b.addons.length > 0
-                          ? b.addons.map((a) => a.label).join(", ")
-                          : "-"}
+                        {getAddonSnapshots(b).length > 0 ? (
+                          <div style={{ display: "grid", gap: "6px" }}>
+                            <span>{getAddonSnapshots(b).map((a) => a.label).join(", ")}</span>
+                            {getAddonAttentionBadge(b)}
+                          </div>
+                        ) : b.addons && b.addons.length > 0 ? (
+                          b.addons.map((a) => a.label).join(", ")
+                        ) : "-"}
                       </td>
                     )}
                     <td style={tdStyle}><StatusBadge status={b.status} /></td>

@@ -71,6 +71,21 @@ function getBookingAddons(booking: Booking) {
   return booking.addons.map((addon) => addon.label).join(", ");
 }
 
+function getAddonStatusTone(status: "confirmed" | "at_risk" | "pending_approval") {
+  if (status === "confirmed") return { color: "#6fcf8a", background: "rgba(80,180,100,0.15)" };
+  if (status === "at_risk") return { color: "#e2ab5a", background: "rgba(226,171,90,0.16)" };
+  return { color: "#9db7d9", background: "rgba(157,183,217,0.14)" };
+}
+
+function formatAddonPrice(price: number | null) {
+  if (typeof price !== "number") return "Price on request";
+  return `$${price.toLocaleString("en-US")}`;
+}
+
+function bookingNeedsAddonAttention(booking: Booking) {
+  return (booking.addons_snapshot ?? []).some((addon) => addon.status === "at_risk" || addon.status === "pending_approval");
+}
+
 function formatSyncStatus(status: string | null) {
   if (status === "success") return "Success";
   if (status === "failed") return "Failed";
@@ -666,6 +681,14 @@ export default function DashboardOperationsView({
               </button>
             </div>
 
+            {bookingNeedsAddonAttention(selectedBooking) && (
+              <div style={{ border: "0.5px solid rgba(226,171,90,0.24)", backgroundColor: "rgba(226,171,90,0.08)", padding: "10px 12px", marginBottom: "1rem" }}>
+                <p style={{ fontFamily: LATO, fontSize: "11px", color: "#e2ab5a", margin: 0, lineHeight: 1.5 }}>
+                  This booking has add-ons requiring attention.
+                </p>
+              </div>
+            )}
+
             {[
               ["Villa", selectedBooking.villa],
               ["Check-in", fmt(selectedBooking.check_in)],
@@ -683,6 +706,46 @@ export default function DashboardOperationsView({
                 </span>
               </div>
             ))}
+
+            {(selectedBooking.addons_snapshot ?? []).length > 0 && (
+              <div style={{ padding: "10px 0", borderTop: "0.5px solid rgba(255,255,255,0.05)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "16px", marginBottom: "10px" }}>
+                  <span style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED, flexShrink: 0 }}>
+                    Add-on status
+                  </span>
+                  <div style={{ width: "100%", maxWidth: "280px", display: "grid", gap: "8px" }}>
+                    {selectedBooking.addons_snapshot?.map((addon) => {
+                      const tone = getAddonStatusTone(addon.status);
+                      return (
+                        <div key={`${selectedBooking.id}-${addon.id}`} style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start" }}>
+                          <div style={{ textAlign: "right" }}>
+                            <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, margin: "0 0 4px", lineHeight: 1.5 }}>
+                              {addon.label}
+                            </p>
+                            <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.4 }}>
+                              {formatAddonPrice(addon.price)}
+                            </p>
+                          </div>
+                          <span style={{
+                            fontFamily: LATO,
+                            fontSize: "9px",
+                            letterSpacing: "1.5px",
+                            textTransform: "uppercase",
+                            color: tone.color,
+                            backgroundColor: tone.background,
+                            padding: "3px 8px",
+                            borderRadius: "2px",
+                            whiteSpace: "nowrap",
+                          }}>
+                            {addon.status.replace("_", " ")}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
