@@ -297,7 +297,14 @@ export async function POST(request: Request) {
             return {
               id: addon.id,
               label: addon.label,
-              price: addon.price ?? null,
+              price: (
+                addon.pricing_type === "percentage" &&
+                typeof addon.percentage_value === "number" &&
+                addon.percentage_value > 0 &&
+                pricingSnapshotData !== null
+              )
+                ? Math.round((addon.percentage_value / 100) * pricingSnapshotData.pricing_subtotal)
+                : addon.price ?? null,
               category: addon.category ?? null,
               preparation_time_hours: addon.preparation_time_hours ?? null,
               enforcement_mode: addon.enforcement_mode ?? null,
