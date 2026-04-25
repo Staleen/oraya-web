@@ -6,7 +6,7 @@ import type { DateRange, Matcher } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 import OrayaEmblem from "@/components/OrayaEmblem";
 import { getVillaBasePrice, getVillaPricing } from "@/lib/admin-pricing";
-import { ADDON_OPERATIONAL_SETTINGS_KEY, formatPreparationTime, getAddonEnforcementMode, mergeAddonsWithOperationalSettings, parseAddonOperationalSetting, type AddonCategory, type AddonCutoffType, type AddonEnforcementMode } from "@/lib/addon-operations";
+import { ADDON_OPERATIONAL_SETTINGS_KEY, formatPreparationTime, getAddonEnforcementMode, getAddonTimingType, mergeAddonsWithOperationalSettings, parseAddonOperationalSetting, type AddonCategory, type AddonCutoffType, type AddonEnforcementMode } from "@/lib/addon-operations";
 import { usePublicPricing } from "@/lib/public-pricing";
 import { calculateStayPricing } from "@/lib/pricing/engine";
 import type { NightSource } from "@/lib/pricing/types";
@@ -298,6 +298,26 @@ function sortAddonsForDisplay(addons: Addon[]): Addon[] {
       return a.index - b.index;
     })
     .map(({ addon }) => addon);
+}
+
+function getSameDayAddonWarning(
+  addon: Addon,
+  checkIn: string,
+  checkOut: string,
+  confirmedRanges: ConfirmedRange[],
+): string {
+  const timingType = getAddonTimingType(addon);
+  if (!timingType) return "";
+
+  if (timingType === "early_checkin" && checkIn && confirmedRanges.some((range) => range.check_out === checkIn)) {
+    return "May not be available due to a same-day checkout.";
+  }
+
+  if (timingType === "late_checkout" && checkOut && confirmedRanges.some((range) => range.check_in === checkOut)) {
+    return "May not be available due to a same-day check-in.";
+  }
+
+  return "";
 }
 
 // ─── Calendar CSS (dark-theme overrides for react-day-picker) ─────────────────
@@ -1366,6 +1386,7 @@ function BookPageInner() {
                           const selected = selectedAddons.includes(addon.id);
                           const availability = getAddonAvailability(addon);
                           const operationalFeedback = selected ? getAddonOperationalFeedback(addon) : [];
+                          const sameDayWarning = getSameDayAddonWarning(addon, checkIn, checkOut, confirmedRanges);
                           const disableSelection = !availability.selectable;
                           return (
                             <button
@@ -1456,6 +1477,11 @@ function BookPageInner() {
                               {!availability.available && (
                                 <span style={{ fontFamily: LATO, fontSize: "11px", color: availability.mode === "soft" ? "#e2ab5a" : "#e07070", display: "block", marginTop: "6px", lineHeight: 1.5 }}>
                                   {availability.warning}
+                                </span>
+                              )}
+                              {sameDayWarning && (
+                                <span style={{ fontFamily: LATO, fontSize: "11px", color: "#e2ab5a", display: "block", marginTop: "6px", lineHeight: 1.5 }}>
+                                  {sameDayWarning}
                                 </span>
                               )}
                               {selected && operationalFeedback.length > 0 && (

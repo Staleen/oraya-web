@@ -4,6 +4,7 @@ export type AddonCutoffType = "before_checkin" | "before_booking";
 export type AddonCategory = string;
 export type PreparationUnit = "hours" | "days";
 export type AddonEnforcementMode = "strict" | "soft" | "none";
+export type AddonTimingType = "early_checkin" | "late_checkout";
 
 export interface AddonOperationalFields {
   preparation_time_hours?: number | null;
@@ -78,6 +79,24 @@ export function formatPreparationTime(hours: number): string {
     return days === 1 ? "1 day" : `${days} days`;
   }
   return hours === 1 ? "1 hour" : `${hours} hours`;
+}
+
+function normalizeAddonTimingKey(value: string | null | undefined): string {
+  return (value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+export function getAddonTimingType(addon: { id?: string | null; label?: string | null }): AddonTimingType | null {
+  const idKey = normalizeAddonTimingKey(addon.id);
+  const labelKey = normalizeAddonTimingKey(addon.label);
+  const combined = `${idKey} ${labelKey}`;
+
+  if (combined.includes("earlycheckin") || combined.includes("earlycheckin")) {
+    return "early_checkin";
+  }
+  if (combined.includes("latecheckout")) {
+    return "late_checkout";
+  }
+  return null;
 }
 
 function parseOperationalFields(value: unknown): AddonOperationalFields {

@@ -7,7 +7,7 @@ import { SITE_URL } from "@/lib/brand";
 import { findAvailabilityConflict } from "@/lib/calendar/availability";
 import { getVillaPricing, parseVillaPricingSetting, VILLA_BASE_PRICING_KEY } from "@/lib/admin-pricing";
 import { buildPricingSnapshot, runPricingAudit } from "@/lib/pricing/server-audit";
-import { ADDON_OPERATIONAL_SETTINGS_KEY, formatPreparationTime, getAddonEnforcementMode, mergeAddonsWithOperationalSettings, parseAddonOperationalSetting } from "@/lib/addon-operations";
+import { ADDON_OPERATIONAL_SETTINGS_KEY, formatPreparationTime, getAddonEnforcementMode, getAddonTimingType, mergeAddonsWithOperationalSettings, parseAddonOperationalSetting } from "@/lib/addon-operations";
 import { runAddonAudit } from "@/lib/addon-audit";
 
 const ALLOWED_VILLAS = ["Villa Mechmech", "Villa Byblos"];
@@ -33,12 +33,13 @@ function getPricingValidationMessage(
 function getAddonAuditResultLabel(input: {
   available: boolean;
   has_time_warning: boolean;
+  has_same_day_warning?: boolean;
   requires_approval: boolean;
   enforcement_mode: "strict" | "soft" | "none";
 }): "ok" | "requires_approval" | "soft_warning" | "strict_violation" {
   if (input.enforcement_mode === "strict" && !input.available) return "strict_violation";
   if (input.requires_approval) return "requires_approval";
-  if (input.enforcement_mode === "soft" && input.has_time_warning) return "soft_warning";
+  if ((input.enforcement_mode === "soft" && input.has_time_warning) || input.has_same_day_warning) return "soft_warning";
   return "ok";
 }
 
@@ -227,7 +228,7 @@ export async function POST(request: Request) {
         : [];
 
       if (selectedAddonIds.length > 0) {
-        const [addonsResponse, addonSettingsResponse] = await Promise.all([
+        const [addonsResponse, addonSettingsResponse, sameDayCheckoutResponse, sameDayCheckinResponse] = await Promise.all([
           supabaseAdmin
             .from("addons")
             .select("id, label, price, enabled")
@@ -237,6 +238,20 @@ export async function POST(request: Request) {
             .select("value")
             .eq("key", ADDON_OPERATIONAL_SETTINGS_KEY)
             .maybeSingle(),
+          supabaseAdmin
+            .from("bookings")
+            .select("id")
+            .eq("villa", villa)
+            .eq("status", "confirmed")
+            .eq("check_out", check_in)
+            .limit(1),
+          supabaseAdmin
+            .from("bookings")
+            .select("id")
+            .eq("villa", villa)
+            .eq("status", "confirmed")
+            .eq("check_in", check_out)
+            .limit(1),
         ]);
 
         if (addonsResponse.error) {
@@ -245,13 +260,24 @@ export async function POST(request: Request) {
         if (addonSettingsResponse.error) {
           throw addonSettingsResponse.error;
         }
+        if (sameDayCheckoutResponse.error) {
+          throw sameDayCheckoutResponse.error;
+        }
+        if (sameDayCheckinResponse.error) {
+          throw sameDayCheckinResponse.error;
+        }
 
         const operationalSettings = parseAddonOperationalSetting(addonSettingsResponse.data?.value);
         const mergedAddons = mergeAddonsWithOperationalSettings(addonsResponse.data ?? [], operationalSettings);
+        const sameDayContext = {
+          has_same_day_checkout: (sameDayCheckoutResponse.data ?? []).length > 0,
+          has_same_day_checkin: (sameDayCheckinResponse.data ?? []).length > 0,
+        };
         const selectedAddonAuditRows = mergedAddons
           .filter((addon) => selectedAddonIds.includes(addon.id))
           .map((addon) => ({
             id: addon.id,
+            label: addon.label,
             preparation_time_hours: addon.preparation_time_hours ?? null,
             requires_approval: addon.requires_approval ?? false,
             enforcement_mode: addon.enforcement_mode ?? null,
@@ -259,6 +285,8 @@ export async function POST(request: Request) {
         const addonAudit = runAddonAudit({
           addons: selectedAddonAuditRows,
           check_in,
+          check_out,
+          same_day_context: sameDayContext,
         });
         const addonStatuses = new Map(addonAudit.items.map((item) => [item.id, item.status]));
         const addonAuditItems = new Map(addonAudit.items.map((item) => [item.id, item]));
@@ -281,15 +309,25 @@ export async function POST(request: Request) {
             const auditItem = addonAuditItems.get(addon.id);
             const enforcementMode = getAddonEnforcementMode(addon.enforcement_mode);
             const preparationTimeHours = addon.preparation_time_hours ?? null;
+            const timingType = getAddonTimingType(addon);
+            const sameDayWarning =
+              auditItem?.same_day_warning === "same_day_checkout"
+                ? "May not be available due to a same-day checkout."
+                : auditItem?.same_day_warning === "same_day_checkin"
+                  ? "May not be available due to a same-day check-in."
+                  : null;
 
             return {
               addon_label: addon.label,
+              addon_timing_type: timingType,
               required_advance_notice: preparationTimeHours ? formatPreparationTime(preparationTimeHours) : null,
               operational_mode: enforcementMode,
               requires_approval: addon.requires_approval ?? false,
+              same_day_warning: sameDayWarning,
               audit_result: getAddonAuditResultLabel({
                 available: auditItem?.available ?? true,
                 has_time_warning: auditItem?.has_time_warning ?? false,
+                has_same_day_warning: auditItem?.same_day_warning !== null,
                 requires_approval: addon.requires_approval ?? false,
                 enforcement_mode: enforcementMode,
               }),

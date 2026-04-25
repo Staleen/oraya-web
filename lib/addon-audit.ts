@@ -1,4 +1,4 @@
-import { getAddonEnforcementMode, type AddonEnforcementMode } from "./addon-operations";
+import { getAddonEnforcementMode, getAddonTimingType, type AddonEnforcementMode } from "./addon-operations";
 
 const ISO_DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -7,12 +7,18 @@ export type AddonSnapshotStatus = "pending_approval" | "confirmed" | "at_risk";
 
 export type AddonAuditInput = {
   check_in: string;
+  check_out?: string | null;
   addons: Array<{
     id: string;
+    label?: string | null;
     preparation_time_hours?: number | null;
     requires_approval?: boolean | null;
     enforcement_mode?: AddonEnforcementMode | null;
   }>;
+  same_day_context?: {
+    has_same_day_checkout: boolean;
+    has_same_day_checkin: boolean;
+  };
   now?: Date;
 };
 
@@ -23,6 +29,7 @@ export type AddonAuditResult = {
     status: AddonSnapshotStatus;
     available: boolean;
     has_time_warning: boolean;
+    same_day_warning: "same_day_checkout" | "same_day_checkin" | null;
   }>;
   violations: {
     insufficient_preparation_time: boolean;
@@ -58,11 +65,18 @@ export function runAddonAudit(input: AddonAuditInput): AddonAuditResult {
   const items = input.addons.map((addon) => {
     const preparationTimeHours = addon.preparation_time_hours ?? null;
     const enforcementMode = getAddonEnforcementMode(addon.enforcement_mode);
+    const timingType = getAddonTimingType(addon);
     const hasTimeWarning =
       typeof preparationTimeHours === "number" &&
       Number.isFinite(preparationTimeHours) &&
       preparationTimeHours > 0 &&
       hoursUntilCheckIn < preparationTimeHours;
+    const sameDayWarning: "same_day_checkout" | "same_day_checkin" | null =
+      timingType === "early_checkin" && input.same_day_context?.has_same_day_checkout
+        ? "same_day_checkout"
+        : timingType === "late_checkout" && input.same_day_context?.has_same_day_checkin
+          ? "same_day_checkin"
+          : null;
     const available = !hasTimeWarning;
 
     let status: AddonSnapshotStatus = "confirmed";
@@ -77,6 +91,7 @@ export function runAddonAudit(input: AddonAuditInput): AddonAuditResult {
       status,
       available,
       has_time_warning: hasTimeWarning,
+      same_day_warning: sameDayWarning,
     };
   });
 
@@ -103,6 +118,16 @@ export function runAddonAudit(input: AddonAuditInput): AddonAuditResult {
     }
     return [`${addon.id}: soft preparation warning`];
   });
+  const sameDayWarnings = input.addons.flatMap((addon) => {
+    const timingType = getAddonTimingType(addon);
+    if (timingType === "early_checkin" && input.same_day_context?.has_same_day_checkout) {
+      return [`${addon.id}: same-day checkout warning`];
+    }
+    if (timingType === "late_checkout" && input.same_day_context?.has_same_day_checkin) {
+      return [`${addon.id}: same-day check-in warning`];
+    }
+    return [];
+  });
   const requiresApproval = input.addons.some((addon) => addon.requires_approval === true);
   const wouldBlockReasons: AddonAuditReason[] = [];
 
@@ -121,6 +146,6 @@ export function runAddonAudit(input: AddonAuditInput): AddonAuditResult {
       requires_approval: requiresApproval,
     },
     would_block_reasons: wouldBlockReasons,
-    warnings: softAvailabilityWarnings,
+    warnings: [...softAvailabilityWarnings, ...sameDayWarnings],
   };
 }
