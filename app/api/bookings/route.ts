@@ -108,6 +108,15 @@ export async function POST(request: Request) {
         source: "server-audit";
       };
     } | null = null;
+    let addonsSnapshotData: Array<{
+      id: string;
+      label: string;
+      price: number | null;
+      category: string | null;
+      preparation_time_hours: number | null;
+      enforcement_mode: string | null;
+      requires_approval: boolean;
+    }> | null = null;
 
     const insertData: Record<string, unknown> = {
       villa,
@@ -128,6 +137,7 @@ export async function POST(request: Request) {
       pricing_nights: null,
       pricing_warnings: null,
       pricing_snapshot: null,
+      addons_snapshot: null,
     };
 
     try {
@@ -207,7 +217,7 @@ export async function POST(request: Request) {
         const [addonsResponse, addonSettingsResponse] = await Promise.all([
           supabaseAdmin
             .from("addons")
-            .select("id, enabled")
+            .select("id, label, price, enabled")
             .in("id", selectedAddonIds),
           supabaseAdmin
             .from("settings")
@@ -225,6 +235,17 @@ export async function POST(request: Request) {
 
         const operationalSettings = parseAddonOperationalSetting(addonSettingsResponse.data?.value);
         const mergedAddons = mergeAddonsWithOperationalSettings(addonsResponse.data ?? [], operationalSettings);
+        addonsSnapshotData = mergedAddons
+          .filter((addon) => selectedAddonIds.includes(addon.id))
+          .map((addon) => ({
+            id: addon.id,
+            label: addon.label,
+            price: addon.price ?? null,
+            category: addon.category ?? null,
+            preparation_time_hours: addon.preparation_time_hours ?? null,
+            enforcement_mode: addon.enforcement_mode ?? null,
+            requires_approval: addon.requires_approval ?? false,
+          }));
         const selectedAddonAuditRows = mergedAddons
           .filter((addon) => selectedAddonIds.includes(addon.id))
           .map((addon) => ({
@@ -251,6 +272,10 @@ export async function POST(request: Request) {
       if (process.env.NODE_ENV !== "production") {
         console.debug("[api/bookings] addon audit skipped", addonAuditError);
       }
+    }
+
+    if (addonsSnapshotData) {
+      insertData.addons_snapshot = addonsSnapshotData.length > 0 ? addonsSnapshotData : null;
     }
 
     const { data, error } = await supabaseAdmin
