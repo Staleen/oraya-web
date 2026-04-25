@@ -1368,9 +1368,12 @@ function BookPageInner() {
                                     fontFamily: LATO,
                                     fontSize: "11px",
                                     color: disableSelection ? "rgba(255,255,255,0.34)" : MUTED,
-                                    display: "block",
+                                    display: "-webkit-box",
                                     marginTop: "4px",
                                     lineHeight: 1.55,
+                                    overflow: "hidden",
+                                    WebkitBoxOrient: "vertical",
+                                    WebkitLineClamp: 2,
                                   }}
                                 >
                                   {addon.description.trim()}
