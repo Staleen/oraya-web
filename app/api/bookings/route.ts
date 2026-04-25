@@ -7,7 +7,7 @@ import { SITE_URL } from "@/lib/brand";
 import { findAvailabilityConflict } from "@/lib/calendar/availability";
 import { getVillaPricing, parseVillaPricingSetting, VILLA_BASE_PRICING_KEY } from "@/lib/admin-pricing";
 import { buildPricingSnapshot, runPricingAudit } from "@/lib/pricing/server-audit";
-import { ADDON_OPERATIONAL_SETTINGS_KEY, mergeAddonsWithOperationalSettings, parseAddonOperationalSetting } from "@/lib/addon-operations";
+import { ADDON_OPERATIONAL_SETTINGS_KEY, formatPreparationTime, getAddonEnforcementMode, mergeAddonsWithOperationalSettings, parseAddonOperationalSetting } from "@/lib/addon-operations";
 import { runAddonAudit } from "@/lib/addon-audit";
 
 const ALLOWED_VILLAS = ["Villa Mechmech", "Villa Byblos"];
@@ -28,6 +28,18 @@ function getPricingValidationMessage(
   }
 
   return "Your selected dates could not be priced. Please review your stay details or contact us.";
+}
+
+function getAddonAuditResultLabel(input: {
+  available: boolean;
+  has_time_warning: boolean;
+  requires_approval: boolean;
+  enforcement_mode: "strict" | "soft" | "none";
+}): "ok" | "requires_approval" | "soft_warning" | "strict_violation" {
+  if (input.requires_approval) return "requires_approval";
+  if (input.enforcement_mode === "strict" && !input.available) return "strict_violation";
+  if (input.enforcement_mode === "soft" && input.has_time_warning) return "soft_warning";
+  return "ok";
 }
 
 // POST — create a new booking (member or guest)
@@ -249,6 +261,7 @@ export async function POST(request: Request) {
           check_in,
         });
         const addonStatuses = new Map(addonAudit.items.map((item) => [item.id, item.status]));
+        const addonAuditItems = new Map(addonAudit.items.map((item) => [item.id, item]));
         addonsSnapshotData = mergedAddons
           .filter((addon) => selectedAddonIds.includes(addon.id))
           .map((addon) => ({
@@ -261,6 +274,34 @@ export async function POST(request: Request) {
             requires_approval: addon.requires_approval ?? false,
             status: addonStatuses.get(addon.id) ?? "confirmed",
           }));
+
+        const addonOperationalAudit = mergedAddons
+          .filter((addon) => selectedAddonIds.includes(addon.id))
+          .map((addon) => {
+            const auditItem = addonAuditItems.get(addon.id);
+            const enforcementMode = getAddonEnforcementMode(addon.enforcement_mode);
+            const preparationTimeHours = addon.preparation_time_hours ?? null;
+
+            return {
+              addon_label: addon.label,
+              required_advance_notice: preparationTimeHours ? formatPreparationTime(preparationTimeHours) : null,
+              operational_mode: enforcementMode,
+              requires_approval: addon.requires_approval ?? false,
+              audit_result: getAddonAuditResultLabel({
+                available: auditItem?.available ?? true,
+                has_time_warning: auditItem?.has_time_warning ?? false,
+                requires_approval: addon.requires_approval ?? false,
+                enforcement_mode: enforcementMode,
+              }),
+            };
+          });
+
+        console.info("[api/bookings] addon operational audit", {
+          villa,
+          check_in,
+          check_out,
+          addons: addonOperationalAudit,
+        });
 
         if (process.env.NODE_ENV !== "production") {
           console.debug("[addon-dry-run]", {
