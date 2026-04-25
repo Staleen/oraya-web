@@ -256,6 +256,13 @@ function friendlyError(msg: string): string {
   return msg;
 }
 
+function isAddonApplicableToVilla(addon: Addon, villa: string): boolean {
+  const applicableVillas = addon.applicable_villas ?? [];
+  if (!villa) return true;
+  if (applicableVillas.length === 0) return true;
+  return applicableVillas.includes(villa);
+}
+
 // ─── Calendar CSS (dark-theme overrides for react-day-picker) ─────────────────
 const CALENDAR_CSS = `
   .oraya-cal { display: flex; justify-content: center; }
@@ -551,8 +558,9 @@ function BookPageInner() {
     : null;
   const staySubtotal = pricingResult?.subtotal
     ?? (nightlyBasePrice !== null && nights > 0 ? nightlyBasePrice * nights : null);
+  const availableAddons = addons.filter((addon) => isAddonApplicableToVilla(addon, form.villa));
   const selectedAddonDetails = selectedAddons
-    .map(id => addons.find(a => a.id === id))
+    .map(id => availableAddons.find(a => a.id === id))
     .filter((a): a is Addon => Boolean(a));
   const selectedAddonSubtotal = selectedAddonDetails.reduce((sum, addon) => {
     if (addon.price === null) return sum;
@@ -568,7 +576,7 @@ function BookPageInner() {
     .map((category) => ({
       category,
       label: category === "other" ? "Other" : ADDON_CATEGORY_LABELS[category],
-      items: addons.filter((addon) => (addon.category ?? "other") === category),
+      items: availableAddons.filter((addon) => (addon.category ?? "other") === category),
     }))
     .filter((group) => group.items.length > 0);
 
@@ -668,6 +676,7 @@ function BookPageInner() {
     setSelectedAddons((prev) => prev.filter((id) => {
       const addon = addons.find((item) => item.id === id);
       if (!addon) return false;
+      if (!isAddonApplicableToVilla(addon, form.villa)) return false;
       const enforcementMode = getAddonEnforcementMode(addon.enforcement_mode);
       const preparationHours = addon.preparation_time_hours ?? null;
       if (
@@ -682,7 +691,7 @@ function BookPageInner() {
       const hoursUntilCheckIn = (parseLocalISO(checkIn).getTime() - Date.now()) / 3_600_000;
       return hoursUntilCheckIn >= preparationHours;
     }));
-  }, [addons, checkIn]);
+  }, [addons, checkIn, form.villa]);
 
   // ── Event handlers ────────────────────────────────────────────────────────
   function handleFormChange(
@@ -721,7 +730,7 @@ function BookPageInner() {
   }
 
   function toggleAddon(id: string) {
-    const addon = addons.find((item) => item.id === id);
+    const addon = availableAddons.find((item) => item.id === id);
     if (!addon) return;
     const availability = getAddonAvailability(addon);
     if (!availability.selectable) return;
@@ -755,7 +764,7 @@ function BookPageInner() {
 
       // Build structured addons payload (id + label + metadata, no price calculation)
       const selectedAddonObjects = selectedAddons
-        .map(id => addons.find(a => a.id === id))
+        .map(id => availableAddons.find(a => a.id === id))
         .filter((a): a is Addon => Boolean(a))
         .map(({ id, label, pricing_model, currency, price }) => ({
           id, label, pricing_model, currency, price,
@@ -1437,7 +1446,7 @@ function BookPageInner() {
                       ...(form.message   ? [["Notes",      form.message]]   : []),
                       ...(guestMode      ? [["Name",       guest.fullName], ["Email", guest.email]] : []),
                       ...(selectedAddons.length > 0
-                        ? [["Add-ons", selectedAddons.map(id => addons.find(a => a.id === id)?.label ?? id).join(", ")]]
+                        ? [["Add-ons", selectedAddonDetails.map((addon) => addon.label).join(", ")]]
                         : []),
                     ] as [string, string][]
                   ).map(([label, value]) => (
