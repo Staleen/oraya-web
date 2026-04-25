@@ -29,7 +29,7 @@ const CATEGORY_OPTIONS: Array<{ value: AddonCategory; label: string }> = [
   { value: "service", label: ADDON_CATEGORY_LABELS.service },
 ];
 const ENFORCEMENT_OPTIONS: Array<{ value: AddonEnforcementMode; label: string; help: string }> = [
-  { value: "strict", label: ADDON_ENFORCEMENT_LABELS.strict, help: "Unavailable if prep time is too short" },
+  { value: "strict", label: ADDON_ENFORCEMENT_LABELS.strict, help: "Disable if not enough preparation time" },
   { value: "soft", label: ADDON_ENFORCEMENT_LABELS.soft, help: "Allow with warning" },
   { value: "none", label: ADDON_ENFORCEMENT_LABELS.none, help: "Always available" },
 ];
@@ -133,7 +133,7 @@ export default function AddonsEditor({
     parts.push(`${getAddonEnforcementMode(addon.enforcement_mode).charAt(0).toUpperCase()}${getAddonEnforcementMode(addon.enforcement_mode).slice(1)} rule`);
     parts.push(addon.requires_approval ? "Manager approval required" : "No manager approval");
 
-    return parts.join(" · ");
+    return parts.join(" - ");
   }
 
   const pricingGridColumns = isMobile ? "1fr" : "110px minmax(0, 1fr) minmax(0, 1.3fr)";
@@ -277,7 +277,7 @@ export default function AddonsEditor({
               <div style={{ display: "grid", gap: "10px" }}>
                 {fieldLabel("Operations")}
                 <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, lineHeight: 1.6, margin: 0 }}>
-                  Strict blocks booking if the rule is not satisfied. Soft allows booking but warns admin/customer. None means no operational restriction.
+                  Strict = blocks booking if rule is not satisfied. Soft = allows booking but warns admin/customer. None = no operational restriction.
                 </p>
                 <div style={{ display: "grid", gridTemplateColumns: operationGridColumns, gap: "10px" }}>
                   <div style={{ display: "grid", gap: "6px" }}>
