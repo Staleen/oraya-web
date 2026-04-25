@@ -323,6 +323,50 @@ function getSameDayAddonWarning(
   return "";
 }
 
+/** Phase 12E Batch 4: detect dead-day monetization windows adjacent to the user's dates.
+ *
+ * A "dead day" is the 1-night gap between two confirmed bookings:
+ *   · booking A ends Day X   (check_out = Day X)
+ *   · booking B starts Day X+2  (check_in = Day X+2)
+ *   · Day X+1 is free but cannot form a normal minimum-stay booking
+ *
+ * Two triggers:
+ *   1. User's checkout = Day X  → dead day follows their stay → suggestLateCheckout
+ *   2. User's check-in = Day X+1 → they're inside the gap     → both suggestions
+ */
+function detectDeadDaySuggestion(
+  checkIn: string,
+  checkOut: string,
+  confirmedRanges: ConfirmedRange[],
+): { suggestLateCheckout: boolean; suggestEarlyCheckin: boolean } {
+  if (!checkIn && !checkOut) return { suggestLateCheckout: false, suggestEarlyCheckin: false };
+  let suggestLateCheckout = false;
+  let suggestEarlyCheckin  = false;
+
+  for (const rangeA of confirmedRanges) {
+    const checkoutMs     = parseLocalISO(rangeA.check_out).getTime();
+    const nextBookingISO = toISO(new Date(checkoutMs + 2 * 86_400_000));
+    // Is there any confirmed booking starting exactly 2 days after rangeA ends?
+    const hasNextBooking = confirmedRanges.some((r) => r.check_in === nextBookingISO);
+    if (!hasNextBooking) continue;
+
+    // Dead gap confirmed: the day between checkout and the next booking is a dead day.
+    const gapDayISO = toISO(new Date(checkoutMs + 86_400_000));
+
+    // Trigger 1: user's checkout coincides with rangeA's checkout → dead day follows their stay.
+    if (checkOut && checkOut === rangeA.check_out) {
+      suggestLateCheckout = true;
+    }
+    // Trigger 2: user's check-in is the dead day itself → they're inside the gap.
+    if (checkIn && checkIn === gapDayISO) {
+      suggestEarlyCheckin  = true;
+      suggestLateCheckout = true;
+    }
+  }
+
+  return { suggestLateCheckout, suggestEarlyCheckin };
+}
+
 // ─── Calendar CSS (dark-theme overrides for react-day-picker) ─────────────────
 const CALENDAR_CSS = `
   .oraya-cal { display: flex; justify-content: center; }
@@ -684,6 +728,9 @@ function BookPageInner() {
     }
     return "";
   })();
+
+  // Phase 12E Batch 4: dead-day suggestion (non-blocking, display only).
+  const deadDaySuggestion = detectDeadDaySuggestion(checkIn, checkOut, confirmedRanges);
 
   function getAddonAvailability(addon: Addon) {
     const enforcementMode = getAddonEnforcementMode(addon.enforcement_mode);
@@ -1417,6 +1464,10 @@ function BookPageInner() {
                           const availability = getAddonAvailability(addon);
                           const operationalFeedback = selected ? getAddonOperationalFeedback(addon) : [];
                           const sameDayWarning = getSameDayAddonWarning(addon, checkIn, checkOut, confirmedRanges);
+                          const timingType = getAddonTimingType(addon);
+                          const deadDayTimingHighlight =
+                            (timingType === "early_checkin" && deadDaySuggestion.suggestEarlyCheckin) ||
+                            (timingType === "late_checkout" && deadDaySuggestion.suggestLateCheckout);
                           const disableSelection = !availability.selectable;
                           return (
                             <button
@@ -1475,6 +1526,23 @@ function BookPageInner() {
                                       }}
                                     >
                                       Recommended
+                                    </span>
+                                  )}
+                                  {deadDayTimingHighlight && (
+                                    <span
+                                      style={{
+                                        fontFamily: LATO,
+                                        fontSize: "9px",
+                                        letterSpacing: "1.4px",
+                                        textTransform: "uppercase",
+                                        color: "#d4b98a",
+                                        border: "0.5px solid rgba(197,164,109,0.5)",
+                                        backgroundColor: "rgba(197,164,109,0.12)",
+                                        padding: "2px 6px",
+                                        whiteSpace: "nowrap",
+                                      }}
+                                    >
+                                      Fits your dates
                                     </span>
                                   )}
                                 </div>
@@ -1586,6 +1654,40 @@ function BookPageInner() {
                   </div>
                 )}
               </div>
+
+              {/* Phase 12E Batch 4: Dead-day monetization suggestion (non-blocking) */}
+              {(deadDaySuggestion.suggestLateCheckout || deadDaySuggestion.suggestEarlyCheckin) && (
+                <div style={{
+                  border: "0.5px solid rgba(197,164,109,0.25)",
+                  backgroundColor: "rgba(197,164,109,0.04)",
+                  padding: "16px 20px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "8px",
+                }}>
+                  <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+                    Enhance your stay
+                  </p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
+                    {deadDaySuggestion.suggestLateCheckout && (
+                      <p style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.65)", margin: 0, lineHeight: 1.6 }}>
+                        · Late checkout may be available to extend your stay by a day
+                      </p>
+                    )}
+                    {deadDaySuggestion.suggestEarlyCheckin && (
+                      <p style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.65)", margin: 0, lineHeight: 1.6 }}>
+                        · Early check-in may be available for the adjacent day
+                      </p>
+                    )}
+                    <p style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.65)", margin: 0, lineHeight: 1.6 }}>
+                      · A special offer may be available for adjacent days — contact Oraya for details
+                    </p>
+                  </div>
+                  <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: "2px 0 0", lineHeight: 1.5 }}>
+                    Select an early check-in or late checkout add-on above, or contact us to arrange.
+                  </p>
+                </div>
+              )}
 
               {/* Divider */}
               <div style={{ height: "0.5px", backgroundColor: "rgba(197,164,109,0.12)" }} />
