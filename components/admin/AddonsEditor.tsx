@@ -294,6 +294,34 @@ export default function AddonsEditor({
     );
   }
 
+  function renderDisplayOrderField(addon: Addon, mobile: boolean) {
+    return (
+      <div style={{ display: "grid", gap: "6px" }}>
+        {fieldLabel("Display order")}
+        <input
+          type="number"
+          value={addon.display_order ?? ""}
+          onChange={e => updateAddon(addon.id, { display_order: e.target.value === "" ? null : parseFloat(e.target.value) })}
+          placeholder="Display order"
+          style={{
+            ...fieldStyle,
+            width: "100%",
+            boxSizing: "border-box",
+            padding: mobile ? "12px 14px" : "10px 12px",
+            fontSize: mobile ? "14px" : "13px",
+            minHeight: mobile ? "48px" : undefined,
+            opacity: addon.enabled ? 1 : 0.5,
+          }}
+          onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
+          onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+        />
+        <p style={{ fontFamily: LATO, fontSize: mobile ? "12px" : "11px", color: MUTED, lineHeight: 1.6, margin: 0 }}>
+          Lower numbers appear first. Empty uses default order.
+        </p>
+      </div>
+    );
+  }
+
   const expandedGridColumns = isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))";
   const operationsGridColumns = isMobile ? "1fr" : "minmax(0, 1.1fr) 110px minmax(0, 1.3fr) minmax(0, 1fr)";
   const editingAddon = expandedAddonId ? addons.find((addon) => addon.id === expandedAddonId) ?? null : null;
@@ -645,6 +673,7 @@ export default function AddonsEditor({
                           ))}
                         </select>
                       </div>
+                      {renderDisplayOrderField(addon, false)}
                       {renderDescriptionField(addon, false)}
                     </div>
                     {renderVillaAssignmentSection(addon, false)}
@@ -838,6 +867,7 @@ export default function AddonsEditor({
                       ))}
                     </select>
                   </div>
+                  {renderDisplayOrderField(editingAddon, true)}
                   {renderDescriptionField(editingAddon, true)}
                 </div>
                 {renderVillaAssignmentSection(editingAddon, true)}

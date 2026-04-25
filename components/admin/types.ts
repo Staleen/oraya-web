@@ -74,6 +74,7 @@ export interface Addon {
   enforcement_mode?: AddonEnforcementMode | null;
   applicable_villas?: string[];
   description?: string;
+  display_order?: number | null;
 }
 
 export type AddonValidationLevel = "error" | "warning";

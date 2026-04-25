@@ -13,6 +13,7 @@ export interface AddonOperationalFields {
   enforcement_mode?: AddonEnforcementMode | null;
   applicable_villas?: string[];
   description?: string;
+  display_order?: number | null;
 }
 
 export interface AddonOperationalSettingRow extends AddonOperationalFields {
@@ -105,6 +106,10 @@ function parseOperationalFields(value: unknown): AddonOperationalFields {
     typeof item.description === "string" && item.description.trim().length > 0
       ? item.description.trim()
       : null;
+  const displayOrder =
+    typeof item.display_order === "number" && Number.isFinite(item.display_order)
+      ? item.display_order
+      : null;
 
   return {
     ...(preparationTimeHours !== null ? { preparation_time_hours: preparationTimeHours } : {}),
@@ -114,6 +119,7 @@ function parseOperationalFields(value: unknown): AddonOperationalFields {
     ...(enforcementMode ? { enforcement_mode: enforcementMode } : {}),
     ...(applicableVillas.length > 0 ? { applicable_villas: applicableVillas } : {}),
     ...(description ? { description } : {}),
+    ...(displayOrder !== null ? { display_order: displayOrder } : {}),
   };
 }
 

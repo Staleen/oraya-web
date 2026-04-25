@@ -181,6 +181,7 @@ interface Addon {
   enforcement_mode?: AddonEnforcementMode | null;
   applicable_villas?: string[];
   description?: string;
+  display_order?: number | null;
 }
 
 const PRICING_MODEL_LABELS: Record<string, string> = {
@@ -262,6 +263,27 @@ function isAddonApplicableToVilla(addon: Addon, villa: string): boolean {
   if (!villa) return true;
   if (applicableVillas.length === 0) return true;
   return applicableVillas.includes(villa);
+}
+
+function sortAddonsForDisplay(addons: Addon[]): Addon[] {
+  return addons
+    .map((addon, index) => ({ addon, index }))
+    .sort((a, b) => {
+      const aOrder = typeof a.addon.display_order === "number" && Number.isFinite(a.addon.display_order)
+        ? a.addon.display_order
+        : null;
+      const bOrder = typeof b.addon.display_order === "number" && Number.isFinite(b.addon.display_order)
+        ? b.addon.display_order
+        : null;
+
+      if (aOrder !== null && bOrder !== null) {
+        return aOrder - bOrder || a.index - b.index;
+      }
+      if (aOrder !== null) return -1;
+      if (bOrder !== null) return 1;
+      return a.index - b.index;
+    })
+    .map(({ addon }) => addon);
 }
 
 // ─── Calendar CSS (dark-theme overrides for react-day-picker) ─────────────────
@@ -559,10 +581,10 @@ function BookPageInner() {
     : null;
   const staySubtotal = pricingResult?.subtotal
     ?? (nightlyBasePrice !== null && nights > 0 ? nightlyBasePrice * nights : null);
-  const availableAddons = addons.filter((addon) => isAddonApplicableToVilla(addon, form.villa));
-  const selectedAddonDetails = selectedAddons
-    .map(id => availableAddons.find(a => a.id === id))
-    .filter((a): a is Addon => Boolean(a));
+  const availableAddons = sortAddonsForDisplay(
+    addons.filter((addon) => isAddonApplicableToVilla(addon, form.villa))
+  );
+  const selectedAddonDetails = availableAddons.filter((addon) => selectedAddons.includes(addon.id));
   const selectedAddonSubtotal = selectedAddonDetails.reduce((sum, addon) => {
     if (addon.price === null) return sum;
     if (addon.pricing_model === "per_night") return sum + addon.price * nights;
