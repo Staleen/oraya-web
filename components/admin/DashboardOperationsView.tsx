@@ -1,14 +1,30 @@
 "use client";
+import { useEffect, useState } from "react";
 import { formatBeirutRelative } from "@/lib/format-date";
 import type { Booking, CalendarSource, Member } from "@/components/admin/types";
 import { BORDER, GOLD, LATO, MUTED, PLAYFAIR, SURFACE, WHITE, fmt } from "@/components/admin/theme";
+import { KNOWN_VILLAS } from "@/lib/calendar/villas";
 
 const DESKTOP_DAY_WIDTH = 92;
-const MOBILE_DAY_WIDTH = 54;
 const TIMELINE_DAYS = 90;
 const TIMELINE_VISIBLE_LABEL = 30;
-const TIMELINE_VISIBLE_LABEL_MOBILE = 6;
+const MOBILE_LIST_DAYS = 30;
 const VILLA_COLUMN_WIDTH = 170;
+const BLOCK_HEIGHT = 46;
+const BLOCK_GAP = 8;
+
+interface ExternalCalendarBlock {
+  id: string;
+  villa: string;
+  starts_on: string;
+  ends_on: string;
+  summary: string | null;
+  is_active?: boolean;
+}
+
+type CalendarItem =
+  | { type: "booking"; id: string; villa: string; starts_on: string; ends_on: string; status: string; booking: Booking }
+  | { type: "external"; id: string; villa: string; starts_on: string; ends_on: string; status: "external"; summary: string | null };
 
 function startOfTodayUtcIso() {
   const now = new Date();
@@ -50,6 +66,11 @@ function getBookingLabel(booking: Booking) {
   return booking.member_id ? "Member" : "Guest";
 }
 
+function getBookingAddons(booking: Booking) {
+  if (!booking.addons?.length) return "-";
+  return booking.addons.map((addon) => addon.label).join(", ");
+}
+
 function formatSyncStatus(status: string | null) {
   if (status === "success") return "Success";
   if (status === "failed") return "Failed";
@@ -60,7 +81,41 @@ function formatSyncStatus(status: string | null) {
 function getStatusTone(status: string) {
   if (status === "confirmed") return { color: "#6fcf8a", background: "rgba(80,180,100,0.14)" };
   if (status === "pending") return { color: "#d99644", background: "rgba(217,150,68,0.16)" };
+  if (status === "external") return { color: "#9a9a9a", background: "rgba(255,255,255,0.08)" };
   return { color: MUTED, background: "rgba(255,255,255,0.04)" };
+}
+
+function itemOverlapsDay(item: CalendarItem, date: string) {
+  return item.starts_on <= date && item.ends_on > date;
+}
+
+function getItemName(item: CalendarItem, members: Member[]) {
+  if (item.type === "external") return item.summary?.trim() || "External block";
+  return getBookingName(item.booking, members);
+}
+
+function getItemLabel(item: CalendarItem) {
+  if (item.type === "external") return "External";
+  return getBookingLabel(item.booking);
+}
+
+function getMobileStatusLabel(item: CalendarItem, members: Member[]) {
+  if (item.type === "external") return "External";
+  const name = getBookingName(item.booking, members);
+  if (item.status === "pending") return `Pending (${name})`;
+  return `Booked (${name})`;
+}
+
+function assignLanes(items: CalendarItem[]) {
+  const laneEnds: string[] = [];
+  return items
+    .sort((a, b) => a.starts_on.localeCompare(b.starts_on) || a.ends_on.localeCompare(b.ends_on))
+    .map((item) => {
+      let lane = laneEnds.findIndex((endsOn) => item.starts_on >= endsOn);
+      if (lane === -1) lane = laneEnds.length;
+      laneEnds[lane] = item.ends_on;
+      return { item, lane };
+    });
 }
 
 export default function DashboardOperationsView({
@@ -68,14 +123,48 @@ export default function DashboardOperationsView({
   members,
   calendarSources,
   loading,
+  externalBlocks = [],
 }: {
   bookings: Booking[];
   members: Member[];
   calendarSources: CalendarSource[];
   loading: boolean;
+  externalBlocks?: ExternalCalendarBlock[];
 }) {
-  const isMobile = typeof window !== "undefined" ? window.innerWidth <= 768 : false;
+  const [isMobile, setIsMobile] = useState(false);
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+
+  useEffect(() => {
+    function syncViewport() {
+      setIsMobile(window.innerWidth < 768);
+    }
+    syncViewport();
+    window.addEventListener("resize", syncViewport);
+    return () => window.removeEventListener("resize", syncViewport);
+  }, []);
+
   const activeBookings = bookings.filter((booking) => booking.status !== "cancelled");
+  const activeExternalBlocks = externalBlocks.filter((block) => block.is_active !== false);
+  const calendarItems: CalendarItem[] = [
+    ...activeBookings.map((booking) => ({
+      type: "booking" as const,
+      id: booking.id,
+      villa: booking.villa,
+      starts_on: booking.check_in,
+      ends_on: booking.check_out,
+      status: booking.status,
+      booking,
+    })),
+    ...activeExternalBlocks.map((block) => ({
+      type: "external" as const,
+      id: block.id,
+      villa: block.villa,
+      starts_on: block.starts_on,
+      ends_on: block.ends_on,
+      status: "external" as const,
+      summary: block.summary,
+    })),
+  ];
   const recentBookings = [...activeBookings].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 5);
   const pendingBookings = [...bookings]
     .filter((booking) => booking.status === "pending")
@@ -88,11 +177,12 @@ export default function DashboardOperationsView({
     .filter((source) => source.last_sync_status !== "success" || !!source.last_error?.trim())
     .slice(0, 4);
 
-  const villaRows = Array.from(new Set(activeBookings.map((booking) => booking.villa))).sort();
+  const villaRows = Array.from(new Set([...KNOWN_VILLAS, ...calendarItems.map((item) => item.villa)])).sort();
   const startDate = startOfTodayUtcIso();
   const timelineDates = Array.from({ length: TIMELINE_DAYS }, (_, index) => toIsoDate(addUtcDays(startDate, index)));
+  const mobileDates = timelineDates.slice(0, MOBILE_LIST_DAYS);
   const timelineEndExclusive = toIsoDate(addUtcDays(startDate, TIMELINE_DAYS));
-  const dayWidth = isMobile ? MOBILE_DAY_WIDTH : DESKTOP_DAY_WIDTH;
+  const dayWidth = DESKTOP_DAY_WIDTH;
   const timelineWidth = timelineDates.length * dayWidth;
 
   return (
@@ -101,10 +191,10 @@ export default function DashboardOperationsView({
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "16px", flexWrap: "wrap", marginBottom: "1rem" }}>
           <div>
             <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 8px" }}>
-              Master calendar preview
+              Master calendar
             </p>
             <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0 }}>
-              Read-only timeline showing the next {isMobile ? TIMELINE_VISIBLE_LABEL_MOBILE : TIMELINE_VISIBLE_LABEL} days by default, with horizontal scroll for a longer planning horizon.
+              Read-only operations calendar showing the next {isMobile ? MOBILE_LIST_DAYS : TIMELINE_VISIBLE_LABEL} days by default.
             </p>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
@@ -116,24 +206,99 @@ export default function DashboardOperationsView({
               <span style={{ display: "inline-block", width: "10px", height: "10px", backgroundColor: "#d99644", marginRight: "6px", verticalAlign: "middle" }} />
               Pending
             </span>
+            {activeExternalBlocks.length > 0 && (
+              <span style={{ fontFamily: LATO, fontSize: "11px", color: WHITE }}>
+                <span style={{ display: "inline-block", width: "10px", height: "10px", backgroundColor: "#9a9a9a", marginRight: "6px", verticalAlign: "middle" }} />
+                External
+              </span>
+            )}
           </div>
         </div>
 
-        <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "0 0 1rem" }}>
-          External calendar blocks are not shown here because the current admin data context does not include imported external block rows.
-        </p>
+        {activeExternalBlocks.length === 0 && (
+          <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "0 0 1rem" }}>
+            External calendar blocks are not shown here because the current admin data context does not include imported external block rows.
+          </p>
+        )}
 
         {loading ? (
           <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: 0 }}>Loading...</p>
         ) : villaRows.length === 0 ? (
-          <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: 0 }}>No active bookings available for the timeline preview.</p>
+          <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: 0 }}>No villas available for the master calendar.</p>
+        ) : isMobile ? (
+          <div style={{ display: "grid", gap: "14px" }}>
+            {mobileDates.map((date) => (
+              <div key={date} style={{ border: `0.5px solid ${BORDER}`, padding: "14px", backgroundColor: "rgba(255,255,255,0.015)" }}>
+                <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: "0 0 12px" }}>
+                  {formatTimelineDayLabel(date)}
+                </p>
+                <div style={{ display: "grid", gap: "10px" }}>
+                  {villaRows.map((villa) => {
+                    const dayItems = calendarItems
+                      .filter((item) => item.villa === villa && itemOverlapsDay(item, date))
+                      .sort((a, b) => a.status.localeCompare(b.status));
+
+                    return (
+                      <div key={`${date}-${villa}`} style={{ display: "grid", gridTemplateColumns: "minmax(92px, 0.8fr) minmax(0, 1.2fr)", gap: "12px", alignItems: "start", paddingTop: "10px", borderTop: "0.5px solid rgba(255,255,255,0.05)" }}>
+                        <p style={{ fontFamily: PLAYFAIR, fontSize: "15px", color: WHITE, margin: 0, lineHeight: 1.3 }}>
+                          {villa.replace("Villa ", "")}
+                        </p>
+                        {dayItems.length === 0 ? (
+                          <span style={{ fontFamily: LATO, fontSize: "12px", color: MUTED }}>
+                            Available
+                          </span>
+                        ) : (
+                          <div style={{ display: "grid", gap: "6px" }}>
+                            {dayItems.map((item) => {
+                              const tone = getStatusTone(item.status);
+                              const content = (
+                                <span style={{
+                                  display: "block",
+                                  fontFamily: LATO,
+                                  fontSize: "11px",
+                                  color: item.type === "external" ? MUTED : WHITE,
+                                  backgroundColor: tone.background,
+                                  border: `0.5px solid ${tone.color}`,
+                                  padding: "7px 9px",
+                                  whiteSpace: "nowrap",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                }}>
+                                  {getMobileStatusLabel(item, members)}
+                                </span>
+                              );
+
+                              if (item.type === "booking") {
+                                return (
+                                  <button
+                                    key={item.id}
+                                    type="button"
+                                    onClick={() => setSelectedBooking(item.booking)}
+                                    style={{ appearance: "none", border: "none", background: "transparent", padding: 0, textAlign: "left", cursor: "pointer", width: "100%" }}
+                                  >
+                                    {content}
+                                  </button>
+                                );
+                              }
+
+                              return <div key={item.id}>{content}</div>;
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
         ) : (
           <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", paddingBottom: "6px" }}>
-            <div style={{ minWidth: `${(isMobile ? 110 : VILLA_COLUMN_WIDTH) + timelineWidth}px` }}>
+            <div style={{ minWidth: `${VILLA_COLUMN_WIDTH + timelineWidth}px` }}>
               <div style={{ display: "flex", borderBottom: `0.5px solid ${BORDER}`, marginBottom: "12px" }}>
                 <div style={{
-                  width: `${isMobile ? 110 : VILLA_COLUMN_WIDTH}px`,
-                  minWidth: `${isMobile ? 110 : VILLA_COLUMN_WIDTH}px`,
+                  width: `${VILLA_COLUMN_WIDTH}px`,
+                  minWidth: `${VILLA_COLUMN_WIDTH}px`,
                   padding: "0 14px 14px 0",
                   position: "sticky",
                   left: 0,
@@ -156,26 +321,28 @@ export default function DashboardOperationsView({
               </div>
 
               {villaRows.map((villa, rowIndex) => {
-                const villaBookings = activeBookings
-                  .filter((booking) => booking.villa === villa && booking.check_in < timelineEndExclusive && booking.check_out > timelineDates[0])
-                  .sort((a, b) => a.check_in.localeCompare(b.check_in));
+                const villaItems = calendarItems
+                  .filter((item) => item.villa === villa && item.starts_on < timelineEndExclusive && item.ends_on > timelineDates[0]);
+                const positionedItems = assignLanes(villaItems);
+                const laneCount = positionedItems.reduce((max, positioned) => Math.max(max, positioned.lane + 1), 0);
+                const rowHeight = Math.max(76, laneCount * (BLOCK_HEIGHT + BLOCK_GAP) + 20);
 
                 return (
-                  <div key={villa} style={{ display: "flex", marginBottom: rowIndex === villaRows.length - 1 ? 0 : "12px" }}>
+                  <div key={villa} style={{ display: "flex", marginBottom: rowIndex === villaRows.length - 1 ? 0 : "16px", borderTop: rowIndex === 0 ? "none" : "0.5px solid rgba(255,255,255,0.05)", paddingTop: rowIndex === 0 ? 0 : "16px" }}>
                     <div style={{
-                      width: `${isMobile ? 110 : VILLA_COLUMN_WIDTH}px`,
-                      minWidth: `${isMobile ? 110 : VILLA_COLUMN_WIDTH}px`,
+                      width: `${VILLA_COLUMN_WIDTH}px`,
+                      minWidth: `${VILLA_COLUMN_WIDTH}px`,
                       padding: "14px 14px 0 0",
                       position: "sticky",
                       left: 0,
                       backgroundColor: SURFACE,
                       zIndex: 2,
                     }}>
-                      <p style={{ fontFamily: PLAYFAIR, fontSize: isMobile ? "15px" : "18px", color: WHITE, margin: "0 0 4px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      <p style={{ fontFamily: PLAYFAIR, fontSize: "18px", color: WHITE, margin: "0 0 4px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                         {villa}
                       </p>
                       <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0 }}>
-                        {villaBookings.length} active range{villaBookings.length === 1 ? "" : "s"}
+                        {villaItems.length} active range{villaItems.length === 1 ? "" : "s"}
                       </p>
                     </div>
 
@@ -183,52 +350,35 @@ export default function DashboardOperationsView({
                       position: "relative",
                       width: `${timelineWidth}px`,
                       minWidth: `${timelineWidth}px`,
-                      height: isMobile ? "68px" : "76px",
+                      height: `${rowHeight}px`,
                       backgroundImage: `repeating-linear-gradient(to right, rgba(255,255,255,0.04), rgba(255,255,255,0.04) 1px, transparent 1px, transparent ${dayWidth}px)`,
                       borderTop: `0.5px solid rgba(255,255,255,0.04)`,
                       borderBottom: `0.5px solid rgba(255,255,255,0.04)`,
                     }}>
-                      {villaBookings.map((booking) => {
-                        const clampedStart = booking.check_in > timelineDates[0] ? booking.check_in : timelineDates[0];
-                        const clampedEnd = booking.check_out < timelineEndExclusive ? booking.check_out : timelineEndExclusive;
+                      {positionedItems.map(({ item, lane }) => {
+                        const clampedStart = item.starts_on > timelineDates[0] ? item.starts_on : timelineDates[0];
+                        const clampedEnd = item.ends_on < timelineEndExclusive ? item.ends_on : timelineEndExclusive;
                         const startOffset = Math.max(0, timelineDates.indexOf(clampedStart));
                         const endOffset = timelineDates.indexOf(clampedEnd);
                         const widthDays = Math.max(1, (endOffset === -1 ? timelineDates.length : endOffset) - startOffset);
-                        const tone = getStatusTone(booking.status);
-                        const title = `${villa} | ${booking.status} | ${getBookingName(booking, members)} | ${fmt(booking.check_in)} to ${fmt(booking.check_out)}`;
-
-                        return (
-                          <div
-                            key={booking.id}
-                            title={title}
-                            style={{
-                              position: "absolute",
-                              left: `${startOffset * dayWidth + 4}px`,
-                              top: isMobile ? "8px" : "10px",
-                              width: `${Math.max(dayWidth - 8, widthDays * dayWidth - 8)}px`,
-                              minWidth: `${Math.max(isMobile ? 68 : 84, widthDays * dayWidth - 8)}px`,
-                              height: isMobile ? "50px" : "56px",
-                              backgroundColor: tone.background,
-                              border: `0.5px solid ${tone.color}`,
-                              padding: "8px 10px",
-                              boxSizing: "border-box",
-                              overflow: "hidden",
-                            }}
-                          >
+                        const tone = getStatusTone(item.status);
+                        const title = `${villa} | ${item.status} | ${getItemName(item, members)} | ${fmt(item.starts_on)} to ${fmt(item.ends_on)}`;
+                        const content = (
+                          <>
                             <p style={{
                               fontFamily: PLAYFAIR,
-                              fontSize: isMobile ? "13px" : "15px",
-                              color: WHITE,
+                              fontSize: "14px",
+                              color: item.type === "external" ? "rgba(255,255,255,0.62)" : WHITE,
                               margin: "0 0 4px",
                               whiteSpace: "nowrap",
                               overflow: "hidden",
                               textOverflow: "ellipsis",
                             }}>
-                              {getBookingName(booking, members)}
+                              {getItemName(item, members)}
                             </p>
                             <p style={{
                               fontFamily: LATO,
-                              fontSize: "10px",
+                              fontSize: "9px",
                               letterSpacing: "1.2px",
                               textTransform: "uppercase",
                               color: tone.color,
@@ -237,8 +387,46 @@ export default function DashboardOperationsView({
                               overflow: "hidden",
                               textOverflow: "ellipsis",
                             }}>
-                              {getBookingLabel(booking)}
+                              {getItemLabel(item)}
                             </p>
+                          </>
+                        );
+
+                        const blockStyle = {
+                          position: "absolute" as const,
+                          left: `${startOffset * dayWidth + 4}px`,
+                          top: `${10 + lane * (BLOCK_HEIGHT + BLOCK_GAP)}px`,
+                          width: `${Math.max(dayWidth - 8, widthDays * dayWidth - 8)}px`,
+                          minWidth: `${Math.max(96, widthDays * dayWidth - 8)}px`,
+                          height: `${BLOCK_HEIGHT}px`,
+                          backgroundColor: tone.background,
+                          border: `0.5px solid ${tone.color}`,
+                          padding: "7px 10px",
+                          boxSizing: "border-box" as const,
+                          overflow: "hidden",
+                        };
+
+                        if (item.type === "booking") {
+                          return (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => setSelectedBooking(item.booking)}
+                              title={title}
+                              style={{ ...blockStyle, cursor: "pointer", textAlign: "left" }}
+                            >
+                              {content}
+                            </button>
+                          );
+                        }
+
+                        return (
+                          <div
+                            key={item.id}
+                            title={title}
+                            style={blockStyle}
+                          >
+                            {content}
                           </div>
                         );
                       })}
@@ -431,6 +619,73 @@ export default function DashboardOperationsView({
         )}
 
       </section>
+
+      {selectedBooking && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 300,
+            backgroundColor: "rgba(10,14,18,0.72)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+          }}
+          onClick={() => setSelectedBooking(null)}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "480px",
+              backgroundColor: SURFACE,
+              border: `0.5px solid ${BORDER}`,
+              padding: isMobile ? "1rem" : "1.5rem",
+              boxShadow: "0 24px 80px rgba(0,0,0,0.32)",
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "16px", marginBottom: "1rem" }}>
+              <div>
+                <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 8px" }}>
+                  Booking details
+                </p>
+                <p style={{ fontFamily: PLAYFAIR, fontSize: "1.5rem", color: WHITE, margin: 0 }}>
+                  {getBookingName(selectedBooking, members)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedBooking(null)}
+                style={{ fontFamily: LATO, fontSize: "18px", color: MUTED, background: "transparent", border: "none", cursor: "pointer", lineHeight: 1 }}
+                aria-label="Close booking details"
+              >
+                x
+              </button>
+            </div>
+
+            {[
+              ["Villa", selectedBooking.villa],
+              ["Check-in", fmt(selectedBooking.check_in)],
+              ["Check-out", fmt(selectedBooking.check_out)],
+              ["Status", selectedBooking.status],
+              ["Type", getBookingLabel(selectedBooking)],
+              ["Add-ons", getBookingAddons(selectedBooking)],
+            ].map(([label, value]) => (
+              <div key={label} style={{ display: "flex", justifyContent: "space-between", gap: "16px", padding: "10px 0", borderTop: "0.5px solid rgba(255,255,255,0.05)" }}>
+                <span style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED, flexShrink: 0 }}>
+                  {label}
+                </span>
+                <span style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, textAlign: "right", lineHeight: 1.5 }}>
+                  {value}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </>
   );
 }
