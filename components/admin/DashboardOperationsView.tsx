@@ -223,6 +223,7 @@ export default function DashboardOperationsView({
 }) {
   const [isMobile, setIsMobile] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [approvedAddonKeys, setApprovedAddonKeys] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     function syncViewport() {
@@ -788,11 +789,13 @@ export default function DashboardOperationsView({
                   <span style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED, flexShrink: 0 }}>
                     Add-on status
                   </span>
-                  <div style={{ width: "100%", maxWidth: "280px", display: "grid", gap: "8px" }}>
+                  <div style={{ width: "100%", maxWidth: "280px", display: "grid", gap: "10px" }}>
                     {selectedBooking.addons_snapshot?.map((addon) => {
                       const tone = getAddonStatusTone(addon.status);
+                      const addonKey = `${selectedBooking.id}-${addon.id}`;
+                      const isLocallyApproved = approvedAddonKeys.has(addonKey);
                       return (
-                        <div key={`${selectedBooking.id}-${addon.id}`} style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start" }}>
+                        <div key={addonKey} style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start" }}>
                           <div style={{ textAlign: "right" }}>
                             <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, margin: "0 0 4px", lineHeight: 1.5 }}>
                               {addon.label}
@@ -801,8 +804,94 @@ export default function DashboardOperationsView({
                               {formatAddonPrice(addon.price)}
                             </p>
                             <div style={{ display: "flex", justifyContent: "flex-end", flexWrap: "wrap", gap: "6px", marginTop: "6px" }}>
-                              {renderAddonOperationalBadges(selectedBooking, addon)}
+                              {/* Approval badge — replaced by Approved if locally marked */}
+                              {addon.requires_approval && (
+                                isLocallyApproved ? (
+                                  <span style={{
+                                    fontFamily: LATO,
+                                    fontSize: "9px",
+                                    letterSpacing: "1.2px",
+                                    textTransform: "uppercase",
+                                    color: "#6fcf8a",
+                                    backgroundColor: "rgba(80,180,100,0.15)",
+                                    padding: "3px 7px",
+                                    borderRadius: "2px",
+                                  }}>
+                                    Approved
+                                  </span>
+                                ) : (
+                                  <span style={{
+                                    fontFamily: LATO,
+                                    fontSize: "9px",
+                                    letterSpacing: "1.2px",
+                                    textTransform: "uppercase",
+                                    color: GOLD,
+                                    backgroundColor: "rgba(197,164,109,0.14)",
+                                    padding: "3px 7px",
+                                    borderRadius: "2px",
+                                  }}>
+                                    Requires approval
+                                  </span>
+                                )
+                              )}
+                              {/* Existing enforcement badges — unchanged */}
+                              {addon.enforcement_mode === "soft" && (
+                                <span style={{
+                                  fontFamily: LATO,
+                                  fontSize: "9px",
+                                  letterSpacing: "1.2px",
+                                  textTransform: "uppercase",
+                                  color: "#e2ab5a",
+                                  backgroundColor: "rgba(226,171,90,0.15)",
+                                  padding: "3px 7px",
+                                  borderRadius: "2px",
+                                }}>
+                                  Soft rule
+                                </span>
+                              )}
+                              {addon.enforcement_mode === "strict" && (
+                                <span style={{
+                                  fontFamily: LATO,
+                                  fontSize: "9px",
+                                  letterSpacing: "1.2px",
+                                  textTransform: "uppercase",
+                                  color: "#e78f8f",
+                                  backgroundColor: "rgba(224,112,112,0.14)",
+                                  padding: "3px 7px",
+                                  borderRadius: "2px",
+                                }}>
+                                  Strict rule
+                                </span>
+                              )}
                             </div>
+                            {/* Mark as approved button — only shown when requires_approval and not yet marked */}
+                            {addon.requires_approval && !isLocallyApproved && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setApprovedAddonKeys((prev) => {
+                                    const next = new Set(prev);
+                                    next.add(addonKey);
+                                    return next;
+                                  })
+                                }
+                                style={{
+                                  fontFamily: LATO,
+                                  fontSize: "9px",
+                                  letterSpacing: "1.2px",
+                                  textTransform: "uppercase",
+                                  color: "#6fcf8a",
+                                  backgroundColor: "transparent",
+                                  border: "0.5px solid rgba(111,207,138,0.45)",
+                                  padding: "3px 8px",
+                                  borderRadius: "2px",
+                                  cursor: "pointer",
+                                  marginTop: "6px",
+                                }}
+                              >
+                                Mark as approved
+                              </button>
+                            )}
                           </div>
                           <span style={{
                             fontFamily: LATO,
@@ -820,6 +909,9 @@ export default function DashboardOperationsView({
                         </div>
                       );
                     })}
+                    <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: "4px 0 0", lineHeight: 1.5, textAlign: "right" }}>
+                      Approval is currently tracked locally and is not saved after refresh.
+                    </p>
                   </div>
                 </div>
               </div>

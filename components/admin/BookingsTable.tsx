@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import { formatBeirutDateTime } from "@/lib/format-date";
 import type { Booking, Member } from "./types";
 import { GOLD, WHITE, MIDNIGHT, MUTED, LATO, PLAYFAIR, SURFACE, BORDER, thStyle, tdStyle, fieldStyle, fmt } from "./theme";
@@ -79,6 +80,8 @@ export default function BookingsTable({
   updateStatus: (id: string, status: "confirmed" | "cancelled") => void;
   emailWarnings: Record<string, string>;
 }) {
+  const [approvedAddonKeys, setApprovedAddonKeys] = useState<Set<string>>(new Set());
+
   function getMember(booking: Booking) {
     return booking.member_id ? members.find((m) => m.id === booking.member_id) : null;
   }
@@ -334,8 +337,10 @@ export default function BookingsTable({
                       </p>
                       {getAddonSnapshots(b).map((addon) => {
                         const tone = getAddonStatusTone(addon.status);
+                        const addonKey = `${b.id}-${addon.id}`;
+                        const isLocallyApproved = approvedAddonKeys.has(addonKey);
                         return (
-                          <div key={`${b.id}-${addon.id}`} style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start" }}>
+                          <div key={addonKey} style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start" }}>
                             <div>
                               <p style={{ fontFamily: LATO, fontSize: "12px", color: WHITE, margin: "0 0 4px" }}>
                                 {addon.label}
@@ -344,8 +349,95 @@ export default function BookingsTable({
                                 {formatAddonPrice(addon.price)}
                               </p>
                               <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "6px" }}>
-                                {renderAddonOperationalBadges(b, addon)}
+                                {/* Approval badge — replaced by Approved if locally marked */}
+                                {addon.requires_approval && (
+                                  isLocallyApproved ? (
+                                    <span style={{
+                                      fontFamily: LATO,
+                                      fontSize: "9px",
+                                      letterSpacing: "1.2px",
+                                      textTransform: "uppercase",
+                                      color: "#6fcf8a",
+                                      backgroundColor: "rgba(80,180,100,0.15)",
+                                      padding: "3px 7px",
+                                      borderRadius: "2px",
+                                    }}>
+                                      Approved
+                                    </span>
+                                  ) : (
+                                    <span style={{
+                                      fontFamily: LATO,
+                                      fontSize: "9px",
+                                      letterSpacing: "1.2px",
+                                      textTransform: "uppercase",
+                                      color: GOLD,
+                                      backgroundColor: "rgba(197,164,109,0.14)",
+                                      padding: "3px 7px",
+                                      borderRadius: "2px",
+                                    }}>
+                                      Requires approval
+                                    </span>
+                                  )
+                                )}
+                                {/* Existing enforcement badges — unchanged */}
+                                {addon.enforcement_mode === "soft" && (
+                                  <span style={{
+                                    fontFamily: LATO,
+                                    fontSize: "9px",
+                                    letterSpacing: "1.2px",
+                                    textTransform: "uppercase",
+                                    color: "#e2ab5a",
+                                    backgroundColor: "rgba(226,171,90,0.15)",
+                                    padding: "3px 7px",
+                                    borderRadius: "2px",
+                                  }}>
+                                    Soft rule
+                                  </span>
+                                )}
+                                {addon.enforcement_mode === "strict" && (
+                                  <span style={{
+                                    fontFamily: LATO,
+                                    fontSize: "9px",
+                                    letterSpacing: "1.2px",
+                                    textTransform: "uppercase",
+                                    color: "#e78f8f",
+                                    backgroundColor: "rgba(224,112,112,0.14)",
+                                    padding: "3px 7px",
+                                    borderRadius: "2px",
+                                  }}>
+                                    Strict rule
+                                  </span>
+                                )}
                               </div>
+                              {/* Mark as approved button — only when requires_approval and not yet marked */}
+                              {addon.requires_approval && !isLocallyApproved && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setApprovedAddonKeys((prev) => {
+                                      const next = new Set(prev);
+                                      next.add(addonKey);
+                                      return next;
+                                    })
+                                  }
+                                  style={{
+                                    fontFamily: LATO,
+                                    fontSize: "9px",
+                                    letterSpacing: "1.2px",
+                                    textTransform: "uppercase",
+                                    color: "#6fcf8a",
+                                    backgroundColor: "transparent",
+                                    border: "0.5px solid rgba(111,207,138,0.45)",
+                                    padding: "3px 8px",
+                                    borderRadius: "2px",
+                                    cursor: "pointer",
+                                    marginTop: "6px",
+                                    display: "block",
+                                  }}
+                                >
+                                  Mark as approved
+                                </button>
+                              )}
                             </div>
                             <span style={{
                               fontFamily: LATO,
@@ -363,6 +455,9 @@ export default function BookingsTable({
                           </div>
                         );
                       })}
+                      <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: "2px 0 0", lineHeight: 1.5 }}>
+                        Approval is currently tracked locally and is not saved after refresh.
+                      </p>
                     </div>
                   )}
 
