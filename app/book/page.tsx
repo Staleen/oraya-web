@@ -182,6 +182,7 @@ interface Addon {
   applicable_villas?: string[];
   description?: string;
   display_order?: number | null;
+  recommended?: boolean;
 }
 
 const PRICING_MODEL_LABELS: Record<string, string> = {
@@ -1380,9 +1381,28 @@ function BookPageInner() {
                                   size={16}
                                   color={selected ? "rgba(197,164,109,0.7)" : disableSelection ? "rgba(197,164,109,0.25)" : "rgba(197,164,109,0.45)"}
                                 />
-                                <span style={{ fontFamily: LATO, fontSize: "13px", color: selected ? WHITE : disableSelection ? "rgba(255,255,255,0.45)" : "rgba(255,255,255,0.7)", fontWeight: selected ? 400 : 300, lineHeight: 1.3 }}>
-                                  {addon.label}
-                                </span>
+                                <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0, flexWrap: "wrap" }}>
+                                  <span style={{ fontFamily: LATO, fontSize: "13px", color: selected ? WHITE : disableSelection ? "rgba(255,255,255,0.45)" : "rgba(255,255,255,0.7)", fontWeight: selected ? 400 : 300, lineHeight: 1.3 }}>
+                                    {addon.label}
+                                  </span>
+                                  {addon.recommended && (
+                                    <span
+                                      style={{
+                                        fontFamily: LATO,
+                                        fontSize: "9px",
+                                        letterSpacing: "1.4px",
+                                        textTransform: "uppercase",
+                                        color: GOLD,
+                                        border: "0.5px solid rgba(197,164,109,0.35)",
+                                        backgroundColor: "rgba(197,164,109,0.08)",
+                                        padding: "2px 6px",
+                                        whiteSpace: "nowrap",
+                                      }}
+                                    >
+                                      Recommended
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                               {addon.description?.trim() && (
                                 <span

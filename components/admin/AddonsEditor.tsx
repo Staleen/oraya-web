@@ -322,6 +322,39 @@ export default function AddonsEditor({
     );
   }
 
+  function renderRecommendedField(addon: Addon, mobile: boolean) {
+    return (
+      <label
+        style={{
+          display: "grid",
+          gap: "8px",
+          alignContent: "start",
+          fontFamily: LATO,
+          fontSize: mobile ? "12px" : "11px",
+          color: addon.enabled ? MUTED : "rgba(138,128,112,0.5)",
+          cursor: "pointer",
+        }}
+      >
+        {fieldLabel("Mark as recommended")}
+        <span style={{ display: "flex", alignItems: "center", gap: "10px", minHeight: mobile ? "48px" : "42px", padding: "0 2px" }}>
+          <input
+            type="checkbox"
+            checked={addon.recommended ?? false}
+            onChange={e => updateAddon(addon.id, { recommended: e.target.checked })}
+            style={{
+              accentColor: GOLD,
+              width: mobile ? "18px" : "16px",
+              height: mobile ? "18px" : "16px",
+              cursor: "pointer",
+              flexShrink: 0,
+            }}
+          />
+          <span>Recommended add-ons are highlighted to guests.</span>
+        </span>
+      </label>
+    );
+  }
+
   const expandedGridColumns = isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))";
   const operationsGridColumns = isMobile ? "1fr" : "minmax(0, 1.1fr) 110px minmax(0, 1.3fr) minmax(0, 1fr)";
   const editingAddon = expandedAddonId ? addons.find((addon) => addon.id === expandedAddonId) ?? null : null;
@@ -673,6 +706,7 @@ export default function AddonsEditor({
                           ))}
                         </select>
                       </div>
+                      {renderRecommendedField(addon, false)}
                       {renderDisplayOrderField(addon, false)}
                       {renderDescriptionField(addon, false)}
                     </div>
@@ -867,6 +901,7 @@ export default function AddonsEditor({
                       ))}
                     </select>
                   </div>
+                  {renderRecommendedField(editingAddon, true)}
                   {renderDisplayOrderField(editingAddon, true)}
                   {renderDescriptionField(editingAddon, true)}
                 </div>

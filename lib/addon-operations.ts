@@ -14,6 +14,7 @@ export interface AddonOperationalFields {
   applicable_villas?: string[];
   description?: string;
   display_order?: number | null;
+  recommended?: boolean;
 }
 
 export interface AddonOperationalSettingRow extends AddonOperationalFields {
@@ -110,6 +111,7 @@ function parseOperationalFields(value: unknown): AddonOperationalFields {
     typeof item.display_order === "number" && Number.isFinite(item.display_order)
       ? item.display_order
       : null;
+  const recommended = item.recommended === true ? true : false;
 
   return {
     ...(preparationTimeHours !== null ? { preparation_time_hours: preparationTimeHours } : {}),
@@ -120,6 +122,7 @@ function parseOperationalFields(value: unknown): AddonOperationalFields {
     ...(applicableVillas.length > 0 ? { applicable_villas: applicableVillas } : {}),
     ...(description ? { description } : {}),
     ...(displayOrder !== null ? { display_order: displayOrder } : {}),
+    ...(recommended ? { recommended: true } : {}),
   };
 }
 
