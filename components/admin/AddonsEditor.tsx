@@ -4,10 +4,13 @@ import type { Addon } from "./types";
 import {
   ADDON_CATEGORY_LABELS,
   ADDON_CUTOFF_LABELS,
+  ADDON_ENFORCEMENT_LABELS,
   derivePreparationUnit,
+  getAddonEnforcementMode,
   getPreparationAmount,
   normalizePreparationTime,
   type AddonCategory,
+  type AddonEnforcementMode,
   type PreparationUnit,
 } from "@/lib/addon-operations";
 import { GOLD, CHARCOAL, MIDNIGHT, MUTED, LATO, SURFACE, BORDER, fieldStyle } from "./theme";
@@ -29,6 +32,11 @@ const CATEGORY_OPTIONS: Array<{ value: AddonCategory; label: string }> = [
 const CUTOFF_OPTIONS = [
   { value: "before_checkin", label: ADDON_CUTOFF_LABELS.before_checkin },
 ] as const;
+const ENFORCEMENT_OPTIONS: Array<{ value: AddonEnforcementMode; label: string; help: string }> = [
+  { value: "strict", label: ADDON_ENFORCEMENT_LABELS.strict, help: "Disable if not enough preparation time" },
+  { value: "soft", label: ADDON_ENFORCEMENT_LABELS.soft, help: "Allow with warning" },
+  { value: "none", label: ADDON_ENFORCEMENT_LABELS.none, help: "Always available" },
+];
 
 export default function AddonsEditor({
   addons, addonsSaving, addonsSaved, updateAddon, saveAddons,
@@ -197,6 +205,19 @@ export default function AddonsEditor({
                     <option key={option.value} value={option.value} style={{ backgroundColor: MIDNIGHT }}>{option.label}</option>
                   ))}
                 </select>
+                <select
+                  value={getAddonEnforcementMode(addon.enforcement_mode)}
+                  onChange={e => updateAddon(addon.id, { enforcement_mode: e.target.value as AddonEnforcementMode })}
+                  style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", cursor: "pointer", opacity: addon.enabled ? 1 : 0.5 }}
+                  onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
+                  onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+                >
+                  {ENFORCEMENT_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value} style={{ backgroundColor: MIDNIGHT }}>
+                      {option.label} - {option.help}
+                    </option>
+                  ))}
+                </select>
                 <label style={{ display: "flex", alignItems: "center", gap: "10px", fontFamily: LATO, fontSize: "12px", color: addon.enabled ? MUTED : "rgba(138,128,112,0.5)", cursor: "pointer" }}>
                   <input
                     type="checkbox"
@@ -270,7 +291,7 @@ export default function AddonsEditor({
                   ))}
                 </select>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "10px", marginTop: "10px", paddingLeft: "40px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: "10px", marginTop: "10px", paddingLeft: "40px" }}>
                 <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 100px", gap: "10px" }}>
                   <input
                     type="number"
@@ -315,6 +336,19 @@ export default function AddonsEditor({
                   <option value="" style={{ backgroundColor: MIDNIGHT }}>Category</option>
                   {CATEGORY_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value} style={{ backgroundColor: MIDNIGHT }}>{option.label}</option>
+                  ))}
+                </select>
+                <select
+                  value={getAddonEnforcementMode(addon.enforcement_mode)}
+                  onChange={e => updateAddon(addon.id, { enforcement_mode: e.target.value as AddonEnforcementMode })}
+                  style={{ ...fieldStyle, padding: "8px 10px", fontSize: "13px", cursor: "pointer", opacity: addon.enabled ? 1 : 0.5 }}
+                  onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
+                  onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+                >
+                  {ENFORCEMENT_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value} style={{ backgroundColor: MIDNIGHT }}>
+                      {option.label} - {option.help}
+                    </option>
                   ))}
                 </select>
                 <label style={{ display: "flex", alignItems: "center", gap: "10px", fontFamily: LATO, fontSize: "12px", color: addon.enabled ? MUTED : "rgba(138,128,112,0.5)", cursor: "pointer", minHeight: "40px" }}>

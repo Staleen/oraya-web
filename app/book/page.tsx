@@ -6,7 +6,7 @@ import type { DateRange, Matcher } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 import OrayaEmblem from "@/components/OrayaEmblem";
 import { getVillaBasePrice, getVillaPricing } from "@/lib/admin-pricing";
-import { ADDON_CATEGORY_LABELS, ADDON_OPERATIONAL_SETTINGS_KEY, formatPreparationTime, mergeAddonsWithOperationalSettings, parseAddonOperationalSetting, type AddonCategory, type AddonCutoffType } from "@/lib/addon-operations";
+import { ADDON_CATEGORY_LABELS, ADDON_OPERATIONAL_SETTINGS_KEY, formatPreparationTime, getAddonEnforcementMode, mergeAddonsWithOperationalSettings, parseAddonOperationalSetting, type AddonCategory, type AddonCutoffType, type AddonEnforcementMode } from "@/lib/addon-operations";
 import { usePublicPricing } from "@/lib/public-pricing";
 import { calculateStayPricing } from "@/lib/pricing/engine";
 import type { NightSource } from "@/lib/pricing/types";
@@ -177,6 +177,7 @@ interface Addon {
   cutoff_type?: AddonCutoffType | null;
   requires_approval?: boolean;
   category?: AddonCategory | null;
+  enforcement_mode?: AddonEnforcementMode | null;
 }
 
 const PRICING_MODEL_LABELS: Record<string, string> = {
@@ -548,24 +549,73 @@ function BookPageInner() {
   })();
 
   function getAddonAvailability(addon: Addon) {
+    const enforcementMode = getAddonEnforcementMode(addon.enforcement_mode);
     const preparationHours = addon.preparation_time_hours ?? null;
-    if (!preparationHours || preparationHours <= 0) {
-      return { available: true, warning: "" };
+    if (enforcementMode === "none" || !preparationHours || preparationHours <= 0) {
+      return {
+        available: true,
+        selectable: true,
+        warning: "",
+        mode: enforcementMode,
+      };
     }
 
     if (!checkIn) {
-      return { available: true, warning: "" };
+      return {
+        available: true,
+        selectable: true,
+        warning: "",
+        mode: enforcementMode,
+      };
     }
 
     const hoursUntilCheckIn = (parseLocalISO(checkIn).getTime() - Date.now()) / 3_600_000;
     const available = hoursUntilCheckIn >= preparationHours;
+    if (available) {
+      return {
+        available: true,
+        selectable: true,
+        warning: "",
+        mode: enforcementMode,
+      };
+    }
+
+    if (enforcementMode === "strict") {
+      return {
+        available: false,
+        selectable: false,
+        warning: `Requires ${formatPreparationTime(preparationHours)} preparation and is not available for your selected check-in.`,
+        mode: enforcementMode,
+      };
+    }
+
     return {
-      available,
-      warning: available
-        ? ""
-        : `This add-on requires ${formatPreparationTime(preparationHours)} preparation and is not available for your selected dates.`,
+      available: false,
+      selectable: true,
+      warning: `Requires ${formatPreparationTime(preparationHours)} preparation. This service may be subject to availability.`,
+      mode: enforcementMode,
     };
   }
+
+  useEffect(() => {
+    setSelectedAddons((prev) => prev.filter((id) => {
+      const addon = addons.find((item) => item.id === id);
+      if (!addon) return false;
+      const enforcementMode = getAddonEnforcementMode(addon.enforcement_mode);
+      const preparationHours = addon.preparation_time_hours ?? null;
+      if (
+        enforcementMode !== "strict" ||
+        !preparationHours ||
+        preparationHours <= 0 ||
+        !checkIn
+      ) {
+        return true;
+      }
+
+      const hoursUntilCheckIn = (parseLocalISO(checkIn).getTime() - Date.now()) / 3_600_000;
+      return hoursUntilCheckIn >= preparationHours;
+    }));
+  }, [addons, checkIn]);
 
   // ── Event handlers ────────────────────────────────────────────────────────
   function handleFormChange(
@@ -604,6 +654,10 @@ function BookPageInner() {
   }
 
   function toggleAddon(id: string) {
+    const addon = addons.find((item) => item.id === id);
+    if (!addon) return;
+    const availability = getAddonAvailability(addon);
+    if (!availability.selectable) return;
     setSelectedAddons(prev =>
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     );
@@ -1187,7 +1241,7 @@ function BookPageInner() {
                         {group.items.map((addon) => {
                           const selected = selectedAddons.includes(addon.id);
                           const availability = getAddonAvailability(addon);
-                          const disableSelection = !selected && !availability.available;
+                          const disableSelection = !availability.selectable;
                           return (
                             <button
                           key={addon.id}
@@ -1198,11 +1252,11 @@ function BookPageInner() {
                             display: "flex", alignItems: "flex-start", justifyContent: "space-between",
                             width: "100%", textAlign: "left",
                             padding: "14px 18px",
-                            border: `0.5px solid ${selected ? GOLD : disableSelection ? "rgba(224,112,112,0.35)" : "rgba(197,164,109,0.18)"}`,
-                            backgroundColor: selected ? "rgba(197,164,109,0.07)" : disableSelection ? "rgba(224,112,112,0.06)" : "rgba(255,255,255,0.02)",
+                            border: `0.5px solid ${selected ? GOLD : availability.mode === "soft" && !availability.available ? "rgba(226,171,90,0.42)" : disableSelection ? "rgba(255,255,255,0.12)" : "rgba(197,164,109,0.18)"}`,
+                            backgroundColor: selected ? "rgba(197,164,109,0.07)" : availability.mode === "soft" && !availability.available ? "rgba(226,171,90,0.08)" : disableSelection ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.02)",
                             cursor: disableSelection ? "not-allowed" : "pointer",
                             transition: "border-color 0.15s, background-color 0.15s",
-                            opacity: disableSelection ? 0.75 : 1,
+                            opacity: disableSelection ? 0.55 : 1,
                             gap: "16px",
                           }}
                         >
@@ -1210,7 +1264,7 @@ function BookPageInner() {
                           <div style={{ display: "flex", alignItems: "flex-start", gap: "12px", flex: 1, minWidth: 0 }}>
                             <div style={{
                               width: "16px", height: "16px", flexShrink: 0, marginTop: "2px",
-                              border: `1px solid ${selected ? GOLD : disableSelection ? "rgba(224,112,112,0.45)" : "rgba(197,164,109,0.3)"}`,
+                              border: `1px solid ${selected ? GOLD : availability.mode === "soft" && !availability.available ? "rgba(226,171,90,0.55)" : disableSelection ? "rgba(255,255,255,0.2)" : "rgba(197,164,109,0.3)"}`,
                               backgroundColor: selected ? GOLD : "transparent",
                               display: "flex", alignItems: "center", justifyContent: "center",
                               transition: "background-color 0.15s, border-color 0.15s",
@@ -1220,7 +1274,7 @@ function BookPageInner() {
                               )}
                             </div>
                             <div style={{ minWidth: 0 }}>
-                              <span style={{ fontFamily: LATO, fontSize: "13px", color: selected ? WHITE : "rgba(255,255,255,0.7)", fontWeight: selected ? 400 : 300, display: "block" }}>
+                              <span style={{ fontFamily: LATO, fontSize: "13px", color: selected ? WHITE : disableSelection ? "rgba(255,255,255,0.45)" : "rgba(255,255,255,0.7)", fontWeight: selected ? 400 : 300, display: "block" }}>
                                 {addon.label}
                               </span>
                               {(addon.requires_approval || addon.preparation_time_hours) && (
@@ -1232,7 +1286,7 @@ function BookPageInner() {
                                 </span>
                               )}
                               {!availability.available && (
-                                <span style={{ fontFamily: LATO, fontSize: "11px", color: "#e07070", display: "block", marginTop: "6px", lineHeight: 1.5 }}>
+                                <span style={{ fontFamily: LATO, fontSize: "11px", color: availability.mode === "soft" ? "#e2ab5a" : "#e07070", display: "block", marginTop: "6px", lineHeight: 1.5 }}>
                                   {availability.warning}
                                 </span>
                               )}

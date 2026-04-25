@@ -1,3 +1,5 @@
+import { getAddonEnforcementMode, type AddonEnforcementMode } from "./addon-operations";
+
 const ISO_DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 export type AddonAuditReason = "insufficient_preparation_time" | "requires_approval";
@@ -8,6 +10,7 @@ export type AddonAuditInput = {
     id: string;
     preparation_time_hours?: number | null;
     requires_approval?: boolean | null;
+    enforcement_mode?: AddonEnforcementMode | null;
   }>;
   now?: Date;
 };
@@ -19,6 +22,7 @@ export type AddonAuditResult = {
     requires_approval: boolean;
   };
   would_block_reasons: AddonAuditReason[];
+  warnings: string[];
 };
 
 function parseDateOnlyToUtcMillis(value: string): number | null {
@@ -46,10 +50,26 @@ export function runAddonAudit(input: AddonAuditInput): AddonAuditResult {
 
   const insufficientPreparationTime = input.addons.some((addon) => {
     const preparationTimeHours = addon.preparation_time_hours ?? null;
+    const enforcementMode = getAddonEnforcementMode(addon.enforcement_mode);
     return typeof preparationTimeHours === "number" &&
       Number.isFinite(preparationTimeHours) &&
       preparationTimeHours > 0 &&
+      enforcementMode === "strict" &&
       hoursUntilCheckIn < preparationTimeHours;
+  });
+  const softAvailabilityWarnings = input.addons.flatMap((addon) => {
+    const preparationTimeHours = addon.preparation_time_hours ?? null;
+    const enforcementMode = getAddonEnforcementMode(addon.enforcement_mode);
+    if (
+      typeof preparationTimeHours !== "number" ||
+      !Number.isFinite(preparationTimeHours) ||
+      preparationTimeHours <= 0 ||
+      enforcementMode !== "soft" ||
+      hoursUntilCheckIn >= preparationTimeHours
+    ) {
+      return [];
+    }
+    return [`${addon.id}: soft preparation warning`];
   });
   const requiresApproval = input.addons.some((addon) => addon.requires_approval === true);
   const wouldBlockReasons: AddonAuditReason[] = [];
@@ -68,5 +88,6 @@ export function runAddonAudit(input: AddonAuditInput): AddonAuditResult {
       requires_approval: requiresApproval,
     },
     would_block_reasons: wouldBlockReasons,
+    warnings: softAvailabilityWarnings,
   };
 }

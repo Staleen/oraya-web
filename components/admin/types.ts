@@ -1,4 +1,4 @@
-import type { AddonCategory, AddonCutoffType } from "@/lib/addon-operations";
+import type { AddonCategory, AddonCutoffType, AddonEnforcementMode } from "@/lib/addon-operations";
 
 export interface BookingAddon {
   id:    string;
@@ -57,4 +57,5 @@ export interface Addon {
   cutoff_type?: AddonCutoffType | null;
   requires_approval?: boolean;
   category?: AddonCategory | null;
+  enforcement_mode?: AddonEnforcementMode | null;
 }

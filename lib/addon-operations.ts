@@ -3,12 +3,14 @@ export const ADDON_OPERATIONAL_SETTINGS_KEY = "addon_operational_settings";
 export type AddonCutoffType = "before_checkin" | "before_booking";
 export type AddonCategory = "comfort" | "experience" | "logistics" | "service";
 export type PreparationUnit = "hours" | "days";
+export type AddonEnforcementMode = "strict" | "soft" | "none";
 
 export interface AddonOperationalFields {
   preparation_time_hours?: number | null;
   cutoff_type?: AddonCutoffType | null;
   requires_approval?: boolean;
   category?: AddonCategory | null;
+  enforcement_mode?: AddonEnforcementMode | null;
 }
 
 export interface AddonOperationalSettingRow extends AddonOperationalFields {
@@ -17,6 +19,7 @@ export interface AddonOperationalSettingRow extends AddonOperationalFields {
 
 const VALID_CUTOFF_TYPES = new Set<AddonCutoffType>(["before_checkin", "before_booking"]);
 const VALID_CATEGORIES = new Set<AddonCategory>(["comfort", "experience", "logistics", "service"]);
+const VALID_ENFORCEMENT_MODES = new Set<AddonEnforcementMode>(["strict", "soft", "none"]);
 
 export const ADDON_CATEGORY_LABELS: Record<AddonCategory, string> = {
   comfort: "Comfort",
@@ -29,6 +32,18 @@ export const ADDON_CUTOFF_LABELS: Record<AddonCutoffType, string> = {
   before_checkin: "Before check-in",
   before_booking: "Before booking",
 };
+
+export const ADDON_ENFORCEMENT_LABELS: Record<AddonEnforcementMode, string> = {
+  strict: "Strict",
+  soft: "Soft",
+  none: "None",
+};
+
+export function getAddonEnforcementMode(
+  mode: AddonEnforcementMode | null | undefined
+): AddonEnforcementMode {
+  return mode ?? "soft";
+}
 
 export function derivePreparationUnit(hours: number | null | undefined): PreparationUnit {
   return typeof hours === "number" && Number.isFinite(hours) && hours >= 24 && hours % 24 === 0
@@ -76,12 +91,18 @@ function parseOperationalFields(value: unknown): AddonOperationalFields {
     typeof item.category === "string" && VALID_CATEGORIES.has(item.category as AddonCategory)
       ? (item.category as AddonCategory)
       : null;
+  const enforcementMode =
+    typeof item.enforcement_mode === "string" &&
+    VALID_ENFORCEMENT_MODES.has(item.enforcement_mode as AddonEnforcementMode)
+      ? (item.enforcement_mode as AddonEnforcementMode)
+      : null;
 
   return {
     ...(preparationTimeHours !== null ? { preparation_time_hours: preparationTimeHours } : {}),
     ...(cutoffType ? { cutoff_type: cutoffType } : {}),
     ...(requiresApproval ? { requires_approval: true } : {}),
     ...(category ? { category } : {}),
+    ...(enforcementMode ? { enforcement_mode: enforcementMode } : {}),
   };
 }
 

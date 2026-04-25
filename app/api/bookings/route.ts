@@ -231,6 +231,7 @@ export async function POST(request: Request) {
             id: addon.id,
             preparation_time_hours: addon.preparation_time_hours ?? null,
             requires_approval: addon.requires_approval ?? false,
+            enforcement_mode: addon.enforcement_mode ?? null,
           }));
         const addonAudit = runAddonAudit({
           addons: selectedAddonAuditRows,
@@ -241,6 +242,7 @@ export async function POST(request: Request) {
           console.debug("[addon-dry-run]", {
             ok: addonAudit.ok,
             would_block_reasons: addonAudit.would_block_reasons,
+            warnings: addonAudit.warnings,
             addon_ids: selectedAddonIds,
           });
         }
