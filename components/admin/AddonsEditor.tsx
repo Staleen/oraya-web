@@ -74,7 +74,9 @@ export default function AddonsEditor({
     if (addons.length === 0) {
       setExpandedAddonId(null);
       previousAddonIdsRef.current = [];
-      initializedAddonIdsRef.current = true;
+      // Reset so the next non-empty load is treated as initialisation, not as
+      // new additions — this prevents the first loaded item from auto-expanding.
+      initializedAddonIdsRef.current = false;
       return;
     }
 
@@ -85,7 +87,11 @@ export default function AddonsEditor({
     }
 
     const previousAddonIds = previousAddonIdsRef.current;
-    const newAddon = addons.find((addon) => !previousAddonIds.includes(addon.id));
+    // Guard: only detect a new addon when we already have a known previous list.
+    // An empty previousAddonIds means we just initialised — never auto-expand.
+    const newAddon = previousAddonIds.length > 0
+      ? addons.find((addon) => !previousAddonIds.includes(addon.id))
+      : null;
 
     if (newAddon) {
       setExpandedAddonId(newAddon.id);
