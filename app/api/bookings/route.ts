@@ -102,7 +102,9 @@ export async function POST(request: Request) {
         throw pricingError;
       }
 
-      const pricingConfig = getVillaPricing(parseVillaPricingSetting(pricingRow?.value), villa);
+      const pricingConfig = pricingRow?.value
+        ? getVillaPricing(parseVillaPricingSetting(pricingRow.value), villa)
+        : null;
       const pricingAudit = runPricingAudit({
         config: pricingConfig,
         check_in,
@@ -110,12 +112,10 @@ export async function POST(request: Request) {
       });
 
       if (process.env.NODE_ENV !== "production") {
-        console.debug("[api/bookings] pricing audit", {
-          villa,
+        console.debug("[pricing-dry-run]", {
           ok: pricingAudit.ok,
+          would_block_reasons: pricingAudit.would_block_reasons,
           subtotal: pricingAudit.subtotal,
-          warnings: pricingAudit.warnings,
-          violations: pricingAudit.violations,
         });
       }
     } catch (pricingAuditError) {

@@ -11,10 +11,14 @@ export type PricingAuditResult = {
   }>;
   warnings: string[];
   violations: {
+    invalid_date_range: boolean;
+    pricing_config_missing: boolean;
     has_unpriced_nights: boolean;
     violates_minimum_stay: boolean;
-    invalid_date_range: boolean;
   };
+  would_block_reasons: Array<
+    "invalid_date_range" | "pricing_config_missing" | "unpriced_nights" | "minimum_stay_violation"
+  >;
 };
 
 export type PricingAuditInput = {
@@ -46,10 +50,12 @@ function emptyAuditResult(overrides?: Partial<PricingAuditResult>): PricingAudit
     nights: [],
     warnings: [],
     violations: {
+      invalid_date_range: false,
+      pricing_config_missing: false,
       has_unpriced_nights: false,
       violates_minimum_stay: false,
-      invalid_date_range: false,
     },
+    would_block_reasons: [],
     ...overrides,
   };
 }
@@ -64,10 +70,12 @@ export function runPricingAudit(input: PricingAuditInput): PricingAuditResult {
     return emptyAuditResult({
       warnings: ["Invalid stay dates for pricing audit."],
       violations: {
+        invalid_date_range: true,
+        pricing_config_missing: false,
         has_unpriced_nights: false,
         violates_minimum_stay: false,
-        invalid_date_range: true,
       },
+      would_block_reasons: ["invalid_date_range"],
     });
   }
 
@@ -75,10 +83,12 @@ export function runPricingAudit(input: PricingAuditInput): PricingAuditResult {
     return emptyAuditResult({
       warnings: ["Missing pricing configuration for audit."],
       violations: {
+        invalid_date_range: false,
+        pricing_config_missing: true,
         has_unpriced_nights: false,
         violates_minimum_stay: false,
-        invalid_date_range: false,
       },
+      would_block_reasons: ["pricing_config_missing"],
     });
   }
 
@@ -87,8 +97,19 @@ export function runPricingAudit(input: PricingAuditInput): PricingAuditResult {
     check_out: input.check_out,
   });
 
+  const hasUnpricedNights = result.nightly.some((night) => night.price === null || night.source === "unpriced");
+  const violatesMinimumStay = result.warnings.some((warning) => warning.kind === "minimum_stay");
+  const wouldBlockReasons: PricingAuditResult["would_block_reasons"] = [];
+
+  if (hasUnpricedNights) {
+    wouldBlockReasons.push("unpriced_nights");
+  }
+  if (violatesMinimumStay) {
+    wouldBlockReasons.push("minimum_stay_violation");
+  }
+
   return {
-    ok: true,
+    ok: wouldBlockReasons.length === 0,
     subtotal: result.subtotal ?? 0,
     nights: result.nightly.map((night) => ({
       date: night.date,
@@ -102,9 +123,11 @@ export function runPricingAudit(input: PricingAuditInput): PricingAuditResult {
       return `Unpriced nights warning: ${warning.count}.`;
     }),
     violations: {
-      has_unpriced_nights: result.nightly.some((night) => night.price === null || night.source === "unpriced"),
-      violates_minimum_stay: result.warnings.some((warning) => warning.kind === "minimum_stay"),
       invalid_date_range: false,
+      pricing_config_missing: false,
+      has_unpriced_nights: hasUnpricedNights,
+      violates_minimum_stay: violatesMinimumStay,
     },
+    would_block_reasons: wouldBlockReasons,
   };
 }
