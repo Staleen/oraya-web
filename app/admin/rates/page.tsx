@@ -4,6 +4,7 @@ import AddonsEditor from "@/components/admin/AddonsEditor";
 import BasePricingEditor from "@/components/admin/BasePricingEditor";
 import { VILLA_BASE_PRICING_KEY, parseVillaPricingSetting, stringifyVillaPricingSetting, type VillaBasePricing } from "@/lib/admin-pricing";
 import { ADDON_OPERATIONAL_SETTINGS_KEY, mergeAddonsWithOperationalSettings, parseAddonOperationalSetting, stringifyAddonOperationalSetting } from "@/lib/addon-operations";
+import { validatePricing } from "@/lib/pricing/validation";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
 import { LATO } from "@/components/admin/theme";
 import type { Addon } from "@/components/admin/types";
@@ -16,6 +17,7 @@ export default function AdminRatesPage() {
   const [villaPricing, setVillaPricing] = useState<VillaBasePricing[]>(parseVillaPricingSetting(null));
   const [pricingSaving, setPricingSaving] = useState(false);
   const [pricingSaved, setPricingSaved] = useState(false);
+  const [pricingValidationAttempted, setPricingValidationAttempted] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -109,12 +111,16 @@ export default function AdminRatesPage() {
   }
 
   async function savePricing() {
-    const missingBasePrice = villaPricing.find((item) => item.base_price === null);
-    if (missingBasePrice) {
-      setError(`Base price is required for ${missingBasePrice.villa}.`);
+    const hasBlockingPricingErrors = villaPricing.some((item) =>
+      validatePricing(item).some((issue) => issue.level === "error"),
+    );
+    if (hasBlockingPricingErrors) {
+      setPricingValidationAttempted(true);
+      setError("");
       return;
     }
 
+    setPricingValidationAttempted(false);
     setPricingSaving(true);
     setPricingSaved(false);
     setError("");
@@ -154,6 +160,7 @@ export default function AdminRatesPage() {
         pricingSaved={pricingSaved}
         updatePricing={updatePricing}
         savePricing={savePricing}
+        pricingValidationAttempted={pricingValidationAttempted}
       />
       <div style={{ marginBottom: "1rem" }}>
         <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: "#C5A46D", margin: "0 0 8px" }}>

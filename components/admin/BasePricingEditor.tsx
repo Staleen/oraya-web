@@ -88,12 +88,14 @@ export default function BasePricingEditor({
   pricingSaved,
   updatePricing,
   savePricing,
+  pricingValidationAttempted,
 }: {
   pricing: VillaBasePricing[];
   pricingSaving: boolean;
   pricingSaved: boolean;
   updatePricing: (villa: string, patch: Partial<VillaBasePricing>) => void;
   savePricing: () => void;
+  pricingValidationAttempted: boolean;
 }) {
   const isMobile = typeof window !== "undefined" ? window.innerWidth <= 768 : false;
 
@@ -111,7 +113,7 @@ export default function BasePricingEditor({
             Base pricing
           </p>
           <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0 }}>
-            Admin-only nightly pricing foundation in USD. Base price is required per villa, while weekday price, weekend price, and minimum stay remain optional.
+            Admin-only nightly pricing foundation in USD. Base price is recommended per villa, while weekday price, weekend price, and minimum stay remain optional.
           </p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "12px", width: isMobile ? "100%" : "auto", flexWrap: "wrap" }}>
@@ -132,6 +134,8 @@ export default function BasePricingEditor({
         {pricing.map((villaPricing) => {
           const issues       = issuesByVilla.get(villaPricing.villa) ?? [];
           const issueCount   = issues.length;
+          const errorCount   = issues.filter((issue) => issue.level === "error").length;
+          const villaHasErrors = errorCount > 0;
           const villaIssue   = (field: ValidationField) => findFieldIssue(issues, "villa", undefined, field);
 
           const baseIssue    = villaIssue("base_price");
@@ -173,6 +177,11 @@ export default function BasePricingEditor({
                 {sampleNight && (
                   <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "4px 0 0" }}>
                     Sample: {sampleLabel(sampleNight.date)} → {sampleNight.price === null ? "Not priced" : `$${sampleNight.price.toLocaleString()}`} ({sampleSourceLabel(sampleNight.source)})
+                  </p>
+                )}
+                {pricingValidationAttempted && villaHasErrors && (
+                  <p style={{ fontFamily: LATO, fontSize: "11px", color: ERROR_RED, margin: "8px 0 0", lineHeight: 1.5 }}>
+                    Fix pricing errors before saving.
                   </p>
                 )}
               </div>

@@ -33,8 +33,22 @@ const MSG = {
   endInvalid:       "End date is invalid.",
   endBeforeStart:   "End date must be on or after start date.",
   noPricingSet:     "No pricing set — this season falls back to villa rates.",
-  overlaps:         "Overlaps with another season — earlier entry in list takes priority.",
+  overlaps:         "Seasonal ranges cannot overlap.",
 } as const;
+
+function isValidDateOnly(value: string): boolean {
+  const match = ISO_DATE.exec(value);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+}
 
 function priceIssues(
   value:    number | null,
@@ -94,17 +108,17 @@ export function validatePricing(config: VillaBasePricing): ValidationIssue[] {
   // ── Per-season checks ──────────────────────────────────────────────────
   const seasons = config.seasonal_overrides ?? [];
   for (const s of seasons) {
-    const startOk = !!s.start_date && ISO_DATE.test(s.start_date);
-    const endOk   = !!s.end_date   && ISO_DATE.test(s.end_date);
+    const startOk = !!s.start_date && isValidDateOnly(s.start_date);
+    const endOk   = !!s.end_date   && isValidDateOnly(s.end_date);
 
     if (!s.start_date) {
       issues.push({ level: "error", scope: "season", villa, season_id: s.id, field: "start_date", message: MSG.startRequired });
-    } else if (!ISO_DATE.test(s.start_date)) {
+    } else if (!isValidDateOnly(s.start_date)) {
       issues.push({ level: "error", scope: "season", villa, season_id: s.id, field: "start_date", message: MSG.startInvalid });
     }
     if (!s.end_date) {
       issues.push({ level: "error", scope: "season", villa, season_id: s.id, field: "end_date", message: MSG.endRequired });
-    } else if (!ISO_DATE.test(s.end_date)) {
+    } else if (!isValidDateOnly(s.end_date)) {
       issues.push({ level: "error", scope: "season", villa, season_id: s.id, field: "end_date", message: MSG.endInvalid });
     }
     if (startOk && endOk && s.start_date > s.end_date) {
@@ -132,7 +146,7 @@ export function validatePricing(config: VillaBasePricing): ValidationIssue[] {
   // ── Cross-season overlap (O(n²); n is small) ───────────────────────────
   const ranged = seasons.filter((s) =>
     !!s.start_date && !!s.end_date &&
-    ISO_DATE.test(s.start_date) && ISO_DATE.test(s.end_date) &&
+    isValidDateOnly(s.start_date) && isValidDateOnly(s.end_date) &&
     s.start_date <= s.end_date,
   );
   for (let i = 0; i < ranged.length; i++) {
@@ -141,8 +155,8 @@ export function validatePricing(config: VillaBasePricing): ValidationIssue[] {
       const b = ranged[j];
       // Inclusive ranges overlap iff a.start <= b.end AND b.start <= a.end.
       if (a.start_date <= b.end_date && b.start_date <= a.end_date) {
-        issues.push({ level: "warning", scope: "season", villa, season_id: a.id, message: MSG.overlaps });
-        issues.push({ level: "warning", scope: "season", villa, season_id: b.id, message: MSG.overlaps });
+        issues.push({ level: "error", scope: "season", villa, season_id: a.id, message: MSG.overlaps });
+        issues.push({ level: "error", scope: "season", villa, season_id: b.id, message: MSG.overlaps });
       }
     }
   }
