@@ -39,12 +39,14 @@ const ENFORCEMENT_OPTIONS: Array<{ value: AddonEnforcementMode; label: string; h
 ];
 
 export default function AddonsEditor({
-  addons, addonsSaving, addonsSaved, updateAddon, saveAddons,
+  addons, addonsSaving, addonsSaved, updateAddon, addAddon, removeAddon, saveAddons,
 }: {
   addons: Addon[];
   addonsSaving: boolean;
   addonsSaved: boolean;
   updateAddon: (id: string, patch: Partial<Addon>) => void;
+  addAddon: () => void;
+  removeAddon: (id: string) => void;
   saveAddons: () => void;
 }) {
   const [preparationUnits, setPreparationUnits] = useState<Record<string, PreparationUnit>>({});
@@ -94,6 +96,13 @@ export default function AddonsEditor({
             <span style={{ fontFamily: LATO, fontSize: "11px", color: "#6fcf8a", letterSpacing: "1px" }}>Saved</span>
           )}
           <button
+            onClick={addAddon}
+            disabled={addonsSaving}
+            style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, backgroundColor: "transparent", border: `0.5px solid ${BORDER}`, padding: "12px 18px", cursor: addonsSaving ? "not-allowed" : "pointer", opacity: addonsSaving ? 0.7 : 1, width: isMobile ? "100%" : "auto" }}
+          >
+            + Add Add-on
+          </button>
+          <button
             onClick={saveAddons}
             disabled={addonsSaving}
             style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: CHARCOAL, backgroundColor: GOLD, border: "none", padding: "12px 24px", cursor: addonsSaving ? "not-allowed" : "pointer", opacity: addonsSaving ? 0.7 : 1, width: isMobile ? "100%" : "auto" }}
@@ -109,14 +118,23 @@ export default function AddonsEditor({
             <div key={addon.id} style={{ border: `0.5px solid rgba(255,255,255,0.03)`, padding: "12px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", marginBottom: "12px" }}>
                 <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
-                  {addon.label}
+                  {addon.label.trim() || "New add-on"}
                 </p>
-                <input
-                  type="checkbox"
-                  checked={addon.enabled}
-                  onChange={e => updateAddon(addon.id, { enabled: e.target.checked })}
-                  style={{ accentColor: GOLD, width: "16px", height: "16px", cursor: "pointer" }}
-                />
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <button
+                    type="button"
+                    onClick={() => removeAddon(addon.id)}
+                    style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: "#d9a2a2", backgroundColor: "transparent", border: "none", padding: 0, cursor: "pointer" }}
+                  >
+                    Remove
+                  </button>
+                  <input
+                    type="checkbox"
+                    checked={addon.enabled}
+                    onChange={e => updateAddon(addon.id, { enabled: e.target.checked })}
+                    style={{ accentColor: GOLD, width: "16px", height: "16px", cursor: "pointer" }}
+                  />
+                </div>
               </div>
               <div style={{ display: "grid", gap: "10px" }}>
                 <input
@@ -290,6 +308,18 @@ export default function AddonsEditor({
                     <option key={pm.value} value={pm.value} style={{ backgroundColor: MIDNIGHT }}>{pm.label}</option>
                   ))}
                 </select>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", marginTop: "10px", paddingLeft: "40px" }}>
+                <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+                  {addon.label.trim() || "New add-on"}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => removeAddon(addon.id)}
+                  style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: "#d9a2a2", backgroundColor: "transparent", border: "none", padding: 0, cursor: "pointer" }}
+                >
+                  Remove
+                </button>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: "10px", marginTop: "10px", paddingLeft: "40px" }}>
                 <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 100px", gap: "10px" }}>

@@ -9,6 +9,13 @@ import { useAdminData } from "@/components/admin/AdminDataProvider";
 import { LATO } from "@/components/admin/theme";
 import type { Addon } from "@/components/admin/types";
 
+function createAddonId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `addon_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
+  }
+  return `addon_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
 export default function AdminRatesPage() {
   const { error, setError } = useAdminData();
   const [addons, setAddons] = useState<Addon[]>([]);
@@ -59,6 +66,31 @@ export default function AdminRatesPage() {
 
   function updateAddon(id: string, patch: Partial<Addon>) {
     setAddons((prev) => prev.map((a) => a.id === id ? { ...a, ...patch } : a));
+    setAddonsSaved(false);
+  }
+
+  function addAddon() {
+    setAddons((prev) => ([
+      ...prev,
+      {
+        id: createAddonId(),
+        label: "",
+        currency: "USD",
+        price: 0,
+        pricing_model: "flat_fee",
+        enabled: true,
+        preparation_time_hours: null,
+        cutoff_type: null,
+        requires_approval: false,
+        category: "service",
+        enforcement_mode: "soft",
+      },
+    ]));
+    setAddonsSaved(false);
+  }
+
+  function removeAddon(id: string) {
+    setAddons((prev) => prev.filter((addon) => addon.id !== id));
     setAddonsSaved(false);
   }
 
@@ -175,6 +207,8 @@ export default function AdminRatesPage() {
         addonsSaving={addonsSaving}
         addonsSaved={addonsSaved}
         updateAddon={updateAddon}
+        addAddon={addAddon}
+        removeAddon={removeAddon}
         saveAddons={saveAddons}
       />
     </>

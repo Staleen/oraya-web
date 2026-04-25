@@ -29,13 +29,41 @@ export async function POST(request: NextRequest) {
     updated_at:    now,
   }));
 
-  const { error } = await supabaseAdmin
+  const { data: existingRows, error: existingError } = await supabaseAdmin
     .from("addons")
-    .upsert(rows, { onConflict: "id" });
+    .select("id");
 
-  if (error) {
-    console.error("[api/admin/addons] upsert error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (existingError) {
+    console.error("[api/admin/addons] existing query error:", existingError);
+    return NextResponse.json({ error: existingError.message }, { status: 500 });
+  }
+
+  if (rows.length > 0) {
+    const { error } = await supabaseAdmin
+      .from("addons")
+      .upsert(rows, { onConflict: "id" });
+
+    if (error) {
+      console.error("[api/admin/addons] upsert error:", error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+  }
+
+  const incomingIds = new Set(rows.map((row) => row.id));
+  const idsToDelete = (existingRows ?? [])
+    .map((row) => row.id)
+    .filter((id) => !incomingIds.has(id));
+
+  if (idsToDelete.length > 0) {
+    const { error: deleteError } = await supabaseAdmin
+      .from("addons")
+      .delete()
+      .in("id", idsToDelete);
+
+    if (deleteError) {
+      console.error("[api/admin/addons] delete error:", deleteError);
+      return NextResponse.json({ error: deleteError.message }, { status: 500 });
+    }
   }
 
   return NextResponse.json({ ok: true });
