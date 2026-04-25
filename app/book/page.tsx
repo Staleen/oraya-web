@@ -22,6 +22,8 @@ const CHARCOAL = "#2E2E2E";
 const MUTED    = "#8a8070";
 const PLAYFAIR = "'Playfair Display', Georgia, serif";
 const LATO     = "'Lato', system-ui, sans-serif";
+/** Phase 12E Batch 5: discount applied to dead-gap extension offers (UI display only, not persisted). */
+const DEAD_DAY_DISCOUNT_PCT = 0.30;
 
 // ─── Static data ──────────────────────────────────────────────────────────────
 const VILLAS      = ["Villa Mechmech", "Villa Byblos"];
@@ -542,6 +544,8 @@ function BookPageInner() {
   // UI
   const [error,   setError]   = useState("");
   const [loading, setLoading] = useState(false);
+  // Phase 12E Batch 5: addon IDs that have had the dead-day discount applied (client-only, display only).
+  const [appliedDiscounts, setAppliedDiscounts] = useState<string[]>([]);
 
   // Pre-select villa from ?villa= query param
   useEffect(() => {
@@ -815,6 +819,28 @@ function BookPageInner() {
     return messages;
   }
 
+  /**
+   * Phase 12E Batch 5: timing add-ons eligible for the dead-day discount offer.
+   * Only populated when a dead-day gap is detected adjacent to the user's dates,
+   * the add-on is available for the selected villa, is selectable, and has a
+   * computable price. The discount is display-only — never sent to the server.
+   */
+  const deadDayOfferAddons = availableAddons.flatMap((addon) => {
+    const tType = getAddonTimingType(addon);
+    const isRelevant =
+      (tType === "early_checkin" && deadDaySuggestion.suggestEarlyCheckin) ||
+      (tType === "late_checkout"  && deadDaySuggestion.suggestLateCheckout);
+    if (!isRelevant) return [];
+    const avail = getAddonAvailability(addon);
+    if (!avail.selectable) return [];
+    const baseRaw = computeAddonPrice(addon);
+    if (baseRaw === null) return [];
+    const basePrice      = Math.round(baseRaw);
+    const discountedPrice = Math.round(baseRaw * (1 - DEAD_DAY_DISCOUNT_PCT));
+    const savings        = basePrice - discountedPrice;
+    return [{ addon, basePrice, discountedPrice, savings }];
+  });
+
   useEffect(() => {
     setSelectedAddons((prev) => prev.filter((id) => {
       const addon = addons.find((item) => item.id === id);
@@ -835,6 +861,9 @@ function BookPageInner() {
       return hoursUntilCheckIn >= preparationHours;
     }));
   }, [addons, checkIn, form.villa]);
+
+  // Clear applied discounts whenever dates change — the discount amount is date-dependent.
+  useEffect(() => { setAppliedDiscounts([]); }, [dateRange]);
 
   // ── Event handlers ────────────────────────────────────────────────────────
   function handleFormChange(
@@ -880,6 +909,12 @@ function BookPageInner() {
     setSelectedAddons(prev =>
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     );
+  }
+
+  /** Phase 12E Batch 5: select a timing add-on and mark it as discount-applied (display only). */
+  function applyDeadDayOffer(addonId: string) {
+    setSelectedAddons(prev => prev.includes(addonId) ? prev : [...prev, addonId]);
+    setAppliedDiscounts(prev => prev.includes(addonId) ? prev : [...prev, addonId]);
   }
 
   function goBack() {
@@ -1468,6 +1503,8 @@ function BookPageInner() {
                           const deadDayTimingHighlight =
                             (timingType === "early_checkin" && deadDaySuggestion.suggestEarlyCheckin) ||
                             (timingType === "late_checkout" && deadDaySuggestion.suggestLateCheckout);
+                          const offerData = deadDayOfferAddons.find(o => o.addon.id === addon.id);
+                          const hasAppliedDiscount = offerData !== undefined && appliedDiscounts.includes(addon.id);
                           const disableSelection = !availability.selectable;
                           return (
                             <button
@@ -1611,7 +1648,20 @@ function BookPageInner() {
 
                           {/* Pricing metadata */}
                           <div style={{ textAlign: "right", flexShrink: 0, paddingLeft: "16px" }}>
-                            {addon.pricing_type === "percentage" && typeof addon.percentage_value === "number" && addon.percentage_value > 0 ? (
+                            {hasAppliedDiscount && offerData ? (
+                              /* Phase 12E Batch 5: discount override (display only, not submitted) */
+                              <>
+                                <span style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, display: "block", textDecoration: "line-through" }}>
+                                  {offerData.basePrice.toLocaleString()} {addon.currency}
+                                </span>
+                                <span style={{ fontFamily: LATO, fontSize: "13px", color: GOLD, display: "block", fontWeight: 500 }}>
+                                  {offerData.discountedPrice.toLocaleString()} {addon.currency}
+                                </span>
+                                <span style={{ fontFamily: LATO, fontSize: "10px", color: "#6fbf7e", display: "block" }}>
+                                  Save {offerData.savings}
+                                </span>
+                              </>
+                            ) : addon.pricing_type === "percentage" && typeof addon.percentage_value === "number" && addon.percentage_value > 0 ? (
                               <>
                                 <span style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1px", color: MUTED, display: "block" }}>
                                   {addon.percentage_value}% of stay
@@ -1655,38 +1705,116 @@ function BookPageInner() {
                 )}
               </div>
 
-              {/* Phase 12E Batch 4: Dead-day monetization suggestion (non-blocking) */}
+              {/* Phase 12E Batch 4+5: Dead-day suggestion / offer card */}
               {(deadDaySuggestion.suggestLateCheckout || deadDaySuggestion.suggestEarlyCheckin) && (
-                <div style={{
-                  border: "0.5px solid rgba(197,164,109,0.25)",
-                  backgroundColor: "rgba(197,164,109,0.04)",
-                  padding: "16px 20px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "8px",
-                }}>
-                  <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
-                    Enhance your stay
-                  </p>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
-                    {deadDaySuggestion.suggestLateCheckout && (
-                      <p style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.65)", margin: 0, lineHeight: 1.6 }}>
-                        · Late checkout may be available to extend your stay by a day
+                deadDayOfferAddons.length > 0 ? (
+                  /* Batch 5: priced offer card — shown when timing add-ons have computable prices */
+                  <div style={{
+                    border: "0.5px solid rgba(197,164,109,0.4)",
+                    backgroundColor: "rgba(197,164,109,0.06)",
+                    padding: "16px 20px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "12px",
+                  }}>
+                    <div>
+                      <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 4px" }}>
+                        Special offer
                       </p>
-                    )}
-                    {deadDaySuggestion.suggestEarlyCheckin && (
-                      <p style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.65)", margin: 0, lineHeight: 1.6 }}>
-                        · Early check-in may be available for the adjacent day
+                      <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, margin: 0, fontWeight: 300 }}>
+                        Extend your stay for less
                       </p>
-                    )}
-                    <p style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.65)", margin: 0, lineHeight: 1.6 }}>
-                      · A special offer may be available for adjacent days — contact Oraya for details
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                      {deadDayOfferAddons.map(({ addon: offerAddon, basePrice: bp, discountedPrice: dp, savings: sv }) => {
+                        const alreadyApplied = appliedDiscounts.includes(offerAddon.id);
+                        return (
+                          <div key={offerAddon.id} style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: "12px",
+                            flexWrap: "wrap",
+                          }}>
+                            <div>
+                              <p style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.8)", margin: "0 0 2px", lineHeight: 1.4 }}>
+                                {offerAddon.label}
+                              </p>
+                              <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.4 }}>
+                                <span style={{ textDecoration: "line-through", marginRight: "6px" }}>
+                                  {bp.toLocaleString()} {offerAddon.currency}
+                                </span>
+                                <span style={{ color: GOLD, marginRight: "6px" }}>
+                                  {dp.toLocaleString()} {offerAddon.currency}
+                                </span>
+                                <span style={{ color: "#6fbf7e" }}>
+                                  Save {sv}
+                                </span>
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => applyDeadDayOffer(offerAddon.id)}
+                              disabled={alreadyApplied}
+                              style={{
+                                fontFamily: LATO,
+                                fontSize: "10px",
+                                letterSpacing: "1.5px",
+                                textTransform: "uppercase",
+                                color: alreadyApplied ? MUTED : CHARCOAL,
+                                backgroundColor: alreadyApplied ? "transparent" : GOLD,
+                                border: alreadyApplied ? `0.5px solid rgba(197,164,109,0.3)` : "none",
+                                padding: "8px 18px",
+                                cursor: alreadyApplied ? "default" : "pointer",
+                                flexShrink: 0,
+                                whiteSpace: "nowrap",
+                              }}
+                              onMouseEnter={e => { if (!alreadyApplied) (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
+                              onMouseLeave={e => { if (!alreadyApplied) (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
+                            >
+                              {alreadyApplied ? "Applied ✓" : "Apply offer"}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+                      Estimated price shown. Final confirmation by Oraya.
                     </p>
                   </div>
-                  <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: "2px 0 0", lineHeight: 1.5 }}>
-                    Select an early check-in or late checkout add-on above, or contact us to arrange.
-                  </p>
-                </div>
+                ) : (
+                  /* Batch 4: generic suggestion — fallback when no timing add-ons are configured */
+                  <div style={{
+                    border: "0.5px solid rgba(197,164,109,0.25)",
+                    backgroundColor: "rgba(197,164,109,0.04)",
+                    padding: "16px 20px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px",
+                  }}>
+                    <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+                      Enhance your stay
+                    </p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
+                      {deadDaySuggestion.suggestLateCheckout && (
+                        <p style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.65)", margin: 0, lineHeight: 1.6 }}>
+                          · Late checkout may be available to extend your stay by a day
+                        </p>
+                      )}
+                      {deadDaySuggestion.suggestEarlyCheckin && (
+                        <p style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.65)", margin: 0, lineHeight: 1.6 }}>
+                          · Early check-in may be available for the adjacent day
+                        </p>
+                      )}
+                      <p style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.65)", margin: 0, lineHeight: 1.6 }}>
+                        · A special offer may be available for adjacent days — contact Oraya for details
+                      </p>
+                    </div>
+                    <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: "2px 0 0", lineHeight: 1.5 }}>
+                      Select an early check-in or late checkout add-on above, or contact us to arrange.
+                    </p>
+                  </div>
+                )
               )}
 
               {/* Divider */}
