@@ -6,12 +6,36 @@ const GOLD    = "#C5A46D";
 const MIDNIGHT = "#1F2B38";
 const MUTED   = "#8a8070";
 const FROM_EMAIL = "Oraya Reservations <bookings@stayoraya.com>";
+const WARN = "#e0b070";
 
 function fmtDate(iso: string): string {
   if (!iso) return "-";
   const [y, m, d] = iso.split("-");
   const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   return `${parseInt(d)} ${months[parseInt(m) - 1]} ${y}`;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function formatAddonPrice(price: number | null) {
+  if (typeof price !== "number") return "Price on request";
+  return `$${price.toLocaleString("en-US")}`;
+}
+
+function formatAdvanceNotice(hours: number | null | undefined) {
+  if (!hours || hours <= 0) return null;
+  if (hours % 24 === 0) {
+    const days = hours / 24;
+    return `Requires ${days} ${days === 1 ? "day" : "days"} advance notice`;
+  }
+  return `Requires ${hours} ${hours === 1 ? "hour" : "hours"} advance notice`;
 }
 
 export interface BookingRequestEmailPayload {
@@ -26,7 +50,18 @@ export interface BookingRequestEmailPayload {
   sleeping_guests: number;
   day_visitors:    number;
   event_type:      string | null;
+  message:         string | null;
   addons:          Array<{ label: string }>;
+  addons_snapshot?: Array<{
+    id: string;
+    label: string;
+    price: number | null;
+    category: string | null;
+    preparation_time_hours: number | null;
+    enforcement_mode: string | null;
+    requires_approval: boolean;
+    status: "pending_approval" | "confirmed" | "at_risk";
+  }> | null;
   created_at:      string;
   admin_url:       string;             // link to /admin - empty string = no button
   confirm_url?:    string;             // signed action link - confirm booking
@@ -44,9 +79,20 @@ export async function sendBookingRequestEmail(
 
   const resend    = new Resend(apiKey);
   const ref       = payload.booking_id.slice(0, 8).toUpperCase();
-  const addonsList = payload.addons.length > 0
-    ? payload.addons.map(a => a.label).join(", ")
-    : "None";
+  const noteText = payload.message?.trim() ? payload.message.trim() : "No special request provided.";
+  const addonRows = (payload.addons_snapshot && payload.addons_snapshot.length > 0
+    ? payload.addons_snapshot
+    : payload.addons.map((addon) => ({
+        id: addon.label,
+        label: addon.label,
+        price: null,
+        category: null,
+        preparation_time_hours: null,
+        enforcement_mode: null,
+        requires_approval: false,
+        status: "confirmed" as const,
+      }))
+  );
 
   const rows: [string, string][] = [
     ["Reference",       ref],
@@ -59,7 +105,6 @@ export async function sendBookingRequestEmail(
     ["Sleeping guests", String(payload.sleeping_guests)],
     ["Day visitors",    String(payload.day_visitors)],
     ...(payload.event_type ? [["Event type", payload.event_type] as [string, string]] : []),
-    ["Add-ons",         addonsList],
     ["Submitted",       formatBeirutDateTime(payload.created_at)],
   ];
 
@@ -76,6 +121,64 @@ export async function sendBookingRequestEmail(
         </td>
       </tr>
     </table>`).join("");
+
+  const notesHtml = `
+    <tr><td style="border:0.5px solid rgba(197,164,109,0.18);padding:22px 24px;">
+      <p style="margin:0 0 14px;font-size:9px;letter-spacing:3px;text-transform:uppercase;color:${GOLD};">
+        Special Request / Notes
+      </p>
+      <p style="margin:0;font-size:13px;line-height:1.75;color:#ffffff;white-space:pre-line;">
+        ${escapeHtml(noteText)}
+      </p>
+    </td></tr>`;
+
+  const addonsHtml = addonRows.length === 0
+    ? `
+      <tr><td style="border:0.5px solid rgba(197,164,109,0.18);padding:22px 24px;">
+        <p style="margin:0 0 14px;font-size:9px;letter-spacing:3px;text-transform:uppercase;color:${GOLD};">
+          Add-ons
+        </p>
+        <p style="margin:0;font-size:13px;line-height:1.75;color:#ffffff;">
+          No add-ons selected.
+        </p>
+      </td></tr>`
+    : `
+      <tr><td style="border:0.5px solid rgba(197,164,109,0.18);padding:22px 24px;">
+        <p style="margin:0 0 14px;font-size:9px;letter-spacing:3px;text-transform:uppercase;color:${GOLD};">
+          Add-ons
+        </p>
+        ${addonRows.map((addon) => {
+          const lines = [
+            typeof addon.price === "number" ? formatAddonPrice(addon.price) : null,
+            formatAdvanceNotice(addon.preparation_time_hours),
+            addon.requires_approval ? "Requires manager approval" : null,
+            addon.enforcement_mode === "strict"
+              ? "Strict rule: may block booking if conditions are not met"
+              : addon.enforcement_mode === "soft"
+                ? "Soft rule: booking allowed but requires review"
+                : addon.enforcement_mode === "none"
+                  ? "No operational restriction"
+                  : null,
+          ].filter((line): line is string => Boolean(line));
+
+          return `
+            <table width="100%" cellpadding="0" cellspacing="0"
+                   style="border:0.5px solid rgba(255,255,255,0.06);background-color:rgba(255,255,255,0.02);margin-top:10px;">
+              <tr>
+                <td style="padding:14px 16px;">
+                  <p style="margin:0 0 6px;font-size:14px;line-height:1.4;color:#ffffff;">
+                    ${escapeHtml(addon.label)}
+                  </p>
+                  ${lines.map((line) => `
+                    <p style="margin:0 0 4px;font-size:12px;line-height:1.65;color:${line.includes("Strict rule") || line.includes("Soft rule") || line.includes("Requires") ? WARN : MUTED};">
+                      ${escapeHtml(line)}
+                    </p>
+                  `).join("")}
+                </td>
+              </tr>
+            </table>`;
+        }).join("")}
+      </td></tr>`;
 
   // Action buttons - prefer signed confirm/cancel links; fall back to generic admin link
   const adminBtn = (payload.confirm_url || payload.cancel_url)
@@ -175,6 +278,10 @@ export async function sendBookingRequestEmail(
           ${rowsHtml}
         </td></tr>
 
+        <tr><td style="padding-top:16px;">${notesHtml}</td></tr>
+
+        <tr><td style="padding-top:16px;">${addonsHtml}</td></tr>
+
         <!-- Admin link -->
         ${adminBtn}
 
@@ -197,6 +304,28 @@ export async function sendBookingRequestEmail(
     "A new booking request has been submitted for review.",
     "",
     ...rows.map(([label, value]) => `${label}: ${value.replace(/<[^>]+>/g, "")}`),
+    "",
+    `Special Request / Notes: ${noteText}`,
+    "",
+    "Add-ons:",
+    ...(addonRows.length === 0
+      ? ["- No add-ons selected."]
+      : addonRows.flatMap((addon) => {
+          const lines = [
+            `- ${addon.label}`,
+            ...(typeof addon.price === "number" ? [`  Price: ${formatAddonPrice(addon.price)}`] : []),
+            ...(formatAdvanceNotice(addon.preparation_time_hours) ? [`  ${formatAdvanceNotice(addon.preparation_time_hours)}`] : []),
+            ...(addon.requires_approval ? ["  Requires manager approval"] : []),
+            ...(addon.enforcement_mode === "strict"
+              ? ["  Strict rule: may block booking if conditions are not met"]
+              : addon.enforcement_mode === "soft"
+                ? ["  Soft rule: booking allowed but requires review"]
+                : addon.enforcement_mode === "none"
+                  ? ["  No operational restriction"]
+                  : []),
+          ];
+          return lines;
+        })),
     ...(payload.confirm_url ? ["", `Confirm: ${payload.confirm_url}`] : []),
     ...(payload.cancel_url ? [`Cancel: ${payload.cancel_url}`] : []),
     ...(payload.admin_url ? [`Admin: ${payload.admin_url}`] : []),
