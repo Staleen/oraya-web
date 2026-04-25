@@ -9,7 +9,9 @@ STOP and ask before proceeding.
 
 ## CURRENT PHASE
 
-Phase 8 - Pricing Foundation
+Phase 8 -> COMPLETE
+
+Next phase = Phase 9 - Enforcement Layer
 
 ---
 
@@ -23,6 +25,11 @@ Phase 4 - Production Hardening
 Phase 5 - Calendar Sync & Availability  
 Phase 6 - Customer Experience Layer  
 Phase 7 - Admin Console Restructure  
+Phase 8 - Pricing Foundation:
+- 8F.1 Pricing display + warnings
+- 8G Seasonal pricing (engine + admin CRUD)
+- 8H Validation layer (UI-only, non-blocking)
+- 8I Pricing visibility (per-night breakdown + source labeling)
 
 Completed stabilization work:
 - Booking reliability: overlap protection, confirm/cancel persistence
@@ -32,6 +39,19 @@ Completed stabilization work:
 - Timezone standardization: Asia/Beirut display, UTC storage
 - Phase 7 - Step 2: Admin Component Extraction
 - Phase 7 - Step 3: Admin Layout + Shared Data Provider
+
+---
+
+## SYSTEM STATUS
+
+- Pricing engine supports:
+  - base / weekday / weekend / seasonal
+- Pricing is:
+  - display-only (not enforced server-side)
+- Per-night pricing breakdown available in booking UI
+- Pricing source labeling implemented
+- Validation layer exists (admin-only, non-blocking)
+- Seasonal pricing integrated end-to-end
 
 ---
 
@@ -47,6 +67,8 @@ Core logic:
 - Booking API remains stable and minimal
 - Booking dates are stored as date-only strings (`YYYY-MM-DD`)
 - Stay dates must never use JS Date parsing
+- Pricing engine is UI/display layer only
+- Booking system does NOT depend on pricing engine for validation or storage
 
 Calendar:
 - External cron (`cron-job.org`) triggers sync
@@ -119,6 +141,8 @@ The following systems are production-stable and must not be changed unless expli
 - No database schema changes
 - No authentication changes
 - Pricing engine implementation is allowed during Phase 8, but must remain display-only and must not enforce booking totals server-side yet.
+- Pricing must remain display-only until Phase 9
+- No server-side pricing enforcement before Phase 9
 - No new features during restructuring
 - No duplicate data sources
 - Booking must work with or without add-ons
@@ -136,6 +160,30 @@ The following systems are production-stable and must not be changed unless expli
 - Stay dates (`check_in`, `check_out`) are date-only strings
 - Stay dates must not be passed through JS `Date` parsing
 - iCal `DTEND` remains exclusive end date
+
+---
+
+## KNOWN LIMITATIONS (PHASE 8)
+
+- Seasonal overlaps resolved by list order (no enforcement)
+- Seasonal minimum stay is not enforced
+- Validation is non-blocking
+- Weekend logic uses UTC (not Asia/Beirut)
+- Pricing not persisted server-side
+- Overlap warnings may duplicate (O(n^2))
+- No strict invalid date validation (e.g. Feb 30)
+
+---
+
+## NEXT PHASE - PHASE 9 (ENFORCEMENT LAYER)
+
+Goals:
+- Enforce pricing rules server-side
+- Enforce minimum stay
+- Prevent overlapping seasons
+- Align timezone logic with Asia/Beirut
+- Persist final pricing into bookings
+- Convert validation from advisory -> blocking
 
 ---
 
