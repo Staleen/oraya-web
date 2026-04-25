@@ -597,6 +597,40 @@ function BookPageInner() {
     };
   }
 
+  function getAddonOperationalFeedback(addon: Addon) {
+    const messages: Array<{ tone: "neutral" | "warning"; text: string }> = [];
+    const preparationHours = addon.preparation_time_hours ?? null;
+    const enforcementMode = getAddonEnforcementMode(addon.enforcement_mode);
+
+    if (preparationHours && preparationHours > 0) {
+      messages.push({
+        tone: "neutral",
+        text: `Requires ${formatPreparationTime(preparationHours)} advance notice`,
+      });
+    }
+
+    if (addon.requires_approval) {
+      messages.push({
+        tone: "neutral",
+        text: "Requires manager approval",
+      });
+    }
+
+    if (enforcementMode === "strict") {
+      messages.push({
+        tone: "warning",
+        text: "May block booking if conditions are not met",
+      });
+    } else if (enforcementMode === "soft") {
+      messages.push({
+        tone: "warning",
+        text: "Booking allowed but may require review",
+      });
+    }
+
+    return messages;
+  }
+
   useEffect(() => {
     setSelectedAddons((prev) => prev.filter((id) => {
       const addon = addons.find((item) => item.id === id);
@@ -1241,6 +1275,7 @@ function BookPageInner() {
                         {group.items.map((addon) => {
                           const selected = selectedAddons.includes(addon.id);
                           const availability = getAddonAvailability(addon);
+                          const operationalFeedback = selected ? getAddonOperationalFeedback(addon) : [];
                           const disableSelection = !availability.selectable;
                           return (
                             <button
@@ -1289,6 +1324,30 @@ function BookPageInner() {
                                 <span style={{ fontFamily: LATO, fontSize: "11px", color: availability.mode === "soft" ? "#e2ab5a" : "#e07070", display: "block", marginTop: "6px", lineHeight: 1.5 }}>
                                   {availability.warning}
                                 </span>
+                              )}
+                              {selected && operationalFeedback.length > 0 && (
+                                <div style={{
+                                  display: "grid",
+                                  gap: "4px",
+                                  marginTop: "8px",
+                                  paddingTop: "8px",
+                                  borderTop: "0.5px solid rgba(255,255,255,0.06)",
+                                }}>
+                                  {operationalFeedback.map((item) => (
+                                    <span
+                                      key={`${addon.id}-${item.text}`}
+                                      style={{
+                                        fontFamily: LATO,
+                                        fontSize: "11px",
+                                        color: item.tone === "warning" ? "#e2ab5a" : MUTED,
+                                        display: "block",
+                                        lineHeight: 1.5,
+                                      }}
+                                    >
+                                      {item.text}
+                                    </span>
+                                  ))}
+                                </div>
                               )}
                             </div>
                           </div>
