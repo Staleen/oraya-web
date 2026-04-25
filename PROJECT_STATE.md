@@ -9,9 +9,9 @@ STOP and ask before proceeding.
 
 ## CURRENT PHASE
 
-Phase 8 -> COMPLETE
+Phase 9 -> COMPLETE
 
-Next phase = Phase 9 - Enforcement Layer
+Next phase = Add-on Enforcement / Operations Layer
 
 ---
 
@@ -30,6 +30,14 @@ Phase 8 - Pricing Foundation:
 - 8G Seasonal pricing (engine + admin CRUD)
 - 8H Validation layer (UI-only, non-blocking)
 - 8I Pricing visibility (per-night breakdown + source labeling)
+Phase 9 - Enforcement Layer:
+- 9A Server pricing mirror / audit mode
+- 9B Server validation dry run
+- 9C Admin pricing hard validation
+- 9D Timezone correction layer
+- 9E Pricing persistence snapshot
+- 9F Pricing consistency & snapshot safety
+- 9G Booking pricing enforcement
 
 Completed stabilization work:
 - Booking reliability: overlap protection, confirm/cancel persistence
@@ -47,11 +55,13 @@ Completed stabilization work:
 - Pricing engine supports:
   - base / weekday / weekend / seasonal
 - Pricing is:
-  - display-only (not enforced server-side)
+  - server-side enforced for booking creation
 - Per-night pricing breakdown available in booking UI
 - Pricing source labeling implemented
-- Validation layer exists (admin-only, non-blocking)
+- Validation layer exists in admin and on the booking server path
 - Seasonal pricing integrated end-to-end
+- Pricing snapshots persist on new bookings
+- Add-ons still are not enforced server-side
 
 ---
 
@@ -175,15 +185,13 @@ The following systems are production-stable and must not be changed unless expli
 
 ---
 
-## NEXT PHASE - PHASE 9 (ENFORCEMENT LAYER)
+## NEXT PHASE - ADD-ON ENFORCEMENT / OPERATIONS LAYER
 
 Goals:
-- Enforce pricing rules server-side
-- Enforce minimum stay
-- Prevent overlapping seasons
-- Align timezone logic with Asia/Beirut
-- Persist final pricing into bookings
-- Convert validation from advisory -> blocking
+- Enforce add-on operational rules server-side
+- Validate preparation constraints at booking time
+- Introduce approval-aware add-on handling
+- Keep add-on operations aligned with booking creation
 
 ---
 
