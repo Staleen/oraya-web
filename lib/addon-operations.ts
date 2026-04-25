@@ -5,6 +5,7 @@ export type AddonCategory = string;
 export type PreparationUnit = "hours" | "days";
 export type AddonEnforcementMode = "strict" | "soft" | "none";
 export type AddonTimingType = "early_checkin" | "late_checkout";
+export type AddonPricingType = "fixed" | "percentage";
 
 export interface AddonOperationalFields {
   preparation_time_hours?: number | null;
@@ -16,6 +17,10 @@ export interface AddonOperationalFields {
   description?: string;
   display_order?: number | null;
   recommended?: boolean;
+  /** Phase 12E: pricing flexibility metadata — fixed (default) or percentage of stay. No calculation applied yet. */
+  pricing_type?: AddonPricingType;
+  /** Phase 12E: percentage value (0–100) used when pricing_type is "percentage". Stored as metadata only. */
+  percentage_value?: number | null;
 }
 
 export interface AddonOperationalSettingRow extends AddonOperationalFields {
@@ -132,6 +137,14 @@ function parseOperationalFields(value: unknown): AddonOperationalFields {
       ? item.display_order
       : null;
   const recommended = item.recommended === true ? true : false;
+  const pricingType =
+    item.pricing_type === "fixed" || item.pricing_type === "percentage"
+      ? (item.pricing_type as AddonPricingType)
+      : undefined;
+  const percentageValue =
+    typeof item.percentage_value === "number" && Number.isFinite(item.percentage_value)
+      ? item.percentage_value
+      : null;
 
   return {
     ...(preparationTimeHours !== null ? { preparation_time_hours: preparationTimeHours } : {}),
@@ -143,6 +156,8 @@ function parseOperationalFields(value: unknown): AddonOperationalFields {
     ...(description ? { description } : {}),
     ...(displayOrder !== null ? { display_order: displayOrder } : {}),
     ...(recommended ? { recommended: true } : {}),
+    ...(pricingType ? { pricing_type: pricingType } : {}),
+    ...(percentageValue !== null ? { percentage_value: percentageValue } : {}),
   };
 }
 

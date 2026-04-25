@@ -10,6 +10,7 @@ import {
   normalizePreparationTime,
   type AddonCategory,
   type AddonEnforcementMode,
+  type AddonPricingType,
   type PreparationUnit,
 } from "@/lib/addon-operations";
 import { KNOWN_VILLAS } from "@/lib/calendar/villas";
@@ -264,6 +265,52 @@ export default function AddonsEditor({
           })}
         </div>
       </div>
+    );
+  }
+
+  function renderPricingTypeField(addon: Addon, mobile: boolean) {
+    const pricingType = addon.pricing_type ?? "fixed";
+    const pad   = mobile ? "12px 14px" : "10px 12px";
+    const fsize = mobile ? "14px" : "13px";
+    const minh  = mobile ? "48px" : undefined;
+    return (
+      <>
+        <div style={{ display: "grid", gap: "6px" }}>
+          {fieldLabel("Pricing type")}
+          <select
+            value={pricingType}
+            onChange={e => updateAddon(addon.id, { pricing_type: e.target.value as AddonPricingType })}
+            style={{ ...fieldStyle, width: "100%", boxSizing: "border-box", padding: pad, fontSize: fsize, cursor: "pointer", minHeight: minh, opacity: addon.enabled ? 1 : 0.5 }}
+            onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
+            onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+          >
+            <option value="fixed" style={{ backgroundColor: MIDNIGHT }}>Fixed price</option>
+            <option value="percentage" style={{ backgroundColor: MIDNIGHT }}>Percentage of stay</option>
+          </select>
+          {pricingType === "percentage" && (
+            <p style={{ fontFamily: LATO, fontSize: mobile ? "12px" : "11px", color: MUTED, lineHeight: 1.6, margin: 0 }}>
+              Percentage-based pricing is stored as metadata only. No calculation is applied yet.
+            </p>
+          )}
+        </div>
+        {pricingType === "percentage" && (
+          <div style={{ display: "grid", gap: "6px" }}>
+            {fieldLabel("Percentage (%)")}
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={0.1}
+              value={addon.percentage_value ?? ""}
+              onChange={e => updateAddon(addon.id, { percentage_value: e.target.value === "" ? null : parseFloat(e.target.value) })}
+              placeholder="e.g. 10"
+              style={{ ...fieldStyle, width: "100%", boxSizing: "border-box", padding: pad, fontSize: fsize, minHeight: minh, opacity: addon.enabled ? 1 : 0.5 }}
+              onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
+              onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+            />
+          </div>
+        )}
+      </>
     );
   }
 
@@ -623,6 +670,7 @@ export default function AddonsEditor({
                         </select>
                       </div>
                     </div>
+                    {renderPricingTypeField(addon, false)}
                   </div>
 
                   <div style={{ display: "grid", gap: "10px" }}>
@@ -814,6 +862,7 @@ export default function AddonsEditor({
                       ))}
                     </select>
                   </div>
+                  {renderPricingTypeField(editingAddon, true)}
                 </div>
               </div>
 
