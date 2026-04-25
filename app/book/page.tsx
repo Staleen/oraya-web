@@ -180,6 +180,7 @@ interface Addon {
   category?: AddonCategory | null;
   enforcement_mode?: AddonEnforcementMode | null;
   applicable_villas?: string[];
+  description?: string;
 }
 
 const PRICING_MODEL_LABELS: Record<string, string> = {
@@ -1361,6 +1362,20 @@ function BookPageInner() {
                                   {addon.label}
                                 </span>
                               </div>
+                              {addon.description?.trim() && (
+                                <span
+                                  style={{
+                                    fontFamily: LATO,
+                                    fontSize: "11px",
+                                    color: disableSelection ? "rgba(255,255,255,0.34)" : MUTED,
+                                    display: "block",
+                                    marginTop: "4px",
+                                    lineHeight: 1.55,
+                                  }}
+                                >
+                                  {addon.description.trim()}
+                                </span>
+                              )}
                               {(addon.requires_approval || addon.preparation_time_hours) && (
                                 <span style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, display: "block", marginTop: "4px", lineHeight: 1.5 }}>
                                   {[

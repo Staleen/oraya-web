@@ -267,6 +267,33 @@ export default function AddonsEditor({
     );
   }
 
+  function renderDescriptionField(addon: Addon, mobile: boolean) {
+    return (
+      <div style={{ display: "grid", gap: "6px" }}>
+        {fieldLabel("Guest description")}
+        <textarea
+          value={addon.description ?? ""}
+          onChange={e => updateAddon(addon.id, { description: e.target.value })}
+          rows={mobile ? 4 : 3}
+          placeholder="Describe what the guest receives (e.g., Heated pool ready before arrival, includes full-day heating)"
+          style={{
+            ...fieldStyle,
+            width: "100%",
+            boxSizing: "border-box",
+            padding: mobile ? "12px 14px" : "10px 12px",
+            fontSize: mobile ? "14px" : "13px",
+            lineHeight: 1.6,
+            resize: "vertical",
+            minHeight: mobile ? "108px" : "92px",
+            opacity: addon.enabled ? 1 : 0.5,
+          }}
+          onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
+          onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+        />
+      </div>
+    );
+  }
+
   const expandedGridColumns = isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))";
   const operationsGridColumns = isMobile ? "1fr" : "minmax(0, 1.1fr) 110px minmax(0, 1.3fr) minmax(0, 1fr)";
   const editingAddon = expandedAddonId ? addons.find((addon) => addon.id === expandedAddonId) ?? null : null;
@@ -618,6 +645,7 @@ export default function AddonsEditor({
                           ))}
                         </select>
                       </div>
+                      {renderDescriptionField(addon, false)}
                     </div>
                     {renderVillaAssignmentSection(addon, false)}
                   </div>
@@ -810,6 +838,7 @@ export default function AddonsEditor({
                       ))}
                     </select>
                   </div>
+                  {renderDescriptionField(editingAddon, true)}
                 </div>
                 {renderVillaAssignmentSection(editingAddon, true)}
               </div>
