@@ -36,6 +36,15 @@ const ENFORCEMENT_OPTIONS: Array<{ value: AddonEnforcementMode; label: string; h
   { value: "none", label: ADDON_ENFORCEMENT_LABELS.none, help: "Always available" },
 ];
 
+function formatVillaApplicabilitySummary(addon: Addon) {
+  const applicableVillas = addon.applicable_villas ?? [];
+  if (applicableVillas.length === 0) return "All villas";
+
+  const villaLabels = applicableVillas.map((villa) => villa.replace(/^Villa\s+/i, ""));
+  if (villaLabels.length === 1) return `${villaLabels[0]} only`;
+  return villaLabels.join(", ");
+}
+
 export default function AddonsEditor({
   addons, addonsSaving, addonsSaved, updateAddon, addAddon, removeAddon, validationIssues, validationAttempted, saveAddons,
 }: {
@@ -200,12 +209,16 @@ export default function AddonsEditor({
 
   function renderVillaAssignmentSection(addon: Addon, mobile: boolean) {
     const applicableVillas = addon.applicable_villas ?? [];
+    const summary = formatVillaApplicabilitySummary(addon);
 
     return (
       <div style={{ display: "grid", gap: "10px" }}>
         {fieldLabel("Applies to villas")}
         <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, lineHeight: 1.6, margin: 0 }}>
           Leave unselected to make this add-on available for all villas.
+        </p>
+        <p style={{ fontFamily: LATO, fontSize: mobile ? "12px" : "11px", color: GOLD, margin: 0, lineHeight: 1.5 }}>
+          {summary}
         </p>
         <div
           style={{
@@ -399,6 +412,9 @@ export default function AddonsEditor({
                         <span style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, display: "block", lineHeight: 1.3, wordBreak: "break-word" }}>
                           {operationalSummary(addon)}
                         </span>
+                        <span style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, display: "block", lineHeight: 1.3, wordBreak: "break-word", marginTop: "6px" }}>
+                          {formatVillaApplicabilitySummary(addon)}
+                        </span>
                       </div>
                     </div>
                   </>
@@ -447,6 +463,9 @@ export default function AddonsEditor({
                     <div style={{ minWidth: 0 }}>
                       <span style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                         {operationalSummary(addon)}
+                      </span>
+                      <span style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginTop: "4px" }}>
+                        {formatVillaApplicabilitySummary(addon)}
                       </span>
                     </div>
 
