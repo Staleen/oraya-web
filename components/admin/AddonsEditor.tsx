@@ -111,7 +111,7 @@ export default function AddonsEditor({
     return { opacity: enabled ? 1 : 0.5 };
   }
 
-  const cardGridColumns = isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))";
+  const pricingGridColumns = isMobile ? "1fr" : "110px minmax(0, 1fr) minmax(0, 1.3fr)";
   const operationGridColumns = isMobile ? "1fr" : "minmax(0, 1.1fr) 110px minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr)";
 
   return (
@@ -155,7 +155,7 @@ export default function AddonsEditor({
                 padding: isMobile ? "14px" : "18px",
               }}
             >
-              <div style={{ display: "flex", alignItems: isMobile ? "flex-start" : "center", justifyContent: "space-between", gap: "14px", flexWrap: "wrap", marginBottom: "16px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "auto minmax(0, 1fr) auto", alignItems: isMobile ? "stretch" : "center", gap: "12px", marginBottom: "16px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
                   <input
                     type="checkbox"
@@ -167,31 +167,30 @@ export default function AddonsEditor({
                     {addon.enabled ? "Enabled" : "Disabled"}
                   </span>
                 </div>
+                <div style={{ display: "grid", gap: "6px", minWidth: 0 }}>
+                  {fieldLabel("Add-on name")}
+                  <input
+                    type="text"
+                    value={addon.label}
+                    onChange={e => updateAddon(addon.id, { label: e.target.value })}
+                    placeholder="Add-on name"
+                    style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", ...getFieldStatusStyle(addon.id, "label", addon.enabled) }}
+                    onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
+                    onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+                  />
+                </div>
                 <button
                   type="button"
                   onClick={() => removeAddon(addon.id)}
-                  style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: "#d9a2a2", backgroundColor: "transparent", border: "none", padding: 0, cursor: "pointer" }}
+                  style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: "#d9a2a2", backgroundColor: "transparent", border: "none", padding: isMobile ? "2px 0" : 0, cursor: "pointer", justifySelf: isMobile ? "start" : "end" }}
                 >
                   Remove
                 </button>
               </div>
 
               <div style={{ display: "grid", gap: "10px", marginBottom: "16px" }}>
-                {fieldLabel("Add-on name")}
-                <input
-                  type="text"
-                  value={addon.label}
-                  onChange={e => updateAddon(addon.id, { label: e.target.value })}
-                  placeholder="Add-on name"
-                  style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", ...getFieldStatusStyle(addon.id, "label", addon.enabled) }}
-                  onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
-                  onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
-                />
-              </div>
-
-              <div style={{ display: "grid", gap: "10px", marginBottom: "16px" }}>
                 {fieldLabel("Pricing")}
-                <div style={{ display: "grid", gridTemplateColumns: cardGridColumns, gap: "10px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: pricingGridColumns, gap: "10px" }}>
                   <div style={{ display: "grid", gap: "6px" }}>
                     {fieldLabel("Currency")}
                     <select
@@ -219,7 +218,7 @@ export default function AddonsEditor({
                       onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
                     />
                   </div>
-                  <div style={{ display: "grid", gap: "6px", gridColumn: isMobile ? "auto" : "1 / -1" }}>
+                  <div style={{ display: "grid", gap: "6px" }}>
                     {fieldLabel("Pricing model")}
                     <select
                       value={addon.pricing_model}
