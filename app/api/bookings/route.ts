@@ -5,6 +5,8 @@ import { sendBookingPendingEmail } from "@/lib/send-booking-pending-email";
 import { createActionToken } from "@/lib/booking-action-token";
 import { SITE_URL } from "@/lib/brand";
 import { findAvailabilityConflict } from "@/lib/calendar/availability";
+import { getVillaPricing, parseVillaPricingSetting, VILLA_BASE_PRICING_KEY } from "@/lib/admin-pricing";
+import { runPricingAudit } from "@/lib/pricing/server-audit";
 
 const ALLOWED_VILLAS = ["Villa Mechmech", "Villa Byblos"];
 const ISO_DATE_RE    = /^\d{4}-\d{2}-\d{2}$/;
@@ -88,6 +90,39 @@ export async function POST(request: Request) {
       guest_phone:     guest_phone || null,
       guest_country:   guest_country || null,
     };
+
+    try {
+      const { data: pricingRow, error: pricingError } = await supabaseAdmin
+        .from("settings")
+        .select("value")
+        .eq("key", VILLA_BASE_PRICING_KEY)
+        .maybeSingle();
+
+      if (pricingError) {
+        throw pricingError;
+      }
+
+      const pricingConfig = getVillaPricing(parseVillaPricingSetting(pricingRow?.value), villa);
+      const pricingAudit = runPricingAudit({
+        config: pricingConfig,
+        check_in,
+        check_out,
+      });
+
+      if (process.env.NODE_ENV !== "production") {
+        console.debug("[api/bookings] pricing audit", {
+          villa,
+          ok: pricingAudit.ok,
+          subtotal: pricingAudit.subtotal,
+          warnings: pricingAudit.warnings,
+          violations: pricingAudit.violations,
+        });
+      }
+    } catch (pricingAuditError) {
+      if (process.env.NODE_ENV !== "production") {
+        console.debug("[api/bookings] pricing audit skipped", pricingAuditError);
+      }
+    }
 
     const { data, error } = await supabaseAdmin
       .from("bookings")
