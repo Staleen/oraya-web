@@ -4,6 +4,7 @@ import { formatBeirutDateTime } from "@/lib/format-date";
 import type { Booking, Member } from "./types";
 import { GOLD, WHITE, MIDNIGHT, MUTED, LATO, PLAYFAIR, SURFACE, BORDER, thStyle, tdStyle, fieldStyle, fmt } from "./theme";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
+import { AddonIcon } from "@/components/addon-icon";
 
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, string> = {
@@ -369,9 +370,12 @@ export default function BookingsTable({
                         return (
                           <div key={addonKey} style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start" }}>
                             <div>
-                              <p style={{ fontFamily: LATO, fontSize: "12px", color: WHITE, margin: "0 0 4px" }}>
-                                {addon.label}
-                              </p>
+                              <div style={{ display: "flex", alignItems: "center", gap: "7px", marginBottom: "4px" }}>
+                                <AddonIcon label={addon.label} size={16} color="rgba(197,164,109,0.5)" style={{ flexShrink: 0 }} />
+                                <p style={{ fontFamily: LATO, fontSize: "12px", color: WHITE, margin: 0 }}>
+                                  {addon.label}
+                                </p>
+                              </div>
                               <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0 }}>
                                 {formatAddonPrice(addon.price)}
                               </p>

@@ -12,6 +12,7 @@ import { calculateStayPricing } from "@/lib/pricing/engine";
 import type { NightSource } from "@/lib/pricing/types";
 import { formatBeirutMonthDay, getBeirutDay } from "@/lib/utils/date-beirut";
 import { supabase } from "@/lib/supabase";
+import { AddonIcon } from "@/components/addon-icon";
 
 // ─── Brand constants ──────────────────────────────────────────────────────────
 const GOLD     = "#C5A46D";
@@ -1340,9 +1341,16 @@ function BookPageInner() {
                               )}
                             </div>
                             <div style={{ minWidth: 0 }}>
-                              <span style={{ fontFamily: LATO, fontSize: "13px", color: selected ? WHITE : disableSelection ? "rgba(255,255,255,0.45)" : "rgba(255,255,255,0.7)", fontWeight: selected ? 400 : 300, display: "block" }}>
-                                {addon.label}
-                              </span>
+                              <div style={{ display: "flex", alignItems: "center", gap: "7px", marginBottom: "2px" }}>
+                                <AddonIcon
+                                  label={addon.label}
+                                  size={16}
+                                  color={selected ? "rgba(197,164,109,0.7)" : disableSelection ? "rgba(197,164,109,0.25)" : "rgba(197,164,109,0.45)"}
+                                />
+                                <span style={{ fontFamily: LATO, fontSize: "13px", color: selected ? WHITE : disableSelection ? "rgba(255,255,255,0.45)" : "rgba(255,255,255,0.7)", fontWeight: selected ? 400 : 300, lineHeight: 1.3 }}>
+                                  {addon.label}
+                                </span>
+                              </div>
                               {(addon.requires_approval || addon.preparation_time_hours) && (
                                 <span style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, display: "block", marginTop: "4px", lineHeight: 1.5 }}>
                                   {[

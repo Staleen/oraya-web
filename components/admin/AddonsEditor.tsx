@@ -13,6 +13,7 @@ import {
   type PreparationUnit,
 } from "@/lib/addon-operations";
 import { GOLD, CHARCOAL, MIDNIGHT, MUTED, LATO, SURFACE, BORDER, fieldStyle } from "./theme";
+import { AddonIcon } from "@/components/addon-icon";
 
 const PRICING_MODELS: { value: Addon["pricing_model"]; label: string }[] = [
   { value: "flat_fee", label: "Flat fee" },
@@ -286,9 +287,16 @@ export default function AddonsEditor({
                       </div>
 
                       <div style={{ minWidth: 0 }}>
-                        <span style={{ fontFamily: LATO, fontSize: "13px", color: addon.enabled ? "#FFFFFF" : "rgba(255,255,255,0.55)", display: "block", lineHeight: 1.25, wordBreak: "break-word" }}>
-                          {addon.label.trim() || "New add-on"}
-                        </span>
+                        <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
+                          <AddonIcon
+                            label={addon.label}
+                            size={18}
+                            color={addon.enabled ? "rgba(197,164,109,0.55)" : "rgba(197,164,109,0.28)"}
+                          />
+                          <span style={{ fontFamily: LATO, fontSize: "13px", color: addon.enabled ? "#FFFFFF" : "rgba(255,255,255,0.55)", lineHeight: 1.25, wordBreak: "break-word", minWidth: 0 }}>
+                            {addon.label.trim() || "New add-on"}
+                          </span>
+                        </div>
                       </div>
 
                       <div style={{ display: "flex", alignItems: "center", gap: "14px", flexWrap: "wrap" }}>
@@ -353,8 +361,14 @@ export default function AddonsEditor({
                       </span>
                     </div>
 
-                    <div style={{ minWidth: 0 }}>
-                      <span style={{ fontFamily: LATO, fontSize: "13px", color: addon.enabled ? "#FFFFFF" : "rgba(255,255,255,0.55)", display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: "7px" }}>
+                      <AddonIcon
+                        label={addon.label}
+                        size={16}
+                        color={addon.enabled ? "rgba(197,164,109,0.55)" : "rgba(197,164,109,0.28)"}
+                        style={{ flexShrink: 0 }}
+                      />
+                      <span style={{ fontFamily: LATO, fontSize: "13px", color: addon.enabled ? "#FFFFFF" : "rgba(255,255,255,0.55)", display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>
                         {addon.label.trim() || "New add-on"}
                       </span>
                     </div>
@@ -557,12 +571,20 @@ export default function AddonsEditor({
           <div style={mobileOverlayShell}>
             <div style={{ position: "sticky", top: 0, zIndex: 2, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px", padding: "14px 16px 12px", backgroundColor: "rgba(31,43,56,0.98)", borderBottom: "0.5px solid rgba(255,255,255,0.06)", boxSizing: "border-box" }}>
               <div style={{ minWidth: 0, paddingRight: "8px" }}>
-                <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 6px" }}>
+                <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 8px" }}>
                   Edit Add-on
                 </p>
-                <p style={{ fontFamily: LATO, fontSize: "16px", color: "#FFFFFF", margin: 0, lineHeight: 1.3, wordBreak: "break-word" }}>
-                  {editingAddon.label.trim() || "New add-on"}
-                </p>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <AddonIcon
+                    label={editingAddon.label}
+                    size={20}
+                    color="rgba(197,164,109,0.6)"
+                    style={{ flexShrink: 0 }}
+                  />
+                  <p style={{ fontFamily: LATO, fontSize: "16px", color: "#FFFFFF", margin: 0, lineHeight: 1.3, wordBreak: "break-word" }}>
+                    {editingAddon.label.trim() || "New add-on"}
+                  </p>
+                </div>
               </div>
               <button
                 type="button"

@@ -5,6 +5,7 @@ import type { Booking, CalendarSource, Member } from "@/components/admin/types";
 import { BORDER, GOLD, LATO, MUTED, PLAYFAIR, SURFACE, WHITE, fmt } from "@/components/admin/theme";
 import { KNOWN_VILLAS } from "@/lib/calendar/villas";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
+import { AddonIcon } from "@/components/addon-icon";
 
 const DESKTOP_DAY_WIDTH = 92;
 const TIMELINE_DAYS = 90;
@@ -842,9 +843,12 @@ export default function DashboardOperationsView({
                       return (
                         <div key={addonKey} style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start" }}>
                           <div style={{ textAlign: "right" }}>
-                            <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, margin: "0 0 4px", lineHeight: 1.5 }}>
-                              {addon.label}
-                            </p>
+                            <div style={{ display: "flex", alignItems: "center", gap: "7px", justifyContent: "flex-end", marginBottom: "4px" }}>
+                              <AddonIcon label={addon.label} size={16} color="rgba(197,164,109,0.5)" style={{ flexShrink: 0 }} />
+                              <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, margin: 0, lineHeight: 1.5 }}>
+                                {addon.label}
+                              </p>
+                            </div>
                             <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.4 }}>
                               {formatAddonPrice(addon.price)}
                             </p>
