@@ -12,6 +12,7 @@ import {
   type AddonEnforcementMode,
   type PreparationUnit,
 } from "@/lib/addon-operations";
+import { KNOWN_VILLAS } from "@/lib/calendar/villas";
 import { GOLD, CHARCOAL, MIDNIGHT, MUTED, LATO, SURFACE, BORDER, fieldStyle } from "./theme";
 import { AddonIcon } from "@/components/addon-icon";
 
@@ -187,6 +188,70 @@ export default function AddonsEditor({
 
   function handleAddAddon() {
     addAddon();
+  }
+
+  function toggleApplicableVilla(addon: Addon, villa: string, checked: boolean) {
+    const current = addon.applicable_villas ?? [];
+    const next = checked
+      ? Array.from(new Set([...current, villa]))
+      : current.filter((item) => item !== villa);
+    updateAddon(addon.id, { applicable_villas: next });
+  }
+
+  function renderVillaAssignmentSection(addon: Addon, mobile: boolean) {
+    const applicableVillas = addon.applicable_villas ?? [];
+
+    return (
+      <div style={{ display: "grid", gap: "10px" }}>
+        {fieldLabel("Applies to villas")}
+        <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, lineHeight: 1.6, margin: 0 }}>
+          Leave unselected to make this add-on available for all villas.
+        </p>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: mobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
+            gap: "10px",
+          }}
+        >
+          {KNOWN_VILLAS.map((villa) => {
+            const checked = applicableVillas.includes(villa);
+            return (
+              <label
+                key={`${addon.id}-${villa}`}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  padding: mobile ? "12px 14px" : "10px 12px",
+                  border: `0.5px solid ${checked ? "rgba(197,164,109,0.38)" : "rgba(255,255,255,0.08)"}`,
+                  backgroundColor: checked ? "rgba(197,164,109,0.08)" : "rgba(255,255,255,0.02)",
+                  cursor: "pointer",
+                  minHeight: mobile ? "48px" : "42px",
+                  boxSizing: "border-box",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={(event) => toggleApplicableVilla(addon, villa, event.target.checked)}
+                  style={{
+                    accentColor: GOLD,
+                    width: mobile ? "18px" : "16px",
+                    height: mobile ? "18px" : "16px",
+                    cursor: "pointer",
+                    flexShrink: 0,
+                  }}
+                />
+                <span style={{ fontFamily: LATO, fontSize: mobile ? "13px" : "12px", color: "#FFFFFF", lineHeight: 1.4 }}>
+                  {villa}
+                </span>
+              </label>
+            );
+          })}
+        </div>
+      </div>
+    );
   }
 
   const expandedGridColumns = isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))";
@@ -535,6 +600,7 @@ export default function AddonsEditor({
                         </select>
                       </div>
                     </div>
+                    {renderVillaAssignmentSection(addon, false)}
                   </div>
 
                   {(showErrors || addonWarnings.length > 0) && (
@@ -726,6 +792,7 @@ export default function AddonsEditor({
                     </select>
                   </div>
                 </div>
+                {renderVillaAssignmentSection(editingAddon, true)}
               </div>
 
               {((validationAttempted && getAddonIssues(editingAddon.id, "error").length > 0) || getAddonIssues(editingAddon.id, "warning").length > 0) && (
