@@ -19,7 +19,7 @@ export interface ValidationIssue {
   message:    string;
 }
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 const MSG = {
   baseRecommended:  "Base price is recommended — without it, nights with no other rate are unpriced.",

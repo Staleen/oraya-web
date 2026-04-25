@@ -47,7 +47,7 @@ export type PricingAuditInput = {
   check_out: string;
 };
 
-const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const ISO_DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 function isValidDateOnly(value: string): boolean {
   const match = ISO_DATE_RE.exec(value);
