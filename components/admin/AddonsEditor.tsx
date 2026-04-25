@@ -115,29 +115,38 @@ export default function AddonsEditor({
     return PRICING_MODELS.find((model) => model.value === value)?.label ?? value;
   }
 
+  function priceSummary(addon: Addon) {
+    const pricePart = addon.price !== null ? `${addon.currency} ${addon.price}` : "Price on request";
+    return `${pricePart} - ${pricingModelLabel(addon.pricing_model)}`;
+  }
+
   function managerSummary(addon: Addon) {
-    const parts: string[] = [];
-    const priceLabel = addon.price !== null
-      ? `${addon.currency} ${addon.price} ${pricingModelLabel(addon.pricing_model).toLowerCase()}`
-      : `Price on request ${pricingModelLabel(addon.pricing_model).toLowerCase()}`;
-    parts.push(priceLabel);
+    const intro = addon.price !== null
+      ? `This add-on is available as ${addon.currency} ${addon.price} ${pricingModelLabel(addon.pricing_model).toLowerCase()}`
+      : `This add-on is available as ${pricingModelLabel(addon.pricing_model).toLowerCase()} pricing on request`;
+
+    const parts: string[] = [intro];
 
     if (addon.preparation_time_hours && addon.preparation_time_hours > 0) {
       const unit = addon.preparation_time_hours % 24 === 0 ? "days" : "hours";
       const amount = unit === "days" ? addon.preparation_time_hours / 24 : addon.preparation_time_hours;
-      parts.push(`${amount} ${amount === 1 ? unit.slice(0, -1) : unit} advance notice`);
+      parts.push(`requires ${amount} ${amount === 1 ? unit.slice(0, -1) : unit} advance notice`);
     } else {
-      parts.push("No advance notice");
+      parts.push("has no advance notice requirement");
     }
 
-    parts.push(`${getAddonEnforcementMode(addon.enforcement_mode).charAt(0).toUpperCase()}${getAddonEnforcementMode(addon.enforcement_mode).slice(1)} rule`);
-    parts.push(addon.requires_approval ? "Manager approval required" : "No manager approval");
+    parts.push(`uses a ${getAddonEnforcementMode(addon.enforcement_mode)} rule`);
+    parts.push(addon.requires_approval ? "needs manager approval." : "does not need manager approval.");
 
-    return parts.join(" - ");
+    return parts.join(", ").replace(", does", " and does").replace(", needs", " and needs");
   }
 
   const pricingGridColumns = isMobile ? "1fr" : "110px minmax(0, 1fr) minmax(0, 1.3fr)";
-  const operationGridColumns = isMobile ? "1fr" : "minmax(0, 1.1fr) 110px minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr)";
+  const operationGridColumns = isMobile ? "1fr" : "minmax(0, 1.1fr) 110px minmax(0, 1.4fr) minmax(0, 1fr)";
+  const totalAddons = addons.length;
+  const enabledAddons = addons.filter((addon) => addon.enabled).length;
+  const approvalAddons = addons.filter((addon) => addon.requires_approval).length;
+  const strictAddons = addons.filter((addon) => getAddonEnforcementMode(addon.enforcement_mode) === "strict").length;
 
   return (
     <div style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: isMobile ? "1rem" : "1.75rem", marginBottom: "2rem" }}>
@@ -166,6 +175,24 @@ export default function AddonsEditor({
         </div>
       </div>
 
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, minmax(0, 1fr))", gap: "10px", marginBottom: "16px" }}>
+        {[
+          { label: "Total add-ons", value: totalAddons },
+          { label: "Enabled", value: enabledAddons },
+          { label: "Needs approval", value: approvalAddons },
+          { label: "Strict rule", value: strictAddons },
+        ].map((item) => (
+          <div key={item.label} style={{ border: `0.5px solid rgba(255,255,255,0.06)`, backgroundColor: "rgba(255,255,255,0.02)", padding: "12px 14px" }}>
+            <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, margin: "0 0 6px" }}>
+              {item.label}
+            </p>
+            <p style={{ fontFamily: LATO, fontSize: "20px", color: GOLD, margin: 0 }}>
+              {item.value}
+            </p>
+          </div>
+        ))}
+      </div>
+
       <div style={{ display: "grid", gap: "14px" }}>
         {addons.map((addon) => {
           const addonErrors = getAddonIssues(addon.id, "error");
@@ -180,8 +207,8 @@ export default function AddonsEditor({
                 padding: isMobile ? "14px" : "18px",
               }}
             >
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "auto minmax(0, 1fr) auto", alignItems: isMobile ? "stretch" : "center", gap: "12px", marginBottom: "16px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "auto minmax(0, 1fr) auto auto", alignItems: isMobile ? "stretch" : "center", gap: "12px", marginBottom: "16px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0, flexShrink: 0 }}>
                   <input
                     type="checkbox"
                     checked={addon.enabled}
@@ -214,13 +241,26 @@ export default function AddonsEditor({
                     onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
                   />
                 </div>
+                <span style={{
+                  fontFamily: LATO,
+                  fontSize: "10px",
+                  letterSpacing: "1px",
+                  color: GOLD,
+                  border: "0.5px solid rgba(197,164,109,0.28)",
+                  backgroundColor: "rgba(197,164,109,0.08)",
+                  padding: "8px 10px",
+                  whiteSpace: "nowrap",
+                  alignSelf: isMobile ? "start" : "center",
+                }}>
+                  {priceSummary(addon)}
+                </span>
                 <button
                   type="button"
                   onClick={() => removeAddon(addon.id)}
                   style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: "#d9a2a2", backgroundColor: "transparent", border: "none", padding: isMobile ? "2px 0" : 0, cursor: "pointer", justifySelf: isMobile ? "start" : "end" }}
-                  >
-                    Remove
-                  </button>
+                >
+                  Remove
+                </button>
               </div>
 
               <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.6, margin: "0 0 16px" }}>
@@ -307,21 +347,6 @@ export default function AddonsEditor({
                     </select>
                   </div>
                   <div style={{ display: "grid", gap: "6px" }}>
-                    {fieldLabel("Category")}
-                    <select
-                      value={addon.category ?? ""}
-                      onChange={e => updateAddon(addon.id, { category: e.target.value === "" ? null : e.target.value as AddonCategory })}
-                      style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", cursor: "pointer", opacity: addon.enabled ? 1 : 0.5 }}
-                      onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
-                      onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
-                    >
-                      <option value="" style={{ backgroundColor: MIDNIGHT }}>Category</option>
-                      {CATEGORY_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value} style={{ backgroundColor: MIDNIGHT }}>{option.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div style={{ display: "grid", gap: "6px" }}>
                     {fieldLabel("Booking rule")}
                     <select
                       value={getAddonEnforcementMode(addon.enforcement_mode)}
@@ -349,6 +374,27 @@ export default function AddonsEditor({
                       <span>Needs manager approval</span>
                     </span>
                   </label>
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gap: "10px", marginTop: "16px" }}>
+                {fieldLabel("Advanced details")}
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1fr)", gap: "10px" }}>
+                  <div style={{ display: "grid", gap: "6px" }}>
+                    {fieldLabel("Category")}
+                    <select
+                      value={addon.category ?? ""}
+                      onChange={e => updateAddon(addon.id, { category: e.target.value === "" ? null : e.target.value as AddonCategory })}
+                      style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", cursor: "pointer", opacity: addon.enabled ? 1 : 0.5 }}
+                      onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
+                      onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+                    >
+                      <option value="" style={{ backgroundColor: MIDNIGHT }}>Category</option>
+                      {CATEGORY_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value} style={{ backgroundColor: MIDNIGHT }}>{option.label}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
 
