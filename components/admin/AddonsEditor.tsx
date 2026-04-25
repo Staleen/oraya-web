@@ -50,6 +50,7 @@ export default function AddonsEditor({
   const [preparationUnits, setPreparationUnits] = useState<Record<string, PreparationUnit>>({});
   const [expandedAddonId, setExpandedAddonId] = useState<string | null>(null);
   const previousAddonIdsRef = useRef<string[]>([]);
+  const initializedAddonIdsRef = useRef(false);
 
   useEffect(() => {
     setPreparationUnits((prev) => {
@@ -73,6 +74,13 @@ export default function AddonsEditor({
     if (addons.length === 0) {
       setExpandedAddonId(null);
       previousAddonIdsRef.current = [];
+      initializedAddonIdsRef.current = true;
+      return;
+    }
+
+    if (!initializedAddonIdsRef.current) {
+      previousAddonIdsRef.current = addons.map((addon) => addon.id);
+      initializedAddonIdsRef.current = true;
       return;
     }
 
