@@ -14,6 +14,8 @@ export interface BookingAddonSnapshot {
   enforcement_mode: AddonEnforcementMode | null;
   requires_approval: boolean;
   status: "confirmed" | "at_risk" | "pending_approval";
+  admin_approved?: boolean;
+  admin_approved_at?: string | null;
 }
 
 export interface Booking {

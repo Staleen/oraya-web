@@ -4,6 +4,7 @@ import { formatBeirutRelative } from "@/lib/format-date";
 import type { Booking, CalendarSource, Member } from "@/components/admin/types";
 import { BORDER, GOLD, LATO, MUTED, PLAYFAIR, SURFACE, WHITE, fmt } from "@/components/admin/theme";
 import { KNOWN_VILLAS } from "@/lib/calendar/villas";
+import { useAdminData } from "@/components/admin/AdminDataProvider";
 
 const DESKTOP_DAY_WIDTH = 92;
 const TIMELINE_DAYS = 90;
@@ -221,9 +222,39 @@ export default function DashboardOperationsView({
   loading: boolean;
   externalBlocks?: ExternalCalendarBlock[];
 }) {
+  const { setBookings } = useAdminData();
   const [isMobile, setIsMobile] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
-  const [approvedAddonKeys, setApprovedAddonKeys] = useState<Set<string>>(new Set());
+  const [approvingAddonId, setApprovingAddonId] = useState<string | null>(null);
+
+  async function approveAddon(bookingId: string, addonId: string) {
+    const key = `${bookingId}-${addonId}`;
+    setApprovingAddonId(key);
+    try {
+      const res = await fetch(`/api/admin/bookings/${bookingId}/approve-addon`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ addon_id: addonId }),
+      });
+      const d = await res.json();
+      if (res.ok && Array.isArray(d.addons_snapshot)) {
+        // Update booking in global context so list views reflect persisted state.
+        setBookings((prev) =>
+          prev.map((b) => b.id === bookingId ? { ...b, addons_snapshot: d.addons_snapshot } : b)
+        );
+        // Also update the open modal's local booking reference.
+        setSelectedBooking((prev) =>
+          prev?.id === bookingId ? { ...prev, addons_snapshot: d.addons_snapshot } : prev
+        );
+      } else {
+        console.error("[admin] approve-addon failed:", d.error ?? "unknown error");
+      }
+    } catch (err) {
+      console.error("[admin] approve-addon network error:", err);
+    } finally {
+      setApprovingAddonId(null);
+    }
+  }
 
   useEffect(() => {
     function syncViewport() {
@@ -793,7 +824,8 @@ export default function DashboardOperationsView({
                     {selectedBooking.addons_snapshot?.map((addon) => {
                       const tone = getAddonStatusTone(addon.status);
                       const addonKey = `${selectedBooking.id}-${addon.id}`;
-                      const isLocallyApproved = approvedAddonKeys.has(addonKey);
+                      const isApproved = addon.admin_approved === true;
+                      const isApproving = approvingAddonId === addonKey;
                       return (
                         <div key={addonKey} style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start" }}>
                           <div style={{ textAlign: "right" }}>
@@ -804,9 +836,9 @@ export default function DashboardOperationsView({
                               {formatAddonPrice(addon.price)}
                             </p>
                             <div style={{ display: "flex", justifyContent: "flex-end", flexWrap: "wrap", gap: "6px", marginTop: "6px" }}>
-                              {/* Approval badge — replaced by Approved if locally marked */}
+                              {/* Approval badge — green when approved, gold when pending */}
                               {addon.requires_approval && (
-                                isLocallyApproved ? (
+                                isApproved ? (
                                   <span style={{
                                     fontFamily: LATO,
                                     fontSize: "9px",
@@ -834,7 +866,7 @@ export default function DashboardOperationsView({
                                   </span>
                                 )
                               )}
-                              {/* Existing enforcement badges — unchanged */}
+                              {/* Enforcement badges — unchanged */}
                               {addon.enforcement_mode === "soft" && (
                                 <span style={{
                                   fontFamily: LATO,
@@ -864,17 +896,12 @@ export default function DashboardOperationsView({
                                 </span>
                               )}
                             </div>
-                            {/* Mark as approved button — only shown when requires_approval and not yet marked */}
-                            {addon.requires_approval && !isLocallyApproved && (
+                            {/* Mark as approved — hidden once approved, shows saving state */}
+                            {addon.requires_approval && !isApproved && (
                               <button
                                 type="button"
-                                onClick={() =>
-                                  setApprovedAddonKeys((prev) => {
-                                    const next = new Set(prev);
-                                    next.add(addonKey);
-                                    return next;
-                                  })
-                                }
+                                onClick={() => approveAddon(selectedBooking.id, addon.id)}
+                                disabled={isApproving}
                                 style={{
                                   fontFamily: LATO,
                                   fontSize: "9px",
@@ -885,11 +912,12 @@ export default function DashboardOperationsView({
                                   border: "0.5px solid rgba(111,207,138,0.45)",
                                   padding: "3px 8px",
                                   borderRadius: "2px",
-                                  cursor: "pointer",
+                                  cursor: isApproving ? "not-allowed" : "pointer",
+                                  opacity: isApproving ? 0.5 : 1,
                                   marginTop: "6px",
                                 }}
                               >
-                                Mark as approved
+                                {isApproving ? "Saving…" : "Mark as approved"}
                               </button>
                             )}
                           </div>
@@ -910,7 +938,7 @@ export default function DashboardOperationsView({
                       );
                     })}
                     <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: "4px 0 0", lineHeight: 1.5, textAlign: "right" }}>
-                      Approval is currently tracked locally and is not saved after refresh.
+                      Approvals are saved to the booking record.
                     </p>
                   </div>
                 </div>

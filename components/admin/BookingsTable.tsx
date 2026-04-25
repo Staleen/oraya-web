@@ -3,6 +3,7 @@ import { useState } from "react";
 import { formatBeirutDateTime } from "@/lib/format-date";
 import type { Booking, Member } from "./types";
 import { GOLD, WHITE, MIDNIGHT, MUTED, LATO, PLAYFAIR, SURFACE, BORDER, thStyle, tdStyle, fieldStyle, fmt } from "./theme";
+import { useAdminData } from "@/components/admin/AdminDataProvider";
 
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, string> = {
@@ -80,7 +81,32 @@ export default function BookingsTable({
   updateStatus: (id: string, status: "confirmed" | "cancelled") => void;
   emailWarnings: Record<string, string>;
 }) {
-  const [approvedAddonKeys, setApprovedAddonKeys] = useState<Set<string>>(new Set());
+  const { setBookings } = useAdminData();
+  const [approvingAddonId, setApprovingAddonId] = useState<string | null>(null);
+
+  async function approveAddon(bookingId: string, addonId: string) {
+    const key = `${bookingId}-${addonId}`;
+    setApprovingAddonId(key);
+    try {
+      const res = await fetch(`/api/admin/bookings/${bookingId}/approve-addon`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ addon_id: addonId }),
+      });
+      const d = await res.json();
+      if (res.ok && Array.isArray(d.addons_snapshot)) {
+        setBookings((prev) =>
+          prev.map((b) => b.id === bookingId ? { ...b, addons_snapshot: d.addons_snapshot } : b)
+        );
+      } else {
+        console.error("[admin] approve-addon failed:", d.error ?? "unknown error");
+      }
+    } catch (err) {
+      console.error("[admin] approve-addon network error:", err);
+    } finally {
+      setApprovingAddonId(null);
+    }
+  }
 
   function getMember(booking: Booking) {
     return booking.member_id ? members.find((m) => m.id === booking.member_id) : null;
@@ -338,7 +364,8 @@ export default function BookingsTable({
                       {getAddonSnapshots(b).map((addon) => {
                         const tone = getAddonStatusTone(addon.status);
                         const addonKey = `${b.id}-${addon.id}`;
-                        const isLocallyApproved = approvedAddonKeys.has(addonKey);
+                        const isApproved = addon.admin_approved === true;
+                        const isApproving = approvingAddonId === addonKey;
                         return (
                           <div key={addonKey} style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start" }}>
                             <div>
@@ -349,9 +376,9 @@ export default function BookingsTable({
                                 {formatAddonPrice(addon.price)}
                               </p>
                               <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "6px" }}>
-                                {/* Approval badge — replaced by Approved if locally marked */}
+                                {/* Approval badge — green when approved, gold when pending */}
                                 {addon.requires_approval && (
-                                  isLocallyApproved ? (
+                                  isApproved ? (
                                     <span style={{
                                       fontFamily: LATO,
                                       fontSize: "9px",
@@ -379,7 +406,7 @@ export default function BookingsTable({
                                     </span>
                                   )
                                 )}
-                                {/* Existing enforcement badges — unchanged */}
+                                {/* Enforcement badges — unchanged */}
                                 {addon.enforcement_mode === "soft" && (
                                   <span style={{
                                     fontFamily: LATO,
@@ -409,17 +436,12 @@ export default function BookingsTable({
                                   </span>
                                 )}
                               </div>
-                              {/* Mark as approved button — only when requires_approval and not yet marked */}
-                              {addon.requires_approval && !isLocallyApproved && (
+                              {/* Mark as approved — hidden once approved, shows saving state */}
+                              {addon.requires_approval && !isApproved && (
                                 <button
                                   type="button"
-                                  onClick={() =>
-                                    setApprovedAddonKeys((prev) => {
-                                      const next = new Set(prev);
-                                      next.add(addonKey);
-                                      return next;
-                                    })
-                                  }
+                                  onClick={() => approveAddon(b.id, addon.id)}
+                                  disabled={isApproving}
                                   style={{
                                     fontFamily: LATO,
                                     fontSize: "9px",
@@ -430,12 +452,13 @@ export default function BookingsTable({
                                     border: "0.5px solid rgba(111,207,138,0.45)",
                                     padding: "3px 8px",
                                     borderRadius: "2px",
-                                    cursor: "pointer",
+                                    cursor: isApproving ? "not-allowed" : "pointer",
+                                    opacity: isApproving ? 0.5 : 1,
                                     marginTop: "6px",
                                     display: "block",
                                   }}
                                 >
-                                  Mark as approved
+                                  {isApproving ? "Saving…" : "Mark as approved"}
                                 </button>
                               )}
                             </div>
@@ -456,7 +479,7 @@ export default function BookingsTable({
                         );
                       })}
                       <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: "2px 0 0", lineHeight: 1.5 }}>
-                        Approval is currently tracked locally and is not saved after refresh.
+                        Approvals are saved to the booking record.
                       </p>
                     </div>
                   )}
