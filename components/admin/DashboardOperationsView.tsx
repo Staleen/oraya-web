@@ -348,72 +348,85 @@ export default function DashboardOperationsView({
         ) : villaRows.length === 0 ? (
           <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: 0 }}>No villas available for the master calendar.</p>
         ) : isMobile ? (
-          <div style={{ display: "grid", gap: "14px" }}>
-            {mobileDates.map((date) => (
-              <div key={date} style={{ border: `0.5px solid ${BORDER}`, padding: "14px", backgroundColor: "rgba(255,255,255,0.015)" }}>
-                <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: "0 0 12px" }}>
-                  {formatTimelineDayLabel(date)}
-                </p>
-                <div style={{ display: "grid", gap: "10px" }}>
-                  {villaRows.map((villa) => {
-                    const dayItems = calendarItems
-                      .filter((item) => item.villa === villa && itemOverlapsDay(item, date))
-                      .sort((a, b) => a.status.localeCompare(b.status));
+          <>
+            <div style={{
+              maxHeight: "480px",
+              overflowY: "auto",
+              WebkitOverflowScrolling: "touch",
+              maskImage: "linear-gradient(to bottom, black 80%, transparent 100%)",
+              WebkitMaskImage: "linear-gradient(to bottom, black 80%, transparent 100%)",
+            }}>
+              <div style={{ display: "grid", gap: "8px", paddingBottom: "24px" }}>
+                {mobileDates.map((date) => (
+                  <div key={date} style={{ border: `0.5px solid ${BORDER}`, padding: "10px 12px", backgroundColor: "rgba(255,255,255,0.015)" }}>
+                    <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: "0 0 8px" }}>
+                      {formatTimelineDayLabel(date)}
+                    </p>
+                    <div style={{ display: "grid", gap: "8px" }}>
+                      {villaRows.map((villa) => {
+                        const dayItems = calendarItems
+                          .filter((item) => item.villa === villa && itemOverlapsDay(item, date))
+                          .sort((a, b) => a.status.localeCompare(b.status));
 
-                    return (
-                      <div key={`${date}-${villa}`} style={{ display: "grid", gridTemplateColumns: "minmax(92px, 0.8fr) minmax(0, 1.2fr)", gap: "12px", alignItems: "start", paddingTop: "10px", borderTop: "0.5px solid rgba(255,255,255,0.05)" }}>
-                        <p style={{ fontFamily: PLAYFAIR, fontSize: "15px", color: WHITE, margin: 0, lineHeight: 1.3 }}>
-                          {villa.replace("Villa ", "")}
-                        </p>
-                        {dayItems.length === 0 ? (
-                          <span style={{ fontFamily: LATO, fontSize: "12px", color: MUTED }}>
-                            Available
-                          </span>
-                        ) : (
-                          <div style={{ display: "grid", gap: "6px" }}>
-                            {dayItems.map((item) => {
-                              const tone = getStatusTone(item.status);
-                              const content = (
-                                <span style={{
-                                  display: "block",
-                                  fontFamily: LATO,
-                                  fontSize: "11px",
-                                  color: item.type === "external" ? MUTED : WHITE,
-                                  backgroundColor: tone.background,
-                                  border: `0.5px solid ${tone.color}`,
-                                  padding: "7px 9px",
-                                  whiteSpace: "nowrap",
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                }}>
-                                  {getMobileStatusLabel(item, members)}
-                                </span>
-                              );
+                        return (
+                          <div key={`${date}-${villa}`} style={{ display: "grid", gridTemplateColumns: "minmax(80px, 0.8fr) minmax(0, 1.2fr)", gap: "10px", alignItems: "start", paddingTop: "8px", borderTop: "0.5px solid rgba(255,255,255,0.05)" }}>
+                            <p style={{ fontFamily: PLAYFAIR, fontSize: "13px", color: WHITE, margin: 0, lineHeight: 1.3 }}>
+                              {villa.replace("Villa ", "")}
+                            </p>
+                            {dayItems.length === 0 ? (
+                              <span style={{ fontFamily: LATO, fontSize: "11px", color: MUTED }}>
+                                Available
+                              </span>
+                            ) : (
+                              <div style={{ display: "grid", gap: "5px" }}>
+                                {dayItems.map((item) => {
+                                  const tone = getStatusTone(item.status);
+                                  const content = (
+                                    <span style={{
+                                      display: "block",
+                                      fontFamily: LATO,
+                                      fontSize: "11px",
+                                      color: item.type === "external" ? MUTED : WHITE,
+                                      backgroundColor: tone.background,
+                                      border: `0.5px solid ${tone.color}`,
+                                      padding: "4px 7px",
+                                      whiteSpace: "nowrap",
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
+                                    }}>
+                                      {getMobileStatusLabel(item, members)}
+                                    </span>
+                                  );
 
-                              if (item.type === "booking") {
-                                return (
-                                  <button
-                                    key={item.id}
-                                    type="button"
-                                    onClick={() => setSelectedBooking(item.booking)}
-                                    style={{ appearance: "none", border: "none", background: "transparent", padding: 0, textAlign: "left", cursor: "pointer", width: "100%" }}
-                                  >
-                                    {content}
-                                  </button>
-                                );
-                              }
+                                  if (item.type === "booking") {
+                                    return (
+                                      <button
+                                        key={item.id}
+                                        type="button"
+                                        onClick={() => setSelectedBooking(item.booking)}
+                                        style={{ appearance: "none", border: "none", background: "transparent", padding: 0, textAlign: "left", cursor: "pointer", width: "100%" }}
+                                      >
+                                        {content}
+                                      </button>
+                                    );
+                                  }
 
-                              return <div key={item.id}>{content}</div>;
-                            })}
+                                  return <div key={item.id}>{content}</div>;
+                                })}
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </div>
+            <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED, margin: "8px 0 0", textAlign: "center" }}>
+              Scroll to view all 30 days
+            </p>
+          </>
         ) : (
           <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", paddingBottom: "6px" }}>
             <div style={{ minWidth: `${VILLA_COLUMN_WIDTH + timelineWidth}px` }}>
