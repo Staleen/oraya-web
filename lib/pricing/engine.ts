@@ -7,6 +7,7 @@ import type {
   SeasonalOverride,
   NightSource,
 } from "./types";
+import { getBeirutDay } from "@/lib/utils/date-beirut";
 
 function parseDateOnlyUTC(s: string): Date | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
@@ -28,8 +29,8 @@ function formatDateOnlyUTC(d: Date): string {
   return `${y}-${m}-${dy}`;
 }
 
-function isWeekendUTC(d: Date): boolean {
-  const day = d.getUTCDay();
+function isWeekendBeirut(dateStr: string): boolean {
+  const day = getBeirutDay(dateStr);
   return day === 5 || day === 6;
 }
 
@@ -105,7 +106,7 @@ export function calculateStayPricing(
   const cursor = new Date(start.getTime());
   while (cursor.getTime() < end.getTime()) {
     const dateStr           = formatDateOnlyUTC(cursor);
-    const is_weekend        = isWeekendUTC(cursor);
+    const is_weekend        = isWeekendBeirut(dateStr);
     const { price, source } = resolveNightlyPrice(config, dateStr, is_weekend);
     nightly.push({ date: dateStr, is_weekend, price, source });
     cursor.setUTCDate(cursor.getUTCDate() + 1);

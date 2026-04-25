@@ -10,6 +10,7 @@ import { ADDON_CATEGORY_LABELS, ADDON_OPERATIONAL_SETTINGS_KEY, mergeAddonsWithO
 import { usePublicPricing } from "@/lib/public-pricing";
 import { calculateStayPricing } from "@/lib/pricing/engine";
 import type { NightSource } from "@/lib/pricing/types";
+import { formatBeirutMonthDay, getBeirutDay } from "@/lib/utils/date-beirut";
 import { supabase } from "@/lib/supabase";
 
 // ─── Brand constants ──────────────────────────────────────────────────────────
@@ -223,20 +224,13 @@ function formatPreparationTime(hours: number): string {
   return hours === 1 ? "1 hour" : `${hours} hours`;
 }
 
-const NIGHT_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const NIGHT_DAYS   = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 
-/** Engine emits UTC-anchored YYYY-MM-DD; render with UTC accessors so the
- *  weekday label matches the engine's weekend determination. */
+/** Engine emits YYYY-MM-DD and pricing now classifies weekends in Asia/Beirut. */
 function fmtNightLabel(iso: string, includeDay: boolean): string {
-  const parts = iso.split("-");
-  if (parts.length !== 3) return iso;
-  const y = Number(parts[0]);
-  const m = Number(parts[1]);
-  const d = Number(parts[2]);
-  const date = new Date(Date.UTC(y, m - 1, d));
-  const base = `${NIGHT_MONTHS[date.getUTCMonth()]} ${date.getUTCDate()}`;
-  return includeDay ? `${base} (${NIGHT_DAYS[date.getUTCDay()]})` : base;
+  const base = formatBeirutMonthDay(iso);
+  const dayIndex = getBeirutDay(iso);
+  return includeDay && dayIndex >= 0 ? `${base} (${NIGHT_DAYS[dayIndex]})` : base;
 }
 
 function nightSourceLabel(source: NightSource): string {
