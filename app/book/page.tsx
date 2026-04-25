@@ -940,13 +940,26 @@ function BookPageInner() {
         accessToken = session?.access_token ?? null;
       }
 
-      // Build structured addons payload (id + label + metadata, no price calculation)
+      // Build structured addons payload.
+      // Phase 12E Batch 6: include discounted_price when a dead-day offer was applied so the
+      // server can persist the correct price in addons_snapshot. The field is omitted (not null)
+      // for non-discounted add-ons to keep the payload backward-compatible.
       const selectedAddonObjects = selectedAddons
         .map(id => availableAddons.find(a => a.id === id))
         .filter((a): a is Addon => Boolean(a))
-        .map(({ id, label, pricing_model, currency, price }) => ({
-          id, label, pricing_model, currency, price,
-        }));
+        .map(({ id, label, pricing_model, currency, price }) => {
+          const offer = appliedDiscounts.includes(id)
+            ? deadDayOfferAddons.find(o => o.addon.id === id)
+            : undefined;
+          return {
+            id,
+            label,
+            pricing_model,
+            currency,
+            price,
+            ...(offer !== undefined ? { discounted_price: offer.discountedPrice } : {}),
+          };
+        });
 
       const body: Record<string, unknown> = {
         villa:           form.villa,

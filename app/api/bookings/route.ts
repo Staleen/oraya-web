@@ -12,6 +12,8 @@ import { runAddonAudit } from "@/lib/addon-audit";
 
 const ALLOWED_VILLAS = ["Villa Mechmech", "Villa Byblos"];
 const ISO_DATE_RE    = /^\d{4}-\d{2}-\d{2}$/;
+/** Phase 12E Batch 6: mirrors the UI constant — used for server-side fallback recompute. */
+const DEAD_DAY_DISCOUNT_PCT = 0.30;
 
 const PRICING_ERROR_MESSAGES = {
   invalid_date_range: "Invalid booking dates.",
@@ -227,6 +229,33 @@ export async function POST(request: Request) {
             .filter((id): id is string => Boolean(id))
         : [];
 
+      /**
+       * Phase 12E Batch 6: discount signals from the frontend.
+       * An entry of type `number` means the client supplied an explicit discounted price.
+       * An entry of `"flag_only"` means the client set applied_discount=true but sent no
+       * price — the server will recompute using DEAD_DAY_DISCOUNT_PCT as a fallback.
+       */
+      const discountedPriceMap = new Map<string, number | "flag_only">();
+      if (Array.isArray(addons)) {
+        for (const item of addons) {
+          if (!item || typeof item !== "object") continue;
+          const entry = item as Record<string, unknown>;
+          const id = typeof entry.id === "string" ? entry.id : null;
+          if (!id) continue;
+          const dp =
+            typeof entry.discounted_price === "number" &&
+            Number.isFinite(entry.discounted_price) &&
+            entry.discounted_price >= 0
+              ? (entry.discounted_price as number)
+              : null;
+          if (dp !== null) {
+            discountedPriceMap.set(id, dp);
+          } else if (entry.applied_discount === true) {
+            discountedPriceMap.set(id, "flag_only");
+          }
+        }
+      }
+
       if (selectedAddonIds.length > 0) {
         const [addonsResponse, addonSettingsResponse, sameDayCheckoutResponse, sameDayCheckinResponse] = await Promise.all([
           supabaseAdmin
@@ -297,14 +326,29 @@ export async function POST(request: Request) {
             return {
               id: addon.id,
               label: addon.label,
-              price: (
-                addon.pricing_type === "percentage" &&
-                typeof addon.percentage_value === "number" &&
-                addon.percentage_value > 0 &&
-                pricingSnapshotData !== null
-              )
-                ? Math.round((addon.percentage_value / 100) * pricingSnapshotData.pricing_subtotal)
-                : addon.price ?? null,
+              price: (() => {
+                // Step 1 — base price (Batch 3 logic: percentage or fixed).
+                const base = (
+                  addon.pricing_type === "percentage" &&
+                  typeof addon.percentage_value === "number" &&
+                  addon.percentage_value > 0 &&
+                  pricingSnapshotData !== null
+                )
+                  ? Math.round((addon.percentage_value / 100) * pricingSnapshotData.pricing_subtotal)
+                  : addon.price ?? null;
+
+                // Step 2 — Phase 12E Batch 6: apply discount when signalled by frontend.
+                const discountEntry = discountedPriceMap.get(addon.id) ?? null;
+                if (discountEntry !== null && base !== null) {
+                  if (typeof discountEntry === "number" && discountEntry >= 0 && discountEntry < base) {
+                    // Client supplied an explicit valid discounted price — use it.
+                    return Math.round(discountEntry);
+                  }
+                  // Flag-only or out-of-range price → recompute server-side.
+                  return Math.round(base * (1 - DEAD_DAY_DISCOUNT_PCT));
+                }
+                return base;
+              })(),
               category: addon.category ?? null,
               preparation_time_hours: addon.preparation_time_hours ?? null,
               enforcement_mode: addon.enforcement_mode ?? null,
