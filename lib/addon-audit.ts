@@ -3,6 +3,7 @@ import { getAddonEnforcementMode, type AddonEnforcementMode } from "./addon-oper
 const ISO_DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 export type AddonAuditReason = "insufficient_preparation_time" | "requires_approval";
+export type AddonSnapshotStatus = "pending_approval" | "confirmed" | "at_risk";
 
 export type AddonAuditInput = {
   check_in: string;
@@ -17,6 +18,12 @@ export type AddonAuditInput = {
 
 export type AddonAuditResult = {
   ok: boolean;
+  items: Array<{
+    id: string;
+    status: AddonSnapshotStatus;
+    available: boolean;
+    has_time_warning: boolean;
+  }>;
   violations: {
     insufficient_preparation_time: boolean;
     requires_approval: boolean;
@@ -47,6 +54,31 @@ export function runAddonAudit(input: AddonAuditInput): AddonAuditResult {
   const checkInUtcMillis = parseDateOnlyToUtcMillis(input.check_in);
   const hoursUntilCheckIn =
     checkInUtcMillis === null ? Number.POSITIVE_INFINITY : (checkInUtcMillis - now.getTime()) / 3_600_000;
+
+  const items = input.addons.map((addon) => {
+    const preparationTimeHours = addon.preparation_time_hours ?? null;
+    const enforcementMode = getAddonEnforcementMode(addon.enforcement_mode);
+    const hasTimeWarning =
+      typeof preparationTimeHours === "number" &&
+      Number.isFinite(preparationTimeHours) &&
+      preparationTimeHours > 0 &&
+      hoursUntilCheckIn < preparationTimeHours;
+    const available = !hasTimeWarning;
+
+    let status: AddonSnapshotStatus = "confirmed";
+    if (addon.requires_approval === true) {
+      status = "pending_approval";
+    } else if (enforcementMode === "soft" && hasTimeWarning) {
+      status = "at_risk";
+    }
+
+    return {
+      id: addon.id,
+      status,
+      available,
+      has_time_warning: hasTimeWarning,
+    };
+  });
 
   const insufficientPreparationTime = input.addons.some((addon) => {
     const preparationTimeHours = addon.preparation_time_hours ?? null;
@@ -83,6 +115,7 @@ export function runAddonAudit(input: AddonAuditInput): AddonAuditResult {
 
   return {
     ok: wouldBlockReasons.length === 0,
+    items,
     violations: {
       insufficient_preparation_time: insufficientPreparationTime,
       requires_approval: requiresApproval,

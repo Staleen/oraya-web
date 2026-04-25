@@ -116,6 +116,7 @@ export async function POST(request: Request) {
       preparation_time_hours: number | null;
       enforcement_mode: string | null;
       requires_approval: boolean;
+      status: "pending_approval" | "confirmed" | "at_risk";
     }> | null = null;
 
     const insertData: Record<string, unknown> = {
@@ -235,17 +236,6 @@ export async function POST(request: Request) {
 
         const operationalSettings = parseAddonOperationalSetting(addonSettingsResponse.data?.value);
         const mergedAddons = mergeAddonsWithOperationalSettings(addonsResponse.data ?? [], operationalSettings);
-        addonsSnapshotData = mergedAddons
-          .filter((addon) => selectedAddonIds.includes(addon.id))
-          .map((addon) => ({
-            id: addon.id,
-            label: addon.label,
-            price: addon.price ?? null,
-            category: addon.category ?? null,
-            preparation_time_hours: addon.preparation_time_hours ?? null,
-            enforcement_mode: addon.enforcement_mode ?? null,
-            requires_approval: addon.requires_approval ?? false,
-          }));
         const selectedAddonAuditRows = mergedAddons
           .filter((addon) => selectedAddonIds.includes(addon.id))
           .map((addon) => ({
@@ -258,10 +248,24 @@ export async function POST(request: Request) {
           addons: selectedAddonAuditRows,
           check_in,
         });
+        const addonStatuses = new Map(addonAudit.items.map((item) => [item.id, item.status]));
+        addonsSnapshotData = mergedAddons
+          .filter((addon) => selectedAddonIds.includes(addon.id))
+          .map((addon) => ({
+            id: addon.id,
+            label: addon.label,
+            price: addon.price ?? null,
+            category: addon.category ?? null,
+            preparation_time_hours: addon.preparation_time_hours ?? null,
+            enforcement_mode: addon.enforcement_mode ?? null,
+            requires_approval: addon.requires_approval ?? false,
+            status: addonStatuses.get(addon.id) ?? "confirmed",
+          }));
 
         if (process.env.NODE_ENV !== "production") {
           console.debug("[addon-dry-run]", {
             ok: addonAudit.ok,
+            items: addonAudit.items,
             would_block_reasons: addonAudit.would_block_reasons,
             warnings: addonAudit.warnings,
             addon_ids: selectedAddonIds,
