@@ -7,6 +7,8 @@ import { SITE_URL } from "@/lib/brand";
 import { findAvailabilityConflict } from "@/lib/calendar/availability";
 import { getVillaPricing, parseVillaPricingSetting, VILLA_BASE_PRICING_KEY } from "@/lib/admin-pricing";
 import { buildPricingSnapshot, runPricingAudit } from "@/lib/pricing/server-audit";
+import { ADDON_OPERATIONAL_SETTINGS_KEY, mergeAddonsWithOperationalSettings, parseAddonOperationalSetting } from "@/lib/addon-operations";
+import { runAddonAudit } from "@/lib/addon-audit";
 
 const ALLOWED_VILLAS = ["Villa Mechmech", "Villa Byblos"];
 const ISO_DATE_RE    = /^\d{4}-\d{2}-\d{2}$/;
@@ -188,6 +190,65 @@ export async function POST(request: Request) {
       insertData.pricing_nights = pricingSnapshotData.pricing_nights;
       insertData.pricing_warnings = pricingSnapshotData.pricing_warnings;
       insertData.pricing_snapshot = pricingSnapshotData.pricing_snapshot;
+    }
+
+    try {
+      const selectedAddonIds = Array.isArray(addons)
+        ? addons
+            .map((addon) => {
+              if (!addon || typeof addon !== "object") return null;
+              const id = (addon as { id?: unknown }).id;
+              return typeof id === "string" ? id : null;
+            })
+            .filter((id): id is string => Boolean(id))
+        : [];
+
+      if (selectedAddonIds.length > 0) {
+        const [addonsResponse, addonSettingsResponse] = await Promise.all([
+          supabaseAdmin
+            .from("addons")
+            .select("id, enabled")
+            .in("id", selectedAddonIds),
+          supabaseAdmin
+            .from("settings")
+            .select("value")
+            .eq("key", ADDON_OPERATIONAL_SETTINGS_KEY)
+            .maybeSingle(),
+        ]);
+
+        if (addonsResponse.error) {
+          throw addonsResponse.error;
+        }
+        if (addonSettingsResponse.error) {
+          throw addonSettingsResponse.error;
+        }
+
+        const operationalSettings = parseAddonOperationalSetting(addonSettingsResponse.data?.value);
+        const mergedAddons = mergeAddonsWithOperationalSettings(addonsResponse.data ?? [], operationalSettings);
+        const selectedAddonAuditRows = mergedAddons
+          .filter((addon) => selectedAddonIds.includes(addon.id))
+          .map((addon) => ({
+            id: addon.id,
+            preparation_time_hours: addon.preparation_time_hours ?? null,
+            requires_approval: addon.requires_approval ?? false,
+          }));
+        const addonAudit = runAddonAudit({
+          addons: selectedAddonAuditRows,
+          check_in,
+        });
+
+        if (process.env.NODE_ENV !== "production") {
+          console.debug("[addon-dry-run]", {
+            ok: addonAudit.ok,
+            would_block_reasons: addonAudit.would_block_reasons,
+            addon_ids: selectedAddonIds,
+          });
+        }
+      }
+    } catch (addonAuditError) {
+      if (process.env.NODE_ENV !== "production") {
+        console.debug("[api/bookings] addon audit skipped", addonAuditError);
+      }
     }
 
     const { data, error } = await supabaseAdmin

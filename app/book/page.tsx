@@ -6,7 +6,7 @@ import type { DateRange, Matcher } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 import OrayaEmblem from "@/components/OrayaEmblem";
 import { getVillaBasePrice, getVillaPricing } from "@/lib/admin-pricing";
-import { ADDON_CATEGORY_LABELS, ADDON_OPERATIONAL_SETTINGS_KEY, mergeAddonsWithOperationalSettings, parseAddonOperationalSetting, type AddonCategory, type AddonCutoffType } from "@/lib/addon-operations";
+import { ADDON_CATEGORY_LABELS, ADDON_OPERATIONAL_SETTINGS_KEY, formatPreparationTime, mergeAddonsWithOperationalSettings, parseAddonOperationalSetting, type AddonCategory, type AddonCutoffType } from "@/lib/addon-operations";
 import { usePublicPricing } from "@/lib/public-pricing";
 import { calculateStayPricing } from "@/lib/pricing/engine";
 import type { NightSource } from "@/lib/pricing/types";
@@ -218,10 +218,6 @@ function nightCount(checkIn: string, checkOut: string): number {
 
 function formatUsd(amount: number): string {
   return `$${amount.toLocaleString("en-US")}`;
-}
-
-function formatPreparationTime(hours: number): string {
-  return hours === 1 ? "1 hour" : `${hours} hours`;
 }
 
 const NIGHT_DAYS   = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
@@ -1231,7 +1227,7 @@ function BookPageInner() {
                                 <span style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, display: "block", marginTop: "4px", lineHeight: 1.5 }}>
                                   {[
                                     addon.requires_approval ? "Approval required" : "",
-                                    addon.preparation_time_hours ? `${formatPreparationTime(addon.preparation_time_hours)} prep` : "",
+                                    addon.preparation_time_hours ? `${formatPreparationTime(addon.preparation_time_hours)} preparation required` : "",
                                   ].filter(Boolean).join(" - ")}
                                 </span>
                               )}

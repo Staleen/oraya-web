@@ -2,6 +2,7 @@ export const ADDON_OPERATIONAL_SETTINGS_KEY = "addon_operational_settings";
 
 export type AddonCutoffType = "before_checkin" | "before_booking";
 export type AddonCategory = "comfort" | "experience" | "logistics" | "service";
+export type PreparationUnit = "hours" | "days";
 
 export interface AddonOperationalFields {
   preparation_time_hours?: number | null;
@@ -28,6 +29,36 @@ export const ADDON_CUTOFF_LABELS: Record<AddonCutoffType, string> = {
   before_checkin: "Before check-in",
   before_booking: "Before booking",
 };
+
+export function derivePreparationUnit(hours: number | null | undefined): PreparationUnit {
+  return typeof hours === "number" && Number.isFinite(hours) && hours >= 24 && hours % 24 === 0
+    ? "days"
+    : "hours";
+}
+
+export function getPreparationAmount(
+  hours: number | null | undefined,
+  unit: PreparationUnit,
+): number | null {
+  if (typeof hours !== "number" || !Number.isFinite(hours)) return null;
+  return unit === "days" ? hours / 24 : hours;
+}
+
+export function normalizePreparationTime(
+  amount: number | null | undefined,
+  unit: PreparationUnit,
+): number | null {
+  if (typeof amount !== "number" || !Number.isFinite(amount)) return null;
+  return unit === "days" ? amount * 24 : amount;
+}
+
+export function formatPreparationTime(hours: number): string {
+  if (hours >= 24 && hours % 24 === 0) {
+    const days = hours / 24;
+    return days === 1 ? "1 day" : `${days} days`;
+  }
+  return hours === 1 ? "1 hour" : `${hours} hours`;
+}
 
 function parseOperationalFields(value: unknown): AddonOperationalFields {
   if (!value || typeof value !== "object") return {};

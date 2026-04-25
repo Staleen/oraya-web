@@ -1,6 +1,15 @@
 "use client";
+import { useEffect, useState } from "react";
 import type { Addon } from "./types";
-import { ADDON_CATEGORY_LABELS, ADDON_CUTOFF_LABELS, type AddonCategory } from "@/lib/addon-operations";
+import {
+  ADDON_CATEGORY_LABELS,
+  ADDON_CUTOFF_LABELS,
+  derivePreparationUnit,
+  getPreparationAmount,
+  normalizePreparationTime,
+  type AddonCategory,
+  type PreparationUnit,
+} from "@/lib/addon-operations";
 import { GOLD, CHARCOAL, MIDNIGHT, MUTED, LATO, SURFACE, BORDER, fieldStyle } from "./theme";
 
 const PRICING_MODELS: { value: Addon["pricing_model"]; label: string }[] = [
@@ -30,7 +39,42 @@ export default function AddonsEditor({
   updateAddon: (id: string, patch: Partial<Addon>) => void;
   saveAddons: () => void;
 }) {
+  const [preparationUnits, setPreparationUnits] = useState<Record<string, PreparationUnit>>({});
+
+  useEffect(() => {
+    setPreparationUnits((prev) => {
+      const next = { ...prev };
+      for (const addon of addons) {
+        if (!next[addon.id]) {
+          next[addon.id] = derivePreparationUnit(addon.preparation_time_hours ?? null);
+        }
+      }
+      return next;
+    });
+  }, [addons]);
+
   const isMobile = typeof window !== "undefined" ? window.innerWidth <= 768 : false;
+
+  function getUnit(addon: Addon): PreparationUnit {
+    return preparationUnits[addon.id] ?? derivePreparationUnit(addon.preparation_time_hours ?? null);
+  }
+
+  function getAmount(addon: Addon): string {
+    const amount = getPreparationAmount(addon.preparation_time_hours ?? null, getUnit(addon));
+    if (amount === null) return "";
+    return Number.isInteger(amount) ? String(amount) : String(Number(amount.toFixed(2)));
+  }
+
+  function updatePreparationAmount(addon: Addon, rawValue: string) {
+    updateAddon(addon.id, {
+      preparation_time_hours: rawValue === "" ? null : normalizePreparationTime(parseFloat(rawValue), getUnit(addon)),
+    });
+  }
+
+  function updatePreparationUnit(addon: Addon, unit: PreparationUnit) {
+    setPreparationUnits((prev) => ({ ...prev, [addon.id]: unit }));
+  }
+
   return (
     <div style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: isMobile ? "1rem" : "1.75rem", marginBottom: "2rem" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem", flexWrap: "wrap", gap: "12px" }}>
@@ -107,16 +151,28 @@ export default function AddonsEditor({
                     <option key={pm.value} value={pm.value} style={{ backgroundColor: MIDNIGHT }}>{pm.label}</option>
                   ))}
                 </select>
-                <input
-                  type="number"
-                  min={0}
-                  value={addon.preparation_time_hours ?? ""}
-                  onChange={e => updateAddon(addon.id, { preparation_time_hours: e.target.value === "" ? null : parseFloat(e.target.value) })}
-                  placeholder="Preparation time (hours)"
-                  style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", opacity: addon.enabled ? 1 : 0.5 }}
-                  onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
-                  onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
-                />
+                <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 100px", gap: "10px" }}>
+                  <input
+                    type="number"
+                    min={0}
+                    value={getAmount(addon)}
+                    onChange={e => updatePreparationAmount(addon, e.target.value)}
+                    placeholder="Preparation time"
+                    style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", opacity: addon.enabled ? 1 : 0.5 }}
+                    onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
+                    onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+                  />
+                  <select
+                    value={getUnit(addon)}
+                    onChange={e => updatePreparationUnit(addon, e.target.value as PreparationUnit)}
+                    style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", cursor: "pointer", opacity: addon.enabled ? 1 : 0.5 }}
+                    onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
+                    onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+                  >
+                    <option value="hours" style={{ backgroundColor: MIDNIGHT }}>hours</option>
+                    <option value="days" style={{ backgroundColor: MIDNIGHT }}>days</option>
+                  </select>
+                </div>
                 <select
                   value={addon.cutoff_type ?? ""}
                   onChange={e => updateAddon(addon.id, { cutoff_type: e.target.value === "" ? null : "before_checkin" })}
@@ -215,16 +271,28 @@ export default function AddonsEditor({
                 </select>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "10px", marginTop: "10px", paddingLeft: "40px" }}>
-                <input
-                  type="number"
-                  min={0}
-                  value={addon.preparation_time_hours ?? ""}
-                  onChange={e => updateAddon(addon.id, { preparation_time_hours: e.target.value === "" ? null : parseFloat(e.target.value) })}
-                  placeholder="Preparation hours"
-                  style={{ ...fieldStyle, padding: "8px 10px", fontSize: "13px", opacity: addon.enabled ? 1 : 0.5 }}
-                  onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
-                  onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
-                />
+                <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 100px", gap: "10px" }}>
+                  <input
+                    type="number"
+                    min={0}
+                    value={getAmount(addon)}
+                    onChange={e => updatePreparationAmount(addon, e.target.value)}
+                    placeholder="Preparation time"
+                    style={{ ...fieldStyle, padding: "8px 10px", fontSize: "13px", opacity: addon.enabled ? 1 : 0.5 }}
+                    onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
+                    onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+                  />
+                  <select
+                    value={getUnit(addon)}
+                    onChange={e => updatePreparationUnit(addon, e.target.value as PreparationUnit)}
+                    style={{ ...fieldStyle, padding: "8px 10px", fontSize: "13px", cursor: "pointer", opacity: addon.enabled ? 1 : 0.5 }}
+                    onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
+                    onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+                  >
+                    <option value="hours" style={{ backgroundColor: MIDNIGHT }}>hours</option>
+                    <option value="days" style={{ backgroundColor: MIDNIGHT }}>days</option>
+                  </select>
+                </div>
                 <select
                   value={addon.cutoff_type ?? ""}
                   onChange={e => updateAddon(addon.id, { cutoff_type: e.target.value === "" ? null : "before_checkin" })}
