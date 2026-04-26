@@ -114,12 +114,28 @@ function getCardAccent(booking: Booking, needsAttention: boolean) {
   };
 }
 
-function getAddonStatusTone(status: "confirmed" | "at_risk" | "pending_approval") {
+function getAddonStatusTone(status: BookingAddonSnapshot["status"]) {
   if (status === "confirmed") {
     return {
       color: "#6fcf8a",
       background: "rgba(80,180,100,0.15)",
       border: "rgba(111,207,138,0.32)",
+    };
+  }
+
+  if (status === "approved") {
+    return {
+      color: "#6fcf8a",
+      background: "rgba(80,180,100,0.18)",
+      border: "rgba(111,207,138,0.36)",
+    };
+  }
+
+  if (status === "declined") {
+    return {
+      color: "#f08b8b",
+      background: "rgba(224,112,112,0.14)",
+      border: "rgba(224,112,112,0.34)",
     };
   }
 
@@ -157,6 +173,20 @@ function getAddonRiskWarning(addon: BookingAddonSnapshot) {
   if (addon.same_day_warning === "same_day_checkout") return "Same-day checkout risk";
   if (addon.same_day_warning === "same_day_checkin") return "Same-day check-in risk";
   return null;
+}
+
+function hasResolvedAddonStatus(addon: BookingAddonSnapshot) {
+  return addon.status === "approved" || addon.status === "declined";
+}
+
+function addonNeedsAttention(addon: BookingAddonSnapshot) {
+  if (hasResolvedAddonStatus(addon)) return false;
+  return (
+    addon.status === "pending_approval" ||
+    addon.status === "at_risk" ||
+    addon.same_day_warning === "same_day_checkout" ||
+    addon.same_day_warning === "same_day_checkin"
+  );
 }
 
 function sortByNewest(items: Booking[]) {
@@ -200,15 +230,15 @@ export default function BookingsTable({
   const [approvingAddonId, setApprovingAddonId] = useState<string | null>(null);
   const [expandedCompactId, setExpandedCompactId] = useState<string | null>(null);
 
-  async function approveAddon(bookingId: string, addonId: string) {
-    const key = `${bookingId}-${addonId}`;
+  async function resolveAddon(bookingId: string, addonId: string, decision: "approve" | "decline") {
+    const key = `${bookingId}-${addonId}-${decision}`;
     setApprovingAddonId(key);
 
     try {
       const res = await fetch(`/api/admin/bookings/${bookingId}/approve-addon`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ addon_id: addonId }),
+        body: JSON.stringify({ addon_id: addonId, decision }),
       });
       const data = await res.json();
 
@@ -219,10 +249,10 @@ export default function BookingsTable({
           ),
         );
       } else {
-        console.error("[admin] approve-addon failed:", data.error ?? "unknown error");
+        console.error("[admin] resolve-addon failed:", data.error ?? "unknown error");
       }
     } catch (error) {
-      console.error("[admin] approve-addon network error:", error);
+      console.error("[admin] resolve-addon network error:", error);
     } finally {
       setApprovingAddonId(null);
     }
@@ -237,17 +267,11 @@ export default function BookingsTable({
   }
 
   function bookingHasPendingAddonApproval(booking: Booking) {
-    return getAddonSnapshots(booking).some((addon) => addon.requires_approval && addon.admin_approved !== true);
+    return getAddonSnapshots(booking).some((addon) => addon.requires_approval && addon.status === "pending_approval");
   }
 
   function bookingHasOperationalAttention(booking: Booking) {
-    return getAddonSnapshots(booking).some(
-      (addon) =>
-        addon.status === "at_risk" ||
-        addon.status === "pending_approval" ||
-        addon.same_day_warning === "same_day_checkout" ||
-        addon.same_day_warning === "same_day_checkin",
-    );
+    return getAddonSnapshots(booking).some((addon) => addonNeedsAttention(addon));
   }
 
   function bookingRequiresAction(booking: Booking) {
@@ -460,8 +484,10 @@ export default function BookingsTable({
         <div style={{ display: "grid", gap: "12px" }}>
           {addonSnapshots.map((addon) => {
             const statusTone = getAddonStatusTone(addon.status);
-            const isApproved = addon.admin_approved === true;
-            const isApproving = approvingAddonId === `${booking.id}-${addon.id}`;
+            const isResolved = hasResolvedAddonStatus(addon);
+            const isPendingApproval = addon.requires_approval && addon.status === "pending_approval";
+            const isApproving = approvingAddonId === `${booking.id}-${addon.id}-approve`;
+            const isDeclining = approvingAddonId === `${booking.id}-${addon.id}-decline`;
             const sameDayRiskWarning = getAddonRiskWarning(addon);
 
             return (
@@ -525,23 +551,7 @@ export default function BookingsTable({
                       </div>
 
                       <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "8px" }}>
-                        {addon.requires_approval && !isApproved && renderOperationalBadge("Requires approval", "approval")}
-                        {isApproved && (
-                          <span
-                            style={{
-                              fontFamily: LATO,
-                              fontSize: "9px",
-                              letterSpacing: "1.2px",
-                              textTransform: "uppercase",
-                              color: "#6fcf8a",
-                              backgroundColor: "rgba(80,180,100,0.15)",
-                              padding: "4px 8px",
-                              borderRadius: "4px",
-                            }}
-                          >
-                            Approved
-                          </span>
-                        )}
+                        {!isResolved && isPendingApproval && renderOperationalBadge("Requires approval", "approval")}
                         {addon.enforcement_mode === "soft" && renderOperationalBadge("Soft rule", "soft")}
                         {addon.enforcement_mode === "strict" && renderOperationalBadge("Strict rule", "strict")}
                       </div>
@@ -588,28 +598,58 @@ export default function BookingsTable({
                     {addon.status.replaceAll("_", " ")}
                   </span>
 
-                  {addon.requires_approval && !isApproved && (
-                    <button
-                      type="button"
-                      onClick={() => approveAddon(booking.id, addon.id)}
-                      disabled={isApproving}
+                  {!isResolved && isPendingApproval && (
+                    <div
                       style={{
-                        fontFamily: LATO,
-                        fontSize: "10px",
-                        letterSpacing: "1.2px",
-                        textTransform: "uppercase",
-                        color: "#6fcf8a",
-                        backgroundColor: "transparent",
-                        border: "0.5px solid rgba(111,207,138,0.45)",
-                        padding: "8px 12px",
-                        borderRadius: "4px",
-                        cursor: isApproving ? "not-allowed" : "pointer",
-                        opacity: isApproving ? 0.5 : 1,
-                        minWidth: isMobile ? "100%" : "auto",
+                        display: "flex",
+                        flexDirection: isMobile ? "column" : "row",
+                        gap: "8px",
+                        width: isMobile ? "100%" : "auto",
                       }}
                     >
-                      {isApproving ? "Saving..." : "Mark as approved"}
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => resolveAddon(booking.id, addon.id, "approve")}
+                        disabled={isApproving || isDeclining}
+                        style={{
+                          fontFamily: LATO,
+                          fontSize: "10px",
+                          letterSpacing: "1.2px",
+                          textTransform: "uppercase",
+                          color: "#6fcf8a",
+                          backgroundColor: "transparent",
+                          border: "0.5px solid rgba(111,207,138,0.45)",
+                          padding: "8px 12px",
+                          borderRadius: "4px",
+                          cursor: isApproving || isDeclining ? "not-allowed" : "pointer",
+                          opacity: isApproving || isDeclining ? 0.5 : 1,
+                          minWidth: isMobile ? "100%" : "auto",
+                        }}
+                      >
+                        {isApproving ? "Saving..." : "Approve"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => resolveAddon(booking.id, addon.id, "decline")}
+                        disabled={isApproving || isDeclining}
+                        style={{
+                          fontFamily: LATO,
+                          fontSize: "10px",
+                          letterSpacing: "1.2px",
+                          textTransform: "uppercase",
+                          color: "#f08b8b",
+                          backgroundColor: "transparent",
+                          border: "0.5px solid rgba(224,112,112,0.4)",
+                          padding: "8px 12px",
+                          borderRadius: "4px",
+                          cursor: isApproving || isDeclining ? "not-allowed" : "pointer",
+                          opacity: isApproving || isDeclining ? 0.5 : 1,
+                          minWidth: isMobile ? "100%" : "auto",
+                        }}
+                      >
+                        {isDeclining ? "Saving..." : "Decline"}
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>

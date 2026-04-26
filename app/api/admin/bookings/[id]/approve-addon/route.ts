@@ -11,20 +11,27 @@ function makeAdminClient() {
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
 }
 
-// PATCH — mark a single add-on as admin-approved within the booking's addons_snapshot.
-// Mutates only the admin_approved / admin_approved_at fields on the matching snapshot item.
+// PATCH — resolve a single add-on approval item within the booking's addons_snapshot.
+// Defaults to approve for backward compatibility, and can also mark the item declined.
 // No booking status, pricing, email, calendar, or overlap logic is touched.
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   let addon_id: string;
+  let decision: "approve" | "decline" = "approve";
   try {
     const body = await request.json();
     if (!body.addon_id || typeof body.addon_id !== "string") {
       return NextResponse.json({ error: "addon_id is required and must be a string." }, { status: 400 });
     }
     addon_id = body.addon_id;
+    if (body.decision !== undefined) {
+      if (body.decision !== "approve" && body.decision !== "decline") {
+        return NextResponse.json({ error: "decision must be 'approve' or 'decline'." }, { status: 400 });
+      }
+      decision = body.decision;
+    }
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
@@ -53,10 +60,17 @@ export async function PATCH(
     return NextResponse.json({ error: "Add-on not found in snapshot." }, { status: 404 });
   }
 
+  const resolvedAt = new Date().toISOString();
+
   // Clone snapshot array, update only the matched item.
   const updatedSnapshot = snapshot.map((item, i) =>
     i === addonIndex
-      ? { ...item, admin_approved: true, admin_approved_at: new Date().toISOString() }
+      ? {
+          ...item,
+          status: decision === "approve" ? "approved" : "declined",
+          admin_approved: decision === "approve",
+          admin_approved_at: decision === "approve" ? resolvedAt : null,
+        }
       : item
   );
 
