@@ -1,11 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { formatBeirutDateTime } from "@/lib/format-date";
-import type { Booking, Member } from "./types";
-import { GOLD, WHITE, MIDNIGHT, MUTED, LATO, PLAYFAIR, SURFACE, BORDER, fieldStyle, fmt } from "./theme";
-import { useAdminData } from "@/components/admin/AdminDataProvider";
+import { useMemo, useState } from "react";
+import type { Booking, BookingAddonSnapshot, Member } from "./types";
 import { AddonIcon } from "@/components/addon-icon";
+import { useAdminData } from "@/components/admin/AdminDataProvider";
+import { BORDER, fieldStyle, fmt, GOLD, LATO, MIDNIGHT, MUTED, PLAYFAIR, WHITE } from "./theme";
 
 type BookingSectionKey = "pending" | "confirmed" | "cancelled";
 
@@ -13,21 +12,25 @@ function StatusBadge({ status }: { status: string }) {
   const tones: Record<string, { text: string; background: string; border: string }> = {
     pending: {
       text: GOLD,
-      background: "rgba(197,164,109,0.16)",
-      border: "rgba(197,164,109,0.4)",
+      background: "rgba(197,164,109,0.14)",
+      border: "rgba(197,164,109,0.35)",
     },
     confirmed: {
       text: "#6fcf8a",
-      background: "rgba(80,180,100,0.16)",
-      border: "rgba(111,207,138,0.38)",
+      background: "rgba(80,180,100,0.15)",
+      border: "rgba(111,207,138,0.34)",
     },
     cancelled: {
       text: "#f08b8b",
       background: "rgba(224,112,112,0.14)",
-      border: "rgba(224,112,112,0.35)",
+      border: "rgba(224,112,112,0.32)",
     },
   };
-  const tone = tones[status] ?? { text: MUTED, background: "transparent", border: BORDER };
+  const tone = tones[status] ?? {
+    text: MUTED,
+    background: "rgba(255,255,255,0.04)",
+    border: BORDER,
+  };
 
   return (
     <span
@@ -37,7 +40,7 @@ function StatusBadge({ status }: { status: string }) {
         justifyContent: "center",
         fontFamily: LATO,
         fontSize: "10px",
-        letterSpacing: "1.7px",
+        letterSpacing: "1.6px",
         textTransform: "uppercase",
         color: tone.text,
         backgroundColor: tone.background,
@@ -52,26 +55,97 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+function getSectionTone(section: BookingSectionKey) {
+  if (section === "confirmed") {
+    return {
+      accent: "#6fcf8a",
+      glow: "rgba(80,180,100,0.08)",
+      title: "Confirmed",
+      subtitle: "Confirmed and upcoming stays",
+    };
+  }
+
+  if (section === "cancelled") {
+    return {
+      accent: "#e07070",
+      glow: "rgba(224,112,112,0.08)",
+      title: "Cancelled",
+      subtitle: "Cancelled bookings",
+    };
+  }
+
+  return {
+    accent: GOLD,
+    glow: "rgba(197,164,109,0.08)",
+    title: "Pending / Action Required",
+    subtitle: "Bookings that still need an operational decision",
+  };
+}
+
+function getCardAccent(booking: Booking, needsAttention: boolean) {
+  if (booking.status === "cancelled") {
+    return {
+      color: "#e07070",
+      border: "rgba(224,112,112,0.68)",
+      glow: "rgba(224,112,112,0.08)",
+    };
+  }
+
+  if (booking.status === "confirmed" && !needsAttention) {
+    return {
+      color: "#6fcf8a",
+      border: "rgba(111,207,138,0.52)",
+      glow: "rgba(80,180,100,0.07)",
+    };
+  }
+
+  if (needsAttention) {
+    return {
+      color: GOLD,
+      border: "rgba(197,164,109,0.82)",
+      glow: "rgba(197,164,109,0.08)",
+    };
+  }
+
+  return {
+    color: "#8eb8ff",
+    border: "rgba(142,184,255,0.62)",
+    glow: "rgba(142,184,255,0.08)",
+  };
+}
+
 function getAddonStatusTone(status: "confirmed" | "at_risk" | "pending_approval") {
   if (status === "confirmed") {
-    return { color: "#6fcf8a", background: "rgba(80,180,100,0.15)", border: "rgba(111,207,138,0.32)" };
+    return {
+      color: "#6fcf8a",
+      background: "rgba(80,180,100,0.15)",
+      border: "rgba(111,207,138,0.32)",
+    };
   }
+
   if (status === "at_risk") {
-    return { color: "#e2ab5a", background: "rgba(226,171,90,0.16)", border: "rgba(226,171,90,0.3)" };
+    return {
+      color: "#e2ab5a",
+      background: "rgba(226,171,90,0.15)",
+      border: "rgba(226,171,90,0.3)",
+    };
   }
-  return { color: "#9db7d9", background: "rgba(157,183,217,0.14)", border: "rgba(157,183,217,0.28)" };
+
+  return {
+    color: "#9db7d9",
+    background: "rgba(157,183,217,0.14)",
+    border: "rgba(157,183,217,0.28)",
+  };
 }
 
 function getOperationalBadgeStyle(kind: "approval" | "soft" | "strict") {
-  if (kind === "strict") return { color: "#e78f8f", background: "rgba(224,112,112,0.14)" };
-  if (kind === "soft") return { color: "#e2ab5a", background: "rgba(226,171,90,0.15)" };
+  if (kind === "strict") {
+    return { color: "#e78f8f", background: "rgba(224,112,112,0.14)" };
+  }
+  if (kind === "soft") {
+    return { color: "#e2ab5a", background: "rgba(226,171,90,0.15)" };
+  }
   return { color: GOLD, background: "rgba(197,164,109,0.14)" };
-}
-
-function getAddonRiskWarning(addon: NonNullable<Booking["addons_snapshot"]>[number]) {
-  if (addon.same_day_warning === "same_day_checkout") return "Same-day checkout risk";
-  if (addon.same_day_warning === "same_day_checkin") return "Same-day check-in risk";
-  return null;
 }
 
 function formatAddonPrice(price: number | null) {
@@ -79,47 +153,19 @@ function formatAddonPrice(price: number | null) {
   return `$${price.toLocaleString("en-US")}`;
 }
 
-function getSectionTone(section: BookingSectionKey) {
-  if (section === "confirmed") {
-    return {
-      accent: "#6fcf8a",
-      glow: "rgba(80,180,100,0.08)",
-      title: "Confirmed Bookings",
-      subtitle: "Confirmed and upcoming stays",
-    };
-  }
-  if (section === "cancelled") {
-    return {
-      accent: "#e07070",
-      glow: "rgba(224,112,112,0.08)",
-      title: "Cancelled Bookings",
-      subtitle: "Bookings that were cancelled",
-    };
-  }
-  return {
-    accent: GOLD,
-    glow: "rgba(197,164,109,0.08)",
-    title: "Pending Approvals",
-    subtitle: "Bookings that require your attention",
-  };
+function getAddonRiskWarning(addon: BookingAddonSnapshot) {
+  if (addon.same_day_warning === "same_day_checkout") return "Same-day checkout risk";
+  if (addon.same_day_warning === "same_day_checkin") return "Same-day check-in risk";
+  return null;
 }
 
-function getCardAccent(booking: Booking, needsApproval: boolean) {
-  if (booking.status === "cancelled") {
-    return { color: "#e07070", border: "rgba(224,112,112,0.7)", glow: "rgba(224,112,112,0.08)" };
-  }
-  if (booking.status === "confirmed") {
-    return { color: "#6fcf8a", border: "rgba(111,207,138,0.6)", glow: "rgba(80,180,100,0.08)" };
-  }
-  if (needsApproval) {
-    return { color: GOLD, border: "rgba(197,164,109,0.8)", glow: "rgba(197,164,109,0.08)" };
-  }
-  return { color: "#78abf6", border: "rgba(120,171,246,0.78)", glow: "rgba(120,171,246,0.08)" };
+function sortByNewest(items: Booking[]) {
+  return [...items].sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
 
 export default function BookingsTable({
   loading,
-  filteredBookings,
+  filteredBookings: _filteredBookings,
   members,
   isMobile,
   statusFilter,
@@ -150,28 +196,33 @@ export default function BookingsTable({
   updateStatus: (id: string, status: "confirmed" | "cancelled") => void;
   emailWarnings: Record<string, string>;
 }) {
-  const { setBookings } = useAdminData();
+  const { bookings, setBookings } = useAdminData();
   const [approvingAddonId, setApprovingAddonId] = useState<string | null>(null);
+  const [expandedCompactId, setExpandedCompactId] = useState<string | null>(null);
 
   async function approveAddon(bookingId: string, addonId: string) {
     const key = `${bookingId}-${addonId}`;
     setApprovingAddonId(key);
+
     try {
       const res = await fetch(`/api/admin/bookings/${bookingId}/approve-addon`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ addon_id: addonId }),
       });
-      const d = await res.json();
-      if (res.ok && Array.isArray(d.addons_snapshot)) {
+      const data = await res.json();
+
+      if (res.ok && Array.isArray(data.addons_snapshot)) {
         setBookings((prev) =>
-          prev.map((booking) => (booking.id === bookingId ? { ...booking, addons_snapshot: d.addons_snapshot } : booking)),
+          prev.map((booking) =>
+            booking.id === bookingId ? { ...booking, addons_snapshot: data.addons_snapshot } : booking,
+          ),
         );
       } else {
-        console.error("[admin] approve-addon failed:", d.error ?? "unknown error");
+        console.error("[admin] approve-addon failed:", data.error ?? "unknown error");
       }
-    } catch (err) {
-      console.error("[admin] approve-addon network error:", err);
+    } catch (error) {
+      console.error("[admin] approve-addon network error:", error);
     } finally {
       setApprovingAddonId(null);
     }
@@ -185,28 +236,42 @@ export default function BookingsTable({
     return booking.addons_snapshot ?? [];
   }
 
-  function bookingNeedsAddonAttention(booking: Booking) {
-    return getAddonSnapshots(booking).some((addon) => addon.status === "at_risk" || addon.status === "pending_approval");
-  }
-
   function bookingHasPendingAddonApproval(booking: Booking) {
     return getAddonSnapshots(booking).some((addon) => addon.requires_approval && addon.admin_approved !== true);
   }
 
+  function bookingHasOperationalAttention(booking: Booking) {
+    return getAddonSnapshots(booking).some(
+      (addon) =>
+        addon.status === "at_risk" ||
+        addon.status === "pending_approval" ||
+        addon.same_day_warning === "same_day_checkout" ||
+        addon.same_day_warning === "same_day_checkin",
+    );
+  }
+
   function bookingRequiresAction(booking: Booking) {
     if (booking.status === "cancelled") return false;
-    return booking.status === "pending" || bookingNeedsAddonAttention(booking) || bookingHasPendingAddonApproval(booking);
+    return booking.status === "pending" || bookingHasPendingAddonApproval(booking) || bookingHasOperationalAttention(booking);
   }
 
-  function sortByNewest(bookings: Booking[]) {
-    return [...bookings].sort((a, b) => b.created_at.localeCompare(a.created_at));
-  }
+  const filterActive = villaFilter !== "all" || dateFilter !== "";
 
-  const pendingBookings = sortByNewest(filteredBookings.filter((booking) => bookingRequiresAction(booking)));
+  const visibleBookings = useMemo(() => {
+    return bookings.filter((booking) => {
+      if (villaFilter !== "all" && booking.villa !== villaFilter) return false;
+      if (dateFilter && booking.check_in !== dateFilter) return false;
+      return true;
+    });
+  }, [bookings, villaFilter, dateFilter]);
+
+  const pendingBookings = sortByNewest(visibleBookings.filter((booking) => bookingRequiresAction(booking)));
+
   const confirmedBookings = sortByNewest(
-    filteredBookings.filter((booking) => booking.status === "confirmed" && !bookingRequiresAction(booking)),
+    visibleBookings.filter((booking) => booking.status === "confirmed" && !bookingRequiresAction(booking)),
   );
-  const cancelledBookings = sortByNewest(filteredBookings.filter((booking) => booking.status === "cancelled"));
+
+  const cancelledBookings = sortByNewest(visibleBookings.filter((booking) => booking.status === "cancelled"));
 
   const sectionCounts: Record<BookingSectionKey, number> = {
     pending: pendingBookings.length,
@@ -244,8 +309,39 @@ export default function BookingsTable({
     );
   }
 
+  function renderFilterChip(label: string, value: string, onClear: () => void) {
+    return (
+      <button
+        type="button"
+        onClick={onClear}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "8px",
+          fontFamily: LATO,
+          fontSize: "10px",
+          letterSpacing: "1.6px",
+          textTransform: "uppercase",
+          color: GOLD,
+          backgroundColor: "rgba(197,164,109,0.12)",
+          border: "0.5px solid rgba(197,164,109,0.32)",
+          borderRadius: "999px",
+          padding: "7px 10px",
+          cursor: "pointer",
+        }}
+      >
+        <span>
+          {label}: {value}
+        </span>
+        <span style={{ color: WHITE, fontSize: "12px", lineHeight: 1 }}>x</span>
+      </button>
+    );
+  }
+
   function renderSectionTeaser(section: BookingSectionKey) {
     const tone = getSectionTone(section);
+    const symbol = section === "confirmed" ? "C" : "X";
+
     return (
       <button
         key={section}
@@ -282,11 +378,26 @@ export default function BookingsTable({
               flexShrink: 0,
             }}
           >
-            {section === "confirmed" ? "✓" : "×"}
+            {symbol}
           </div>
           <div style={{ minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "4px" }}>
-              <span style={{ fontFamily: LATO, fontSize: isMobile ? "20px" : "22px", color: WHITE, fontWeight: 700 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                flexWrap: "wrap",
+                marginBottom: "4px",
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: LATO,
+                  fontSize: isMobile ? "20px" : "22px",
+                  color: WHITE,
+                  fontWeight: 700,
+                }}
+              >
                 {tone.title}
               </span>
               <span
@@ -312,54 +423,250 @@ export default function BookingsTable({
             </p>
           </div>
         </div>
-        <span style={{ color: WHITE, fontFamily: LATO, fontSize: "26px", lineHeight: 1, opacity: 0.85 }}>›</span>
+        <span style={{ color: WHITE, fontFamily: LATO, fontSize: "22px", lineHeight: 1, opacity: 0.85 }}>
+          {">"}
+        </span>
       </button>
     );
   }
 
-  function renderBookingCard(booking: Booking) {
+  function renderAddonRows(booking: Booking) {
+    const addonSnapshots = getAddonSnapshots(booking);
+    if (addonSnapshots.length === 0) return null;
+
+    return (
+      <div style={{ display: "grid", gap: "12px" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            color: MUTED,
+          }}
+        >
+          <span
+            style={{
+              fontFamily: LATO,
+              fontSize: "10px",
+              letterSpacing: "2.4px",
+              textTransform: "uppercase",
+            }}
+          >
+            Add-ons
+          </span>
+          <span style={{ flex: 1, height: "1px", backgroundColor: "rgba(255,255,255,0.08)" }} />
+        </div>
+
+        <div style={{ display: "grid", gap: "12px" }}>
+          {addonSnapshots.map((addon) => {
+            const statusTone = getAddonStatusTone(addon.status);
+            const isApproved = addon.admin_approved === true;
+            const isApproving = approvingAddonId === `${booking.id}-${addon.id}`;
+            const sameDayRiskWarning = getAddonRiskWarning(addon);
+
+            return (
+              <div
+                key={`${booking.id}-${addon.id}`}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1fr) auto",
+                  gap: "10px 14px",
+                  alignItems: "start",
+                  paddingBottom: "12px",
+                  borderBottom: "0.5px solid rgba(255,255,255,0.05)",
+                }}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: "10px",
+                    }}
+                  >
+                    <AddonIcon
+                      label={addon.label}
+                      size={16}
+                      color="rgba(197,164,109,0.5)"
+                      style={{ flexShrink: 0, marginTop: "2px" }}
+                    />
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "baseline",
+                          justifyContent: "space-between",
+                          gap: "10px",
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <p
+                          style={{
+                            fontFamily: LATO,
+                            fontSize: "15px",
+                            color: WHITE,
+                            margin: 0,
+                            lineHeight: 1.4,
+                          }}
+                        >
+                          {addon.label}
+                        </p>
+                        <p
+                          style={{
+                            fontFamily: LATO,
+                            fontSize: "13px",
+                            color: GOLD,
+                            margin: 0,
+                            lineHeight: 1.4,
+                          }}
+                        >
+                          {formatAddonPrice(addon.price)}
+                        </p>
+                      </div>
+
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "8px" }}>
+                        {addon.requires_approval && !isApproved && renderOperationalBadge("Requires approval", "approval")}
+                        {isApproved && (
+                          <span
+                            style={{
+                              fontFamily: LATO,
+                              fontSize: "9px",
+                              letterSpacing: "1.2px",
+                              textTransform: "uppercase",
+                              color: "#6fcf8a",
+                              backgroundColor: "rgba(80,180,100,0.15)",
+                              padding: "4px 8px",
+                              borderRadius: "4px",
+                            }}
+                          >
+                            Approved
+                          </span>
+                        )}
+                        {addon.enforcement_mode === "soft" && renderOperationalBadge("Soft rule", "soft")}
+                        {addon.enforcement_mode === "strict" && renderOperationalBadge("Strict rule", "strict")}
+                      </div>
+
+                      {sameDayRiskWarning && (
+                        <p
+                          style={{
+                            fontFamily: LATO,
+                            fontSize: "11px",
+                            color: "#e2ab5a",
+                            margin: "8px 0 0",
+                            lineHeight: 1.5,
+                          }}
+                        >
+                          {sameDayRiskWarning}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gap: "8px",
+                    justifyItems: isMobile ? "start" : "end",
+                    alignItems: "start",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontFamily: LATO,
+                      fontSize: "9px",
+                      letterSpacing: "1.5px",
+                      textTransform: "uppercase",
+                      color: statusTone.color,
+                      backgroundColor: statusTone.background,
+                      border: `0.5px solid ${statusTone.border}`,
+                      padding: "7px 10px",
+                      borderRadius: "6px",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {addon.status.replaceAll("_", " ")}
+                  </span>
+
+                  {addon.requires_approval && !isApproved && (
+                    <button
+                      type="button"
+                      onClick={() => approveAddon(booking.id, addon.id)}
+                      disabled={isApproving}
+                      style={{
+                        fontFamily: LATO,
+                        fontSize: "10px",
+                        letterSpacing: "1.2px",
+                        textTransform: "uppercase",
+                        color: "#6fcf8a",
+                        backgroundColor: "transparent",
+                        border: "0.5px solid rgba(111,207,138,0.45)",
+                        padding: "8px 12px",
+                        borderRadius: "4px",
+                        cursor: isApproving ? "not-allowed" : "pointer",
+                        opacity: isApproving ? 0.5 : 1,
+                        minWidth: isMobile ? "100%" : "auto",
+                      }}
+                    >
+                      {isApproving ? "Saving..." : "Mark as approved"}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+          Approvals are saved to the booking record.
+        </p>
+      </div>
+    );
+  }
+
+  function renderExpandedBookingDetails(booking: Booking, compactMode: boolean) {
     const isGuest = !booking.member_id;
     const memberInfo = getMember(booking);
-    const displayName = isGuest ? (booking.guest_name ?? "Guest") : (memberInfo?.full_name ?? "Member");
-    const displayEmail = isGuest ? (booking.guest_email ?? "-") : (memberInfo?.email ?? "-");
-    const displayPhone = isGuest ? booking.guest_phone : (memberInfo?.phone ?? null);
-    const displayCountry = isGuest ? booking.guest_country : (memberInfo?.country ?? null);
-    const isUpdating = updatingId === booking.id;
-    const addonSnapshots = getAddonSnapshots(booking);
-    const needsAddonAttention = bookingNeedsAddonAttention(booking);
+    const displayName = isGuest ? booking.guest_name ?? "Guest" : memberInfo?.full_name ?? "Member";
+    const displayEmail = isGuest ? booking.guest_email ?? "-" : memberInfo?.email ?? "-";
+    const displayPhone = isGuest ? booking.guest_phone : memberInfo?.phone ?? null;
+    const displayCountry = isGuest ? booking.guest_country : memberInfo?.country ?? null;
     const needsApproval = bookingHasPendingAddonApproval(booking);
+    const needsAttention = bookingHasOperationalAttention(booking);
+    const accent = getCardAccent(booking, needsApproval || needsAttention || booking.status === "pending");
+    const isUpdating = updatingId === booking.id;
     const canConfirm = booking.status === "pending";
     const canCancel = booking.status === "pending" || booking.status === "confirmed";
-    const accent = getCardAccent(booking, needsApproval);
-    const prominentLabel =
-      needsApproval ? "Approval needed" : booking.status === "pending" ? "Pending approval" : booking.status;
 
     return (
       <div
-        key={booking.id}
         style={{
           position: "relative",
-          background: "linear-gradient(180deg, rgba(31,43,56,0.98) 0%, rgba(27,38,53,0.98) 100%)",
+          background: compactMode
+            ? "linear-gradient(180deg, rgba(29,40,55,0.94) 0%, rgba(24,34,48,0.94) 100%)"
+            : "linear-gradient(180deg, rgba(31,43,56,0.98) 0%, rgba(27,38,53,0.98) 100%)",
           border: `0.5px solid ${accent.border}`,
-          borderRadius: "18px",
+          borderRadius: compactMode ? "0 0 18px 18px" : "18px",
           padding: isMobile ? "1rem" : "1.45rem 1.5rem",
-          boxShadow: `0 18px 44px rgba(0,0,0,0.24), inset 0 0 0 1px ${accent.glow}`,
+          boxShadow: compactMode ? "none" : `0 18px 44px rgba(0,0,0,0.24), inset 0 0 0 1px ${accent.glow}`,
           display: "grid",
           gap: isMobile ? "14px" : "18px",
         }}
       >
-        <span
-          style={{
-            position: "absolute",
-            top: "10px",
-            left: "10px",
-            width: "10px",
-            height: "10px",
-            borderRadius: "999px",
-            backgroundColor: accent.color,
-            boxShadow: `0 0 0 3px ${accent.glow}`,
-          }}
-        />
+        {!compactMode && (
+          <span
+            style={{
+              position: "absolute",
+              top: "10px",
+              left: "10px",
+              width: "10px",
+              height: "10px",
+              borderRadius: "999px",
+              backgroundColor: accent.color,
+              boxShadow: `0 0 0 3px ${accent.glow}`,
+            }}
+          />
+        )}
 
         <div
           style={{
@@ -370,11 +677,11 @@ export default function BookingsTable({
             flexWrap: "wrap",
           }}
         >
-          <div style={{ minWidth: 0, flex: "1 1 260px", paddingLeft: isMobile ? "12px" : "14px" }}>
+          <div style={{ minWidth: 0, flex: "1 1 260px", paddingLeft: compactMode ? 0 : isMobile ? "12px" : "14px" }}>
             <p
               style={{
                 fontFamily: PLAYFAIR,
-                fontSize: isMobile ? "1.7rem" : "2rem",
+                fontSize: compactMode ? (isMobile ? "1.4rem" : "1.65rem") : isMobile ? "1.7rem" : "2rem",
                 color: WHITE,
                 margin: "0 0 8px",
                 lineHeight: 1.05,
@@ -405,7 +712,7 @@ export default function BookingsTable({
             }}
           >
             <StatusBadge status={booking.status} />
-            {prominentLabel !== booking.status && (
+            {needsApproval && (
               <span
                 style={{
                   display: "inline-flex",
@@ -423,7 +730,7 @@ export default function BookingsTable({
                   whiteSpace: "nowrap",
                 }}
               >
-                {prominentLabel}
+                Approval needed
               </span>
             )}
           </div>
@@ -457,12 +764,12 @@ export default function BookingsTable({
               flexShrink: 0,
             }}
           >
-            ▣
+            01
           </div>
           <p
             style={{
               fontFamily: LATO,
-              fontSize: isMobile ? "1.5rem" : "2rem",
+              fontSize: compactMode ? (isMobile ? "1.25rem" : "1.5rem") : isMobile ? "1.5rem" : "2rem",
               fontWeight: 700,
               color: WHITE,
               margin: 0,
@@ -474,9 +781,7 @@ export default function BookingsTable({
         </div>
 
         <div style={{ display: "grid", gap: "10px", color: MUTED }}>
-          <p style={{ fontFamily: LATO, fontSize: "14px", color: WHITE, margin: 0 }}>
-            {booking.villa}
-          </p>
+          <p style={{ fontFamily: LATO, fontSize: "15px", color: WHITE, margin: 0 }}>{booking.villa}</p>
           <p style={{ fontFamily: LATO, fontSize: "13px", margin: 0, lineHeight: 1.6 }}>
             {displayEmail}
             {displayPhone ? ` | ${displayPhone}` : ""}
@@ -486,12 +791,20 @@ export default function BookingsTable({
             {booking.sleeping_guests} sleeping
             {booking.day_visitors > 0 ? ` | ${booking.day_visitors} visitors` : ""}
           </p>
-          <p style={{ fontFamily: LATO, fontSize: "12px", margin: 0, lineHeight: 1.65, opacity: booking.message?.trim() ? 1 : 0.8 }}>
+          <p
+            style={{
+              fontFamily: LATO,
+              fontSize: "12px",
+              margin: 0,
+              lineHeight: 1.65,
+              opacity: booking.message?.trim() ? 1 : 0.8,
+            }}
+          >
             {booking.message?.trim() || "-"}
           </p>
         </div>
 
-        {needsAddonAttention && (
+        {needsAttention && (
           <div
             style={{
               border: "0.5px solid rgba(226,171,90,0.24)",
@@ -506,143 +819,7 @@ export default function BookingsTable({
           </div>
         )}
 
-        {addonSnapshots.length > 0 && (
-          <div style={{ display: "grid", gap: "12px" }}>
-            <p
-              style={{
-                fontFamily: LATO,
-                fontSize: "10px",
-                letterSpacing: "2.4px",
-                textTransform: "uppercase",
-                color: MUTED,
-                margin: 0,
-                display: "flex",
-                alignItems: "center",
-                gap: "10px",
-              }}
-            >
-              <span>Add-ons</span>
-              <span style={{ flex: 1, height: "1px", backgroundColor: "rgba(255,255,255,0.08)" }} />
-            </p>
-
-            <div style={{ display: "grid", gap: "10px" }}>
-              {addonSnapshots.map((addon) => {
-                const statusTone = getAddonStatusTone(addon.status);
-                const addonKey = `${booking.id}-${addon.id}`;
-                const isApproved = addon.admin_approved === true;
-                const isApproving = approvingAddonId === addonKey;
-                const sameDayRiskWarning = getAddonRiskWarning(addon);
-
-                return (
-                  <div
-                    key={addonKey}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1fr) auto",
-                      gap: isMobile ? "8px" : "12px",
-                      alignItems: "start",
-                    }}
-                  >
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-                        <AddonIcon label={addon.label} size={16} color="rgba(197,164,109,0.5)" style={{ flexShrink: 0 }} />
-                        <div style={{ display: "flex", alignItems: "baseline", gap: "10px", flexWrap: "wrap" }}>
-                          <p style={{ fontFamily: LATO, fontSize: "14px", color: WHITE, margin: 0, lineHeight: 1.4 }}>
-                            {addon.label}
-                          </p>
-                          <p style={{ fontFamily: LATO, fontSize: "12px", color: GOLD, margin: 0 }}>
-                            {formatAddonPrice(addon.price)}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "8px" }}>
-                        {addon.requires_approval && !isApproved && renderOperationalBadge("Requires approval", "approval")}
-                        {isApproved && (
-                          <span
-                            style={{
-                              fontFamily: LATO,
-                              fontSize: "9px",
-                              letterSpacing: "1.2px",
-                              textTransform: "uppercase",
-                              color: "#6fcf8a",
-                              backgroundColor: "rgba(80,180,100,0.15)",
-                              padding: "4px 8px",
-                              borderRadius: "4px",
-                            }}
-                          >
-                            Approved
-                          </span>
-                        )}
-                        {addon.enforcement_mode === "soft" && renderOperationalBadge("Soft rule", "soft")}
-                        {addon.enforcement_mode === "strict" && renderOperationalBadge("Strict rule", "strict")}
-                      </div>
-
-                      {sameDayRiskWarning && (
-                        <p style={{ fontFamily: LATO, fontSize: "11px", color: "#e2ab5a", margin: "8px 0 0", lineHeight: 1.5 }}>
-                          {sameDayRiskWarning}
-                        </p>
-                      )}
-                    </div>
-
-                    <div
-                      style={{
-                        display: "grid",
-                        gap: "8px",
-                        justifyItems: isMobile ? "start" : "end",
-                        alignItems: "start",
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontFamily: LATO,
-                          fontSize: "9px",
-                          letterSpacing: "1.5px",
-                          textTransform: "uppercase",
-                          color: statusTone.color,
-                          backgroundColor: statusTone.background,
-                          border: `0.5px solid ${statusTone.border}`,
-                          padding: "7px 10px",
-                          borderRadius: "6px",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {addon.status.replace("_", " ")}
-                      </span>
-                      {addon.requires_approval && !isApproved && (
-                        <button
-                          type="button"
-                          onClick={() => approveAddon(booking.id, addon.id)}
-                          disabled={isApproving}
-                          style={{
-                            fontFamily: LATO,
-                            fontSize: "10px",
-                            letterSpacing: "1.2px",
-                            textTransform: "uppercase",
-                            color: "#6fcf8a",
-                            backgroundColor: "transparent",
-                            border: "0.5px solid rgba(111,207,138,0.45)",
-                            padding: "8px 12px",
-                            borderRadius: "4px",
-                            cursor: isApproving ? "not-allowed" : "pointer",
-                            opacity: isApproving ? 0.5 : 1,
-                            minWidth: isMobile ? "100%" : "auto",
-                          }}
-                        >
-                          {isApproving ? "Saving..." : "Mark as approved"}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
-              Approvals are saved to the booking record.
-            </p>
-          </div>
-        )}
+        {renderAddonRows(booking)}
 
         <div
           style={{
@@ -655,6 +832,7 @@ export default function BookingsTable({
         >
           {canCancel && (
             <button
+              type="button"
               onClick={() => updateStatus(booking.id, "cancelled")}
               disabled={isUpdating}
               style={{
@@ -678,6 +856,7 @@ export default function BookingsTable({
 
           {canConfirm && (
             <button
+              type="button"
               onClick={() => updateStatus(booking.id, "confirmed")}
               disabled={isUpdating}
               style={{
@@ -701,11 +880,106 @@ export default function BookingsTable({
           )}
 
           {emailWarnings[booking.id] && (
-            <span style={{ display: "block", width: "100%", fontFamily: LATO, fontSize: "10px", color: "#e0b070", lineHeight: 1.4 }}>
+            <span
+              style={{
+                display: "block",
+                width: "100%",
+                fontFamily: LATO,
+                fontSize: "10px",
+                color: "#e0b070",
+                lineHeight: 1.4,
+              }}
+            >
               {emailWarnings[booking.id]}
             </span>
           )}
         </div>
+      </div>
+    );
+  }
+
+  function renderCompactRow(booking: Booking, section: "confirmed" | "cancelled") {
+    const expanded = expandedCompactId === booking.id;
+    const accent = section === "confirmed" ? "#6fcf8a" : "#e07070";
+    const isGuest = !booking.member_id;
+    const memberInfo = getMember(booking);
+    const displayName = isGuest ? booking.guest_name ?? "Guest" : memberInfo?.full_name ?? "Member";
+
+    return (
+      <div
+        key={booking.id}
+        style={{
+          border: `0.5px solid ${BORDER}`,
+          borderRadius: "16px",
+          backgroundColor: "rgba(255,255,255,0.02)",
+          overflow: "hidden",
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setExpandedCompactId((prev) => (prev === booking.id ? null : booking.id))}
+          style={{
+            width: "100%",
+            display: "grid",
+            gridTemplateColumns: isMobile ? "1fr auto" : "minmax(0, 1.15fr) minmax(0, 0.9fr) auto auto",
+            gap: "12px",
+            alignItems: "center",
+            textAlign: "left",
+            border: "none",
+            backgroundColor: "transparent",
+            color: WHITE,
+            padding: isMobile ? "14px 16px" : "14px 18px",
+            cursor: "pointer",
+          }}
+        >
+          <div style={{ minWidth: 0 }}>
+            <p style={{ fontFamily: PLAYFAIR, fontSize: isMobile ? "1.18rem" : "1.35rem", color: WHITE, margin: "0 0 4px" }}>
+              {displayName}
+            </p>
+            <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+              {booking.villa}
+            </p>
+          </div>
+
+          {!isMobile && (
+            <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, margin: 0, lineHeight: 1.5 }}>
+              {fmt(booking.check_in)} to {fmt(booking.check_out)}
+            </p>
+          )}
+
+          <div style={{ display: "grid", gap: "6px", justifyItems: isMobile ? "end" : "start" }}>
+            {isMobile && (
+              <p
+                style={{
+                  fontFamily: LATO,
+                  fontSize: "12px",
+                  color: MUTED,
+                  margin: 0,
+                  textAlign: "right",
+                  lineHeight: 1.5,
+                }}
+              >
+                {fmt(booking.check_in)} to {fmt(booking.check_out)}
+              </p>
+            )}
+            <StatusBadge status={booking.status} />
+          </div>
+
+          <span
+            style={{
+              color: accent,
+              fontFamily: LATO,
+              fontSize: "12px",
+              letterSpacing: "1.5px",
+              textTransform: "uppercase",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {expanded ? "Close" : "View"}
+          </span>
+        </button>
+
+        {expanded && <div style={{ padding: "0 12px 12px" }}>{renderExpandedBookingDetails(booking, true)}</div>}
       </div>
     );
   }
@@ -784,7 +1058,14 @@ export default function BookingsTable({
                     cursor: "pointer",
                   }}
                 >
-                  <span style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: active ? tone.accent : MUTED }}>
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      letterSpacing: "2px",
+                      textTransform: "uppercase",
+                      color: active ? tone.accent : MUTED,
+                    }}
+                  >
                     {label}
                   </span>
                   <span
@@ -824,7 +1105,11 @@ export default function BookingsTable({
             >
               Villa
             </label>
-            <select value={villaFilter} onChange={(e) => setVillaFilter(e.target.value)} style={{ ...fieldStyle, cursor: "pointer" }}>
+            <select
+              value={villaFilter}
+              onChange={(event) => setVillaFilter(event.target.value)}
+              style={{ ...fieldStyle, cursor: "pointer" }}
+            >
               <option value="all" style={{ backgroundColor: MIDNIGHT }}>
                 All villas
               </option>
@@ -850,19 +1135,25 @@ export default function BookingsTable({
             >
               Check-in
             </label>
-            <input type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} style={fieldStyle} />
+            <input
+              type="date"
+              value={dateFilter}
+              onChange={(event) => setDateFilter(event.target.value)}
+              style={fieldStyle}
+            />
           </div>
 
           <button
+            type="button"
             onClick={clearFilters}
             style={{
               fontFamily: LATO,
               fontSize: "10px",
               letterSpacing: "2px",
               textTransform: "uppercase",
-              color: MUTED,
-              backgroundColor: "transparent",
-              border: `0.5px solid ${BORDER}`,
+              color: filterActive ? WHITE : MUTED,
+              backgroundColor: filterActive ? "rgba(197,164,109,0.12)" : "transparent",
+              border: `0.5px solid ${filterActive ? "rgba(197,164,109,0.28)" : BORDER}`,
               padding: isMobile ? "12px 16px" : "12px 18px",
               cursor: "pointer",
               whiteSpace: "nowrap",
@@ -872,6 +1163,13 @@ export default function BookingsTable({
             Clear
           </button>
         </div>
+
+        {filterActive && (
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            {villaFilter !== "all" && renderFilterChip("Villa", villaFilter, () => setVillaFilter("all"))}
+            {dateFilter && renderFilterChip("Check-in", fmt(dateFilter), () => setDateFilter(""))}
+          </div>
+        )}
       </div>
 
       <div
@@ -895,7 +1193,15 @@ export default function BookingsTable({
           }}
         >
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "6px" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                flexWrap: "wrap",
+                marginBottom: "6px",
+              }}
+            >
               <p style={{ fontFamily: PLAYFAIR, fontSize: isMobile ? "1.7rem" : "1.9rem", color: WHITE, margin: 0 }}>
                 {sectionTone.title}
               </p>
@@ -937,7 +1243,7 @@ export default function BookingsTable({
               }}
             >
               <span>Sort by: Newest</span>
-              <span style={{ color: MUTED }}>⌄</span>
+              <span style={{ color: MUTED }}>v</span>
             </div>
             <button
               type="button"
@@ -951,12 +1257,12 @@ export default function BookingsTable({
                 color: WHITE,
                 cursor: "pointer",
                 fontFamily: LATO,
-                fontSize: "18px",
+                fontSize: "16px",
                 lineHeight: 1,
               }}
               aria-label="Reset booking filters"
             >
-              ↻
+              R
             </button>
           </div>
         </div>
@@ -965,9 +1271,15 @@ export default function BookingsTable({
           <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: 0 }}>Loading...</p>
         ) : sectionBookings.length === 0 ? (
           <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: 0 }}>{sectionEmptyCopy[activeSection]}</p>
-        ) : (
+        ) : activeSection === "pending" ? (
           <div style={{ display: "grid", gap: "16px" }}>
-            {sectionBookings.map(renderBookingCard)}
+            {sectionBookings.map((booking) => (
+              <div key={booking.id}>{renderExpandedBookingDetails(booking, false)}</div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ display: "grid", gap: "12px" }}>
+            {sectionBookings.map((booking) => renderCompactRow(booking, activeSection))}
           </div>
         )}
       </div>
