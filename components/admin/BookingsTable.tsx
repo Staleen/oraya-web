@@ -673,6 +673,7 @@ export default function BookingsTable({
     const displayCountry = isGuest ? booking.guest_country : memberInfo?.country ?? null;
     const needsApproval = bookingHasPendingAddonApproval(booking);
     const needsAttention = bookingHasOperationalAttention(booking);
+    const readyToConfirm = booking.status === "pending" && !needsApproval && !needsAttention;
     const accent = getCardAccent(booking, needsApproval || needsAttention || booking.status === "pending");
     const isUpdating = updatingId === booking.id;
     const canConfirm = booking.status === "pending";
@@ -773,6 +774,27 @@ export default function BookingsTable({
                 Approval needed
               </span>
             )}
+            {readyToConfirm && (
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontFamily: LATO,
+                  fontSize: "9px",
+                  letterSpacing: "1.5px",
+                  textTransform: "uppercase",
+                  color: "#6fcf8a",
+                  backgroundColor: "rgba(80,180,100,0.12)",
+                  border: "0.5px solid rgba(111,207,138,0.34)",
+                  padding: "6px 10px",
+                  borderRadius: "6px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Ready to confirm
+              </span>
+            )}
           </div>
         </div>
 
@@ -855,6 +877,21 @@ export default function BookingsTable({
           >
             <p style={{ fontFamily: LATO, fontSize: "11px", color: "#e2ab5a", margin: 0, lineHeight: 1.5 }}>
               This booking has add-ons requiring attention.
+            </p>
+          </div>
+        )}
+
+        {readyToConfirm && (
+          <div
+            style={{
+              border: "0.5px solid rgba(111,207,138,0.24)",
+              backgroundColor: "rgba(80,180,100,0.08)",
+              padding: "12px 14px",
+              borderRadius: "8px",
+            }}
+          >
+            <p style={{ fontFamily: LATO, fontSize: "11px", color: "#6fcf8a", margin: 0, lineHeight: 1.5 }}>
+              All add-ons are resolved. This booking is ready to confirm.
             </p>
           </div>
         )}
