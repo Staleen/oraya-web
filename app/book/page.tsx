@@ -672,7 +672,7 @@ function BookPageInner() {
     // Search up to one year for a checkout where every occupied night is open.
     for (let n = effectiveMinStayNights; n <= 366; n++) {
       const candidateCheckout = addLocalDays(checkInDay, n);
-      if (isStayRangeAvailable(checkInDay, candidateCheckout)) {
+      if (!isCalendarDateBlocked(candidateCheckout) && isStayRangeAvailable(checkInDay, candidateCheckout)) {
         return true;
       }
     }
@@ -946,8 +946,8 @@ function BookPageInner() {
     }
 
     if (nextRange?.from && nextRange.to && !isStayRangeAvailable(nextRange.from, nextRange.to)) {
-      setDateRange({ from: nextRange.from });
-      setError("Those dates are not available as a continuous stay. Please choose another check-out date.");
+      setDateRange(undefined);
+      setError("Those dates are not available as a continuous stay. Please choose your dates again.");
       return;
     }
 
