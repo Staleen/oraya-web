@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import SiteNav from "@/components/SiteNav";
 import OrayaEmblem from "@/components/OrayaEmblem";
+import { SkeletonBlock, SkeletonText } from "@/components/LoadingSkeleton";
 import { supabase } from "@/lib/supabase";
 import { formatBeirutDateTime } from "@/lib/format-date";
 
@@ -443,12 +444,40 @@ export default function ProfilePage() {
     setEditForms((f) => ({ ...f, [bookingId]: { ...f[bookingId], [field]: value } }));
   }
 
-  // Loading spinner
+  // Loading skeleton
   if (pageLoading) {
     return (
-      <main style={{ backgroundColor: MIDNIGHT, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ width: "36px", opacity: 0.35 }}><OrayaEmblem /></div>
-      </main>
+      <>
+        <SiteNav base="/" />
+        <main style={{ backgroundColor: MIDNIGHT, minHeight: "100vh", paddingTop: "80px" }}>
+          <div style={{ maxWidth: "720px", margin: "0 auto", padding: "4rem 2rem 6rem" }} aria-hidden="true">
+            <div style={{ marginBottom: "3.5rem" }}>
+              <SkeletonText width="130px" height="10px" style={{ marginBottom: "18px" }} />
+              <SkeletonBlock width="240px" height="46px" style={{ marginBottom: "1.5rem" }} />
+              <SkeletonBlock width="40px" height="1px" style={{ background: GOLD, opacity: 0.45 }} />
+            </div>
+            <section style={{ marginBottom: "4rem" }}>
+              <SkeletonText width="160px" height="10px" style={{ marginBottom: "1.75rem" }} />
+              <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+                {[0, 1, 2, 3].map((item) => (
+                  <div key={item}>
+                    <SkeletonText width="110px" height="10px" style={{ marginBottom: "8px" }} />
+                    <SkeletonBlock height="47px" style={{ borderColor: "rgba(197,164,109,0.16)" }} />
+                  </div>
+                ))}
+              </div>
+            </section>
+            <section>
+              <SkeletonText width="140px" height="10px" style={{ marginBottom: "1rem" }} />
+              <div style={{ display: "grid", gap: "12px" }}>
+                {[0, 1].map((item) => (
+                  <SkeletonBlock key={item} height="120px" style={{ border: `0.5px solid ${BORDER}` }} />
+                ))}
+              </div>
+            </section>
+          </div>
+        </main>
+      </>
     );
   }
 

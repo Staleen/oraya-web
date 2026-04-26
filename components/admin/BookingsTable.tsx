@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { Booking, BookingAddonSnapshot, Member } from "./types";
 import { AddonIcon } from "@/components/addon-icon";
+import { SkeletonBlock, SkeletonText } from "@/components/LoadingSkeleton";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
 import { BORDER, fieldStyle, fmt, GOLD, LATO, MIDNIGHT, MUTED, PLAYFAIR, WHITE } from "./theme";
 
@@ -1312,6 +1313,73 @@ export default function BookingsTable({
           ? "Latest check-in first"
           : "Newly confirmed first";
 
+  function renderBookingSkeletons() {
+    if (activeSection === "pending") {
+      return (
+        <div style={{ display: "grid", gap: "16px" }} aria-hidden="true">
+          {[0, 1].map((item) => (
+            <div
+              key={item}
+              style={{
+                border: "0.5px solid rgba(197,164,109,0.26)",
+                borderRadius: "18px",
+                padding: isMobile ? "1rem" : "1.45rem 1.5rem",
+                minHeight: isMobile ? "360px" : "330px",
+                background: "linear-gradient(135deg, rgba(24,36,52,0.98), rgba(18,29,43,0.98))",
+                display: "grid",
+                gap: "16px",
+              }}
+            >
+              <SkeletonText width={isMobile ? "60%" : "34%"} height="24px" />
+              <SkeletonBlock height={isMobile ? "58px" : "62px"} radius="10px" />
+              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                <SkeletonText width="170px" />
+                <SkeletonText width="130px" />
+                <SkeletonText width="100px" />
+              </div>
+              <SkeletonBlock height="44px" radius="8px" />
+              <div style={{ display: "grid", gap: "10px" }}>
+                <SkeletonText width="100%" />
+                <SkeletonText width="86%" />
+                <SkeletonText width="72%" />
+              </div>
+              <div style={{ display: "flex", gap: "12px", justifyContent: isMobile ? "stretch" : "flex-end", flexDirection: isMobile ? "column" : "row" }}>
+                <SkeletonBlock height="42px" width={isMobile ? "100%" : "132px"} radius="8px" />
+                <SkeletonBlock height="42px" width={isMobile ? "100%" : "190px"} radius="8px" />
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    return (
+      <div style={{ display: "grid", gap: "12px" }} aria-hidden="true">
+        {[0, 1, 2, 3].map((item) => (
+          <div
+            key={item}
+            style={{
+              border: `0.5px solid ${BORDER}`,
+              borderRadius: "16px",
+              padding: isMobile ? "14px 16px" : "14px 18px",
+              minHeight: isMobile ? "92px" : "74px",
+              backgroundColor: "rgba(255,255,255,0.025)",
+              display: "grid",
+              gridTemplateColumns: isMobile ? "1fr auto" : "minmax(0, 1.15fr) minmax(0, 0.9fr) auto auto",
+              gap: "12px",
+              alignItems: "center",
+            }}
+          >
+            <SkeletonText width={isMobile ? "68%" : "180px"} height="18px" />
+            {!isMobile && <SkeletonText width="220px" />}
+            <SkeletonText width="86px" />
+            <SkeletonText width="42px" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: "grid", gap: "1rem" }}>
       <div
@@ -1655,7 +1723,7 @@ export default function BookingsTable({
         </div>
 
         {loading ? (
-          <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: 0 }}>Loading...</p>
+          renderBookingSkeletons()
         ) : sectionBookings.length === 0 ? (
           <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: 0 }}>{sectionEmptyCopy[activeSection]}</p>
         ) : activeSection === "pending" ? (

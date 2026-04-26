@@ -7,6 +7,7 @@ import { ADDON_OPERATIONAL_SETTINGS_KEY, mergeAddonsWithOperationalSettings, par
 import { validatePricing } from "@/lib/pricing/validation";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
 import { LATO } from "@/components/admin/theme";
+import { SkeletonBlock, SkeletonText } from "@/components/LoadingSkeleton";
 import type { Addon, AddonValidationIssue } from "@/components/admin/types";
 
 function createAddonId() {
@@ -26,6 +27,7 @@ export default function AdminRatesPage() {
   const [pricingSaving, setPricingSaving] = useState(false);
   const [pricingSaved, setPricingSaved] = useState(false);
   const [pricingValidationAttempted, setPricingValidationAttempted] = useState(false);
+  const [ratesLoading, setRatesLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,6 +46,7 @@ export default function AdminRatesPage() {
 
       if (settingsResult.status === "rejected") {
         console.error("[admin] pricing settings fetch error:", settingsResult.reason);
+        setRatesLoading(false);
         return;
       }
 
@@ -57,6 +60,7 @@ export default function AdminRatesPage() {
 
       setVillaPricing(parseVillaPricingSetting(pricingRow?.value));
       setAddons(mergeAddonsWithOperationalSettings(addonRows, operationalSettings));
+      setRatesLoading(false);
     }
 
     loadRatesPageData();
@@ -293,14 +297,27 @@ export default function AdminRatesPage() {
           Configure base villa pricing first, then manage add-ons below. These values are stored in admin settings only and do not affect booking calculations yet.
         </p>
       </div>
-      <BasePricingEditor
-        pricing={villaPricing}
-        pricingSaving={pricingSaving}
-        pricingSaved={pricingSaved}
-        updatePricing={updatePricing}
-        savePricing={savePricing}
-        pricingValidationAttempted={pricingValidationAttempted}
-      />
+      {ratesLoading ? (
+        <div style={{ border: "0.5px solid rgba(197,164,109,0.12)", backgroundColor: "rgba(255,255,255,0.03)", padding: "1rem", marginBottom: "2rem" }} aria-hidden="true">
+          <SkeletonText width="140px" height="10px" style={{ marginBottom: "18px" }} />
+          <SkeletonBlock height="46px" style={{ marginBottom: "14px" }} />
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "10px", marginBottom: "14px" }}>
+            {[0, 1, 2, 3].map((item) => <SkeletonBlock key={item} height="82px" />)}
+          </div>
+          {[0, 1].map((item) => (
+            <SkeletonBlock key={item} height="104px" style={{ marginTop: "10px" }} />
+          ))}
+        </div>
+      ) : (
+        <BasePricingEditor
+          pricing={villaPricing}
+          pricingSaving={pricingSaving}
+          pricingSaved={pricingSaved}
+          updatePricing={updatePricing}
+          savePricing={savePricing}
+          pricingValidationAttempted={pricingValidationAttempted}
+        />
+      )}
       <div style={{ marginBottom: "1rem" }}>
         <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: "#C5A46D", margin: "0 0 8px" }}>
           Add-ons
@@ -309,17 +326,27 @@ export default function AdminRatesPage() {
           Existing optional extras remain separate from base villa pricing and continue to use their current admin flow.
         </p>
       </div>
-      <AddonsEditor
-        addons={addons}
-        addonsSaving={addonsSaving}
-        addonsSaved={addonsSaved}
-        updateAddon={updateAddon}
-        addAddon={addAddon}
-        removeAddon={removeAddon}
-        validationIssues={addonValidationIssues}
-        validationAttempted={addonValidationAttempted}
-        saveAddons={saveAddons}
-      />
+      {ratesLoading ? (
+        <div style={{ border: "0.5px solid rgba(197,164,109,0.12)", backgroundColor: "rgba(255,255,255,0.03)", padding: "1rem" }} aria-hidden="true">
+          <SkeletonText width="150px" height="10px" style={{ marginBottom: "16px" }} />
+          <SkeletonBlock height="42px" style={{ marginBottom: "12px" }} />
+          {[0, 1, 2, 3].map((item) => (
+            <SkeletonBlock key={item} height="74px" style={{ marginTop: "8px" }} />
+          ))}
+        </div>
+      ) : (
+        <AddonsEditor
+          addons={addons}
+          addonsSaving={addonsSaving}
+          addonsSaved={addonsSaved}
+          updateAddon={updateAddon}
+          addAddon={addAddon}
+          removeAddon={removeAddon}
+          validationIssues={addonValidationIssues}
+          validationAttempted={addonValidationAttempted}
+          saveAddons={saveAddons}
+        />
+      )}
     </>
   );
 }

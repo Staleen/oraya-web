@@ -1645,7 +1645,36 @@ function BookPageInner() {
                 </p>
 
                 {addonsLoading ? (
-                  <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED }}>Loading…</p>
+                  <div style={{ display: "grid", gap: "8px" }} aria-hidden="true">
+                    {[0, 1, 2].map((item) => (
+                      <div
+                        key={item}
+                        style={{
+                          display: "flex",
+                          alignItems: "flex-start",
+                          justifyContent: "space-between",
+                          gap: "16px",
+                          padding: "14px 18px",
+                          border: "0.5px solid rgba(197,164,109,0.14)",
+                          backgroundColor: "rgba(255,255,255,0.02)",
+                          minHeight: "82px",
+                        }}
+                      >
+                        <div style={{ display: "flex", gap: "12px", flex: 1, minWidth: 0 }}>
+                          <SkeletonBlock width="16px" height="16px" style={{ marginTop: "2px", flexShrink: 0 }} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <SkeletonText width={item === 0 ? "48%" : item === 1 ? "38%" : "56%"} height="14px" style={{ marginBottom: "10px" }} />
+                            <SkeletonText width="92%" height="11px" style={{ marginBottom: "7px" }} />
+                            <SkeletonText width="62%" height="10px" />
+                          </div>
+                        </div>
+                        <div style={{ width: "76px", display: "grid", justifyItems: "end", gap: "8px" }}>
+                          <SkeletonText width="64px" height="10px" />
+                          <SkeletonText width="46px" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 ) : addons.length === 0 ? (
                   <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED }}>
                     No add-ons are available for this booking.

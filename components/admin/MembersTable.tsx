@@ -1,5 +1,6 @@
 "use client";
 import type { Member } from "./types";
+import { SkeletonBlock, SkeletonText } from "@/components/LoadingSkeleton";
 import { MUTED, LATO, SURFACE, BORDER, thStyle, tdStyle, fmt } from "./theme";
 
 export default function MembersTable({
@@ -17,7 +18,41 @@ export default function MembersTable({
   return (
     <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
       {loading ? (
-        <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED }}>Loading...</p>
+        isMobile ? (
+          <div style={{ display: "grid", gap: "12px" }}>
+            {[0, 1, 2].map((item) => (
+              <div key={item} style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: "1rem", minHeight: "178px" }}>
+                <SkeletonText width="58%" height="18px" style={{ marginBottom: "16px" }} />
+                <SkeletonText width="86%" style={{ marginBottom: "10px" }} />
+                <SkeletonText width="52%" style={{ marginBottom: "10px" }} />
+                <SkeletonText width="42%" style={{ marginBottom: "10px" }} />
+                <SkeletonText width="70%" style={{ marginBottom: "18px" }} />
+                <SkeletonBlock width="86px" height="34px" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <table style={{ width: "100%", minWidth: "100%", borderCollapse: "collapse", backgroundColor: SURFACE, border: `0.5px solid ${BORDER}` }}>
+            <thead>
+              <tr>
+                {["Name", "Email", "Phone", "Country", "Address", "Joined", ""].map((h) => (
+                  <th key={h} style={thStyle}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {[0, 1, 2, 3].map((row) => (
+                <tr key={row}>
+                  {[0, 1, 2, 3, 4, 5, 6].map((cell) => (
+                    <td key={cell} style={tdStyle}>
+                      <SkeletonText width={cell === 6 ? "72px" : cell === 4 ? "140px" : "96px"} />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )
       ) : members.length === 0 ? (
         <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED }}>No members yet.</p>
       ) : isMobile ? (

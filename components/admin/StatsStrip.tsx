@@ -1,5 +1,6 @@
 "use client";
 import type { Booking, Member } from "./types";
+import { SkeletonBlock } from "@/components/LoadingSkeleton";
 import { GOLD, MUTED, LATO, PLAYFAIR, SURFACE, BORDER } from "./theme";
 
 export default function StatsStrip({
@@ -22,9 +23,13 @@ export default function StatsStrip({
           <p style={{ fontFamily: LATO, fontSize: isMobile ? "8px" : "9px", letterSpacing: "2.5px", textTransform: "uppercase", color: MUTED, margin: isMobile ? "0 0 6px" : "0 0 8px" }}>
             {label}
           </p>
-          <p style={{ fontFamily: PLAYFAIR, fontSize: isMobile ? "1.4rem" : "2rem", color: GOLD, margin: 0, lineHeight: 1 }}>
-            {value}
-          </p>
+          {loading ? (
+            <SkeletonBlock height={isMobile ? "28px" : "38px"} width={isMobile ? "44px" : "56px"} style={{ borderColor: "rgba(197,164,109,0.12)" }} />
+          ) : (
+            <p style={{ fontFamily: PLAYFAIR, fontSize: isMobile ? "1.4rem" : "2rem", color: GOLD, margin: 0, lineHeight: 1 }}>
+              {value}
+            </p>
+          )}
         </div>
       ))}
     </div>

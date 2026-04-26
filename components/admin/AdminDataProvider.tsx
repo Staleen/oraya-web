@@ -1,7 +1,8 @@
 "use client";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import PasswordGate from "@/components/admin/PasswordGate";
-import { SESSION_KEY } from "@/components/admin/theme";
+import { SkeletonBlock, SkeletonText } from "@/components/LoadingSkeleton";
+import { BORDER, GOLD, MIDNIGHT, SESSION_KEY } from "@/components/admin/theme";
 import type { Booking, CalendarSource, Member } from "@/components/admin/types";
 
 interface AdminDataContextValue {
@@ -97,7 +98,26 @@ export default function AdminDataProvider({ children }: { children: React.ReactN
     signOut,
   }), [authed, bookings, members, calendarSources, loading, error]);
 
-  if (authed === null) return null;
+  if (authed === null) {
+    return (
+      <main style={{ backgroundColor: MIDNIGHT, minHeight: "100vh", padding: "80px 24px" }}>
+        <div style={{ width: "100%", maxWidth: "980px", margin: "0 auto" }} aria-hidden="true">
+          <SkeletonText width="160px" height="10px" style={{ marginBottom: "18px" }} />
+          <SkeletonBlock width="280px" height="42px" style={{ marginBottom: "28px" }} />
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px", marginBottom: "2rem" }}>
+            {[0, 1, 2, 3].map((item) => (
+              <div key={item} style={{ border: `0.5px solid ${BORDER}`, padding: "1.25rem", backgroundColor: "rgba(255,255,255,0.03)" }}>
+                <SkeletonText width="70%" height="10px" style={{ marginBottom: "14px" }} />
+                <SkeletonBlock width="56px" height="34px" style={{ borderColor: "rgba(197,164,109,0.12)" }} />
+              </div>
+            ))}
+          </div>
+          <SkeletonBlock height="360px" style={{ border: `0.5px solid ${BORDER}`, background: "linear-gradient(90deg, rgba(255,255,255,0.025), rgba(197,164,109,0.075), rgba(255,255,255,0.025))" }} />
+          <SkeletonBlock width="40px" height="1px" style={{ background: GOLD, opacity: 0.35, marginTop: "24px" }} />
+        </div>
+      </main>
+    );
+  }
   if (!authed) return <PasswordGate onSuccess={() => setAuthed(true)} />;
 
   return (

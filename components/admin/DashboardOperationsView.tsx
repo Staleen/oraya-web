@@ -6,6 +6,7 @@ import { BORDER, GOLD, LATO, MUTED, PLAYFAIR, SURFACE, WHITE, fmt } from "@/comp
 import { KNOWN_VILLAS } from "@/lib/calendar/villas";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
 import { AddonIcon } from "@/components/addon-icon";
+import { SkeletonBlock, SkeletonText } from "@/components/LoadingSkeleton";
 
 const DESKTOP_DAY_WIDTH = 92;
 const TIMELINE_DAYS = 90;
@@ -333,6 +334,79 @@ export default function DashboardOperationsView({
   const dayWidth = DESKTOP_DAY_WIDTH;
   const timelineWidth = timelineDates.length * dayWidth;
 
+  function renderCompactListSkeleton(rows = 4) {
+    return (
+      <div aria-hidden="true">
+        {Array.from({ length: rows }).map((_, index) => (
+          <div
+            key={index}
+            style={{
+              display: "grid",
+              gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1fr) auto",
+              gap: "12px",
+              padding: "14px 0",
+              borderTop: index === 0 ? "none" : "0.5px solid rgba(255,255,255,0.04)",
+              minHeight: "76px",
+            }}
+          >
+            <div>
+              <SkeletonText width={isMobile ? "64%" : "190px"} height="18px" style={{ marginBottom: "10px" }} />
+              <SkeletonText width={isMobile ? "92%" : "260px"} style={{ marginBottom: "8px" }} />
+              <SkeletonText width={isMobile ? "70%" : "210px"} height="10px" />
+            </div>
+            {!isMobile && (
+              <div style={{ display: "grid", gap: "10px", justifyItems: "end" }}>
+                <SkeletonBlock width="88px" height="24px" radius="4px" />
+                <SkeletonText width="70px" height="10px" />
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  function renderTimelineSkeleton() {
+    if (isMobile) {
+      return (
+        <div style={{ display: "grid", gap: "8px", maxHeight: "480px", overflow: "hidden" }} aria-hidden="true">
+          {[0, 1, 2, 3, 4].map((item) => (
+            <div key={item} style={{ border: `0.5px solid ${BORDER}`, padding: "10px 12px", minHeight: "110px", backgroundColor: "rgba(255,255,255,0.015)" }}>
+              <SkeletonText width="118px" height="10px" style={{ marginBottom: "14px" }} />
+              <div style={{ display: "grid", gap: "10px" }}>
+                <SkeletonText width="92%" />
+                <SkeletonText width="76%" />
+                <SkeletonText width="84%" />
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    return (
+      <div style={{ overflow: "hidden" }} aria-hidden="true">
+        <div style={{ display: "grid", gridTemplateColumns: `${VILLA_COLUMN_WIDTH}px 1fr`, gap: "12px", minHeight: "210px" }}>
+          <div style={{ display: "grid", gap: "10px", paddingTop: "34px" }}>
+            {[0, 1].map((item) => <SkeletonText key={item} width="130px" height="18px" />)}
+          </div>
+          <div style={{ display: "grid", gap: "10px" }}>
+            <div style={{ display: "flex", gap: "8px" }}>
+              {Array.from({ length: 7 }).map((_, item) => <SkeletonText key={item} width="80px" height="24px" />)}
+            </div>
+            {[0, 1].map((row) => (
+              <div key={row} style={{ display: "flex", gap: "8px", alignItems: "center", height: BLOCK_HEIGHT }}>
+                {Array.from({ length: 7 }).map((_, item) => (
+                  <SkeletonBlock key={item} width="80px" height={BLOCK_HEIGHT} radius="6px" />
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <section style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: isMobile ? "1rem" : "1.5rem", marginBottom: "2rem" }}>
@@ -370,7 +444,7 @@ export default function DashboardOperationsView({
         )}
 
         {loading ? (
-          <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: 0 }}>Loading...</p>
+          renderTimelineSkeleton()
         ) : villaRows.length === 0 ? (
           <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: 0 }}>No villas available for the master calendar.</p>
         ) : isMobile ? (
@@ -613,7 +687,7 @@ export default function DashboardOperationsView({
             </div>
           </div>
           {loading ? (
-            <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: 0 }}>Loading...</p>
+            renderCompactListSkeleton(4)
           ) : recentBookings.length === 0 ? (
             <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: 0 }}>No bookings to show yet.</p>
           ) : (
@@ -676,7 +750,7 @@ export default function DashboardOperationsView({
             Oldest pending requests first so operations can clear the queue quickly.
           </p>
           {loading ? (
-            <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: 0 }}>Loading...</p>
+            renderCompactListSkeleton(3)
           ) : pendingBookings.length === 0 ? (
             <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: 0 }}>No pending approvals right now.</p>
           ) : (
@@ -740,14 +814,16 @@ export default function DashboardOperationsView({
                   {item.label}
                 </p>
                 <p style={{ fontFamily: PLAYFAIR, fontSize: "1.5rem", color: GOLD, margin: 0, lineHeight: 1 }}>
-                  {loading ? "-" : item.value}
+                  {loading ? (
+                    <SkeletonBlock width="34px" height="28px" style={{ marginTop: "2px" }} />
+                  ) : item.value}
                 </p>
               </div>
             ))}
           </div>
         </div>
         {loading ? (
-          <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: 0 }}>Loading...</p>
+          renderCompactListSkeleton(2)
         ) : calendarSources.length === 0 ? (
           <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: 0 }}>No calendar sources configured yet.</p>
         ) : staleSources.length === 0 ? (

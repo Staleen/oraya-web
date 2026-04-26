@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useRef, DragEvent } from "react";
+import { SkeletonBlock } from "@/components/LoadingSkeleton";
 
 const GOLD     = "#C5A46D";
 const WHITE    = "#FFFFFF";
@@ -328,7 +329,21 @@ export default function MediaManager() {
 
       {/* ── Thumbnail grid ── */}
       {loading ? (
-        <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED }}>Loading…</p>
+        <div
+          aria-hidden="true"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
+            gap: "8px",
+          }}
+        >
+          {Array.from({ length: 8 }).map((_, item) => (
+            <div key={item} style={{ backgroundColor: "rgba(255,255,255,0.03)", border: `0.5px solid ${BORDER}`, padding: "8px" }}>
+              <SkeletonBlock height="120px" style={{ marginBottom: "10px" }} />
+              <SkeletonBlock width="68px" height="22px" />
+            </div>
+          ))}
+        </div>
       ) : currentMedia.length === 0 ? (
         <p style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(138,128,112,0.45)", textAlign: "center", padding: "1.5rem 0" }}>
           No photos yet for this villa. Upload some above.
