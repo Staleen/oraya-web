@@ -13,6 +13,7 @@ import type { NightSource } from "@/lib/pricing/types";
 import { formatBeirutMonthDay, getBeirutDay } from "@/lib/utils/date-beirut";
 import { supabase } from "@/lib/supabase";
 import { AddonIcon } from "@/components/addon-icon";
+import { SkeletonBlock, SkeletonText } from "@/components/LoadingSkeleton";
 
 // ─── Brand constants ──────────────────────────────────────────────────────────
 const GOLD     = "#C5A46D";
@@ -574,6 +575,8 @@ function BookPageInner() {
 
   // Auth check on mount
   useEffect(() => {
+    // PERF-TIMING (temporary) — measures auth round-trip visible to user as spinner
+    console.time("[perf] book:auth");
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (user) {
         setAuthStatus("member");
@@ -583,6 +586,7 @@ function BookPageInner() {
       } else {
         setAuthStatus("none");
       }
+      console.timeEnd("[perf] book:auth");
     });
   }, []);
 
@@ -609,10 +613,13 @@ function BookPageInner() {
   useEffect(() => {
     setDateRange(undefined);
     if (!form.villa) { setConfirmedRanges([]); return; }
+    // PERF-TIMING (temporary)
+    const t = `[perf] book:availability(${form.villa})`;
+    console.time(t);
     fetch(`/api/bookings/availability?villa=${encodeURIComponent(form.villa)}`)
       .then(r => r.json())
-      .then(d => setConfirmedRanges(Array.isArray(d.ranges) ? d.ranges : []))
-      .catch(() => setConfirmedRanges([]));
+      .then(d => { console.timeEnd(t); setConfirmedRanges(Array.isArray(d.ranges) ? d.ranges : []); })
+      .catch(() => { console.timeEnd(t); setConfirmedRanges([]); });
   }, [form.villa]);
 
   // ── Derived values ────────────────────────────────────────────────────────
@@ -1085,8 +1092,28 @@ function BookPageInner() {
   // ── Auth loading spinner ──────────────────────────────────────────────────
   if (authStatus === "loading") {
     return (
-      <main style={{ backgroundColor: MIDNIGHT, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ width: "36px", opacity: 0.5 }}><OrayaEmblem /></div>
+      <main style={{ backgroundColor: MIDNIGHT, minHeight: "100vh", padding: "80px 24px" }}>
+        <div style={{ width: "100%", maxWidth: "720px", margin: "0 auto" }} aria-hidden="true">
+          <div style={{ width: "52px", margin: "0 auto 2.5rem", opacity: 0.45 }}><OrayaEmblem /></div>
+          <div style={{ textAlign: "center", marginBottom: "2rem", display: "grid", justifyItems: "center", gap: "12px" }}>
+            <SkeletonText width="120px" height="10px" />
+            <SkeletonBlock width="260px" height="38px" />
+            <SkeletonText width="340px" />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: "14px", marginBottom: "24px" }}>
+            {[0, 1].map((item) => (
+              <div key={item} style={{ border: "0.5px solid rgba(197,164,109,0.18)", backgroundColor: "rgba(255,255,255,0.02)" }}>
+                <SkeletonBlock height="132px" />
+                <div style={{ padding: "16px" }}>
+                  <SkeletonText width="68%" height="20px" style={{ marginBottom: "12px" }} />
+                  <SkeletonText width="92%" style={{ marginBottom: "8px" }} />
+                  <SkeletonText width="76%" />
+                </div>
+              </div>
+            ))}
+          </div>
+          <SkeletonBlock height="360px" style={{ border: "0.5px solid rgba(197,164,109,0.12)" }} />
+        </div>
       </main>
     );
   }

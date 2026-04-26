@@ -47,10 +47,12 @@ export default function VillaMechmechPage() {
   const [villaMedia, setVillaMedia] = useState<VillaMedia[]>([]);
 
   useEffect(() => {
+    // PERF-TIMING (temporary) — hero and gallery are blank until this resolves
+    console.time("[perf] mechmech:media");
     fetch("/api/media?villa=mechmech")
       .then((r) => r.json())
-      .then((d) => { if (d.media) setVillaMedia(d.media); })
-      .catch(() => {});
+      .then((d) => { console.timeEnd("[perf] mechmech:media"); if (d.media) setVillaMedia(d.media); })
+      .catch(() => { console.timeEnd("[perf] mechmech:media"); });
   }, []);
 
   const heroImg = villaMedia[0]?.file_url ?? "";
