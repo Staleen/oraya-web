@@ -10,15 +10,15 @@ import { AddonIcon } from "@/components/addon-icon";
 type BookingSectionKey = "pending" | "confirmed" | "cancelled";
 
 function StatusBadge({ status }: { status: string }) {
-  const colors: Record<string, { text: string; background: string; border: string }> = {
+  const tones: Record<string, { text: string; background: string; border: string }> = {
     pending: {
       text: GOLD,
-      background: "rgba(197,164,109,0.15)",
-      border: "rgba(197,164,109,0.35)",
+      background: "rgba(197,164,109,0.16)",
+      border: "rgba(197,164,109,0.4)",
     },
     confirmed: {
       text: "#6fcf8a",
-      background: "rgba(80,180,100,0.15)",
+      background: "rgba(80,180,100,0.16)",
       border: "rgba(111,207,138,0.38)",
     },
     cancelled: {
@@ -27,7 +27,7 @@ function StatusBadge({ status }: { status: string }) {
       border: "rgba(224,112,112,0.35)",
     },
   };
-  const tone = colors[status] ?? { text: MUTED, background: "transparent", border: BORDER };
+  const tone = tones[status] ?? { text: MUTED, background: "transparent", border: BORDER };
 
   return (
     <span
@@ -42,7 +42,7 @@ function StatusBadge({ status }: { status: string }) {
         color: tone.text,
         backgroundColor: tone.background,
         border: `0.5px solid ${tone.border}`,
-        padding: "6px 10px",
+        padding: "7px 11px",
         borderRadius: "999px",
         whiteSpace: "nowrap",
       }}
@@ -54,22 +54,18 @@ function StatusBadge({ status }: { status: string }) {
 
 function getAddonStatusTone(status: "confirmed" | "at_risk" | "pending_approval") {
   if (status === "confirmed") {
-    return { color: "#6fcf8a", backgroundColor: "rgba(80,180,100,0.15)", borderColor: "rgba(111,207,138,0.32)" };
+    return { color: "#6fcf8a", background: "rgba(80,180,100,0.15)", border: "rgba(111,207,138,0.32)" };
   }
   if (status === "at_risk") {
-    return { color: "#e2ab5a", backgroundColor: "rgba(226,171,90,0.16)", borderColor: "rgba(226,171,90,0.3)" };
+    return { color: "#e2ab5a", background: "rgba(226,171,90,0.16)", border: "rgba(226,171,90,0.3)" };
   }
-  return { color: "#9db7d9", backgroundColor: "rgba(157,183,217,0.14)", borderColor: "rgba(157,183,217,0.28)" };
+  return { color: "#9db7d9", background: "rgba(157,183,217,0.14)", border: "rgba(157,183,217,0.28)" };
 }
 
 function getOperationalBadgeStyle(kind: "approval" | "soft" | "strict") {
-  if (kind === "strict") {
-    return { color: "#e78f8f", backgroundColor: "rgba(224,112,112,0.14)" };
-  }
-  if (kind === "soft") {
-    return { color: "#e2ab5a", backgroundColor: "rgba(226,171,90,0.15)" };
-  }
-  return { color: GOLD, backgroundColor: "rgba(197,164,109,0.14)" };
+  if (kind === "strict") return { color: "#e78f8f", background: "rgba(224,112,112,0.14)" };
+  if (kind === "soft") return { color: "#e2ab5a", background: "rgba(226,171,90,0.15)" };
+  return { color: GOLD, background: "rgba(197,164,109,0.14)" };
 }
 
 function getAddonRiskWarning(addon: NonNullable<Booking["addons_snapshot"]>[number]) {
@@ -87,25 +83,38 @@ function getSectionTone(section: BookingSectionKey) {
   if (section === "confirmed") {
     return {
       accent: "#6fcf8a",
-      accentSoft: "rgba(80,180,100,0.08)",
-      title: "Confirmed",
-      subtitle: "Confirmed stays and bookings with no pending actions.",
+      glow: "rgba(80,180,100,0.08)",
+      title: "Confirmed Bookings",
+      subtitle: "Confirmed and upcoming stays",
     };
   }
   if (section === "cancelled") {
     return {
       accent: "#e07070",
-      accentSoft: "rgba(224,112,112,0.08)",
-      title: "Cancelled",
-      subtitle: "Bookings that were cancelled.",
+      glow: "rgba(224,112,112,0.08)",
+      title: "Cancelled Bookings",
+      subtitle: "Bookings that were cancelled",
     };
   }
   return {
     accent: GOLD,
-    accentSoft: "rgba(197,164,109,0.08)",
-    title: "Pending / Action Required",
-    subtitle: "Bookings needing confirmation or add-on review.",
+    glow: "rgba(197,164,109,0.08)",
+    title: "Pending Approvals",
+    subtitle: "Bookings that require your attention",
   };
+}
+
+function getCardAccent(booking: Booking, needsApproval: boolean) {
+  if (booking.status === "cancelled") {
+    return { color: "#e07070", border: "rgba(224,112,112,0.7)", glow: "rgba(224,112,112,0.08)" };
+  }
+  if (booking.status === "confirmed") {
+    return { color: "#6fcf8a", border: "rgba(111,207,138,0.6)", glow: "rgba(80,180,100,0.08)" };
+  }
+  if (needsApproval) {
+    return { color: GOLD, border: "rgba(197,164,109,0.8)", glow: "rgba(197,164,109,0.08)" };
+  }
+  return { color: "#78abf6", border: "rgba(120,171,246,0.78)", glow: "rgba(120,171,246,0.08)" };
 }
 
 export default function BookingsTable({
@@ -156,7 +165,7 @@ export default function BookingsTable({
       const d = await res.json();
       if (res.ok && Array.isArray(d.addons_snapshot)) {
         setBookings((prev) =>
-          prev.map((b) => (b.id === bookingId ? { ...b, addons_snapshot: d.addons_snapshot } : b)),
+          prev.map((booking) => (booking.id === bookingId ? { ...booking, addons_snapshot: d.addons_snapshot } : booking)),
         );
       } else {
         console.error("[admin] approve-addon failed:", d.error ?? "unknown error");
@@ -189,9 +198,15 @@ export default function BookingsTable({
     return booking.status === "pending" || bookingNeedsAddonAttention(booking) || bookingHasPendingAddonApproval(booking);
   }
 
-  const pendingBookings = filteredBookings.filter((booking) => bookingRequiresAction(booking));
-  const confirmedBookings = filteredBookings.filter((booking) => booking.status === "confirmed" && !bookingRequiresAction(booking));
-  const cancelledBookings = filteredBookings.filter((booking) => booking.status === "cancelled");
+  function sortByNewest(bookings: Booking[]) {
+    return [...bookings].sort((a, b) => b.created_at.localeCompare(a.created_at));
+  }
+
+  const pendingBookings = sortByNewest(filteredBookings.filter((booking) => bookingRequiresAction(booking)));
+  const confirmedBookings = sortByNewest(
+    filteredBookings.filter((booking) => booking.status === "confirmed" && !bookingRequiresAction(booking)),
+  );
+  const cancelledBookings = sortByNewest(filteredBookings.filter((booking) => booking.status === "cancelled"));
 
   const sectionCounts: Record<BookingSectionKey, number> = {
     pending: pendingBookings.length,
@@ -200,9 +215,7 @@ export default function BookingsTable({
   };
 
   const activeSection: BookingSectionKey =
-    statusFilter === "confirmed" || statusFilter === "cancelled"
-      ? statusFilter
-      : "pending";
+    statusFilter === "confirmed" || statusFilter === "cancelled" ? statusFilter : "pending";
 
   const sectionBookings =
     activeSection === "pending"
@@ -221,13 +234,86 @@ export default function BookingsTable({
           letterSpacing: "1.2px",
           textTransform: "uppercase",
           color: tone.color,
-          backgroundColor: tone.backgroundColor,
-          padding: "3px 7px",
-          borderRadius: "999px",
+          backgroundColor: tone.background,
+          padding: "4px 8px",
+          borderRadius: "4px",
         }}
       >
         {text}
       </span>
+    );
+  }
+
+  function renderSectionTeaser(section: BookingSectionKey) {
+    const tone = getSectionTone(section);
+    return (
+      <button
+        key={section}
+        type="button"
+        onClick={() => setStatusFilter(section)}
+        style={{
+          width: "100%",
+          background: `linear-gradient(90deg, ${tone.glow} 0%, rgba(255,255,255,0.02) 100%)`,
+          border: `0.5px solid ${tone.accent}55`,
+          borderRadius: "16px",
+          padding: isMobile ? "16px 18px" : "18px 20px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "16px",
+          cursor: "pointer",
+          textAlign: "left",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "14px", minWidth: 0 }}>
+          <div
+            style={{
+              width: "46px",
+              height: "46px",
+              borderRadius: "999px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: tone.glow,
+              color: tone.accent,
+              fontFamily: LATO,
+              fontSize: "20px",
+              lineHeight: 1,
+              flexShrink: 0,
+            }}
+          >
+            {section === "confirmed" ? "✓" : "×"}
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "4px" }}>
+              <span style={{ fontFamily: LATO, fontSize: isMobile ? "20px" : "22px", color: WHITE, fontWeight: 700 }}>
+                {tone.title}
+              </span>
+              <span
+                style={{
+                  minWidth: "28px",
+                  height: "28px",
+                  borderRadius: "8px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: tone.accent,
+                  color: MIDNIGHT,
+                  fontFamily: LATO,
+                  fontSize: "11px",
+                  fontWeight: 700,
+                }}
+              >
+                {sectionCounts[section]}
+              </span>
+            </div>
+            <p style={{ fontFamily: LATO, fontSize: "14px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+              {tone.subtitle}
+            </p>
+          </div>
+        </div>
+        <span style={{ color: WHITE, fontFamily: LATO, fontSize: "26px", lineHeight: 1, opacity: 0.85 }}>›</span>
+      </button>
     );
   }
 
@@ -244,36 +330,54 @@ export default function BookingsTable({
     const needsApproval = bookingHasPendingAddonApproval(booking);
     const canConfirm = booking.status === "pending";
     const canCancel = booking.status === "pending" || booking.status === "confirmed";
+    const accent = getCardAccent(booking, needsApproval);
+    const prominentLabel =
+      needsApproval ? "Approval needed" : booking.status === "pending" ? "Pending approval" : booking.status;
 
     return (
       <div
         key={booking.id}
         style={{
-          backgroundColor: "rgba(255,255,255,0.02)",
-          border: `0.5px solid ${BORDER}`,
-          boxShadow: "0 16px 36px rgba(0,0,0,0.18)",
-          padding: isMobile ? "1rem" : "1.25rem 1.35rem",
+          position: "relative",
+          background: "linear-gradient(180deg, rgba(31,43,56,0.98) 0%, rgba(27,38,53,0.98) 100%)",
+          border: `0.5px solid ${accent.border}`,
+          borderRadius: "18px",
+          padding: isMobile ? "1rem" : "1.45rem 1.5rem",
+          boxShadow: `0 18px 44px rgba(0,0,0,0.24), inset 0 0 0 1px ${accent.glow}`,
           display: "grid",
-          gap: isMobile ? "14px" : "16px",
+          gap: isMobile ? "14px" : "18px",
         }}
       >
+        <span
+          style={{
+            position: "absolute",
+            top: "10px",
+            left: "10px",
+            width: "10px",
+            height: "10px",
+            borderRadius: "999px",
+            backgroundColor: accent.color,
+            boxShadow: `0 0 0 3px ${accent.glow}`,
+          }}
+        />
+
         <div
           style={{
             display: "flex",
             justifyContent: "space-between",
             alignItems: "flex-start",
-            gap: "14px",
+            gap: "16px",
             flexWrap: "wrap",
           }}
         >
-          <div style={{ minWidth: 0, flex: "1 1 280px" }}>
+          <div style={{ minWidth: 0, flex: "1 1 260px", paddingLeft: isMobile ? "12px" : "14px" }}>
             <p
               style={{
                 fontFamily: PLAYFAIR,
-                fontSize: isMobile ? "1.7rem" : "1.95rem",
-                color: isGuest ? WHITE : GOLD,
-                margin: "0 0 6px",
-                lineHeight: 1.1,
+                fontSize: isMobile ? "1.7rem" : "2rem",
+                color: WHITE,
+                margin: "0 0 8px",
+                lineHeight: 1.05,
               }}
             >
               {displayName}
@@ -282,15 +386,16 @@ export default function BookingsTable({
               style={{
                 fontFamily: LATO,
                 fontSize: "10px",
-                letterSpacing: "2px",
+                letterSpacing: "2.6px",
                 textTransform: "uppercase",
-                color: isGuest ? MUTED : GOLD,
+                color: isGuest ? "rgba(245,241,235,0.72)" : GOLD,
                 margin: 0,
               }}
             >
               {isGuest ? "Guest" : "Member"}
             </p>
           </div>
+
           <div
             style={{
               display: "grid",
@@ -300,7 +405,7 @@ export default function BookingsTable({
             }}
           >
             <StatusBadge status={booking.status} />
-            {needsApproval && (
+            {prominentLabel !== booking.status && (
               <span
                 style={{
                   display: "inline-flex",
@@ -310,15 +415,15 @@ export default function BookingsTable({
                   fontSize: "9px",
                   letterSpacing: "1.5px",
                   textTransform: "uppercase",
-                  color: GOLD,
-                  backgroundColor: "rgba(197,164,109,0.14)",
-                  border: "0.5px solid rgba(197,164,109,0.28)",
-                  padding: "5px 9px",
-                  borderRadius: "999px",
+                  color: accent.color,
+                  backgroundColor: accent.glow,
+                  border: `0.5px solid ${accent.border}`,
+                  padding: "6px 10px",
+                  borderRadius: "6px",
                   whiteSpace: "nowrap",
                 }}
               >
-                Approval needed
+                {prominentLabel}
               </span>
             )}
           </div>
@@ -326,35 +431,52 @@ export default function BookingsTable({
 
         <div
           style={{
-            border: `0.5px solid rgba(197,164,109,0.3)`,
-            backgroundColor: "rgba(255,255,255,0.025)",
-            padding: isMobile ? "14px 16px" : "16px 18px",
+            display: "grid",
+            gridTemplateColumns: isMobile ? "1fr" : "auto 1fr",
+            alignItems: "center",
+            gap: "14px",
+            border: `0.5px solid ${accent.border}`,
+            borderRadius: "14px",
+            backgroundColor: "rgba(255,255,255,0.03)",
+            padding: isMobile ? "14px 16px" : "18px 20px",
           }}
         >
-          <p style={{ fontFamily: LATO, fontSize: "12px", color: WHITE, margin: "0 0 8px" }}>
-            {booking.villa}
-          </p>
+          <div
+            style={{
+              width: isMobile ? "44px" : "48px",
+              height: isMobile ? "44px" : "48px",
+              borderRadius: "12px",
+              border: `0.5px solid ${accent.border}`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: accent.color,
+              fontFamily: LATO,
+              fontSize: isMobile ? "18px" : "20px",
+              lineHeight: 1,
+              flexShrink: 0,
+            }}
+          >
+            ▣
+          </div>
           <p
             style={{
               fontFamily: LATO,
-              fontSize: isMobile ? "1.35rem" : "1.65rem",
+              fontSize: isMobile ? "1.5rem" : "2rem",
               fontWeight: 700,
               color: WHITE,
               margin: 0,
-              lineHeight: 1.25,
+              lineHeight: 1.2,
             }}
           >
-            {fmt(booking.check_in)} → {fmt(booking.check_out)}
+            {fmt(booking.check_in)} to {fmt(booking.check_out)}
           </p>
         </div>
 
-        <div
-          style={{
-            display: "grid",
-            gap: "8px",
-            color: MUTED,
-          }}
-        >
+        <div style={{ display: "grid", gap: "10px", color: MUTED }}>
+          <p style={{ fontFamily: LATO, fontSize: "14px", color: WHITE, margin: 0 }}>
+            {booking.villa}
+          </p>
           <p style={{ fontFamily: LATO, fontSize: "13px", margin: 0, lineHeight: 1.6 }}>
             {displayEmail}
             {displayPhone ? ` | ${displayPhone}` : ""}
@@ -363,12 +485,8 @@ export default function BookingsTable({
           <p style={{ fontFamily: LATO, fontSize: "13px", margin: 0, lineHeight: 1.6 }}>
             {booking.sleeping_guests} sleeping
             {booking.day_visitors > 0 ? ` | ${booking.day_visitors} visitors` : ""}
-            {booking.event_type ? ` | ${booking.event_type}` : ""}
           </p>
-          <p style={{ fontFamily: LATO, fontSize: "12px", margin: 0, lineHeight: 1.6 }}>
-            Submitted {formatBeirutDateTime(booking.created_at)}
-          </p>
-          <p style={{ fontFamily: LATO, fontSize: "12px", margin: 0, lineHeight: 1.65 }}>
+          <p style={{ fontFamily: LATO, fontSize: "12px", margin: 0, lineHeight: 1.65, opacity: booking.message?.trim() ? 1 : 0.8 }}>
             {booking.message?.trim() || "-"}
           </p>
         </div>
@@ -378,7 +496,8 @@ export default function BookingsTable({
             style={{
               border: "0.5px solid rgba(226,171,90,0.24)",
               backgroundColor: "rgba(226,171,90,0.08)",
-              padding: "10px 12px",
+              padding: "12px 14px",
+              borderRadius: "8px",
             }}
           >
             <p style={{ fontFamily: LATO, fontSize: "11px", color: "#e2ab5a", margin: 0, lineHeight: 1.5 }}>
@@ -388,22 +507,27 @@ export default function BookingsTable({
         )}
 
         {addonSnapshots.length > 0 && (
-          <div style={{ display: "grid", gap: "10px" }}>
+          <div style={{ display: "grid", gap: "12px" }}>
             <p
               style={{
                 fontFamily: LATO,
                 fontSize: "10px",
-                letterSpacing: "2px",
+                letterSpacing: "2.4px",
                 textTransform: "uppercase",
                 color: MUTED,
                 margin: 0,
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
               }}
             >
-              Add-ons
+              <span>Add-ons</span>
+              <span style={{ flex: 1, height: "1px", backgroundColor: "rgba(255,255,255,0.08)" }} />
             </p>
+
             <div style={{ display: "grid", gap: "10px" }}>
               {addonSnapshots.map((addon) => {
-                const tone = getAddonStatusTone(addon.status);
+                const statusTone = getAddonStatusTone(addon.status);
                 const addonKey = `${booking.id}-${addon.id}`;
                 const isApproved = addon.admin_approved === true;
                 const isApproving = approvingAddonId === addonKey;
@@ -417,21 +541,22 @@ export default function BookingsTable({
                       gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1fr) auto",
                       gap: isMobile ? "8px" : "12px",
                       alignItems: "start",
-                      padding: "10px 0",
-                      borderTop: "0.5px solid rgba(255,255,255,0.05)",
                     }}
                   >
                     <div style={{ minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
                         <AddonIcon label={addon.label} size={16} color="rgba(197,164,109,0.5)" style={{ flexShrink: 0 }} />
-                        <p style={{ fontFamily: LATO, fontSize: "14px", color: WHITE, margin: 0, lineHeight: 1.4 }}>
-                          {addon.label}
-                        </p>
+                        <div style={{ display: "flex", alignItems: "baseline", gap: "10px", flexWrap: "wrap" }}>
+                          <p style={{ fontFamily: LATO, fontSize: "14px", color: WHITE, margin: 0, lineHeight: 1.4 }}>
+                            {addon.label}
+                          </p>
+                          <p style={{ fontFamily: LATO, fontSize: "12px", color: GOLD, margin: 0 }}>
+                            {formatAddonPrice(addon.price)}
+                          </p>
+                        </div>
                       </div>
-                      <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0 }}>
-                        {formatAddonPrice(addon.price)}
-                      </p>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "7px" }}>
+
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "8px" }}>
                         {addon.requires_approval && !isApproved && renderOperationalBadge("Requires approval", "approval")}
                         {isApproved && (
                           <span
@@ -442,8 +567,8 @@ export default function BookingsTable({
                               textTransform: "uppercase",
                               color: "#6fcf8a",
                               backgroundColor: "rgba(80,180,100,0.15)",
-                              padding: "3px 7px",
-                              borderRadius: "999px",
+                              padding: "4px 8px",
+                              borderRadius: "4px",
                             }}
                           >
                             Approved
@@ -452,12 +577,14 @@ export default function BookingsTable({
                         {addon.enforcement_mode === "soft" && renderOperationalBadge("Soft rule", "soft")}
                         {addon.enforcement_mode === "strict" && renderOperationalBadge("Strict rule", "strict")}
                       </div>
+
                       {sameDayRiskWarning && (
-                        <p style={{ fontFamily: LATO, fontSize: "11px", color: "#e2ab5a", margin: "7px 0 0", lineHeight: 1.5 }}>
+                        <p style={{ fontFamily: LATO, fontSize: "11px", color: "#e2ab5a", margin: "8px 0 0", lineHeight: 1.5 }}>
                           {sameDayRiskWarning}
                         </p>
                       )}
                     </div>
+
                     <div
                       style={{
                         display: "grid",
@@ -472,11 +599,11 @@ export default function BookingsTable({
                           fontSize: "9px",
                           letterSpacing: "1.5px",
                           textTransform: "uppercase",
-                          color: tone.color,
-                          backgroundColor: tone.backgroundColor,
-                          border: `0.5px solid ${tone.borderColor}`,
-                          padding: "6px 9px",
-                          borderRadius: "999px",
+                          color: statusTone.color,
+                          backgroundColor: statusTone.background,
+                          border: `0.5px solid ${statusTone.border}`,
+                          padding: "7px 10px",
+                          borderRadius: "6px",
                           whiteSpace: "nowrap",
                         }}
                       >
@@ -495,8 +622,8 @@ export default function BookingsTable({
                             color: "#6fcf8a",
                             backgroundColor: "transparent",
                             border: "0.5px solid rgba(111,207,138,0.45)",
-                            padding: "8px 10px",
-                            borderRadius: "2px",
+                            padding: "8px 12px",
+                            borderRadius: "4px",
                             cursor: isApproving ? "not-allowed" : "pointer",
                             opacity: isApproving ? 0.5 : 1,
                             minWidth: isMobile ? "100%" : "auto",
@@ -510,6 +637,7 @@ export default function BookingsTable({
                 );
               })}
             </div>
+
             <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
               Approvals are saved to the booking record.
             </p>
@@ -525,26 +653,6 @@ export default function BookingsTable({
             justifyContent: isMobile ? "stretch" : "flex-end",
           }}
         >
-          {canConfirm && (
-            <button
-              onClick={() => updateStatus(booking.id, "confirmed")}
-              disabled={isUpdating}
-              style={{
-                fontFamily: LATO,
-                fontSize: "11px",
-                letterSpacing: "1.4px",
-                textTransform: "uppercase",
-                color: "#2E2E2E",
-                backgroundColor: isUpdating ? "rgba(80,180,100,0.5)" : "#6fcf8a",
-                border: "none",
-                padding: "12px 18px",
-                cursor: isUpdating ? "not-allowed" : "pointer",
-                minWidth: isMobile ? "100%" : "140px",
-              }}
-            >
-              Confirm booking
-            </button>
-          )}
           {canCancel && (
             <button
               onClick={() => updateStatus(booking.id, "cancelled")}
@@ -552,19 +660,46 @@ export default function BookingsTable({
               style={{
                 fontFamily: LATO,
                 fontSize: "11px",
-                letterSpacing: "1.4px",
+                letterSpacing: "1.6px",
                 textTransform: "uppercase",
                 color: WHITE,
-                backgroundColor: isUpdating ? "rgba(224,112,112,0.5)" : "#e07070",
-                border: "none",
+                backgroundColor: "transparent",
+                border: `0.5px solid ${accent.border}`,
                 padding: "12px 18px",
                 cursor: isUpdating ? "not-allowed" : "pointer",
                 minWidth: isMobile ? "100%" : "140px",
+                opacity: isUpdating ? 0.6 : 1,
+                borderRadius: "6px",
               }}
             >
-              Cancel booking
+              Cancel
             </button>
           )}
+
+          {canConfirm && (
+            <button
+              onClick={() => updateStatus(booking.id, "confirmed")}
+              disabled={isUpdating}
+              style={{
+                fontFamily: LATO,
+                fontSize: "11px",
+                letterSpacing: "1.6px",
+                textTransform: "uppercase",
+                color: WHITE,
+                background: isUpdating
+                  ? "linear-gradient(135deg, rgba(229,115,115,0.55) 0%, rgba(255,145,145,0.55) 100%)"
+                  : "linear-gradient(135deg, #e57a7a 0%, #ff9191 100%)",
+                border: "none",
+                padding: "12px 18px",
+                cursor: isUpdating ? "not-allowed" : "pointer",
+                minWidth: isMobile ? "100%" : "188px",
+                borderRadius: "6px",
+              }}
+            >
+              Confirm booking
+            </button>
+          )}
+
           {emailWarnings[booking.id] && (
             <span style={{ display: "block", width: "100%", fontFamily: LATO, fontSize: "10px", color: "#e0b070", lineHeight: 1.4 }}>
               {emailWarnings[booking.id]}
@@ -584,7 +719,96 @@ export default function BookingsTable({
 
   return (
     <div style={{ display: "grid", gap: "1rem" }}>
-      <div style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: isMobile ? "0.9rem" : "1rem" }}>
+      <div
+        style={{
+          background: "linear-gradient(180deg, rgba(26,37,53,0.98) 0%, rgba(23,33,47,0.98) 100%)",
+          border: `0.5px solid ${BORDER}`,
+          borderRadius: "22px",
+          padding: isMobile ? "1rem" : "1.2rem",
+          boxShadow: "0 20px 56px rgba(0,0,0,0.22)",
+          display: "grid",
+          gap: "1rem",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: isMobile ? "stretch" : "flex-start",
+            flexDirection: isMobile ? "column" : "row",
+            gap: "16px",
+          }}
+        >
+          <div>
+            <p style={{ fontFamily: LATO, fontSize: isMobile ? "14px" : "16px", color: MUTED, margin: 0, lineHeight: 1.6 }}>
+              Manage booking requests and approvals
+            </p>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              gap: "0",
+              flexWrap: "wrap",
+              border: `0.5px solid ${BORDER}`,
+              borderRadius: "16px",
+              padding: "4px",
+              backgroundColor: "rgba(255,255,255,0.02)",
+            }}
+          >
+            {([
+              ["pending", "Pending"] as const,
+              ["confirmed", "Confirmed"] as const,
+              ["cancelled", "Cancelled"] as const,
+            ]).map(([section, label]) => {
+              const active = activeSection === section;
+              const tone = getSectionTone(section);
+              return (
+                <button
+                  key={section}
+                  type="button"
+                  onClick={() => setStatusFilter(section)}
+                  style={{
+                    minWidth: isMobile ? "calc(50% - 4px)" : "190px",
+                    flex: isMobile ? "1 1 calc(50% - 4px)" : "0 0 auto",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "10px",
+                    padding: "16px 18px",
+                    backgroundColor: active ? "rgba(255,255,255,0.03)" : "transparent",
+                    border: `0.5px solid ${active ? tone.accent : "transparent"}`,
+                    borderRadius: "12px",
+                    color: active ? WHITE : MUTED,
+                    fontFamily: LATO,
+                    cursor: "pointer",
+                  }}
+                >
+                  <span style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: active ? tone.accent : MUTED }}>
+                    {label}
+                  </span>
+                  <span
+                    style={{
+                      minWidth: "28px",
+                      height: "28px",
+                      borderRadius: "999px",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: active ? tone.accent : "rgba(255,255,255,0.12)",
+                      color: active ? MIDNIGHT : WHITE,
+                      fontSize: "11px",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {sectionCounts[section]}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "flex-end" }}>
           <div style={{ minWidth: isMobile ? "100%" : "220px", flex: "1 1 220px" }}>
             <label
@@ -611,6 +835,7 @@ export default function BookingsTable({
               ))}
             </select>
           </div>
+
           <div style={{ minWidth: isMobile ? "100%" : "180px", flex: "1 1 180px" }}>
             <label
               style={{
@@ -627,6 +852,7 @@ export default function BookingsTable({
             </label>
             <input type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} style={fieldStyle} />
           </div>
+
           <button
             onClick={clearFilters}
             style={{
@@ -640,6 +866,7 @@ export default function BookingsTable({
               padding: isMobile ? "12px 16px" : "12px 18px",
               cursor: "pointer",
               whiteSpace: "nowrap",
+              borderRadius: "8px",
             }}
           >
             Clear
@@ -647,95 +874,110 @@ export default function BookingsTable({
         </div>
       </div>
 
-      <div style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: isMobile ? "0.9rem" : "1rem" }}>
-        <div style={{ display: "grid", gap: "14px" }}>
-          <div
-            style={{
-              display: "flex",
-              gap: "10px",
-              flexWrap: "wrap",
-              alignItems: "stretch",
-            }}
-          >
-            {([
-              ["pending", "Pending"] as const,
-              ["confirmed", "Confirmed"] as const,
-              ["cancelled", "Cancelled"] as const,
-            ]).map(([section, label]) => {
-              const active = activeSection === section;
-              const count = sectionCounts[section];
-              const tone = getSectionTone(section);
-              return (
-                <button
-                  key={section}
-                  type="button"
-                  onClick={() => setStatusFilter(section)}
-                  style={{
-                    flex: isMobile ? "1 1 100%" : "0 0 auto",
-                    minWidth: isMobile ? "100%" : "180px",
-                    fontFamily: LATO,
-                    backgroundColor: active ? tone.accentSoft : "rgba(255,255,255,0.015)",
-                    border: `0.5px solid ${active ? tone.accent : BORDER}`,
-                    color: active ? WHITE : MUTED,
-                    padding: isMobile ? "14px 16px" : "13px 16px",
-                    cursor: "pointer",
-                    textAlign: "left",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
-                    <span style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: active ? tone.accent : MUTED }}>
-                      {label}
-                    </span>
-                    <span
-                      style={{
-                        minWidth: "28px",
-                        height: "28px",
-                        borderRadius: "999px",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        backgroundColor: active ? tone.accent : "rgba(255,255,255,0.08)",
-                        color: active ? MIDNIGHT : WHITE,
-                        fontSize: "11px",
-                        fontWeight: 700,
-                      }}
-                    >
-                      {count}
-                    </span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          <div
-            style={{
-              border: `0.5px solid ${BORDER}`,
-              backgroundColor: "rgba(255,255,255,0.015)",
-              padding: isMobile ? "1rem" : "1.2rem",
-            }}
-          >
-            <div style={{ marginBottom: "1rem" }}>
-              <p style={{ fontFamily: PLAYFAIR, fontSize: isMobile ? "1.5rem" : "1.7rem", color: WHITE, margin: "0 0 6px" }}>
+      <div
+        style={{
+          background: "linear-gradient(180deg, rgba(26,37,53,0.98) 0%, rgba(23,33,47,0.98) 100%)",
+          border: `0.5px solid ${BORDER}`,
+          borderRadius: "22px",
+          padding: isMobile ? "1rem" : "1.2rem",
+          boxShadow: "0 20px 56px rgba(0,0,0,0.22)",
+          display: "grid",
+          gap: "14px",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: isMobile ? "stretch" : "center",
+            flexDirection: isMobile ? "column" : "row",
+            gap: "16px",
+          }}
+        >
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "6px" }}>
+              <p style={{ fontFamily: PLAYFAIR, fontSize: isMobile ? "1.7rem" : "1.9rem", color: WHITE, margin: 0 }}>
                 {sectionTone.title}
               </p>
-              <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: 0 }}>
-                {sectionTone.subtitle}
-              </p>
+              <span
+                style={{
+                  minWidth: "28px",
+                  height: "28px",
+                  borderRadius: "8px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: sectionTone.accent,
+                  color: MIDNIGHT,
+                  fontFamily: LATO,
+                  fontSize: "11px",
+                  fontWeight: 700,
+                }}
+              >
+                {sectionCounts[activeSection]}
+              </span>
             </div>
+            <p style={{ fontFamily: LATO, fontSize: "14px", color: MUTED, margin: 0, lineHeight: 1.6 }}>
+              {sectionTone.subtitle}
+            </p>
+          </div>
 
-            {loading ? (
-              <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: 0 }}>Loading...</p>
-            ) : sectionBookings.length === 0 ? (
-              <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: 0 }}>{sectionEmptyCopy[activeSection]}</p>
-            ) : (
-              <div style={{ display: "grid", gap: "14px" }}>
-                {sectionBookings.map(renderBookingCard)}
-              </div>
-            )}
+          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "12px 16px",
+                border: `0.5px solid ${BORDER}`,
+                borderRadius: "10px",
+                color: WHITE,
+                fontFamily: LATO,
+                fontSize: "12px",
+              }}
+            >
+              <span>Sort by: Newest</span>
+              <span style={{ color: MUTED }}>⌄</span>
+            </div>
+            <button
+              type="button"
+              onClick={clearFilters}
+              style={{
+                width: "46px",
+                height: "46px",
+                border: `0.5px solid ${BORDER}`,
+                borderRadius: "10px",
+                backgroundColor: "transparent",
+                color: WHITE,
+                cursor: "pointer",
+                fontFamily: LATO,
+                fontSize: "18px",
+                lineHeight: 1,
+              }}
+              aria-label="Reset booking filters"
+            >
+              ↻
+            </button>
           </div>
         </div>
+
+        {loading ? (
+          <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: 0 }}>Loading...</p>
+        ) : sectionBookings.length === 0 ? (
+          <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: 0 }}>{sectionEmptyCopy[activeSection]}</p>
+        ) : (
+          <div style={{ display: "grid", gap: "16px" }}>
+            {sectionBookings.map(renderBookingCard)}
+          </div>
+        )}
       </div>
+
+      {activeSection === "pending" && (
+        <div style={{ display: "grid", gap: "14px" }}>
+          {renderSectionTeaser("confirmed")}
+          {renderSectionTeaser("cancelled")}
+        </div>
+      )}
     </div>
   );
 }

@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import BookingsTable from "@/components/admin/BookingsTable";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
-import { LATO } from "@/components/admin/theme";
+import { GOLD, LATO, MUTED, PLAYFAIR, WHITE } from "@/components/admin/theme";
 
 export default function AdminBookingsPage() {
   const { bookings, setBookings, members, loading, error, setError, loadData } = useAdminData();
@@ -70,6 +70,17 @@ export default function AdminBookingsPage() {
 
   return (
     <>
+      <div style={{ marginBottom: "1.5rem" }}>
+        <p style={{ fontFamily: PLAYFAIR, fontSize: isMobile ? "2.1rem" : "2.6rem", color: WHITE, margin: "0 0 8px" }}>
+          Bookings
+        </p>
+        <p style={{ fontFamily: LATO, fontSize: isMobile ? "14px" : "16px", color: MUTED, margin: 0, lineHeight: 1.6 }}>
+          Manage booking requests, approvals, and guest follow-up from one operations queue.
+        </p>
+        <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: "10px 0 0" }}>
+          Action-first booking operations
+        </p>
+      </div>
       {error && (
         <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070", marginBottom: "1.5rem" }}>
           Error: {error}
