@@ -15,6 +15,40 @@ function fmtDate(iso: string) {
   return `${parseInt(d)} ${months[parseInt(m) - 1]} ${y}`;
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function formatAddonPrice(price: number | null | undefined): string {
+  if (typeof price !== "number") return "Price on request";
+  return `$${price.toLocaleString("en-US")}`;
+}
+
+function addonIconGlyph(label: string): string {
+  const l = label.toLowerCase();
+  if (/pool|water|hydro|aqua|swim|heated/.test(l)) return "~~";
+  if (/fire|flame|diesel|wood|hearth|stove/.test(l)) return "FL";
+  if (/breakfast|lunch|dinner|food|meal|dining|catering|coffee|drink/.test(l)) return "DN";
+  if (/bed|linen|bedding|mattress|pillow|sheet/.test(l)) return "BD";
+  return "SV";
+}
+
+function addonIconHtml(label: string): string {
+  return `
+    <td width="36" valign="top" style="padding:14px 0 14px 14px;">
+      <div style="width:26px;height:26px;border-radius:6px;background-color:rgba(197,164,109,0.12);
+                  border:0.5px solid rgba(197,164,109,0.28);color:${GOLD};font-size:9px;
+                  letter-spacing:1px;text-align:center;line-height:26px;font-weight:600;">
+        ${escapeHtml(addonIconGlyph(label))}
+      </div>
+    </td>`;
+}
+
 // Token expires at the end of the stay (UTC end-of-day on check_out).
 function checkOutExpiryUnix(check_out: string): number {
   return Math.floor(new Date(`${check_out}T23:59:59Z`).getTime() / 1000);
@@ -27,6 +61,17 @@ export interface BookingPendingEmailPayload {
   check_in:   string;
   check_out:  string;
   booking_id: string;
+  sleeping_guests?: number | null;
+  day_visitors?: number | null;
+  event_type?: string | null;
+  message?: string | null;
+  addons?: Array<{ label: string; price?: number | null }>;
+  addons_snapshot?: Array<{
+    label: string;
+    price: number | null;
+    requires_approval?: boolean;
+    same_day_warning?: "same_day_checkout" | "same_day_checkin" | null;
+  }> | null;
 }
 
 export async function sendBookingPendingEmail(payload: BookingPendingEmailPayload): Promise<void> {
@@ -47,6 +92,65 @@ export async function sendBookingPendingEmail(payload: BookingPendingEmailPayloa
   const ref       = payload.booking_id.slice(0, 8).toUpperCase();
   const firstName = payload.name.split(" ")[0] || "Guest";
   const subject   = "Oraya - Booking Request Received";
+  const addonRows = (payload.addons_snapshot && payload.addons_snapshot.length > 0
+    ? payload.addons_snapshot
+    : (payload.addons ?? []).map((addon) => ({
+        label: addon.label,
+        price: typeof addon.price === "number" ? addon.price : null,
+        requires_approval: false,
+        same_day_warning: null,
+      }))
+  );
+  const summaryRows: Array<[string, string]> = [
+    ["Villa", payload.villa],
+    ["Dates", `${fmtDate(payload.check_in)} to ${fmtDate(payload.check_out)}`],
+    ...(typeof payload.sleeping_guests === "number" ? [["Guests", String(payload.sleeping_guests)] as [string, string]] : []),
+    ...(typeof payload.day_visitors === "number" ? [["Visitors", String(payload.day_visitors)] as [string, string]] : []),
+    ...(payload.event_type ? [["Event type", payload.event_type] as [string, string]] : []),
+    ["Status", "Pending"],
+    ["Reference", ref],
+  ];
+  const addonsHtml = addonRows.length === 0
+    ? `
+      <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="border:0.5px solid rgba(197,164,109,0.18);padding:22px 24px;">
+        <p style="margin:0 0 14px;font-size:9px;letter-spacing:3px;text-transform:uppercase;color:${GOLD};">
+          Add-ons
+        </p>
+        <p style="margin:0;font-size:13px;line-height:1.75;color:#ffffff;">No add-ons selected.</p>
+      </td></tr></table>`
+    : `
+      <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="border:0.5px solid rgba(197,164,109,0.18);padding:22px 24px;">
+        <p style="margin:0 0 14px;font-size:9px;letter-spacing:3px;text-transform:uppercase;color:${GOLD};">
+          Add-ons
+        </p>
+        ${addonRows.map((addon) => {
+          const notes = [
+            addon.requires_approval ? "Subject to confirmation" : null,
+            addon.same_day_warning === "same_day_checkout" ? "Early check-in may depend on same-day checkout timing" : null,
+            addon.same_day_warning === "same_day_checkin" ? "Late checkout may depend on same-day check-in timing" : null,
+          ].filter((item): item is string => Boolean(item));
+          return `
+            <table width="100%" cellpadding="0" cellspacing="0"
+                   style="border:0.5px solid rgba(255,255,255,0.07);background-color:rgba(255,255,255,0.025);margin-top:10px;border-radius:10px;">
+              <tr>
+                ${addonIconHtml(addon.label)}
+                <td style="padding:14px 12px 14px 10px;">
+                  <p style="margin:0 0 4px;font-size:14px;line-height:1.4;color:#ffffff;">
+                    ${escapeHtml(addon.label)}
+                  </p>
+                  ${notes.map((note) => `
+                    <p style="margin:0 0 3px;font-size:11px;line-height:1.55;color:${MUTED};">
+                      ${escapeHtml(note)}
+                    </p>
+                  `).join("")}
+                </td>
+                <td align="right" valign="top" style="padding:14px 14px 14px 8px;font-size:12px;color:${GOLD};white-space:nowrap;">
+                  ${escapeHtml(formatAddonPrice(addon.price))}
+                </td>
+              </tr>
+            </table>`;
+        }).join("")}
+      </td></tr></table>`;
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -121,13 +225,7 @@ export async function sendBookingPendingEmail(payload: BookingPendingEmailPayloa
                 Booking Summary
               </p>
 
-              ${[
-                ["Villa",     payload.villa],
-                ["Check-in",  fmtDate(payload.check_in)],
-                ["Check-out", fmtDate(payload.check_out)],
-                ["Status",    `<span style="color:${GOLD};">Pending</span>`],
-                ["Reference", ref],
-              ].map(([label, value]) => `
+              ${summaryRows.map(([label, value]) => `
               <table width="100%" cellpadding="0" cellspacing="0"
                      style="border-bottom:0.5px solid rgba(255,255,255,0.05);">
                 <tr>
@@ -136,13 +234,27 @@ export async function sendBookingPendingEmail(payload: BookingPendingEmailPayloa
                     ${label}
                   </td>
                   <td align="right" style="padding:10px 0;font-size:13px;
-                                           color:#ffffff;font-weight:300;">
-                    ${value}
+                                           color:${label === "Status" ? GOLD : "#ffffff"};font-weight:300;">
+                    ${escapeHtml(value)}
                   </td>
                 </tr>
               </table>`).join("")}
             </td>
           </tr>
+
+          <tr><td style="padding-top:16px;">${addonsHtml}</td></tr>
+
+          ${payload.message?.trim() ? `
+          <tr><td style="padding-top:16px;">
+            <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="border:0.5px solid rgba(197,164,109,0.18);padding:22px 24px;">
+              <p style="margin:0 0 10px;font-size:9px;letter-spacing:3px;text-transform:uppercase;color:${GOLD};">
+                Special Request / Notes
+              </p>
+              <p style="margin:0;font-size:13px;line-height:1.75;color:#ffffff;white-space:pre-line;">
+                ${escapeHtml(payload.message.trim())}
+              </p>
+            </td></tr></table>
+          </td></tr>` : ""}
 
           <!-- View CTA -->
           <tr>
@@ -179,11 +291,16 @@ export async function sendBookingPendingEmail(payload: BookingPendingEmailPayloa
     "",
     "This is a transactional email to confirm we received your booking request.",
     "",
-    `Villa: ${payload.villa}`,
-    `Check-in: ${fmtDate(payload.check_in)}`,
-    `Check-out: ${fmtDate(payload.check_out)}`,
-    "Status: Pending",
-    `Reference: ${ref}`,
+    ...summaryRows.map(([label, value]) => `${label}: ${value}`),
+    "",
+    "Add-ons:",
+    ...(addonRows.length === 0
+      ? ["- No add-ons selected."]
+      : addonRows.flatMap((addon) => [
+          `- ${addon.label}: ${formatAddonPrice(addon.price)}`,
+          ...(addon.requires_approval ? ["  Subject to confirmation"] : []),
+        ])),
+    ...(payload.message?.trim() ? ["", `Special Request / Notes: ${payload.message.trim()}`] : []),
     "",
     `View your booking: ${viewUrl}`,
     "",

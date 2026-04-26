@@ -38,6 +38,39 @@ function formatAdvanceNotice(hours: number | null | undefined) {
   return `Requires ${hours} ${hours === 1 ? "hour" : "hours"} advance notice`;
 }
 
+function addonIconGlyph(label: string): string {
+  const l = label.toLowerCase();
+  if (/pool|water|hydro|aqua|swim|heated/.test(l)) return "~~";
+  if (/fire|flame|diesel|wood|hearth|stove/.test(l)) return "FL";
+  if (/breakfast|lunch|dinner|food|meal|dining|catering|coffee|drink/.test(l)) return "DN";
+  if (/bed|linen|bedding|mattress|pillow|sheet/.test(l)) return "BD";
+  return "SV";
+}
+
+function addonIconHtml(label: string): string {
+  return `
+    <td width="36" valign="top" style="padding:14px 0 14px 14px;">
+      <div style="width:26px;height:26px;border-radius:6px;background-color:rgba(197,164,109,0.12);
+                  border:0.5px solid rgba(197,164,109,0.28);color:${GOLD};font-size:9px;
+                  letter-spacing:1px;text-align:center;line-height:26px;font-weight:600;">
+        ${escapeHtml(addonIconGlyph(label))}
+      </div>
+    </td>`;
+}
+
+function formatRule(mode: string | null | undefined): string | null {
+  if (mode === "strict") return "Strict rule: may block booking if conditions are not met";
+  if (mode === "soft") return "Soft rule: booking allowed but requires review";
+  if (mode === "none") return "No operational restriction";
+  return null;
+}
+
+function formatSameDayWarning(value: string | null | undefined): string | null {
+  if (value === "same_day_checkout") return "Early check-in risk: same-day checkout";
+  if (value === "same_day_checkin") return "Late checkout risk: same-day check-in";
+  return null;
+}
+
 export interface BookingRequestEmailPayload {
   recipients:      string[];           // admin recipient addresses
   booking_id:      string;
@@ -60,7 +93,8 @@ export interface BookingRequestEmailPayload {
     preparation_time_hours: number | null;
     enforcement_mode: string | null;
     requires_approval: boolean;
-    status: "pending_approval" | "confirmed" | "at_risk";
+    status: "pending_approval" | "confirmed" | "at_risk" | "approved" | "declined";
+    same_day_warning?: "same_day_checkout" | "same_day_checkin" | null;
   }> | null;
   created_at:      string;
   admin_url:       string;             // link to /admin - empty string = no button
@@ -91,6 +125,7 @@ export async function sendBookingRequestEmail(
         enforcement_mode: null,
         requires_approval: false,
         status: "confirmed" as const,
+        same_day_warning: null,
       }))
   );
 
@@ -117,7 +152,7 @@ export async function sendBookingRequestEmail(
           ${label}
         </td>
         <td style="padding:9px 0;font-size:13px;color:#ffffff;font-weight:300;">
-          ${value}
+          ${escapeHtml(value)}
         </td>
       </tr>
     </table>`).join("");
@@ -152,20 +187,16 @@ export async function sendBookingRequestEmail(
             typeof addon.price === "number" ? formatAddonPrice(addon.price) : null,
             formatAdvanceNotice(addon.preparation_time_hours),
             addon.requires_approval ? "Requires manager approval" : null,
-            addon.enforcement_mode === "strict"
-              ? "Strict rule: may block booking if conditions are not met"
-              : addon.enforcement_mode === "soft"
-                ? "Soft rule: booking allowed but requires review"
-                : addon.enforcement_mode === "none"
-                  ? "No operational restriction"
-                  : null,
+            formatRule(addon.enforcement_mode),
+            formatSameDayWarning(addon.same_day_warning),
           ].filter((line): line is string => Boolean(line));
 
           return `
             <table width="100%" cellpadding="0" cellspacing="0"
-                   style="border:0.5px solid rgba(255,255,255,0.06);background-color:rgba(255,255,255,0.02);margin-top:10px;">
+                   style="border:0.5px solid rgba(255,255,255,0.07);background-color:rgba(255,255,255,0.025);margin-top:10px;border-radius:10px;">
               <tr>
-                <td style="padding:14px 16px;">
+                ${addonIconHtml(addon.label)}
+                <td style="padding:14px 16px 14px 10px;">
                   <p style="margin:0 0 6px;font-size:14px;line-height:1.4;color:#ffffff;">
                     ${escapeHtml(addon.label)}
                   </p>
@@ -316,13 +347,8 @@ export async function sendBookingRequestEmail(
             ...(typeof addon.price === "number" ? [`  Price: ${formatAddonPrice(addon.price)}`] : []),
             ...(formatAdvanceNotice(addon.preparation_time_hours) ? [`  ${formatAdvanceNotice(addon.preparation_time_hours)}`] : []),
             ...(addon.requires_approval ? ["  Requires manager approval"] : []),
-            ...(addon.enforcement_mode === "strict"
-              ? ["  Strict rule: may block booking if conditions are not met"]
-              : addon.enforcement_mode === "soft"
-                ? ["  Soft rule: booking allowed but requires review"]
-                : addon.enforcement_mode === "none"
-                  ? ["  No operational restriction"]
-                  : []),
+            ...(formatRule(addon.enforcement_mode) ? [`  ${formatRule(addon.enforcement_mode)}`] : []),
+            ...(formatSameDayWarning(addon.same_day_warning) ? [`  ${formatSameDayWarning(addon.same_day_warning)}`] : []),
           ];
           return lines;
         })),

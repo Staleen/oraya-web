@@ -1,5 +1,6 @@
 import Link from "next/link";
 import OrayaEmblem from "@/components/OrayaEmblem";
+import { AddonIcon } from "@/components/addon-icon";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { verifyViewToken } from "@/lib/booking-action-token";
 
@@ -13,7 +14,15 @@ const LATO     = "'Lato', system-ui, sans-serif";
 
 export const dynamic = "force-dynamic";
 
-type Addon = { id?: string; label?: string };
+type Addon = {
+  id?: string;
+  label?: string;
+  price?: number | null;
+  preparation_time_hours?: number | null;
+  requires_approval?: boolean;
+  status?: string | null;
+  same_day_warning?: "same_day_checkout" | "same_day_checkin" | null;
+};
 
 interface BookingRow {
   id:               string;
@@ -25,6 +34,7 @@ interface BookingRow {
   event_type:       string | null;
   message:          string | null;
   addons:           Addon[] | null;
+  addons_snapshot:  Addon[] | null;
   status:           string;
   guest_name:       string | null;
   member_id:        string | null;
@@ -42,6 +52,36 @@ function statusVisual(status: string): { label: string; color: string; bg: strin
   if (s === "confirmed") return { label: "Confirmed", color: "#6fcf8a", bg: "rgba(111,207,138,0.15)" };
   if (s === "cancelled") return { label: "Cancelled", color: "#e07070", bg: "rgba(224,112,112,0.15)" };
   return { label: "Pending", color: GOLD, bg: "rgba(197,164,109,0.15)" };
+}
+
+function formatAddonPrice(price: number | null | undefined): string {
+  if (typeof price !== "number") return "Price on request";
+  return `$${price.toLocaleString("en-US")}`;
+}
+
+function formatAdvanceNotice(hours: number | null | undefined): string | null {
+  if (!hours || hours <= 0) return null;
+  if (hours % 24 === 0) {
+    const days = hours / 24;
+    return `${days} ${days === 1 ? "day" : "days"} advance notice`;
+  }
+  return `${hours} ${hours === 1 ? "hour" : "hours"} advance notice`;
+}
+
+function addonStatusLabel(addon: Addon): { text: string; color: string; bg: string } | null {
+  if (addon.status === "approved") return { text: "Approved", color: "#6fcf8a", bg: "rgba(111,207,138,0.14)" };
+  if (addon.status === "declined") return { text: "Declined", color: "#e07070", bg: "rgba(224,112,112,0.14)" };
+  if (addon.status === "pending_approval" || addon.requires_approval) {
+    return { text: "Subject to confirmation", color: GOLD, bg: "rgba(197,164,109,0.12)" };
+  }
+  if (addon.status === "at_risk") return { text: "Needs review", color: GOLD, bg: "rgba(197,164,109,0.12)" };
+  return null;
+}
+
+function sameDayWarningText(value: Addon["same_day_warning"]): string | null {
+  if (value === "same_day_checkout") return "May depend on same-day checkout timing.";
+  if (value === "same_day_checkin") return "May depend on same-day check-in timing.";
+  return null;
 }
 
 async function getWhatsappNumber(): Promise<string | null> {
@@ -126,7 +166,7 @@ export default async function BookingViewPage({ params }: { params: { token: str
 
   const { data: booking, error } = await supabaseAdmin
     .from("bookings")
-    .select("id, villa, check_in, check_out, sleeping_guests, day_visitors, event_type, message, addons, status, guest_name, member_id")
+    .select("id, villa, check_in, check_out, sleeping_guests, day_visitors, event_type, message, addons, addons_snapshot, status, guest_name, member_id")
     .eq("id", verified.booking_id)
     .single<BookingRow>();
 
@@ -142,10 +182,11 @@ export default async function BookingViewPage({ params }: { params: { token: str
   const whatsappNumber = await getWhatsappNumber();
   const ref     = booking.id.slice(0, 8).toUpperCase();
   const visual  = statusVisual(booking.status);
-  const addons  = Array.isArray(booking.addons) ? booking.addons : [];
-  const addonsLabel = addons.length > 0
-    ? addons.map(a => a.label).filter(Boolean).join(", ")
-    : "—";
+  const addons = Array.isArray(booking.addons_snapshot) && booking.addons_snapshot.length > 0
+    ? booking.addons_snapshot
+    : Array.isArray(booking.addons)
+      ? booking.addons
+      : [];
 
   const rows: Array<{ label: string; value: string }> = [
     { label: "Villa",        value: booking.villa },
@@ -154,7 +195,6 @@ export default async function BookingViewPage({ params }: { params: { token: str
     { label: "Guests staying",  value: String(booking.sleeping_guests ?? "—") },
     { label: "Expected visitors", value: String(booking.day_visitors ?? 0) },
     ...(booking.event_type ? [{ label: "Event type", value: booking.event_type }] : []),
-    { label: "Add-ons",      value: addonsLabel },
     { label: "Reference",    value: ref },
   ];
 
@@ -233,6 +273,72 @@ export default async function BookingViewPage({ params }: { params: { token: str
               </span>
             </div>
           ))}
+        </div>
+
+        {/* Add-ons card */}
+        <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", padding: "1.75rem", marginBottom: "2rem", textAlign: "left", backgroundColor: "rgba(255,255,255,0.015)" }}>
+          <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, marginBottom: "1rem" }}>
+            Add-ons
+          </p>
+          {addons.length === 0 ? (
+            <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: 0, lineHeight: 1.7 }}>
+              No add-ons selected.
+            </p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              {addons.map((addon, index) => {
+                const status = addonStatusLabel(addon);
+                const notice = formatAdvanceNotice(addon.preparation_time_hours);
+                const warning = sameDayWarningText(addon.same_day_warning);
+                return (
+                  <div
+                    key={`${addon.id ?? addon.label ?? "addon"}-${index}`}
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      justifyContent: "space-between",
+                      gap: "14px",
+                      padding: "12px 0",
+                      borderBottom: index === addons.length - 1 ? "none" : "0.5px solid rgba(255,255,255,0.06)",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: "10px", minWidth: 0 }}>
+                      <AddonIcon label={addon.label ?? "Add-on"} size={17} color="rgba(197,164,109,0.58)" />
+                      <div style={{ minWidth: 0 }}>
+                        <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, margin: "0 0 4px", lineHeight: 1.4 }}>
+                          {addon.label ?? "Add-on"}
+                        </p>
+                        <p style={{ fontFamily: LATO, fontSize: "12px", color: GOLD, margin: "0 0 4px", lineHeight: 1.4 }}>
+                          {formatAddonPrice(addon.price)}
+                        </p>
+                        {(notice || warning) && (
+                          <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
+                            {[notice, warning].filter(Boolean).join(" · ")}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    {status && (
+                      <span
+                        style={{
+                          fontFamily: LATO,
+                          fontSize: "9px",
+                          letterSpacing: "1.3px",
+                          textTransform: "uppercase",
+                          color: status.color,
+                          backgroundColor: status.bg,
+                          padding: "5px 8px",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {status.text}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Message card (if any) */}

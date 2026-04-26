@@ -548,6 +548,12 @@ export async function POST(request: Request) {
           check_in:   data.check_in,
           check_out:  data.check_out,
           booking_id: data.id,
+          sleeping_guests: data.sleeping_guests,
+          day_visitors:    data.day_visitors,
+          event_type:      data.event_type ?? null,
+          message:         data.message ?? null,
+          addons:          Array.isArray(data.addons) ? data.addons : [],
+          addons_snapshot: Array.isArray(data.addons_snapshot) ? data.addons_snapshot : null,
         });
       }
     } catch (pendingEmailErr) {

@@ -20,6 +20,7 @@ const WHITE    = "#FFFFFF";
 const MIDNIGHT = "#1F2B38";
 const CHARCOAL = "#2E2E2E";
 const MUTED    = "#8a8070";
+const SUCCESS  = "#6fcf8a";
 const PLAYFAIR = "'Playfair Display', Georgia, serif";
 const LATO     = "'Lato', system-ui, sans-serif";
 /** Phase 12E Batch 5: discount applied to dead-gap extension offers (UI display only, not persisted). */
@@ -435,6 +436,12 @@ const CALENDAR_CSS = `
     opacity: 0.5;
   }
 
+  .oraya-cal .rdp-day_deadCheckIn:not(.rdp-day_selected):not(.rdp-day_range_middle):not(.rdp-day_range_start):not(.rdp-day_range_end) {
+    color: rgba(255,255,255,0.28);
+    text-decoration: line-through;
+    cursor: not-allowed;
+  }
+
   /* Outside (adjacent-month days) */
   .oraya-cal .rdp-day_outside { color: rgba(255,255,255,0.15); }
 
@@ -628,22 +635,45 @@ function BookPageInner() {
 
   const minStayNights =
     (form.villa ? getVillaPricing(pricing, form.villa)?.minimum_stay : null) ?? 1;
+  const effectiveMinStayNights = Math.max(1, minStayNights);
 
-  const deadCheckInExtras: Date[] = confirmedRanges.flatMap(r => {
-    const checkoutDay = parseLocalISO(r.check_out); // boundary day left open by -1 logic
-    // Search up to 366 days ahead for any non-blocked checkout date.
-    for (let n = minStayNights; n <= 366; n++) {
-      const candidate = new Date(checkoutDay.getTime());
-      candidate.setDate(candidate.getDate() + n);
-      if (!isCalendarDateBlocked(candidate)) return []; // valid checkout exists
+  function addLocalDays(day: Date, days: number): Date {
+    const next = new Date(day.getTime());
+    next.setDate(next.getDate() + days);
+    return next;
+  }
+
+  function isStayRangeAvailable(checkInDay: Date, checkOutDay: Date): boolean {
+    if (checkOutDay <= checkInDay) return false;
+
+    for (let night = new Date(checkInDay.getTime()); night < checkOutDay; night.setDate(night.getDate() + 1)) {
+      if (isCalendarDateBlocked(night)) return false;
     }
-    return [checkoutDay]; // no valid checkout found — disable this day
-  });
+
+    return true;
+  }
+
+  function hasValidCheckoutFromCheckIn(checkInDay: Date): boolean {
+    if (isCalendarDateBlocked(checkInDay)) return false;
+
+    // Search up to one year for a checkout where every occupied night is open.
+    for (let n = effectiveMinStayNights; n <= 366; n++) {
+      const candidateCheckout = addLocalDays(checkInDay, n);
+      if (isStayRangeAvailable(checkInDay, candidateCheckout)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  function isDeadCheckInDate(day: Date): boolean {
+    return !isCalendarDateBlocked(day) && !hasValidCheckoutFromCheckIn(day);
+  }
 
   const disabledDays: Matcher[] = [
     { before: today },
     ...bookedRangeList,
-    ...deadCheckInExtras,
   ];
 
   const checkIn  = dateRange?.from ? toISO(dateRange.from) : "";
@@ -772,7 +802,7 @@ function BookPageInner() {
       return {
         available: false,
         selectable: false,
-        warning: `Requires ${formatPreparationTime(preparationHours)} preparation and is not available for your selected check-in.`,
+        warning: `Needs ${formatPreparationTime(preparationHours)} advance notice and is not available for your selected check-in.`,
         mode: enforcementMode,
       };
     }
@@ -780,7 +810,7 @@ function BookPageInner() {
     return {
       available: false,
       selectable: true,
-      warning: `Requires ${formatPreparationTime(preparationHours)} preparation. This service may be subject to availability.`,
+      warning: `Short notice: subject to confirmation for your selected check-in.`,
       mode: enforcementMode,
     };
   }
@@ -789,30 +819,32 @@ function BookPageInner() {
     const messages: Array<{ tone: "neutral" | "warning"; text: string }> = [];
     const preparationHours = addon.preparation_time_hours ?? null;
     const enforcementMode = getAddonEnforcementMode(addon.enforcement_mode);
+    const availability = getAddonAvailability(addon);
+    const hasTimingRisk = preparationHours !== null && preparationHours > 0 && !availability.available;
 
-    if (preparationHours && preparationHours > 0) {
+    if (hasTimingRisk) {
       messages.push({
-        tone: "neutral",
-        text: `Requires ${formatPreparationTime(preparationHours)} advance notice`,
+        tone: "warning",
+        text: `${formatPreparationTime(preparationHours)} advance notice is preferred for this service.`,
       });
     }
 
-    if (addon.requires_approval) {
+    if (addon.requires_approval && hasTimingRisk) {
       messages.push({
-        tone: "neutral",
-        text: "Requires manager approval",
+        tone: "warning",
+        text: "Subject to confirmation",
       });
     }
 
-    if (enforcementMode === "strict") {
+    if (enforcementMode === "strict" && hasTimingRisk) {
       messages.push({
         tone: "warning",
-        text: "May block booking if conditions are not met",
+        text: "This add-on is only available when advance notice is satisfied",
       });
-    } else if (enforcementMode === "soft") {
+    } else if (enforcementMode === "soft" && hasTimingRisk) {
       messages.push({
         tone: "warning",
-        text: "Booking allowed but may require review",
+        text: "Booking request can continue, and our team will review availability",
       });
     }
 
@@ -879,6 +911,28 @@ function BookPageInner() {
   }
   function blurGold(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
     e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)";
+  }
+
+  function handleDateSelect(nextRange: DateRange | undefined, selectedDay: Date) {
+    const startsNewRange =
+      !dateRange?.from ||
+      Boolean(dateRange.to) ||
+      toISO(selectedDay) <= toISO(dateRange.from);
+
+    if (startsNewRange && !hasValidCheckoutFromCheckIn(selectedDay)) {
+      setDateRange(undefined);
+      setError("Please choose a check-in date with at least one available check-out.");
+      return;
+    }
+
+    if (nextRange?.from && nextRange.to && !isStayRangeAvailable(nextRange.from, nextRange.to)) {
+      setDateRange({ from: nextRange.from });
+      setError("Those dates are not available as a continuous stay. Please choose another check-out date.");
+      return;
+    }
+
+    setError("");
+    setDateRange(nextRange);
   }
 
   function goNext() {
@@ -1259,8 +1313,9 @@ function BookPageInner() {
                       <DayPicker
                         mode="range"
                         selected={dateRange}
-                        onSelect={setDateRange}
+                        onSelect={handleDateSelect}
                         disabled={disabledDays}
+                        modifiers={{ deadCheckIn: isDeadCheckInDate }}
                         numberOfMonths={2}
                         fromDate={today}
                         showOutsideDays
@@ -1529,8 +1584,8 @@ function BookPageInner() {
                             display: "flex", alignItems: "flex-start", justifyContent: "space-between",
                             width: "100%", textAlign: "left",
                             padding: "14px 18px",
-                            border: `0.5px solid ${selected ? GOLD : availability.mode === "soft" && !availability.available ? "rgba(226,171,90,0.42)" : disableSelection ? "rgba(255,255,255,0.12)" : "rgba(197,164,109,0.18)"}`,
-                            backgroundColor: selected ? "rgba(197,164,109,0.07)" : availability.mode === "soft" && !availability.available ? "rgba(226,171,90,0.08)" : disableSelection ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.02)",
+                            border: `0.5px solid ${selected ? "rgba(111,207,138,0.55)" : availability.mode === "soft" && !availability.available ? "rgba(226,171,90,0.42)" : disableSelection ? "rgba(255,255,255,0.12)" : "rgba(197,164,109,0.18)"}`,
+                            backgroundColor: selected ? "rgba(111,207,138,0.08)" : availability.mode === "soft" && !availability.available ? "rgba(226,171,90,0.08)" : disableSelection ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.02)",
                             cursor: disableSelection ? "not-allowed" : "pointer",
                             transition: "border-color 0.15s, background-color 0.15s",
                             opacity: disableSelection ? 0.55 : 1,
@@ -1541,8 +1596,8 @@ function BookPageInner() {
                           <div style={{ display: "flex", alignItems: "flex-start", gap: "12px", flex: 1, minWidth: 0 }}>
                             <div style={{
                               width: "16px", height: "16px", flexShrink: 0, marginTop: "2px",
-                              border: `1px solid ${selected ? GOLD : availability.mode === "soft" && !availability.available ? "rgba(226,171,90,0.55)" : disableSelection ? "rgba(255,255,255,0.2)" : "rgba(197,164,109,0.3)"}`,
-                              backgroundColor: selected ? GOLD : "transparent",
+                              border: `1px solid ${selected ? SUCCESS : availability.mode === "soft" && !availability.available ? "rgba(226,171,90,0.55)" : disableSelection ? "rgba(255,255,255,0.2)" : "rgba(197,164,109,0.3)"}`,
+                              backgroundColor: selected ? SUCCESS : "transparent",
                               display: "flex", alignItems: "center", justifyContent: "center",
                               transition: "background-color 0.15s, border-color 0.15s",
                             }}>
@@ -1555,7 +1610,7 @@ function BookPageInner() {
                                 <AddonIcon
                                   label={addon.label}
                                   size={16}
-                                  color={selected ? "rgba(197,164,109,0.7)" : disableSelection ? "rgba(197,164,109,0.25)" : "rgba(197,164,109,0.45)"}
+                                  color={selected ? "rgba(111,207,138,0.82)" : disableSelection ? "rgba(197,164,109,0.25)" : "rgba(197,164,109,0.45)"}
                                 />
                                 <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0, flexWrap: "wrap" }}>
                                   <span style={{ fontFamily: LATO, fontSize: "13px", color: selected ? WHITE : disableSelection ? "rgba(255,255,255,0.45)" : "rgba(255,255,255,0.7)", fontWeight: selected ? 400 : 300, lineHeight: 1.3 }}>
@@ -1614,12 +1669,9 @@ function BookPageInner() {
                                   {addon.description.trim()}
                                 </span>
                               )}
-                              {(addon.requires_approval || addon.preparation_time_hours) && (
+                              {addon.requires_approval && (
                                 <span style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, display: "block", marginTop: "4px", lineHeight: 1.5 }}>
-                                  {[
-                                    addon.requires_approval ? "Approval required" : "",
-                                    addon.preparation_time_hours ? `${formatPreparationTime(addon.preparation_time_hours)} preparation required` : "",
-                                  ].filter(Boolean).join(" - ")}
+                                  Subject to confirmation
                                 </span>
                               )}
                               {!availability.available && (
@@ -1682,7 +1734,7 @@ function BookPageInner() {
                                 {(() => {
                                   const computed = computeAddonPrice(addon);
                                   return computed !== null ? (
-                                    <span style={{ fontFamily: LATO, fontSize: "12px", color: selected ? GOLD : MUTED }}>
+                                    <span style={{ fontFamily: LATO, fontSize: "12px", color: selected ? SUCCESS : MUTED }}>
                                       {Math.round(computed).toLocaleString()} {addon.currency}
                                     </span>
                                   ) : (
@@ -1698,7 +1750,7 @@ function BookPageInner() {
                                   {PRICING_MODEL_LABELS[addon.pricing_model] ?? addon.pricing_model}
                                 </span>
                                 {addon.price !== null ? (
-                                  <span style={{ fontFamily: LATO, fontSize: "12px", color: selected ? GOLD : MUTED }}>
+                                  <span style={{ fontFamily: LATO, fontSize: "12px", color: selected ? SUCCESS : MUTED }}>
                                     {addon.price.toLocaleString()} {addon.currency}
                                   </span>
                                 ) : (
