@@ -7,6 +7,7 @@ import { useAdminData } from "@/components/admin/AdminDataProvider";
 import { BORDER, fieldStyle, fmt, GOLD, LATO, MIDNIGHT, MUTED, PLAYFAIR, WHITE } from "./theme";
 
 type BookingSectionKey = "pending" | "confirmed" | "cancelled";
+type ConfirmedSortKey = "created_desc" | "created_asc" | "check_in_asc" | "check_in_desc";
 
 function StatusBadge({ status }: { status: string }) {
   const tones: Record<string, { text: string; background: string; border: string }> = {
@@ -193,6 +194,28 @@ function sortByNewest(items: Booking[]) {
   return [...items].sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
 
+function sortConfirmedBookings(items: Booking[], sortKey: ConfirmedSortKey) {
+  const sorted = [...items];
+
+  if (sortKey === "created_asc") {
+    sorted.sort((a, b) => a.created_at.localeCompare(b.created_at));
+    return sorted;
+  }
+
+  if (sortKey === "check_in_asc") {
+    sorted.sort((a, b) => a.check_in.localeCompare(b.check_in) || b.created_at.localeCompare(a.created_at));
+    return sorted;
+  }
+
+  if (sortKey === "check_in_desc") {
+    sorted.sort((a, b) => b.check_in.localeCompare(a.check_in) || b.created_at.localeCompare(a.created_at));
+    return sorted;
+  }
+
+  sorted.sort((a, b) => b.created_at.localeCompare(a.created_at));
+  return sorted;
+}
+
 export default function BookingsTable({
   loading,
   filteredBookings: _filteredBookings,
@@ -229,32 +252,64 @@ export default function BookingsTable({
   const { bookings, setBookings } = useAdminData();
   const [approvingAddonId, setApprovingAddonId] = useState<string | null>(null);
   const [expandedCompactId, setExpandedCompactId] = useState<string | null>(null);
+  const [bulkActionBookingId, setBulkActionBookingId] = useState<string | null>(null);
+  const [confirmedSort, setConfirmedSort] = useState<ConfirmedSortKey>("created_desc");
+  const [hiddenCancelledIds, setHiddenCancelledIds] = useState<string[]>([]);
+
+  async function patchAddonResolution(bookingId: string, addonId: string, decision: "approve" | "decline") {
+    const res = await fetch(`/api/admin/bookings/${bookingId}/approve-addon`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ addon_id: addonId, decision }),
+    });
+    const data = await res.json();
+
+    if (res.ok && Array.isArray(data.addons_snapshot)) {
+      setBookings((prev) =>
+        prev.map((booking) =>
+          booking.id === bookingId ? { ...booking, addons_snapshot: data.addons_snapshot } : booking,
+        ),
+      );
+      return data.addons_snapshot as BookingAddonSnapshot[];
+    }
+
+    throw new Error(data.error ?? "Failed to update add-on state.");
+  }
 
   async function resolveAddon(bookingId: string, addonId: string, decision: "approve" | "decline") {
     const key = `${bookingId}-${addonId}-${decision}`;
     setApprovingAddonId(key);
 
     try {
-      const res = await fetch(`/api/admin/bookings/${bookingId}/approve-addon`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ addon_id: addonId, decision }),
-      });
-      const data = await res.json();
-
-      if (res.ok && Array.isArray(data.addons_snapshot)) {
-        setBookings((prev) =>
-          prev.map((booking) =>
-            booking.id === bookingId ? { ...booking, addons_snapshot: data.addons_snapshot } : booking,
-          ),
-        );
-      } else {
-        console.error("[admin] resolve-addon failed:", data.error ?? "unknown error");
-      }
+      await patchAddonResolution(bookingId, addonId, decision);
     } catch (error) {
       console.error("[admin] resolve-addon network error:", error);
     } finally {
       setApprovingAddonId(null);
+    }
+  }
+
+  async function approveAllAddonsAndConfirm(booking: Booking) {
+    const unresolvedApprovalAddons = getAddonSnapshots(booking).filter(
+      (addon) => addon.requires_approval && addon.status === "pending_approval",
+    );
+
+    if (unresolvedApprovalAddons.length === 0) {
+      await updateStatus(booking.id, "confirmed");
+      return;
+    }
+
+    setBulkActionBookingId(booking.id);
+
+    try {
+      for (const addon of unresolvedApprovalAddons) {
+        await patchAddonResolution(booking.id, addon.id, "approve");
+      }
+      await updateStatus(booking.id, "confirmed");
+    } catch (error) {
+      console.error("[admin] approve-all-and-confirm failed:", error);
+    } finally {
+      setBulkActionBookingId(null);
     }
   }
 
@@ -280,6 +335,7 @@ export default function BookingsTable({
   }
 
   const filterActive = villaFilter !== "all" || dateFilter !== "";
+  const sortActive = confirmedSort !== "created_desc";
 
   const visibleBookings = useMemo(() => {
     return bookings.filter((booking) => {
@@ -291,11 +347,17 @@ export default function BookingsTable({
 
   const pendingBookings = sortByNewest(visibleBookings.filter((booking) => bookingRequiresAction(booking)));
 
-  const confirmedBookings = sortByNewest(
+  const confirmedBookings = sortConfirmedBookings(
     visibleBookings.filter((booking) => booking.status === "confirmed" && !bookingRequiresAction(booking)),
+    confirmedSort,
   );
 
-  const cancelledBookings = sortByNewest(visibleBookings.filter((booking) => booking.status === "cancelled"));
+  const cancelledBookings = sortByNewest(
+    visibleBookings.filter((booking) => booking.status === "cancelled" && !hiddenCancelledIds.includes(booking.id)),
+  );
+  const hiddenCancelledCount = visibleBookings.filter(
+    (booking) => booking.status === "cancelled" && hiddenCancelledIds.includes(booking.id),
+  ).length;
 
   const sectionCounts: Record<BookingSectionKey, number> = {
     pending: pendingBookings.length,
@@ -360,6 +422,24 @@ export default function BookingsTable({
         <span style={{ color: WHITE, fontSize: "12px", lineHeight: 1 }}>x</span>
       </button>
     );
+  }
+
+  function handleResetView() {
+    clearFilters();
+    setConfirmedSort("created_desc");
+    setHiddenCancelledIds([]);
+    setExpandedCompactId(null);
+  }
+
+  function hideVisibleCancelledBookings() {
+    setHiddenCancelledIds((prev) => {
+      const next = new Set(prev);
+      for (const booking of visibleBookings) {
+        if (booking.status === "cancelled") next.add(booking.id);
+      }
+      return Array.from(next);
+    });
+    setExpandedCompactId(null);
   }
 
   function renderSectionTeaser(section: BookingSectionKey) {
@@ -676,7 +756,8 @@ export default function BookingsTable({
     const readyToConfirm = booking.status === "pending" && !needsApproval && !needsAttention;
     const accent = getCardAccent(booking, needsApproval || needsAttention || booking.status === "pending");
     const isUpdating = updatingId === booking.id;
-    const canConfirm = booking.status === "pending";
+    const isBulkResolving = bulkActionBookingId === booking.id;
+    const canConfirm = booking.status === "pending" && !needsApproval;
     const canCancel = booking.status === "pending" || booking.status === "confirmed";
 
     return (
@@ -907,6 +988,32 @@ export default function BookingsTable({
             justifyContent: isMobile ? "stretch" : "flex-end",
           }}
         >
+          {booking.status === "pending" && needsApproval && (
+            <button
+              type="button"
+              onClick={() => approveAllAddonsAndConfirm(booking)}
+              disabled={isBulkResolving || isUpdating}
+              style={{
+                fontFamily: LATO,
+                fontSize: "11px",
+                letterSpacing: "1.6px",
+                textTransform: "uppercase",
+                color: MIDNIGHT,
+                background: isBulkResolving
+                  ? "linear-gradient(135deg, rgba(197,164,109,0.45) 0%, rgba(245,225,182,0.45) 100%)"
+                  : "linear-gradient(135deg, #c5a46d 0%, #f0d39c 100%)",
+                border: "none",
+                padding: "12px 18px",
+                cursor: isBulkResolving || isUpdating ? "not-allowed" : "pointer",
+                minWidth: isMobile ? "100%" : "260px",
+                borderRadius: "6px",
+                opacity: isBulkResolving || isUpdating ? 0.7 : 1,
+              }}
+            >
+              {isBulkResolving ? "Resolving add-ons..." : "Approve all add-ons & confirm booking"}
+            </button>
+          )}
+
           {canCancel && (
             <button
               type="button"
@@ -949,10 +1056,10 @@ export default function BookingsTable({
                 padding: "12px 18px",
                 cursor: isUpdating ? "not-allowed" : "pointer",
                 minWidth: isMobile ? "100%" : "188px",
-                borderRadius: "6px",
-              }}
-            >
-              Confirm booking
+              borderRadius: "6px",
+            }}
+          >
+              {readyToConfirm ? "Confirm booking" : "Confirm booking"}
             </button>
           )}
 
@@ -1067,6 +1174,14 @@ export default function BookingsTable({
     confirmed: "No confirmed bookings match the current filters.",
     cancelled: "No cancelled bookings match the current filters.",
   };
+  const confirmedSortLabel =
+    confirmedSort === "created_asc"
+      ? "Oldest confirmed first"
+      : confirmedSort === "check_in_asc"
+        ? "Earliest check-in first"
+        : confirmedSort === "check_in_desc"
+          ? "Latest check-in first"
+          : "Newly confirmed first";
 
   return (
     <div style={{ display: "grid", gap: "1rem" }}>
@@ -1222,7 +1337,7 @@ export default function BookingsTable({
 
           <button
             type="button"
-            onClick={clearFilters}
+            onClick={handleResetView}
             style={{
               fontFamily: LATO,
               fontSize: "10px",
@@ -1241,10 +1356,13 @@ export default function BookingsTable({
           </button>
         </div>
 
-        {filterActive && (
+        {(filterActive || (activeSection === "confirmed" && sortActive)) && (
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
             {villaFilter !== "all" && renderFilterChip("Villa", villaFilter, () => setVillaFilter("all"))}
             {dateFilter && renderFilterChip("Check-in", fmt(dateFilter), () => setDateFilter(""))}
+            {activeSection === "confirmed" &&
+              sortActive &&
+              renderFilterChip("Sort", confirmedSortLabel, () => setConfirmedSort("created_desc"))}
           </div>
         )}
       </div>
@@ -1306,25 +1424,48 @@ export default function BookingsTable({
           </div>
 
           <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-            <div
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "8px",
-                padding: "12px 16px",
-                border: `0.5px solid ${BORDER}`,
-                borderRadius: "10px",
-                color: WHITE,
-                fontFamily: LATO,
-                fontSize: "12px",
-              }}
-            >
-              <span>Sort by: Newest</span>
-              <span style={{ color: MUTED }}>v</span>
-            </div>
+            {activeSection === "confirmed" ? (
+              <div style={{ minWidth: isMobile ? "100%" : "240px" }}>
+                <select
+                  value={confirmedSort}
+                  onChange={(event) => setConfirmedSort(event.target.value as ConfirmedSortKey)}
+                  style={{ ...fieldStyle, cursor: "pointer" }}
+                >
+                  <option value="created_desc" style={{ backgroundColor: MIDNIGHT }}>
+                    Newly confirmed first
+                  </option>
+                  <option value="created_asc" style={{ backgroundColor: MIDNIGHT }}>
+                    Oldest confirmed first
+                  </option>
+                  <option value="check_in_asc" style={{ backgroundColor: MIDNIGHT }}>
+                    Earliest check-in first
+                  </option>
+                  <option value="check_in_desc" style={{ backgroundColor: MIDNIGHT }}>
+                    Latest check-in first
+                  </option>
+                </select>
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "12px 16px",
+                  border: `0.5px solid ${BORDER}`,
+                  borderRadius: "10px",
+                  color: WHITE,
+                  fontFamily: LATO,
+                  fontSize: "12px",
+                }}
+              >
+                <span>Sort by: Newest</span>
+                <span style={{ color: MUTED }}>v</span>
+              </div>
+            )}
             <button
               type="button"
-              onClick={clearFilters}
+              onClick={handleResetView}
               style={{
                 width: "46px",
                 height: "46px",
@@ -1341,6 +1482,46 @@ export default function BookingsTable({
             >
               R
             </button>
+            {activeSection === "cancelled" && sectionBookings.length > 0 && (
+              <button
+                type="button"
+                onClick={hideVisibleCancelledBookings}
+                style={{
+                  fontFamily: LATO,
+                  fontSize: "10px",
+                  letterSpacing: "1.5px",
+                  textTransform: "uppercase",
+                  color: MUTED,
+                  backgroundColor: "transparent",
+                  border: `0.5px solid ${BORDER}`,
+                  padding: "12px 16px",
+                  borderRadius: "10px",
+                  cursor: "pointer",
+                }}
+              >
+                Hide cancelled from view
+              </button>
+            )}
+            {activeSection === "cancelled" && hiddenCancelledCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setHiddenCancelledIds([])}
+                style={{
+                  fontFamily: LATO,
+                  fontSize: "10px",
+                  letterSpacing: "1.5px",
+                  textTransform: "uppercase",
+                  color: GOLD,
+                  backgroundColor: "rgba(197,164,109,0.08)",
+                  border: "0.5px solid rgba(197,164,109,0.28)",
+                  padding: "12px 16px",
+                  borderRadius: "10px",
+                  cursor: "pointer",
+                }}
+              >
+                Show hidden ({hiddenCancelledCount})
+              </button>
+            )}
           </div>
         </div>
 
