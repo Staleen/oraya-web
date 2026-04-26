@@ -30,6 +30,18 @@ const DEAD_DAY_DISCOUNT_PCT = 0.30;
 const VILLAS      = ["Villa Mechmech", "Villa Byblos"];
 const EVENT_TYPES = ["Stay", "Wedding", "Baptism", "Corporate"];
 const EMAIL_RE    = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const VILLA_CARD_META: Record<string, { image: string; imagePosition: string; note: string }> = {
+  "Villa Mechmech": {
+    image: "/screenshots/03-villas.png",
+    imagePosition: "left center",
+    note: "A quiet mountain retreat with generous outdoor living.",
+  },
+  "Villa Byblos": {
+    image: "/screenshots/03-villas.png",
+    imagePosition: "right center",
+    note: "An elegant private villa designed for relaxed gatherings.",
+  },
+};
 
 const COUNTRIES = [
   { label: "Saudi Arabia",   value: "Saudi Arabia" },
@@ -671,9 +683,11 @@ function BookPageInner() {
     return !isCalendarDateBlocked(day) && !hasValidCheckoutFromCheckIn(day);
   }
 
+  const isChoosingCheckout = Boolean(dateRange?.from && !dateRange.to);
   const disabledDays: Matcher[] = [
     { before: today },
     ...bookedRangeList,
+    ...(isChoosingCheckout ? [] : [isDeadCheckInDate]),
   ];
 
   const checkIn  = dateRange?.from ? toISO(dateRange.from) : "";
@@ -905,6 +919,11 @@ function BookPageInner() {
   function handleGuestChange(
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) { setGuest(g => ({ ...g, [e.target.name]: e.target.value })); }
+
+  function handleVillaSelect(villa: string) {
+    setForm(f => ({ ...f, villa }));
+    setError("");
+  }
 
   function focusGold(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
     e.currentTarget.style.borderColor = GOLD;
@@ -1291,17 +1310,68 @@ function BookPageInner() {
 
               {/* Villa selector */}
               <div>
-                <label style={labelStyle}>Villa</label>
-                <select
-                  name="villa" value={form.villa} onChange={handleFormChange}
-                  onFocus={focusGold} onBlur={blurGold}
-                  style={{ ...inputStyle, cursor: "pointer" }}
-                >
-                  <option value="" disabled style={{ backgroundColor: MIDNIGHT }}>Select a villa</option>
-                  {VILLAS.map(v => (
-                    <option key={v} value={v} style={{ backgroundColor: MIDNIGHT }}>{v}</option>
-                  ))}
-                </select>
+                <p style={{ ...labelStyle, marginBottom: "14px" }}>Choose your villa</p>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: "14px" }}>
+                  {VILLAS.map((villa) => {
+                    const selected = form.villa === villa;
+                    const meta = VILLA_CARD_META[villa];
+                    return (
+                      <button
+                        key={villa}
+                        type="button"
+                        onClick={() => handleVillaSelect(villa)}
+                        aria-pressed={selected}
+                        style={{
+                          padding: 0,
+                          overflow: "hidden",
+                          textAlign: "left",
+                          border: `0.5px solid ${selected ? GOLD : "rgba(197,164,109,0.18)"}`,
+                          backgroundColor: selected ? "rgba(197,164,109,0.08)" : "rgba(255,255,255,0.02)",
+                          cursor: "pointer",
+                          transition: "border-color 0.15s, background-color 0.15s, transform 0.15s",
+                        }}
+                      >
+                        <div
+                          style={{
+                            height: "132px",
+                            backgroundImage: `linear-gradient(180deg, rgba(31,43,56,0.15), rgba(31,43,56,0.85)), url("${meta.image}")`,
+                            backgroundSize: "cover",
+                            backgroundPosition: meta.imagePosition,
+                            borderBottom: "0.5px solid rgba(197,164,109,0.12)",
+                          }}
+                        />
+                        <div style={{ padding: "16px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
+                            <h2 style={{ fontFamily: PLAYFAIR, fontSize: "20px", fontWeight: 400, color: WHITE, margin: 0 }}>
+                              {villa}
+                            </h2>
+                            <span
+                              style={{
+                                width: "18px",
+                                height: "18px",
+                                border: `1px solid ${selected ? GOLD : "rgba(197,164,109,0.35)"}`,
+                                backgroundColor: selected ? GOLD : "transparent",
+                                color: CHARCOAL,
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                flexShrink: 0,
+                                fontFamily: LATO,
+                                fontSize: "11px",
+                                fontWeight: 700,
+                              }}
+                            >
+                              {selected ? "✓" : ""}
+                            </span>
+                          </div>
+                          <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.6, margin: 0 }}>
+                            {meta.note}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Calendar — only shown once a villa is selected */}
@@ -1315,7 +1385,7 @@ function BookPageInner() {
                         selected={dateRange}
                         onSelect={handleDateSelect}
                         disabled={disabledDays}
-                        modifiers={{ deadCheckIn: isDeadCheckInDate }}
+                        modifiers={{ deadCheckIn: isChoosingCheckout ? () => false : isDeadCheckInDate }}
                         numberOfMonths={2}
                         fromDate={today}
                         showOutsideDays

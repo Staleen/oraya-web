@@ -69,7 +69,7 @@ export async function PATCH(
     try {
       const { data: bk } = await db
         .from("bookings")
-        .select("villa, check_in, check_out, sleeping_guests, day_visitors, event_type, message, addons, addons_snapshot, member_id, guest_name, guest_email")
+        .select("villa, check_in, check_out, sleeping_guests, day_visitors, event_type, message, addons, addons_snapshot, pricing_subtotal, pricing_snapshot, member_id, guest_name, guest_email")
         .eq("id", params.id)
         .single();
 
@@ -112,6 +112,8 @@ export async function PATCH(
             message: bk.message ?? null,
             addons: Array.isArray(bk.addons) ? bk.addons : [],
             addons_snapshot: Array.isArray(bk.addons_snapshot) ? bk.addons_snapshot : null,
+            pricing_subtotal: bk.pricing_subtotal ?? null,
+            pricing_snapshot: bk.pricing_snapshot ?? null,
           });
           emailSent = true;
         }

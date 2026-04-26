@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
 
   const { data: booking, error: fetchErr } = await supabaseAdmin
     .from("bookings")
-    .select("villa, check_in, check_out, sleeping_guests, day_visitors, event_type, message, addons, addons_snapshot, status, member_id, guest_name, guest_email")
+    .select("villa, check_in, check_out, sleeping_guests, day_visitors, event_type, message, addons, addons_snapshot, pricing_subtotal, pricing_snapshot, status, member_id, guest_name, guest_email")
     .eq("id", booking_id)
     .single();
 
@@ -113,6 +113,8 @@ export async function POST(request: NextRequest) {
         message: booking.message ?? null,
         addons: Array.isArray(booking.addons) ? booking.addons : [],
         addons_snapshot: Array.isArray(booking.addons_snapshot) ? booking.addons_snapshot : null,
+        pricing_subtotal: booking.pricing_subtotal ?? null,
+        pricing_snapshot: booking.pricing_snapshot ?? null,
       });
     } else {
       console.warn(`[api/booking-action] no email for booking ${booking_id} — skipping guest notification`);

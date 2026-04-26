@@ -7,6 +7,7 @@ const MIDNIGHT = "#1F2B38";
 const MUTED    = "#8a8070";
 const FROM_EMAIL = "Oraya Reservations <bookings@stayoraya.com>";
 const REPLY_TO = "bookings@stayoraya.com";
+const CURRENCY = "USD";
 
 function fmtDate(iso: string) {
   if (!iso) return "-";
@@ -27,6 +28,29 @@ function escapeHtml(value: string): string {
 function formatAddonPrice(price: number | null | undefined): string {
   if (typeof price !== "number") return "Price on request";
   return `$${price.toLocaleString("en-US")}`;
+}
+
+function parseAmount(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function formatMoney(value: number): string {
+  return `${CURRENCY} ${Math.round(value).toLocaleString("en-US")}`;
+}
+
+function sumAddonPrices(addons: Array<{ price: number | null | undefined }>): number | null {
+  if (addons.length === 0) return 0;
+  let total = 0;
+  for (const addon of addons) {
+    if (typeof addon.price !== "number") return null;
+    total += addon.price;
+  }
+  return total;
 }
 
 function addonIconGlyph(label: string): string {
@@ -72,6 +96,8 @@ export interface BookingPendingEmailPayload {
     requires_approval?: boolean;
     same_day_warning?: "same_day_checkout" | "same_day_checkin" | null;
   }> | null;
+  pricing_subtotal?: number | string | null;
+  pricing_snapshot?: { subtotal?: number | string | null } | null;
 }
 
 export async function sendBookingPendingEmail(payload: BookingPendingEmailPayload): Promise<void> {
@@ -101,6 +127,11 @@ export async function sendBookingPendingEmail(payload: BookingPendingEmailPayloa
         same_day_warning: null,
       }))
   );
+  const staySubtotal = parseAmount(payload.pricing_subtotal ?? payload.pricing_snapshot?.subtotal);
+  const addonsTotal = sumAddonPrices(addonRows);
+  const estimatedTotal = staySubtotal !== null && addonsTotal !== null
+    ? staySubtotal + addonsTotal
+    : null;
   const summaryRows: Array<[string, string]> = [
     ["Villa", payload.villa],
     ["Dates", `${fmtDate(payload.check_in)} to ${fmtDate(payload.check_out)}`],
@@ -151,6 +182,30 @@ export async function sendBookingPendingEmail(payload: BookingPendingEmailPayloa
             </table>`;
         }).join("")}
       </td></tr></table>`;
+  const paymentRows: [string, string, boolean][] = [
+    ["Stay subtotal", staySubtotal !== null ? formatMoney(staySubtotal) : "Not available", false],
+    ["Add-ons total", addonsTotal !== null ? formatMoney(addonsTotal) : "Price on request", false],
+    ["Total estimated", estimatedTotal !== null ? formatMoney(estimatedTotal) : "Not available", true],
+  ];
+  const paymentHtml = `
+    <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="border:0.5px solid rgba(197,164,109,0.18);padding:22px 24px;background-color:rgba(197,164,109,0.04);">
+      <p style="margin:0 0 14px;font-size:9px;letter-spacing:3px;text-transform:uppercase;color:${GOLD};">
+        Payment Summary
+      </p>
+      ${paymentRows.map(([label, value, isTotal]) => `
+        <table width="100%" cellpadding="0" cellspacing="0"
+               style="border-top:${isTotal ? "0.5px solid rgba(197,164,109,0.2)" : "0.5px solid rgba(255,255,255,0.05)"};">
+          <tr>
+            <td style="padding:${isTotal ? "12px" : "9px"} 0 0;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:${MUTED};">
+              ${label}
+            </td>
+            <td align="right" style="padding:${isTotal ? "12px" : "9px"} 0 0;font-size:${isTotal ? "16px" : "13px"};color:${isTotal ? GOLD : "#ffffff"};font-weight:${isTotal ? "600" : "300"};">
+              ${escapeHtml(value)}
+            </td>
+          </tr>
+        </table>
+      `).join("")}
+    </td></tr></table>`;
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -244,6 +299,8 @@ export async function sendBookingPendingEmail(payload: BookingPendingEmailPayloa
 
           <tr><td style="padding-top:16px;">${addonsHtml}</td></tr>
 
+          <tr><td style="padding-top:16px;">${paymentHtml}</td></tr>
+
           ${payload.message?.trim() ? `
           <tr><td style="padding-top:16px;">
             <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="border:0.5px solid rgba(197,164,109,0.18);padding:22px 24px;">
@@ -263,7 +320,7 @@ export async function sendBookingPendingEmail(payload: BookingPendingEmailPayloa
                  style="display:inline-block;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;
                         font-size:11px;letter-spacing:2.5px;text-transform:uppercase;
                         color:#2E2E2E;background-color:${GOLD};text-decoration:none;padding:14px 32px;">
-                View Your Booking
+                View Online Copy
               </a>
             </td>
           </tr>
@@ -300,9 +357,12 @@ export async function sendBookingPendingEmail(payload: BookingPendingEmailPayloa
           `- ${addon.label}: ${formatAddonPrice(addon.price)}`,
           ...(addon.requires_approval ? ["  Subject to confirmation"] : []),
         ])),
+    "",
+    "Payment Summary:",
+    ...paymentRows.map(([label, value]) => `${label}: ${value}`),
     ...(payload.message?.trim() ? ["", `Special Request / Notes: ${payload.message.trim()}`] : []),
     "",
-    `View your booking: ${viewUrl}`,
+    `View online copy: ${viewUrl}`,
     "",
     "Oraya - Luxury Boutique Villas - Lebanon",
   ].join("\n");

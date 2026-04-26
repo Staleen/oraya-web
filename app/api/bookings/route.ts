@@ -511,6 +511,8 @@ export async function POST(request: Request) {
           message:         data.message ?? null,
           addons:          Array.isArray(data.addons) ? data.addons : [],
           addons_snapshot: Array.isArray(data.addons_snapshot) ? data.addons_snapshot : null,
+          pricing_subtotal: data.pricing_subtotal ?? null,
+          pricing_snapshot: data.pricing_snapshot ?? null,
           created_at:      data.created_at,
           admin_url:       adminUrl,
           confirm_url:     confirmUrl,
@@ -554,6 +556,8 @@ export async function POST(request: Request) {
           message:         data.message ?? null,
           addons:          Array.isArray(data.addons) ? data.addons : [],
           addons_snapshot: Array.isArray(data.addons_snapshot) ? data.addons_snapshot : null,
+          pricing_subtotal: data.pricing_subtotal ?? null,
+          pricing_snapshot: data.pricing_snapshot ?? null,
         });
       }
     } catch (pendingEmailErr) {

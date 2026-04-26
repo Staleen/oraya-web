@@ -7,6 +7,7 @@ const MIDNIGHT = "#1F2B38";
 const MUTED   = "#8a8070";
 const FROM_EMAIL = "Oraya Reservations <bookings@stayoraya.com>";
 const WARN = "#e0b070";
+const CURRENCY = "USD";
 
 function fmtDate(iso: string): string {
   if (!iso) return "-";
@@ -27,6 +28,29 @@ function escapeHtml(value: string): string {
 function formatAddonPrice(price: number | null) {
   if (typeof price !== "number") return "Price on request";
   return `$${price.toLocaleString("en-US")}`;
+}
+
+function parseAmount(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function formatMoney(value: number): string {
+  return `${CURRENCY} ${Math.round(value).toLocaleString("en-US")}`;
+}
+
+function sumAddonPrices(addons: Array<{ price: number | null }>): number | null {
+  if (addons.length === 0) return 0;
+  let total = 0;
+  for (const addon of addons) {
+    if (typeof addon.price !== "number") return null;
+    total += addon.price;
+  }
+  return total;
 }
 
 function formatAdvanceNotice(hours: number | null | undefined) {
@@ -96,6 +120,8 @@ export interface BookingRequestEmailPayload {
     status: "pending_approval" | "confirmed" | "at_risk" | "approved" | "declined";
     same_day_warning?: "same_day_checkout" | "same_day_checkin" | null;
   }> | null;
+  pricing_subtotal?: number | string | null;
+  pricing_snapshot?: { subtotal?: number | string | null } | null;
   created_at:      string;
   admin_url:       string;             // link to /admin - empty string = no button
   confirm_url?:    string;             // signed action link - confirm booking
@@ -128,6 +154,11 @@ export async function sendBookingRequestEmail(
         same_day_warning: null,
       }))
   );
+  const staySubtotal = parseAmount(payload.pricing_subtotal ?? payload.pricing_snapshot?.subtotal);
+  const addonsTotal = sumAddonPrices(addonRows);
+  const estimatedTotal = staySubtotal !== null && addonsTotal !== null
+    ? staySubtotal + addonsTotal
+    : null;
 
   const rows: [string, string][] = [
     ["Reference",       ref],
@@ -158,27 +189,53 @@ export async function sendBookingRequestEmail(
     </table>`).join("");
 
   const notesHtml = `
-    <tr><td style="border:0.5px solid rgba(197,164,109,0.18);padding:22px 24px;">
+    <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="border:0.5px solid rgba(197,164,109,0.18);padding:22px 24px;">
       <p style="margin:0 0 14px;font-size:9px;letter-spacing:3px;text-transform:uppercase;color:${GOLD};">
         Special Request / Notes
       </p>
       <p style="margin:0;font-size:13px;line-height:1.75;color:#ffffff;white-space:pre-line;">
         ${escapeHtml(noteText)}
       </p>
-    </td></tr>`;
+    </td></tr></table>`;
+
+  const paymentRows: [string, string, boolean][] = [
+    ["Stay subtotal", staySubtotal !== null ? formatMoney(staySubtotal) : "Not available", false],
+    ["Add-ons total", addonsTotal !== null ? formatMoney(addonsTotal) : "Price on request", false],
+    ["Total estimated", estimatedTotal !== null ? formatMoney(estimatedTotal) : "Not available", true],
+  ];
+
+  const paymentHtml = `
+    <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="border:0.5px solid rgba(197,164,109,0.18);padding:22px 24px;background-color:rgba(197,164,109,0.04);">
+      <p style="margin:0 0 14px;font-size:9px;letter-spacing:3px;text-transform:uppercase;color:${GOLD};">
+        Payment Summary
+      </p>
+      ${paymentRows.map(([label, value, isTotal]) => `
+        <table width="100%" cellpadding="0" cellspacing="0"
+               style="border-top:${isTotal ? "0.5px solid rgba(197,164,109,0.2)" : "0.5px solid rgba(255,255,255,0.05)"};">
+          <tr>
+            <td style="padding:${isTotal ? "12px" : "9px"} 0 0;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:${MUTED};">
+              ${label}
+            </td>
+            <td align="right" style="padding:${isTotal ? "12px" : "9px"} 0 0;font-size:${isTotal ? "16px" : "13px"};color:${isTotal ? GOLD : "#ffffff"};font-weight:${isTotal ? "600" : "300"};">
+              ${escapeHtml(value)}
+            </td>
+          </tr>
+        </table>
+      `).join("")}
+    </td></tr></table>`;
 
   const addonsHtml = addonRows.length === 0
     ? `
-      <tr><td style="border:0.5px solid rgba(197,164,109,0.18);padding:22px 24px;">
+      <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="border:0.5px solid rgba(197,164,109,0.18);padding:22px 24px;">
         <p style="margin:0 0 14px;font-size:9px;letter-spacing:3px;text-transform:uppercase;color:${GOLD};">
           Add-ons
         </p>
         <p style="margin:0;font-size:13px;line-height:1.75;color:#ffffff;">
           No add-ons selected.
         </p>
-      </td></tr>`
+      </td></tr></table>`
     : `
-      <tr><td style="border:0.5px solid rgba(197,164,109,0.18);padding:22px 24px;">
+      <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="border:0.5px solid rgba(197,164,109,0.18);padding:22px 24px;">
         <p style="margin:0 0 14px;font-size:9px;letter-spacing:3px;text-transform:uppercase;color:${GOLD};">
           Add-ons
         </p>
@@ -209,7 +266,7 @@ export async function sendBookingRequestEmail(
               </tr>
             </table>`;
         }).join("")}
-      </td></tr>`;
+      </td></tr></table>`;
 
   // Action buttons - prefer signed confirm/cancel links; fall back to generic admin link
   const adminBtn = (payload.confirm_url || payload.cancel_url)
@@ -309,6 +366,8 @@ export async function sendBookingRequestEmail(
           ${rowsHtml}
         </td></tr>
 
+        <tr><td style="padding-top:16px;">${paymentHtml}</td></tr>
+
         <tr><td style="padding-top:16px;">${notesHtml}</td></tr>
 
         <tr><td style="padding-top:16px;">${addonsHtml}</td></tr>
@@ -335,6 +394,9 @@ export async function sendBookingRequestEmail(
     "A new booking request has been submitted for review.",
     "",
     ...rows.map(([label, value]) => `${label}: ${value.replace(/<[^>]+>/g, "")}`),
+    "",
+    "Payment Summary:",
+    ...paymentRows.map(([label, value]) => `${label}: ${value}`),
     "",
     `Special Request / Notes: ${noteText}`,
     "",

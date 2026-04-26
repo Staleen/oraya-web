@@ -35,6 +35,8 @@ interface BookingRow {
   message:          string | null;
   addons:           Addon[] | null;
   addons_snapshot:  Addon[] | null;
+  pricing_subtotal: number | string | null;
+  pricing_snapshot: { subtotal?: number | string | null } | null;
   status:           string;
   guest_name:       string | null;
   member_id:        string | null;
@@ -57,6 +59,29 @@ function statusVisual(status: string): { label: string; color: string; bg: strin
 function formatAddonPrice(price: number | null | undefined): string {
   if (typeof price !== "number") return "Price on request";
   return `$${price.toLocaleString("en-US")}`;
+}
+
+function parseAmount(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function formatMoney(value: number): string {
+  return `USD ${Math.round(value).toLocaleString("en-US")}`;
+}
+
+function sumAddonPrices(addons: Addon[]): number | null {
+  if (addons.length === 0) return 0;
+  let total = 0;
+  for (const addon of addons) {
+    if (typeof addon.price !== "number") return null;
+    total += addon.price;
+  }
+  return total;
 }
 
 function formatAdvanceNotice(hours: number | null | undefined): string | null {
@@ -166,7 +191,7 @@ export default async function BookingViewPage({ params }: { params: { token: str
 
   const { data: booking, error } = await supabaseAdmin
     .from("bookings")
-    .select("id, villa, check_in, check_out, sleeping_guests, day_visitors, event_type, message, addons, addons_snapshot, status, guest_name, member_id")
+    .select("id, villa, check_in, check_out, sleeping_guests, day_visitors, event_type, message, addons, addons_snapshot, pricing_subtotal, pricing_snapshot, status, guest_name, member_id")
     .eq("id", verified.booking_id)
     .single<BookingRow>();
 
@@ -187,6 +212,16 @@ export default async function BookingViewPage({ params }: { params: { token: str
     : Array.isArray(booking.addons)
       ? booking.addons
       : [];
+  const staySubtotal = parseAmount(booking.pricing_subtotal ?? booking.pricing_snapshot?.subtotal);
+  const addonsTotal = sumAddonPrices(addons);
+  const estimatedTotal = staySubtotal !== null && addonsTotal !== null
+    ? staySubtotal + addonsTotal
+    : null;
+  const paymentRows: Array<[string, string, boolean]> = [
+    ["Stay subtotal", staySubtotal !== null ? formatMoney(staySubtotal) : "Not available", false],
+    ["Add-ons total", addonsTotal !== null ? formatMoney(addonsTotal) : "Price on request", false],
+    ["Total estimated", estimatedTotal !== null ? formatMoney(estimatedTotal) : "Not available", true],
+  ];
 
   const rows: Array<{ label: string; value: string }> = [
     { label: "Villa",        value: booking.villa },
@@ -339,6 +374,32 @@ export default async function BookingViewPage({ params }: { params: { token: str
               })}
             </div>
           )}
+        </div>
+
+        {/* Payment summary */}
+        <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", padding: "1.75rem", marginBottom: "2rem", textAlign: "left", backgroundColor: "rgba(197,164,109,0.04)" }}>
+          <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, marginBottom: "1rem" }}>
+            Payment summary
+          </p>
+          {paymentRows.map(([label, value, isTotal]) => (
+            <div
+              key={String(label)}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: "16px",
+                padding: isTotal ? "12px 0 0" : "9px 0",
+                borderTop: isTotal ? "0.5px solid rgba(197,164,109,0.25)" : "0.5px solid rgba(255,255,255,0.05)",
+              }}
+            >
+              <span style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED }}>
+                {String(label)}
+              </span>
+              <span style={{ fontFamily: LATO, fontSize: isTotal ? "16px" : "13px", color: isTotal ? GOLD : WHITE, fontWeight: isTotal ? 600 : 300, textAlign: "right" }}>
+                {String(value)}
+              </span>
+            </div>
+          ))}
         </div>
 
         {/* Message card (if any) */}
