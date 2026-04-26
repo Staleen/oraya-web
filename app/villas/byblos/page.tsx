@@ -48,12 +48,10 @@ export default function VillaByblosPage() {
   const [villaMedia, setVillaMedia] = useState<VillaMedia[]>([]);
 
   useEffect(() => {
-    // PERF-TIMING (temporary) — hero and gallery are blank until this resolves
-    console.time("[perf] byblos:media");
     fetch("/api/media?villa=byblos")
       .then((r) => r.json())
-      .then((d) => { console.timeEnd("[perf] byblos:media"); if (d.media) setVillaMedia(d.media); })
-      .catch(() => { console.timeEnd("[perf] byblos:media"); });
+      .then((d) => { if (d.media) setVillaMedia(d.media); })
+      .catch(() => {});
   }, []);
 
   const heroImg      = villaMedia[0]?.file_url ?? "";

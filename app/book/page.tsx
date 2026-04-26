@@ -575,8 +575,6 @@ function BookPageInner() {
 
   // Auth check on mount
   useEffect(() => {
-    // PERF-TIMING (temporary) — measures auth round-trip visible to user as spinner
-    console.time("[perf] book:auth");
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (user) {
         setAuthStatus("member");
@@ -586,7 +584,6 @@ function BookPageInner() {
       } else {
         setAuthStatus("none");
       }
-      console.timeEnd("[perf] book:auth");
     });
   }, []);
 
@@ -613,13 +610,10 @@ function BookPageInner() {
   useEffect(() => {
     setDateRange(undefined);
     if (!form.villa) { setConfirmedRanges([]); return; }
-    // PERF-TIMING (temporary)
-    const t = `[perf] book:availability(${form.villa})`;
-    console.time(t);
     fetch(`/api/bookings/availability?villa=${encodeURIComponent(form.villa)}`)
       .then(r => r.json())
-      .then(d => { console.timeEnd(t); setConfirmedRanges(Array.isArray(d.ranges) ? d.ranges : []); })
-      .catch(() => { console.timeEnd(t); setConfirmedRanges([]); });
+      .then(d => setConfirmedRanges(Array.isArray(d.ranges) ? d.ranges : []))
+      .catch(() => setConfirmedRanges([]));
   }, [form.villa]);
 
   // ── Derived values ────────────────────────────────────────────────────────
