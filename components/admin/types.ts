@@ -17,6 +17,10 @@ export interface BookingAddonSnapshot {
   same_day_warning?: "same_day_checkout" | "same_day_checkin" | null;
   admin_approved?: boolean;
   admin_approved_at?: string | null;
+  /** Phase 12E Batch 7: set to "percentage" when the add-on price is derived from a % of the stay total. */
+  pricing_type?: "percentage";
+  /** Phase 12E Batch 7: the pre-discount base price, only present when a dead-day discount was applied. */
+  original_price?: number | null;
 }
 
 export interface Booking {

@@ -323,37 +323,40 @@ export async function POST(request: Request) {
           .filter((addon) => selectedAddonIds.includes(addon.id))
           .map((addon) => {
             const auditItem = addonAuditItems.get(addon.id);
+
+            // Phase 12E Batch 7: lift price computation to capture base for admin display metadata.
+            const addonBase = (
+              addon.pricing_type === "percentage" &&
+              typeof addon.percentage_value === "number" &&
+              addon.percentage_value > 0 &&
+              pricingSnapshotData !== null
+            )
+              ? Math.round((addon.percentage_value / 100) * pricingSnapshotData.pricing_subtotal)
+              : addon.price ?? null;
+
+            const discountEntry = discountedPriceMap.get(addon.id) ?? null;
+            let addonFinalPrice: number | null = addonBase;
+            if (discountEntry !== null && addonBase !== null) {
+              if (typeof discountEntry === "number" && discountEntry >= 0 && discountEntry < addonBase) {
+                addonFinalPrice = Math.round(discountEntry);
+              } else {
+                addonFinalPrice = Math.round(addonBase * (1 - DEAD_DAY_DISCOUNT_PCT));
+              }
+            }
+            const addonIsDiscounted =
+              addonFinalPrice !== null && addonBase !== null && addonFinalPrice < addonBase;
+
             return {
               id: addon.id,
               label: addon.label,
-              price: (() => {
-                // Step 1 — base price (Batch 3 logic: percentage or fixed).
-                const base = (
-                  addon.pricing_type === "percentage" &&
-                  typeof addon.percentage_value === "number" &&
-                  addon.percentage_value > 0 &&
-                  pricingSnapshotData !== null
-                )
-                  ? Math.round((addon.percentage_value / 100) * pricingSnapshotData.pricing_subtotal)
-                  : addon.price ?? null;
-
-                // Step 2 — Phase 12E Batch 6: apply discount when signalled by frontend.
-                const discountEntry = discountedPriceMap.get(addon.id) ?? null;
-                if (discountEntry !== null && base !== null) {
-                  if (typeof discountEntry === "number" && discountEntry >= 0 && discountEntry < base) {
-                    // Client supplied an explicit valid discounted price — use it.
-                    return Math.round(discountEntry);
-                  }
-                  // Flag-only or out-of-range price → recompute server-side.
-                  return Math.round(base * (1 - DEAD_DAY_DISCOUNT_PCT));
-                }
-                return base;
-              })(),
+              price: addonFinalPrice,
               category: addon.category ?? null,
               preparation_time_hours: addon.preparation_time_hours ?? null,
               enforcement_mode: addon.enforcement_mode ?? null,
               requires_approval: addon.requires_approval ?? false,
               status: addonStatuses.get(addon.id) ?? "confirmed",
+              ...(addon.pricing_type === "percentage" ? { pricing_type: "percentage" as const } : {}),
+              ...(addonIsDiscounted ? { original_price: addonBase } : {}),
               ...(auditItem?.same_day_warning ? { same_day_warning: auditItem.same_day_warning } : {}),
             };
           });

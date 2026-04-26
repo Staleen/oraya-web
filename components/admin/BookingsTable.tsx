@@ -180,6 +180,13 @@ function hasResolvedAddonStatus(addon: BookingAddonSnapshot) {
   return addon.status === "approved" || addon.status === "declined";
 }
 
+function isAddonDiscounted(addon: BookingAddonSnapshot) {
+  return (
+    addon.pricing_type === "percentage" ||
+    (typeof addon.original_price === "number" && typeof addon.price === "number" && addon.original_price > addon.price)
+  );
+}
+
 function addonNeedsAttention(addon: BookingAddonSnapshot) {
   if (hasResolvedAddonStatus(addon)) return false;
   return (
@@ -327,6 +334,10 @@ export default function BookingsTable({
 
   function bookingHasOperationalAttention(booking: Booking) {
     return getAddonSnapshots(booking).some((addon) => addonNeedsAttention(addon));
+  }
+
+  function bookingHasDiscountedAddon(booking: Booking) {
+    return getAddonSnapshots(booking).some((addon) => isAddonDiscounted(addon));
   }
 
   function bookingRequiresAction(booking: Booking) {
@@ -616,24 +627,100 @@ export default function BookingsTable({
                           }}
                         >
                           {addon.label}
+                          {addon.pricing_type === "percentage" && (
+                            <span
+                              style={{
+                                fontFamily: LATO,
+                                fontSize: "9px",
+                                letterSpacing: "1.2px",
+                                textTransform: "uppercase",
+                                color: "#7ecfcf",
+                                backgroundColor: "rgba(126,207,207,0.12)",
+                                border: "0.5px solid rgba(126,207,207,0.28)",
+                                padding: "3px 7px",
+                                borderRadius: "4px",
+                                marginLeft: "8px",
+                                verticalAlign: "middle",
+                              }}
+                            >
+                              % of stay
+                            </span>
+                          )}
                         </p>
-                        <p
-                          style={{
-                            fontFamily: LATO,
-                            fontSize: "13px",
-                            color: GOLD,
-                            margin: 0,
-                            lineHeight: 1.4,
-                          }}
-                        >
-                          {formatAddonPrice(addon.price)}
-                        </p>
+                        <div style={{ display: "flex", alignItems: "baseline", gap: "6px", flexWrap: "wrap" }}>
+                          {typeof addon.original_price === "number" && typeof addon.price === "number" && addon.original_price > addon.price ? (
+                            <>
+                              <p
+                                style={{
+                                  fontFamily: LATO,
+                                  fontSize: "12px",
+                                  color: MUTED,
+                                  margin: 0,
+                                  lineHeight: 1.4,
+                                  textDecoration: "line-through",
+                                }}
+                              >
+                                {formatAddonPrice(addon.original_price)}
+                              </p>
+                              <p
+                                style={{
+                                  fontFamily: LATO,
+                                  fontSize: "13px",
+                                  color: "#7ecfcf",
+                                  margin: 0,
+                                  lineHeight: 1.4,
+                                }}
+                              >
+                                {formatAddonPrice(addon.price)}
+                              </p>
+                              <p
+                                style={{
+                                  fontFamily: LATO,
+                                  fontSize: "11px",
+                                  color: MUTED,
+                                  margin: 0,
+                                  lineHeight: 1.4,
+                                }}
+                              >
+                                (Save ${(addon.original_price - addon.price).toLocaleString("en-US")})
+                              </p>
+                            </>
+                          ) : (
+                            <p
+                              style={{
+                                fontFamily: LATO,
+                                fontSize: "13px",
+                                color: GOLD,
+                                margin: 0,
+                                lineHeight: 1.4,
+                              }}
+                            >
+                              {formatAddonPrice(addon.price)}
+                            </p>
+                          )}
+                        </div>
                       </div>
 
                       <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "8px" }}>
                         {!isResolved && isPendingApproval && renderOperationalBadge("Requires approval", "approval")}
                         {addon.enforcement_mode === "soft" && renderOperationalBadge("Soft rule", "soft")}
                         {addon.enforcement_mode === "strict" && renderOperationalBadge("Strict rule", "strict")}
+                        {isAddonDiscounted(addon) && (
+                          <span
+                            style={{
+                              fontFamily: LATO,
+                              fontSize: "9px",
+                              letterSpacing: "1.2px",
+                              textTransform: "uppercase",
+                              color: "#7ecfcf",
+                              backgroundColor: "rgba(126,207,207,0.12)",
+                              padding: "4px 8px",
+                              borderRadius: "4px",
+                            }}
+                          >
+                            {typeof addon.original_price === "number" ? "Discounted" : "Offer applied"}
+                          </span>
+                        )}
                       </div>
 
                       {sameDayRiskWarning && (
@@ -874,6 +961,27 @@ export default function BookingsTable({
                 }}
               >
                 Ready to confirm
+              </span>
+            )}
+            {bookingHasDiscountedAddon(booking) && (
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontFamily: LATO,
+                  fontSize: "9px",
+                  letterSpacing: "1.5px",
+                  textTransform: "uppercase",
+                  color: "#7ecfcf",
+                  backgroundColor: "rgba(126,207,207,0.12)",
+                  border: "0.5px solid rgba(126,207,207,0.3)",
+                  padding: "6px 10px",
+                  borderRadius: "6px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Offer used
               </span>
             )}
           </div>
@@ -1147,6 +1255,27 @@ export default function BookingsTable({
               </p>
             )}
             <StatusBadge status={booking.status} />
+            {bookingHasDiscountedAddon(booking) && (
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontFamily: LATO,
+                  fontSize: "9px",
+                  letterSpacing: "1.4px",
+                  textTransform: "uppercase",
+                  color: "#7ecfcf",
+                  backgroundColor: "rgba(126,207,207,0.12)",
+                  border: "0.5px solid rgba(126,207,207,0.28)",
+                  padding: "5px 9px",
+                  borderRadius: "6px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Offer used
+              </span>
+            )}
           </div>
 
           <span
