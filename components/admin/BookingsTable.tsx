@@ -392,6 +392,11 @@ export default function BookingsTable({
     return booking.member_id ? members.find((member) => member.id === booking.member_id) : null;
   }
 
+  function getBookingDisplayName(booking: Booking) {
+    if (!booking.member_id) return booking.guest_name ?? "Guest";
+    return getMember(booking)?.full_name ?? "Member";
+  }
+
   function getAddonSnapshots(booking: Booking) {
     return booking.addons_snapshot ?? [];
   }
@@ -1275,29 +1280,68 @@ export default function BookingsTable({
             }}
           >
             <p style={{ fontFamily: LATO, fontSize: "11px", color: "#f0bd67", margin: 0, lineHeight: 1.5 }}>
-              This pending request overlaps with other pending requests for the same villa.
+              This request overlaps with {overlappingPendingBookings.length === 1 ? "another pending request" : "other pending requests"} for {booking.villa}.
+              {" "}Review the conflicting {overlappingPendingBookings.length === 1 ? "request" : "requests"} in this pending list.
             </p>
             <div style={{ display: "grid", gap: "8px" }}>
-              {overlappingPendingBookings.map((conflict) => (
-                <div
-                  key={conflict.id}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1fr) auto",
-                    gap: "6px 12px",
-                    alignItems: "center",
-                    borderTop: "0.5px solid rgba(240,189,103,0.16)",
-                    paddingTop: "8px",
-                  }}
-                >
-                  <p style={{ fontFamily: LATO, fontSize: "11px", color: WHITE, margin: 0, lineHeight: 1.5, wordBreak: "break-all" }}>
-                    {conflict.id}
-                  </p>
-                  <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
-                    {fmt(conflict.check_in)} to {fmt(conflict.check_out)} · {conflict.status}
-                  </p>
-                </div>
-              ))}
+              {overlappingPendingBookings.map((conflict) => {
+                const conflictNeedsApproval = bookingHasPendingAddonApproval(conflict);
+                const conflictNeedsAttention = bookingHasOperationalAttention(conflict);
+                const attentionLabel = conflictNeedsApproval
+                  ? "Add-on approval needed"
+                  : conflictNeedsAttention
+                    ? "Add-ons need attention"
+                    : null;
+
+                return (
+                  <div
+                    key={conflict.id}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1fr) auto",
+                      gap: "8px 12px",
+                      alignItems: "center",
+                      border: "0.5px solid rgba(240,189,103,0.18)",
+                      backgroundColor: "rgba(255,255,255,0.025)",
+                      borderRadius: "8px",
+                      padding: "10px 12px",
+                    }}
+                  >
+                    <div style={{ display: "grid", gap: "4px", minWidth: 0 }}>
+                      <p style={{ fontFamily: LATO, fontSize: "12px", color: WHITE, margin: 0, lineHeight: 1.5, fontWeight: 700 }}>
+                        {getBookingDisplayName(conflict)}
+                      </p>
+                      <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+                        {conflict.villa} · {fmt(conflict.check_in)} to {fmt(conflict.check_out)}
+                      </p>
+                    </div>
+                    <div style={{ display: "flex", alignItems: isMobile ? "flex-start" : "flex-end", gap: "6px", flexDirection: "column" }}>
+                      <StatusBadge status={conflict.status} />
+                      {attentionLabel && (
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontFamily: LATO,
+                            fontSize: "9px",
+                            letterSpacing: "1.3px",
+                            textTransform: "uppercase",
+                            color: "#f0bd67",
+                            backgroundColor: "rgba(240,189,103,0.12)",
+                            border: "0.5px solid rgba(240,189,103,0.28)",
+                            padding: "5px 8px",
+                            borderRadius: "6px",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {attentionLabel}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
