@@ -685,10 +685,19 @@ function BookPageInner() {
   }
 
   const isChoosingCheckout = Boolean(dateRange?.from && !dateRange.to);
+
+  function isInvalidCheckout(day: Date): boolean {
+    const checkInDay = dateRange!.from!;
+    if (day <= checkInDay) return true;
+    if (isCalendarDateBlocked(day)) return true;
+    if (!isStayRangeAvailable(checkInDay, day)) return true;
+    return false;
+  }
+
   const disabledDays: Matcher[] = [
     { before: today },
     ...bookedRangeList,
-    ...(isChoosingCheckout ? [] : [isDeadCheckInDate]),
+    ...(isChoosingCheckout ? [isInvalidCheckout] : [isDeadCheckInDate]),
   ];
 
   const checkIn  = dateRange?.from ? toISO(dateRange.from) : "";
