@@ -9,6 +9,16 @@ import { BORDER, fieldStyle, fmt, GOLD, LATO, MIDNIGHT, MUTED, PLAYFAIR, WHITE }
 
 type BookingSectionKey = "pending" | "confirmed" | "cancelled";
 type ConfirmedSortKey = "created_desc" | "created_asc" | "check_in_asc" | "check_in_desc";
+type DeadDayUpsellOpportunity = {
+  kind: "late_checkout" | "early_checkin";
+  dateLabel: string;
+  pairedBooking: Booking;
+  gapNights: number;
+};
+
+// Admin visibility only: bookings data does not include current pricing minimums, so this
+// mirrors the 1-night dead-gap upsell concept without affecting validation or booking logic.
+const DEAD_DAY_MINIMUM_VALID_STAY_NIGHTS = 2;
 
 function StatusBadge({ status }: { status: string }) {
   const tones: Record<string, { text: string; background: string; border: string }> = {
@@ -228,6 +238,70 @@ function bookingDateRangesOverlap(a: Booking, b: Booking) {
   return a.check_in < b.check_out && b.check_in < a.check_out;
 }
 
+function parseDateOnlyParts(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+
+  return {
+    year: Number(match[1]),
+    month: Number(match[2]),
+    day: Number(match[3]),
+  };
+}
+
+function dateOnlySerial(value: string) {
+  const parts = parseDateOnlyParts(value);
+  if (!parts) return null;
+
+  let year = parts.year;
+  const { month, day } = parts;
+  year -= month <= 2 ? 1 : 0;
+  const era = Math.floor(year / 400);
+  const yearOfEra = year - era * 400;
+  const monthPrime = month + (month > 2 ? -3 : 9);
+  const dayOfYear = Math.floor((153 * monthPrime + 2) / 5) + day - 1;
+  const dayOfEra = yearOfEra * 365 + Math.floor(yearOfEra / 4) - Math.floor(yearOfEra / 100) + dayOfYear;
+
+  return era * 146097 + dayOfEra;
+}
+
+function civilFromDateOnlySerial(serial: number) {
+  const era = Math.floor(serial / 146097);
+  const dayOfEra = serial - era * 146097;
+  const yearOfEra = Math.floor((dayOfEra - Math.floor(dayOfEra / 1460) + Math.floor(dayOfEra / 36524) - Math.floor(dayOfEra / 146096)) / 365);
+  const yearBase = yearOfEra + era * 400;
+  const dayOfYear = dayOfEra - (365 * yearOfEra + Math.floor(yearOfEra / 4) - Math.floor(yearOfEra / 100));
+  const monthPrime = Math.floor((5 * dayOfYear + 2) / 153);
+  const day = dayOfYear - Math.floor((153 * monthPrime + 2) / 5) + 1;
+  const month = monthPrime + (monthPrime < 10 ? 3 : -9);
+  const year = yearBase + (month <= 2 ? 1 : 0);
+
+  return { year, month, day };
+}
+
+function addDateOnlyDays(value: string, days: number) {
+  const serial = dateOnlySerial(value);
+  if (serial === null) return value;
+
+  const next = civilFromDateOnlySerial(serial + days);
+  const year = String(next.year).padStart(4, "0");
+  const month = String(next.month).padStart(2, "0");
+  const day = String(next.day).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function dateOnlyNightGap(start: string, end: string) {
+  const startSerial = dateOnlySerial(start);
+  const endSerial = dateOnlySerial(end);
+  if (startSerial === null || endSerial === null) return null;
+  return endSerial - startSerial;
+}
+
+function formatDeadDayLabel(start: string, gapNights: number) {
+  if (gapNights <= 1) return fmt(start);
+  return `${fmt(start)} to ${fmt(addDateOnlyDays(start, gapNights - 1))}`;
+}
+
 export default function BookingsTable({
   loading,
   filteredBookings: _filteredBookings,
@@ -383,6 +457,47 @@ export default function BookingsTable({
 
   function getPendingOverlaps(booking: Booking) {
     return pendingOverlapMap.get(booking.id) ?? [];
+  }
+
+  const deadDayUpsellMap = useMemo(() => {
+    const byVilla = new Map<string, Booking[]>();
+    const opportunities = new Map<string, DeadDayUpsellOpportunity[]>();
+
+    for (const booking of bookings) {
+      if (booking.status === "cancelled") continue;
+      byVilla.set(booking.villa, [...(byVilla.get(booking.villa) ?? []), booking]);
+    }
+
+    for (const villaBookings of Array.from(byVilla.values())) {
+      const sortedVillaBookings = [...villaBookings].sort(
+        (a, b) => a.check_in.localeCompare(b.check_in) || a.check_out.localeCompare(b.check_out) || a.created_at.localeCompare(b.created_at),
+      );
+
+      for (let index = 0; index < sortedVillaBookings.length - 1; index += 1) {
+        const current = sortedVillaBookings[index];
+        const next = sortedVillaBookings[index + 1];
+        const gapNights = dateOnlyNightGap(current.check_out, next.check_in);
+
+        if (gapNights === null) continue;
+        if (gapNights <= 0 || gapNights >= DEAD_DAY_MINIMUM_VALID_STAY_NIGHTS) continue;
+
+        const dateLabel = formatDeadDayLabel(current.check_out, gapNights);
+        opportunities.set(current.id, [
+          ...(opportunities.get(current.id) ?? []),
+          { kind: "late_checkout", dateLabel, pairedBooking: next, gapNights },
+        ]);
+        opportunities.set(next.id, [
+          ...(opportunities.get(next.id) ?? []),
+          { kind: "early_checkin", dateLabel, pairedBooking: current, gapNights },
+        ]);
+      }
+    }
+
+    return opportunities;
+  }, [bookings]);
+
+  function getDeadDayUpsells(booking: Booking) {
+    return deadDayUpsellMap.get(booking.id) ?? [];
   }
 
   const pendingBookings = sortByNewest(visibleBookings.filter((booking) => bookingRequiresAction(booking)));
@@ -877,6 +992,8 @@ export default function BookingsTable({
     const canCancel = booking.status === "pending" || booking.status === "confirmed";
     const overlappingPendingBookings = getPendingOverlaps(booking);
     const hasPendingOverlap = overlappingPendingBookings.length > 0;
+    const deadDayUpsells = getDeadDayUpsells(booking);
+    const hasDeadDayUpsell = deadDayUpsells.length > 0;
 
     return (
       <div
@@ -952,6 +1069,27 @@ export default function BookingsTable({
             }}
           >
             <StatusBadge status={booking.status} />
+            {hasDeadDayUpsell && (
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontFamily: LATO,
+                  fontSize: "9px",
+                  letterSpacing: "1.5px",
+                  textTransform: "uppercase",
+                  color: "#7ecfcf",
+                  backgroundColor: "rgba(126,207,207,0.12)",
+                  border: "0.5px solid rgba(126,207,207,0.32)",
+                  padding: "6px 10px",
+                  borderRadius: "6px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Upsell opportunity
+              </span>
+            )}
             {hasPendingOverlap && (
               <span
                 style={{
@@ -1176,6 +1314,37 @@ export default function BookingsTable({
           </div>
         )}
 
+        {hasDeadDayUpsell && (
+          <div
+            style={{
+              border: "0.5px solid rgba(126,207,207,0.26)",
+              backgroundColor: "rgba(126,207,207,0.08)",
+              padding: "12px 14px",
+              borderRadius: "8px",
+              display: "grid",
+              gap: "8px",
+            }}
+          >
+            {deadDayUpsells.map((opportunity) => {
+              const message =
+                opportunity.kind === "late_checkout"
+                  ? `Upsell opportunity: Late checkout available on ${opportunity.dateLabel}`
+                  : `Upsell opportunity: Early check-in available on ${opportunity.dateLabel}`;
+
+              return (
+                <div key={`${opportunity.kind}-${opportunity.pairedBooking.id}`}>
+                  <p style={{ fontFamily: LATO, fontSize: "11px", color: "#7ecfcf", margin: "0 0 4px", lineHeight: 1.5 }}>
+                    {message}
+                  </p>
+                  <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+                    Adjacent booking {opportunity.pairedBooking.id} · {fmt(opportunity.pairedBooking.check_in)} to {fmt(opportunity.pairedBooking.check_out)}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {renderAddonRows(booking)}
 
         <div
@@ -1287,6 +1456,7 @@ export default function BookingsTable({
     const isGuest = !booking.member_id;
     const memberInfo = getMember(booking);
     const displayName = isGuest ? booking.guest_name ?? "Guest" : memberInfo?.full_name ?? "Member";
+    const hasDeadDayUpsell = getDeadDayUpsells(booking).length > 0;
 
     return (
       <div
@@ -1346,6 +1516,27 @@ export default function BookingsTable({
               </p>
             )}
             <StatusBadge status={booking.status} />
+            {hasDeadDayUpsell && (
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontFamily: LATO,
+                  fontSize: "9px",
+                  letterSpacing: "1.4px",
+                  textTransform: "uppercase",
+                  color: "#7ecfcf",
+                  backgroundColor: "rgba(126,207,207,0.12)",
+                  border: "0.5px solid rgba(126,207,207,0.28)",
+                  padding: "5px 9px",
+                  borderRadius: "6px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Upsell
+              </span>
+            )}
             {bookingHasDiscountedAddon(booking) && (
               <span
                 style={{
