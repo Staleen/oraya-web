@@ -11,14 +11,10 @@ type BookingSectionKey = "pending" | "confirmed" | "cancelled";
 type ConfirmedSortKey = "created_desc" | "created_asc" | "check_in_asc" | "check_in_desc";
 type DeadDayUpsellOpportunity = {
   kind: "late_checkout" | "early_checkin";
+  dateISO: string;
   dateLabel: string;
   pairedBooking: Booking;
-  gapNights: number;
 };
-
-// Admin visibility only: bookings data does not include current pricing minimums, so this
-// mirrors the 1-night dead-gap upsell concept without affecting validation or booking logic.
-const DEAD_DAY_MINIMUM_VALID_STAY_NIGHTS = 2;
 
 function StatusBadge({ status }: { status: string }) {
   const tones: Record<string, { text: string; background: string; border: string }> = {
@@ -279,27 +275,20 @@ function civilFromDateOnlySerial(serial: number) {
   return { year, month, day };
 }
 
-function addDateOnlyDays(value: string, days: number) {
-  const serial = dateOnlySerial(value);
-  if (serial === null) return value;
-
-  const next = civilFromDateOnlySerial(serial + days);
-  const year = String(next.year).padStart(4, "0");
-  const month = String(next.month).padStart(2, "0");
-  const day = String(next.day).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function dateOnlyNightGap(start: string, end: string) {
+function enumerateDateOnlyGapDates(start: string, end: string) {
   const startSerial = dateOnlySerial(start);
   const endSerial = dateOnlySerial(end);
-  if (startSerial === null || endSerial === null) return null;
-  return endSerial - startSerial;
-}
+  if (startSerial === null || endSerial === null || endSerial <= startSerial) return [];
 
-function formatDeadDayLabel(start: string, gapNights: number) {
-  if (gapNights <= 1) return fmt(start);
-  return `${fmt(start)} to ${fmt(addDateOnlyDays(start, gapNights - 1))}`;
+  const dates: string[] = [];
+  for (let serial = startSerial; serial < endSerial; serial += 1) {
+    const next = civilFromDateOnlySerial(serial);
+    const year = String(next.year).padStart(4, "0");
+    const month = String(next.month).padStart(2, "0");
+    const day = String(next.day).padStart(2, "0");
+    dates.push(`${year}-${month}-${day}`);
+  }
+  return dates;
 }
 
 export default function BookingsTable({
@@ -464,7 +453,7 @@ export default function BookingsTable({
     const opportunities = new Map<string, DeadDayUpsellOpportunity[]>();
 
     for (const booking of bookings) {
-      if (booking.status === "cancelled") continue;
+      if (booking.status !== "confirmed") continue;
       byVilla.set(booking.villa, [...(byVilla.get(booking.villa) ?? []), booking]);
     }
 
@@ -476,20 +465,19 @@ export default function BookingsTable({
       for (let index = 0; index < sortedVillaBookings.length - 1; index += 1) {
         const current = sortedVillaBookings[index];
         const next = sortedVillaBookings[index + 1];
-        const gapNights = dateOnlyNightGap(current.check_out, next.check_in);
+        const gapDates = enumerateDateOnlyGapDates(current.check_out, next.check_in);
 
-        if (gapNights === null) continue;
-        if (gapNights <= 0 || gapNights >= DEAD_DAY_MINIMUM_VALID_STAY_NIGHTS) continue;
-
-        const dateLabel = formatDeadDayLabel(current.check_out, gapNights);
-        opportunities.set(current.id, [
-          ...(opportunities.get(current.id) ?? []),
-          { kind: "late_checkout", dateLabel, pairedBooking: next, gapNights },
-        ]);
-        opportunities.set(next.id, [
-          ...(opportunities.get(next.id) ?? []),
-          { kind: "early_checkin", dateLabel, pairedBooking: current, gapNights },
-        ]);
+        for (const gapDate of gapDates) {
+          const dateLabel = fmt(gapDate);
+          opportunities.set(current.id, [
+            ...(opportunities.get(current.id) ?? []),
+            { kind: "late_checkout", dateISO: gapDate, dateLabel, pairedBooking: next },
+          ]);
+          opportunities.set(next.id, [
+            ...(opportunities.get(next.id) ?? []),
+            { kind: "early_checkin", dateISO: gapDate, dateLabel, pairedBooking: current },
+          ]);
+        }
       }
     }
 
@@ -1328,11 +1316,11 @@ export default function BookingsTable({
             {deadDayUpsells.map((opportunity) => {
               const message =
                 opportunity.kind === "late_checkout"
-                  ? `Upsell opportunity: Late checkout available on ${opportunity.dateLabel}`
-                  : `Upsell opportunity: Early check-in available on ${opportunity.dateLabel}`;
+                  ? `Late checkout opportunity: ${opportunity.dateLabel}`
+                  : `Early check-in opportunity: ${opportunity.dateLabel}`;
 
               return (
-                <div key={`${opportunity.kind}-${opportunity.pairedBooking.id}`}>
+                <div key={`${opportunity.kind}-${opportunity.dateISO}-${opportunity.pairedBooking.id}`}>
                   <p style={{ fontFamily: LATO, fontSize: "11px", color: "#7ecfcf", margin: "0 0 4px", lineHeight: 1.5 }}>
                     {message}
                   </p>
