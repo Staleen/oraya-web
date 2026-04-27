@@ -686,18 +686,29 @@ function BookPageInner() {
 
   const isChoosingCheckout = Boolean(dateRange?.from && !dateRange.to);
 
-  function isInvalidCheckout(day: Date): boolean {
-    const checkInDay = dateRange!.from!;
-    if (day <= checkInDay) return true;
-    if (isCalendarDateBlocked(day)) return true;
-    if (!isStayRangeAvailable(checkInDay, day)) return true;
-    return false;
+  // A checkout date is valid only if every condition holds:
+  // 1. checkout is strictly after check-in (minimum 1 night)
+  // 2. checkout day itself is not in the middle of a blocked stay
+  // 3. every night from check-in up to checkout-1 is free (continuous stay)
+  function isValidCheckoutFrom(checkIn: Date, checkout: Date): boolean {
+    if (checkout <= checkIn) return false;
+    if (isCalendarDateBlocked(checkout)) return false;
+    for (
+      let night = new Date(checkIn.getTime());
+      night < checkout;
+      night.setDate(night.getDate() + 1)
+    ) {
+      if (isCalendarDateBlocked(night)) return false;
+    }
+    return true;
   }
 
   const disabledDays: Matcher[] = [
     { before: today },
     ...bookedRangeList,
-    ...(isChoosingCheckout ? [isInvalidCheckout] : [isDeadCheckInDate]),
+    ...(isChoosingCheckout
+      ? [(day: Date) => !isValidCheckoutFrom(dateRange!.from!, day)]
+      : [isDeadCheckInDate]),
   ];
 
   const checkIn  = dateRange?.from ? toISO(dateRange.from) : "";
@@ -954,7 +965,7 @@ function BookPageInner() {
       return;
     }
 
-    if (nextRange?.from && nextRange.to && !isStayRangeAvailable(nextRange.from, nextRange.to)) {
+    if (nextRange?.from && nextRange.to && !isValidCheckoutFrom(nextRange.from, nextRange.to)) {
       setDateRange(undefined);
       setError("Those dates are not available as a continuous stay. Please choose your dates again.");
       return;
