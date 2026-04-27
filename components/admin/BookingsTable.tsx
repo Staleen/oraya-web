@@ -224,6 +224,10 @@ function sortConfirmedBookings(items: Booking[], sortKey: ConfirmedSortKey) {
   return sorted;
 }
 
+function bookingDateRangesOverlap(a: Booking, b: Booking) {
+  return a.check_in < b.check_out && b.check_in < a.check_out;
+}
+
 export default function BookingsTable({
   loading,
   filteredBookings: _filteredBookings,
@@ -356,6 +360,30 @@ export default function BookingsTable({
       return true;
     });
   }, [bookings, villaFilter, dateFilter]);
+
+  const pendingOverlapMap = useMemo(() => {
+    const pendingOnly = bookings.filter((booking) => booking.status === "pending");
+    const overlaps = new Map<string, Booking[]>();
+
+    for (let i = 0; i < pendingOnly.length; i += 1) {
+      for (let j = i + 1; j < pendingOnly.length; j += 1) {
+        const current = pendingOnly[i];
+        const other = pendingOnly[j];
+
+        if (current.villa !== other.villa) continue;
+        if (!bookingDateRangesOverlap(current, other)) continue;
+
+        overlaps.set(current.id, [...(overlaps.get(current.id) ?? []), other]);
+        overlaps.set(other.id, [...(overlaps.get(other.id) ?? []), current]);
+      }
+    }
+
+    return overlaps;
+  }, [bookings]);
+
+  function getPendingOverlaps(booking: Booking) {
+    return pendingOverlapMap.get(booking.id) ?? [];
+  }
 
   const pendingBookings = sortByNewest(visibleBookings.filter((booking) => bookingRequiresAction(booking)));
 
@@ -847,6 +875,8 @@ export default function BookingsTable({
     const isBulkResolving = bulkActionBookingId === booking.id;
     const canConfirm = booking.status === "pending" && !needsApproval;
     const canCancel = booking.status === "pending" || booking.status === "confirmed";
+    const overlappingPendingBookings = getPendingOverlaps(booking);
+    const hasPendingOverlap = overlappingPendingBookings.length > 0;
 
     return (
       <div
@@ -922,6 +952,27 @@ export default function BookingsTable({
             }}
           >
             <StatusBadge status={booking.status} />
+            {hasPendingOverlap && (
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontFamily: LATO,
+                  fontSize: "9px",
+                  letterSpacing: "1.5px",
+                  textTransform: "uppercase",
+                  color: "#f0bd67",
+                  backgroundColor: "rgba(240,189,103,0.12)",
+                  border: "0.5px solid rgba(240,189,103,0.38)",
+                  padding: "6px 10px",
+                  borderRadius: "6px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                ⚠️ Overlapping request
+              </span>
+            )}
             {needsApproval && (
               <span
                 style={{
@@ -1083,6 +1134,45 @@ export default function BookingsTable({
             <p style={{ fontFamily: LATO, fontSize: "11px", color: "#6fcf8a", margin: 0, lineHeight: 1.5 }}>
               All add-ons are resolved. This booking is ready to confirm.
             </p>
+          </div>
+        )}
+
+        {hasPendingOverlap && (
+          <div
+            style={{
+              border: "0.5px solid rgba(240,189,103,0.26)",
+              backgroundColor: "rgba(240,189,103,0.08)",
+              padding: "12px 14px",
+              borderRadius: "8px",
+              display: "grid",
+              gap: "10px",
+            }}
+          >
+            <p style={{ fontFamily: LATO, fontSize: "11px", color: "#f0bd67", margin: 0, lineHeight: 1.5 }}>
+              This pending request overlaps with other pending requests for the same villa.
+            </p>
+            <div style={{ display: "grid", gap: "8px" }}>
+              {overlappingPendingBookings.map((conflict) => (
+                <div
+                  key={conflict.id}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1fr) auto",
+                    gap: "6px 12px",
+                    alignItems: "center",
+                    borderTop: "0.5px solid rgba(240,189,103,0.16)",
+                    paddingTop: "8px",
+                  }}
+                >
+                  <p style={{ fontFamily: LATO, fontSize: "11px", color: WHITE, margin: 0, lineHeight: 1.5, wordBreak: "break-all" }}>
+                    {conflict.id}
+                  </p>
+                  <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+                    {fmt(conflict.check_in)} to {fmt(conflict.check_out)} · {conflict.status}
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
