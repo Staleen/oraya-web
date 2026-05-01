@@ -29,11 +29,6 @@ type CalendarItem =
   | { type: "booking"; id: string; villa: string; starts_on: string; ends_on: string; status: string; booking: Booking }
   | { type: "external"; id: string; villa: string; starts_on: string; ends_on: string; status: "external"; summary: string | null };
 
-type BookingWithOptionalPricing = Booking & {
-  pricing_subtotal?: unknown;
-  pricing_snapshot?: { subtotal?: unknown } | null;
-};
-
 function startOfTodayUtcIso() {
   const now = new Date();
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
@@ -159,19 +154,6 @@ function getBookingAddonRevenue(booking: Booking) {
   return (booking.addons_snapshot ?? []).reduce((sum, addon) => {
     return sum + (readFiniteNumber(addon.price) ?? 0);
   }, 0);
-}
-
-function getBookingStaySubtotal(booking: Booking) {
-  const pricedBooking = booking as BookingWithOptionalPricing;
-  return (
-    readFiniteNumber(pricedBooking.pricing_subtotal) ??
-    readFiniteNumber(pricedBooking.pricing_snapshot?.subtotal) ??
-    0
-  );
-}
-
-function getBookingEstimatedRevenue(booking: Booking) {
-  return getBookingStaySubtotal(booking) + getBookingAddonRevenue(booking);
 }
 
 function formatOfferType(value: string | null | undefined) {
@@ -408,7 +390,7 @@ export default function DashboardOperationsView({
       const savingsForBooking = getBookingOfferSavingsTotal(booking) ?? 0;
 
       if (booking.status !== "cancelled") {
-        estimatedRevenue += getBookingEstimatedRevenue(booking);
+        estimatedRevenue += getBookingAddonRevenue(booking);
       }
 
       if (hasOffer) bookingsWithOffers += 1;
@@ -480,7 +462,7 @@ export default function DashboardOperationsView({
       detail: `${formatRate(analytics.offerUsageRate)} of bookings`,
     },
     { label: "Total savings", value: formatMoney(analytics.totalSavings), detail: "Persisted offer savings" },
-    { label: "Estimated revenue", value: formatMoney(analytics.estimatedRevenue), detail: "Active snapshot value" },
+    { label: "Add-on revenue", value: formatMoney(analytics.estimatedRevenue), detail: "Add-ons only" },
   ];
 
   function renderCompactListSkeleton(rows = 4) {
