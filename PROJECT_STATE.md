@@ -255,6 +255,23 @@ Phase 13 — Real-world validation & stabilization:
   - Event-aware advisory panel (per purpose, advisory only)
   - Commercial layer teaser (static copy)
   - Review summary: "Booking purpose" label
+- 13C Hotfix [COMPLETE]
+  - Auto-select Extra Bedding when sleeping guests = 8 (locked, helper text)
+  - Simplified guest pricing display (totals only)
+  - Event Inquiry mode foundation: Preferred Event Area + Requested Services + notes append
+- 13C.2 Stay vs Event Inquiry Separation [COMPLETE]
+  - Page mode state ("stay" / "event"); URL deep-link via /book?mode=event
+  - Stay flow no longer asks "Booking Purpose"; instead shows "Explore Event Options" upgrade CTA
+  - Event mode: "Plan Your Event" heading + standing inquiry banner + back-to-stay toggle
+  - Event mode: event-type cards above guest counts (Stay Only filtered out)
+  - Mode-aware labels: "Overnight Hosts / Guests", "Expected Event Attendees"
+  - Updated event area + service taxonomies (poolside, garden/outdoor, terrace, etc.)
+  - Step 3: heading switches to "Event Services & Add-ons" in event mode
+  - Event package commercial copy block (event mode only)
+  - Stay pricing panel further simplified to "Estimated Booking Total" with duration + add-ons rows only
+  - Mode-specific review summary (Booking Summary vs. Event Inquiry Summary)
+  - Submit button: "Submit Booking Request" / "Submit Event Inquiry"
+  - Notes append now structured ([Event Inquiry] block) and dedupes on back/forth navigation
 - 13D Guest booking detail page (view token, persistent link) — pending approval
 - 13E Dynamic pricing optimization — pending approval
 
