@@ -28,8 +28,43 @@ const LATO     = "'Lato', system-ui, sans-serif";
 const DEAD_DAY_DISCOUNT_PCT = 0.30;
 
 // ─── Static data ──────────────────────────────────────────────────────────────
-const VILLAS      = ["Villa Mechmech", "Villa Byblos"];
-const EVENT_TYPES = ["Stay", "Wedding", "Baptism", "Corporate"];
+const VILLAS = ["Villa Mechmech", "Villa Byblos"];
+
+const BOOKING_PURPOSES = [
+  {
+    value: "Stay Only",
+    label: "Stay Only",
+    description: "Overnight villa stay with standard access and optional guest services.",
+  },
+  {
+    value: "Baptism / Family Gathering",
+    label: "Baptism / Family Gathering",
+    description: "Family-style event setup with seating, service flow, and optional hospitality add-ons.",
+  },
+  {
+    value: "Wedding / Engagement",
+    label: "Wedding / Engagement",
+    description: "Celebration-focused setup with premium add-ons, guest movement, and operational coordination.",
+  },
+  {
+    value: "Corporate Event",
+    label: "Corporate Event",
+    description: "Professional gathering setup with AV, seating, presentation, and service support.",
+  },
+  {
+    value: "Private Celebration",
+    label: "Private Celebration",
+    description: "Birthday, dinner, or private occasion with flexible add-ons and guest support.",
+  },
+];
+
+const EVENT_ADVISORY: Record<string, string> = {
+  "Stay Only": "Optional upgrades can make the stay more comfortable, but no event setup is required.",
+  "Baptism / Family Gathering": "Recommended for this type of booking: family seating, catering support, shaded areas, and service setup.",
+  "Wedding / Engagement": "Recommended for this type of booking: seating, valet, lighting, AV, and guest-flow support.",
+  "Corporate Event": "Recommended for this type of booking: AV support, presentation setup, seating layout, coffee service, and valet.",
+  "Private Celebration": "Recommended for this type of booking: seating, lighting, decoration support, music/AV, and service staff.",
+};
 const EMAIL_RE    = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const VILLA_CARD_META: Record<string, { image: string; imagePosition: string; note: string }> = {
   "Villa Mechmech": {
@@ -1594,19 +1629,56 @@ function BookPageInner() {
                 </div>
               </div>
 
-              {/* Event type */}
+              {/* Booking Purpose */}
               <div>
-                <label style={labelStyle}>
-                  Event type{" "}
+                <p style={{ ...labelStyle, marginBottom: "12px" }}>
+                  Booking Purpose{" "}
                   <span style={{ color: "rgba(138,128,112,0.5)", letterSpacing: 0 }}>(optional)</span>
-                </label>
-                <select name="eventType" value={form.eventType} onChange={handleFormChange}
-                  onFocus={focusGold} onBlur={blurGold} style={{ ...inputStyle, cursor: "pointer" }}>
-                  <option value="" style={{ backgroundColor: MIDNIGHT }}>Select type</option>
-                  {EVENT_TYPES.map(t => (
-                    <option key={t} value={t} style={{ backgroundColor: MIDNIGHT }}>{t}</option>
-                  ))}
-                </select>
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {BOOKING_PURPOSES.map((purpose) => {
+                    const selected = form.eventType === purpose.value;
+                    return (
+                      <button
+                        key={purpose.value}
+                        type="button"
+                        onClick={() => setForm(f => ({ ...f, eventType: selected ? "" : purpose.value }))}
+                        style={{
+                          display: "flex",
+                          alignItems: "flex-start",
+                          gap: "12px",
+                          padding: "14px 16px",
+                          textAlign: "left",
+                          width: "100%",
+                          border: `0.5px solid ${selected ? GOLD : "rgba(197,164,109,0.18)"}`,
+                          backgroundColor: selected ? "rgba(197,164,109,0.08)" : "rgba(255,255,255,0.02)",
+                          cursor: "pointer",
+                          transition: "border-color 0.15s, background-color 0.15s",
+                        }}
+                        onMouseEnter={e => { if (!selected) { (e.currentTarget as HTMLElement).style.borderColor = "rgba(197,164,109,0.35)"; (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(197,164,109,0.04)"; } }}
+                        onMouseLeave={e => { if (!selected) { (e.currentTarget as HTMLElement).style.borderColor = "rgba(197,164,109,0.18)"; (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.02)"; } }}
+                      >
+                        <div style={{
+                          width: "16px", height: "16px", flexShrink: 0, marginTop: "2px",
+                          border: `1px solid ${selected ? GOLD : "rgba(197,164,109,0.3)"}`,
+                          backgroundColor: selected ? GOLD : "transparent",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          transition: "background-color 0.15s, border-color 0.15s",
+                        }}>
+                          {selected && <span style={{ color: CHARCOAL, fontSize: "10px", fontWeight: 700, lineHeight: 1 }}>✓</span>}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <p style={{ fontFamily: LATO, fontSize: "13px", color: selected ? WHITE : "rgba(255,255,255,0.7)", margin: "0 0 4px", fontWeight: selected ? 400 : 300 }}>
+                            {purpose.label}
+                          </p>
+                          <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
+                            {purpose.description}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Notes */}
@@ -1654,8 +1726,11 @@ function BookPageInner() {
 
               {/* ── Add-ons ─────────────────────────────────────────────── */}
               <div>
-                <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 14px" }}>
-                  Add-ons
+                <p style={{ fontFamily: PLAYFAIR, fontSize: "20px", fontWeight: 400, color: WHITE, margin: "0 0 6px" }}>
+                  Enhance Your Booking
+                </p>
+                <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "0 0 16px", lineHeight: 1.6 }}>
+                  Select optional services and upgrades. Some items may require approval or advance preparation.
                 </p>
 
                 {addonsLoading ? (
@@ -1705,7 +1780,7 @@ function BookPageInner() {
                       if (hasOffer)                     hints.push("A special offer is available — see highlighted add-ons below.");
                       if (isGroupBooking)                hints.push("Some add-ons are especially popular for larger groups.");
                       else if (isLongerStay)             hints.push("A few add-ons are particularly suited to longer stays.");
-                      if (isEventBooking && form.eventType !== "Stay") hints.push(`Experience add-ons pair well with ${form.eventType.toLowerCase()} bookings.`);
+                      if (isEventBooking && form.eventType !== "Stay Only") hints.push(`Experience add-ons pair well with ${form.eventType.toLowerCase()} bookings.`);
                       if (hints.length === 0) return null;
                       return (
                         <div style={{ border: "0.5px solid rgba(197,164,109,0.18)", backgroundColor: "rgba(197,164,109,0.04)", padding: "10px 14px" }}>
@@ -1717,6 +1792,17 @@ function BookPageInner() {
                         </div>
                       );
                     })()}
+                    {/* Event-aware advisory suggestions */}
+                    {form.eventType && EVENT_ADVISORY[form.eventType] && (
+                      <div style={{ border: "0.5px solid rgba(197,164,109,0.22)", backgroundColor: "rgba(197,164,109,0.05)", padding: "12px 16px" }}>
+                        <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2.5px", textTransform: "uppercase", color: GOLD, margin: "0 0 5px" }}>
+                          {form.eventType}
+                        </p>
+                        <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.6, fontStyle: "italic" }}>
+                          {EVENT_ADVISORY[form.eventType]}
+                        </p>
+                      </div>
+                    )}
                     {addonGroups.map((group) => (
                       <div key={group.category} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                         {showCategoryHeaders && (
@@ -1867,7 +1953,7 @@ function BookPageInner() {
                                     Recommended for your stay
                                   </span>
                                 );
-                                if (!!form.eventType && form.eventType !== "Stay" && cat === "Experience") return (
+                                if (!!form.eventType && form.eventType !== "Stay Only" && cat === "Experience") return (
                                   <span style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, display: "block", marginTop: "3px", lineHeight: 1.4, fontStyle: "italic" }}>
                                     Pairs well with {form.eventType.toLowerCase()} bookings
                                   </span>
@@ -2138,7 +2224,7 @@ function BookPageInner() {
                       ["Duration",        `${nights} ${nights === 1 ? "night" : "nights"}`],
                       ["Sleeping guests", form.sleepingGuests],
                       ["Day visitors",    form.dayVisitors],
-                      ...(form.eventType ? [["Event type", form.eventType]] : []),
+                      ...(form.eventType ? [["Booking purpose", form.eventType]] : []),
                       ...(form.message   ? [["Notes",      form.message]]   : []),
                       ...(guestMode      ? [["Name",       guest.fullName], ["Email", guest.email]] : []),
                       ...(selectedAddons.length > 0
@@ -2174,6 +2260,13 @@ function BookPageInner() {
               </div>
 
               {estimatePanel}
+
+              {/* Commercial layer teaser — static copy, no logic */}
+              <div style={{ border: "0.5px solid rgba(197,164,109,0.12)", backgroundColor: "rgba(197,164,109,0.03)", padding: "12px 16px", textAlign: "center" }}>
+                <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: 0, lineHeight: 1.7, letterSpacing: "0.3px" }}>
+                  Oraya Club benefits, member rewards, and exclusive packages will be available soon.
+                </p>
+              </div>
 
               <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.8, textAlign: "center", margin: 0 }}>
                 Your request will be reviewed and you&apos;ll receive a confirmation within 24 hours.
