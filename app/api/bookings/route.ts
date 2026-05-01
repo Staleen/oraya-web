@@ -132,6 +132,12 @@ export async function POST(request: Request) {
       enforcement_mode: string | null;
       requires_approval: boolean;
       status: "pending_approval" | "confirmed" | "at_risk";
+      pricing_type?: "percentage";
+      original_price?: number;
+      offer_applied?: true;
+      offer_type?: "dead_day";
+      savings?: number;
+      same_day_warning?: "same_day_checkout" | "same_day_checkin";
     }> | null = null;
 
     const insertData: Record<string, unknown> = {
@@ -345,6 +351,10 @@ export async function POST(request: Request) {
             }
             const addonIsDiscounted =
               addonFinalPrice !== null && addonBase !== null && addonFinalPrice < addonBase;
+            const addonSavings =
+              addonIsDiscounted && addonBase !== null && addonFinalPrice !== null
+                ? addonBase - addonFinalPrice
+                : null;
 
             return {
               id: addon.id,
@@ -357,6 +367,13 @@ export async function POST(request: Request) {
               status: addonStatuses.get(addon.id) ?? "confirmed",
               ...(addon.pricing_type === "percentage" ? { pricing_type: "percentage" as const } : {}),
               ...(addonIsDiscounted ? { original_price: addonBase } : {}),
+              ...(addonIsDiscounted
+                ? {
+                    offer_applied: true as const,
+                    offer_type: "dead_day" as const,
+                    savings: addonSavings!,
+                  }
+                : {}),
               ...(auditItem?.same_day_warning ? { same_day_warning: auditItem.same_day_warning } : {}),
             };
           });
