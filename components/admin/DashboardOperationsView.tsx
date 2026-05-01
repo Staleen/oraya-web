@@ -44,6 +44,14 @@ function toIsoDate(date: Date) {
   return date.toISOString().slice(0, 10);
 }
 
+/** Convert a YYYY-MM-DD string to a UTC day serial (days since epoch).
+ *  Safe for date-only arithmetic: no timezone shifts. */
+function isoToUtcDay(iso: string): number | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return null;
+  return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) / 86400000;
+}
+
 function formatTimelineDayLabel(iso: string) {
   const [year, month, day] = iso.split("-").map(Number);
   const value = new Date(Date.UTC(year, month - 1, day));
@@ -439,6 +447,83 @@ export default function DashboardOperationsView({
     };
   }, [bookings]);
 
+  // ── Revenue opportunity detection ─────────────────────────────────────────
+  type RevenueOpportunity = {
+    bookingId: string;
+    guestName: string;
+    villa: string;
+    kind: "offer_available" | "no_addons" | "high_value" | "operational_risk";
+    description: string;
+    recommendation: string;
+  };
+
+  const revenueOpportunities = useMemo<RevenueOpportunity[]>(() => {
+    const opportunities: RevenueOpportunity[] = [];
+
+    // Build per-villa confirmed check-in / check-out day-serial sets for O(1) dead-day lookup.
+    const villaCheckOuts = new Map<string, Set<number>>();
+    const villaCheckIns  = new Map<string, Set<number>>();
+    for (const b of bookings) {
+      if (b.status !== "confirmed") continue;
+      const co = isoToUtcDay(b.check_out);
+      const ci = isoToUtcDay(b.check_in);
+      if (co !== null) { const s = villaCheckOuts.get(b.villa) ?? new Set<number>(); s.add(co); villaCheckOuts.set(b.villa, s); }
+      if (ci !== null) { const s = villaCheckIns.get(b.villa)  ?? new Set<number>(); s.add(ci); villaCheckIns.set(b.villa, s); }
+    }
+
+    const seen = new Set<string>();
+
+    for (const booking of bookings) {
+      if (booking.status === "cancelled") continue;
+      const guestName = getBookingName(booking, members);
+      const snapshots = booking.addons_snapshot ?? [];
+
+      const push = (kind: RevenueOpportunity["kind"], description: string, recommendation: string) => {
+        const key = `${booking.id}-${kind}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        opportunities.push({ bookingId: booking.id, guestName, villa: booking.villa, kind, description, recommendation });
+      };
+
+      // 1. Dead-day: 1-night gap between adjacent confirmed bookings on the same villa.
+      const co = isoToUtcDay(booking.check_out);
+      const ci = isoToUtcDay(booking.check_in);
+      const outs = villaCheckOuts.get(booking.villa) ?? new Set<number>();
+      const ins  = villaCheckIns.get(booking.villa)  ?? new Set<number>();
+      const hasDeadDay = (co !== null && ins.has(co + 2)) || (ci !== null && outs.has(ci - 2));
+      const hasAnyOffer = snapshots.some((s) => s.offer_applied === true);
+      if (hasDeadDay && !hasAnyOffer) {
+        push("offer_available", "Adjacent gap detected", "Offer discounted late checkout or early check-in");
+      }
+
+      // 2. No add-ons selected.
+      if (snapshots.length === 0) {
+        push("no_addons", "No add-ons selected", "Recommend breakfast, heated pool, or service add-ons");
+      }
+
+      // 3. High-value guest signals.
+      const isHighValue = booking.sleeping_guests > 4 || booking.day_visitors > 0 || !!booking.event_type;
+      if (isHighValue) {
+        const reason = booking.event_type
+          ? `${booking.event_type} event`
+          : booking.day_visitors > 0
+            ? `${booking.day_visitors} day visitor${booking.day_visitors === 1 ? "" : "s"}`
+            : `${booking.sleeping_guests} guests overnight`;
+        push("high_value", reason, "Suggest experience or luxury service add-ons");
+      }
+
+      // 4. Operational risk: same-day timing conflict or pending add-on approval.
+      const hasRisk = snapshots.some(
+        (s) => s.same_day_warning != null || (s.requires_approval && s.status === "pending_approval"),
+      );
+      if (hasRisk) {
+        push("operational_risk", "Add-on operational risk", "Review timing or pending approval status");
+      }
+    }
+
+    return opportunities.slice(0, 8);
+  }, [bookings, members]);
+
   const syncSuccessCount = calendarSources.filter((source) => source.last_sync_status === "success").length;
   const syncFailureCount = calendarSources.filter((source) => source.last_sync_status === "failed").length;
   const staleSources = calendarSources
@@ -464,6 +549,25 @@ export default function DashboardOperationsView({
     { label: "Total savings", value: formatMoney(analytics.totalSavings), detail: "Persisted offer savings" },
     { label: "Add-on revenue", value: formatMoney(analytics.estimatedRevenue), detail: "Add-ons only" },
   ];
+
+  // Advisory insights derived from analytics — no extra state, no extra fetch.
+  const advisoryInsights: string[] = [];
+  if (analytics.topAddons.length > 0 && analytics.topAddons[0].count >= 3) {
+    advisoryInsights.push(`"${analytics.topAddons[0].label}" is the most-selected add-on (${analytics.topAddons[0].count}×).`);
+  }
+  if (analytics.bookingsWithOffers > 0 && analytics.offerUsageRate >= 0.3) {
+    advisoryInsights.push(`${formatRate(analytics.offerUsageRate)} of bookings use a special offer — consider reviewing discount depth.`);
+  }
+  for (const v of analytics.villaPerformance) {
+    const villaActiveBookings = bookings.filter((b) => b.villa === v.villa && b.status !== "cancelled");
+    const villaWithAddons = villaActiveBookings.filter((b) => (b.addons_snapshot ?? []).length > 0).length;
+    if (villaActiveBookings.length >= 3 && villaWithAddons === 0) {
+      advisoryInsights.push(`${v.villa} has ${villaActiveBookings.length} bookings with no add-ons — cross-sell opportunity.`);
+    }
+  }
+  if (analytics.mostCommonOfferType !== null) {
+    advisoryInsights.push(`Most common offer type: ${formatOfferType(analytics.mostCommonOfferType)}.`);
+  }
 
   function renderCompactListSkeleton(rows = 4) {
     return (
@@ -664,9 +768,68 @@ export default function DashboardOperationsView({
                 )}
               </div>
             </div>
+
+            {advisoryInsights.length > 0 && (
+              <div style={{ marginTop: "12px", borderTop: `0.5px solid ${BORDER}`, paddingTop: "12px" }}>
+                <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: "0 0 8px" }}>
+                  Advisory insights
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
+                  {advisoryInsights.map((insight, index) => (
+                    <p key={index} style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+                      {insight}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
           </>
         )}
       </section>
+
+      {!loading && revenueOpportunities.length > 0 && (
+        <section style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: isMobile ? "1rem" : "1.5rem", marginBottom: "2rem" }}>
+          <div style={{ marginBottom: "1rem" }}>
+            <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 8px" }}>
+              Revenue opportunities
+            </p>
+            <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0, lineHeight: 1.6 }}>
+              {revenueOpportunities.length} actionable {revenueOpportunities.length === 1 ? "opportunity" : "opportunities"} detected from current booking data.
+            </p>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))", gap: "10px" }}>
+            {revenueOpportunities.map((opp) => {
+              const kindColor =
+                opp.kind === "operational_risk" ? "#e2ab5a" :
+                opp.kind === "offer_available"   ? "#7ecfcf" : GOLD;
+              const kindBg =
+                opp.kind === "operational_risk" ? "rgba(226,171,90,0.07)" :
+                opp.kind === "offer_available"   ? "rgba(126,207,207,0.06)" : "rgba(197,164,109,0.06)";
+              const kindBorder =
+                opp.kind === "operational_risk" ? "rgba(226,171,90,0.22)" :
+                opp.kind === "offer_available"   ? "rgba(126,207,207,0.22)" : "rgba(197,164,109,0.18)";
+              return (
+                <div key={`${opp.bookingId}-${opp.kind}`} style={{ border: `0.5px solid ${kindBorder}`, backgroundColor: kindBg, padding: "12px 14px" }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px", marginBottom: "6px", flexWrap: "wrap" }}>
+                    <p style={{ fontFamily: PLAYFAIR, fontSize: "15px", color: WHITE, margin: 0, lineHeight: 1.3 }}>
+                      {opp.guestName}
+                    </p>
+                    <span style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "1.4px", textTransform: "uppercase", color: kindColor, border: `0.5px solid ${kindBorder}`, padding: "3px 7px", whiteSpace: "nowrap" }}>
+                      {opp.villa}
+                    </span>
+                  </div>
+                  <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "0 0 4px", lineHeight: 1.5 }}>
+                    {opp.description}
+                  </p>
+                  <p style={{ fontFamily: LATO, fontSize: "11px", color: kindColor, margin: 0, lineHeight: 1.5 }}>
+                    → {opp.recommendation}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       <section style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: isMobile ? "1rem" : "1.5rem", marginBottom: "2rem" }}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "16px", flexWrap: "wrap", marginBottom: "1rem" }}>
@@ -1193,6 +1356,23 @@ export default function DashboardOperationsView({
                 </p>
               </div>
             )}
+
+            {(() => {
+              const hints = revenueOpportunities.filter((o) => o.bookingId === selectedBooking.id);
+              if (hints.length === 0) return null;
+              return (
+                <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: "rgba(197,164,109,0.05)", padding: "10px 12px", marginBottom: "1rem" }}>
+                  <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "1.8px", textTransform: "uppercase", color: GOLD, margin: "0 0 8px" }}>
+                    Revenue insights
+                  </p>
+                  {hints.map((h) => (
+                    <p key={h.kind} style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "0 0 3px", lineHeight: 1.5 }}>
+                      {h.description} — {h.recommendation}
+                    </p>
+                  ))}
+                </div>
+              );
+            })()}
 
             {[
               ["Villa", selectedBooking.villa],

@@ -1695,6 +1695,28 @@ function BookPageInner() {
                   </p>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                    {/* Smart suggestion context banner — derived from current stay details */}
+                    {(() => {
+                      const isGroupBooking = sleepingGuestsCount >= 4;
+                      const isLongerStay   = nights >= 3;
+                      const isEventBooking = !!form.eventType;
+                      const hasOffer       = deadDayOfferAddons.length > 0;
+                      const hints: string[] = [];
+                      if (hasOffer)                     hints.push("A special offer is available — see highlighted add-ons below.");
+                      if (isGroupBooking)                hints.push("Some add-ons are especially popular for larger groups.");
+                      else if (isLongerStay)             hints.push("A few add-ons are particularly suited to longer stays.");
+                      if (isEventBooking && form.eventType !== "Stay") hints.push(`Experience add-ons pair well with ${form.eventType.toLowerCase()} bookings.`);
+                      if (hints.length === 0) return null;
+                      return (
+                        <div style={{ border: "0.5px solid rgba(197,164,109,0.18)", backgroundColor: "rgba(197,164,109,0.04)", padding: "10px 14px" }}>
+                          {hints.map((hint, i) => (
+                            <p key={i} style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: i > 0 ? "5px 0 0" : 0, lineHeight: 1.55, fontStyle: "italic" }}>
+                              {hint}
+                            </p>
+                          ))}
+                        </div>
+                      );
+                    })()}
                     {addonGroups.map((group) => (
                       <div key={group.category} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                         {showCategoryHeaders && (
@@ -1827,6 +1849,31 @@ function BookPageInner() {
                                   )}
                                 </div>
                               </div>
+                              {/* Context microcopy — derived from stay details, never blocks selection */}
+                              {(() => {
+                                const cat = normalizeAddonCategory(addon.category);
+                                if (deadDayTimingHighlight && offerData !== undefined) return (
+                                  <span style={{ fontFamily: LATO, fontSize: "10px", color: "#7ecfcf", display: "block", marginTop: "3px", lineHeight: 1.4, fontStyle: "italic" }}>
+                                    Best value for your dates
+                                  </span>
+                                );
+                                if (sleepingGuestsCount >= 4 && (cat === "Experience" || cat === "Services")) return (
+                                  <span style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, display: "block", marginTop: "3px", lineHeight: 1.4, fontStyle: "italic" }}>
+                                    Popular for groups
+                                  </span>
+                                );
+                                if (nights >= 3 && cat === "Comfort") return (
+                                  <span style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, display: "block", marginTop: "3px", lineHeight: 1.4, fontStyle: "italic" }}>
+                                    Recommended for your stay
+                                  </span>
+                                );
+                                if (!!form.eventType && form.eventType !== "Stay" && cat === "Experience") return (
+                                  <span style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, display: "block", marginTop: "3px", lineHeight: 1.4, fontStyle: "italic" }}>
+                                    Pairs well with {form.eventType.toLowerCase()} bookings
+                                  </span>
+                                );
+                                return null;
+                              })()}
                               {addon.description?.trim() && (
                                 <span
                                   style={{
