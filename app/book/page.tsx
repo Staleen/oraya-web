@@ -1712,6 +1712,7 @@ function BookPageInner() {
                             (timingType === "early_checkin" && deadDaySuggestion.suggestEarlyCheckin) ||
                             (timingType === "late_checkout" && deadDaySuggestion.suggestLateCheckout);
                           const offerData = deadDayOfferAddons.find(o => o.addon.id === addon.id);
+                          const hasOffer = offerData !== undefined;
                           const hasAppliedDiscount = offerData !== undefined && appliedDiscounts.includes(addon.id);
                           const disableSelection = !availability.selectable;
                           return (
@@ -1790,6 +1791,40 @@ function BookPageInner() {
                                       Fits your dates
                                     </span>
                                   )}
+                                  {hasOffer && (
+                                    <span
+                                      style={{
+                                        fontFamily: LATO,
+                                        fontSize: "9px",
+                                        letterSpacing: "1.4px",
+                                        textTransform: "uppercase",
+                                        color: "#7ecfcf",
+                                        border: "0.5px solid rgba(126,207,207,0.38)",
+                                        backgroundColor: "rgba(126,207,207,0.10)",
+                                        padding: "2px 6px",
+                                        whiteSpace: "nowrap",
+                                      }}
+                                    >
+                                      Special offer
+                                    </span>
+                                  )}
+                                  {hasAppliedDiscount && (
+                                    <span
+                                      style={{
+                                        fontFamily: LATO,
+                                        fontSize: "9px",
+                                        letterSpacing: "1.4px",
+                                        textTransform: "uppercase",
+                                        color: SUCCESS,
+                                        border: "0.5px solid rgba(111,207,138,0.4)",
+                                        backgroundColor: "rgba(111,207,138,0.12)",
+                                        padding: "2px 6px",
+                                        whiteSpace: "nowrap",
+                                      }}
+                                    >
+                                      Offer applied
+                                    </span>
+                                  )}
                                 </div>
                               </div>
                               {addon.description?.trim() && (
@@ -1807,6 +1842,20 @@ function BookPageInner() {
                                   }}
                                 >
                                   {addon.description.trim()}
+                                </span>
+                              )}
+                              {hasOffer && (
+                                <span
+                                  style={{
+                                    fontFamily: LATO,
+                                    fontSize: "11px",
+                                    color: hasAppliedDiscount ? "rgba(111,207,138,0.88)" : MUTED,
+                                    display: "block",
+                                    marginTop: "6px",
+                                    lineHeight: 1.5,
+                                  }}
+                                >
+                                  {hasAppliedDiscount ? "Discount applied due to an availability gap." : "Special rate for extending your stay."}
                                 </span>
                               )}
                               {addon.requires_approval && (
@@ -1859,11 +1908,14 @@ function BookPageInner() {
                                 <span style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, display: "block", textDecoration: "line-through" }}>
                                   {offerData.basePrice.toLocaleString()} {addon.currency}
                                 </span>
-                                <span style={{ fontFamily: LATO, fontSize: "13px", color: GOLD, display: "block", fontWeight: 500 }}>
+                                <span style={{ fontFamily: LATO, fontSize: "14px", color: selected ? SUCCESS : GOLD, display: "block", fontWeight: 600, lineHeight: 1.35 }}>
                                   {offerData.discountedPrice.toLocaleString()} {addon.currency}
                                 </span>
-                                <span style={{ fontFamily: LATO, fontSize: "10px", color: "#6fbf7e", display: "block" }}>
-                                  Save {offerData.savings}
+                                <span style={{ fontFamily: LATO, fontSize: "10px", color: selected ? SUCCESS : "#6fbf7e", display: "block", lineHeight: 1.4 }}>
+                                  Save {offerData.savings} {addon.currency}
+                                </span>
+                                <span style={{ fontFamily: LATO, fontSize: "10px", color: selected ? "rgba(111,207,138,0.88)" : MUTED, display: "block", marginTop: "3px", lineHeight: 1.4 }}>
+                                  {selected ? "Offer applied ✓" : "Limited-time offer"}
                                 </span>
                               </>
                             ) : addon.pricing_type === "percentage" && typeof addon.percentage_value === "number" && addon.percentage_value > 0 ? (
