@@ -249,7 +249,12 @@ The following systems are production-stable and must not be changed unless expli
 Phase 13 — Real-world validation & stabilization:
 - 13A Calendar sync verification + cron health [COMPLETE — code correct, external config issue]
 - 13B Password reset flow (forgot password → email → new password) [COMPLETE]
-- 13C Pre-production smoke testing
+- 13C Guest Website UX Upgrade [COMPLETE]
+  - Booking purpose: card-based selection (5 types) replacing old dropdown
+  - Step 3 add-ons: "Enhance Your Booking" heading + subcopy
+  - Event-aware advisory panel (per purpose, advisory only)
+  - Commercial layer teaser (static copy)
+  - Review summary: "Booking purpose" label
 - 13D Guest booking detail page (view token, persistent link) — pending approval
 - 13E Dynamic pricing optimization — pending approval
 
