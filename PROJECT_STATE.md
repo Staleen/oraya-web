@@ -9,9 +9,7 @@ STOP and ask before proceeding.
 
 ## CURRENT PHASE
 
-Phase 11 -> COMPLETE
-
-Next phase = Phase 12
+Phase 12 -> IN PROGRESS
 
 ---
 
@@ -52,6 +50,15 @@ Phase 11 - Add-on Operational Enforcement & Visibility:
 - 11B Strict add-on operational enforcement
 - 11D Admin visibility for add-on operational flags
 - 11 Final operational polish
+Phase 12E - Monetization Layer:
+- 12E.1 Dead-day detection (guest UI)
+- 12E.2 Discount application UI (guest)
+- 12E.3 Discounted price persistence in snapshot
+- 12E.4 Admin visibility for discounted offers
+- 12E.5 Guest offer visibility (UI polish)
+- 12E.6 Offer tracking metadata in snapshot
+- 12E.7 Server-side offer validation (anti-forgery)
+- 12E.8 Admin insights (offer usage, savings visibility)
 
 Completed stabilization work:
 - Booking reliability: overlap protection, confirm/cancel persistence
@@ -78,6 +85,12 @@ Completed stabilization work:
 - Add-on snapshots persist on new bookings
 - Strict add-on operational violations are enforced server-side
 - Approval-required and soft-rule add-ons remain non-blocking
+- Dead-day monetization implemented end-to-end
+- Discounted add-ons supported (UI + snapshot + admin visibility)
+- Offer tracking metadata persisted (`offer_applied`, `offer_type`, `original_price`, `savings`)
+- Server-side validation prevents forged discount input
+- Admin UI surfaces offer usage and savings
+- Guest UI displays discounted pricing with contextual messaging
 
 ---
 
@@ -198,13 +211,17 @@ The following systems are production-stable and must not be changed unless expli
 - Pricing not persisted server-side
 - Overlap warnings may duplicate (O(n^2))
 - No strict invalid date validation (e.g. Feb 30)
+- No analytics dashboard for offer performance (UI only visibility)
+- Offer logic currently limited to dead-day timing add-ons
+- No dynamic pricing adjustments beyond predefined rules
 
 ---
 
 ## NEXT PHASE - PHASE 12
 
 Goals:
-- To be defined before implementation
+- Phase 12F - Analytics & Reporting Layer
+- Phase 12G - Dynamic pricing optimization (optional, requires approval)
 
 ---
 
