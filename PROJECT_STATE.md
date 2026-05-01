@@ -279,6 +279,12 @@ Phase 13 — Real-world validation & stabilization:
   - Structured `[Stay Setup]` notes are appended in the existing message field without changing payload shape
 - 13D Guest booking detail page (view token, persistent link) — pending approval
 - 13E Dynamic pricing optimization — pending approval
+- 13E.1 Smart Event Recommendations (frontend-only) [COMPLETE]
+  - Event-type-based guidance card on `/events/inquiry`
+  - Recommended services button adds advisory service selections without auto-selecting by default
+  - Services grouped visually by setup, hospitality, production, and guest flow
+  - Event summary upgraded with overview + requested services sections
+  - No pricing added and no backend/API/schema changes
 
 ---
 

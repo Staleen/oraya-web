@@ -34,8 +34,48 @@ const EVENT_SERVICES = [
   "Decoration support",
   "AV / sound",
   "Lighting",
+  "Music coordination",
+  "Photography coordination",
   "Valet",
   "Service staff coordination",
+];
+
+const EVENT_RECOMMENDATIONS: Record<string, { guidance: string; recommended: string[] }> = {
+  "Baptism / Family Gathering": {
+    guidance: "This type of event typically includes family seating, shaded comfort, catering flow, and light service coordination.",
+    recommended: ["Basic seating setup", "Tables and chairs", "Umbrellas / shaded areas", "Catering / buffet setup", "Service staff coordination"],
+  },
+  "Wedding / Engagement": {
+    guidance: "This type of event typically includes seating, decoration, lighting, AV, and coordinated guest flow.",
+    recommended: ["Tables and chairs", "Decoration support", "Lighting", "AV / sound", "Service staff coordination"],
+  },
+  "Corporate Event": {
+    guidance: "This type of event typically includes seating, AV support, lighting, service coordination, and a polished arrival flow.",
+    recommended: ["Basic seating setup", "Tables and chairs", "AV / sound", "Lighting", "Valet"],
+  },
+  "Private Celebration": {
+    guidance: "This type of event typically includes dining setup, decoration, music, lighting, and guest hospitality support.",
+    recommended: ["Tables and chairs", "Catering / buffet setup", "Decoration support", "Music coordination", "Service staff coordination"],
+  },
+};
+
+const EVENT_SERVICE_GROUPS: Array<{ title: string; services: string[] }> = [
+  {
+    title: "Setup & Seating",
+    services: ["Basic seating setup", "Tables and chairs", "Umbrellas / shaded areas"],
+  },
+  {
+    title: "Food & Hospitality",
+    services: ["Catering / buffet setup", "Service staff coordination"],
+  },
+  {
+    title: "Production & Atmosphere",
+    services: ["Decoration support", "AV / sound", "Lighting", "Music coordination", "Photography coordination"],
+  },
+  {
+    title: "Arrival & Guest Flow",
+    services: ["Valet"],
+  },
 ];
 
 const DIAL_CODES = [
@@ -299,6 +339,13 @@ function EventInquiryPageInner() {
   const checkIn  = dateRange?.from ? toISO(dateRange.from) : "";
   const checkOut = dateRange?.to   ? toISO(dateRange.to)   : "";
   const nights   = nightCount(checkIn, checkOut);
+  const selectedEventRecommendation = form.eventType ? EVENT_RECOMMENDATIONS[form.eventType] : null;
+  const serviceIntent = (() => {
+    const count = eventServices.length;
+    if (count <= 2) return "Basic";
+    if (count >= 7) return "Premium";
+    return "Full setup";
+  })();
 
   const guestEmail = guest.email.trim();
   const guestEmailInvalid = authStatus !== "member" && guestEmail.length > 0 && !EMAIL_RE.test(guestEmail);
@@ -338,6 +385,11 @@ function EventInquiryPageInner() {
     setEventServices(prev =>
       prev.includes(service) ? prev.filter(s => s !== service) : [...prev, service]
     );
+  }
+
+  function addRecommendedServices(services: string[]) {
+    setEventServices(prev => Array.from(new Set([...prev, ...services])));
+    setError("");
   }
 
   function goNext() {
@@ -396,6 +448,7 @@ function EventInquiryPageInner() {
       if (form.dayVisitors)          block.push(`Expected Attendees: ${form.dayVisitors}`);
       if (form.sleepingGuests)       block.push(`Overnight Hosts: ${form.sleepingGuests}`);
       if (eventServices.length > 0)  block.push(`Requested Services: ${eventServices.join(", ")}`);
+      block.push(`Service Intent: ${serviceIntent}`);
       block.push(`Notes: ${userNotes || "None"}`);
       const composedMessage = block.join("\n");
 
@@ -592,6 +645,49 @@ function EventInquiryPageInner() {
                     );
                   })}
                 </div>
+                {selectedEventRecommendation && (
+                  <div style={{ marginTop: "14px", border: "0.5px solid rgba(197,164,109,0.22)", backgroundColor: "rgba(197,164,109,0.05)", padding: "16px 18px", display: "flex", flexDirection: "column", gap: "10px" }}>
+                    <div>
+                      <p style={{ fontFamily: PLAYFAIR, fontSize: "18px", fontWeight: 400, color: WHITE, margin: "0 0 6px" }}>
+                        {form.eventType}
+                      </p>
+                      <p style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.72)", margin: 0, lineHeight: 1.65 }}>
+                        {selectedEventRecommendation.guidance}
+                      </p>
+                    </div>
+                    <div>
+                      <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2.5px", textTransform: "uppercase", color: GOLD, margin: "0 0 8px" }}>
+                        Recommended
+                      </p>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                        {selectedEventRecommendation.recommended.map((service) => (
+                          <span
+                            key={service}
+                            style={{
+                              fontFamily: LATO,
+                              fontSize: "11px",
+                              color: eventServices.includes(service) ? WHITE : "rgba(255,255,255,0.72)",
+                              border: `0.5px solid ${eventServices.includes(service) ? GOLD : "rgba(197,164,109,0.18)"}`,
+                              backgroundColor: eventServices.includes(service) ? "rgba(197,164,109,0.08)" : "rgba(255,255,255,0.02)",
+                              padding: "7px 10px",
+                            }}
+                          >
+                            {service}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => addRecommendedServices(selectedEventRecommendation.recommended)}
+                      style={{ alignSelf: "flex-start", fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: CHARCOAL, backgroundColor: GOLD, border: "none", padding: "11px 18px", cursor: "pointer" }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
+                    >
+                      Add recommended services
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Calendar — only after villa selected */}
@@ -699,10 +795,56 @@ function EventInquiryPageInner() {
                   Services &amp; Setup Requirements
                 </p>
                 <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "0 0 16px", lineHeight: 1.6 }}>
-                  Select the services you may need. Final setup and pricing will be confirmed by Oraya.
+                  Select the services you may need. Oraya will review and confirm the final setup.
                 </p>
+                {selectedEventRecommendation && (
+                  <p style={{ fontFamily: LATO, fontSize: "11px", color: "rgba(255,255,255,0.6)", margin: "0 0 16px", lineHeight: 1.6 }}>
+                    Recommended for {form.eventType}: {selectedEventRecommendation.recommended.join(", ")}.
+                  </p>
+                )}
+                <div style={{ display: "flex", flexDirection: "column", gap: "18px", marginBottom: "16px" }}>
+                  {EVENT_SERVICE_GROUPS.map((group) => (
+                    <div key={group.title}>
+                      <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2.5px", textTransform: "uppercase", color: GOLD, margin: "0 0 10px" }}>
+                        {group.title}
+                      </p>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "8px" }}>
+                        {group.services.map(service => {
+                          const selected = eventServices.includes(service);
+                          return (
+                            <button
+                              key={`${group.title}-${service}`}
+                              type="button"
+                              onClick={() => toggleService(service)}
+                              style={{
+                                display: "flex", alignItems: "center", gap: "10px",
+                                padding: "12px 14px", textAlign: "left",
+                                border: `0.5px solid ${selected ? GOLD : "rgba(197,164,109,0.18)"}`,
+                                backgroundColor: selected ? "rgba(197,164,109,0.08)" : "rgba(255,255,255,0.02)",
+                                cursor: "pointer",
+                                transition: "border-color 0.15s, background-color 0.15s",
+                              }}
+                            >
+                              <div style={{
+                                width: "14px", height: "14px", flexShrink: 0,
+                                border: `1px solid ${selected ? GOLD : "rgba(197,164,109,0.3)"}`,
+                                backgroundColor: selected ? GOLD : "transparent",
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                              }}>
+                                {selected && <span style={{ color: CHARCOAL, fontSize: "9px", fontWeight: 700, lineHeight: 1 }}>✓</span>}
+                              </div>
+                              <span style={{ fontFamily: LATO, fontSize: "12px", color: selected ? WHITE : "rgba(255,255,255,0.75)" }}>
+                                {service}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "8px" }}>
+                <div style={{ display: "none" }} aria-hidden="true">
                   {EVENT_SERVICES.map(service => {
                     const selected = eventServices.includes(service);
                     return (
@@ -736,10 +878,10 @@ function EventInquiryPageInner() {
                 </div>
               </div>
 
-              {/* Pricing-not-shown copy */}
+              {/* Inquiry-only copy */}
               <div style={{ border: "0.5px solid rgba(197,164,109,0.18)", backgroundColor: "rgba(197,164,109,0.04)", padding: "12px 16px" }}>
                 <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.6 }}>
-                  Pricing is tailored based on your event size, services, and date.
+                  Oraya will review your event requirements and respond within 24 hours with availability, setup options, and a tailored proposal.
                 </p>
               </div>
 
@@ -895,7 +1037,55 @@ function EventInquiryPageInner() {
                 <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 14px" }}>
                   Event Inquiry Summary
                 </p>
-                <div style={{ border: "0.5px solid rgba(197,164,109,0.18)", padding: "1.25rem", backgroundColor: "rgba(255,255,255,0.015)" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginBottom: "16px" }}>
+                  <div style={{ border: "0.5px solid rgba(197,164,109,0.18)", padding: "1.25rem", backgroundColor: "rgba(255,255,255,0.015)" }}>
+                    <p style={{ fontFamily: PLAYFAIR, fontSize: "18px", fontWeight: 400, color: WHITE, margin: "0 0 12px" }}>
+                      Event Overview
+                    </p>
+                    {(
+                      [
+                        ["Villa preference", form.villa],
+                        ["Preferred dates", `${fmtDate(checkIn)} to ${fmtDate(checkOut)}`],
+                        ["Window", `${nights} ${nights === 1 ? "night" : "nights"}`],
+                        ["Event type", form.eventType],
+                        ["Attendees", form.dayVisitors],
+                        ["Hosts overnight stay", form.sleepingGuests],
+                      ] as [string, string][]
+                    ).map(([label, value]) => {
+                      const isHighlight = label === "Event type" || label === "Attendees" || label === "Hosts overnight stay";
+                      return (
+                        <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: isHighlight ? "12px 0" : "9px 0", borderBottom: "0.5px solid rgba(255,255,255,0.05)", gap: "16px" }}>
+                          <span style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED, flexShrink: 0, paddingRight: "16px" }}>
+                            {label}
+                          </span>
+                          <span style={{ fontFamily: LATO, fontSize: isHighlight ? "14px" : "13px", color: isHighlight ? GOLD : WHITE, fontWeight: isHighlight ? 400 : 300, textAlign: "right", lineHeight: 1.5, maxWidth: "60%" }}>
+                            {value}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div style={{ border: "0.5px solid rgba(197,164,109,0.18)", padding: "1.25rem", backgroundColor: "rgba(255,255,255,0.015)" }}>
+                    <p style={{ fontFamily: PLAYFAIR, fontSize: "18px", fontWeight: 400, color: WHITE, margin: "0 0 12px" }}>
+                      Services Requested
+                    </p>
+                    {eventServices.length > 0 ? (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                        {eventServices.map((service) => (
+                          <span key={service} style={{ fontFamily: LATO, fontSize: "11px", color: WHITE, border: "0.5px solid rgba(197,164,109,0.22)", backgroundColor: "rgba(197,164,109,0.05)", padding: "7px 10px" }}>
+                            {service}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0, lineHeight: 1.6 }}>
+                        No services selected yet. Oraya can still recommend setup options after review.
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div style={{ display: "none" }} aria-hidden="true">
                   {(
                     [
                       ["Villa preference",   form.villa],
@@ -945,10 +1135,7 @@ function EventInquiryPageInner() {
                   Event Package
                 </p>
                 <p style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.75)", margin: "0 0 8px", lineHeight: 1.6 }}>
-                  Oraya will review the full venue package, including setup, services, and availability, and respond within 24 hours.
-                </p>
-                <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.6 }}>
-                  Pricing is tailored based on your event size, services, and date.
+                  This request will be reviewed as a full event setup and you will receive a tailored proposal.
                 </p>
               </div>
 
@@ -984,3 +1171,4 @@ export default function EventInquiryPage() {
     </Suspense>
   );
 }
+
