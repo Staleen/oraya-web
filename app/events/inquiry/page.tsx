@@ -354,7 +354,7 @@ function EventInquiryPageInner() {
     }
     if (step === 3) {
       const sleeping = parseInt(form.sleepingGuests, 10);
-      if (!sleeping || sleeping < 1) { setError("Please enter the number of overnight hosts (at least 1)."); return; }
+      if (!sleeping || sleeping < 1) { setError("Please enter the host overnight stay count (at least 1)."); return; }
       if (authStatus !== "member") {
         if (!guest.fullName.trim())                  { setError("Please enter your full name so we know who to contact."); return; }
         if (!guestEmail)                             { setError("Please enter your email address so we can reach you about your event."); return; }
@@ -773,13 +773,13 @@ function EventInquiryPageInner() {
                   Host Details
                 </p>
                 <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "0 0 6px", lineHeight: 1.6 }}>
-                  Event packages include overnight stay for the hosts and are reviewed as a full venue request.
+                  Event packages include overnight stay for the hosts. Oraya will review the full package before confirmation.
                 </p>
               </div>
 
               {/* Overnight hosts */}
               <div>
-                <label style={labelStyle}>Overnight Hosts / Guests</label>
+                <label style={labelStyle}>Host overnight stay</label>
                 <input
                   name="sleepingGuests"
                   type="number"
@@ -793,7 +793,7 @@ function EventInquiryPageInner() {
                   style={inputStyle}
                 />
                 <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, marginTop: "6px", lineHeight: 1.5 }}>
-                  Number of people staying overnight at the villa during the event window.
+                  Event packages include overnight stay for the hosts. Oraya will review the full package before confirmation.
                 </p>
               </div>
 
@@ -903,13 +903,13 @@ function EventInquiryPageInner() {
                       ["Preferred dates",    `${fmtDate(checkIn)} → ${fmtDate(checkOut)}`],
                       ["Window",             `${nights} ${nights === 1 ? "night" : "nights"}`],
                       ["Expected attendees", form.dayVisitors],
-                      ["Overnight hosts",    form.sleepingGuests],
+                      ["Host overnight stay", form.sleepingGuests],
                       ...(eventServices.length > 0 ? [["Requested services", eventServices.join(", ")]] : []),
                       ...(form.message ? [["Notes", form.message]] : []),
                       ...(authStatus !== "member" ? [["Name", guest.fullName], ["Email", guest.email]] : []),
                     ] as [string, string][]
                   ).map(([label, value]) => {
-                    const isHighlight = label === "Event type" || label === "Preferred dates" || label === "Expected attendees" || label === "Overnight hosts";
+                    const isHighlight = label === "Event type" || label === "Preferred dates" || label === "Expected attendees" || label === "Host overnight stay";
                     return (
                       <div key={label} style={{
                         display: "flex",

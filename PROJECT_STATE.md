@@ -259,19 +259,24 @@ Phase 13 — Real-world validation & stabilization:
   - Auto-select Extra Bedding when sleeping guests = 8 (locked, helper text)
   - Simplified guest pricing display (totals only)
   - Event Inquiry mode foundation: Preferred Event Area + Requested Services + notes append
-- 13C.2 Stay vs Event Inquiry Separation [COMPLETE]
-  - Page mode state ("stay" / "event"); URL deep-link via /book?mode=event
-  - Stay flow no longer asks "Booking Purpose"; instead shows "Explore Event Options" upgrade CTA
-  - Event mode: "Plan Your Event" heading + standing inquiry banner + back-to-stay toggle
-  - Event mode: event-type cards above guest counts (Stay Only filtered out)
-  - Mode-aware labels: "Overnight Hosts / Guests", "Expected Event Attendees"
-  - Updated event area + service taxonomies (poolside, garden/outdoor, terrace, etc.)
-  - Step 3: heading switches to "Event Services & Add-ons" in event mode
-  - Event package commercial copy block (event mode only)
-  - Stay pricing panel further simplified to "Estimated Booking Total" with duration + add-ons rows only
-  - Mode-specific review summary (Booking Summary vs. Event Inquiry Summary)
-  - Submit button: "Submit Booking Request" / "Submit Event Inquiry"
-  - Notes append now structured ([Event Inquiry] block) and dedupes on back/forth navigation
+- 13C.2 Stay vs Event Inquiry Separation [COMPLETE — superseded by 13C.3]
+  - Introduced page mode state inside /book (later removed in 13C.3 — events moved to a dedicated inquiry route)
+- 13C.3 Architectural split: Stay (/book) vs Event Inquiry (/events/inquiry) [COMPLETE]
+  - `#events` remains the homepage marketing anchor
+  - New dedicated route `app/events/inquiry/page.tsx` — 4-step event inquiry flow (Event Basics → Services → Host Details → Review)
+  - All event inquiry CTAs route to `/events/inquiry`
+  - `/events/inquiry` shows NO pricing — only "Pricing is tailored based on your event size, services, and date."
+  - `/events/inquiry` submits via existing `/api/bookings` with structured `[Event Inquiry]` notes block (no schema change)
+  - Backend, API, and schema remain unchanged
+  - /book stripped back to stay-only: removed mode state, switchMode, isEventInquiry, EVENT_AREAS, EVENT_SERVICES, BOOKING_PURPOSES, EVENT_ADVISORY, eventArea, eventServices, inquiryPricingPanel
+  - /book Step 2 keeps a single CTA card "Planning something more than a stay?" → routes to /events/inquiry
+  - /book Step 3: review summary stay-only ("Booking Summary"); confirmation copy unified to "Your booking request will be reviewed and confirmed by Oraya."
+  - Submit button always "Submit Booking Request"
+  - /book bundle dropped from 35.3 kB → 17.5 kB
+- 13C.4 Bedroom-based stay setup UX [COMPLETE]
+  - /book Step 2 now leads with bedroom selection (1, 2, or 3 bedrooms) instead of overnight guest count
+  - Estimated guests remains secondary and maps safely to the existing `sleeping_guests` API field
+  - Structured `[Stay Setup]` notes are appended in the existing message field without changing payload shape
 - 13D Guest booking detail page (view token, persistent link) — pending approval
 - 13E Dynamic pricing optimization — pending approval
 

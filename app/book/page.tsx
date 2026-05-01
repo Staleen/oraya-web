@@ -291,6 +291,17 @@ function isExtraBeddingAddon(addon: Pick<Addon, "label">): boolean {
 
 /** Phase 13C Hotfix: 8 sleeping guests forces Extra Bedding (operationally required). */
 const EXTRA_BEDDING_REQUIRED_GUESTS = 8;
+const BEDROOM_DEFAULT_GUESTS = {
+  "1": "2",
+  "2": "4",
+  "3": "6",
+} as const;
+
+type BedroomCount = keyof typeof BEDROOM_DEFAULT_GUESTS;
+
+function formatBedroomLabel(count: string) {
+  return `${count} Bedroom${count === "1" ? "" : "s"}`;
+}
 
 function normalizeAddonCategory(category: string | null | undefined): string {
   const value = category?.trim();
@@ -544,6 +555,7 @@ function BookPageInner() {
   // Form (persisted across steps)
   const [form, setForm] = useState({
     villa:          "",
+    bedroomCount:   "1",
     sleepingGuests: "2",
     dayVisitors:    "0",
     message:        "",
@@ -572,6 +584,7 @@ function BookPageInner() {
   const [loading, setLoading] = useState(false);
   // Phase 12E Batch 5: addon IDs that have had the dead-day discount applied (client-only, display only).
   const [appliedDiscounts, setAppliedDiscounts] = useState<string[]>([]);
+  const [guestEstimateManuallyChanged, setGuestEstimateManuallyChanged] = useState(false);
 
   // Pre-select villa from ?villa= query param
   useEffect(() => {
@@ -954,7 +967,11 @@ function BookPageInner() {
   // ── Event handlers ────────────────────────────────────────────────────────
   function handleFormChange(
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
-  ) { setForm(f => ({ ...f, [e.target.name]: e.target.value })); }
+  ) {
+    const { name, value } = e.target;
+    setForm(f => ({ ...f, [name]: value }));
+    if (name === "sleepingGuests") setGuestEstimateManuallyChanged(true);
+  }
 
   function handleGuestChange(
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -962,6 +979,15 @@ function BookPageInner() {
 
   function handleVillaSelect(villa: string) {
     setForm(f => ({ ...f, villa }));
+    setError("");
+  }
+
+  function handleBedroomSelect(bedroomCount: BedroomCount) {
+    setForm((current) => ({
+      ...current,
+      bedroomCount,
+      sleepingGuests: guestEstimateManuallyChanged ? current.sleepingGuests : BEDROOM_DEFAULT_GUESTS[bedroomCount],
+    }));
     setError("");
   }
 
@@ -1004,11 +1030,12 @@ function BookPageInner() {
       if (dateConflict)        { setError(dateConflict);                                                        return; }
     }
     if (step === 2) {
+      if (!form.bedroomCount)                  { setError("Please select how many bedrooms you would like prepared."); return; }
       if (guestMode && !guest.fullName.trim()) { setError("Please enter your full name so we know who the booking request is for."); return; }
       if (guestMode && !guestEmail)            { setError("Please enter your email address so we can contact you about your booking."); return; }
       if (guestMode && !EMAIL_RE.test(guestEmail)) { setError("Please enter a valid email address so we can contact you about your booking."); return; }
       const sleeping = parseInt(form.sleepingGuests, 10);
-      if (!sleeping || sleeping < 1)           { setError("Please enter at least 1 overnight guest before continuing."); return; }
+      if (!sleeping || sleeping < 1)           { setError("Please enter at least 1 estimated guest before continuing."); return; }
     }
     setStep(s => s + 1);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1080,13 +1107,23 @@ function BookPageInner() {
           };
         });
 
+      const composedMessage = (() => {
+        const userNotes = (form.message ?? "").replace(/\n*\[Stay Setup][\s\S]*$/, "").trim();
+        return [
+          "[Stay Setup]",
+          `Bedrooms to be used: ${formatBedroomLabel(form.bedroomCount)}`,
+          `Estimated guests: ${form.sleepingGuests}`,
+          `Guest Notes: ${userNotes || "None"}`,
+        ].join("\n");
+      })();
+
       const body: Record<string, unknown> = {
         villa:           form.villa,
         check_in:        checkIn,
         check_out:       checkOut,
         sleeping_guests: form.sleepingGuests,
         day_visitors:    form.dayVisitors,
-        message:         form.message || null,
+        message:         composedMessage,
         addons:          selectedAddonObjects,
       };
       if (user) {
@@ -1546,24 +1583,75 @@ function BookPageInner() {
                 </div>
               )}
 
-              {/* Guest counts */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+              {/* Bedroom-based stay setup */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                 <div>
-                  <label style={labelStyle}>Guests staying overnight</label>
-                  <input name="sleepingGuests" type="number" required min={1} max={8}
-                    value={form.sleepingGuests} onChange={handleFormChange}
-                    onFocus={focusGold} onBlur={blurGold} style={inputStyle} />
-                  {parseInt(form.sleepingGuests, 10) > 6 && (
+                  <label style={labelStyle}>Bedrooms to be used</label>
+                  <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "0 0 12px", lineHeight: 1.6 }}>
+                    Select how many bedrooms you would like prepared for your stay.
+                  </p>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "10px" }}>
+                    {(["1", "2", "3"] as BedroomCount[]).map((bedroomCount) => {
+                      const selected = form.bedroomCount === bedroomCount;
+                      return (
+                        <button
+                          key={bedroomCount}
+                          type="button"
+                          onClick={() => handleBedroomSelect(bedroomCount)}
+                          style={{
+                            border: `0.5px solid ${selected ? GOLD : "rgba(197,164,109,0.2)"}`,
+                            backgroundColor: selected ? "rgba(197,164,109,0.08)" : "rgba(255,255,255,0.02)",
+                            padding: "14px 12px",
+                            cursor: "pointer",
+                            textAlign: "center",
+                            transition: "border-color 0.15s, background-color 0.15s",
+                          }}
+                          onMouseEnter={e => {
+                            if (!selected) {
+                              (e.currentTarget as HTMLElement).style.borderColor = "rgba(197,164,109,0.38)";
+                              (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(197,164,109,0.04)";
+                            }
+                          }}
+                          onMouseLeave={e => {
+                            if (!selected) {
+                              (e.currentTarget as HTMLElement).style.borderColor = "rgba(197,164,109,0.2)";
+                              (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.02)";
+                            }
+                          }}
+                        >
+                          <span style={{ fontFamily: PLAYFAIR, fontSize: "16px", color: selected ? GOLD : WHITE, display: "block", marginBottom: "4px" }}>
+                            {formatBedroomLabel(bedroomCount)}
+                          </span>
+                          <span style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, letterSpacing: "0.4px" }}>
+                            Prepared for your stay
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                  <div>
+                    <label style={labelStyle}>Estimated number of guests</label>
+                    <input name="sleepingGuests" type="number" required min={1} max={8}
+                      value={form.sleepingGuests} onChange={handleFormChange}
+                      onFocus={focusGold} onBlur={blurGold} style={inputStyle} />
+                    <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, marginTop: "6px", lineHeight: 1.5 }}>
+                      Optional - this helps us prepare the stay, but bedroom usage is the primary setup preference.
+                    </p>
+                  {sleepingGuestsCount === EXTRA_BEDDING_REQUIRED_GUESTS && (
                     <p style={{ fontFamily: LATO, fontSize: "11px", color: GOLD, marginTop: "6px", lineHeight: 1.5 }}>
-                      Extra bedding will be arranged.
+                      Extra bedding will be arranged for this setup.
                     </p>
                   )}
-                </div>
-                <div>
-                  <label style={labelStyle}>Expected day visitors</label>
-                  <input name="dayVisitors" type="number" required min={0} max={25}
-                    value={form.dayVisitors} onChange={handleFormChange}
-                    onFocus={focusGold} onBlur={blurGold} style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Expected day visitors</label>
+                    <input name="dayVisitors" type="number" required min={0} max={25}
+                      value={form.dayVisitors} onChange={handleFormChange}
+                      onFocus={focusGold} onBlur={blurGold} style={inputStyle} />
+                  </div>
                 </div>
               </div>
 
@@ -1893,7 +1981,7 @@ function BookPageInner() {
                               {/* Phase 13C Hotfix: required-for-8-guests helper */}
                               {isExtraBeddingAddon(addon) && sleepingGuestsCount === EXTRA_BEDDING_REQUIRED_GUESTS && availability.selectable && (
                                 <span style={{ fontFamily: LATO, fontSize: "11px", color: GOLD, display: "block", marginTop: "6px", lineHeight: 1.5 }}>
-                                  Required for 8 sleeping guests.
+                                  Required when estimated guests reach 8.
                                 </span>
                               )}
                               {!availability.available && (
@@ -2122,7 +2210,8 @@ function BookPageInner() {
                       ["Check-in",               fmtDate(checkIn)],
                       ["Check-out",              fmtDate(checkOut)],
                       ["Duration",               `${nights} ${nights === 1 ? "night" : "nights"}`],
-                      ["Guests staying overnight", form.sleepingGuests],
+                      ["Bedrooms to be used",    formatBedroomLabel(form.bedroomCount)],
+                      ["Estimated guests",       form.sleepingGuests],
                       ["Expected day visitors",  form.dayVisitors],
                       ...(selectedAddons.length > 0
                         ? [["Add-ons", selectedAddonDetails.map((addon) => addon.label).join(", ")]]
@@ -2131,7 +2220,7 @@ function BookPageInner() {
                       ...(guestMode    ? [["Name", guest.fullName], ["Email", guest.email]] : []),
                     ] as [string, string][]
                   ).map(([label, value]) => {
-                    const isHighlight = label === "Check-in" || label === "Check-out" || label === "Guests staying overnight" || label === "Expected day visitors";
+                    const isHighlight = label === "Check-in" || label === "Check-out" || label === "Bedrooms to be used" || label === "Estimated guests" || label === "Expected day visitors";
                     return (
                     <div key={label} style={{
                       display: "flex",
