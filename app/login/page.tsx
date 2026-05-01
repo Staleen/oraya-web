@@ -39,6 +39,8 @@ function LoginPageInner() {
   const searchParams = useSearchParams();
   const justRegistered = searchParams.get("registered") === "1";
 
+  const justReset = searchParams.get("reset") === "1";
+
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -109,6 +111,22 @@ function LoginPageInner() {
           </p>
         </div>
 
+        {/* Password reset confirmation */}
+        {justReset && (
+          <div style={{
+            border: "0.5px solid rgba(197,164,109,0.4)",
+            padding: "12px 16px",
+            marginBottom: "24px",
+            fontFamily: LATO,
+            fontSize: "12px",
+            color: GOLD,
+            textAlign: "center",
+            lineHeight: 1.6,
+          }}>
+            Password updated — you can now sign in.
+          </div>
+        )}
+
         {/* Registered confirmation */}
         {justRegistered && (
           <div style={{
@@ -143,7 +161,17 @@ function LoginPageInner() {
           </div>
 
           <div>
-            <label style={labelStyle}>Password</label>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+              <label style={{ ...labelStyle, marginBottom: 0 }}>Password</label>
+              <a
+                href="/forgot-password"
+                style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, textDecoration: "none", letterSpacing: "0.5px" }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = GOLD; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = MUTED; }}
+              >
+                Forgot password?
+              </a>
+            </div>
             <input
               name="password"
               type="password"

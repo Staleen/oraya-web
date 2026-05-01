@@ -9,7 +9,7 @@ STOP and ask before proceeding.
 
 ## CURRENT PHASE
 
-Phase 12G -> COMPLETE
+Phase 12 -> COMPLETE | Phase 13 -> IN PROGRESS
 
 ---
 
@@ -50,6 +50,17 @@ Phase 11 - Add-on Operational Enforcement & Visibility:
 - 11B Strict add-on operational enforcement
 - 11D Admin visibility for add-on operational flags
 - 11 Final operational polish
+Phase 12B - Villa-specific add-ons:
+- Per-villa add-on applicability (applicable_villas field)
+- Admin UI for villa scoping on add-ons
+Phase 12C - Add-on commercial layer:
+- Percentage-based pricing model
+- Display-order and recommended flag
+- Add-on descriptions
+Phase 12D - Early/late checkout + same-day risk:
+- Same-day checkout / same-day checkin detection
+- Admin visibility for operational risk flags
+- Guest-side same-day warning display
 Phase 12E - Monetization Layer:
 - 12E.1 Dead-day detection (guest UI)
 - 12E.2 Discount application UI (guest)
@@ -105,6 +116,8 @@ Completed stabilization work:
 - Booking modal shows per-booking revenue hints
 - Guest Step 3 shows smart suggestion banner + per-add-on microcopy
 - Admin advisory insights derived from analytics data (top add-ons, offer rate, cross-sell gaps)
+- Password reset flow: forgot-password page + reset-password page (Supabase email recovery)
+- Login page: "Forgot password?" link + post-reset confirmation banner
 
 ---
 
@@ -233,9 +246,12 @@ The following systems are production-stable and must not be changed unless expli
 
 ## NEXT PHASE
 
-Goals (pending approval):
-- Phase 12H - Guest-facing booking detail page (view token, persistent link)
-- Phase 12I - Dynamic pricing optimization (optional, requires approval)
+Phase 13 — Real-world validation & stabilization:
+- 13A Calendar sync verification + cron health [COMPLETE — code correct, external config issue]
+- 13B Password reset flow (forgot password → email → new password) [COMPLETE]
+- 13C Pre-production smoke testing
+- 13D Guest booking detail page (view token, persistent link) — pending approval
+- 13E Dynamic pricing optimization — pending approval
 
 ---
 
