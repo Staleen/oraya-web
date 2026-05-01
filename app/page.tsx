@@ -563,7 +563,7 @@ export default function Home() {
             Weddings, baptisms, and private gatherings for small groups — hosted in complete privacy across our villas.
           </p>
           <a
-            href="/book"
+            href="/events"
             style={{
               display: "inline-block", fontFamily: LATO, fontSize: "11px", letterSpacing: "2.5px",
               textTransform: "uppercase", color: CHARCOAL, backgroundColor: GOLD,

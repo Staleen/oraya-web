@@ -28,67 +28,8 @@ const LATO     = "'Lato', system-ui, sans-serif";
 const DEAD_DAY_DISCOUNT_PCT = 0.30;
 
 // ─── Static data ──────────────────────────────────────────────────────────────
-const VILLAS = ["Villa Mechmech", "Villa Byblos"];
-
-const BOOKING_PURPOSES = [
-  {
-    value: "Stay Only",
-    label: "Stay Only",
-    description: "Overnight villa stay with standard access and optional guest services.",
-  },
-  {
-    value: "Baptism / Family Gathering",
-    label: "Baptism / Family Gathering",
-    description: "Family-style event setup with seating, service flow, and optional hospitality add-ons.",
-  },
-  {
-    value: "Wedding / Engagement",
-    label: "Wedding / Engagement",
-    description: "Celebration-focused setup with premium add-ons, guest movement, and operational coordination.",
-  },
-  {
-    value: "Corporate Event",
-    label: "Corporate Event",
-    description: "Professional gathering setup with AV, seating, presentation, and service support.",
-  },
-  {
-    value: "Private Celebration",
-    label: "Private Celebration",
-    description: "Birthday, dinner, or private occasion with flexible add-ons and guest support.",
-  },
-];
-
-const EVENT_ADVISORY: Record<string, string> = {
-  "Stay Only": "Optional upgrades can make the stay more comfortable, but no event setup is required.",
-  "Baptism / Family Gathering": "Recommended for this type of booking: family seating, catering support, shaded areas, and service setup.",
-  "Wedding / Engagement": "Recommended for this type of booking: seating, valet, lighting, AV, and guest-flow support.",
-  "Corporate Event": "Recommended for this type of booking: AV support, presentation setup, seating layout, coffee service, and valet.",
-  "Private Celebration": "Recommended for this type of booking: seating, lighting, decoration support, music/AV, and service staff.",
-};
-
-/** Phase 13C.2: preferred event area options (frontend-only, appended to notes). */
-const EVENT_AREAS = [
-  "Poolside Event Area",
-  "Garden / Outdoor Seating Area",
-  "Terrace / View Area",
-  "Indoor Villa Area",
-  "Full Venue / Multiple Areas",
-  "To Be Recommended by Oraya",
-];
-
-/** Phase 13C.2: requested event services (frontend-only, appended to notes). */
-const EVENT_SERVICES = [
-  "Basic seating setup",
-  "Tables and chairs",
-  "Umbrellas / shaded setup",
-  "Buffet / catering setup area",
-  "Decoration support",
-  "AV / sound support",
-  "Lighting support",
-  "Valet / guest arrival support",
-  "Service staff coordination",
-];
-const EMAIL_RE    = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const VILLAS   = ["Villa Mechmech", "Villa Byblos"];
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const VILLA_CARD_META: Record<string, { image: string; imagePosition: string; note: string }> = {
   "Villa Mechmech": {
     image: "/screenshots/03-villas.png",
@@ -548,10 +489,8 @@ const CALENDAR_CSS = `
 `;
 
 // ─── Step indicator ───────────────────────────────────────────────────────────
-function StepIndicator({ step, mode }: { step: number; mode: "stay" | "event" }) {
-  const labels = mode === "event"
-    ? ["Villa & Dates", "Event Details", "Services & Review"]
-    : ["Villa & Dates", "Stay Details", "Review"];
+function StepIndicator({ step }: { step: number }) {
+  const labels = ["Villa & Dates", "Stay Details", "Review"];
   return (
     <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -602,24 +541,13 @@ function BookPageInner() {
   // Step
   const [step, setStep] = useState(1);
 
-  // Phase 13C.2: page mode — "stay" (default) or "event" (event inquiry).
-  // Initialized from ?mode=event so external "Inquire About Events" buttons can deep-link in.
-  const [mode, setMode] = useState<"stay" | "event">(() => {
-    const m = searchParams.get("mode");
-    return m === "event" ? "event" : "stay";
-  });
-
   // Form (persisted across steps)
   const [form, setForm] = useState({
     villa:          "",
     sleepingGuests: "2",
     dayVisitors:    "0",
-    eventType:      "",
     message:        "",
-    eventArea:      "",
   });
-  // Phase 13C Hotfix: requested event services (frontend-only, merged into notes on submit).
-  const [eventServices, setEventServices] = useState<string[]>([]);
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
   // Guest contact (shown on step 2 when guestMode)
@@ -1010,16 +938,6 @@ function BookPageInner() {
   // Clear applied discounts whenever dates change — the discount amount is date-dependent.
   useEffect(() => { setAppliedDiscounts([]); }, [dateRange]);
 
-  // Phase 13C.2: switch between stay and event mode. Preserves villa/dates/guest counts,
-  // clears event-only fields when leaving event mode.
-  function switchMode(next: "stay" | "event") {
-    setError("");
-    setMode(next);
-    if (next === "stay") {
-      setForm(f => ({ ...f, eventType: "", eventArea: "" }));
-      setEventServices([]);
-    }
-  }
 
   // Phase 13C Hotfix: auto-select Extra Bedding when sleeping guests reaches 8 (operationally required).
   // Idempotent — prev.includes guard prevents re-renders. Respects existing strict/availability blocks.
@@ -1162,35 +1080,13 @@ function BookPageInner() {
           };
         });
 
-      // Phase 13C.2: append event-inquiry details to notes (no backend fields for area/services).
-      // Strips any prior [Event Inquiry] block from form.message before re-appending so back-and-forth
-      // navigation does not duplicate the block.
-      const composedMessage = (() => {
-        const userNotes = (form.message ?? "").replace(/\n*\[Event Inquiry][\s\S]*$/, "").trim();
-        const lines: string[] = [];
-        if (userNotes) lines.push(userNotes);
-        if (isEventInquiry) {
-          const block: string[] = ["[Event Inquiry]"];
-          if (form.eventType)            block.push(`Event Type: ${form.eventType}`);
-          if (form.dayVisitors)          block.push(`Expected Event Attendees: ${form.dayVisitors}`);
-          if (form.sleepingGuests)       block.push(`Overnight Hosts / Guests: ${form.sleepingGuests}`);
-          if (form.eventArea)            block.push(`Preferred Event Area: ${form.eventArea}`);
-          if (eventServices.length > 0)  block.push(`Requested Services: ${eventServices.join(", ")}`);
-          if (selectedAddonObjects.length > 0) block.push(`Selected Add-ons / Event Services: ${selectedAddonObjects.map(a => a.label).join(", ")}`);
-          if (userNotes)                 block.push(`Guest Notes: ${userNotes}`);
-          if (block.length > 1) lines.push(block.join("\n"));
-        }
-        return lines.length > 0 ? lines.join("\n\n") : null;
-      })();
-
       const body: Record<string, unknown> = {
         villa:           form.villa,
         check_in:        checkIn,
         check_out:       checkOut,
         sleeping_guests: form.sleepingGuests,
         day_visitors:    form.dayVisitors,
-        event_type:      form.eventType || null,
-        message:         composedMessage,
+        message:         form.message || null,
         addons:          selectedAddonObjects,
       };
       if (user) {
@@ -1217,7 +1113,6 @@ function BookPageInner() {
         checkOut,
         sleepingGuests: form.sleepingGuests,
         dayVisitors:    form.dayVisitors,
-        eventType:      form.eventType,
         id:             booking?.id ?? "",
         ...(displayName ? { name: displayName } : {}),
       });
@@ -1260,12 +1155,9 @@ function BookPageInner() {
     );
   }
 
-  // Phase 13C.2: event inquiry mode is now driven by page mode, decoupled from eventType.
-  const isEventInquiry = mode === "event";
-
   // ── Auth gate (not member, not yet chosen guest) ──────────────────────────
   // Phase 13C.2: simplified stay pricing panel — Estimated Booking Total prominent, then small detail lines.
-  const stayPricingPanel = checkIn && checkOut && nightlyBasePrice !== null ? (
+  const estimatePanel = checkIn && checkOut && nightlyBasePrice !== null ? (
     <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: "rgba(197,164,109,0.04)", padding: "1.25rem" }}>
       <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 8px" }}>
         Estimated Booking Total
@@ -1314,23 +1206,6 @@ function BookPageInner() {
       })}
     </div>
   ) : null;
-
-  // Phase 13C Hotfix: event inquiry mode shows no calculated total — pricing is quoted later.
-  const inquiryPricingPanel = (
-    <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: "rgba(197,164,109,0.04)", padding: "1.25rem" }}>
-      <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 10px" }}>
-        Event Inquiry — Pricing
-      </p>
-      <p style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.75)", margin: "0 0 8px", lineHeight: 1.6 }}>
-        Pricing for events depends on the area, services, and event details you choose.
-      </p>
-      <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.6 }}>
-        Our team will follow up with a tailored proposal shortly after you submit this inquiry.
-      </p>
-    </div>
-  );
-
-  const estimatePanel = isEventInquiry ? inquiryPricingPanel : stayPricingPanel;
 
   if (authStatus === "none" && !guestMode) {
     return (
@@ -1397,37 +1272,18 @@ function BookPageInner() {
           <OrayaEmblem />
         </a>
 
-        {/* Page heading — mode-aware */}
+        {/* Page heading */}
         <div style={{ textAlign: "center", marginBottom: "2rem" }}>
           <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "4px", textTransform: "uppercase", color: GOLD, marginBottom: "12px" }}>
-            {isEventInquiry ? "Event Inquiry" : "Reservations"}
+            Reservations
           </p>
           <h1 style={{ fontFamily: PLAYFAIR, fontSize: "2rem", fontWeight: 400, color: WHITE, margin: "0 0 10px" }}>
-            {isEventInquiry ? "Plan Your Event" : "Request a booking"}
+            Request a booking
           </h1>
           <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, lineHeight: 1.7, margin: 0 }}>
-            {isEventInquiry
-              ? "Tell us what type of event you are hosting, how many guests will attend, and what services you need. Event packages include overnight stay for the hosts and are reviewed by Oraya before confirmation."
-              : "Submit your dates and we'll confirm availability within 24 hours."}
+            Submit your dates and we&apos;ll confirm availability within 24 hours.
           </p>
         </div>
-
-        {/* Event Inquiry standing notice */}
-        {isEventInquiry && (
-          <div style={{ border: "0.5px solid rgba(197,164,109,0.25)", backgroundColor: "rgba(197,164,109,0.06)", padding: "12px 16px", marginBottom: "1.5rem", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
-            <p style={{ fontFamily: LATO, fontSize: "11px", color: "rgba(255,255,255,0.7)", margin: 0, lineHeight: 1.6, flex: 1, minWidth: "240px" }}>
-              This is an inquiry, not an instant booking. Our team will respond within 24 hours with availability, setup options, and pricing.
-            </p>
-            <button
-              onClick={() => switchMode("stay")}
-              style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED, backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.3)", padding: "8px 14px", cursor: "pointer", whiteSpace: "nowrap" }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = GOLD; (e.currentTarget as HTMLElement).style.color = GOLD; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(197,164,109,0.3)"; (e.currentTarget as HTMLElement).style.color = MUTED; }}
-            >
-              ← Back to stay booking
-            </button>
-          </div>
-        )}
 
         {/* Auth identity banner */}
         {authStatus === "member" ? (
@@ -1455,7 +1311,7 @@ function BookPageInner() {
         )}
 
         {/* Step indicator */}
-        <StepIndicator step={step} mode={mode} />
+        <StepIndicator step={step} />
 
         {/* Step content — keyed so the fade animation re-fires on each step change */}
         <div key={step} className="step-content">
@@ -1690,64 +1546,10 @@ function BookPageInner() {
                 </div>
               )}
 
-              {/* Event Type cards (event mode only — appears above guest counts so the page feels event-first) */}
-              {isEventInquiry && (
-                <div>
-                  <p style={{ ...labelStyle, marginBottom: "12px" }}>
-                    Event Type{" "}
-                    <span style={{ color: "rgba(138,128,112,0.5)", letterSpacing: 0 }}>(optional)</span>
-                  </p>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                    {BOOKING_PURPOSES.filter(p => p.value !== "Stay Only").map((purpose) => {
-                      const selected = form.eventType === purpose.value;
-                      return (
-                        <button
-                          key={purpose.value}
-                          type="button"
-                          onClick={() => setForm(f => ({ ...f, eventType: selected ? "" : purpose.value }))}
-                          style={{
-                            display: "flex",
-                            alignItems: "flex-start",
-                            gap: "12px",
-                            padding: "14px 16px",
-                            textAlign: "left",
-                            width: "100%",
-                            border: `0.5px solid ${selected ? GOLD : "rgba(197,164,109,0.18)"}`,
-                            backgroundColor: selected ? "rgba(197,164,109,0.08)" : "rgba(255,255,255,0.02)",
-                            cursor: "pointer",
-                            transition: "border-color 0.15s, background-color 0.15s",
-                          }}
-                          onMouseEnter={e => { if (!selected) { (e.currentTarget as HTMLElement).style.borderColor = "rgba(197,164,109,0.35)"; (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(197,164,109,0.04)"; } }}
-                          onMouseLeave={e => { if (!selected) { (e.currentTarget as HTMLElement).style.borderColor = "rgba(197,164,109,0.18)"; (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.02)"; } }}
-                        >
-                          <div style={{
-                            width: "16px", height: "16px", flexShrink: 0, marginTop: "2px",
-                            border: `1px solid ${selected ? GOLD : "rgba(197,164,109,0.3)"}`,
-                            backgroundColor: selected ? GOLD : "transparent",
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            transition: "background-color 0.15s, border-color 0.15s",
-                          }}>
-                            {selected && <span style={{ color: CHARCOAL, fontSize: "10px", fontWeight: 700, lineHeight: 1 }}>✓</span>}
-                          </div>
-                          <div style={{ flex: 1 }}>
-                            <p style={{ fontFamily: LATO, fontSize: "13px", color: selected ? WHITE : "rgba(255,255,255,0.7)", margin: "0 0 4px", fontWeight: selected ? 400 : 300 }}>
-                              {purpose.label}
-                            </p>
-                            <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
-                              {purpose.description}
-                            </p>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Guest counts — labels adapt to mode */}
+              {/* Guest counts */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
                 <div>
-                  <label style={labelStyle}>{isEventInquiry ? "Overnight Hosts / Guests" : "Guests staying overnight"}</label>
+                  <label style={labelStyle}>Guests staying overnight</label>
                   <input name="sleepingGuests" type="number" required min={1} max={8}
                     value={form.sleepingGuests} onChange={handleFormChange}
                     onFocus={focusGold} onBlur={blurGold} style={inputStyle} />
@@ -1758,142 +1560,42 @@ function BookPageInner() {
                   )}
                 </div>
                 <div>
-                  <label style={labelStyle}>{isEventInquiry ? "Expected Event Attendees" : "Expected day visitors"}</label>
+                  <label style={labelStyle}>Expected day visitors</label>
                   <input name="dayVisitors" type="number" required min={0} max={25}
                     value={form.dayVisitors} onChange={handleFormChange}
                     onFocus={focusGold} onBlur={blurGold} style={inputStyle} />
                 </div>
               </div>
 
-              {/* Event mode helper copy under guest counts */}
-              {isEventInquiry && (
-                <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.6 }}>
-                  Event packages include overnight stay for the hosts. Attendee capacity, setup, and services will be reviewed by Oraya.
+              {/* Explore Event Options upgrade CTA — navigates to /events */}
+              <div style={{ border: "0.5px solid rgba(197,164,109,0.22)", backgroundColor: "rgba(197,164,109,0.04)", padding: "16px 18px" }}>
+                <p style={{ fontFamily: PLAYFAIR, fontSize: "16px", fontWeight: 400, color: WHITE, margin: "0 0 6px" }}>
+                  Planning something more than a stay?
                 </p>
-              )}
-
-              {/* Stay mode — Explore Event Options upgrade CTA (replaces Booking Purpose) */}
-              {!isEventInquiry && (
-                <div style={{ border: "0.5px solid rgba(197,164,109,0.22)", backgroundColor: "rgba(197,164,109,0.04)", padding: "16px 18px" }}>
-                  <p style={{ fontFamily: PLAYFAIR, fontSize: "16px", fontWeight: 400, color: WHITE, margin: "0 0 6px" }}>
-                    Planning something more than a stay?
-                  </p>
-                  <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "0 0 14px", lineHeight: 1.6 }}>
-                    Turn your villa booking into a hosted experience with guest seating, setup support, catering areas, AV, valet, and service coordination.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => switchMode("event")}
-                    style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: CHARCOAL, backgroundColor: GOLD, border: "none", padding: "11px 22px", cursor: "pointer" }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
-                  >
-                    Explore Event Options →
-                  </button>
-                </div>
-              )}
-
-              {/* Event Inquiry mode — Preferred Event Area + Requested Services */}
-              {isEventInquiry && (
-                <>
-                  {/* Preferred Event Area */}
-                  <div>
-                    <p style={{ ...labelStyle, marginBottom: "8px" }}>
-                      Preferred Event Area{" "}
-                      <span style={{ color: "rgba(138,128,112,0.5)", letterSpacing: 0 }}>(optional)</span>
-                    </p>
-                    <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "0 0 10px", lineHeight: 1.6 }}>
-                      For event inquiries, Oraya reviews the required area, guest flow, setup needs, and operational availability before confirmation.
-                    </p>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                      {EVENT_AREAS.map((area) => {
-                        const selected = form.eventArea === area;
-                        return (
-                          <button
-                            key={area}
-                            type="button"
-                            onClick={() => setForm(f => ({ ...f, eventArea: selected ? "" : area }))}
-                            style={{
-                              fontFamily: LATO,
-                              fontSize: "11px",
-                              letterSpacing: "0.5px",
-                              padding: "9px 14px",
-                              border: `0.5px solid ${selected ? GOLD : "rgba(197,164,109,0.2)"}`,
-                              backgroundColor: selected ? "rgba(197,164,109,0.1)" : "rgba(255,255,255,0.02)",
-                              color: selected ? WHITE : "rgba(255,255,255,0.7)",
-                              cursor: "pointer",
-                              transition: "border-color 0.15s, background-color 0.15s",
-                            }}
-                            onMouseEnter={e => { if (!selected) (e.currentTarget as HTMLElement).style.borderColor = "rgba(197,164,109,0.4)"; }}
-                            onMouseLeave={e => { if (!selected) (e.currentTarget as HTMLElement).style.borderColor = "rgba(197,164,109,0.2)"; }}
-                          >
-                            {area}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Requested Event Services */}
-                  <div>
-                    <p style={{ ...labelStyle, marginBottom: "8px" }}>
-                      Requested Event Services{" "}
-                      <span style={{ color: "rgba(138,128,112,0.5)", letterSpacing: 0 }}>(optional)</span>
-                    </p>
-                    <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "0 0 10px", lineHeight: 1.6 }}>
-                      Select what you&apos;d like our team to plan for. Final scope is confirmed by Oraya.
-                    </p>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "8px" }}>
-                      {EVENT_SERVICES.map((service) => {
-                        const selected = eventServices.includes(service);
-                        return (
-                          <button
-                            key={service}
-                            type="button"
-                            onClick={() => setEventServices(prev => prev.includes(service) ? prev.filter(s => s !== service) : [...prev, service])}
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "10px",
-                              padding: "10px 12px",
-                              textAlign: "left",
-                              border: `0.5px solid ${selected ? GOLD : "rgba(197,164,109,0.18)"}`,
-                              backgroundColor: selected ? "rgba(197,164,109,0.08)" : "rgba(255,255,255,0.02)",
-                              cursor: "pointer",
-                              transition: "border-color 0.15s, background-color 0.15s",
-                            }}
-                          >
-                            <div style={{
-                              width: "14px", height: "14px", flexShrink: 0,
-                              border: `1px solid ${selected ? GOLD : "rgba(197,164,109,0.3)"}`,
-                              backgroundColor: selected ? GOLD : "transparent",
-                              display: "flex", alignItems: "center", justifyContent: "center",
-                            }}>
-                              {selected && <span style={{ color: CHARCOAL, fontSize: "9px", fontWeight: 700, lineHeight: 1 }}>✓</span>}
-                            </div>
-                            <span style={{ fontFamily: LATO, fontSize: "12px", color: selected ? WHITE : "rgba(255,255,255,0.7)" }}>
-                              {service}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </>
-              )}
+                <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "0 0 14px", lineHeight: 1.6 }}>
+                  Hosting a celebration, wedding, baptism, corporate gathering, or private event? Oraya can prepare the venue, setup, services, and overnight host stay as a full event package.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => router.push("/events")}
+                  style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: CHARCOAL, backgroundColor: GOLD, border: "none", padding: "11px 22px", cursor: "pointer" }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
+                >
+                  Explore Event Options →
+                </button>
+              </div>
 
               {/* Notes */}
               <div>
                 <label style={labelStyle}>
-                  {isEventInquiry ? "Additional notes" : "Special requests"}{" "}
+                  Special requests{" "}
                   <span style={{ color: "rgba(138,128,112,0.5)", letterSpacing: 0 }}>(optional)</span>
                 </label>
                 <textarea name="message" value={form.message} onChange={handleFormChange}
                   onFocus={focusGold} onBlur={blurGold}
                   rows={4}
-                  placeholder={isEventInquiry
-                    ? "Tell us about your event — guest count expectations, theme, timing, or anything else we should know…"
-                    : "Any special requirements, dietary needs, or occasion details…"}
+                  placeholder="Any special requirements, dietary needs, or occasion details…"
                   style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6 }} />
               </div>
 
@@ -1931,12 +1633,10 @@ function BookPageInner() {
               {/* ── Add-ons ─────────────────────────────────────────────── */}
               <div>
                 <p style={{ fontFamily: PLAYFAIR, fontSize: "20px", fontWeight: 400, color: WHITE, margin: "0 0 6px" }}>
-                  {isEventInquiry ? "Event Services & Add-ons" : "Enhance Your Booking"}
+                  Enhance Your Booking
                 </p>
                 <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "0 0 16px", lineHeight: 1.6 }}>
-                  {isEventInquiry
-                    ? "Select the services you may need for your event. Final availability and pricing will be confirmed by Oraya."
-                    : "Select optional services and upgrades. Some items may require approval or advance preparation."}
+                  Select optional services and upgrades. Some items may require approval or advance preparation.
                 </p>
 
                 {addonsLoading ? (
@@ -1980,13 +1680,11 @@ function BookPageInner() {
                     {(() => {
                       const isGroupBooking = sleepingGuestsCount >= 4;
                       const isLongerStay   = nights >= 3;
-                      const isEventBooking = !!form.eventType;
                       const hasOffer       = deadDayOfferAddons.length > 0;
                       const hints: string[] = [];
-                      if (hasOffer)                     hints.push("A special offer is available — see highlighted add-ons below.");
+                      if (hasOffer)                      hints.push("A special offer is available — see highlighted add-ons below.");
                       if (isGroupBooking)                hints.push("Some add-ons are especially popular for larger groups.");
                       else if (isLongerStay)             hints.push("A few add-ons are particularly suited to longer stays.");
-                      if (isEventBooking && form.eventType !== "Stay Only") hints.push(`Experience add-ons pair well with ${form.eventType.toLowerCase()} bookings.`);
                       if (hints.length === 0) return null;
                       return (
                         <div style={{ border: "0.5px solid rgba(197,164,109,0.18)", backgroundColor: "rgba(197,164,109,0.04)", padding: "10px 14px" }}>
@@ -1998,17 +1696,6 @@ function BookPageInner() {
                         </div>
                       );
                     })()}
-                    {/* Event-aware advisory suggestions */}
-                    {form.eventType && EVENT_ADVISORY[form.eventType] && (
-                      <div style={{ border: "0.5px solid rgba(197,164,109,0.22)", backgroundColor: "rgba(197,164,109,0.05)", padding: "12px 16px" }}>
-                        <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2.5px", textTransform: "uppercase", color: GOLD, margin: "0 0 5px" }}>
-                          {form.eventType}
-                        </p>
-                        <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.6, fontStyle: "italic" }}>
-                          {EVENT_ADVISORY[form.eventType]}
-                        </p>
-                      </div>
-                    )}
                     {addonGroups.map((group) => (
                       <div key={group.category} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                         {showCategoryHeaders && (
@@ -2157,11 +1844,6 @@ function BookPageInner() {
                                 if (nights >= 3 && cat === "Comfort") return (
                                   <span style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, display: "block", marginTop: "3px", lineHeight: 1.4, fontStyle: "italic" }}>
                                     Recommended for your stay
-                                  </span>
-                                );
-                                if (!!form.eventType && form.eventType !== "Stay Only" && cat === "Experience") return (
-                                  <span style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, display: "block", marginTop: "3px", lineHeight: 1.4, fontStyle: "italic" }}>
-                                    Pairs well with {form.eventType.toLowerCase()} bookings
                                   </span>
                                 );
                                 return null;
@@ -2425,41 +2107,25 @@ function BookPageInner() {
               {/* ── Booking Summary ──────────────────────────────────────── */}
               <div>
                 <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 14px" }}>
-                  {isEventInquiry ? "Event Inquiry Summary" : "Booking Summary"}
+                  Booking Summary
                 </p>
                 <div style={{ border: "0.5px solid rgba(197,164,109,0.18)", padding: "1.25rem", backgroundColor: "rgba(255,255,255,0.015)" }}>
-                  {(isEventInquiry
-                    ? [
-                        ["Request type",         "Event Inquiry"],
-                        ["Villa",                form.villa],
-                        ...(form.eventType ? [["Event type", form.eventType]] : []),
-                        ["Preferred dates",      `${fmtDate(checkIn)} → ${fmtDate(checkOut)}`],
-                        ["Duration",             `${nights} ${nights === 1 ? "night" : "nights"}`],
-                        ["Expected attendees",   form.dayVisitors],
-                        ["Overnight hosts",      form.sleepingGuests],
-                        ...(form.eventArea ? [["Preferred event area", form.eventArea]] : []),
-                        ...(eventServices.length > 0 ? [["Requested services", eventServices.join(", ")]] : []),
-                        ...(selectedAddons.length > 0
-                          ? [["Selected event add-ons", selectedAddonDetails.map((addon) => addon.label).join(", ")]]
-                          : []),
-                        ...(form.message ? [["Notes", form.message]] : []),
-                        ...(guestMode    ? [["Name", guest.fullName], ["Email", guest.email]] : []),
-                      ]
-                    : [
-                        ["Villa",           form.villa],
-                        ["Check-in",        fmtDate(checkIn)],
-                        ["Check-out",       fmtDate(checkOut)],
-                        ["Duration",        `${nights} ${nights === 1 ? "night" : "nights"}`],
-                        ["Overnight guests", form.sleepingGuests],
-                        ["Day visitors",    form.dayVisitors],
-                        ...(selectedAddons.length > 0
-                          ? [["Add-ons", selectedAddonDetails.map((addon) => addon.label).join(", ")]]
-                          : []),
-                        ...(form.message ? [["Notes", form.message]] : []),
-                        ...(guestMode    ? [["Name", guest.fullName], ["Email", guest.email]] : []),
-                      ] as [string, string][]
+                  {(
+                    [
+                      ["Villa",                  form.villa],
+                      ["Check-in",               fmtDate(checkIn)],
+                      ["Check-out",              fmtDate(checkOut)],
+                      ["Duration",               `${nights} ${nights === 1 ? "night" : "nights"}`],
+                      ["Guests staying overnight", form.sleepingGuests],
+                      ["Expected day visitors",  form.dayVisitors],
+                      ...(selectedAddons.length > 0
+                        ? [["Add-ons", selectedAddonDetails.map((addon) => addon.label).join(", ")]]
+                        : []),
+                      ...(form.message ? [["Notes", form.message]] : []),
+                      ...(guestMode    ? [["Name", guest.fullName], ["Email", guest.email]] : []),
+                    ] as [string, string][]
                   ).map(([label, value]) => {
-                    const isHighlight = label === "Check-in" || label === "Check-out" || label === "Overnight guests" || label === "Day visitors" || label === "Preferred dates" || label === "Expected attendees" || label === "Overnight hosts" || label === "Request type";
+                    const isHighlight = label === "Check-in" || label === "Check-out" || label === "Guests staying overnight" || label === "Expected day visitors";
                     return (
                     <div key={label} style={{
                       display: "flex",
@@ -2489,24 +2155,6 @@ function BookPageInner() {
                 </div>
               </div>
 
-              {/* Event Inquiry — package commercial copy + inquiry note */}
-              {isEventInquiry && (
-                <div style={{ border: "0.5px solid rgba(197,164,109,0.22)", backgroundColor: "rgba(197,164,109,0.04)", padding: "16px 20px" }}>
-                  <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 10px" }}>
-                    Event Package
-                  </p>
-                  <p style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.75)", margin: "0 0 8px", lineHeight: 1.6 }}>
-                    Event packages are reviewed as a complete request and may include exclusive event area usage, overnight stay for hosts, guest seating/setup, selected services, and operational support.
-                  </p>
-                  <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "0 0 8px", lineHeight: 1.6 }}>
-                    Final pricing depends on date, event size, selected area, and services.
-                  </p>
-                  <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.6, fontStyle: "italic" }}>
-                    This is an inquiry request. Oraya will review availability, event setup, services, and final pricing within 24 hours.
-                  </p>
-                </div>
-              )}
-
               {estimatePanel}
 
               {/* Commercial layer teaser — static copy, no logic */}
@@ -2517,9 +2165,7 @@ function BookPageInner() {
               </div>
 
               <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.8, textAlign: "center", margin: 0 }}>
-                {isEventInquiry
-                  ? "Your event inquiry will be reviewed and our team will follow up with a tailored proposal shortly."
-                  : "Your request will be reviewed and you'll receive a confirmation within 24 hours."}
+                Your booking request will be reviewed and confirmed by Oraya.
               </p>
 
               {error && (
@@ -2539,7 +2185,7 @@ function BookPageInner() {
                   style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2.5px", textTransform: "uppercase", color: CHARCOAL, backgroundColor: GOLD, border: "none", padding: "16px", flex: 1, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1 }}
                   onMouseEnter={e => { if (!loading) (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}>
-                  {loading ? "Submitting…" : isEventInquiry ? "Send Event Inquiry" : "Submit Booking Request"}
+                  {loading ? "Submitting…" : "Submit Booking Request"}
                 </button>
               </div>
             </div>
