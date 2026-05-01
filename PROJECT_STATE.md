@@ -9,7 +9,7 @@ STOP and ask before proceeding.
 
 ## CURRENT PHASE
 
-Phase 12 -> IN PROGRESS
+Phase 12G -> COMPLETE
 
 ---
 
@@ -59,6 +59,14 @@ Phase 12E - Monetization Layer:
 - 12E.6 Offer tracking metadata in snapshot
 - 12E.7 Server-side offer validation (anti-forgery)
 - 12E.8 Admin insights (offer usage, savings visibility)
+Phase 12F - Analytics & Revenue Metrics:
+- 12F Add-on revenue metric (dashboard analytics tile)
+Phase 12G - Revenue Optimization Layer:
+- 12G.1 Revenue opportunity detection (5 types per booking)
+- 12G.2 Admin Revenue Opportunities panel (dashboard)
+- 12G.3 Booking-level revenue hints (detail modal)
+- 12G.4 Guest smart suggestions (Step 3 add-ons)
+- 12G.5 Admin advisory insights (below analytics)
 
 Completed stabilization work:
 - Booking reliability: overlap protection, confirm/cancel persistence
@@ -91,6 +99,12 @@ Completed stabilization work:
 - Server-side validation prevents forged discount input
 - Admin UI surfaces offer usage and savings
 - Guest UI displays discounted pricing with contextual messaging
+- Add-on revenue metric visible in admin dashboard analytics
+- Revenue opportunity detection runs client-side across 5 signal types (offer_available, no_addons, high_value, operational_risk)
+- Admin Revenue Opportunities panel surfaces up to 8 actionable items per load
+- Booking modal shows per-booking revenue hints
+- Guest Step 3 shows smart suggestion banner + per-add-on microcopy
+- Admin advisory insights derived from analytics data (top add-ons, offer rate, cross-sell gaps)
 
 ---
 
@@ -217,11 +231,11 @@ The following systems are production-stable and must not be changed unless expli
 
 ---
 
-## NEXT PHASE - PHASE 12
+## NEXT PHASE
 
-Goals:
-- Phase 12F - Analytics & Reporting Layer
-- Phase 12G - Dynamic pricing optimization (optional, requires approval)
+Goals (pending approval):
+- Phase 12H - Guest-facing booking detail page (view token, persistent link)
+- Phase 12I - Dynamic pricing optimization (optional, requires approval)
 
 ---
 
