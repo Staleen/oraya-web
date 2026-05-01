@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { formatBeirutRelative } from "@/lib/format-date";
 import type { Booking, CalendarSource, Member } from "@/components/admin/types";
 import { BORDER, GOLD, LATO, MUTED, PLAYFAIR, SURFACE, WHITE, fmt } from "@/components/admin/theme";
@@ -28,6 +28,11 @@ interface ExternalCalendarBlock {
 type CalendarItem =
   | { type: "booking"; id: string; villa: string; starts_on: string; ends_on: string; status: string; booking: Booking }
   | { type: "external"; id: string; villa: string; starts_on: string; ends_on: string; status: "external"; summary: string | null };
+
+type BookingWithOptionalPricing = Booking & {
+  pricing_subtotal?: unknown;
+  pricing_snapshot?: { subtotal?: unknown } | null;
+};
 
 function startOfTodayUtcIso() {
   const now = new Date();
@@ -114,6 +119,69 @@ function addonNeedsAttention(addon: NonNullable<Booking["addons_snapshot"]>[numb
 function formatAddonPrice(price: number | null) {
   if (typeof price !== "number") return "Price on request";
   return `$${price.toLocaleString("en-US")}`;
+}
+
+function readFiniteNumber(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function formatMoney(value: number) {
+  return `$${value.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+}
+
+function formatRate(value: number) {
+  return `${Math.round(value * 100)}%`;
+}
+
+function addonHasTrackedOffer(addon: NonNullable<Booking["addons_snapshot"]>[number]) {
+  return addon.offer_applied === true;
+}
+
+function bookingHasTrackedOffer(booking: Booking) {
+  return (booking.addons_snapshot ?? []).some((addon) => addonHasTrackedOffer(addon));
+}
+
+function getBookingOfferSavingsTotal(booking: Booking) {
+  const total = (booking.addons_snapshot ?? []).reduce((sum, addon) => {
+    if (!addonHasTrackedOffer(addon)) return sum;
+    return sum + (readFiniteNumber(addon.savings) ?? 0);
+  }, 0);
+
+  return total > 0 ? total : null;
+}
+
+function getBookingAddonRevenue(booking: Booking) {
+  return (booking.addons_snapshot ?? []).reduce((sum, addon) => {
+    return sum + (readFiniteNumber(addon.price) ?? 0);
+  }, 0);
+}
+
+function getBookingStaySubtotal(booking: Booking) {
+  const pricedBooking = booking as BookingWithOptionalPricing;
+  return (
+    readFiniteNumber(pricedBooking.pricing_subtotal) ??
+    readFiniteNumber(pricedBooking.pricing_snapshot?.subtotal) ??
+    0
+  );
+}
+
+function getBookingEstimatedRevenue(booking: Booking) {
+  return getBookingStaySubtotal(booking) + getBookingAddonRevenue(booking);
+}
+
+function formatOfferType(value: string | null | undefined) {
+  if (value === "dead_day") return "Dead-day";
+  if (!value) return "Unknown";
+  return value
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 function bookingNeedsAddonAttention(booking: Booking) {
@@ -320,6 +388,75 @@ export default function DashboardOperationsView({
     .sort((a, b) => a.created_at.localeCompare(b.created_at))
     .slice(0, 6);
 
+  const analytics = useMemo(() => {
+    const addonUsage = new Map<string, { label: string; count: number; discountedCount: number }>();
+    const villaUsage = new Map<string, { villa: string; totalBookings: number; bookingsWithOffers: number; totalSavings: number }>();
+    const offerTypes = new Map<string, number>();
+
+    let confirmedBookings = 0;
+    let pendingBookingCount = 0;
+    let bookingsWithOffers = 0;
+    let totalSavings = 0;
+    let estimatedRevenue = 0;
+
+    for (const booking of bookings) {
+      if (booking.status === "confirmed") confirmedBookings += 1;
+      if (booking.status === "pending") pendingBookingCount += 1;
+
+      const snapshots = booking.addons_snapshot ?? [];
+      const hasOffer = snapshots.some((addon) => addonHasTrackedOffer(addon));
+      const savingsForBooking = getBookingOfferSavingsTotal(booking) ?? 0;
+
+      if (booking.status !== "cancelled") {
+        estimatedRevenue += getBookingEstimatedRevenue(booking);
+      }
+
+      if (hasOffer) bookingsWithOffers += 1;
+      totalSavings += savingsForBooking;
+
+      const villaStats = villaUsage.get(booking.villa) ?? {
+        villa: booking.villa,
+        totalBookings: 0,
+        bookingsWithOffers: 0,
+        totalSavings: 0,
+      };
+      villaStats.totalBookings += 1;
+      if (hasOffer) villaStats.bookingsWithOffers += 1;
+      villaStats.totalSavings += savingsForBooking;
+      villaUsage.set(booking.villa, villaStats);
+
+      for (const addon of snapshots) {
+        const key = addon.id || addon.label;
+        const existing = addonUsage.get(key) ?? { label: addon.label, count: 0, discountedCount: 0 };
+        existing.count += 1;
+        if (addonHasTrackedOffer(addon)) {
+          existing.discountedCount += 1;
+          offerTypes.set(addon.offer_type ?? "unknown", (offerTypes.get(addon.offer_type ?? "unknown") ?? 0) + 1);
+        }
+        addonUsage.set(key, existing);
+      }
+    }
+
+    const mostCommonOfferType = Array.from(offerTypes.entries())
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] ?? null;
+
+    return {
+      totalBookings: bookings.length,
+      confirmedBookings,
+      pendingBookings: pendingBookingCount,
+      bookingsWithOffers,
+      offerUsageRate: bookings.length > 0 ? bookingsWithOffers / bookings.length : 0,
+      totalSavings,
+      estimatedRevenue,
+      averageSavingsPerOfferBooking: bookingsWithOffers > 0 ? totalSavings / bookingsWithOffers : 0,
+      mostCommonOfferType,
+      topAddons: Array.from(addonUsage.values())
+        .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+        .slice(0, 5),
+      villaPerformance: Array.from(villaUsage.values()).sort((a, b) => a.villa.localeCompare(b.villa)),
+    };
+  }, [bookings]);
+
   const syncSuccessCount = calendarSources.filter((source) => source.last_sync_status === "success").length;
   const syncFailureCount = calendarSources.filter((source) => source.last_sync_status === "failed").length;
   const staleSources = calendarSources
@@ -333,6 +470,18 @@ export default function DashboardOperationsView({
   const timelineEndExclusive = toIsoDate(addUtcDays(startDate, TIMELINE_DAYS));
   const dayWidth = DESKTOP_DAY_WIDTH;
   const timelineWidth = timelineDates.length * dayWidth;
+  const analyticsMetrics = [
+    { label: "Total bookings", value: analytics.totalBookings.toLocaleString("en-US"), detail: "All loaded bookings" },
+    { label: "Confirmed", value: analytics.confirmedBookings.toLocaleString("en-US"), detail: "Confirmed stays" },
+    { label: "Pending", value: analytics.pendingBookings.toLocaleString("en-US"), detail: "Awaiting action" },
+    {
+      label: "Offer usage",
+      value: analytics.bookingsWithOffers.toLocaleString("en-US"),
+      detail: `${formatRate(analytics.offerUsageRate)} of bookings`,
+    },
+    { label: "Total savings", value: formatMoney(analytics.totalSavings), detail: "Persisted offer savings" },
+    { label: "Estimated revenue", value: formatMoney(analytics.estimatedRevenue), detail: "Active snapshot value" },
+  ];
 
   function renderCompactListSkeleton(rows = 4) {
     return (
@@ -409,6 +558,134 @@ export default function DashboardOperationsView({
 
   return (
     <>
+      <section style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: isMobile ? "1rem" : "1.5rem", marginBottom: "2rem" }}>
+        <div style={{ marginBottom: "1rem" }}>
+          <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 8px" }}>
+            Analytics snapshot
+          </p>
+          <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0, lineHeight: 1.6 }}>
+            Derived from the bookings already loaded in admin. Nothing is fetched, stored, or recalculated server-side.
+          </p>
+        </div>
+
+        {loading ? (
+          <>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : "repeat(6, minmax(0, 1fr))", gap: "10px", marginBottom: "1rem" }} aria-hidden="true">
+              {Array.from({ length: 6 }).map((_, index) => (
+                <div key={index} style={{ border: `0.5px solid ${BORDER}`, padding: "12px", minHeight: "88px", backgroundColor: "rgba(255,255,255,0.015)" }}>
+                  <SkeletonText width="70%" height="10px" style={{ marginBottom: "12px" }} />
+                  <SkeletonBlock width="58px" height="26px" radius="4px" style={{ marginBottom: "10px" }} />
+                  <SkeletonText width="84%" height="10px" />
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))", gap: "12px" }} aria-hidden="true">
+              {[0, 1, 2].map((item) => (
+                <div key={item} style={{ border: `0.5px solid ${BORDER}`, padding: "14px", minHeight: "160px" }}>
+                  <SkeletonText width="145px" height="12px" style={{ marginBottom: "16px" }} />
+                  <SkeletonText width="92%" style={{ marginBottom: "12px" }} />
+                  <SkeletonText width="78%" style={{ marginBottom: "12px" }} />
+                  <SkeletonText width="84%" />
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : "repeat(6, minmax(0, 1fr))", gap: "10px", marginBottom: "1rem" }}>
+              {analyticsMetrics.map((metric) => (
+                <div key={metric.label} style={{ border: `0.5px solid ${BORDER}`, padding: "12px", minHeight: "88px", backgroundColor: "rgba(255,255,255,0.015)", boxSizing: "border-box" }}>
+                  <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "1.8px", textTransform: "uppercase", color: MUTED, margin: "0 0 8px", lineHeight: 1.4 }}>
+                    {metric.label}
+                  </p>
+                  <p style={{ fontFamily: PLAYFAIR, fontSize: isMobile ? "1.35rem" : "1.55rem", color: GOLD, margin: "0 0 6px", lineHeight: 1.05 }}>
+                    {metric.value}
+                  </p>
+                  <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: 0, lineHeight: 1.4 }}>
+                    {metric.detail}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))", gap: "12px" }}>
+              <div style={{ border: `0.5px solid ${BORDER}`, padding: "14px", backgroundColor: "rgba(255,255,255,0.015)" }}>
+                <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: "0 0 12px" }}>
+                  Offer performance
+                </p>
+                {[
+                  ["Bookings using offers", analytics.bookingsWithOffers.toLocaleString("en-US")],
+                  ["Total savings", formatMoney(analytics.totalSavings)],
+                  ["Average savings", formatMoney(analytics.averageSavingsPerOfferBooking)],
+                  ["Most common offer", formatOfferType(analytics.mostCommonOfferType)],
+                ].map(([label, value]) => (
+                  <div key={label} style={{ display: "flex", justifyContent: "space-between", gap: "12px", padding: "8px 0", borderTop: "0.5px solid rgba(255,255,255,0.05)" }}>
+                    <span style={{ fontFamily: LATO, fontSize: "11px", color: MUTED }}>{label}</span>
+                    <span style={{ fontFamily: LATO, fontSize: "12px", color: WHITE, textAlign: "right" }}>{value}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ border: `0.5px solid ${BORDER}`, padding: "14px", backgroundColor: "rgba(255,255,255,0.015)" }}>
+                <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: "0 0 12px" }}>
+                  Add-on performance
+                </p>
+                {analytics.topAddons.length === 0 ? (
+                  <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+                    No add-on snapshots yet.
+                  </p>
+                ) : (
+                  analytics.topAddons.map((addon, index) => (
+                    <div key={`${addon.label}-${index}`} style={{ display: "flex", justifyContent: "space-between", gap: "12px", padding: "8px 0", borderTop: index === 0 ? "none" : "0.5px solid rgba(255,255,255,0.05)" }}>
+                      <div style={{ minWidth: 0 }}>
+                        <p style={{ fontFamily: LATO, fontSize: "12px", color: WHITE, margin: 0, lineHeight: 1.4 }}>
+                          {addon.label}
+                        </p>
+                        {addon.discountedCount > 0 && (
+                          <p style={{ fontFamily: LATO, fontSize: "10px", color: "#7ecfcf", margin: "3px 0 0", lineHeight: 1.4 }}>
+                            Discounted {addon.discountedCount.toLocaleString("en-US")}x
+                          </p>
+                        )}
+                      </div>
+                      <span style={{ fontFamily: PLAYFAIR, fontSize: "1.1rem", color: GOLD, whiteSpace: "nowrap" }}>
+                        {addon.count.toLocaleString("en-US")}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div style={{ border: `0.5px solid ${BORDER}`, padding: "14px", backgroundColor: "rgba(255,255,255,0.015)" }}>
+                <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: "0 0 12px" }}>
+                  Villa performance
+                </p>
+                {analytics.villaPerformance.length === 0 ? (
+                  <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+                    No villa booking data yet.
+                  </p>
+                ) : (
+                  analytics.villaPerformance.map((villa, index) => (
+                    <div key={villa.villa} style={{ padding: "8px 0", borderTop: index === 0 ? "none" : "0.5px solid rgba(255,255,255,0.05)" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", marginBottom: "4px" }}>
+                        <p style={{ fontFamily: PLAYFAIR, fontSize: "15px", color: WHITE, margin: 0, lineHeight: 1.3 }}>
+                          {villa.villa}
+                        </p>
+                        <span style={{ fontFamily: LATO, fontSize: "11px", color: GOLD, whiteSpace: "nowrap" }}>
+                          {villa.totalBookings.toLocaleString("en-US")} bookings
+                        </span>
+                      </div>
+                      <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+                        {villa.bookingsWithOffers.toLocaleString("en-US")} with offers | Savings {formatMoney(villa.totalSavings)}
+                      </p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </section>
+
       <section style={{ backgroundColor: SURFACE, border: `0.5px solid ${BORDER}`, padding: isMobile ? "1rem" : "1.5rem", marginBottom: "2rem" }}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "16px", flexWrap: "wrap", marginBottom: "1rem" }}>
           <div>
@@ -694,6 +971,8 @@ export default function DashboardOperationsView({
             <div>
               {recentBookings.map((booking, index) => {
                 const tone = getStatusTone(booking.status);
+                const offerSavingsTotal = getBookingOfferSavingsTotal(booking);
+                const hasTrackedOffer = bookingHasTrackedOffer(booking);
                 return (
                   <div
                     key={booking.id}
@@ -716,6 +995,11 @@ export default function DashboardOperationsView({
                         {getBookingEmail(booking, members)} | {booking.sleeping_guests} sleeping
                         {booking.day_visitors > 0 ? ` | ${booking.day_visitors} visitors` : ""}
                       </p>
+                      {hasTrackedOffer && (
+                        <p style={{ fontFamily: LATO, fontSize: "10px", color: "#7ecfcf", margin: "8px 0 0", lineHeight: 1.5 }}>
+                          Offer used{offerSavingsTotal !== null ? ` | Savings: ${formatMoney(offerSavingsTotal)}` : ""}
+                        </p>
+                      )}
                     </div>
                     <div style={{ textAlign: "right" }}>
                       <span style={{
@@ -755,39 +1039,48 @@ export default function DashboardOperationsView({
             <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: 0 }}>No pending approvals right now.</p>
           ) : (
             <div>
-              {pendingBookings.map((booking, index) => (
-                <div
-                  key={booking.id}
-                  style={{
-                    padding: "12px 0",
-                    borderTop: index === 0 ? "none" : `0.5px solid rgba(255,255,255,0.04)`,
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", marginBottom: "6px" }}>
-                    <p style={{ fontFamily: PLAYFAIR, fontSize: "17px", color: WHITE, margin: 0 }}>
-                      {getBookingName(booking, members)}
+              {pendingBookings.map((booking, index) => {
+                const offerSavingsTotal = getBookingOfferSavingsTotal(booking);
+                const hasTrackedOffer = bookingHasTrackedOffer(booking);
+                return (
+                  <div
+                    key={booking.id}
+                    style={{
+                      padding: "12px 0",
+                      borderTop: index === 0 ? "none" : `0.5px solid rgba(255,255,255,0.04)`,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", marginBottom: "6px" }}>
+                      <p style={{ fontFamily: PLAYFAIR, fontSize: "17px", color: WHITE, margin: 0 }}>
+                        {getBookingName(booking, members)}
+                      </p>
+                      <span style={{
+                        fontFamily: LATO,
+                        fontSize: "10px",
+                        letterSpacing: "1.5px",
+                        textTransform: "uppercase",
+                        color: "#d99644",
+                        backgroundColor: "rgba(217,150,68,0.16)",
+                        padding: "4px 10px",
+                        borderRadius: "2px",
+                      }}>
+                        pending
+                      </span>
+                    </div>
+                    <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "0 0 4px" }}>
+                      {booking.villa} | {fmt(booking.check_in)} to {fmt(booking.check_out)}
                     </p>
-                    <span style={{
-                      fontFamily: LATO,
-                      fontSize: "10px",
-                      letterSpacing: "1.5px",
-                      textTransform: "uppercase",
-                      color: "#d99644",
-                      backgroundColor: "rgba(217,150,68,0.16)",
-                      padding: "4px 10px",
-                      borderRadius: "2px",
-                    }}>
-                      pending
-                    </span>
+                    <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0 }}>
+                      Submitted {formatBeirutRelative(booking.created_at)}
+                    </p>
+                    {hasTrackedOffer && (
+                      <p style={{ fontFamily: LATO, fontSize: "10px", color: "#7ecfcf", margin: "8px 0 0", lineHeight: 1.5 }}>
+                        Includes special offer{offerSavingsTotal !== null ? ` | Savings: ${formatMoney(offerSavingsTotal)}` : ""}
+                      </p>
+                    )}
                   </div>
-                  <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "0 0 4px" }}>
-                    {booking.villa} | {fmt(booking.check_in)} to {fmt(booking.check_out)}
-                  </p>
-                  <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0 }}>
-                    Submitted {formatBeirutRelative(booking.created_at)}
-                  </p>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>
@@ -911,6 +1204,14 @@ export default function DashboardOperationsView({
               </div>
             )}
 
+            {bookingHasTrackedOffer(selectedBooking) && (
+              <div style={{ border: "0.5px solid rgba(126,207,207,0.24)", backgroundColor: "rgba(126,207,207,0.08)", padding: "10px 12px", marginBottom: "1rem" }}>
+                <p style={{ fontFamily: LATO, fontSize: "11px", color: "#7ecfcf", margin: 0, lineHeight: 1.5 }}>
+                  Offer used{getBookingOfferSavingsTotal(selectedBooking) !== null ? ` | Savings: ${formatMoney(getBookingOfferSavingsTotal(selectedBooking) ?? 0)}` : ""}
+                </p>
+              </div>
+            )}
+
             {[
               ["Villa", selectedBooking.villa],
               ["Check-in", fmt(selectedBooking.check_in)],
@@ -943,6 +1244,8 @@ export default function DashboardOperationsView({
                       const isApproving = approvingAddonId === `${selectedBooking.id}-${addon.id}-approve`;
                       const isDeclining = approvingAddonId === `${selectedBooking.id}-${addon.id}-decline`;
                       const sameDayRiskWarning = getAddonRiskWarning(addon);
+                      const hasTrackedOffer = addonHasTrackedOffer(addon);
+                      const addonSavings = readFiniteNumber(addon.savings);
                       return (
                         <div key={`${selectedBooking.id}-${addon.id}`} style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start" }}>
                           <div style={{ textAlign: "right" }}>
@@ -955,6 +1258,11 @@ export default function DashboardOperationsView({
                             <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.4 }}>
                               {formatAddonPrice(addon.price)}
                             </p>
+                            {hasTrackedOffer && (
+                              <p style={{ fontFamily: LATO, fontSize: "10px", color: "#7ecfcf", margin: "4px 0 0", lineHeight: 1.4 }}>
+                                {formatOfferType(addon.offer_type)} offer{addonSavings !== null && addonSavings > 0 ? ` | Savings ${formatMoney(addonSavings)}` : ""}
+                              </p>
+                            )}
                             <div style={{ display: "flex", justifyContent: "flex-end", flexWrap: "wrap", gap: "6px", marginTop: "6px" }}>
                               {/* Approval badge — green when approved, gold when pending */}
                               {!isResolved && isPendingApproval && (
