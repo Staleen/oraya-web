@@ -52,7 +52,7 @@ export default function SiteNav({ base = "" }: Props) {
   const navLinks = [
     { href: `${base}#villas`,     label: "Our villas" },
     { href: `${base}#experience`, label: "Experience" },
-    { href: `${base}#events`,     label: "Events" },
+    { href: "/events/inquiry",    label: "Events" },
     ...(!isLoggedIn ? [{ href: `${base}#membership`, label: "Membership" }] : []),
   ];
 

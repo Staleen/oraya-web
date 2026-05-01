@@ -15,7 +15,7 @@ export default function SiteFooter() {
         { label: "Villa Mechmech", href: "/villas/mechmech" },
         { label: "Villa Byblos",   href: "/villas/byblos" },
         { label: "Gallery",        href: "#" },
-        { label: "Events",         href: "#" },
+        { label: "Events",         href: "/events/inquiry" },
       ],
     },
     {

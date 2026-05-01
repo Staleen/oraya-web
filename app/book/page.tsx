@@ -1567,22 +1567,28 @@ function BookPageInner() {
                 </div>
               </div>
 
-              {/* Explore Event Options upgrade CTA — navigates to /events */}
-              <div style={{ border: "0.5px solid rgba(197,164,109,0.22)", backgroundColor: "rgba(197,164,109,0.04)", padding: "16px 18px" }}>
+              {/* Premium stay-to-event upgrade CTA — routes to /events/inquiry */}
+              <div style={{ border: "0.5px solid rgba(197,164,109,0.26)", backgroundColor: "rgba(255,255,255,0.03)", padding: "18px 20px", display: "flex", flexDirection: "column", gap: "10px", boxShadow: "inset 0 0 0 1px rgba(197,164,109,0.04)" }}>
+                <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+                  Hosted Experiences
+                </p>
                 <p style={{ fontFamily: PLAYFAIR, fontSize: "16px", fontWeight: 400, color: WHITE, margin: "0 0 6px" }}>
                   Planning something more than a stay?
                 </p>
                 <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "0 0 14px", lineHeight: 1.6 }}>
-                  Hosting a celebration, wedding, baptism, corporate gathering, or private event? Oraya can prepare the venue, setup, services, and overnight host stay as a full event package.
+                  Turn your villa booking into a fully hosted experience - celebrations, private gatherings, and curated event services.
+                </p>
+                <p style={{ fontFamily: LATO, fontSize: "10px", color: "rgba(255,255,255,0.5)", margin: "-2px 0 0", lineHeight: 1.5 }}>
+                  Event inquiries are reviewed separately and confirmed by Oraya.
                 </p>
                 <button
                   type="button"
-                  onClick={() => router.push("/events")}
-                  style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: CHARCOAL, backgroundColor: GOLD, border: "none", padding: "11px 22px", cursor: "pointer" }}
+                  onClick={() => router.push("/events/inquiry")}
+                  style={{ alignSelf: "flex-start", fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: CHARCOAL, backgroundColor: GOLD, border: "none", padding: "11px 22px", cursor: "pointer" }}
                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
                 >
-                  Explore Event Options →
+                  Plan your event
                 </button>
               </div>
 

@@ -563,7 +563,7 @@ export default function Home() {
             Weddings, baptisms, and private gatherings for small groups — hosted in complete privacy across our villas.
           </p>
           <a
-            href="/events"
+            href="/events/inquiry"
             style={{
               display: "inline-block", fontFamily: LATO, fontSize: "11px", letterSpacing: "2.5px",
               textTransform: "uppercase", color: CHARCOAL, backgroundColor: GOLD,
@@ -677,7 +677,7 @@ export default function Home() {
           </div>
 
           {[
-            { title: "Explore",  links: [{ label: "Villa Mechmech", href: "/villas/mechmech" }, { label: "Villa Byblos", href: "/villas/byblos" }, { label: "Gallery", href: "#" }, { label: "Events", href: "#" }] },
+            { title: "Explore",  links: [{ label: "Villa Mechmech", href: "/villas/mechmech" }, { label: "Villa Byblos", href: "/villas/byblos" }, { label: "Gallery", href: "#" }, { label: "Events", href: "/events/inquiry" }] },
             { title: "Members",  links: [{ label: "Join Oraya", href: "/join" }, { label: "Sign in", href: "/login" }, { label: "My bookings", href: "#" }, { label: "My profile", href: "#" }] },
             { title: "Contact",  links: [{ label: "hello@oraya.com", href: "mailto:hello@oraya.com" }, { label: "WhatsApp", href: "#" }, { label: "Instagram", href: "#" }, { label: "Lebanon", href: "#" }] },
           ].map(({ title, links }) => (
