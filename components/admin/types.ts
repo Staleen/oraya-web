@@ -21,6 +21,12 @@ export interface BookingAddonSnapshot {
   pricing_type?: "percentage";
   /** Phase 12E Batch 7: the pre-discount base price, only present when a dead-day discount was applied. */
   original_price?: number | null;
+  /** Phase 12E Batch 9: explicit tracking flag for applied offer usage. */
+  offer_applied?: boolean;
+  /** Phase 12E Batch 9: lightweight persisted offer source metadata. */
+  offer_type?: "dead_day";
+  /** Phase 12E Batch 9: persisted absolute savings for the applied offer. */
+  savings?: number | null;
 }
 
 export interface Booking {

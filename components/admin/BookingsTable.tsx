@@ -187,15 +187,25 @@ function hasResolvedAddonStatus(addon: BookingAddonSnapshot) {
   return addon.status === "approved" || addon.status === "declined";
 }
 
+function addonHasTrackedOffer(addon: BookingAddonSnapshot) {
+  return addon.offer_applied === true;
+}
+
 function isAddonDiscounted(addon: BookingAddonSnapshot) {
   return (
+    addonHasTrackedOffer(addon) ||
     addon.pricing_type === "percentage" ||
     (typeof addon.original_price === "number" && typeof addon.price === "number" && addon.original_price > addon.price)
   );
 }
 
 function hasDiscountPriceMetadata(addon: BookingAddonSnapshot) {
-  return typeof addon.original_price === "number" && typeof addon.price === "number" && addon.original_price > addon.price;
+  return (
+    addonHasTrackedOffer(addon) &&
+    typeof addon.original_price === "number" &&
+    typeof addon.price === "number" &&
+    typeof addon.savings === "number"
+  );
 }
 
 function addonNeedsAttention(addon: BookingAddonSnapshot) {
@@ -414,7 +424,16 @@ export default function BookingsTable({
   }
 
   function bookingHasDiscountedAddon(booking: Booking) {
-    return getAddonSnapshots(booking).some((addon) => isAddonDiscounted(addon));
+    return getAddonSnapshots(booking).some((addon) => addonHasTrackedOffer(addon));
+  }
+
+  function getBookingOfferSavingsTotal(booking: Booking) {
+    const total = getAddonSnapshots(booking).reduce((sum, addon) => {
+      if (!addonHasTrackedOffer(addon) || typeof addon.savings !== "number") return sum;
+      return sum + addon.savings;
+    }, 0);
+
+    return total > 0 ? total : null;
   }
 
   function bookingRequiresAction(booking: Booking) {
@@ -724,7 +743,8 @@ export default function BookingsTable({
             const hasDiscountMetadata = hasDiscountPriceMetadata(addon);
             const originalDiscountPrice = hasDiscountMetadata ? addon.original_price! : null;
             const finalDiscountPrice = hasDiscountMetadata ? addon.price! : null;
-            const savingsAmount = hasDiscountMetadata ? originalDiscountPrice! - finalDiscountPrice! : null;
+            const savingsAmount = hasDiscountMetadata ? addon.savings! : null;
+            const hasTrackedOffer = addonHasTrackedOffer(addon);
 
             return (
               <div
@@ -855,7 +875,7 @@ export default function BookingsTable({
                               lineHeight: 1.5,
                             }}
                           >
-                            Original {formatAddonPrice(originalDiscountPrice)} · Final {formatAddonPrice(finalDiscountPrice)} · Savings {formatAddonPrice(savingsAmount)}
+                            Dead-day offer - Original {formatAddonPrice(originalDiscountPrice)} - Final {formatAddonPrice(finalDiscountPrice)} - Savings {formatAddonPrice(savingsAmount)}
                           </p>
                         )}
                       </div>
@@ -864,7 +884,7 @@ export default function BookingsTable({
                         {!isResolved && isPendingApproval && renderOperationalBadge("Requires approval", "approval")}
                         {addon.enforcement_mode === "soft" && renderOperationalBadge("Soft rule", "soft")}
                         {addon.enforcement_mode === "strict" && renderOperationalBadge("Strict rule", "strict")}
-                        {isAddonDiscounted(addon) && (
+                        {hasTrackedOffer && (
                           <span
                             style={{
                               fontFamily: LATO,
@@ -877,7 +897,7 @@ export default function BookingsTable({
                               borderRadius: "4px",
                             }}
                           >
-                            {hasDiscountMetadata ? "Discounted offer" : "Offer used"}
+                            Dead-day offer
                           </span>
                         )}
                       </div>
@@ -1009,6 +1029,8 @@ export default function BookingsTable({
     const hasPendingOverlap = overlappingPendingBookings.length > 0;
     const deadDayUpsells = getDeadDayUpsells(booking);
     const hasDeadDayUpsell = deadDayUpsells.length > 0;
+    const offerSavingsTotal = getBookingOfferSavingsTotal(booking);
+    const hasTrackedOffer = bookingHasDiscountedAddon(booking);
 
     return (
       <div
@@ -1168,7 +1190,7 @@ export default function BookingsTable({
                 Ready to confirm
               </span>
             )}
-            {bookingHasDiscountedAddon(booking) && (
+            {hasTrackedOffer && (
               <span
                 style={{
                   display: "inline-flex",
@@ -1275,6 +1297,21 @@ export default function BookingsTable({
           </div>
         )}
 
+        {booking.status === "pending" && hasTrackedOffer && (
+          <div
+            style={{
+              border: "0.5px solid rgba(126,207,207,0.24)",
+              backgroundColor: "rgba(126,207,207,0.08)",
+              padding: "12px 14px",
+              borderRadius: "8px",
+            }}
+          >
+            <p style={{ fontFamily: LATO, fontSize: "11px", color: "#7ecfcf", margin: 0, lineHeight: 1.5 }}>
+              Includes special offer.
+            </p>
+          </div>
+        )}
+
         {readyToConfirm && (
           <div
             style={{
@@ -1286,6 +1323,21 @@ export default function BookingsTable({
           >
             <p style={{ fontFamily: LATO, fontSize: "11px", color: "#6fcf8a", margin: 0, lineHeight: 1.5 }}>
               All add-ons are resolved. This booking is ready to confirm.
+            </p>
+          </div>
+        )}
+
+        {offerSavingsTotal !== null && (
+          <div
+            style={{
+              border: "0.5px solid rgba(126,207,207,0.22)",
+              backgroundColor: "rgba(126,207,207,0.06)",
+              padding: "12px 14px",
+              borderRadius: "8px",
+            }}
+          >
+            <p style={{ fontFamily: LATO, fontSize: "11px", color: "#7ecfcf", margin: 0, lineHeight: 1.5 }}>
+              Total savings: {formatAddonPrice(offerSavingsTotal)}
             </p>
           </div>
         )}
