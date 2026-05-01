@@ -289,18 +289,34 @@ function isExtraBeddingAddon(addon: Pick<Addon, "label">): boolean {
   return addon.label?.trim().toLowerCase() === "extra bedding";
 }
 
-/** Phase 13C Hotfix: 8 sleeping guests forces Extra Bedding (operationally required). */
-const EXTRA_BEDDING_REQUIRED_GUESTS = 8;
+/** Phase 13C.4 correction: 7-8 sleeping guests force Extra Bedding (operationally required). */
+const EXTRA_BEDDING_REQUIRED_GUESTS = 7;
 const BEDROOM_DEFAULT_GUESTS = {
   "1": "2",
   "2": "4",
   "3": "6",
+} as const;
+const BEDROOM_CAPACITY = {
+  "1": 2,
+  "2": 4,
+  "3": 6,
+} as const;
+const BEDROOM_CAPACITY_COPY = {
+  "1": "Ideal for 1–2 guests",
+  "2": "Ideal for 2–4 guests",
+  "3": "Ideal for 3–6 guests",
 } as const;
 
 type BedroomCount = keyof typeof BEDROOM_DEFAULT_GUESTS;
 
 function formatBedroomLabel(count: string) {
   return `${count} Bedroom${count === "1" ? "" : "s"}`;
+}
+
+function getSleepingSetupLabel(guestCount: number) {
+  return guestCount > 6
+    ? "Extra bedding / sofa setup required"
+    : "Standard bedroom setup";
 }
 
 function normalizeAddonCategory(category: string | null | undefined): string {
@@ -734,6 +750,19 @@ function BookPageInner() {
   const checkOut = dateRange?.to   ? toISO(dateRange.to)   : "";
   const nights   = nightCount(checkIn, checkOut);
   const sleepingGuestsCount = parseInt(form.sleepingGuests, 10) || 0;
+  const sleepingSetupLabel = getSleepingSetupLabel(sleepingGuestsCount);
+  const bedroomCapacityWarning = (() => {
+    if (form.bedroomCount === "1" && sleepingGuestsCount > 2) {
+      return "This exceeds the standard 1-bedroom setup. Consider selecting more bedrooms.";
+    }
+    if (form.bedroomCount === "2" && sleepingGuestsCount > 4) {
+      return "This exceeds the standard 2-bedroom setup. Consider selecting 3 bedrooms.";
+    }
+    if (form.bedroomCount === "3" && sleepingGuestsCount > 6) {
+      return "Guests above 6 require extra bedding / sofa sleeping setup.";
+    }
+    return "";
+  })();
   const nightlyBasePrice = form.villa ? getVillaBasePrice(form.villa, pricing) : null;
   const villaPricingConfig = form.villa ? getVillaPricing(pricing, form.villa) : null;
   const pricingResult = villaPricingConfig && checkIn && checkOut
@@ -952,17 +981,17 @@ function BookPageInner() {
   useEffect(() => { setAppliedDiscounts([]); }, [dateRange]);
 
 
-  // Phase 13C Hotfix: auto-select Extra Bedding when sleeping guests reaches 8 (operationally required).
+  // Phase 13C.4 correction: auto-select Extra Bedding when sleeping guests exceeds 6.
   // Idempotent — prev.includes guard prevents re-renders. Respects existing strict/availability blocks.
   useEffect(() => {
-    if (sleepingGuestsCount !== EXTRA_BEDDING_REQUIRED_GUESTS) return;
+    if (sleepingGuestsCount < EXTRA_BEDDING_REQUIRED_GUESTS) return;
     const ebAddon = availableAddons.find(isExtraBeddingAddon);
     if (!ebAddon) return;
     const ebAvailability = getAddonAvailability(ebAddon);
     if (!ebAvailability.selectable) return;
     setSelectedAddons(prev => prev.includes(ebAddon.id) ? prev : [...prev, ebAddon.id]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sleepingGuestsCount, addons, form.villa, checkIn]);
+  }, [sleepingGuestsCount, availableAddons, form.villa, checkIn]);
 
   // ── Event handlers ────────────────────────────────────────────────────────
   function handleFormChange(
@@ -1046,9 +1075,9 @@ function BookPageInner() {
     if (!addon) return;
     const availability = getAddonAvailability(addon);
     if (!availability.selectable) return;
-    // Phase 13C Hotfix: prevent deselection of Extra Bedding when 8 sleeping guests are required.
+    // Phase 13C.4 correction: prevent deselection of Extra Bedding when 7-8 sleeping guests require it.
     if (
-      sleepingGuestsCount === EXTRA_BEDDING_REQUIRED_GUESTS &&
+      sleepingGuestsCount >= EXTRA_BEDDING_REQUIRED_GUESTS &&
       isExtraBeddingAddon(addon) &&
       selectedAddons.includes(id)
     ) return;
@@ -1113,6 +1142,7 @@ function BookPageInner() {
           "[Stay Setup]",
           `Bedrooms to be used: ${formatBedroomLabel(form.bedroomCount)}`,
           `Estimated guests: ${form.sleepingGuests}`,
+          `Sleeping setup: ${sleepingSetupLabel}`,
           `Guest Notes: ${userNotes || "None"}`,
         ].join("\n");
       })();
@@ -1588,7 +1618,7 @@ function BookPageInner() {
                 <div>
                   <label style={labelStyle}>Bedrooms to be used</label>
                   <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "0 0 12px", lineHeight: 1.6 }}>
-                    Select how many bedrooms you would like prepared for your stay.
+                    Select how many bedrooms you would like prepared. Guests above bedroom capacity may require extra bedding or sofa setup.
                   </p>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "10px" }}>
                     {(["1", "2", "3"] as BedroomCount[]).map((bedroomCount) => {
@@ -1623,7 +1653,7 @@ function BookPageInner() {
                             {formatBedroomLabel(bedroomCount)}
                           </span>
                           <span style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, letterSpacing: "0.4px" }}>
-                            Prepared for your stay
+                            {BEDROOM_CAPACITY_COPY[bedroomCount]}
                           </span>
                         </button>
                       );
@@ -1640,9 +1670,14 @@ function BookPageInner() {
                     <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, marginTop: "6px", lineHeight: 1.5 }}>
                       Optional - this helps us prepare the stay, but bedroom usage is the primary setup preference.
                     </p>
-                  {sleepingGuestsCount === EXTRA_BEDDING_REQUIRED_GUESTS && (
+                    {bedroomCapacityWarning && (
+                      <p style={{ fontFamily: LATO, fontSize: "11px", color: "#e2ab5a", marginTop: "6px", lineHeight: 1.5 }}>
+                        {bedroomCapacityWarning}
+                      </p>
+                  )}
+                  {sleepingGuestsCount >= EXTRA_BEDDING_REQUIRED_GUESTS && (
                     <p style={{ fontFamily: LATO, fontSize: "11px", color: GOLD, marginTop: "6px", lineHeight: 1.5 }}>
-                      Extra bedding will be arranged for this setup.
+                      7–8 guests require extra bedding / sofa setup.
                     </p>
                   )}
                   </div>
@@ -1978,10 +2013,10 @@ function BookPageInner() {
                                   Subject to confirmation
                                 </span>
                               )}
-                              {/* Phase 13C Hotfix: required-for-8-guests helper */}
-                              {isExtraBeddingAddon(addon) && sleepingGuestsCount === EXTRA_BEDDING_REQUIRED_GUESTS && availability.selectable && (
+                              {/* Phase 13C.4 correction: required-for-7-8-guests helper */}
+                              {isExtraBeddingAddon(addon) && sleepingGuestsCount >= EXTRA_BEDDING_REQUIRED_GUESTS && availability.selectable && (
                                 <span style={{ fontFamily: LATO, fontSize: "11px", color: GOLD, display: "block", marginTop: "6px", lineHeight: 1.5 }}>
-                                  Required when estimated guests reach 8.
+                                  Required for 7–8 guests.
                                 </span>
                               )}
                               {!availability.available && (
@@ -2212,6 +2247,9 @@ function BookPageInner() {
                       ["Duration",               `${nights} ${nights === 1 ? "night" : "nights"}`],
                       ["Bedrooms to be used",    formatBedroomLabel(form.bedroomCount)],
                       ["Estimated guests",       form.sleepingGuests],
+                      ...(sleepingGuestsCount > 6
+                        ? [["Sleeping setup", sleepingSetupLabel]]
+                        : []),
                       ["Expected day visitors",  form.dayVisitors],
                       ...(selectedAddons.length > 0
                         ? [["Add-ons", selectedAddonDetails.map((addon) => addon.label).join(", ")]]
@@ -2220,7 +2258,7 @@ function BookPageInner() {
                       ...(guestMode    ? [["Name", guest.fullName], ["Email", guest.email]] : []),
                     ] as [string, string][]
                   ).map(([label, value]) => {
-                    const isHighlight = label === "Check-in" || label === "Check-out" || label === "Bedrooms to be used" || label === "Estimated guests" || label === "Expected day visitors";
+                    const isHighlight = label === "Check-in" || label === "Check-out" || label === "Bedrooms to be used" || label === "Estimated guests" || label === "Sleeping setup" || label === "Expected day visitors";
                     return (
                     <div key={label} style={{
                       display: "flex",
