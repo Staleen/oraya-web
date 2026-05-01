@@ -194,6 +194,10 @@ function isAddonDiscounted(addon: BookingAddonSnapshot) {
   );
 }
 
+function hasDiscountPriceMetadata(addon: BookingAddonSnapshot) {
+  return typeof addon.original_price === "number" && typeof addon.price === "number" && addon.original_price > addon.price;
+}
+
 function addonNeedsAttention(addon: BookingAddonSnapshot) {
   if (hasResolvedAddonStatus(addon)) return false;
   return (
@@ -717,6 +721,10 @@ export default function BookingsTable({
             const isApproving = approvingAddonId === `${booking.id}-${addon.id}-approve`;
             const isDeclining = approvingAddonId === `${booking.id}-${addon.id}-decline`;
             const sameDayRiskWarning = getAddonRiskWarning(addon);
+            const hasDiscountMetadata = hasDiscountPriceMetadata(addon);
+            const originalDiscountPrice = hasDiscountMetadata ? addon.original_price! : null;
+            const finalDiscountPrice = hasDiscountMetadata ? addon.price! : null;
+            const savingsAmount = hasDiscountMetadata ? originalDiscountPrice! - finalDiscountPrice! : null;
 
             return (
               <div
@@ -785,7 +793,7 @@ export default function BookingsTable({
                           )}
                         </p>
                         <div style={{ display: "flex", alignItems: "baseline", gap: "6px", flexWrap: "wrap" }}>
-                          {typeof addon.original_price === "number" && typeof addon.price === "number" && addon.original_price > addon.price ? (
+                          {hasDiscountMetadata ? (
                             <>
                               <p
                                 style={{
@@ -797,7 +805,7 @@ export default function BookingsTable({
                                   textDecoration: "line-through",
                                 }}
                               >
-                                {formatAddonPrice(addon.original_price)}
+                                {formatAddonPrice(originalDiscountPrice)}
                               </p>
                               <p
                                 style={{
@@ -808,7 +816,7 @@ export default function BookingsTable({
                                   lineHeight: 1.4,
                                 }}
                               >
-                                {formatAddonPrice(addon.price)}
+                                {formatAddonPrice(finalDiscountPrice)}
                               </p>
                               <p
                                 style={{
@@ -819,7 +827,7 @@ export default function BookingsTable({
                                   lineHeight: 1.4,
                                 }}
                               >
-                                (Save ${(addon.original_price - addon.price).toLocaleString("en-US")})
+                                (Save ${savingsAmount?.toLocaleString("en-US")})
                               </p>
                             </>
                           ) : (
@@ -836,6 +844,20 @@ export default function BookingsTable({
                             </p>
                           )}
                         </div>
+
+                        {hasDiscountMetadata && (
+                          <p
+                            style={{
+                              fontFamily: LATO,
+                              fontSize: "11px",
+                              color: MUTED,
+                              margin: "6px 0 0",
+                              lineHeight: 1.5,
+                            }}
+                          >
+                            Original {formatAddonPrice(originalDiscountPrice)} · Final {formatAddonPrice(finalDiscountPrice)} · Savings {formatAddonPrice(savingsAmount)}
+                          </p>
+                        )}
                       </div>
 
                       <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "8px" }}>
@@ -855,7 +877,7 @@ export default function BookingsTable({
                               borderRadius: "4px",
                             }}
                           >
-                            {typeof addon.original_price === "number" ? "Discounted" : "Offer applied"}
+                            {hasDiscountMetadata ? "Discounted offer" : "Offer used"}
                           </span>
                         )}
                       </div>
