@@ -22,6 +22,11 @@ const PRICING_ERROR_MESSAGES = {
   minimum_stay_violation: "Your selected dates do not meet the minimum stay requirement.",
 } as const;
 
+type ConfirmedRange = {
+  check_in: string;
+  check_out: string;
+};
+
 function getPricingValidationMessage(
   reasons: ReturnType<typeof runPricingAudit>["would_block_reasons"]
 ): string {
@@ -43,6 +48,84 @@ function getAddonAuditResultLabel(input: {
   if (input.requires_approval) return "requires_approval";
   if ((input.enforcement_mode === "soft" && input.has_time_warning) || input.has_same_day_warning) return "soft_warning";
   return "ok";
+}
+
+function parseDateOnlyParts(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+
+  return {
+    year: Number(match[1]),
+    month: Number(match[2]),
+    day: Number(match[3]),
+  };
+}
+
+function dateOnlySerial(value: string) {
+  const parts = parseDateOnlyParts(value);
+  if (!parts) return null;
+
+  let year = parts.year;
+  const { month, day } = parts;
+  year -= month <= 2 ? 1 : 0;
+  const era = Math.floor(year / 400);
+  const yearOfEra = year - era * 400;
+  const monthPrime = month + (month > 2 ? -3 : 9);
+  const dayOfYear = Math.floor((153 * monthPrime + 2) / 5) + day - 1;
+  const dayOfEra = yearOfEra * 365 + Math.floor(yearOfEra / 4) - Math.floor(yearOfEra / 100) + dayOfYear;
+
+  return era * 146097 + dayOfEra;
+}
+
+function formatDateOnlyFromSerial(serial: number) {
+  const era = Math.floor(serial / 146097);
+  const dayOfEra = serial - era * 146097;
+  const yearOfEra = Math.floor((dayOfEra - Math.floor(dayOfEra / 1460) + Math.floor(dayOfEra / 36524) - Math.floor(dayOfEra / 146096)) / 365);
+  const yearBase = yearOfEra + era * 400;
+  const dayOfYear = dayOfEra - (365 * yearOfEra + Math.floor(yearOfEra / 4) - Math.floor(yearOfEra / 100));
+  const monthPrime = Math.floor((5 * dayOfYear + 2) / 153);
+  const day = dayOfYear - Math.floor((153 * monthPrime + 2) / 5) + 1;
+  const month = monthPrime + (monthPrime < 10 ? 3 : -9);
+  const year = yearBase + (month <= 2 ? 1 : 0);
+
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function addDaysDateOnly(value: string, days: number) {
+  const serial = dateOnlySerial(value);
+  if (serial === null) return null;
+  return formatDateOnlyFromSerial(serial + days);
+}
+
+function detectDeadDayOfferSuggestion(
+  checkIn: string,
+  checkOut: string,
+  confirmedRanges: ConfirmedRange[],
+) {
+  let suggestLateCheckout = false;
+  let suggestEarlyCheckin = false;
+
+  for (const rangeA of confirmedRanges) {
+    const nextBookingISO = addDaysDateOnly(rangeA.check_out, 2);
+    if (!nextBookingISO) continue;
+
+    const hasNextBooking = confirmedRanges.some((rangeB) => rangeB.check_in === nextBookingISO);
+    if (!hasNextBooking) continue;
+
+    const gapDayISO = addDaysDateOnly(rangeA.check_out, 1);
+    if (!gapDayISO) continue;
+
+    if (checkOut === rangeA.check_out) {
+      suggestLateCheckout = true;
+    }
+
+    if (checkIn === gapDayISO) {
+      suggestEarlyCheckin = true;
+      suggestLateCheckout = true;
+    }
+  }
+
+  return { suggestLateCheckout, suggestEarlyCheckin };
 }
 
 // POST — create a new booking (member or guest)
@@ -263,7 +346,7 @@ export async function POST(request: Request) {
       }
 
       if (selectedAddonIds.length > 0) {
-        const [addonsResponse, addonSettingsResponse, sameDayCheckoutResponse, sameDayCheckinResponse] = await Promise.all([
+        const [addonsResponse, addonSettingsResponse, sameDayCheckoutResponse, sameDayCheckinResponse, confirmedRangesResponse] = await Promise.all([
           supabaseAdmin
             .from("addons")
             .select("id, label, price, enabled")
@@ -287,6 +370,11 @@ export async function POST(request: Request) {
             .eq("status", "confirmed")
             .eq("check_in", check_out)
             .limit(1),
+          supabaseAdmin
+            .from("bookings")
+            .select("check_in, check_out")
+            .eq("villa", villa)
+            .eq("status", "confirmed"),
         ]);
 
         if (addonsResponse.error) {
@@ -301,9 +389,17 @@ export async function POST(request: Request) {
         if (sameDayCheckinResponse.error) {
           throw sameDayCheckinResponse.error;
         }
+        if (confirmedRangesResponse.error) {
+          throw confirmedRangesResponse.error;
+        }
 
         const operationalSettings = parseAddonOperationalSetting(addonSettingsResponse.data?.value);
         const mergedAddons = mergeAddonsWithOperationalSettings(addonsResponse.data ?? [], operationalSettings);
+        const confirmedRanges = (confirmedRangesResponse.data ?? []).filter(
+          (range): range is ConfirmedRange =>
+            typeof range.check_in === "string" && typeof range.check_out === "string",
+        );
+        const deadDayOfferSuggestion = detectDeadDayOfferSuggestion(check_in, check_out, confirmedRanges);
         const sameDayContext = {
           has_same_day_checkout: (sameDayCheckoutResponse.data ?? []).length > 0,
           has_same_day_checkin: (sameDayCheckinResponse.data ?? []).length > 0,
@@ -329,6 +425,7 @@ export async function POST(request: Request) {
           .filter((addon) => selectedAddonIds.includes(addon.id))
           .map((addon) => {
             const auditItem = addonAuditItems.get(addon.id);
+            const addonTimingType = getAddonTimingType(addon);
 
             // Phase 12E Batch 7: lift price computation to capture base for admin display metadata.
             const addonBase = (
@@ -341,13 +438,27 @@ export async function POST(request: Request) {
               : addon.price ?? null;
 
             const discountEntry = discountedPriceMap.get(addon.id) ?? null;
+            const expectedDiscountPrice =
+              addonBase !== null ? Math.round(addonBase * (1 - DEAD_DAY_DISCOUNT_PCT)) : null;
+            const deadDayOfferEligible =
+              addonTimingType === "early_checkin"
+                ? deadDayOfferSuggestion.suggestEarlyCheckin
+                : addonTimingType === "late_checkout"
+                  ? deadDayOfferSuggestion.suggestLateCheckout
+                  : false;
+            const shouldApplyDeadDayDiscount =
+              addonBase !== null &&
+              deadDayOfferEligible &&
+              expectedDiscountPrice !== null &&
+              expectedDiscountPrice >= 0 &&
+              expectedDiscountPrice < addonBase &&
+              (
+                discountEntry === "flag_only" ||
+                (typeof discountEntry === "number" && Math.round(discountEntry) === expectedDiscountPrice)
+              );
             let addonFinalPrice: number | null = addonBase;
-            if (discountEntry !== null && addonBase !== null) {
-              if (typeof discountEntry === "number" && discountEntry >= 0 && discountEntry < addonBase) {
-                addonFinalPrice = Math.round(discountEntry);
-              } else {
-                addonFinalPrice = Math.round(addonBase * (1 - DEAD_DAY_DISCOUNT_PCT));
-              }
+            if (shouldApplyDeadDayDiscount && expectedDiscountPrice !== null) {
+              addonFinalPrice = expectedDiscountPrice;
             }
             const addonIsDiscounted =
               addonFinalPrice !== null && addonBase !== null && addonFinalPrice < addonBase;
