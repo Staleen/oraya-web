@@ -320,6 +320,14 @@ function isAddonApplicableToVilla(addon: Addon, villa: string): boolean {
   return applicableVillas.includes(villa);
 }
 
+/** Phase 13C Hotfix: identify the Extra Bedding add-on by case-insensitive label match. */
+function isExtraBeddingAddon(addon: Pick<Addon, "label">): boolean {
+  return addon.label?.trim().toLowerCase() === "extra bedding";
+}
+
+/** Phase 13C Hotfix: 8 sleeping guests forces Extra Bedding (operationally required). */
+const EXTRA_BEDDING_REQUIRED_GUESTS = 8;
+
 function normalizeAddonCategory(category: string | null | undefined): string {
   const value = category?.trim();
   if (!value) return "Other";
@@ -967,6 +975,18 @@ function BookPageInner() {
   // Clear applied discounts whenever dates change — the discount amount is date-dependent.
   useEffect(() => { setAppliedDiscounts([]); }, [dateRange]);
 
+  // Phase 13C Hotfix: auto-select Extra Bedding when sleeping guests reaches 8 (operationally required).
+  // Idempotent — prev.includes guard prevents re-renders. Respects existing strict/availability blocks.
+  useEffect(() => {
+    if (sleepingGuestsCount !== EXTRA_BEDDING_REQUIRED_GUESTS) return;
+    const ebAddon = availableAddons.find(isExtraBeddingAddon);
+    if (!ebAddon) return;
+    const ebAvailability = getAddonAvailability(ebAddon);
+    if (!ebAvailability.selectable) return;
+    setSelectedAddons(prev => prev.includes(ebAddon.id) ? prev : [...prev, ebAddon.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sleepingGuestsCount, addons, form.villa, checkIn]);
+
   // ── Event handlers ────────────────────────────────────────────────────────
   function handleFormChange(
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -1035,6 +1055,12 @@ function BookPageInner() {
     if (!addon) return;
     const availability = getAddonAvailability(addon);
     if (!availability.selectable) return;
+    // Phase 13C Hotfix: prevent deselection of Extra Bedding when 8 sleeping guests are required.
+    if (
+      sleepingGuestsCount === EXTRA_BEDDING_REQUIRED_GUESTS &&
+      isExtraBeddingAddon(addon) &&
+      selectedAddons.includes(id)
+    ) return;
     setSelectedAddons(prev =>
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     );
@@ -1994,6 +2020,12 @@ function BookPageInner() {
                               {addon.requires_approval && (
                                 <span style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, display: "block", marginTop: "4px", lineHeight: 1.5 }}>
                                   Subject to confirmation
+                                </span>
+                              )}
+                              {/* Phase 13C Hotfix: required-for-8-guests helper */}
+                              {isExtraBeddingAddon(addon) && sleepingGuestsCount === EXTRA_BEDDING_REQUIRED_GUESTS && availability.selectable && (
+                                <span style={{ fontFamily: LATO, fontSize: "11px", color: GOLD, display: "block", marginTop: "6px", lineHeight: 1.5 }}>
+                                  Required for 8 sleeping guests.
                                 </span>
                               )}
                               {!availability.available && (
