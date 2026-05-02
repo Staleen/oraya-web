@@ -1556,6 +1556,135 @@ export default function BookingsTable({
           </div>
         )}
 
+        {/* Phase 13H.2: Decision Signal panel — pending bookings only. Reuses existing revenue/overlap data. */}
+        {booking.status === "pending" && (() => {
+          const pricingIntelligence = getPricingIntelligenceMeta(booking);
+          const addonSubtotalRaw = getAddonSnapshots(booking).reduce((sum, addon) => {
+            return sum + (typeof addon.price === "number" && Number.isFinite(addon.price) ? addon.price : 0);
+          }, 0);
+          const stayValueRaw =
+            getSnapshotNumber(booking.pricing_snapshot?.adjusted_stay_subtotal) ??
+            getSnapshotNumber(booking.pricing_snapshot?.subtotal) ??
+            pricingIntelligence?.stay_value ??
+            getPersistedStayValue(booking);
+          const addonsValueRaw =
+            pricingIntelligence?.addons_value ??
+            (getAddonSnapshots(booking).length > 0 ? addonSubtotalRaw : 0);
+          const estimatedTotalRaw =
+            getSnapshotNumber(booking.pricing_snapshot?.estimated_total) ??
+            pricingIntelligence?.estimated_total ??
+            pricingIntelligence?.internal_value ??
+            (typeof stayValueRaw === "number" && typeof addonsValueRaw === "number"
+              ? stayValueRaw + addonsValueRaw
+              : null);
+
+          const totalDisplay = formatMoney(estimatedTotalRaw) ?? "Not calculated";
+          const addonsDisplay = formatMoney(addonsValueRaw) ?? "—";
+
+          const bedroomsRaw = booking.pricing_snapshot?.bedrooms_to_be_used;
+          const bedroomLabel =
+            typeof bedroomsRaw === "number" && bedroomsRaw >= 1 && bedroomsRaw <= 3
+              ? `${bedroomsRaw}BR`
+              : "—";
+
+          const overnightGuests =
+            typeof booking.sleeping_guests === "number" ? booking.sleeping_guests : null;
+          const dayVisitors =
+            typeof booking.day_visitors === "number" ? booking.day_visitors : null;
+          const guestLoadLabel = overnightGuests !== null
+            ? (dayVisitors && dayVisitors > 0
+                ? `${overnightGuests} overnight + ${dayVisitors} day`
+                : `${overnightGuests} ${overnightGuests === 1 ? "guest" : "guests"}`)
+            : "—";
+
+          const conflictMessage = hasPendingOverlap
+            ? "Competing request detected — compare revenue before confirming."
+            : "No competing pending request.";
+          const conflictColor = hasPendingOverlap ? "#f0bd67" : MUTED;
+          const conflictBorder = hasPendingOverlap ? "rgba(240,189,103,0.32)" : "rgba(197,164,109,0.18)";
+          const conflictBg = hasPendingOverlap ? "rgba(240,189,103,0.08)" : "rgba(255,255,255,0.025)";
+
+          return (
+            <div
+              style={{
+                border: "0.5px solid rgba(197,164,109,0.3)",
+                backgroundColor: "rgba(197,164,109,0.05)",
+                padding: "14px 16px",
+                borderRadius: "8px",
+                display: "grid",
+                gap: "12px",
+              }}
+            >
+              <div style={{ display: "grid", gap: "4px" }}>
+                <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+                  Decision Signal
+                </p>
+                <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+                  Compact view for approval decisions on pending requests.
+                </p>
+              </div>
+
+              {/* Estimated total — prominent */}
+              <div style={{ display: "grid", gap: "2px" }}>
+                <span style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED }}>
+                  Estimated total
+                </span>
+                <span style={{ fontFamily: PLAYFAIR, fontSize: "22px", color: GOLD, lineHeight: 1.1 }}>
+                  {totalDisplay}
+                </span>
+              </div>
+
+              {/* Secondary metrics */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(3, minmax(0, 1fr))",
+                  gap: "10px 16px",
+                }}
+              >
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <span style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED }}>
+                    Add-ons
+                  </span>
+                  <span style={{ fontFamily: LATO, fontSize: "13px", color: WHITE }}>
+                    {addonsDisplay}
+                  </span>
+                </div>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <span style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED }}>
+                    Bedroom setup
+                  </span>
+                  <span style={{ fontFamily: LATO, fontSize: "13px", color: WHITE }}>
+                    {bedroomLabel}
+                  </span>
+                </div>
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <span style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED }}>
+                    Guest load
+                  </span>
+                  <span style={{ fontFamily: LATO, fontSize: "13px", color: WHITE }}>
+                    {guestLoadLabel}
+                  </span>
+                </div>
+              </div>
+
+              {/* Conflict status */}
+              <div
+                style={{
+                  border: `0.5px solid ${conflictBorder}`,
+                  backgroundColor: conflictBg,
+                  padding: "8px 12px",
+                  borderRadius: "6px",
+                }}
+              >
+                <p style={{ fontFamily: LATO, fontSize: "11px", color: conflictColor, margin: 0, lineHeight: 1.5 }}>
+                  {conflictMessage}
+                </p>
+              </div>
+            </div>
+          );
+        })()}
+
         {(() => {
           const pricingIntelligence = getPricingIntelligenceMeta(booking);
           const addonSubtotalRaw = getAddonSnapshots(booking).reduce((sum, addon) => {

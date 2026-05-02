@@ -329,6 +329,12 @@ Phase 13 — Real-world validation & stabilization:
   - Admin revenue estimate uses adjusted stay value when present
   - No event pricing exposure
   - No schema/API response changes
+- 13H.2 Admin Decision Intelligence [COMPLETE]
+  - Pending booking decision panel
+  - Revenue total / add-ons / bedroom / guest load visibility
+  - Pending conflict advisory copy
+  - Existing data only
+  - No schema/API changes
 
 ---
 
