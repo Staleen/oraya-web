@@ -299,9 +299,9 @@ function getPaymentStatusStyle(status: string, overdue: boolean) {
   if (overdue) {
     return {
       label: "Payment overdue",
-      color: "#f0bd67",
-      background: "rgba(240,189,103,0.14)",
-      border: "rgba(240,189,103,0.34)",
+      color: "#f2a7a7",
+      background: "rgba(224,112,112,0.16)",
+      border: "rgba(224,112,112,0.36)",
     };
   }
 
@@ -317,9 +317,9 @@ function getPaymentStatusStyle(status: string, overdue: boolean) {
   if (status === "deposit_paid") {
     return {
       label: "Deposit paid",
-      color: "#9db7d9",
-      background: "rgba(157,183,217,0.14)",
-      border: "rgba(157,183,217,0.28)",
+      color: "#7ed39b",
+      background: "rgba(80,180,100,0.14)",
+      border: "rgba(111,207,138,0.3)",
     };
   }
 
@@ -1443,12 +1443,20 @@ export default function BookingsTable({
     const draft = getPaymentDraft(booking);
     const paymentStatus = getPaymentStatus(booking);
     const overdue = isPaymentOverdue(booking);
+    const paymentTone = getPaymentStatusStyle(paymentStatus, overdue);
     const depositAmount = formatMoney(booking.deposit_amount);
     const amountPaid = formatMoney(booking.amount_paid);
     const { stayValueRaw, addonsValueRaw, estimatedTotalRaw } = getBookingRevenueData(booking);
     const stayValue = formatMoney(stayValueRaw);
     const addonsValue = formatMoney(addonsValueRaw);
     const estimatedTotal = formatMoney(estimatedTotalRaw);
+    const amountPaidRaw =
+      typeof booking.amount_paid === "number" && Number.isFinite(booking.amount_paid) ? booking.amount_paid : 0;
+    const remainingBalanceRaw =
+      typeof estimatedTotalRaw === "number" && Number.isFinite(estimatedTotalRaw)
+        ? Math.max(0, estimatedTotalRaw - amountPaidRaw)
+        : null;
+    const remainingBalance = formatMoney(remainingBalanceRaw);
     const requestSentAt = formatDateTimeValue(booking.payment_requested_at);
     const receivedAt = formatDateTimeValue(booking.payment_received_at);
     const dueAt = formatDateTimeValue(booking.payment_due_at);
@@ -1460,8 +1468,8 @@ export default function BookingsTable({
     return (
       <div
         style={{
-          border: "0.5px solid rgba(197,164,109,0.24)",
-          backgroundColor: "rgba(197,164,109,0.05)",
+          border: `0.5px solid ${paymentTone.border}`,
+          backgroundColor: paymentTone.background,
           padding: "14px 16px",
           borderRadius: "8px",
           display: "grid",
@@ -1479,7 +1487,7 @@ export default function BookingsTable({
             }}
           >
             <div style={{ display: "grid", gap: "4px" }}>
-              <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+              <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: paymentTone.color, margin: 0 }}>
                 Payment
               </p>
               <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
@@ -1515,17 +1523,77 @@ export default function BookingsTable({
           {overdue && (
             <div
               style={{
-                border: "0.5px solid rgba(240,189,103,0.26)",
-                backgroundColor: "rgba(240,189,103,0.08)",
+                border: "0.5px solid rgba(224,112,112,0.3)",
+                backgroundColor: "rgba(224,112,112,0.12)",
                 padding: "10px 12px",
                 borderRadius: "6px",
               }}
             >
-              <p style={{ fontFamily: LATO, fontSize: "11px", color: "#f0bd67", margin: 0, lineHeight: 1.5 }}>
+              <p style={{ fontFamily: LATO, fontSize: "11px", color: "#f4b3b3", margin: 0, lineHeight: 1.5 }}>
                 Payment overdue.
               </p>
             </div>
           )}
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
+            gap: "12px",
+          }}
+        >
+          <div
+            style={{
+              border: `0.5px solid ${paymentTone.border}`,
+              backgroundColor: "rgba(255,255,255,0.03)",
+              padding: "12px 14px",
+              borderRadius: "8px",
+              display: "grid",
+              gap: "6px",
+            }}
+          >
+            <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "1.4px", textTransform: "uppercase", color: MUTED, margin: 0 }}>
+              Status
+            </p>
+            <p style={{ fontFamily: PLAYFAIR, fontSize: "1.05rem", color: paymentTone.color, lineHeight: 1.2, margin: 0 }}>
+              {paymentTone.label}
+            </p>
+          </div>
+          <div
+            style={{
+              border: "0.5px solid rgba(255,255,255,0.08)",
+              backgroundColor: "rgba(255,255,255,0.03)",
+              padding: "12px 14px",
+              borderRadius: "8px",
+              display: "grid",
+              gap: "6px",
+            }}
+          >
+            <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "1.4px", textTransform: "uppercase", color: MUTED, margin: 0 }}>
+              Amount paid
+            </p>
+            <p style={{ fontFamily: PLAYFAIR, fontSize: "1.05rem", color: paymentStatus === "paid_in_full" || paymentStatus === "deposit_paid" ? "#6fcf8a" : WHITE, lineHeight: 1.2, margin: 0 }}>
+              {amountPaid ?? "$0"}
+            </p>
+          </div>
+          <div
+            style={{
+              border: "0.5px solid rgba(255,255,255,0.08)",
+              backgroundColor: "rgba(255,255,255,0.03)",
+              padding: "12px 14px",
+              borderRadius: "8px",
+              display: "grid",
+              gap: "6px",
+            }}
+          >
+            <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "1.4px", textTransform: "uppercase", color: MUTED, margin: 0 }}>
+              Remaining balance
+            </p>
+            <p style={{ fontFamily: PLAYFAIR, fontSize: "1.05rem", color: remainingBalanceRaw === 0 ? "#6fcf8a" : GOLD, lineHeight: 1.2, margin: 0 }}>
+              {remainingBalance ?? "Unavailable"}
+            </p>
+          </div>
         </div>
 
         <div
@@ -1541,6 +1609,7 @@ export default function BookingsTable({
           {renderRevenueEstimateRow("Payment status", formatAdvisoryLabel(paymentStatus.replaceAll("_", " ")))}
           {renderRevenueEstimateRow("Deposit amount", depositAmount ?? "Not set")}
           {renderRevenueEstimateRow("Amount paid", amountPaid ?? "$0")}
+          {renderRevenueEstimateRow("Remaining balance", remainingBalance ?? "Unavailable")}
           {renderRevenueEstimateRow("Method", booking.payment_method ? formatAdvisoryLabel(booking.payment_method.replaceAll("_", " ")) : "Not set")}
           {renderRevenueEstimateRow("Reference", booking.payment_reference?.trim() || "Not set")}
           {renderRevenueEstimateRow("Due date", dueAt ?? "Not set")}

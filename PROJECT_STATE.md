@@ -390,6 +390,14 @@ Phase 13 — Real-world validation & stabilization:
   - Emails link to secure booking view
   - No Stripe / payment processing
   - No schema / API changes
+- 13L.4 Payment UX Polish [COMPLETE]
+  - Whish-first UX improvements
+  - Payment reference copy UX
+  - Clearer balance display
+  - Overdue payment warning
+  - Admin payment status visual polish
+  - No Stripe / payment processing
+  - No schema / API changes
 
 ---
 

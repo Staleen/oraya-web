@@ -1,6 +1,7 @@
 import Link from "next/link";
 import OrayaEmblem from "@/components/OrayaEmblem";
 import { AddonIcon } from "@/components/addon-icon";
+import CopyValueButton from "@/components/CopyValueButton";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { verifyViewToken } from "@/lib/booking-action-token";
 
@@ -157,16 +158,20 @@ function sameDayWarningText(value: Addon["same_day_warning"]): string | null {
   return null;
 }
 
-async function getWhatsappNumber(): Promise<string | null> {
+async function getContactSettings(): Promise<{ whatsappNumber: string | null; whishNumber: string | null }> {
   try {
     const { data } = await supabaseAdmin
       .from("settings")
-      .select("value")
-      .eq("key", "whatsapp_number")
-      .single();
-    return data?.value ?? null;
+      .select("key, value")
+      .in("key", ["whatsapp_number", "whish_number"]);
+
+    const settings = Array.isArray(data) ? data : [];
+    return {
+      whatsappNumber: settings.find((item) => item.key === "whatsapp_number")?.value ?? null,
+      whishNumber: settings.find((item) => item.key === "whish_number")?.value ?? null,
+    };
   } catch {
-    return null;
+    return { whatsappNumber: null, whishNumber: null };
   }
 }
 
@@ -252,7 +257,7 @@ export default async function BookingViewPage({ params }: { params: { token: str
     );
   }
 
-  const whatsappNumber = await getWhatsappNumber();
+  const { whatsappNumber, whishNumber } = await getContactSettings();
   const ref     = booking.id.slice(0, 8).toUpperCase();
   const visual  = statusVisual(booking.status);
   // Phase 13I: detect event inquiry — both conditions required (event_type set + structured notes marker).
@@ -287,6 +292,11 @@ export default async function BookingViewPage({ params }: { params: { token: str
   const paymentReceivedAt = formatDateTime(booking.payment_received_at);
   const paymentDueAt = formatDateTime(booking.payment_due_at);
   const refundedAt = formatDateTime(booking.refunded_at);
+  const paymentOverdue =
+    booking.payment_status === "payment_requested" &&
+    Boolean(booking.payment_due_at) &&
+    !Number.isNaN(new Date(booking.payment_due_at ?? "").getTime()) &&
+    new Date(booking.payment_due_at ?? "").getTime() < Date.now();
   const paymentRows: Array<[string, string, boolean]> = [
     ["Stay subtotal", staySubtotal !== null ? formatMoney(staySubtotal) : "Not available", false],
     ["Add-ons total", addonsTotal !== null ? formatMoney(addonsTotal) : "Price on request", false],
@@ -489,7 +499,15 @@ export default async function BookingViewPage({ params }: { params: { token: str
         )}
 
         {!isEventInquiry && booking.status === "confirmed" && (
-          <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", padding: "1.75rem", marginBottom: "2rem", textAlign: "left", backgroundColor: "rgba(255,255,255,0.015)" }}>
+          <div
+            style={{
+              border: paymentOverdue ? "0.5px solid rgba(224,112,112,0.32)" : "0.5px solid rgba(197,164,109,0.2)",
+              padding: "1.75rem",
+              marginBottom: "2rem",
+              textAlign: "left",
+              backgroundColor: paymentOverdue ? "rgba(224,112,112,0.05)" : "rgba(255,255,255,0.015)",
+            }}
+          >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px", flexWrap: "wrap", marginBottom: "1rem" }}>
               <div>
                 <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 8px" }}>
@@ -519,6 +537,22 @@ export default async function BookingViewPage({ params }: { params: { token: str
               </span>
             </div>
 
+            {paymentOverdue && (
+              <div
+                style={{
+                  border: "0.5px solid rgba(224,112,112,0.28)",
+                  backgroundColor: "rgba(224,112,112,0.08)",
+                  borderRadius: "8px",
+                  padding: "12px 14px",
+                  marginBottom: "12px",
+                }}
+              >
+                <p style={{ fontFamily: LATO, fontSize: "12px", color: "#f0bd67", lineHeight: 1.7, margin: 0 }}>
+                  Payment overdue — please complete payment to secure your booking.
+                </p>
+              </div>
+            )}
+
             {(booking.payment_status === null || booking.payment_status === "unpaid") && (
               <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, lineHeight: 1.7, margin: 0 }}>
                 Payment not requested yet.
@@ -545,6 +579,47 @@ export default async function BookingViewPage({ params }: { params: { token: str
                   )}
                 </div>
                 <div style={{ border: "0.5px solid rgba(197,164,109,0.16)", backgroundColor: "rgba(197,164,109,0.04)", padding: "14px 16px" }}>
+                  <div style={{ display: "grid", gap: "8px", marginBottom: "12px" }}>
+                    <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+                      Pay via Whish
+                    </p>
+                    <div
+                      style={{
+                        border: "0.5px solid rgba(197,164,109,0.16)",
+                        backgroundColor: "rgba(255,255,255,0.03)",
+                        padding: "12px 14px",
+                        borderRadius: "8px",
+                      }}
+                    >
+                      <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, lineHeight: 1.6, margin: 0 }}>
+                        {whishNumber?.trim() || "Send to Oraya Whish number"}
+                      </p>
+                    </div>
+                  </div>
+                  <div style={{ display: "grid", gap: "8px", marginBottom: "12px" }}>
+                    <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+                      Booking reference
+                    </p>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", flexWrap: "wrap" }}>
+                      <div
+                        style={{
+                          border: "0.5px solid rgba(197,164,109,0.16)",
+                          backgroundColor: "rgba(255,255,255,0.03)",
+                          padding: "12px 14px",
+                          borderRadius: "8px",
+                          flex: "1 1 180px",
+                        }}
+                      >
+                        <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, letterSpacing: "1px", margin: 0 }}>
+                          {ref}
+                        </p>
+                      </div>
+                      <CopyValueButton value={ref} buttonLabel="Copy reference" />
+                    </div>
+                    <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, lineHeight: 1.6, margin: 0 }}>
+                      Use this reference when sending payment.
+                    </p>
+                  </div>
                   <p style={{ fontFamily: LATO, fontSize: "12px", color: WHITE, lineHeight: 1.75, margin: "0 0 10px" }}>
                     Please complete payment using one of the available methods and send the reference to Oraya.
                   </p>
@@ -565,13 +640,30 @@ export default async function BookingViewPage({ params }: { params: { token: str
 
             {booking.payment_status === "deposit_paid" && (
               <div style={{ display: "grid", gap: "8px" }}>
+                {estimatedTotal !== null && (
+                  <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, lineHeight: 1.6, margin: 0 }}>
+                    Total booking value: <span style={{ color: GOLD }}>{formatMoney(estimatedTotal)}</span>
+                  </p>
+                )}
                 <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, lineHeight: 1.6, margin: 0 }}>
                   Amount paid: <span style={{ color: GOLD }}>{amountPaid !== null ? formatMoney(amountPaid) : "Not available"}</span>
                 </p>
                 {balanceDue !== null && (
-                  <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, lineHeight: 1.6, margin: 0 }}>
-                    Balance due: <span style={{ color: GOLD }}>{formatMoney(balanceDue)}</span>
-                  </p>
+                  <div
+                    style={{
+                      border: "0.5px solid rgba(197,164,109,0.18)",
+                      backgroundColor: "rgba(197,164,109,0.06)",
+                      borderRadius: "8px",
+                      padding: "12px 14px",
+                    }}
+                  >
+                    <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, margin: "0 0 6px" }}>
+                      Remaining balance
+                    </p>
+                    <p style={{ fontFamily: PLAYFAIR, fontSize: "1.2rem", color: GOLD, lineHeight: 1.2, margin: 0 }}>
+                      {formatMoney(balanceDue)}
+                    </p>
+                  </div>
                 )}
                 {booking.payment_method && (
                   <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.6, margin: 0 }}>
