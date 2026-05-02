@@ -1255,7 +1255,7 @@ function BookPageInner() {
         </div>
       </div>
       <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: "12px 0 0", lineHeight: 1.6 }}>
-        Includes your selected dates and current rates. Final confirmation is handled by Oraya.
+        Includes selected dates and current rates. Final confirmation is handled by Oraya.
       </p>
       {selectedAddonQuoteCount > 0 && (
         <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: "8px 0 0", lineHeight: 1.6 }}>
@@ -1513,6 +1513,9 @@ function BookPageInner() {
                   {estimatePanel && (
                     <div style={{ marginTop: "14px" }}>
                       {estimatePanel}
+                      <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: "8px 0 0", lineHeight: 1.6 }}>
+                        Rates vary by selected dates, season, and bedroom setup.
+                      </p>
                     </div>
                   )}
 
@@ -1667,6 +1670,9 @@ function BookPageInner() {
                       );
                     })}
                   </div>
+                  <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "10px 0 0", lineHeight: 1.6 }}>
+                    Bedroom setup affects the stay estimate. Add-ons are calculated separately.
+                  </p>
                 </div>
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>

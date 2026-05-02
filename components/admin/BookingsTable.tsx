@@ -1607,7 +1607,7 @@ export default function BookingsTable({
                 Revenue Estimate
               </p>
               <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
-                Internal advisory signal based on stay setup, guest load, add-ons, and event/service intent.
+                Advisory signal based on stay value, guest load, add-ons, and service intent.
               </p>
             </div>
 
@@ -1639,8 +1639,8 @@ export default function BookingsTable({
                     alignItems: "center",
                   }}
                 >
-                  {renderPricingIntelligenceBadge("Value tier", tierLabel, "tier")}
-                  {renderPricingIntelligenceBadge("Confidence", confidenceLabel, "confidence")}
+                  {renderPricingIntelligenceBadge("Revenue signal", tierLabel, "tier")}
+                  {renderPricingIntelligenceBadge("Signal confidence", confidenceLabel, "confidence")}
                 </div>
               </>
             ) : pricingIntelligence && isUnavailableFallback ? (
