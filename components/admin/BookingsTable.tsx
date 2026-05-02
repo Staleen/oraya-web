@@ -275,34 +275,11 @@ function dateOnlySerial(value: string) {
   return era * 146097 + dayOfEra;
 }
 
-function civilFromDateOnlySerial(serial: number) {
-  const era = Math.floor(serial / 146097);
-  const dayOfEra = serial - era * 146097;
-  const yearOfEra = Math.floor((dayOfEra - Math.floor(dayOfEra / 1460) + Math.floor(dayOfEra / 36524) - Math.floor(dayOfEra / 146096)) / 365);
-  const yearBase = yearOfEra + era * 400;
-  const dayOfYear = dayOfEra - (365 * yearOfEra + Math.floor(yearOfEra / 4) - Math.floor(yearOfEra / 100));
-  const monthPrime = Math.floor((5 * dayOfYear + 2) / 153);
-  const day = dayOfYear - Math.floor((153 * monthPrime + 2) / 5) + 1;
-  const month = monthPrime + (monthPrime < 10 ? 3 : -9);
-  const year = yearBase + (month <= 2 ? 1 : 0);
-
-  return { year, month, day };
-}
-
-function enumerateDateOnlyGapDates(start: string, end: string) {
-  const startSerial = dateOnlySerial(start);
-  const endSerial = dateOnlySerial(end);
-  if (startSerial === null || endSerial === null || endSerial <= startSerial) return [];
-
-  const dates: string[] = [];
-  for (let serial = startSerial; serial < endSerial; serial += 1) {
-    const next = civilFromDateOnlySerial(serial);
-    const year = String(next.year).padStart(4, "0");
-    const month = String(next.month).padStart(2, "0");
-    const day = String(next.day).padStart(2, "0");
-    dates.push(`${year}-${month}-${day}`);
-  }
-  return dates;
+function dateOnlyGapDays(startExclusive: string, endInclusiveStart: string) {
+  const startSerial = dateOnlySerial(startExclusive);
+  const endSerial = dateOnlySerial(endInclusiveStart);
+  if (startSerial === null || endSerial === null) return null;
+  return endSerial - startSerial;
 }
 
 export default function BookingsTable({
@@ -493,19 +470,19 @@ export default function BookingsTable({
       for (let index = 0; index < sortedVillaBookings.length - 1; index += 1) {
         const current = sortedVillaBookings[index];
         const next = sortedVillaBookings[index + 1];
-        const gapDates = enumerateDateOnlyGapDates(current.check_out, next.check_in);
+        const gapDays = dateOnlyGapDays(current.check_out, next.check_in);
+        if (gapDays !== 1) continue;
 
-        for (const gapDate of gapDates) {
-          const dateLabel = fmt(gapDate);
-          opportunities.set(current.id, [
-            ...(opportunities.get(current.id) ?? []),
-            { kind: "late_checkout", dateISO: gapDate, dateLabel, pairedBooking: next },
-          ]);
-          opportunities.set(next.id, [
-            ...(opportunities.get(next.id) ?? []),
-            { kind: "early_checkin", dateISO: gapDate, dateLabel, pairedBooking: current },
-          ]);
-        }
+        const opportunityDate = current.check_out;
+        const dateLabel = fmt(opportunityDate);
+        opportunities.set(current.id, [
+          ...(opportunities.get(current.id) ?? []),
+          { kind: "late_checkout", dateISO: opportunityDate, dateLabel, pairedBooking: next },
+        ]);
+        opportunities.set(next.id, [
+          ...(opportunities.get(next.id) ?? []),
+          { kind: "early_checkin", dateISO: opportunityDate, dateLabel, pairedBooking: current },
+        ]);
       }
     }
 
@@ -1443,7 +1420,7 @@ export default function BookingsTable({
                     {message}
                   </p>
                   <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
-                    Adjacent booking {opportunity.pairedBooking.id} · {fmt(opportunity.pairedBooking.check_in)} to {fmt(opportunity.pairedBooking.check_out)}
+                    Adjacent booking: {fmt(opportunity.pairedBooking.check_in)} to {fmt(opportunity.pairedBooking.check_out)}
                   </p>
                 </div>
               );
