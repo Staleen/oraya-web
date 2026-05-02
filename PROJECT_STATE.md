@@ -335,6 +335,12 @@ Phase 13 — Real-world validation & stabilization:
   - Pending conflict advisory copy
   - Existing data only
   - No schema/API changes
+- 13H.3 Admin Booking Comparison Layer [COMPLETE]
+  - Overlapping pending bookings comparison
+  - Side-by-side revenue visibility
+  - Advisory recommendation hints
+  - No auto decision logic
+  - No schema/API changes
 
 ---
 

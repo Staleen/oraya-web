@@ -1685,6 +1685,176 @@ export default function BookingsTable({
           );
         })()}
 
+        {/* Phase 13H.3: Booking Comparison Layer — overlapping pending requests. Reuses existing overlap + revenue data. */}
+        {booking.status === "pending" && hasPendingOverlap && (() => {
+          // Same fallback chain as Decision Signal — computed per booking, no recomputation of pricing.
+          function summarize(b: Booking) {
+            const intel = getPricingIntelligenceMeta(b);
+            const addonSubRaw = getAddonSnapshots(b).reduce((sum, addon) => {
+              return sum + (typeof addon.price === "number" && Number.isFinite(addon.price) ? addon.price : 0);
+            }, 0);
+            const stayRaw =
+              getSnapshotNumber(b.pricing_snapshot?.adjusted_stay_subtotal) ??
+              getSnapshotNumber(b.pricing_snapshot?.subtotal) ??
+              intel?.stay_value ??
+              getPersistedStayValue(b);
+            const addonsRaw =
+              intel?.addons_value ??
+              (getAddonSnapshots(b).length > 0 ? addonSubRaw : 0);
+            const totalRaw =
+              getSnapshotNumber(b.pricing_snapshot?.estimated_total) ??
+              intel?.estimated_total ??
+              intel?.internal_value ??
+              (typeof stayRaw === "number" && typeof addonsRaw === "number"
+                ? stayRaw + addonsRaw
+                : null);
+            const bedroomsRaw = b.pricing_snapshot?.bedrooms_to_be_used;
+            const bedroomLabel =
+              typeof bedroomsRaw === "number" && bedroomsRaw >= 1 && bedroomsRaw <= 3
+                ? `${bedroomsRaw}BR`
+                : "—";
+            const overnight = typeof b.sleeping_guests === "number" ? b.sleeping_guests : null;
+            const dayVis = typeof b.day_visitors === "number" ? b.day_visitors : null;
+            const guestLabel = overnight !== null
+              ? (dayVis && dayVis > 0
+                  ? `${overnight} overnight + ${dayVis} day`
+                  : `${overnight} ${overnight === 1 ? "guest" : "guests"}`)
+              : "—";
+            return {
+              totalRaw,
+              totalDisplay: formatMoney(totalRaw) ?? "—",
+              addonsRaw,
+              addonsDisplay: formatMoney(addonsRaw),
+              hasAddons: typeof addonsRaw === "number" && addonsRaw > 0,
+              bedroomLabel,
+              guestLabel,
+            };
+          }
+
+          const currentSummary = summarize(booking);
+          const conflictSummaries = overlappingPendingBookings.map((conflict) => ({
+            booking: conflict,
+            summary: summarize(conflict),
+          }));
+
+          // Recommendation hint — advisory, based on numeric totals only (skip nulls).
+          const numericTotals: number[] = [];
+          if (typeof currentSummary.totalRaw === "number") numericTotals.push(currentSummary.totalRaw);
+          for (const c of conflictSummaries) {
+            if (typeof c.summary.totalRaw === "number") numericTotals.push(c.summary.totalRaw);
+          }
+          let recommendation: string | null = null;
+          let recommendationTone: "warning" | "neutral" | "positive" = "neutral";
+          if (numericTotals.length >= 2 && typeof currentSummary.totalRaw === "number") {
+            const maxTotal = Math.max(...numericTotals);
+            const allEqual = numericTotals.every((t) => t === currentSummary.totalRaw);
+            if (allEqual) {
+              recommendation = "Comparable value requests.";
+              recommendationTone = "neutral";
+            } else if (currentSummary.totalRaw < maxTotal) {
+              recommendation = "Higher-value request detected — review before confirming.";
+              recommendationTone = "warning";
+            } else {
+              recommendation = "Highest-value request among overlaps.";
+              recommendationTone = "positive";
+            }
+          }
+
+          const recColor =
+            recommendationTone === "warning" ? "#f0bd67"
+            : recommendationTone === "positive" ? "#7ecfcf"
+            : MUTED;
+          const recBorder =
+            recommendationTone === "warning" ? "rgba(240,189,103,0.32)"
+            : recommendationTone === "positive" ? "rgba(126,207,207,0.32)"
+            : "rgba(197,164,109,0.18)";
+          const recBg =
+            recommendationTone === "warning" ? "rgba(240,189,103,0.08)"
+            : recommendationTone === "positive" ? "rgba(126,207,207,0.08)"
+            : "rgba(255,255,255,0.025)";
+
+          function renderRow(
+            label: "Current request" | "Competing request",
+            s: ReturnType<typeof summarize>,
+            isCurrent: boolean,
+          ) {
+            return (
+              <div
+                style={{
+                  display: "grid",
+                  gap: "4px",
+                  padding: "10px 12px",
+                  border: `0.5px solid ${isCurrent ? "rgba(197,164,109,0.32)" : "rgba(255,255,255,0.08)"}`,
+                  backgroundColor: isCurrent ? "rgba(197,164,109,0.06)" : "rgba(255,255,255,0.02)",
+                  borderRadius: "6px",
+                }}
+              >
+                <span style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "1.4px", textTransform: "uppercase", color: MUTED }}>
+                  {label}
+                </span>
+                <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: "8px" }}>
+                  <span style={{ fontFamily: PLAYFAIR, fontSize: "16px", color: GOLD, fontWeight: 600 }}>
+                    {s.totalDisplay}
+                  </span>
+                  <span style={{ fontFamily: LATO, fontSize: "11px", color: "rgba(255,255,255,0.7)" }}>
+                    — {s.bedroomLabel} — {s.guestLabel} —{" "}
+                    {s.hasAddons ? `${s.addonsDisplay} add-ons` : "no add-ons"}
+                  </span>
+                </div>
+              </div>
+            );
+          }
+
+          return (
+            <div
+              style={{
+                border: "0.5px solid rgba(240,189,103,0.28)",
+                backgroundColor: "rgba(240,189,103,0.05)",
+                padding: "14px 16px",
+                borderRadius: "8px",
+                display: "grid",
+                gap: "10px",
+              }}
+            >
+              <div style={{ display: "grid", gap: "4px" }}>
+                <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: "#f0bd67", margin: 0 }}>
+                  Competing Requests
+                </p>
+                <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+                  Side-by-side comparison of overlapping pending requests for {booking.villa}.
+                </p>
+              </div>
+
+              <div style={{ display: "grid", gap: "8px" }}>
+                {renderRow("Current request", currentSummary, true)}
+                {conflictSummaries.map((c) => (
+                  <div key={c.booking.id} style={{ display: "grid", gap: "4px" }}>
+                    {renderRow("Competing request", c.summary, false)}
+                    <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: "0 4px", lineHeight: 1.5 }}>
+                      {getBookingDisplayName(c.booking)} · {fmt(c.booking.check_in)} to {fmt(c.booking.check_out)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              {recommendation && (
+                <div
+                  style={{
+                    border: `0.5px solid ${recBorder}`,
+                    backgroundColor: recBg,
+                    padding: "8px 12px",
+                    borderRadius: "6px",
+                  }}
+                >
+                  <p style={{ fontFamily: LATO, fontSize: "11px", color: recColor, margin: 0, lineHeight: 1.5 }}>
+                    {recommendation}
+                  </p>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         {(() => {
           const pricingIntelligence = getPricingIntelligenceMeta(booking);
           const addonSubtotalRaw = getAddonSnapshots(booking).reduce((sum, addon) => {
