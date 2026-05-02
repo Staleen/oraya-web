@@ -182,7 +182,14 @@ UI:
 
 The following systems are production-stable and must not be changed unless explicitly approved:
 
-- `/api/bookings` - submission, validation, overlap logic
+- `/api/bookings` - submission, validation, overlap logic (CORE LOCKED)
+- Allowed exception:
+  - Non-blocking enrichment of `pricing_snapshot` during booking creation
+  - Must NOT:
+    - affect booking acceptance/rejection
+    - modify validation rules
+    - alter response structure
+    - introduce new required fields
 - `/api/bookings/availability`
 - `/api/booking-action/*`
 - `/api/calendar/*`
@@ -200,9 +207,15 @@ The following systems are production-stable and must not be changed unless expli
 
 ## HARD CONSTRAINTS
 
-- No backend changes
-- No API changes
+- No destructive backend changes
+- No API response shape changes
 - No booking logic changes
+- Allowed exception:
+  - Controlled backend enrichment inside existing JSON snapshot fields (e.g. `pricing_snapshot`, `addons`)
+  - This enrichment must be:
+    - Non-blocking
+    - Advisory only (not used for validation or booking decisions)
+    - Not exposed to guest-facing UI
 - No calendar sync logic changes
 - No database schema changes
 - No authentication changes
@@ -285,6 +298,29 @@ Phase 13 — Real-world validation & stabilization:
   - Services grouped visually by setup, hospitality, production, and guest flow
   - Event summary upgraded with overview + requested services sections
   - No pricing added and no backend/API/schema changes
+- 13F Pricing Intelligence Layer — APPROVED (CONTROLLED)
+  - Purpose:
+    - Introduce internal booking value computation for admin advisory use only.
+  - Scope:
+    - Compute internal booking value based on:
+      - stay duration
+      - bedroom selection
+      - guest load
+      - add-ons
+      - event services
+    - Attach metadata into `pricing_snapshot`
+  - Allowed:
+    - Server-side computation during booking creation
+    - Storage inside existing `pricing_snapshot` JSON
+    - Admin-only display (non-numeric or summarized)
+  - NOT allowed:
+    - No database schema changes
+    - No API contract changes
+    - No booking flow or validation changes
+    - No pricing exposure to guest UI
+    - No enforcement based on computed values
+  - Clarification:
+    - This layer is advisory only and does not influence booking outcomes.
 
 ---
 
