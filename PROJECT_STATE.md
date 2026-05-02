@@ -383,6 +383,13 @@ Phase 13 — Real-world validation & stabilization:
   - No online payment processing
   - Event inquiries remain pricing / payment hidden
   - No schema / API changes
+- 13L.3 Payment Email Flow [COMPLETE]
+  - Payment requested email implemented
+  - Payment received email implemented
+  - Payment reminder template prepared
+  - Emails link to secure booking view
+  - No Stripe / payment processing
+  - No schema / API changes
 
 ---
 

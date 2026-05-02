@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { sendBookingEmail } from "@/lib/send-booking-email";
+import {
+  sendBookingPaymentReceivedEmail,
+  sendBookingPaymentRequestedEmail,
+} from "@/lib/send-booking-payment-email";
 import { findAvailabilityConflict } from "@/lib/calendar/availability";
 
 function makeAdminClient() {
@@ -12,12 +16,38 @@ function makeAdminClient() {
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
 }
 
+async function resolveRecipient(db: ReturnType<typeof makeAdminClient>, booking: {
+  member_id?: string | null;
+  guest_email?: string | null;
+  guest_name?: string | null;
+}) {
+  if (booking.member_id) {
+    const { data: { user } } = await db.auth.admin.getUserById(booking.member_id);
+    if (user?.email) {
+      let memberName = "Member";
+      const { data: member } = await db
+        .from("members")
+        .select("full_name")
+        .eq("id", booking.member_id)
+        .single();
+      if (member?.full_name) memberName = member.full_name;
+      return { email: user.email, name: memberName };
+    }
+  }
+
+  return {
+    email: booking.guest_email ?? null,
+    name: booking.guest_name || "Guest",
+  };
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   const db = makeAdminClient();
   const payload = await request.json();
+  const bookingId = params.id;
   const status = payload.status as unknown;
 
   const statusUpdateProvided = Object.prototype.hasOwnProperty.call(payload, "status");
@@ -44,6 +74,16 @@ export async function PATCH(
     return NextResponse.json({ error: "No booking updates provided." }, { status: 400 });
   }
 
+  const { data: existingBooking, error: existingBookingError } = await db
+    .from("bookings")
+    .select("id, villa, check_in, check_out, sleeping_guests, day_visitors, event_type, message, addons, addons_snapshot, pricing_subtotal, pricing_snapshot, member_id, guest_name, guest_email, payment_status, payment_method, deposit_amount, amount_paid, payment_reference, payment_due_at, payment_requested_at, payment_received_at, refund_status, refund_amount, refunded_at")
+    .eq("id", bookingId)
+    .single();
+
+  if (existingBookingError || !existingBooking) {
+    return NextResponse.json({ error: "Booking not found." }, { status: 404 });
+  }
+
   if (statusUpdateProvided) {
     const allowed = ["pending", "confirmed", "cancelled"];
     if (typeof status !== "string" || !allowed.includes(status)) {
@@ -52,21 +92,16 @@ export async function PATCH(
   }
 
   if (status === "confirmed") {
-    const { data: booking, error: fetchErr } = await db
-      .from("bookings")
-      .select("villa, check_in, check_out")
-      .eq("id", params.id)
-      .single();
-
-    if (fetchErr || !booking) {
-      return NextResponse.json({ error: "Booking not found." }, { status: 404 });
-    }
-
     try {
-      const conflict = await findAvailabilityConflict(booking.villa, booking.check_in, booking.check_out, params.id);
+      const conflict = await findAvailabilityConflict(
+        existingBooking.villa,
+        existingBooking.check_in,
+        existingBooking.check_out,
+        bookingId
+      );
       if (conflict) {
         return NextResponse.json(
-          { error: `Cannot confirm — ${booking.villa} already has a blocked stay from ${conflict.check_in} to ${conflict.check_out} that overlaps these dates.` },
+          { error: `Cannot confirm — ${existingBooking.villa} already has a blocked stay from ${conflict.check_in} to ${conflict.check_out} that overlaps these dates.` },
           { status: 409 }
         );
       }
@@ -178,7 +213,7 @@ export async function PATCH(
   const { data: updated, error } = await db
     .from("bookings")
     .update(updatePayload)
-    .eq("id", params.id)
+    .eq("id", bookingId)
     .select()
     .single();
 
@@ -191,61 +226,94 @@ export async function PATCH(
   }
 
   let emailSent = false;
+  const isEventInquiry = Boolean(
+    updated.event_type &&
+    typeof updated.message === "string" &&
+    updated.message.includes("[Event Inquiry]")
+  );
+
   if (statusUpdateProvided && (status === "confirmed" || status === "cancelled")) {
     try {
-      const { data: bk } = await db
-        .from("bookings")
-        .select("villa, check_in, check_out, sleeping_guests, day_visitors, event_type, message, addons, addons_snapshot, pricing_subtotal, pricing_snapshot, member_id, guest_name, guest_email")
-        .eq("id", params.id)
-        .single();
+      const { email: recipientEmail, name: recipientName } = await resolveRecipient(db, updated);
 
-      if (!bk) {
-        console.warn(`[api/admin/bookings] booking ${params.id} not found for email — skipping`);
+      if (!recipientEmail) {
+        console.warn(`[api/admin/bookings] no email address for booking ${bookingId} — skipping notification`);
       } else {
-        let recipientEmail: string | null = null;
-        let recipientName = "Member";
-
-        if (bk.member_id) {
-          const { data: { user } } = await db.auth.admin.getUserById(bk.member_id);
-          if (user?.email) {
-            recipientEmail = user.email;
-            const { data: member } = await db
-              .from("members")
-              .select("full_name")
-              .eq("id", bk.member_id)
-              .single();
-            if (member?.full_name) recipientName = member.full_name;
-          }
-        } else if (bk.guest_email) {
-          recipientEmail = bk.guest_email;
-          if (bk.guest_name) recipientName = bk.guest_name;
-        }
-
-        if (!recipientEmail) {
-          console.warn(`[api/admin/bookings] no email address for booking ${params.id} — skipping notification`);
-        } else {
-          await sendBookingEmail({
-            to: recipientEmail,
-            name: recipientName,
-            status: status as "confirmed" | "cancelled",
-            villa: bk.villa,
-            check_in: bk.check_in,
-            check_out: bk.check_out,
-            booking_id: params.id,
-            sleeping_guests: bk.sleeping_guests,
-            day_visitors: bk.day_visitors,
-            event_type: bk.event_type ?? null,
-            message: bk.message ?? null,
-            addons: Array.isArray(bk.addons) ? bk.addons : [],
-            addons_snapshot: Array.isArray(bk.addons_snapshot) ? bk.addons_snapshot : null,
-            pricing_subtotal: bk.pricing_subtotal ?? null,
-            pricing_snapshot: bk.pricing_snapshot ?? null,
-          });
-          emailSent = true;
-        }
+        await sendBookingEmail({
+          to: recipientEmail,
+          name: recipientName,
+          status: status as "confirmed" | "cancelled",
+          villa: updated.villa,
+          check_in: updated.check_in,
+          check_out: updated.check_out,
+          booking_id: bookingId,
+          sleeping_guests: updated.sleeping_guests,
+          day_visitors: updated.day_visitors,
+          event_type: updated.event_type ?? null,
+          message: updated.message ?? null,
+          addons: Array.isArray(updated.addons) ? updated.addons : [],
+          addons_snapshot: Array.isArray(updated.addons_snapshot) ? updated.addons_snapshot : null,
+          pricing_subtotal: updated.pricing_subtotal ?? null,
+          pricing_snapshot: updated.pricing_snapshot ?? null,
+        });
+        emailSent = true;
       }
     } catch (emailErr) {
       console.error("[api/admin/bookings] email notification error:", emailErr);
+    }
+  }
+
+  const paymentStatusChanged =
+    typeof updated.payment_status === "string" &&
+    updated.payment_status !== existingBooking.payment_status;
+
+  if (paymentStatusChanged && !isEventInquiry) {
+    try {
+      const { email: recipientEmail, name: recipientName } = await resolveRecipient(db, updated);
+
+      if (!recipientEmail) {
+        console.warn(`[api/admin/bookings] no email address for booking ${bookingId} payment update — skipping notification`);
+      } else if (updated.payment_status === "payment_requested") {
+        await sendBookingPaymentRequestedEmail({
+          to: recipientEmail,
+          name: recipientName,
+          villa: updated.villa,
+          check_in: updated.check_in,
+          check_out: updated.check_out,
+          booking_id: bookingId,
+          payment_status: updated.payment_status ?? null,
+          deposit_amount: updated.deposit_amount ?? null,
+          amount_paid: updated.amount_paid ?? null,
+          payment_due_at: updated.payment_due_at ?? null,
+          payment_method: updated.payment_method ?? null,
+          payment_reference: updated.payment_reference ?? null,
+          pricing_subtotal: updated.pricing_subtotal ?? null,
+          pricing_snapshot: updated.pricing_snapshot ?? null,
+          addons_snapshot: Array.isArray(updated.addons_snapshot) ? updated.addons_snapshot : null,
+        });
+        emailSent = true;
+      } else if (updated.payment_status === "deposit_paid" || updated.payment_status === "paid_in_full") {
+        await sendBookingPaymentReceivedEmail({
+          to: recipientEmail,
+          name: recipientName,
+          villa: updated.villa,
+          check_in: updated.check_in,
+          check_out: updated.check_out,
+          booking_id: bookingId,
+          payment_status: updated.payment_status ?? null,
+          deposit_amount: updated.deposit_amount ?? null,
+          amount_paid: updated.amount_paid ?? null,
+          payment_due_at: updated.payment_due_at ?? null,
+          payment_method: updated.payment_method ?? null,
+          payment_reference: updated.payment_reference ?? null,
+          pricing_subtotal: updated.pricing_subtotal ?? null,
+          pricing_snapshot: updated.pricing_snapshot ?? null,
+          addons_snapshot: Array.isArray(updated.addons_snapshot) ? updated.addons_snapshot : null,
+        });
+        emailSent = true;
+      }
+    } catch (paymentEmailErr) {
+      console.error("[api/admin/bookings] payment email notification error:", paymentEmailErr);
     }
   }
 
