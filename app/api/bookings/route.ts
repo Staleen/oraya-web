@@ -6,7 +6,13 @@ import { createActionToken } from "@/lib/booking-action-token";
 import { SITE_URL } from "@/lib/brand";
 import { findAvailabilityConflict } from "@/lib/calendar/availability";
 import { getVillaPricing, parseVillaPricingSetting, VILLA_BASE_PRICING_KEY } from "@/lib/admin-pricing";
-import { buildPricingSnapshot, runPricingAudit } from "@/lib/pricing/server-audit";
+import {
+  computeInternalPricingIntelligence,
+  detectEventInquiry,
+  parseBedroomCountFromMessage,
+  parseRequestedServiceCount,
+} from "@/lib/pricing/intelligence";
+import { buildPricingSnapshot, runPricingAudit, type PricingSnapshot } from "@/lib/pricing/server-audit";
 import { ADDON_OPERATIONAL_SETTINGS_KEY, formatPreparationTime, getAddonEnforcementMode, getAddonTimingType, mergeAddonsWithOperationalSettings, parseAddonOperationalSetting } from "@/lib/addon-operations";
 import { runAddonAudit } from "@/lib/addon-audit";
 
@@ -196,15 +202,7 @@ export async function POST(request: Request) {
       pricing_subtotal: number;
       pricing_nights: ReturnType<typeof runPricingAudit>["nights"];
       pricing_warnings: string[];
-      pricing_snapshot: {
-        subtotal: number;
-        nights: ReturnType<typeof runPricingAudit>["nights"];
-        warnings: string[];
-        violations: ReturnType<typeof runPricingAudit>["violations"];
-        would_block_reasons: ReturnType<typeof runPricingAudit>["would_block_reasons"];
-        calculated_at: string;
-        source: "server-audit";
-      };
+      pricing_snapshot: PricingSnapshot;
     } | null = null;
     let addonsSnapshotData: Array<{
       id: string;
@@ -553,6 +551,36 @@ export async function POST(request: Request) {
 
     if (addonsSnapshotData) {
       insertData.addons_snapshot = addonsSnapshotData.length > 0 ? addonsSnapshotData : null;
+    }
+
+    if (pricingSnapshotData) {
+      try {
+        const bedrooms = parseBedroomCountFromMessage(message) ?? 3;
+        const guests = parseInt(sleeping_guests, 10) || 0;
+        const eventInquiry = detectEventInquiry(message);
+        const servicesCount = eventInquiry ? parseRequestedServiceCount(message) : 0;
+        const addonsValue = (addonsSnapshotData ?? []).reduce((sum, addon) => {
+          return sum + (typeof addon.price === "number" && Number.isFinite(addon.price) ? addon.price : 0);
+        }, 0);
+        const addonsCount = addonsSnapshotData?.length ?? 0;
+        const internalIntelligence = computeInternalPricingIntelligence({
+          fullVillaBase: pricingSnapshotData.pricing_subtotal,
+          bedrooms,
+          guests,
+          addonsValue,
+          addonsCount,
+          eventInquiry,
+          servicesCount,
+        });
+
+        pricingSnapshotData.pricing_snapshot = {
+          ...pricingSnapshotData.pricing_snapshot,
+          internal_intelligence: internalIntelligence,
+        };
+        insertData.pricing_snapshot = pricingSnapshotData.pricing_snapshot;
+      } catch (internalIntelligenceError) {
+        console.error("[api/bookings] pricing intelligence skipped:", internalIntelligenceError);
+      }
     }
 
     const { data, error } = await supabaseAdmin

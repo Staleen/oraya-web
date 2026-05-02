@@ -177,6 +177,11 @@ function formatAddonPrice(price: number | null) {
   return `$${price.toLocaleString("en-US")}`;
 }
 
+function formatAdvisoryLabel(value: string) {
+  if (!value) return value;
+  return `${value.charAt(0).toUpperCase()}${value.slice(1)}`;
+}
+
 function getAddonRiskWarning(addon: BookingAddonSnapshot) {
   if (addon.same_day_warning === "same_day_checkout") return "Same-day checkout risk";
   if (addon.same_day_warning === "same_day_checkin") return "Same-day check-in risk";
@@ -1425,6 +1430,29 @@ export default function BookingsTable({
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {booking.pricing_snapshot?.internal_intelligence && (
+          <div
+            style={{
+              border: "0.5px solid rgba(197,164,109,0.24)",
+              backgroundColor: "rgba(197,164,109,0.07)",
+              padding: "12px 14px",
+              borderRadius: "8px",
+              display: "grid",
+              gap: "6px",
+            }}
+          >
+            <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+              Internal advisory
+            </p>
+            <p style={{ fontFamily: LATO, fontSize: "12px", color: WHITE, margin: 0, lineHeight: 1.5 }}>
+              Estimated Value: {formatAdvisoryLabel(booking.pricing_snapshot.internal_intelligence.tier)}
+            </p>
+            <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+              Confidence: {formatAdvisoryLabel(booking.pricing_snapshot.internal_intelligence.confidence)}
+            </p>
           </div>
         )}
 

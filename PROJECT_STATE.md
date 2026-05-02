@@ -298,29 +298,13 @@ Phase 13 — Real-world validation & stabilization:
   - Services grouped visually by setup, hospitality, production, and guest flow
   - Event summary upgraded with overview + requested services sections
   - No pricing added and no backend/API/schema changes
-- 13F Pricing Intelligence Layer — APPROVED (CONTROLLED)
-  - Purpose:
-    - Introduce internal booking value computation for admin advisory use only.
-  - Scope:
-    - Compute internal booking value based on:
-      - stay duration
-      - bedroom selection
-      - guest load
-      - add-ons
-      - event services
-    - Attach metadata into `pricing_snapshot`
-  - Allowed:
-    - Server-side computation during booking creation
-    - Storage inside existing `pricing_snapshot` JSON
-    - Admin-only display (non-numeric or summarized)
-  - NOT allowed:
-    - No database schema changes
-    - No API contract changes
-    - No booking flow or validation changes
-    - No pricing exposure to guest UI
-    - No enforcement based on computed values
-  - Clarification:
-    - This layer is advisory only and does not influence booking outcomes.
+- 13F Pricing Intelligence Layer [COMPLETE]
+  - Controlled snapshot enrichment implemented for admin advisory use only
+  - 3BR base pricing model used internally
+  - Bedroom factors: 1BR=0.6, 2BR=0.8, 3BR=1.0
+  - Admin-only non-numeric value/confidence display
+  - No guest pricing exposure
+  - No schema/API response changes
 
 ---
 

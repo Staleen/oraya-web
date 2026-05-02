@@ -1,4 +1,5 @@
 import { calculateStayPricing } from "./engine";
+import type { InternalPricingIntelligence } from "./intelligence";
 import type { NightSource, VillaPricingConfig } from "./types";
 
 export type PricingAuditResult = {
@@ -39,6 +40,7 @@ export type PricingSnapshot = {
   };
   calculated_at: string;
   source: "server-audit";
+  internal_intelligence?: InternalPricingIntelligence;
 };
 
 export type PricingAuditInput = {
