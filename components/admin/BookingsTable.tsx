@@ -182,6 +182,68 @@ function formatAdvisoryLabel(value: string) {
   return `${value.charAt(0).toUpperCase()}${value.slice(1)}`;
 }
 
+function getPricingIntelligenceMeta(booking: Booking) {
+  return booking.pricing_snapshot?.internal_intelligence ?? null;
+}
+
+function renderPricingIntelligenceBadge(label: string, value: string, tone: "tier" | "confidence") {
+  const styles =
+    tone === "tier"
+      ? {
+          color: GOLD,
+          backgroundColor: "rgba(197,164,109,0.14)",
+          border: "rgba(197,164,109,0.3)",
+        }
+      : {
+          color: "#9db7d9",
+          backgroundColor: "rgba(157,183,217,0.14)",
+          border: "rgba(157,183,217,0.26)",
+        };
+
+  return (
+    <div
+      style={{
+        display: "grid",
+        gap: "4px",
+        minWidth: 0,
+      }}
+    >
+      <p
+        style={{
+          fontFamily: LATO,
+          fontSize: "9px",
+          letterSpacing: "1.4px",
+          textTransform: "uppercase",
+          color: MUTED,
+          margin: 0,
+        }}
+      >
+        {label}
+      </p>
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: "fit-content",
+          fontFamily: LATO,
+          fontSize: "10px",
+          letterSpacing: "1.4px",
+          textTransform: "uppercase",
+          color: styles.color,
+          backgroundColor: styles.backgroundColor,
+          border: `0.5px solid ${styles.border}`,
+          borderRadius: "999px",
+          padding: "6px 10px",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {formatAdvisoryLabel(value)}
+      </span>
+    </div>
+  );
+}
+
 function getAddonRiskWarning(addon: BookingAddonSnapshot) {
   if (addon.same_day_warning === "same_day_checkout") return "Same-day checkout risk";
   if (addon.same_day_warning === "same_day_checkin") return "Same-day check-in risk";
@@ -1433,28 +1495,49 @@ export default function BookingsTable({
           </div>
         )}
 
-        {booking.pricing_snapshot?.internal_intelligence && (
+        {(() => {
+          const pricingIntelligence = getPricingIntelligenceMeta(booking);
+
+          return (
           <div
             style={{
               border: "0.5px solid rgba(197,164,109,0.24)",
-              backgroundColor: "rgba(197,164,109,0.07)",
-              padding: "12px 14px",
+              backgroundColor: "rgba(197,164,109,0.06)",
+              padding: "12px 14px 13px",
               borderRadius: "8px",
               display: "grid",
-              gap: "6px",
+              gap: "10px",
             }}
           >
-            <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
-              Internal advisory
-            </p>
-            <p style={{ fontFamily: LATO, fontSize: "12px", color: WHITE, margin: 0, lineHeight: 1.5 }}>
-              Estimated Value: {formatAdvisoryLabel(booking.pricing_snapshot.internal_intelligence.tier)}
-            </p>
-            <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
-              Confidence: {formatAdvisoryLabel(booking.pricing_snapshot.internal_intelligence.confidence)}
-            </p>
+            <div style={{ display: "grid", gap: "4px" }}>
+              <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+                Pricing Intelligence
+              </p>
+              <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+                Internal advisory signal based on stay setup, guest load, add-ons, and event/service intent.
+              </p>
+            </div>
+
+            {pricingIntelligence ? (
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "12px 16px",
+                  alignItems: "center",
+                }}
+              >
+                {renderPricingIntelligenceBadge("Estimated Value", pricingIntelligence.tier, "tier")}
+                {renderPricingIntelligenceBadge("Confidence", pricingIntelligence.confidence, "confidence")}
+              </div>
+            ) : (
+              <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+                Value intelligence unavailable for older booking.
+              </p>
+            )}
           </div>
-        )}
+          );
+        })()}
 
         {renderAddonRows(booking)}
 

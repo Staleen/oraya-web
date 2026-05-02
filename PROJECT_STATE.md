@@ -305,6 +305,12 @@ Phase 13 — Real-world validation & stabilization:
   - Admin-only non-numeric value/confidence display
   - No guest pricing exposure
   - No schema/API response changes
+- 13G Admin Pricing Intelligence UX Polish [COMPLETE]
+  - Admin-only display for internal pricing intelligence
+  - Safe fallback for older bookings
+  - No numeric internal value exposed
+  - No guest UI exposure
+  - No schema/API changes
 
 ---
 
