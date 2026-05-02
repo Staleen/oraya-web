@@ -377,6 +377,12 @@ Phase 13 — Real-world validation & stabilization:
   - No guest payment UI yet
   - No Stripe / card gateway integration
   - No booking validation changes
+- 13L.2 Guest Payment Instructions [COMPLETE]
+  - Secure booking view displays payment instructions for stay bookings
+  - Payment status is reflected to guests after admin request / payment recording
+  - No online payment processing
+  - Event inquiries remain pricing / payment hidden
+  - No schema / API changes
 
 ---
 

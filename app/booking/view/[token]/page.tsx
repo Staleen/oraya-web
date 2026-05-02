@@ -40,6 +40,17 @@ interface BookingRow {
   status:           string;
   guest_name:       string | null;
   member_id:        string | null;
+  payment_status:   string | null;
+  deposit_amount:   number | string | null;
+  amount_paid:      number | string | null;
+  payment_method:   string | null;
+  payment_reference:string | null;
+  payment_requested_at: string | null;
+  payment_received_at: string | null;
+  payment_due_at:   string | null;
+  refund_status:    string | null;
+  refund_amount:    number | string | null;
+  refunded_at:      string | null;
 }
 
 function fmtDate(iso: string) {
@@ -72,6 +83,43 @@ function parseAmount(value: unknown): number | null {
 
 function formatMoney(value: number): string {
   return `USD ${Math.round(value).toLocaleString("en-US")}`;
+}
+
+function formatDateTime(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return new Intl.DateTimeFormat("en-GB", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Asia/Beirut",
+  }).format(parsed);
+}
+
+function paymentStatusLabel(status: string | null | undefined): string {
+  switch (status) {
+    case "payment_requested":
+      return "Payment requested";
+    case "deposit_paid":
+      return "Deposit received";
+    case "paid_in_full":
+      return "Paid in full";
+    default:
+      return "Payment not requested yet";
+  }
+}
+
+function paymentStatusTone(status: string | null | undefined) {
+  if (status === "paid_in_full") {
+    return { color: "#6fcf8a", bg: "rgba(111,207,138,0.15)", border: "rgba(111,207,138,0.28)" };
+  }
+  if (status === "deposit_paid") {
+    return { color: "#9db7d9", bg: "rgba(157,183,217,0.14)", border: "rgba(157,183,217,0.26)" };
+  }
+  if (status === "payment_requested") {
+    return { color: GOLD, bg: "rgba(197,164,109,0.14)", border: "rgba(197,164,109,0.28)" };
+  }
+  return { color: MUTED, bg: "rgba(255,255,255,0.04)", border: "rgba(255,255,255,0.08)" };
 }
 
 function sumAddonPrices(addons: Addon[]): number | null {
@@ -191,7 +239,7 @@ export default async function BookingViewPage({ params }: { params: { token: str
 
   const { data: booking, error } = await supabaseAdmin
     .from("bookings")
-    .select("id, villa, check_in, check_out, sleeping_guests, day_visitors, event_type, message, addons, addons_snapshot, pricing_subtotal, pricing_snapshot, status, guest_name, member_id")
+    .select("id, villa, check_in, check_out, sleeping_guests, day_visitors, event_type, message, addons, addons_snapshot, pricing_subtotal, pricing_snapshot, status, guest_name, member_id, payment_status, deposit_amount, amount_paid, payment_method, payment_reference, payment_requested_at, payment_received_at, payment_due_at, refund_status, refund_amount, refunded_at")
     .eq("id", verified.booking_id)
     .single<BookingRow>();
 
@@ -228,6 +276,17 @@ export default async function BookingViewPage({ params }: { params: { token: str
   const estimatedTotal = staySubtotal !== null && addonsTotal !== null
     ? staySubtotal + addonsTotal
     : null;
+  const depositAmount = parseAmount(booking.deposit_amount);
+  const amountPaid = parseAmount(booking.amount_paid);
+  const refundAmount = parseAmount(booking.refund_amount);
+  const balanceDue =
+    estimatedTotal !== null
+      ? Math.max(0, estimatedTotal - (amountPaid ?? 0))
+      : null;
+  const paymentRequestedAt = formatDateTime(booking.payment_requested_at);
+  const paymentReceivedAt = formatDateTime(booking.payment_received_at);
+  const paymentDueAt = formatDateTime(booking.payment_due_at);
+  const refundedAt = formatDateTime(booking.refunded_at);
   const paymentRows: Array<[string, string, boolean]> = [
     ["Stay subtotal", staySubtotal !== null ? formatMoney(staySubtotal) : "Not available", false],
     ["Add-ons total", addonsTotal !== null ? formatMoney(addonsTotal) : "Price on request", false],
@@ -426,6 +485,152 @@ export default async function BookingViewPage({ params }: { params: { token: str
                 </span>
               </div>
             ))}
+          </div>
+        )}
+
+        {!isEventInquiry && booking.status === "confirmed" && (
+          <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", padding: "1.75rem", marginBottom: "2rem", textAlign: "left", backgroundColor: "rgba(255,255,255,0.015)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px", flexWrap: "wrap", marginBottom: "1rem" }}>
+              <div>
+                <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 8px" }}>
+                  Payment
+                </p>
+                <p style={{ fontFamily: PLAYFAIR, fontSize: "1.15rem", color: WHITE, margin: 0 }}>
+                  {paymentStatusLabel(booking.payment_status)}
+                </p>
+              </div>
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontFamily: LATO,
+                  fontSize: "10px",
+                  letterSpacing: "1.5px",
+                  textTransform: "uppercase",
+                  color: paymentStatusTone(booking.payment_status).color,
+                  backgroundColor: paymentStatusTone(booking.payment_status).bg,
+                  border: `0.5px solid ${paymentStatusTone(booking.payment_status).border}`,
+                  padding: "6px 12px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {paymentStatusLabel(booking.payment_status)}
+              </span>
+            </div>
+
+            {(booking.payment_status === null || booking.payment_status === "unpaid") && (
+              <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, lineHeight: 1.7, margin: 0 }}>
+                Payment not requested yet.
+              </p>
+            )}
+
+            {booking.payment_status === "payment_requested" && (
+              <div style={{ display: "grid", gap: "12px" }}>
+                <div style={{ display: "grid", gap: "8px" }}>
+                  {depositAmount !== null && (
+                    <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, lineHeight: 1.6, margin: 0 }}>
+                      Deposit amount: <span style={{ color: GOLD }}>{formatMoney(depositAmount)}</span>
+                    </p>
+                  )}
+                  {paymentDueAt && (
+                    <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, lineHeight: 1.6, margin: 0 }}>
+                      Due date: <span style={{ color: GOLD }}>{paymentDueAt}</span>
+                    </p>
+                  )}
+                  {paymentRequestedAt && (
+                    <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.6, margin: 0 }}>
+                      Requested on {paymentRequestedAt}
+                    </p>
+                  )}
+                </div>
+                <div style={{ border: "0.5px solid rgba(197,164,109,0.16)", backgroundColor: "rgba(197,164,109,0.04)", padding: "14px 16px" }}>
+                  <p style={{ fontFamily: LATO, fontSize: "12px", color: WHITE, lineHeight: 1.75, margin: "0 0 10px" }}>
+                    Please complete payment using one of the available methods and send the reference to Oraya.
+                  </p>
+                  <div style={{ display: "grid", gap: "8px" }}>
+                    <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.7, margin: 0 }}>
+                      Whish: Send payment through Whish using the details provided by Oraya.
+                    </p>
+                    <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.7, margin: 0 }}>
+                      Bank transfer: Use the bank transfer details provided by Oraya.
+                    </p>
+                    <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.7, margin: 0 }}>
+                      Cash: Cash payment can be arranged directly with Oraya.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {booking.payment_status === "deposit_paid" && (
+              <div style={{ display: "grid", gap: "8px" }}>
+                <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, lineHeight: 1.6, margin: 0 }}>
+                  Amount paid: <span style={{ color: GOLD }}>{amountPaid !== null ? formatMoney(amountPaid) : "Not available"}</span>
+                </p>
+                {balanceDue !== null && (
+                  <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, lineHeight: 1.6, margin: 0 }}>
+                    Balance due: <span style={{ color: GOLD }}>{formatMoney(balanceDue)}</span>
+                  </p>
+                )}
+                {booking.payment_method && (
+                  <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.6, margin: 0 }}>
+                    Method: {booking.payment_method.replaceAll("_", " ")}
+                  </p>
+                )}
+                {booking.payment_reference?.trim() && (
+                  <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.6, margin: 0 }}>
+                    Reference: {booking.payment_reference}
+                  </p>
+                )}
+                {paymentReceivedAt && (
+                  <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.6, margin: 0 }}>
+                    Received on {paymentReceivedAt}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {booking.payment_status === "paid_in_full" && (
+              <div style={{ display: "grid", gap: "8px" }}>
+                <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, lineHeight: 1.6, margin: 0 }}>
+                  Paid in full
+                  {amountPaid !== null ? ` — ${formatMoney(amountPaid)}` : ""}
+                </p>
+                {booking.payment_method && (
+                  <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.6, margin: 0 }}>
+                    Method: {booking.payment_method.replaceAll("_", " ")}
+                  </p>
+                )}
+                {booking.payment_reference?.trim() && (
+                  <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.6, margin: 0 }}>
+                    Reference: {booking.payment_reference}
+                  </p>
+                )}
+                {paymentReceivedAt && (
+                  <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.6, margin: 0 }}>
+                    Received on {paymentReceivedAt}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {booking.refund_status && (
+              <div style={{ borderTop: "0.5px solid rgba(255,255,255,0.06)", marginTop: "14px", paddingTop: "14px", display: "grid", gap: "8px" }}>
+                <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+                  Refund
+                </p>
+                <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, lineHeight: 1.6, margin: 0 }}>
+                  Refund recorded
+                  {refundAmount !== null ? ` — ${formatMoney(refundAmount)}` : ""}
+                </p>
+                {refundedAt && (
+                  <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.6, margin: 0 }}>
+                    Refunded on {refundedAt}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         )}
 
