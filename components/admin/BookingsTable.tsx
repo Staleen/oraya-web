@@ -191,6 +191,18 @@ function getPricingIntelligenceMeta(booking: Booking) {
   return booking.pricing_snapshot?.internal_intelligence ?? null;
 }
 
+function getPersistedStayValue(booking: Booking) {
+  if (typeof booking.pricing_snapshot?.subtotal === "number" && Number.isFinite(booking.pricing_snapshot.subtotal)) {
+    return booking.pricing_snapshot.subtotal;
+  }
+
+  if (typeof booking.pricing_subtotal === "number" && Number.isFinite(booking.pricing_subtotal)) {
+    return booking.pricing_subtotal;
+  }
+
+  return null;
+}
+
 function renderPricingIntelligenceBadge(label: string, value: string, tone: "tier" | "confidence") {
   const styles =
     tone === "tier"
@@ -1539,18 +1551,35 @@ export default function BookingsTable({
 
         {(() => {
           const pricingIntelligence = getPricingIntelligenceMeta(booking);
-          const stayValue = formatMoney(pricingIntelligence?.stay_value);
-          const addonsValue = formatMoney(pricingIntelligence?.addons_value);
-          const estimatedTotal = formatMoney(
-            pricingIntelligence?.estimated_total ?? pricingIntelligence?.internal_value,
-          );
-          const hasRevenueEstimate =
-            stayValue !== null &&
-            addonsValue !== null &&
-            estimatedTotal !== null &&
-            pricingIntelligence?.tier !== "unknown";
+          const addonSubtotalRaw = getAddonSnapshots(booking).reduce((sum, addon) => {
+            return sum + (typeof addon.price === "number" && Number.isFinite(addon.price) ? addon.price : 0);
+          }, 0);
+          const stayValueRaw =
+            pricingIntelligence?.stay_value ??
+            getPersistedStayValue(booking);
+          const addonsValueRaw =
+            pricingIntelligence?.addons_value ??
+            (getAddonSnapshots(booking).length > 0 ? addonSubtotalRaw : 0);
+          const estimatedTotalRaw =
+            pricingIntelligence?.estimated_total ??
+            pricingIntelligence?.internal_value ??
+            (typeof stayValueRaw === "number" && typeof addonsValueRaw === "number"
+              ? stayValueRaw + addonsValueRaw
+              : null);
+          const stayValue = formatMoney(stayValueRaw);
+          const addonsValue = formatMoney(addonsValueRaw);
+          const estimatedTotal = formatMoney(estimatedTotalRaw);
+          const hasAnyRevenueData = stayValue !== null || addonsValue !== null || estimatedTotal !== null;
+          const tierLabel =
+            pricingIntelligence?.tier && pricingIntelligence.tier !== "unknown"
+              ? formatAdvisoryLabel(pricingIntelligence.tier)
+              : "Not calculated";
+          const confidenceLabel =
+            pricingIntelligence?.tier && pricingIntelligence.tier !== "unknown"
+              ? formatAdvisoryLabel(pricingIntelligence.confidence)
+              : "Not calculated";
           const isUnavailableFallback =
-            pricingIntelligence?.basis.reason === "intelligence_unavailable" || !hasRevenueEstimate;
+            pricingIntelligence?.basis.reason === "intelligence_unavailable" && !hasAnyRevenueData;
 
           return (
           <div
@@ -1572,7 +1601,7 @@ export default function BookingsTable({
               </p>
             </div>
 
-            {pricingIntelligence && !isUnavailableFallback ? (
+            {hasAnyRevenueData ? (
               <>
                 <div
                   style={{
@@ -1581,9 +1610,15 @@ export default function BookingsTable({
                     gap: "12px 16px",
                   }}
                 >
-                  {renderRevenueEstimateRow("Stay value", stayValue)}
-                  {renderRevenueEstimateRow("Add-ons value", addonsValue)}
-                  {renderRevenueEstimateRow("Estimated total", estimatedTotal)}
+                  {stayValue
+                    ? renderRevenueEstimateRow("Stay value", stayValue)
+                    : renderRevenueEstimateRow("Stay value", "Unavailable")}
+                  {addonsValue
+                    ? renderRevenueEstimateRow("Add-ons value", addonsValue)
+                    : renderRevenueEstimateRow("Add-ons value", "Unavailable")}
+                  {estimatedTotal
+                    ? renderRevenueEstimateRow("Estimated total", estimatedTotal)
+                    : renderRevenueEstimateRow("Estimated total", "Unavailable")}
                 </div>
 
                 <div
@@ -1594,11 +1629,11 @@ export default function BookingsTable({
                     alignItems: "center",
                   }}
                 >
-                  {renderPricingIntelligenceBadge("Value tier", pricingIntelligence.tier, "tier")}
-                  {renderPricingIntelligenceBadge("Confidence", pricingIntelligence.confidence, "confidence")}
+                  {renderPricingIntelligenceBadge("Value tier", tierLabel, "tier")}
+                  {renderPricingIntelligenceBadge("Confidence", confidenceLabel, "confidence")}
                 </div>
               </>
-            ) : pricingIntelligence ? (
+            ) : pricingIntelligence && isUnavailableFallback ? (
               <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
                 Revenue estimate currently unavailable for this booking.
               </p>

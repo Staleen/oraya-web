@@ -316,6 +316,12 @@ Phase 13 — Real-world validation & stabilization:
   - Safe fallback metadata persists if intelligence computation is unavailable
   - Guest UI remains unchanged and does not expose internal pricing
   - No schema/API response changes
+- 13G.2 Admin Rental Price Display + Revenue Snapshot Debug [COMPLETE]
+  - Admin revenue panel now shows stay/add-ons/total values where persisted data exists
+  - Works for pending and confirmed bookings
+  - Revenue display no longer depends entirely on internal intelligence
+  - No guest UI exposure
+  - No schema/API response changes
 
 ---
 
