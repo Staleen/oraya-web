@@ -341,6 +341,11 @@ Phase 13 — Real-world validation & stabilization:
   - Advisory recommendation hints
   - No auto decision logic
   - No schema/API changes
+- 13H.4 Admin Approval Optimization [COMPLETE]
+  - Approval area advisory warning for higher-value overlaps
+  - Clearer confirm/cancel action grouping
+  - No auto-decision logic
+  - No backend/API/schema changes
 
 ---
 

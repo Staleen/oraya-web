@@ -1957,6 +1957,75 @@ export default function BookingsTable({
 
         {renderAddonRows(booking)}
 
+        {/* Phase 13H.4: Approval advisory — warns if a higher-value competing request exists */}
+        {booking.status === "pending" && hasPendingOverlap && (() => {
+          function getTotal(b: Booking): number | null {
+            const intel = getPricingIntelligenceMeta(b);
+            const addonSubRaw = getAddonSnapshots(b).reduce((sum, addon) => {
+              return sum + (typeof addon.price === "number" && Number.isFinite(addon.price) ? addon.price : 0);
+            }, 0);
+            const stayRaw =
+              getSnapshotNumber(b.pricing_snapshot?.adjusted_stay_subtotal) ??
+              getSnapshotNumber(b.pricing_snapshot?.subtotal) ??
+              intel?.stay_value ??
+              getPersistedStayValue(b);
+            const addonsRaw =
+              intel?.addons_value ??
+              (getAddonSnapshots(b).length > 0 ? addonSubRaw : 0);
+            return (
+              getSnapshotNumber(b.pricing_snapshot?.estimated_total) ??
+              intel?.estimated_total ??
+              intel?.internal_value ??
+              (typeof stayRaw === "number" && typeof addonsRaw === "number" ? stayRaw + addonsRaw : null)
+            );
+          }
+          const currentTotal = getTotal(booking);
+          if (typeof currentTotal !== "number") return null;
+          const conflictTotals = overlappingPendingBookings
+            .map(getTotal)
+            .filter((n): n is number => typeof n === "number");
+          if (conflictTotals.length === 0) return null;
+          const maxConflict = Math.max(...conflictTotals);
+
+          if (currentTotal < maxConflict) {
+            return (
+              <div
+                style={{
+                  border: "0.5px solid rgba(240,189,103,0.32)",
+                  backgroundColor: "rgba(240,189,103,0.08)",
+                  padding: "10px 14px",
+                  borderRadius: "8px",
+                }}
+              >
+                <p style={{ fontFamily: LATO, fontSize: "11px", color: "#f0bd67", margin: 0, lineHeight: 1.5, fontWeight: 600 }}>
+                  Higher-value competing request exists. Review before confirming.
+                </p>
+              </div>
+            );
+          }
+          return (
+            <div
+              style={{
+                border: "0.5px solid rgba(126,207,207,0.28)",
+                backgroundColor: "rgba(126,207,207,0.06)",
+                padding: "10px 14px",
+                borderRadius: "8px",
+              }}
+            >
+              <p style={{ fontFamily: LATO, fontSize: "11px", color: "#7ecfcf", margin: 0, lineHeight: 1.5 }}>
+                This is the highest-value request among current overlaps.
+              </p>
+            </div>
+          );
+        })()}
+
+        {/* Phase 13H.4: subtle confirmation context — pending bookings only */}
+        {booking.status === "pending" && (canConfirm || needsApproval || canCancel) && (
+          <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: 0, lineHeight: 1.5, fontStyle: "italic" }}>
+            Confirming this request will move it to Confirmed bookings. Review conflicts and revenue before confirming.
+          </p>
+        )}
+
         <div
           style={{
             display: "flex",
@@ -1966,32 +2035,7 @@ export default function BookingsTable({
             justifyContent: isMobile ? "stretch" : "flex-end",
           }}
         >
-          {booking.status === "pending" && needsApproval && (
-            <button
-              type="button"
-              onClick={() => approveAllAddonsAndConfirm(booking)}
-              disabled={isBulkResolving || isUpdating}
-              style={{
-                fontFamily: LATO,
-                fontSize: "11px",
-                letterSpacing: "1.6px",
-                textTransform: "uppercase",
-                color: MIDNIGHT,
-                background: isBulkResolving
-                  ? "linear-gradient(135deg, rgba(197,164,109,0.45) 0%, rgba(245,225,182,0.45) 100%)"
-                  : "linear-gradient(135deg, #c5a46d 0%, #f0d39c 100%)",
-                border: "none",
-                padding: "12px 18px",
-                cursor: isBulkResolving || isUpdating ? "not-allowed" : "pointer",
-                minWidth: isMobile ? "100%" : "260px",
-                borderRadius: "6px",
-                opacity: isBulkResolving || isUpdating ? 0.7 : 1,
-              }}
-            >
-              {isBulkResolving ? "Resolving add-ons..." : "Approve all add-ons & confirm booking"}
-            </button>
-          )}
-
+          {/* Phase 13H.4: Cancel sits standalone on the left; primary actions group together on the right */}
           {canCancel && (
             <button
               type="button"
@@ -2010,35 +2054,74 @@ export default function BookingsTable({
                 minWidth: isMobile ? "100%" : "140px",
                 opacity: isUpdating ? 0.6 : 1,
                 borderRadius: "6px",
+                marginRight: !isMobile && (needsApproval || canConfirm) ? "auto" : 0,
               }}
             >
               Cancel
             </button>
           )}
 
-          {canConfirm && (
-            <button
-              type="button"
-              onClick={() => updateStatus(booking.id, "confirmed")}
-              disabled={isUpdating}
+          {(needsApproval || canConfirm) && (
+            <div
               style={{
-                fontFamily: LATO,
-                fontSize: "11px",
-                letterSpacing: "1.6px",
-                textTransform: "uppercase",
-                color: WHITE,
-                background: isUpdating
-                  ? "linear-gradient(135deg, rgba(229,115,115,0.55) 0%, rgba(255,145,145,0.55) 100%)"
-                  : "linear-gradient(135deg, #e57a7a 0%, #ff9191 100%)",
-                border: "none",
-                padding: "12px 18px",
-                cursor: isUpdating ? "not-allowed" : "pointer",
-                minWidth: isMobile ? "100%" : "188px",
-              borderRadius: "6px",
-            }}
-          >
-              {readyToConfirm ? "Confirm booking" : "Confirm booking"}
-            </button>
+                display: "flex",
+                gap: "10px",
+                flexWrap: "wrap",
+                alignItems: "center",
+                width: isMobile ? "100%" : "auto",
+              }}
+            >
+              {booking.status === "pending" && needsApproval && (
+                <button
+                  type="button"
+                  onClick={() => approveAllAddonsAndConfirm(booking)}
+                  disabled={isBulkResolving || isUpdating}
+                  style={{
+                    fontFamily: LATO,
+                    fontSize: "11px",
+                    letterSpacing: "1.6px",
+                    textTransform: "uppercase",
+                    color: MIDNIGHT,
+                    background: isBulkResolving
+                      ? "linear-gradient(135deg, rgba(197,164,109,0.45) 0%, rgba(245,225,182,0.45) 100%)"
+                      : "linear-gradient(135deg, #c5a46d 0%, #f0d39c 100%)",
+                    border: "none",
+                    padding: "12px 18px",
+                    cursor: isBulkResolving || isUpdating ? "not-allowed" : "pointer",
+                    minWidth: isMobile ? "100%" : "260px",
+                    borderRadius: "6px",
+                    opacity: isBulkResolving || isUpdating ? 0.7 : 1,
+                  }}
+                >
+                  {isBulkResolving ? "Resolving add-ons..." : "Approve all add-ons & confirm booking"}
+                </button>
+              )}
+
+              {canConfirm && (
+                <button
+                  type="button"
+                  onClick={() => updateStatus(booking.id, "confirmed")}
+                  disabled={isUpdating}
+                  style={{
+                    fontFamily: LATO,
+                    fontSize: "11px",
+                    letterSpacing: "1.6px",
+                    textTransform: "uppercase",
+                    color: WHITE,
+                    background: isUpdating
+                      ? "linear-gradient(135deg, rgba(229,115,115,0.55) 0%, rgba(255,145,145,0.55) 100%)"
+                      : "linear-gradient(135deg, #e57a7a 0%, #ff9191 100%)",
+                    border: "none",
+                    padding: "12px 18px",
+                    cursor: isUpdating ? "not-allowed" : "pointer",
+                    minWidth: isMobile ? "100%" : "188px",
+                    borderRadius: "6px",
+                  }}
+                >
+                  {readyToConfirm ? "Confirm booking" : "Confirm booking"}
+                </button>
+              )}
+            </div>
           )}
 
           {emailWarnings[booking.id] && (
