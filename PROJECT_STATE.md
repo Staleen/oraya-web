@@ -361,6 +361,14 @@ Phase 13 — Real-world validation & stabilization:
   - No event inquiry pricing
   - No admin intelligence exposure
   - No schema/API changes
+- 13K Payment Readiness Audit [COMPLETE]
+  - Booking lifecycle audited (request → admin review → confirm/cancel → guest view)
+  - Pricing snapshot readiness reviewed (adjusted_stay_subtotal, addons_snapshot, estimated_total, bedrooms_to_be_used all persisted)
+  - Future payment fields identified (payment_status, deposit_amount, amount_paid, payment_method, transaction_id, refund_status, payment_provider_metadata)
+  - Recommended architecture: request-first → admin confirms availability → deposit link issued post-approval (HMAC-signed, leveraging existing booking_action_tokens pattern)
+  - Event inquiries: payment must remain off-flow; pricing is bespoke and quoted manually
+  - No payment implementation
+  - No schema/API changes
 
 ---
 
