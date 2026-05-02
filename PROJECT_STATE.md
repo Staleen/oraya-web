@@ -302,15 +302,20 @@ Phase 13 — Real-world validation & stabilization:
   - Controlled snapshot enrichment implemented for admin advisory use only
   - 3BR base pricing model used internally
   - Bedroom factors: 1BR=0.6, 2BR=0.8, 3BR=1.0
-  - Admin-only non-numeric value/confidence display
-  - No guest pricing exposure
+  - Admin-only revenue estimate metadata persisted in `pricing_snapshot.internal_intelligence`
+  - Guest UI does not expose internal pricing
   - No schema/API response changes
 - 13G Admin Pricing Intelligence UX Polish [COMPLETE]
   - Admin-only display for internal pricing intelligence
   - Safe fallback for older bookings
-  - No numeric internal value exposed
   - No guest UI exposure
   - No schema/API changes
+- 13G.1 Admin Revenue Value Display + Intelligence Attachment Fix [COMPLETE]
+  - Admin bookings UI displays numeric stay value, add-ons value, and estimated total
+  - Internal intelligence now attaches reliably for new bookings when `pricing_snapshot` exists
+  - Safe fallback metadata persists if intelligence computation is unavailable
+  - Guest UI remains unchanged and does not expose internal pricing
+  - No schema/API response changes
 
 ---
 

@@ -177,6 +177,11 @@ function formatAddonPrice(price: number | null) {
   return `$${price.toLocaleString("en-US")}`;
 }
 
+function formatMoney(value: number | null | undefined) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  return `$${value.toLocaleString("en-US")}`;
+}
+
 function formatAdvisoryLabel(value: string) {
   if (!value) return value;
   return `${value.charAt(0).toUpperCase()}${value.slice(1)}`;
@@ -240,6 +245,43 @@ function renderPricingIntelligenceBadge(label: string, value: string, tone: "tie
       >
         {formatAdvisoryLabel(value)}
       </span>
+    </div>
+  );
+}
+
+function renderRevenueEstimateRow(label: string, value: string) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gap: "4px",
+        minWidth: 0,
+      }}
+    >
+      <p
+        style={{
+          fontFamily: LATO,
+          fontSize: "9px",
+          letterSpacing: "1.4px",
+          textTransform: "uppercase",
+          color: MUTED,
+          margin: 0,
+        }}
+      >
+        {label}
+      </p>
+      <p
+        style={{
+          fontFamily: LATO,
+          fontSize: "13px",
+          color: WHITE,
+          margin: 0,
+          lineHeight: 1.45,
+          fontWeight: 700,
+        }}
+      >
+        {value}
+      </p>
     </div>
   );
 }
@@ -1497,6 +1539,18 @@ export default function BookingsTable({
 
         {(() => {
           const pricingIntelligence = getPricingIntelligenceMeta(booking);
+          const stayValue = formatMoney(pricingIntelligence?.stay_value);
+          const addonsValue = formatMoney(pricingIntelligence?.addons_value);
+          const estimatedTotal = formatMoney(
+            pricingIntelligence?.estimated_total ?? pricingIntelligence?.internal_value,
+          );
+          const hasRevenueEstimate =
+            stayValue !== null &&
+            addonsValue !== null &&
+            estimatedTotal !== null &&
+            pricingIntelligence?.tier !== "unknown";
+          const isUnavailableFallback =
+            pricingIntelligence?.basis.reason === "intelligence_unavailable" || !hasRevenueEstimate;
 
           return (
           <div
@@ -1511,28 +1565,46 @@ export default function BookingsTable({
           >
             <div style={{ display: "grid", gap: "4px" }}>
               <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
-                Pricing Intelligence
+                Revenue Estimate
               </p>
               <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
                 Internal advisory signal based on stay setup, guest load, add-ons, and event/service intent.
               </p>
             </div>
 
-            {pricingIntelligence ? (
-              <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: "12px 16px",
-                  alignItems: "center",
-                }}
-              >
-                {renderPricingIntelligenceBadge("Estimated Value", pricingIntelligence.tier, "tier")}
-                {renderPricingIntelligenceBadge("Confidence", pricingIntelligence.confidence, "confidence")}
-              </div>
+            {pricingIntelligence && !isUnavailableFallback ? (
+              <>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
+                    gap: "12px 16px",
+                  }}
+                >
+                  {renderRevenueEstimateRow("Stay value", stayValue)}
+                  {renderRevenueEstimateRow("Add-ons value", addonsValue)}
+                  {renderRevenueEstimateRow("Estimated total", estimatedTotal)}
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: "12px 16px",
+                    alignItems: "center",
+                  }}
+                >
+                  {renderPricingIntelligenceBadge("Value tier", pricingIntelligence.tier, "tier")}
+                  {renderPricingIntelligenceBadge("Confidence", pricingIntelligence.confidence, "confidence")}
+                </div>
+              </>
+            ) : pricingIntelligence ? (
+              <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+                Revenue estimate currently unavailable for this booking.
+              </p>
             ) : (
               <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
-                Value intelligence unavailable for older booking.
+                Revenue estimate unavailable for older booking.
               </p>
             )}
           </div>

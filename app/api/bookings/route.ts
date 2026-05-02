@@ -7,6 +7,7 @@ import { SITE_URL } from "@/lib/brand";
 import { findAvailabilityConflict } from "@/lib/calendar/availability";
 import { getVillaPricing, parseVillaPricingSetting, VILLA_BASE_PRICING_KEY } from "@/lib/admin-pricing";
 import {
+  buildUnavailableInternalPricingIntelligence,
   computeInternalPricingIntelligence,
   detectEventInquiry,
   parseBedroomCountFromMessage,
@@ -554,6 +555,8 @@ export async function POST(request: Request) {
     }
 
     if (pricingSnapshotData) {
+      let internalIntelligence = buildUnavailableInternalPricingIntelligence();
+
       try {
         const bedrooms = parseBedroomCountFromMessage(message) ?? 3;
         const guests = parseInt(sleeping_guests, 10) || 0;
@@ -563,7 +566,7 @@ export async function POST(request: Request) {
           return sum + (typeof addon.price === "number" && Number.isFinite(addon.price) ? addon.price : 0);
         }, 0);
         const addonsCount = addonsSnapshotData?.length ?? 0;
-        const internalIntelligence = computeInternalPricingIntelligence({
+        internalIntelligence = computeInternalPricingIntelligence({
           fullVillaBase: pricingSnapshotData.pricing_subtotal,
           bedrooms,
           guests,
@@ -573,14 +576,15 @@ export async function POST(request: Request) {
           servicesCount,
         });
 
-        pricingSnapshotData.pricing_snapshot = {
-          ...pricingSnapshotData.pricing_snapshot,
-          internal_intelligence: internalIntelligence,
-        };
-        insertData.pricing_snapshot = pricingSnapshotData.pricing_snapshot;
       } catch (internalIntelligenceError) {
-        console.error("[api/bookings] pricing intelligence skipped:", internalIntelligenceError);
+        console.error("[api/bookings] pricing intelligence unavailable:", internalIntelligenceError);
       }
+
+      pricingSnapshotData.pricing_snapshot = {
+        ...pricingSnapshotData.pricing_snapshot,
+        internal_intelligence: internalIntelligence,
+      };
+      insertData.pricing_snapshot = pricingSnapshotData.pricing_snapshot;
     }
 
     const { data, error } = await supabaseAdmin

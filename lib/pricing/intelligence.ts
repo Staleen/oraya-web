@@ -1,16 +1,21 @@
 export type ServiceIntent = "basic" | "full" | "premium";
 export type IntelligenceConfidence = "low" | "medium" | "high";
+export type InternalPricingTier = ServiceIntent | "unknown";
 
 export type InternalPricingIntelligence = {
-  internal_value: number;
-  tier: ServiceIntent;
+  internal_value?: number;
+  stay_value?: number;
+  addons_value?: number;
+  estimated_total?: number;
+  tier: InternalPricingTier;
   confidence: IntelligenceConfidence;
   basis: {
-    bedroom_factor: number;
-    bedrooms: number;
-    guests: number;
-    event_inquiry: boolean;
+    bedroom_factor?: number;
+    bedrooms?: number;
+    guests?: number;
+    event_inquiry?: boolean;
     service_intent?: ServiceIntent;
+    reason?: "intelligence_unavailable";
   };
 };
 
@@ -98,6 +103,8 @@ export function computeInternalPricingIntelligence(
   if (guests > 6) {
     adjustedStayValue *= 1.2;
   }
+  const roundedStayValue = Math.round(adjustedStayValue);
+  const estimatedTotal = roundedStayValue + Math.round(addonsValue);
 
   const tier = determineTier({
     eventInquiry,
@@ -107,7 +114,10 @@ export function computeInternalPricingIntelligence(
   });
 
   return {
-    internal_value: Math.round(adjustedStayValue + addonsValue),
+    internal_value: estimatedTotal,
+    stay_value: roundedStayValue,
+    addons_value: Math.round(addonsValue),
+    estimated_total: estimatedTotal,
     tier,
     confidence: computeConfidence({
       eventInquiry,
@@ -121,6 +131,16 @@ export function computeInternalPricingIntelligence(
       guests,
       event_inquiry: eventInquiry,
       ...(eventInquiry ? { service_intent: computeServiceIntent(servicesCount) } : {}),
+    },
+  };
+}
+
+export function buildUnavailableInternalPricingIntelligence(): InternalPricingIntelligence {
+  return {
+    tier: "unknown",
+    confidence: "low",
+    basis: {
+      reason: "intelligence_unavailable",
     },
   };
 }

@@ -30,19 +30,24 @@ export interface BookingAddonSnapshot {
 }
 
 export interface BookingPricingInternalIntelligence {
-  internal_value: number;
-  tier: "basic" | "full" | "premium";
+  internal_value?: number;
+  stay_value?: number;
+  addons_value?: number;
+  estimated_total?: number;
+  tier: "basic" | "full" | "premium" | "unknown";
   confidence: "low" | "medium" | "high";
   basis: {
-    bedroom_factor: number;
-    bedrooms: number;
-    guests: number;
-    event_inquiry: boolean;
+    bedroom_factor?: number;
+    bedrooms?: number;
+    guests?: number;
+    event_inquiry?: boolean;
     service_intent?: "basic" | "full" | "premium";
+    reason?: "intelligence_unavailable";
   };
 }
 
 export interface BookingPricingSnapshot {
+  subtotal?: number;
   internal_intelligence?: BookingPricingInternalIntelligence | null;
 }
 
@@ -57,6 +62,7 @@ export interface Booking {
   message: string | null;
   addons: BookingAddon[] | null;
   addons_snapshot?: BookingAddonSnapshot[] | null;
+  pricing_subtotal?: number | null;
   pricing_snapshot?: BookingPricingSnapshot | null;
   status: string;
   created_at: string;
