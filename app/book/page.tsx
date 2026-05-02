@@ -9,6 +9,7 @@ import { getVillaBasePrice, getVillaPricing } from "@/lib/admin-pricing";
 import { ADDON_OPERATIONAL_SETTINGS_KEY, formatPreparationTime, getAddonEnforcementMode, getAddonTimingType, mergeAddonsWithOperationalSettings, parseAddonOperationalSetting, type AddonCategory, type AddonCutoffType, type AddonEnforcementMode, type AddonPricingType } from "@/lib/addon-operations";
 import { usePublicPricing } from "@/lib/public-pricing";
 import { calculateStayPricing } from "@/lib/pricing/engine";
+import { applyBedroomFactorToNightlyRates, computeBedroomFactor } from "@/lib/pricing/intelligence";
 import type { NightSource } from "@/lib/pricing/types";
 import { formatBeirutMonthDay, getBeirutDay } from "@/lib/utils/date-beirut";
 import { supabase } from "@/lib/supabase";
@@ -750,6 +751,7 @@ function BookPageInner() {
   const checkOut = dateRange?.to   ? toISO(dateRange.to)   : "";
   const nights   = nightCount(checkIn, checkOut);
   const sleepingGuestsCount = parseInt(form.sleepingGuests, 10) || 0;
+  const selectedBedroomsCount = parseInt(form.bedroomCount, 10) || 3;
   const sleepingSetupLabel = getSleepingSetupLabel(sleepingGuestsCount);
   const bedroomCapacityWarning = (() => {
     if (form.bedroomCount === "1" && sleepingGuestsCount > 2) {
@@ -777,8 +779,14 @@ function BookPageInner() {
         { check_in: checkIn, check_out: checkOut },
       )
     : null;
-  const staySubtotal = pricingResult?.subtotal
-    ?? (nightlyBasePrice !== null && nights > 0 ? nightlyBasePrice * nights : null);
+  const bedroomPricing = pricingResult
+    ? applyBedroomFactorToNightlyRates(pricingResult.nightly, selectedBedroomsCount)
+    : null;
+  const fallbackBedroomFactor = computeBedroomFactor(selectedBedroomsCount);
+  const staySubtotal = bedroomPricing?.adjustedSubtotal
+    ?? (nightlyBasePrice !== null && nights > 0
+      ? Math.round(nightlyBasePrice * fallbackBedroomFactor * nights)
+      : null);
 
   /**
    * Phase 12E: resolve the effective price for a single add-on.
@@ -1224,7 +1232,7 @@ function BookPageInner() {
 
   // ── Auth gate (not member, not yet chosen guest) ──────────────────────────
   // Phase 13C.2: simplified stay pricing panel — Estimated Booking Total prominent, then small detail lines.
-  const estimatePanel = checkIn && checkOut && nightlyBasePrice !== null ? (
+  const estimatePanel = checkIn && checkOut && staySubtotal !== null ? (
     <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: "rgba(197,164,109,0.04)", padding: "1.25rem" }}>
       <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 8px" }}>
         Estimated Booking Total

@@ -48,6 +48,17 @@ export interface BookingPricingInternalIntelligence {
 
 export interface BookingPricingSnapshot {
   subtotal?: number;
+  full_villa_subtotal?: number;
+  adjusted_stay_subtotal?: number;
+  estimated_total?: number;
+  bedroom_factor?: number;
+  bedrooms_to_be_used?: number;
+  nightly_breakdown?: Array<{
+    date: string;
+    full_villa_rate: number | null;
+    bedroom_adjusted_rate: number | null;
+    source: "seasonal" | "weekday" | "weekend" | "base" | "unpriced";
+  }>;
   internal_intelligence?: BookingPricingInternalIntelligence | null;
 }
 

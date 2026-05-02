@@ -322,6 +322,13 @@ Phase 13 — Real-world validation & stabilization:
   - Revenue display no longer depends entirely on internal intelligence
   - No guest UI exposure
   - No schema/API response changes
+- 13H Seasonal Bedroom-Based Pricing Integration [COMPLETE]
+  - Bedroom factor applied after seasonal/weekday/weekend full-villa rate selection
+  - Homepage from-price aligned with the 1-bedroom weekday entry model
+  - `pricing_snapshot` stores full-villa and bedroom-adjusted stay values plus nightly breakdown metadata
+  - Admin revenue estimate uses adjusted stay value when present
+  - No event pricing exposure
+  - No schema/API response changes
 
 ---
 

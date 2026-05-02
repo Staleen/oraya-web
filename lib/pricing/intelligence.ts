@@ -1,6 +1,15 @@
+import type { NightSource } from "./types";
+
 export type ServiceIntent = "basic" | "full" | "premium";
 export type IntelligenceConfidence = "low" | "medium" | "high";
 export type InternalPricingTier = ServiceIntent | "unknown";
+
+export type BedroomAdjustedNightlyRate = {
+  date: string;
+  full_villa_rate: number | null;
+  bedroom_adjusted_rate: number | null;
+  source: NightSource;
+};
 
 export type InternalPricingIntelligence = {
   internal_value?: number;
@@ -68,6 +77,46 @@ export function computeBedroomFactor(bedrooms: number) {
   if (bedrooms === 2) return 0.8;
   if (bedrooms === 3) return 1.0;
   return 1.0;
+}
+
+export function applyBedroomFactorToNightlyRates(
+  nights: Array<{
+    date: string;
+    price: number | null;
+    source: NightSource;
+  }>,
+  bedrooms: number
+): {
+  bedroomFactor: number;
+  bedrooms: number;
+  adjustedSubtotal: number | null;
+  nightlyBreakdown: BedroomAdjustedNightlyRate[];
+} {
+  const normalizedBedrooms = clampBedroomCount(bedrooms);
+  const bedroomFactor = computeBedroomFactor(normalizedBedrooms);
+  const nightlyBreakdown = nights.map((night) => {
+    const fullVillaRate =
+      typeof night.price === "number" && Number.isFinite(night.price) ? night.price : null;
+    return {
+      date: night.date,
+      full_villa_rate: fullVillaRate,
+      bedroom_adjusted_rate:
+        fullVillaRate !== null ? Math.round(fullVillaRate * bedroomFactor) : null,
+      source: night.source,
+    };
+  });
+
+  const hasMissingRate = nightlyBreakdown.some((night) => night.bedroom_adjusted_rate === null);
+  const adjustedSubtotal = hasMissingRate
+    ? null
+    : nightlyBreakdown.reduce((sum, night) => sum + (night.bedroom_adjusted_rate ?? 0), 0);
+
+  return {
+    bedroomFactor,
+    bedrooms: normalizedBedrooms,
+    adjustedSubtotal,
+    nightlyBreakdown,
+  };
 }
 
 export function computeServiceIntent(serviceCount: number): ServiceIntent {

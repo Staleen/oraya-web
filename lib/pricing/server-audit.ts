@@ -1,5 +1,5 @@
 import { calculateStayPricing } from "./engine";
-import type { InternalPricingIntelligence } from "./intelligence";
+import type { BedroomAdjustedNightlyRate, InternalPricingIntelligence } from "./intelligence";
 import type { NightSource, VillaPricingConfig } from "./types";
 
 export type PricingAuditResult = {
@@ -25,6 +25,12 @@ export type PricingAuditResult = {
 export type PricingSnapshot = {
   subtotal: number;
   nights: PricingAuditResult["nights"];
+  full_villa_subtotal?: number;
+  adjusted_stay_subtotal?: number;
+  estimated_total?: number;
+  bedroom_factor?: number;
+  bedrooms_to_be_used?: number;
+  nightly_breakdown?: BedroomAdjustedNightlyRate[];
   warnings: string[];
   violations: PricingAuditResult["violations"];
   would_block_reasons: PricingAuditResult["would_block_reasons"];

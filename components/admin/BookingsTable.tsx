@@ -191,9 +191,16 @@ function getPricingIntelligenceMeta(booking: Booking) {
   return booking.pricing_snapshot?.internal_intelligence ?? null;
 }
 
+function getSnapshotNumber(value: number | null | undefined) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
 function getPersistedStayValue(booking: Booking) {
-  if (typeof booking.pricing_snapshot?.subtotal === "number" && Number.isFinite(booking.pricing_snapshot.subtotal)) {
-    return booking.pricing_snapshot.subtotal;
+  const adjustedStaySubtotal =
+    getSnapshotNumber(booking.pricing_snapshot?.adjusted_stay_subtotal) ??
+    getSnapshotNumber(booking.pricing_snapshot?.subtotal);
+  if (adjustedStaySubtotal !== null) {
+    return adjustedStaySubtotal;
   }
 
   if (typeof booking.pricing_subtotal === "number" && Number.isFinite(booking.pricing_subtotal)) {
@@ -1555,12 +1562,15 @@ export default function BookingsTable({
             return sum + (typeof addon.price === "number" && Number.isFinite(addon.price) ? addon.price : 0);
           }, 0);
           const stayValueRaw =
+            getSnapshotNumber(booking.pricing_snapshot?.adjusted_stay_subtotal) ??
+            getSnapshotNumber(booking.pricing_snapshot?.subtotal) ??
             pricingIntelligence?.stay_value ??
             getPersistedStayValue(booking);
           const addonsValueRaw =
             pricingIntelligence?.addons_value ??
             (getAddonSnapshots(booking).length > 0 ? addonSubtotalRaw : 0);
           const estimatedTotalRaw =
+            getSnapshotNumber(booking.pricing_snapshot?.estimated_total) ??
             pricingIntelligence?.estimated_total ??
             pricingIntelligence?.internal_value ??
             (typeof stayValueRaw === "number" && typeof addonsValueRaw === "number"

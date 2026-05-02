@@ -212,7 +212,7 @@ export default async function BookingViewPage({ params }: { params: { token: str
     : Array.isArray(booking.addons)
       ? booking.addons
       : [];
-  const staySubtotal = parseAmount(booking.pricing_subtotal ?? booking.pricing_snapshot?.subtotal);
+  const staySubtotal = parseAmount(booking.pricing_snapshot?.subtotal ?? booking.pricing_subtotal);
   const addonsTotal = sumAddonPrices(addons);
   const estimatedTotal = staySubtotal !== null && addonsTotal !== null
     ? staySubtotal + addonsTotal

@@ -7,6 +7,7 @@ import { SITE_URL } from "@/lib/brand";
 import { findAvailabilityConflict } from "@/lib/calendar/availability";
 import { getVillaPricing, parseVillaPricingSetting, VILLA_BASE_PRICING_KEY } from "@/lib/admin-pricing";
 import {
+  applyBedroomFactorToNightlyRates,
   buildUnavailableInternalPricingIntelligence,
   computeInternalPricingIntelligence,
   detectEventInquiry,
@@ -263,9 +264,18 @@ export async function POST(request: Request) {
         check_in,
         check_out,
       });
+      const selectedBedrooms = parseBedroomCountFromMessage(message) ?? 3;
+      const bedroomPricing = applyBedroomFactorToNightlyRates(pricingAudit.nights, selectedBedrooms);
+      const adjustedStaySubtotal = bedroomPricing.adjustedSubtotal ?? pricingAudit.subtotal;
       const pricingSnapshot = buildPricingSnapshot(pricingAudit, {
         clientSubtotal: clientPricingSubtotal,
       });
+      pricingSnapshot.full_villa_subtotal = pricingAudit.subtotal;
+      pricingSnapshot.adjusted_stay_subtotal = adjustedStaySubtotal;
+      pricingSnapshot.subtotal = adjustedStaySubtotal;
+      pricingSnapshot.bedroom_factor = bedroomPricing.bedroomFactor;
+      pricingSnapshot.bedrooms_to_be_used = bedroomPricing.bedrooms;
+      pricingSnapshot.nightly_breakdown = bedroomPricing.nightlyBreakdown;
 
       if (process.env.NODE_ENV !== "production") {
         console.debug("[pricing-dry-run]", {
@@ -433,7 +443,14 @@ export async function POST(request: Request) {
               addon.percentage_value > 0 &&
               pricingSnapshotData !== null
             )
-              ? Math.round((addon.percentage_value / 100) * pricingSnapshotData.pricing_subtotal)
+              ? Math.round(
+                  (addon.percentage_value / 100) *
+                    (
+                      pricingSnapshotData.pricing_snapshot.adjusted_stay_subtotal ??
+                      pricingSnapshotData.pricing_snapshot.subtotal ??
+                      pricingSnapshotData.pricing_subtotal
+                    )
+                )
               : addon.price ?? null;
 
             const discountEntry = discountedPriceMap.get(addon.id) ?? null;
@@ -567,7 +584,9 @@ export async function POST(request: Request) {
         }, 0);
         const addonsCount = addonsSnapshotData?.length ?? 0;
         internalIntelligence = computeInternalPricingIntelligence({
-          fullVillaBase: pricingSnapshotData.pricing_subtotal,
+          fullVillaBase:
+            pricingSnapshotData.pricing_snapshot.full_villa_subtotal ??
+            pricingSnapshotData.pricing_subtotal,
           bedrooms,
           guests,
           addonsValue,
@@ -582,6 +601,13 @@ export async function POST(request: Request) {
 
       pricingSnapshotData.pricing_snapshot = {
         ...pricingSnapshotData.pricing_snapshot,
+        estimated_total:
+          (pricingSnapshotData.pricing_snapshot.adjusted_stay_subtotal ??
+            pricingSnapshotData.pricing_snapshot.subtotal ??
+            0) +
+          (addonsSnapshotData ?? []).reduce((sum, addon) => {
+            return sum + (typeof addon.price === "number" && Number.isFinite(addon.price) ? addon.price : 0);
+          }, 0),
         internal_intelligence: internalIntelligence,
       };
       insertData.pricing_snapshot = pricingSnapshotData.pricing_snapshot;

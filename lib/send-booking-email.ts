@@ -155,7 +155,7 @@ export async function sendBookingEmail(payload: BookingEmailPayload): Promise<vo
         same_day_warning: null,
       }))
   );
-  const staySubtotal = parseAmount(payload.pricing_subtotal ?? payload.pricing_snapshot?.subtotal);
+  const staySubtotal = parseAmount(payload.pricing_snapshot?.subtotal ?? payload.pricing_subtotal);
   const addonsTotal = sumAddonPrices(addonRows);
   const estimatedTotal = staySubtotal !== null && addonsTotal !== null
     ? staySubtotal + addonsTotal

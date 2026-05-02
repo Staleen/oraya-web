@@ -2,6 +2,7 @@ import { KNOWN_VILLAS } from "@/lib/calendar/villas";
 import type { SeasonalOverride } from "@/lib/pricing/types";
 
 export const VILLA_BASE_PRICING_KEY = "villa_base_pricing";
+const ENTRY_BEDROOM_FACTOR = 0.6;
 const DEFAULT_BASE_PRICES: Record<string, number> = {
   "Villa Mechmech": 400,
   "Villa Byblos": 350,
@@ -98,10 +99,16 @@ export function getVillaBasePrice(villa: string, pricing?: VillaBasePricing[] | 
   return item.weekday_price ?? item.base_price ?? DEFAULT_BASE_PRICES[villa] ?? null;
 }
 
+export function getVillaEntryPrice(villa: string, pricing?: VillaBasePricing[] | null): number | null {
+  const fullVillaWeekdayRate = getVillaBasePrice(villa, pricing);
+  if (fullVillaWeekdayRate === null) return null;
+  return Math.round(fullVillaWeekdayRate * ENTRY_BEDROOM_FACTOR);
+}
+
 export function formatVillaFromPrice(villa: string, pricing?: VillaBasePricing[] | null): string | null {
-  const price = getVillaBasePrice(villa, pricing);
+  const price = getVillaEntryPrice(villa, pricing);
   if (price === null) return null;
   return `From $${price} / night`;
 }
 
-export const VILLA_FROM_PRICE_MICROLABEL = "Weekday base rate, excludes add-ons";
+export const VILLA_FROM_PRICE_MICROLABEL = "Based on 1-bedroom weekday stay. Seasonal rates may apply.";
