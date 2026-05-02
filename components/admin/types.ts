@@ -82,6 +82,19 @@ export interface Booking {
   guest_email: string | null;
   guest_phone: string | null;
   guest_country: string | null;
+  payment_status?: string | null;
+  payment_method?: string | null;
+  deposit_amount?: number | null;
+  amount_paid?: number | null;
+  payment_reference?: string | null;
+  payment_notes?: string | null;
+  payment_requested_at?: string | null;
+  payment_received_at?: string | null;
+  payment_due_at?: string | null;
+  payment_marked_by?: string | null;
+  refund_status?: string | null;
+  refund_amount?: number | null;
+  refunded_at?: string | null;
 }
 
 export interface Member {

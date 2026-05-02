@@ -369,6 +369,14 @@ Phase 13 — Real-world validation & stabilization:
   - Event inquiries: payment must remain off-flow; pricing is bespoke and quoted manually
   - No payment implementation
   - No schema/API changes
+- 13L.1 Manual Payment Tracking [COMPLETE]
+  - Payment tracking schema added
+  - Admin can request deposit
+  - Admin can record Whish / cash / bank transfer / manual payments
+  - Admin can record refund state
+  - No guest payment UI yet
+  - No Stripe / card gateway integration
+  - No booking validation changes
 
 ---
 

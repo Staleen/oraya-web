@@ -15,6 +15,17 @@ type DeadDayUpsellOpportunity = {
   dateLabel: string;
   pairedBooking: Booking;
 };
+type PaymentDraft = {
+  depositAmount: string;
+  dueAt: string;
+  requestNote: string;
+  paymentAmount: string;
+  paymentMethod: string;
+  paymentReference: string;
+  paymentNotes: string;
+  refundAmount: string;
+  refundNote: string;
+};
 
 function StatusBadge({ status }: { status: string }) {
   const tones: Record<string, { text: string; background: string; border: string }> = {
@@ -182,6 +193,36 @@ function formatMoney(value: number | null | undefined) {
   return `$${value.toLocaleString("en-US")}`;
 }
 
+function parseAmountInput(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function formatDateTimeValue(value: string | null | undefined) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat("en-GB", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Asia/Beirut",
+  }).format(date);
+}
+
+function toDateTimeLocalInput(value: string | null | undefined) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
 function formatAdvisoryLabel(value: string) {
   if (!value) return value;
   return `${value.charAt(0).toUpperCase()}${value.slice(1)}`;
@@ -208,6 +249,120 @@ function getPersistedStayValue(booking: Booking) {
   }
 
   return null;
+}
+
+function getBookingRevenueData(booking: Booking) {
+  const pricingIntelligence = getPricingIntelligenceMeta(booking);
+  const addonSubtotalRaw = getAddonSnapshotsFromBooking(booking).reduce((sum, addon) => {
+    return sum + (typeof addon.price === "number" && Number.isFinite(addon.price) ? addon.price : 0);
+  }, 0);
+  const stayValueRaw =
+    getSnapshotNumber(booking.pricing_snapshot?.adjusted_stay_subtotal) ??
+    getSnapshotNumber(booking.pricing_snapshot?.subtotal) ??
+    pricingIntelligence?.stay_value ??
+    getPersistedStayValue(booking);
+  const addonsValueRaw =
+    pricingIntelligence?.addons_value ??
+    (getAddonSnapshotsFromBooking(booking).length > 0 ? addonSubtotalRaw : 0);
+  const estimatedTotalRaw =
+    getSnapshotNumber(booking.pricing_snapshot?.estimated_total) ??
+    pricingIntelligence?.estimated_total ??
+    pricingIntelligence?.internal_value ??
+    (typeof stayValueRaw === "number" && typeof addonsValueRaw === "number"
+      ? stayValueRaw + addonsValueRaw
+      : null);
+
+  return {
+    pricingIntelligence,
+    stayValueRaw,
+    addonsValueRaw,
+    estimatedTotalRaw,
+  };
+}
+
+function getAddonSnapshotsFromBooking(booking: Booking) {
+  return booking.addons_snapshot ?? [];
+}
+
+function getPaymentStatus(booking: Booking) {
+  return booking.payment_status?.trim() || "unpaid";
+}
+
+function isPaymentOverdue(booking: Booking) {
+  if (getPaymentStatus(booking) !== "payment_requested" || !booking.payment_due_at) return false;
+  const dueDate = new Date(booking.payment_due_at);
+  if (Number.isNaN(dueDate.getTime())) return false;
+  return dueDate.getTime() < Date.now();
+}
+
+function getPaymentStatusStyle(status: string, overdue: boolean) {
+  if (overdue) {
+    return {
+      label: "Payment overdue",
+      color: "#f0bd67",
+      background: "rgba(240,189,103,0.14)",
+      border: "rgba(240,189,103,0.34)",
+    };
+  }
+
+  if (status === "paid_in_full") {
+    return {
+      label: "Paid in full",
+      color: "#6fcf8a",
+      background: "rgba(80,180,100,0.16)",
+      border: "rgba(111,207,138,0.34)",
+    };
+  }
+
+  if (status === "deposit_paid") {
+    return {
+      label: "Deposit paid",
+      color: "#9db7d9",
+      background: "rgba(157,183,217,0.14)",
+      border: "rgba(157,183,217,0.28)",
+    };
+  }
+
+  if (status === "payment_requested") {
+    return {
+      label: "Payment requested",
+      color: GOLD,
+      background: "rgba(197,164,109,0.14)",
+      border: "rgba(197,164,109,0.3)",
+    };
+  }
+
+  return {
+    label: "Unpaid",
+    color: MUTED,
+    background: "rgba(255,255,255,0.04)",
+    border: BORDER,
+  };
+}
+
+function renderPaymentStatusBadge(booking: Booking) {
+  const tone = getPaymentStatusStyle(getPaymentStatus(booking), isPaymentOverdue(booking));
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontFamily: LATO,
+        fontSize: "9px",
+        letterSpacing: "1.5px",
+        textTransform: "uppercase",
+        color: tone.color,
+        backgroundColor: tone.background,
+        border: `0.5px solid ${tone.border}`,
+        padding: "6px 10px",
+        borderRadius: "6px",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {tone.label}
+    </span>
+  );
 }
 
 function renderPricingIntelligenceBadge(label: string, value: string, tone: "tier" | "confidence") {
@@ -443,12 +598,14 @@ export default function BookingsTable({
   updateStatus: (id: string, status: "confirmed" | "cancelled") => void;
   emailWarnings: Record<string, string>;
 }) {
-  const { bookings, setBookings } = useAdminData();
+  const { bookings, setBookings, setError } = useAdminData();
   const [approvingAddonId, setApprovingAddonId] = useState<string | null>(null);
   const [expandedCompactId, setExpandedCompactId] = useState<string | null>(null);
   const [bulkActionBookingId, setBulkActionBookingId] = useState<string | null>(null);
   const [confirmedSort, setConfirmedSort] = useState<ConfirmedSortKey>("created_desc");
   const [hiddenCancelledIds, setHiddenCancelledIds] = useState<string[]>([]);
+  const [paymentUpdatingId, setPaymentUpdatingId] = useState<string | null>(null);
+  const [paymentDrafts, setPaymentDrafts] = useState<Record<string, PaymentDraft>>({});
 
   async function patchAddonResolution(bookingId: string, addonId: string, decision: "approve" | "decline") {
     const res = await fetch(`/api/admin/bookings/${bookingId}/approve-addon`, {
@@ -504,6 +661,171 @@ export default function BookingsTable({
       console.error("[admin] approve-all-and-confirm failed:", error);
     } finally {
       setBulkActionBookingId(null);
+    }
+  }
+
+  function getPaymentDraft(booking: Booking): PaymentDraft {
+    return paymentDrafts[booking.id] ?? {
+      depositAmount: booking.deposit_amount != null ? String(booking.deposit_amount) : "",
+      dueAt: toDateTimeLocalInput(booking.payment_due_at),
+      requestNote: "",
+      paymentAmount: "",
+      paymentMethod: booking.payment_method ?? "whish",
+      paymentReference: booking.payment_reference ?? "",
+      paymentNotes: "",
+      refundAmount: booking.refund_amount != null ? String(booking.refund_amount) : "",
+      refundNote: "",
+    };
+  }
+
+  function updatePaymentDraft(bookingId: string, updates: Partial<PaymentDraft>) {
+    setPaymentDrafts((prev) => ({
+      ...prev,
+      [bookingId]: {
+        ...(prev[bookingId] ?? {
+          depositAmount: "",
+          dueAt: "",
+          requestNote: "",
+          paymentAmount: "",
+          paymentMethod: "whish",
+          paymentReference: "",
+          paymentNotes: "",
+          refundAmount: "",
+          refundNote: "",
+        }),
+        ...updates,
+      },
+    }));
+  }
+
+  async function patchBookingRecord(bookingId: string, updates: Record<string, unknown>, actionKey: string) {
+    setError("");
+    setPaymentUpdatingId(`${bookingId}:${actionKey}`);
+
+    try {
+      const res = await fetch(`/api/admin/bookings/${bookingId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error ?? "Failed to update payment details.");
+        return null;
+      }
+
+      if (data.booking) {
+        setBookings((prev) => prev.map((booking) => (booking.id === bookingId ? { ...booking, ...data.booking } : booking)));
+      }
+
+      return data.booking as Booking | null;
+    } catch (error) {
+      console.error("[admin] payment update error:", error);
+      setError("Failed to update payment details.");
+      return null;
+    } finally {
+      setPaymentUpdatingId(null);
+    }
+  }
+
+  async function requestDeposit(booking: Booking) {
+    const draft = getPaymentDraft(booking);
+    const depositAmount = parseAmountInput(draft.depositAmount);
+    if (depositAmount === null) {
+      setError("Enter a valid deposit amount before requesting payment.");
+      return;
+    }
+
+    const dueAtIso = draft.dueAt ? new Date(draft.dueAt).toISOString() : null;
+    const nextNotes = draft.requestNote.trim() || booking.payment_notes || null;
+    const updated = await patchBookingRecord(
+      booking.id,
+      {
+        deposit_amount: depositAmount,
+        payment_due_at: dueAtIso,
+        payment_notes: nextNotes,
+        payment_status: "payment_requested",
+        payment_requested_at: new Date().toISOString(),
+      },
+      "request-deposit",
+    );
+
+    if (updated) {
+      updatePaymentDraft(booking.id, { requestNote: "" });
+    }
+  }
+
+  async function recordPayment(booking: Booking) {
+    const draft = getPaymentDraft(booking);
+    const receivedAmount = parseAmountInput(draft.paymentAmount);
+    if (receivedAmount === null) {
+      setError("Enter a valid payment amount before recording payment.");
+      return;
+    }
+    if (!draft.paymentMethod) {
+      setError("Select a payment method before recording payment.");
+      return;
+    }
+
+    const currentPaid = typeof booking.amount_paid === "number" && Number.isFinite(booking.amount_paid)
+      ? booking.amount_paid
+      : 0;
+    const { estimatedTotalRaw } = getBookingRevenueData(booking);
+    const nextAmountPaid = currentPaid + receivedAmount;
+    const nextPaymentStatus =
+      typeof estimatedTotalRaw === "number" && nextAmountPaid >= estimatedTotalRaw
+        ? "paid_in_full"
+        : "deposit_paid";
+    const nextNotes = draft.paymentNotes.trim() || booking.payment_notes || null;
+
+    const updated = await patchBookingRecord(
+      booking.id,
+      {
+        payment_method: draft.paymentMethod,
+        amount_paid: nextAmountPaid,
+        payment_reference: draft.paymentReference.trim() || null,
+        payment_notes: nextNotes,
+        payment_received_at: new Date().toISOString(),
+        payment_status: nextPaymentStatus,
+      },
+      "record-payment",
+    );
+
+    if (updated) {
+      updatePaymentDraft(booking.id, {
+        paymentAmount: "",
+        paymentNotes: "",
+        paymentReference: updated.payment_reference ?? draft.paymentReference,
+      });
+    }
+  }
+
+  async function issueRefund(booking: Booking) {
+    const draft = getPaymentDraft(booking);
+    const refundAmount = parseAmountInput(draft.refundAmount);
+    if (refundAmount === null) {
+      setError("Enter a valid refund amount before recording a refund.");
+      return;
+    }
+
+    const combinedNotes = [booking.payment_notes?.trim(), draft.refundNote.trim() ? `Refund: ${draft.refundNote.trim()}` : ""]
+      .filter(Boolean)
+      .join("\n");
+
+    const updated = await patchBookingRecord(
+      booking.id,
+      {
+        refund_status: "refunded",
+        refund_amount: refundAmount,
+        refunded_at: new Date().toISOString(),
+        payment_notes: combinedNotes || null,
+      },
+      "issue-refund",
+    );
+
+    if (updated) {
+      updatePaymentDraft(booking.id, { refundAmount: "", refundNote: "" });
     }
   }
 
@@ -1115,6 +1437,313 @@ export default function BookingsTable({
     );
   }
 
+  function renderPaymentSection(booking: Booking) {
+    if (booking.status !== "confirmed") return null;
+
+    const draft = getPaymentDraft(booking);
+    const paymentStatus = getPaymentStatus(booking);
+    const overdue = isPaymentOverdue(booking);
+    const depositAmount = formatMoney(booking.deposit_amount);
+    const amountPaid = formatMoney(booking.amount_paid);
+    const { stayValueRaw, addonsValueRaw, estimatedTotalRaw } = getBookingRevenueData(booking);
+    const stayValue = formatMoney(stayValueRaw);
+    const addonsValue = formatMoney(addonsValueRaw);
+    const estimatedTotal = formatMoney(estimatedTotalRaw);
+    const requestSentAt = formatDateTimeValue(booking.payment_requested_at);
+    const receivedAt = formatDateTimeValue(booking.payment_received_at);
+    const dueAt = formatDateTimeValue(booking.payment_due_at);
+    const refundedAt = formatDateTimeValue(booking.refunded_at);
+    const isRequesting = paymentUpdatingId === `${booking.id}:request-deposit`;
+    const isRecording = paymentUpdatingId === `${booking.id}:record-payment`;
+    const isRefunding = paymentUpdatingId === `${booking.id}:issue-refund`;
+
+    return (
+      <div
+        style={{
+          border: "0.5px solid rgba(197,164,109,0.24)",
+          backgroundColor: "rgba(197,164,109,0.05)",
+          padding: "14px 16px",
+          borderRadius: "8px",
+          display: "grid",
+          gap: "12px",
+        }}
+      >
+        <div style={{ display: "grid", gap: "8px" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+              gap: "12px",
+              flexWrap: "wrap",
+            }}
+          >
+            <div style={{ display: "grid", gap: "4px" }}>
+              <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+                Payment
+              </p>
+              <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+                Manual payment tracking for confirmed bookings only.
+              </p>
+            </div>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+              {renderPaymentStatusBadge(booking)}
+              {booking.refund_status === "refunded" && (
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontFamily: LATO,
+                    fontSize: "9px",
+                    letterSpacing: "1.5px",
+                    textTransform: "uppercase",
+                    color: "#f08b8b",
+                    backgroundColor: "rgba(224,112,112,0.14)",
+                    border: "0.5px solid rgba(224,112,112,0.32)",
+                    padding: "6px 10px",
+                    borderRadius: "6px",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Refunded
+                </span>
+              )}
+            </div>
+          </div>
+
+          {overdue && (
+            <div
+              style={{
+                border: "0.5px solid rgba(240,189,103,0.26)",
+                backgroundColor: "rgba(240,189,103,0.08)",
+                padding: "10px 12px",
+                borderRadius: "6px",
+              }}
+            >
+              <p style={{ fontFamily: LATO, fontSize: "11px", color: "#f0bd67", margin: 0, lineHeight: 1.5 }}>
+                Payment overdue.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
+            gap: "12px 16px",
+          }}
+        >
+          {renderRevenueEstimateRow("Stay value", stayValue ?? "Unavailable")}
+          {renderRevenueEstimateRow("Add-ons value", addonsValue ?? "Unavailable")}
+          {renderRevenueEstimateRow("Estimated total", estimatedTotal ?? "Unavailable")}
+          {renderRevenueEstimateRow("Payment status", formatAdvisoryLabel(paymentStatus.replaceAll("_", " ")))}
+          {renderRevenueEstimateRow("Deposit amount", depositAmount ?? "Not set")}
+          {renderRevenueEstimateRow("Amount paid", amountPaid ?? "$0")}
+          {renderRevenueEstimateRow("Method", booking.payment_method ? formatAdvisoryLabel(booking.payment_method.replaceAll("_", " ")) : "Not set")}
+          {renderRevenueEstimateRow("Reference", booking.payment_reference?.trim() || "Not set")}
+          {renderRevenueEstimateRow("Due date", dueAt ?? "Not set")}
+        </div>
+
+        {(requestSentAt || receivedAt || refundedAt || booking.payment_notes?.trim()) && (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
+              gap: "10px 16px",
+            }}
+          >
+            {requestSentAt ? renderRevenueEstimateRow("Requested", requestSentAt) : null}
+            {receivedAt ? renderRevenueEstimateRow("Received", receivedAt) : null}
+            {refundedAt ? renderRevenueEstimateRow("Refunded", refundedAt) : null}
+            {booking.payment_notes?.trim()
+              ? renderRevenueEstimateRow("Notes", booking.payment_notes.trim())
+              : null}
+          </div>
+        )}
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
+            gap: "12px",
+          }}
+        >
+          <div
+            style={{
+              border: `0.5px solid ${BORDER}`,
+              backgroundColor: "rgba(255,255,255,0.02)",
+              padding: "12px",
+              borderRadius: "8px",
+              display: "grid",
+              gap: "10px",
+            }}
+          >
+            <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: WHITE, margin: 0 }}>
+              Request deposit
+            </p>
+            <input
+              value={draft.depositAmount}
+              onChange={(event) => updatePaymentDraft(booking.id, { depositAmount: event.target.value })}
+              placeholder="Deposit amount"
+              inputMode="decimal"
+              style={fieldStyle}
+            />
+            <input
+              type="datetime-local"
+              value={draft.dueAt}
+              onChange={(event) => updatePaymentDraft(booking.id, { dueAt: event.target.value })}
+              style={fieldStyle}
+            />
+            <textarea
+              value={draft.requestNote}
+              onChange={(event) => updatePaymentDraft(booking.id, { requestNote: event.target.value })}
+              placeholder="Optional note"
+              rows={3}
+              style={{ ...fieldStyle, resize: "vertical" }}
+            />
+            <button
+              type="button"
+              onClick={() => requestDeposit(booking)}
+              disabled={isRequesting}
+              style={{
+                fontFamily: LATO,
+                fontSize: "10px",
+                letterSpacing: "1.5px",
+                textTransform: "uppercase",
+                color: MIDNIGHT,
+                backgroundColor: GOLD,
+                border: "none",
+                padding: "12px 14px",
+                borderRadius: "6px",
+                cursor: isRequesting ? "not-allowed" : "pointer",
+                opacity: isRequesting ? 0.7 : 1,
+              }}
+            >
+              {isRequesting ? "Saving..." : "Request deposit"}
+            </button>
+          </div>
+
+          <div
+            style={{
+              border: `0.5px solid ${BORDER}`,
+              backgroundColor: "rgba(255,255,255,0.02)",
+              padding: "12px",
+              borderRadius: "8px",
+              display: "grid",
+              gap: "10px",
+            }}
+          >
+            <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: WHITE, margin: 0 }}>
+              Record payment
+            </p>
+            <select
+              value={draft.paymentMethod}
+              onChange={(event) => updatePaymentDraft(booking.id, { paymentMethod: event.target.value })}
+              style={{ ...fieldStyle, cursor: "pointer" }}
+            >
+              <option value="whish" style={{ backgroundColor: MIDNIGHT }}>Whish</option>
+              <option value="cash" style={{ backgroundColor: MIDNIGHT }}>Cash</option>
+              <option value="bank_transfer" style={{ backgroundColor: MIDNIGHT }}>Bank transfer</option>
+              <option value="card_manual" style={{ backgroundColor: MIDNIGHT }}>Card manual</option>
+              <option value="other" style={{ backgroundColor: MIDNIGHT }}>Other</option>
+            </select>
+            <input
+              value={draft.paymentAmount}
+              onChange={(event) => updatePaymentDraft(booking.id, { paymentAmount: event.target.value })}
+              placeholder="Amount received"
+              inputMode="decimal"
+              style={fieldStyle}
+            />
+            <input
+              value={draft.paymentReference}
+              onChange={(event) => updatePaymentDraft(booking.id, { paymentReference: event.target.value })}
+              placeholder="Reference"
+              style={fieldStyle}
+            />
+            <textarea
+              value={draft.paymentNotes}
+              onChange={(event) => updatePaymentDraft(booking.id, { paymentNotes: event.target.value })}
+              placeholder="Payment note"
+              rows={3}
+              style={{ ...fieldStyle, resize: "vertical" }}
+            />
+            <button
+              type="button"
+              onClick={() => recordPayment(booking)}
+              disabled={isRecording}
+              style={{
+                fontFamily: LATO,
+                fontSize: "10px",
+                letterSpacing: "1.5px",
+                textTransform: "uppercase",
+                color: WHITE,
+                backgroundColor: "rgba(111,207,138,0.18)",
+                border: "0.5px solid rgba(111,207,138,0.34)",
+                padding: "12px 14px",
+                borderRadius: "6px",
+                cursor: isRecording ? "not-allowed" : "pointer",
+                opacity: isRecording ? 0.7 : 1,
+              }}
+            >
+              {isRecording ? "Saving..." : "Record payment"}
+            </button>
+          </div>
+
+          <div
+            style={{
+              border: `0.5px solid ${BORDER}`,
+              backgroundColor: "rgba(255,255,255,0.02)",
+              padding: "12px",
+              borderRadius: "8px",
+              display: "grid",
+              gap: "10px",
+            }}
+          >
+            <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: WHITE, margin: 0 }}>
+              Issue refund
+            </p>
+            <input
+              value={draft.refundAmount}
+              onChange={(event) => updatePaymentDraft(booking.id, { refundAmount: event.target.value })}
+              placeholder="Refund amount"
+              inputMode="decimal"
+              style={fieldStyle}
+            />
+            <textarea
+              value={draft.refundNote}
+              onChange={(event) => updatePaymentDraft(booking.id, { refundNote: event.target.value })}
+              placeholder="Refund note"
+              rows={5}
+              style={{ ...fieldStyle, resize: "vertical" }}
+            />
+            <button
+              type="button"
+              onClick={() => issueRefund(booking)}
+              disabled={isRefunding}
+              style={{
+                fontFamily: LATO,
+                fontSize: "10px",
+                letterSpacing: "1.5px",
+                textTransform: "uppercase",
+                color: WHITE,
+                backgroundColor: "rgba(224,112,112,0.14)",
+                border: "0.5px solid rgba(224,112,112,0.32)",
+                padding: "12px 14px",
+                borderRadius: "6px",
+                cursor: isRefunding ? "not-allowed" : "pointer",
+                opacity: isRefunding ? 0.7 : 1,
+              }}
+            >
+              {isRefunding ? "Saving..." : "Issue refund"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   function renderExpandedBookingDetails(booking: Booking, compactMode: boolean) {
     const isGuest = !booking.member_id;
     const memberInfo = getMember(booking);
@@ -1211,6 +1840,7 @@ export default function BookingsTable({
             }}
           >
             <StatusBadge status={booking.status} />
+            {booking.status === "confirmed" && renderPaymentStatusBadge(booking)}
             {hasDeadDayUpsell && (
               <span
                 style={{
@@ -1955,6 +2585,8 @@ export default function BookingsTable({
           );
         })()}
 
+        {renderPaymentSection(booking)}
+
         {renderAddonRows(booking)}
 
         {/* Phase 13H.4: Approval advisory — warns if a higher-value competing request exists */}
@@ -2209,6 +2841,7 @@ export default function BookingsTable({
               </p>
             )}
             <StatusBadge status={booking.status} />
+            {section === "confirmed" && renderPaymentStatusBadge(booking)}
             {hasDeadDayUpsell && (
               <span
                 style={{

@@ -17,11 +17,38 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   const db = makeAdminClient();
-  const { status } = await request.json();
+  const payload = await request.json();
+  const status = payload.status as unknown;
 
-  const allowed = ["pending", "confirmed", "cancelled"];
-  if (!allowed.includes(status)) {
-    return NextResponse.json({ error: "Invalid status value." }, { status: 400 });
+  const statusUpdateProvided = Object.prototype.hasOwnProperty.call(payload, "status");
+  const paymentFieldNames = [
+    "payment_status",
+    "payment_method",
+    "deposit_amount",
+    "amount_paid",
+    "payment_reference",
+    "payment_notes",
+    "payment_requested_at",
+    "payment_received_at",
+    "payment_due_at",
+    "payment_marked_by",
+    "refund_status",
+    "refund_amount",
+    "refunded_at",
+  ] as const;
+  const paymentUpdateProvided = paymentFieldNames.some((field) =>
+    Object.prototype.hasOwnProperty.call(payload, field)
+  );
+
+  if (!statusUpdateProvided && !paymentUpdateProvided) {
+    return NextResponse.json({ error: "No booking updates provided." }, { status: 400 });
+  }
+
+  if (statusUpdateProvided) {
+    const allowed = ["pending", "confirmed", "cancelled"];
+    if (typeof status !== "string" || !allowed.includes(status)) {
+      return NextResponse.json({ error: "Invalid status value." }, { status: 400 });
+    }
   }
 
   if (status === "confirmed") {
@@ -49,9 +76,108 @@ export async function PATCH(
     }
   }
 
+  const allowedPaymentStatuses = ["unpaid", "payment_requested", "deposit_paid", "paid_in_full"];
+  const allowedPaymentMethods = ["whish", "cash", "bank_transfer", "card_manual", "other"];
+  const allowedRefundStatuses = ["refund_pending", "partial_refund", "refunded"];
+  const updatePayload: Record<string, unknown> = {};
+
+  if (statusUpdateProvided) {
+    updatePayload.status = status;
+  }
+
+  function readOptionalText(field: (typeof paymentFieldNames)[number]) {
+    if (!Object.prototype.hasOwnProperty.call(payload, field)) return;
+    const value = payload[field];
+    if (value === null || value === "") {
+      updatePayload[field] = null;
+      return;
+    }
+    if (typeof value !== "string") {
+      throw new Error(`Invalid ${field} value.`);
+    }
+    updatePayload[field] = value;
+  }
+
+  function readOptionalNumber(field: (typeof paymentFieldNames)[number]) {
+    if (!Object.prototype.hasOwnProperty.call(payload, field)) return;
+    const value = payload[field];
+    if (value === null || value === "") {
+      updatePayload[field] = null;
+      return;
+    }
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+      throw new Error(`Invalid ${field} value.`);
+    }
+    updatePayload[field] = value;
+  }
+
+  function readOptionalTimestamp(field: (typeof paymentFieldNames)[number]) {
+    if (!Object.prototype.hasOwnProperty.call(payload, field)) return;
+    const value = payload[field];
+    if (value === null || value === "") {
+      updatePayload[field] = null;
+      return;
+    }
+    if (typeof value !== "string" || Number.isNaN(new Date(value).getTime())) {
+      throw new Error(`Invalid ${field} value.`);
+    }
+    updatePayload[field] = value;
+  }
+
+  try {
+    if (Object.prototype.hasOwnProperty.call(payload, "payment_status")) {
+      const paymentStatus = payload.payment_status;
+      if (paymentStatus === null || paymentStatus === "") {
+        updatePayload.payment_status = null;
+      } else if (typeof paymentStatus === "string" && allowedPaymentStatuses.includes(paymentStatus)) {
+        updatePayload.payment_status = paymentStatus;
+      } else {
+        return NextResponse.json({ error: "Invalid payment_status value." }, { status: 400 });
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(payload, "payment_method")) {
+      const paymentMethod = payload.payment_method;
+      if (paymentMethod === null || paymentMethod === "") {
+        updatePayload.payment_method = null;
+      } else if (typeof paymentMethod === "string" && allowedPaymentMethods.includes(paymentMethod)) {
+        updatePayload.payment_method = paymentMethod;
+      } else {
+        return NextResponse.json({ error: "Invalid payment_method value." }, { status: 400 });
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(payload, "refund_status")) {
+      const refundStatus = payload.refund_status;
+      if (refundStatus === null || refundStatus === "") {
+        updatePayload.refund_status = null;
+      } else if (typeof refundStatus === "string" && allowedRefundStatuses.includes(refundStatus)) {
+        updatePayload.refund_status = refundStatus;
+      } else {
+        return NextResponse.json({ error: "Invalid refund_status value." }, { status: 400 });
+      }
+    }
+
+    readOptionalNumber("deposit_amount");
+    readOptionalNumber("amount_paid");
+    readOptionalNumber("refund_amount");
+    readOptionalText("payment_reference");
+    readOptionalText("payment_notes");
+    readOptionalText("payment_marked_by");
+    readOptionalTimestamp("payment_requested_at");
+    readOptionalTimestamp("payment_received_at");
+    readOptionalTimestamp("payment_due_at");
+    readOptionalTimestamp("refunded_at");
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Invalid payment update." },
+      { status: 400 }
+    );
+  }
+
   const { data: updated, error } = await db
     .from("bookings")
-    .update({ status })
+    .update(updatePayload)
     .eq("id", params.id)
     .select()
     .single();
@@ -65,7 +191,7 @@ export async function PATCH(
   }
 
   let emailSent = false;
-  if (status === "confirmed" || status === "cancelled") {
+  if (statusUpdateProvided && (status === "confirmed" || status === "cancelled")) {
     try {
       const { data: bk } = await db
         .from("bookings")

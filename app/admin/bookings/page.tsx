@@ -48,7 +48,7 @@ export default function AdminBookingsPage() {
         return next;
       });
       if (d.booking) {
-        setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: d.booking.status } : b)));
+        setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, ...d.booking } : b)));
       }
       loadData(true);
     }
