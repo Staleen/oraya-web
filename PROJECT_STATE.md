@@ -346,6 +346,14 @@ Phase 13 — Real-world validation & stabilization:
   - Clearer confirm/cancel action grouping
   - No auto-decision logic
   - No backend/API/schema changes
+- 13I Guest Booking Detail Page [COMPLETE]
+  - Secure persistent guest view link verified (existing HMAC-signed token via verifyViewToken)
+  - Stay booking detail display includes bedroom setup
+  - Event inquiry detail display hides pricing
+  - Email view links already integrated
+  - No admin intelligence exposure
+  - No event pricing exposure
+  - No schema/API changes
 
 ---
 

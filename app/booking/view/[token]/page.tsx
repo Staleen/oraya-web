@@ -36,7 +36,7 @@ interface BookingRow {
   addons:           Addon[] | null;
   addons_snapshot:  Addon[] | null;
   pricing_subtotal: number | string | null;
-  pricing_snapshot: { subtotal?: number | string | null } | null;
+  pricing_snapshot: { subtotal?: number | string | null; bedrooms_to_be_used?: number | null } | null;
   status:           string;
   guest_name:       string | null;
   member_id:        string | null;
@@ -207,6 +207,17 @@ export default async function BookingViewPage({ params }: { params: { token: str
   const whatsappNumber = await getWhatsappNumber();
   const ref     = booking.id.slice(0, 8).toUpperCase();
   const visual  = statusVisual(booking.status);
+  // Phase 13I: detect event inquiry — both conditions required (event_type set + structured notes marker).
+  const isEventInquiry =
+    !!booking.event_type &&
+    typeof booking.message === "string" &&
+    booking.message.includes("[Event Inquiry]");
+  // Phase 13I: bedroom setup label (stay bookings only) from snapshot persisted in 13H.
+  const bedroomsRaw = booking.pricing_snapshot?.bedrooms_to_be_used;
+  const bedroomLabel =
+    typeof bedroomsRaw === "number" && bedroomsRaw >= 1 && bedroomsRaw <= 3
+      ? `${bedroomsRaw} ${bedroomsRaw === 1 ? "bedroom" : "bedrooms"}`
+      : null;
   const addons = Array.isArray(booking.addons_snapshot) && booking.addons_snapshot.length > 0
     ? booking.addons_snapshot
     : Array.isArray(booking.addons)
@@ -227,8 +238,11 @@ export default async function BookingViewPage({ params }: { params: { token: str
     { label: "Villa",        value: booking.villa },
     { label: "Check-in",     value: fmtDate(booking.check_in) },
     { label: "Check-out",    value: fmtDate(booking.check_out) },
-    { label: "Guests staying",  value: String(booking.sleeping_guests ?? "—") },
-    { label: "Expected visitors", value: String(booking.day_visitors ?? 0) },
+    ...(!isEventInquiry && bedroomLabel
+      ? [{ label: "Bedroom setup", value: bedroomLabel }]
+      : []),
+    { label: isEventInquiry ? "Overnight hosts" : "Guests staying", value: String(booking.sleeping_guests ?? "—") },
+    { label: isEventInquiry ? "Expected attendees" : "Expected visitors", value: String(booking.day_visitors ?? 0) },
     ...(booking.event_type ? [{ label: "Event type", value: booking.event_type }] : []),
     { label: "Reference",    value: ref },
   ];
@@ -255,7 +269,7 @@ export default async function BookingViewPage({ params }: { params: { token: str
 
         {/* Eyebrow */}
         <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "4px", textTransform: "uppercase", color: GOLD, marginBottom: "1.25rem" }}>
-          Your Booking
+          {isEventInquiry ? "Your Event Inquiry" : "Your Booking"}
         </p>
 
         {/* Heading */}
@@ -286,7 +300,7 @@ export default async function BookingViewPage({ params }: { params: { token: str
         {/* Details card */}
         <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", padding: "2rem", marginBottom: "2rem", textAlign: "left" }}>
           <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, marginBottom: "1.25rem" }}>
-            Booking summary
+            {isEventInquiry ? "Inquiry summary" : "Booking summary"}
           </p>
           {rows.map(({ label, value }) => (
             <div
@@ -310,7 +324,8 @@ export default async function BookingViewPage({ params }: { params: { token: str
           ))}
         </div>
 
-        {/* Add-ons card */}
+        {/* Add-ons card — hide on event inquiries with no addons (event services live in the notes block) */}
+        {!(isEventInquiry && addons.length === 0) && (
         <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", padding: "1.75rem", marginBottom: "2rem", textAlign: "left", backgroundColor: "rgba(255,255,255,0.015)" }}>
           <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, marginBottom: "1rem" }}>
             Add-ons
@@ -375,32 +390,44 @@ export default async function BookingViewPage({ params }: { params: { token: str
             </div>
           )}
         </div>
+        )}
 
-        {/* Payment summary */}
-        <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", padding: "1.75rem", marginBottom: "2rem", textAlign: "left", backgroundColor: "rgba(197,164,109,0.04)" }}>
-          <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, marginBottom: "1rem" }}>
-            Payment summary
-          </p>
-          {paymentRows.map(([label, value, isTotal]) => (
-            <div
-              key={String(label)}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                gap: "16px",
-                padding: isTotal ? "12px 0 0" : "9px 0",
-                borderTop: isTotal ? "0.5px solid rgba(197,164,109,0.25)" : "0.5px solid rgba(255,255,255,0.05)",
-              }}
-            >
-              <span style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED }}>
-                {String(label)}
-              </span>
-              <span style={{ fontFamily: LATO, fontSize: isTotal ? "16px" : "13px", color: isTotal ? GOLD : WHITE, fontWeight: isTotal ? 600 : 300, textAlign: "right" }}>
-                {String(value)}
-              </span>
-            </div>
-          ))}
-        </div>
+        {/* Phase 13I: pricing block — stay bookings see Payment summary; event inquiries see no pricing */}
+        {isEventInquiry ? (
+          <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", padding: "1.75rem", marginBottom: "2rem", textAlign: "left", backgroundColor: "rgba(197,164,109,0.04)" }}>
+            <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, marginBottom: "0.75rem" }}>
+              Next steps
+            </p>
+            <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, lineHeight: 1.7, margin: 0 }}>
+              Oraya will review your event request and follow up with availability, setup options, and a tailored proposal.
+            </p>
+          </div>
+        ) : (
+          <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", padding: "1.75rem", marginBottom: "2rem", textAlign: "left", backgroundColor: "rgba(197,164,109,0.04)" }}>
+            <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, marginBottom: "1rem" }}>
+              Payment summary
+            </p>
+            {paymentRows.map(([label, value, isTotal]) => (
+              <div
+                key={String(label)}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: "16px",
+                  padding: isTotal ? "12px 0 0" : "9px 0",
+                  borderTop: isTotal ? "0.5px solid rgba(197,164,109,0.25)" : "0.5px solid rgba(255,255,255,0.05)",
+                }}
+              >
+                <span style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED }}>
+                  {String(label)}
+                </span>
+                <span style={{ fontFamily: LATO, fontSize: isTotal ? "16px" : "13px", color: isTotal ? GOLD : WHITE, fontWeight: isTotal ? 600 : 300, textAlign: "right" }}>
+                  {String(value)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Message card (if any) */}
         {booking.message && (
