@@ -231,7 +231,7 @@ export default async function BookingViewPage({ params }: { params: { token: str
   const paymentRows: Array<[string, string, boolean]> = [
     ["Stay subtotal", staySubtotal !== null ? formatMoney(staySubtotal) : "Not available", false],
     ["Add-ons total", addonsTotal !== null ? formatMoney(addonsTotal) : "Price on request", false],
-    ["Total estimated", estimatedTotal !== null ? formatMoney(estimatedTotal) : "Not available", true],
+    ["Estimated booking total", estimatedTotal !== null ? formatMoney(estimatedTotal) : "Not available", true],
   ];
 
   const rows: Array<{ label: string; value: string }> = [
@@ -405,7 +405,7 @@ export default async function BookingViewPage({ params }: { params: { token: str
         ) : (
           <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", padding: "1.75rem", marginBottom: "2rem", textAlign: "left", backgroundColor: "rgba(197,164,109,0.04)" }}>
             <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, marginBottom: "1rem" }}>
-              Payment summary
+              Estimated booking total
             </p>
             {paymentRows.map(([label, value, isTotal]) => (
               <div

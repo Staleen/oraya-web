@@ -1235,7 +1235,7 @@ function BookPageInner() {
   const estimatePanel = checkIn && checkOut && staySubtotal !== null ? (
     <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: "rgba(197,164,109,0.04)", padding: "1.25rem" }}>
       <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 8px" }}>
-        Estimated Booking Total
+        Estimated booking total
       </p>
       <p style={{ fontFamily: PLAYFAIR, fontSize: "26px", color: GOLD, margin: "0 0 14px", lineHeight: 1.2 }}>
         {formatUsd(estimatedTotal)}
@@ -1255,7 +1255,7 @@ function BookPageInner() {
         </div>
       </div>
       <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: "12px 0 0", lineHeight: 1.6 }}>
-        Includes selected dates and current rates. Final confirmation is handled by Oraya.
+        This total is based on your selected dates, bedroom setup, and add-ons. Final confirmation is handled by Oraya.
       </p>
       {selectedAddonQuoteCount > 0 && (
         <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: "8px 0 0", lineHeight: 1.6 }}>
@@ -2247,10 +2247,10 @@ function BookPageInner() {
               {/* Divider */}
               <div style={{ height: "0.5px", backgroundColor: "rgba(197,164,109,0.12)" }} />
 
-              {/* ── Booking Summary ──────────────────────────────────────── */}
+              {/* ── Review your stay ──────────────────────────────────────── */}
               <div>
                 <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 14px" }}>
-                  Booking Summary
+                  Review your stay
                 </p>
                 <div style={{ border: "0.5px solid rgba(197,164,109,0.18)", padding: "1.25rem", backgroundColor: "rgba(255,255,255,0.015)" }}>
                   {(
@@ -2313,6 +2313,10 @@ function BookPageInner() {
 
               <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.8, textAlign: "center", margin: 0 }}>
                 Your booking request will be reviewed and confirmed by Oraya.
+              </p>
+
+              <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, lineHeight: 1.6, textAlign: "center", margin: 0, fontStyle: "italic" }}>
+                After submission, Oraya will review your request and confirm availability.
               </p>
 
               {error && (
