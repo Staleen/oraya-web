@@ -3,8 +3,10 @@ import { createClient } from "@supabase/supabase-js";
 import { sendBookingEmail } from "@/lib/send-booking-email";
 import {
   sendBookingPaymentReceivedEmail,
+  sendBookingPaymentReminderEmail,
   sendBookingPaymentRequestedEmail,
 } from "@/lib/send-booking-payment-email";
+import { appendPaymentReminderNote } from "@/lib/payment-reminders";
 import { findAvailabilityConflict } from "@/lib/calendar/availability";
 
 function makeAdminClient() {
@@ -49,6 +51,7 @@ export async function PATCH(
   const payload = await request.json();
   const bookingId = params.id;
   const status = payload.status as unknown;
+  const reminderRequested = payload.send_payment_reminder === true;
 
   const statusUpdateProvided = Object.prototype.hasOwnProperty.call(payload, "status");
   const paymentFieldNames = [
@@ -70,13 +73,13 @@ export async function PATCH(
     Object.prototype.hasOwnProperty.call(payload, field)
   );
 
-  if (!statusUpdateProvided && !paymentUpdateProvided) {
+  if (!statusUpdateProvided && !paymentUpdateProvided && !reminderRequested) {
     return NextResponse.json({ error: "No booking updates provided." }, { status: 400 });
   }
 
   const { data: existingBooking, error: existingBookingError } = await db
     .from("bookings")
-    .select("id, villa, check_in, check_out, sleeping_guests, day_visitors, event_type, message, addons, addons_snapshot, pricing_subtotal, pricing_snapshot, member_id, guest_name, guest_email, payment_status, payment_method, deposit_amount, amount_paid, payment_reference, payment_due_at, payment_requested_at, payment_received_at, refund_status, refund_amount, refunded_at")
+    .select("id, villa, check_in, check_out, status, sleeping_guests, day_visitors, event_type, message, addons, addons_snapshot, pricing_subtotal, pricing_snapshot, member_id, guest_name, guest_email, payment_status, payment_method, deposit_amount, amount_paid, payment_reference, payment_due_at, payment_requested_at, payment_received_at, payment_notes, refund_status, refund_amount, refunded_at")
     .eq("id", bookingId)
     .single();
 
@@ -108,6 +111,15 @@ export async function PATCH(
     } catch (conflictErr) {
       console.error("[api/admin/bookings] conflict check error:", conflictErr);
       return NextResponse.json({ error: "Could not verify availability. Please try again." }, { status: 500 });
+    }
+  }
+
+  if (reminderRequested) {
+    if (existingBooking.status !== "confirmed") {
+      return NextResponse.json({ error: "Payment reminders are only available for confirmed bookings." }, { status: 400 });
+    }
+    if ((existingBooking.payment_status?.trim() || "unpaid") !== "payment_requested") {
+      return NextResponse.json({ error: "Payment reminders are only available when payment has been requested." }, { status: 400 });
     }
   }
 
@@ -210,19 +222,25 @@ export async function PATCH(
     );
   }
 
-  const { data: updated, error } = await db
-    .from("bookings")
-    .update(updatePayload)
-    .eq("id", bookingId)
-    .select()
-    .single();
+  let updated = existingBooking;
 
-  if (error || !updated) {
-    console.error("[api/admin/bookings] update error or no row matched:", error);
-    return NextResponse.json(
-      { error: error?.message ?? "Booking not found or could not be updated." },
-      { status: error ? 500 : 404 }
-    );
+  if (statusUpdateProvided || paymentUpdateProvided) {
+    const { data, error } = await db
+      .from("bookings")
+      .update(updatePayload)
+      .eq("id", bookingId)
+      .select()
+      .single();
+
+    if (error || !data) {
+      console.error("[api/admin/bookings] update error or no row matched:", error);
+      return NextResponse.json(
+        { error: error?.message ?? "Booking not found or could not be updated." },
+        { status: error ? 500 : 404 }
+      );
+    }
+
+    updated = data;
   }
 
   let emailSent = false;
@@ -314,6 +332,53 @@ export async function PATCH(
       }
     } catch (paymentEmailErr) {
       console.error("[api/admin/bookings] payment email notification error:", paymentEmailErr);
+    }
+  }
+
+  if (reminderRequested && !isEventInquiry) {
+    try {
+      const { email: recipientEmail, name: recipientName } = await resolveRecipient(db, updated);
+
+      if (!recipientEmail) {
+        console.warn(`[api/admin/bookings] no email address for booking ${bookingId} reminder — skipping notification`);
+      } else {
+        await sendBookingPaymentReminderEmail({
+          to: recipientEmail,
+          name: recipientName,
+          villa: updated.villa,
+          check_in: updated.check_in,
+          check_out: updated.check_out,
+          booking_id: bookingId,
+          payment_status: updated.payment_status ?? null,
+          deposit_amount: updated.deposit_amount ?? null,
+          amount_paid: updated.amount_paid ?? null,
+          payment_due_at: updated.payment_due_at ?? null,
+          payment_method: updated.payment_method ?? null,
+          payment_reference: updated.payment_reference ?? null,
+          pricing_subtotal: updated.pricing_subtotal ?? null,
+          pricing_snapshot: updated.pricing_snapshot ?? null,
+          addons_snapshot: Array.isArray(updated.addons_snapshot) ? updated.addons_snapshot : null,
+        });
+
+        const reminderTimestamp = new Date().toISOString();
+        const reminderNotes = appendPaymentReminderNote(updated.payment_notes ?? null, reminderTimestamp);
+        const { data: remindedBooking, error: reminderUpdateError } = await db
+          .from("bookings")
+          .update({ payment_notes: reminderNotes })
+          .eq("id", bookingId)
+          .select()
+          .single();
+
+        if (reminderUpdateError || !remindedBooking) {
+          console.error("[api/admin/bookings] reminder note update error:", reminderUpdateError);
+        } else {
+          updated = remindedBooking;
+        }
+
+        emailSent = true;
+      }
+    } catch (reminderErr) {
+      console.error("[api/admin/bookings] payment reminder error:", reminderErr);
     }
   }
 

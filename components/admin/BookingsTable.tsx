@@ -829,6 +829,19 @@ export default function BookingsTable({
     }
   }
 
+  async function sendPaymentReminder(booking: Booking) {
+    if (getPaymentStatus(booking) !== "payment_requested") {
+      setError("Payment reminders are only available after requesting payment.");
+      return;
+    }
+
+    await patchBookingRecord(
+      booking.id,
+      { send_payment_reminder: true },
+      "send-reminder",
+    );
+  }
+
   function getMember(booking: Booking) {
     return booking.member_id ? members.find((member) => member.id === booking.member_id) : null;
   }
@@ -1464,6 +1477,7 @@ export default function BookingsTable({
     const isRequesting = paymentUpdatingId === `${booking.id}:request-deposit`;
     const isRecording = paymentUpdatingId === `${booking.id}:record-payment`;
     const isRefunding = paymentUpdatingId === `${booking.id}:issue-refund`;
+    const isReminderSending = paymentUpdatingId === `${booking.id}:send-reminder`;
 
     return (
       <div
@@ -1527,10 +1541,15 @@ export default function BookingsTable({
                 backgroundColor: "rgba(224,112,112,0.12)",
                 padding: "10px 12px",
                 borderRadius: "6px",
+                display: "grid",
+                gap: "4px",
               }}
             >
               <p style={{ fontFamily: LATO, fontSize: "11px", color: "#f4b3b3", margin: 0, lineHeight: 1.5 }}>
-                Payment overdue.
+                Overdue — payment not received.
+              </p>
+              <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+                Consider cancelling or following up.
               </p>
             </div>
           )}
@@ -1539,7 +1558,7 @@ export default function BookingsTable({
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
+            gridTemplateColumns: isMobile ? "1fr" : "repeat(4, minmax(0, 1fr))",
             gap: "12px",
           }}
         >
@@ -1806,6 +1825,44 @@ export default function BookingsTable({
               }}
             >
               {isRefunding ? "Saving..." : "Issue refund"}
+            </button>
+          </div>
+
+          <div
+            style={{
+              border: `0.5px solid ${paymentStatus === "payment_requested" ? "rgba(197,164,109,0.24)" : BORDER}`,
+              backgroundColor: paymentStatus === "payment_requested" ? "rgba(197,164,109,0.04)" : "rgba(255,255,255,0.02)",
+              padding: "12px",
+              borderRadius: "8px",
+              display: "grid",
+              gap: "10px",
+            }}
+          >
+            <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: WHITE, margin: 0 }}>
+              Send reminder
+            </p>
+            <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
+              Resend the payment reminder email and append a reminder timestamp to payment notes.
+            </p>
+            <button
+              type="button"
+              onClick={() => sendPaymentReminder(booking)}
+              disabled={paymentStatus !== "payment_requested" || isReminderSending}
+              style={{
+                fontFamily: LATO,
+                fontSize: "10px",
+                letterSpacing: "1.5px",
+                textTransform: "uppercase",
+                color: paymentStatus === "payment_requested" ? MIDNIGHT : MUTED,
+                backgroundColor: paymentStatus === "payment_requested" ? GOLD : "rgba(255,255,255,0.05)",
+                border: paymentStatus === "payment_requested" ? "none" : `0.5px solid ${BORDER}`,
+                padding: "12px 14px",
+                borderRadius: "6px",
+                cursor: paymentStatus === "payment_requested" && !isReminderSending ? "pointer" : "not-allowed",
+                opacity: paymentStatus === "payment_requested" ? (isReminderSending ? 0.7 : 1) : 0.55,
+              }}
+            >
+              {isReminderSending ? "Sending..." : "Send payment reminder"}
             </button>
           </div>
         </div>

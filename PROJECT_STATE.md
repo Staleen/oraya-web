@@ -398,6 +398,13 @@ Phase 13 — Real-world validation & stabilization:
   - Admin payment status visual polish
   - No Stripe / payment processing
   - No schema / API changes
+- 13L.5 Payment Reminder & Overdue Control [COMPLETE]
+  - Admin-triggered payment reminder
+  - Overdue escalation UI
+  - Cron-ready reminder function prepared
+  - No auto-cancel logic
+  - No Stripe / payment processing
+  - No schema / API changes
 
 ---
 
