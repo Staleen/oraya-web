@@ -9,7 +9,7 @@ STOP and ask before proceeding.
 
 ## CURRENT PHASE
 
-Phase 13 -> COMPLETE | Phase 14 -> COMPLETE (14M closure) | Phase 15A -> COMPLETE (readiness audit) | Phase 15B -> COMPLETE (security hotfix) | Phase 15C -> COMPLETE (event inquiry calendar parity with stay picker) | Phase 15D -> COMPLETE (security cleanup + smoke test) | Phase 15E -> COMPLETE (local env parity + secret hygiene) | Phase 15F.1 -> COMPLETE (contact email consistency hotfix) | Phase 15F.2 -> COMPLETE (email identity hello standard) | Phase 15F.3 -> COMPLETE (privacy + legal communication alignment) | Phase 15F.4 -> COMPLETE (trust layer + legal entity + testimonial intake) | Phase 15F.5 -> COMPLETE (manual testimonial manager + feedback request tool)
+Phase 13 -> COMPLETE | Phase 14 -> COMPLETE (14M closure) | Phase 15A -> COMPLETE (readiness audit) | Phase 15B -> COMPLETE (security hotfix) | Phase 15C -> COMPLETE (event inquiry calendar parity with stay picker) | Phase 15D -> COMPLETE (security cleanup + smoke test) | Phase 15E -> COMPLETE (local env parity + secret hygiene) | Phase 15F.1 -> COMPLETE (contact email consistency hotfix) | Phase 15F.2 -> COMPLETE (email identity hello standard) | Phase 15F.3 -> COMPLETE (privacy + legal communication alignment) | Phase 15F.4 -> COMPLETE (trust layer + legal entity + testimonial intake) | Phase 15F.5 -> COMPLETE (manual testimonial manager + feedback request tool) | Phase 15F.6 -> COMPLETE (completed reservations history + feedback follow-up)
 
 ---
 
@@ -587,6 +587,12 @@ Phase 15 — Production & growth readiness
   - manual feedback request tool on confirmed booking cards: prepared copy, clipboard, optional WhatsApp and mailto links — **no** automatic feedback emails, cron, or auto-publish
   - event inquiries use alternate line: “We hope your event experience with Oraya went well.”
   - no booking/pricing logic changes
+- 15F.6 Completed Reservations History + Feedback Follow-up [COMPLETE]
+  - completed/checked-out reservations separated visually (today > `check_out` ISO date; admin-only, no `status` DB change)
+  - feedback request tool emphasized in Completed / Checked-out (compact “Prep FB” shortcut + primary styling); de-emphasized copy in Confirmed / Upcoming expanded view
+  - stay vs event wording in history rows (`Event dates · …` vs stay range; proposal total when available)
+  - **Feedback request tracking:** not persisted anywhere today — UI shows “Not tracked in system (manual only)”. Optional future schema (e.g. `feedback_invite_sent_at` on `bookings` or settings log) was **not** applied pending explicit approval
+  - no automatic feedback emails; no schema changes in this phase
 
 ---
 

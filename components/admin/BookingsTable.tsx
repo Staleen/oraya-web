@@ -114,7 +114,7 @@ function getSectionTone(section: BookingSectionKey) {
       accent: "#6fcf8a",
       glow: "rgba(80,180,100,0.08)",
       title: "Confirmed",
-      subtitle: "Confirmed and upcoming stays",
+      subtitle: "Confirmed / Upcoming (active) and Completed / Checked-out (history — visual only, no DB status change)",
     };
   }
 
@@ -738,6 +738,36 @@ function dateOnlyGapDays(startExclusive: string, endInclusiveStart: string) {
   return endSerial - startSerial;
 }
 
+/** Phase 15F.6: today (UTC date) strictly after check_out → checked out for admin display only (no DB change). */
+function todayIsoDateOnly(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function isBookingCheckedOutAfter(booking: Pick<Booking, "check_out">): boolean {
+  const co = booking.check_out?.trim();
+  if (!co) return false;
+  return todayIsoDateOnly() > co;
+}
+
+function formatEventOrStayDateLine(booking: Booking): string {
+  if (isEventInquiryBooking(booking)) {
+    return `Event dates · ${fmt(booking.check_in)} → ${fmt(booking.check_out)}`;
+  }
+  return `${fmt(booking.check_in)} → ${fmt(booking.check_out)}`;
+}
+
+function getCompletedHistoryTotalDisplay(booking: Booking): string {
+  if (isEventInquiryBooking(booking)) {
+    const p = booking.proposal_total_amount;
+    if (typeof p === "number" && Number.isFinite(p)) {
+      const s = formatMoney(p);
+      if (s) return s;
+    }
+  }
+  const { estimatedTotalRaw } = getBookingRevenueData(booking);
+  return formatMoney(estimatedTotalRaw) ?? "—";
+}
+
 function getBookingGuestEmailForFeedback(booking: Booking, members: Member[]): string | null {
   const g = booking.guest_email?.trim();
   if (g) return g;
@@ -1328,6 +1358,11 @@ export default function BookingsTable({
     confirmedSort,
   );
 
+  const upcomingConfirmedBookings = confirmedBookings.filter((b) => !isBookingCheckedOutAfter(b));
+  const completedConfirmedBookings = [...confirmedBookings.filter((b) => isBookingCheckedOutAfter(b))].sort(
+    (a, b) => b.check_out.localeCompare(a.check_out) || b.created_at.localeCompare(a.created_at),
+  );
+
   const cancelledBookings = sortByNewest(
     visibleBookings.filter((booking) => booking.status === "cancelled" && !hiddenCancelledIds.includes(booking.id)),
   );
@@ -1350,6 +1385,8 @@ export default function BookingsTable({
       : activeSection === "confirmed"
         ? confirmedBookings
         : cancelledBookings;
+
+  const confirmedSectionHasRows = upcomingConfirmedBookings.length > 0 || completedConfirmedBookings.length > 0;
 
   function renderOperationalBadge(text: string, kind: "approval" | "soft" | "strict") {
     const tone = getOperationalBadgeStyle(kind);
@@ -1815,7 +1852,7 @@ export default function BookingsTable({
     );
   }
 
-  function renderGuestFeedbackSection(booking: Booking) {
+  function renderGuestFeedbackSection(booking: Booking, emphasis: "completed" | "upcoming" = "upcoming") {
     if (booking.status !== "confirmed") return null;
     const guestName = getBookingGuestDisplayName(booking, members);
     const eventInquiry = isEventInquiryBooking(booking);
@@ -1825,6 +1862,7 @@ export default function BookingsTable({
     const waUrl = phone ? buildWhatsAppFeedbackUrl(phone, message) : null;
     const mailtoUrl = email ? buildMailtoFeedbackUrl(email, message) : null;
     const open = feedbackPrepBookingId === booking.id;
+    const isPrimary = emphasis === "completed";
 
     async function copyFeedbackMessage() {
       try {
@@ -1836,11 +1874,15 @@ export default function BookingsTable({
       }
     }
 
+    const manualLine = eventInquiry
+      ? "Send manually after the event date."
+      : "Send manually after the guest has checked out.";
+
     return (
       <div
         style={{
-          border: "0.5px solid rgba(197,164,109,0.22)",
-          backgroundColor: "rgba(255,255,255,0.02)",
+          border: isPrimary ? "0.5px solid rgba(197,164,109,0.42)" : "0.5px solid rgba(197,164,109,0.16)",
+          backgroundColor: isPrimary ? "rgba(197,164,109,0.07)" : "rgba(255,255,255,0.02)",
           padding: "12px 14px",
           borderRadius: "8px",
           marginTop: "10px",
@@ -1849,8 +1891,13 @@ export default function BookingsTable({
         <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: GOLD, margin: "0 0 6px" }}>
           Feedback request (manual)
         </p>
+        <p style={{ fontFamily: LATO, fontSize: "11px", color: isPrimary ? "rgba(255,255,255,0.82)" : MUTED, margin: "0 0 6px", lineHeight: 1.55, fontWeight: isPrimary ? 500 : 400 }}>
+          {manualLine}
+        </p>
         <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: "0 0 10px", lineHeight: 1.55 }}>
-          Nothing is sent from Oraya automatically. Copy the message or open WhatsApp / email with the text filled in — you send when ready.
+          {isPrimary
+            ? "Nothing is sent from Oraya automatically. Copy the message or open WhatsApp / email with the text filled in — you send when ready."
+            : "Nothing sends automatically. Prefer preparing feedback from Completed / Checked-out once the stay or event has finished; you can still open the tool here if needed."}
         </p>
         <button
           type="button"
@@ -2827,7 +2874,11 @@ export default function BookingsTable({
     );
   }
 
-  function renderExpandedBookingDetails(booking: Booking, compactMode: boolean) {
+  function renderExpandedBookingDetails(
+    booking: Booking,
+    compactMode: boolean,
+    feedbackEmphasis: "completed" | "upcoming" = "upcoming",
+  ) {
     const isGuest = !booking.member_id;
     const memberInfo = getMember(booking);
     const displayName = isGuest ? booking.guest_name ?? "Guest" : memberInfo?.full_name ?? "Member";
@@ -4130,7 +4181,7 @@ export default function BookingsTable({
 
         {renderPaymentSection(booking)}
 
-        {renderGuestFeedbackSection(booking)}
+        {renderGuestFeedbackSection(booking, feedbackEmphasis)}
 
         {renderAddonRows(booking)}
 
@@ -4355,8 +4406,15 @@ export default function BookingsTable({
     );
   }
 
-  function renderCompactRow(booking: Booking, section: "confirmed" | "cancelled" | "pending") {
+  function renderCompactRow(
+    booking: Booking,
+    section: "confirmed" | "cancelled" | "pending",
+    opts?: { confirmedBand?: "upcoming" | "completed" },
+  ) {
     const expanded = expandedCompactId === booking.id;
+    const confirmedBand = opts?.confirmedBand;
+    const isCompletedBand = section === "confirmed" && confirmedBand === "completed";
+    const dateLine = section === "confirmed" ? formatEventOrStayDateLine(booking) : `${fmt(booking.check_in)} to ${fmt(booking.check_out)}`;
     const conflictHoldRow = section === "pending" && hasConfirmedOverlap(booking);
     const conflictHoldReason = conflictHoldRow
       ? getConfirmedConflicts(booking).some((c) => isEventInquiryBooking(c))
@@ -4368,6 +4426,8 @@ export default function BookingsTable({
     const memberInfo = getMember(booking);
     const displayName = isGuest ? booking.guest_name ?? "Guest" : memberInfo?.full_name ?? "Member";
     const hasDeadDayUpsell = getDeadDayUpsells(booking).length > 0;
+    const feedbackEmphasisForExpand: "completed" | "upcoming" =
+      section === "confirmed" && confirmedBand === "completed" ? "completed" : "upcoming";
 
     return (
       <div
@@ -4375,57 +4435,69 @@ export default function BookingsTable({
         style={{
           border: `0.5px solid ${BORDER}`,
           borderRadius: "16px",
-          backgroundColor: "rgba(255,255,255,0.02)",
+          backgroundColor: isCompletedBand ? "rgba(197,164,109,0.04)" : "rgba(255,255,255,0.02)",
           overflow: "hidden",
         }}
       >
-        <button
-          type="button"
-          onClick={() => setExpandedCompactId((prev) => (prev === booking.id ? null : booking.id))}
-          style={{
-            width: "100%",
-            display: "grid",
-            gridTemplateColumns: isMobile ? "1fr auto" : "minmax(0, 1.15fr) minmax(0, 0.9fr) auto auto",
-            gap: "12px",
-            alignItems: "center",
-            textAlign: "left",
-            border: "none",
-            backgroundColor: "transparent",
-            color: WHITE,
-            padding: isMobile ? "14px 16px" : "14px 18px",
-            cursor: "pointer",
-          }}
-        >
-          <div style={{ minWidth: 0 }}>
-            <p style={{ fontFamily: PLAYFAIR, fontSize: isMobile ? "1.18rem" : "1.35rem", color: WHITE, margin: "0 0 4px" }}>
-              {displayName}
-            </p>
-            <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
-              {booking.villa}
-            </p>
-          </div>
+        <div style={{ display: "flex", alignItems: "stretch" }}>
+          <button
+            type="button"
+            onClick={() => setExpandedCompactId((prev) => (prev === booking.id ? null : booking.id))}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              display: "grid",
+              gridTemplateColumns: isMobile ? "1fr auto" : "minmax(0, 1.15fr) minmax(0, 0.9fr) auto auto",
+              gap: "12px",
+              alignItems: "center",
+              textAlign: "left",
+              border: "none",
+              backgroundColor: "transparent",
+              color: WHITE,
+              padding: isMobile ? "14px 16px" : "14px 18px",
+              cursor: "pointer",
+            }}
+          >
+            <div style={{ minWidth: 0 }}>
+              <p style={{ fontFamily: PLAYFAIR, fontSize: isMobile ? "1.18rem" : "1.35rem", color: WHITE, margin: "0 0 4px" }}>
+                {displayName}
+              </p>
+              <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+                {booking.villa}
+              </p>
+              {isCompletedBand && (
+                <>
+                  <p style={{ fontFamily: LATO, fontSize: "10px", color: "rgba(255,255,255,0.55)", margin: "8px 0 0", lineHeight: 1.45 }}>
+                    {isEventInquiryBooking(booking) ? "Proposal / est. total" : "Est. total"} · {getCompletedHistoryTotalDisplay(booking)}
+                  </p>
+                  <p style={{ fontFamily: LATO, fontSize: "9px", color: MUTED, margin: "4px 0 0", lineHeight: 1.4 }}>
+                    Feedback · Not tracked in system (manual only)
+                  </p>
+                </>
+              )}
+            </div>
 
-          {!isMobile && (
-            <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, margin: 0, lineHeight: 1.5 }}>
-              {fmt(booking.check_in)} to {fmt(booking.check_out)}
-            </p>
-          )}
-
-          <div style={{ display: "grid", gap: "6px", justifyItems: isMobile ? "end" : "start" }}>
-            {isMobile && (
-              <p
-                style={{
-                  fontFamily: LATO,
-                  fontSize: "12px",
-                  color: MUTED,
-                  margin: 0,
-                  textAlign: "right",
-                  lineHeight: 1.5,
-                }}
-              >
-                {fmt(booking.check_in)} to {fmt(booking.check_out)}
+            {!isMobile && (
+              <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, margin: 0, lineHeight: 1.5 }}>
+                {dateLine}
               </p>
             )}
+
+            <div style={{ display: "grid", gap: "6px", justifyItems: isMobile ? "end" : "start" }}>
+              {isMobile && (
+                <p
+                  style={{
+                    fontFamily: LATO,
+                    fontSize: "12px",
+                    color: MUTED,
+                    margin: 0,
+                    textAlign: "right",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {dateLine}
+                </p>
+              )}
             <StatusBadge status={booking.status} />
             {section === "confirmed" && renderPaymentStatusBadge(booking)}
             {/* Phase 14A: pending-row payment + conflict badges */}
@@ -4538,21 +4610,57 @@ export default function BookingsTable({
             )}
           </div>
 
-          <span
-            style={{
-              color: accent,
-              fontFamily: LATO,
-              fontSize: "12px",
-              letterSpacing: "1.5px",
-              textTransform: "uppercase",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {expanded ? "Close" : "View"}
-          </span>
-        </button>
+              <span
+                style={{
+                  color: accent,
+                  fontFamily: LATO,
+                  fontSize: "12px",
+                  letterSpacing: "1.5px",
+                  textTransform: "uppercase",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {expanded ? "Close" : "View"}
+              </span>
+            </button>
+            {isCompletedBand && (
+              <button
+                type="button"
+                title="Prepare feedback request (opens details + message)"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setExpandedCompactId(booking.id);
+                  setFeedbackPrepBookingId(booking.id);
+                }}
+                style={{
+                  width: "52px",
+                  flexShrink: 0,
+                  alignSelf: "stretch",
+                  border: "none",
+                  borderLeft: `0.5px solid ${BORDER}`,
+                  backgroundColor: "rgba(197,164,109,0.14)",
+                  color: GOLD,
+                  fontFamily: LATO,
+                  fontSize: "9px",
+                  letterSpacing: "0.8px",
+                  lineHeight: 1.25,
+                  textTransform: "uppercase",
+                  cursor: "pointer",
+                  padding: "6px 4px",
+                }}
+              >
+                Prep
+                <br />
+                FB
+              </button>
+            )}
+          </div>
 
-        {expanded && <div style={{ padding: "0 12px 12px" }}>{renderExpandedBookingDetails(booking, true)}</div>}
+        {expanded && (
+          <div style={{ padding: "0 12px 12px" }}>
+            {renderExpandedBookingDetails(booking, true, feedbackEmphasisForExpand)}
+          </div>
+        )}
       </div>
     );
   }
@@ -4983,7 +5091,9 @@ export default function BookingsTable({
 
         {loading ? (
           renderBookingSkeletons()
-        ) : sectionBookings.length === 0 ? (
+        ) : activeSection === "confirmed" && !confirmedSectionHasRows ? (
+          <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: 0 }}>{sectionEmptyCopy[activeSection]}</p>
+        ) : activeSection !== "confirmed" && sectionBookings.length === 0 ? (
           <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: 0 }}>{sectionEmptyCopy[activeSection]}</p>
         ) : activeSection === "pending" ? (
           // Phase 14A + 14B: pending section split into Stay Requests / Event Inquiries / Conflict / On Hold.
@@ -5016,6 +5126,32 @@ export default function BookingsTable({
                   These requests conflict with the calendar (confirmed stays or event setup windows). Resolve manually — no automatic action will be taken.
                 </p>
                 {conflictHoldBookings.map((booking) => renderCompactRow(booking, "pending"))}
+              </div>
+            )}
+          </div>
+        ) : activeSection === "confirmed" ? (
+          <div style={{ display: "grid", gap: "20px" }}>
+            {upcomingConfirmedBookings.length > 0 && (
+              <div style={{ display: "grid", gap: "12px" }}>
+                <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "#6fcf8a", margin: 0 }}>
+                  Confirmed / Upcoming ({upcomingConfirmedBookings.length})
+                </p>
+                <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
+                  Today is on or before the window end date on the booking (check-out / event window end). Visual classification only — no database status change.
+                </p>
+                {upcomingConfirmedBookings.map((booking) => renderCompactRow(booking, "confirmed", { confirmedBand: "upcoming" }))}
+              </div>
+            )}
+            {completedConfirmedBookings.length > 0 && (
+              <div style={{ display: "grid", gap: "12px" }}>
+                <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+                  Completed / Checked-out ({completedConfirmedBookings.length})
+                </p>
+                <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
+                  Shown when today is after the booking check-out date (stays) or the event date window end as stored. Feedback follow-up is manual — prioritize{" "}
+                  <span style={{ color: "rgba(255,255,255,0.75)", fontWeight: 600 }}>Prepare feedback request</span> here; it remains available in expanded upcoming rows if needed.
+                </p>
+                {completedConfirmedBookings.map((booking) => renderCompactRow(booking, "confirmed", { confirmedBand: "completed" }))}
               </div>
             )}
           </div>
