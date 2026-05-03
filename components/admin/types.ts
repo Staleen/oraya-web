@@ -1,4 +1,11 @@
-import type { AddonCategory, AddonCutoffType, AddonEnforcementMode, AddonPricingType } from "@/lib/addon-operations";
+import type {
+  AddonAppliesTo,
+  AddonCategory,
+  AddonCutoffType,
+  AddonEnforcementMode,
+  AddonEventPricingUnit,
+  AddonPricingType,
+} from "@/lib/addon-operations";
 
 export interface BookingAddon {
   id:    string;
@@ -137,6 +144,13 @@ export interface Addon {
   recommended?: boolean;
   pricing_type?: AddonPricingType;
   percentage_value?: number | null;
+  applies_to?: AddonAppliesTo;
+  applicable_event_types?: string[];
+  quantity_enabled?: boolean;
+  unit_label?: string | null;
+  pricing_unit?: AddonEventPricingUnit | null;
+  min_quantity?: number | null;
+  max_quantity?: number | null;
 }
 
 export type AddonValidationLevel = "error" | "warning";

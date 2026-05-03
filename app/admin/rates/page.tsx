@@ -89,6 +89,13 @@ export default function AdminRatesPage() {
         requires_approval: false,
         category: "service",
         enforcement_mode: "soft",
+        applies_to: "stay",
+        applicable_event_types: [],
+        quantity_enabled: false,
+        unit_label: null,
+        pricing_unit: null,
+        min_quantity: null,
+        max_quantity: null,
       },
     ]));
     setAddonsSaved(false);
@@ -322,8 +329,11 @@ export default function AdminRatesPage() {
         <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: "#C5A46D", margin: "0 0 8px" }}>
           Add-ons
         </p>
-        <p style={{ fontFamily: LATO, fontSize: "12px", color: "#8a8070", margin: 0 }}>
+        <p style={{ fontFamily: LATO, fontSize: "12px", color: "#8a8070", margin: "0 0 6px" }}>
           Existing optional extras remain separate from base villa pricing and continue to use their current admin flow.
+        </p>
+        <p style={{ fontFamily: LATO, fontSize: "12px", color: "#8a8070", margin: 0 }}>
+          Event Services are managed here but pricing is not shown to guests until event quoting is enabled.
         </p>
       </div>
       {ratesLoading ? (

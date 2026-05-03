@@ -468,6 +468,13 @@ Phase 14 rules:
   - Admin UI plan prepared under the existing Rates / Add-ons area
   - No event pricing exposed
   - No schema/API changes applied
+- 14E Event Services Admin Foundation [COMPLETE]
+  - Add-on metadata extended for event services
+  - Admin add-ons manager separates Stay Add-ons and Event Services
+  - Event type applicability and quantity settings added
+  - Data stored in existing settings JSON
+  - No schema/API changes
+  - No guest event pricing exposure
 ---
 
 ## AGENT EXECUTION RULES

@@ -6,6 +6,8 @@ export type PreparationUnit = "hours" | "days";
 export type AddonEnforcementMode = "strict" | "soft" | "none";
 export type AddonTimingType = "early_checkin" | "late_checkout";
 export type AddonPricingType = "fixed" | "percentage";
+export type AddonAppliesTo = "stay" | "event" | "both";
+export type AddonEventPricingUnit = "fixed" | "per_guest" | "per_unit" | "per_hour" | "percentage";
 
 export interface AddonOperationalFields {
   preparation_time_hours?: number | null;
@@ -21,6 +23,13 @@ export interface AddonOperationalFields {
   pricing_type?: AddonPricingType;
   /** Phase 12E: percentage value (0–100) used when pricing_type is "percentage". Stored as metadata only. */
   percentage_value?: number | null;
+  applies_to?: AddonAppliesTo;
+  applicable_event_types?: string[];
+  quantity_enabled?: boolean;
+  unit_label?: string | null;
+  pricing_unit?: AddonEventPricingUnit | null;
+  min_quantity?: number | null;
+  max_quantity?: number | null;
 }
 
 export interface AddonOperationalSettingRow extends AddonOperationalFields {
@@ -29,6 +38,8 @@ export interface AddonOperationalSettingRow extends AddonOperationalFields {
 
 const VALID_CUTOFF_TYPES = new Set<AddonCutoffType>(["before_checkin", "before_booking"]);
 const VALID_ENFORCEMENT_MODES = new Set<AddonEnforcementMode>(["strict", "soft", "none"]);
+const VALID_APPLIES_TO = new Set<AddonAppliesTo>(["stay", "event", "both"]);
+const VALID_EVENT_PRICING_UNITS = new Set<AddonEventPricingUnit>(["fixed", "per_guest", "per_unit", "per_hour", "percentage"]);
 
 export const ADDON_CATEGORY_LABELS: Record<string, string> = {
   comfort: "Comfort",
@@ -50,10 +61,22 @@ export const ADDON_ENFORCEMENT_LABELS: Record<AddonEnforcementMode, string> = {
   none: "None",
 };
 
+export const ADDON_APPLIES_TO_LABELS: Record<AddonAppliesTo, string> = {
+  stay: "Stay",
+  event: "Event",
+  both: "Both",
+};
+
 export function getAddonEnforcementMode(
   mode: AddonEnforcementMode | null | undefined
 ): AddonEnforcementMode {
   return mode ?? "soft";
+}
+
+export function getAddonAppliesTo(
+  appliesTo: AddonAppliesTo | null | undefined
+): AddonAppliesTo {
+  return appliesTo ?? "stay";
 }
 
 export function derivePreparationUnit(hours: number | null | undefined): PreparationUnit {
@@ -145,6 +168,30 @@ function parseOperationalFields(value: unknown): AddonOperationalFields {
     typeof item.percentage_value === "number" && Number.isFinite(item.percentage_value)
       ? item.percentage_value
       : null;
+  const appliesTo =
+    typeof item.applies_to === "string" && VALID_APPLIES_TO.has(item.applies_to as AddonAppliesTo)
+      ? (item.applies_to as AddonAppliesTo)
+      : "stay";
+  const applicableEventTypes = Array.isArray(item.applicable_event_types)
+    ? item.applicable_event_types.filter((eventType): eventType is string => typeof eventType === "string" && eventType.trim().length > 0)
+    : [];
+  const quantityEnabled = item.quantity_enabled === true ? true : false;
+  const unitLabel =
+    typeof item.unit_label === "string" && item.unit_label.trim().length > 0
+      ? item.unit_label.trim()
+      : null;
+  const pricingUnit =
+    typeof item.pricing_unit === "string" && VALID_EVENT_PRICING_UNITS.has(item.pricing_unit as AddonEventPricingUnit)
+      ? (item.pricing_unit as AddonEventPricingUnit)
+      : null;
+  const minQuantity =
+    typeof item.min_quantity === "number" && Number.isFinite(item.min_quantity)
+      ? item.min_quantity
+      : null;
+  const maxQuantity =
+    typeof item.max_quantity === "number" && Number.isFinite(item.max_quantity)
+      ? item.max_quantity
+      : null;
 
   return {
     ...(preparationTimeHours !== null ? { preparation_time_hours: preparationTimeHours } : {}),
@@ -158,6 +205,13 @@ function parseOperationalFields(value: unknown): AddonOperationalFields {
     ...(recommended ? { recommended: true } : {}),
     ...(pricingType ? { pricing_type: pricingType } : {}),
     ...(percentageValue !== null ? { percentage_value: percentageValue } : {}),
+    ...(appliesTo !== "stay" ? { applies_to: appliesTo } : {}),
+    ...(applicableEventTypes.length > 0 ? { applicable_event_types: applicableEventTypes } : {}),
+    ...(quantityEnabled ? { quantity_enabled: true } : {}),
+    ...(unitLabel ? { unit_label: unitLabel } : {}),
+    ...(pricingUnit ? { pricing_unit: pricingUnit } : {}),
+    ...(minQuantity !== null ? { min_quantity: minQuantity } : {}),
+    ...(maxQuantity !== null ? { max_quantity: maxQuantity } : {}),
   };
 }
 

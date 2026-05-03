@@ -2,19 +2,23 @@
 import { useEffect, useRef, useState } from "react";
 import type { Addon, AddonValidationIssue } from "./types";
 import {
+  ADDON_APPLIES_TO_LABELS,
   ADDON_CATEGORY_LABELS,
   ADDON_ENFORCEMENT_LABELS,
   derivePreparationUnit,
+  getAddonAppliesTo,
   getAddonEnforcementMode,
   getPreparationAmount,
   normalizePreparationTime,
+  type AddonAppliesTo,
   type AddonCategory,
   type AddonEnforcementMode,
+  type AddonEventPricingUnit,
   type AddonPricingType,
   type PreparationUnit,
 } from "@/lib/addon-operations";
 import { KNOWN_VILLAS } from "@/lib/calendar/villas";
-import { GOLD, CHARCOAL, MIDNIGHT, MUTED, LATO, SURFACE, BORDER, fieldStyle } from "./theme";
+import { GOLD, CHARCOAL, MIDNIGHT, MUTED, LATO, SURFACE, BORDER, WHITE, fieldStyle } from "./theme";
 import { AddonIcon } from "@/components/addon-icon";
 
 const PRICING_MODELS: { value: Addon["pricing_model"]; label: string }[] = [
@@ -31,6 +35,26 @@ const CATEGORY_OPTIONS: Array<{ value: AddonCategory; label: string }> = [
   { value: "Experience", label: "Experience" },
   { value: "Essentials", label: "Essentials" },
 ];
+const APPLIES_TO_OPTIONS: Array<{ value: AddonAppliesTo; label: string }> = [
+  { value: "stay", label: ADDON_APPLIES_TO_LABELS.stay },
+  { value: "event", label: ADDON_APPLIES_TO_LABELS.event },
+  { value: "both", label: ADDON_APPLIES_TO_LABELS.both },
+];
+const EVENT_TYPE_OPTIONS = [
+  "Wedding / Engagement",
+  "Baptism / Family Gathering",
+  "Corporate Event",
+  "Private Celebration",
+  "Other",
+] as const;
+const EVENT_PRICING_UNIT_OPTIONS: Array<{ value: AddonEventPricingUnit; label: string }> = [
+  { value: "fixed", label: "Fixed" },
+  { value: "per_guest", label: "Per guest" },
+  { value: "per_unit", label: "Per unit" },
+  { value: "per_hour", label: "Per hour" },
+  { value: "percentage", label: "Percentage" },
+];
+const UNIT_LABEL_SUGGESTIONS = ["chairs", "tables", "staff", "hours", "cars", "package"];
 const ENFORCEMENT_OPTIONS: Array<{ value: AddonEnforcementMode; label: string; help: string }> = [
   { value: "strict", label: ADDON_ENFORCEMENT_LABELS.strict, help: "Disable if not enough preparation time" },
   { value: "soft", label: ADDON_ENFORCEMENT_LABELS.soft, help: "Allow with warning" },
@@ -44,6 +68,13 @@ function formatVillaApplicabilitySummary(addon: Addon) {
   const villaLabels = applicableVillas.map((villa) => villa.replace(/^Villa\s+/i, ""));
   if (villaLabels.length === 1) return `${villaLabels[0]} only`;
   return villaLabels.join(", ");
+}
+
+function formatAddonUsageSummary(addon: Addon) {
+  const appliesTo = getAddonAppliesTo(addon.applies_to);
+  if (appliesTo === "stay") return "Stay add-on";
+  if (appliesTo === "both") return "Stay + Event service";
+  return "Event service";
 }
 
 export default function AddonsEditor({
@@ -206,6 +237,237 @@ export default function AddonsEditor({
       ? Array.from(new Set([...current, villa]))
       : current.filter((item) => item !== villa);
     updateAddon(addon.id, { applicable_villas: next });
+  }
+
+  function toggleApplicableEventType(addon: Addon, eventType: string, checked: boolean) {
+    const current = addon.applicable_event_types ?? [];
+    const next = checked
+      ? Array.from(new Set([...current, eventType]))
+      : current.filter((item) => item !== eventType);
+    updateAddon(addon.id, { applicable_event_types: next });
+  }
+
+  function renderAppliesToField(addon: Addon, mobile: boolean) {
+    return (
+      <div style={{ display: "grid", gap: "6px" }}>
+        {fieldLabel("Applies to")}
+        <select
+          value={getAddonAppliesTo(addon.applies_to)}
+          onChange={e => updateAddon(addon.id, { applies_to: e.target.value as AddonAppliesTo })}
+          style={{
+            ...fieldStyle,
+            width: "100%",
+            boxSizing: "border-box",
+            padding: mobile ? "12px 14px" : "10px 12px",
+            fontSize: mobile ? "14px" : "13px",
+            cursor: "pointer",
+            minHeight: mobile ? "48px" : undefined,
+            opacity: addon.enabled ? 1 : 0.5,
+          }}
+          onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
+          onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+        >
+          {APPLIES_TO_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value} style={{ backgroundColor: MIDNIGHT }}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </div>
+    );
+  }
+
+  function renderEventServiceSection(addon: Addon, mobile: boolean) {
+    const appliesTo = getAddonAppliesTo(addon.applies_to);
+    if (appliesTo === "stay") return null;
+
+    const eventTypes = addon.applicable_event_types ?? [];
+    const quantityEnabled = addon.quantity_enabled === true;
+
+    return (
+      <div style={{ display: "grid", gap: "10px" }}>
+        {fieldLabel("Event service settings")}
+        <p style={{ fontFamily: LATO, fontSize: mobile ? "12px" : "11px", color: MUTED, lineHeight: 1.6, margin: 0 }}>
+          Event Services are managed here but pricing is not shown to guests until event quoting is enabled.
+        </p>
+        <div style={{ display: "grid", gap: "10px" }}>
+          <div style={{ display: "grid", gap: "8px" }}>
+            {fieldLabel("Applicable event types")}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: mobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
+                gap: "10px",
+              }}
+            >
+              {EVENT_TYPE_OPTIONS.map((eventType) => {
+                const checked = eventTypes.includes(eventType);
+                return (
+                  <label
+                    key={`${addon.id}-${eventType}`}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "10px",
+                      padding: mobile ? "12px 14px" : "10px 12px",
+                      border: `0.5px solid ${checked ? "rgba(197,164,109,0.38)" : "rgba(255,255,255,0.08)"}`,
+                      backgroundColor: checked ? "rgba(197,164,109,0.08)" : "rgba(255,255,255,0.02)",
+                      cursor: "pointer",
+                      minHeight: mobile ? "48px" : "42px",
+                      boxSizing: "border-box",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(event) => toggleApplicableEventType(addon, eventType, event.target.checked)}
+                      style={{
+                        accentColor: GOLD,
+                        width: mobile ? "18px" : "16px",
+                        height: mobile ? "18px" : "16px",
+                        cursor: "pointer",
+                        flexShrink: 0,
+                      }}
+                    />
+                    <span style={{ fontFamily: LATO, fontSize: mobile ? "13px" : "12px", color: WHITE, lineHeight: 1.4 }}>
+                      {eventType}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+            <p style={{ fontFamily: LATO, fontSize: mobile ? "12px" : "11px", color: MUTED, lineHeight: 1.6, margin: 0 }}>
+              Leave unselected to make this service available for all event types.
+            </p>
+          </div>
+
+          <label
+            style={{
+              display: "grid",
+              gap: "8px",
+              alignContent: "start",
+              fontFamily: LATO,
+              fontSize: mobile ? "12px" : "11px",
+              color: addon.enabled ? MUTED : "rgba(138,128,112,0.5)",
+              cursor: "pointer",
+            }}
+          >
+            {fieldLabel("Quantity support")}
+            <span style={{ display: "flex", alignItems: "center", gap: "10px", minHeight: mobile ? "48px" : "42px", padding: "0 2px" }}>
+              <input
+                type="checkbox"
+                checked={quantityEnabled}
+                onChange={e => updateAddon(addon.id, { quantity_enabled: e.target.checked })}
+                style={{
+                  accentColor: GOLD,
+                  width: mobile ? "18px" : "16px",
+                  height: mobile ? "18px" : "16px",
+                  cursor: "pointer",
+                  flexShrink: 0,
+                }}
+              />
+              <span>Allow quantity selection for this event service.</span>
+            </span>
+          </label>
+
+          <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "repeat(2, minmax(0, 1fr))", gap: "10px" }}>
+            <div style={{ display: "grid", gap: "6px" }}>
+              {fieldLabel("Pricing unit")}
+              <select
+                value={addon.pricing_unit ?? ""}
+                onChange={e => updateAddon(addon.id, { pricing_unit: e.target.value ? (e.target.value as AddonEventPricingUnit) : null })}
+                style={{
+                  ...fieldStyle,
+                  width: "100%",
+                  boxSizing: "border-box",
+                  padding: mobile ? "12px 14px" : "10px 12px",
+                  fontSize: mobile ? "14px" : "13px",
+                  cursor: "pointer",
+                  minHeight: mobile ? "48px" : undefined,
+                  opacity: addon.enabled ? 1 : 0.5,
+                }}
+                onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
+                onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+              >
+                <option value="" style={{ backgroundColor: MIDNIGHT }}>Select unit</option>
+                {EVENT_PRICING_UNIT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value} style={{ backgroundColor: MIDNIGHT }}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              {fieldLabel("Unit label")}
+              <input
+                list="addon-unit-label-options"
+                value={addon.unit_label ?? ""}
+                onChange={e => updateAddon(addon.id, { unit_label: e.target.value.trim() === "" ? null : e.target.value })}
+                placeholder="chairs, tables, staff..."
+                style={{
+                  ...fieldStyle,
+                  width: "100%",
+                  boxSizing: "border-box",
+                  padding: mobile ? "12px 14px" : "10px 12px",
+                  fontSize: mobile ? "14px" : "13px",
+                  minHeight: mobile ? "48px" : undefined,
+                  opacity: addon.enabled ? 1 : 0.5,
+                }}
+                onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
+                onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+              />
+            </div>
+          </div>
+
+          {quantityEnabled && (
+            <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "repeat(2, minmax(0, 1fr))", gap: "10px" }}>
+              <div style={{ display: "grid", gap: "6px" }}>
+                {fieldLabel("Min quantity")}
+                <input
+                  type="number"
+                  min={0}
+                  value={addon.min_quantity ?? ""}
+                  onChange={e => updateAddon(addon.id, { min_quantity: e.target.value === "" ? null : parseFloat(e.target.value) })}
+                  placeholder="Minimum"
+                  style={{
+                    ...fieldStyle,
+                    width: "100%",
+                    boxSizing: "border-box",
+                    padding: mobile ? "12px 14px" : "10px 12px",
+                    fontSize: mobile ? "14px" : "13px",
+                    minHeight: mobile ? "48px" : undefined,
+                    opacity: addon.enabled ? 1 : 0.5,
+                  }}
+                  onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
+                  onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+                />
+              </div>
+              <div style={{ display: "grid", gap: "6px" }}>
+                {fieldLabel("Max quantity")}
+                <input
+                  type="number"
+                  min={0}
+                  value={addon.max_quantity ?? ""}
+                  onChange={e => updateAddon(addon.id, { max_quantity: e.target.value === "" ? null : parseFloat(e.target.value) })}
+                  placeholder="Maximum"
+                  style={{
+                    ...fieldStyle,
+                    width: "100%",
+                    boxSizing: "border-box",
+                    padding: mobile ? "12px 14px" : "10px 12px",
+                    fontSize: mobile ? "14px" : "13px",
+                    minHeight: mobile ? "48px" : undefined,
+                    opacity: addon.enabled ? 1 : 0.5,
+                  }}
+                  onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
+                  onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
   }
 
   function renderVillaAssignmentSection(addon: Addon, mobile: boolean) {
@@ -405,6 +667,12 @@ export default function AddonsEditor({
   const expandedGridColumns = isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))";
   const operationsGridColumns = isMobile ? "1fr" : "minmax(0, 1.1fr) 110px minmax(0, 1.3fr) minmax(0, 1fr)";
   const editingAddon = expandedAddonId ? addons.find((addon) => addon.id === expandedAddonId) ?? null : null;
+  const stayAddons = addons.filter((addon) => getAddonAppliesTo(addon.applies_to) === "stay");
+  const eventServiceAddons = addons.filter((addon) => getAddonAppliesTo(addon.applies_to) !== "stay");
+  const addonSections = [
+    { key: "stay", title: "Stay Add-ons", subtitle: "Optional stay extras and operational add-ons.", items: stayAddons },
+    { key: "event", title: "Event Services", subtitle: "Service options for event inquiry workflows and future event quoting.", items: eventServiceAddons },
+  ];
   const mobileOverlayShell = {
     width: "100%",
     maxWidth: "100vw",
@@ -449,8 +717,23 @@ export default function AddonsEditor({
         </div>
       </div>
 
+      <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.6, margin: "0 0 14px" }}>
+        Event Services are managed here but pricing is not shown to guests until event quoting is enabled.
+      </p>
+
       <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-        {addons.map((addon) => {
+        {addonSections.map((section) => (
+          section.items.length > 0 ? (
+            <div key={section.key} style={{ display: "grid", gap: "10px" }}>
+              <div style={{ display: "grid", gap: "4px", paddingTop: section.key === "event" ? "8px" : 0 }}>
+                <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: section.key === "event" ? "#9db7d9" : GOLD, margin: 0 }}>
+                  {section.title}
+                </p>
+                <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+                  {section.subtitle}
+                </p>
+              </div>
+              {section.items.map((addon) => {
           const addonErrors = getAddonIssues(addon.id, "error");
           const addonWarnings = getAddonIssues(addon.id, "warning");
           const showErrors = validationAttempted && addonErrors.length > 0;
@@ -550,6 +833,9 @@ export default function AddonsEditor({
                         <span style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, display: "block", lineHeight: 1.3, wordBreak: "break-word", marginTop: "6px" }}>
                           {formatVillaApplicabilitySummary(addon)}
                         </span>
+                        <span style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, display: "block", lineHeight: 1.3, wordBreak: "break-word", marginTop: "6px" }}>
+                          {formatAddonUsageSummary(addon)}
+                        </span>
                       </div>
                     </div>
                   </>
@@ -601,6 +887,9 @@ export default function AddonsEditor({
                       </span>
                       <span style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginTop: "4px" }}>
                         {formatVillaApplicabilitySummary(addon)}
+                      </span>
+                      <span style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginTop: "4px" }}>
+                        {formatAddonUsageSummary(addon)}
                       </span>
                     </div>
 
@@ -739,6 +1028,7 @@ export default function AddonsEditor({
                   <div style={{ display: "grid", gap: "10px" }}>
                     {fieldLabel("Advanced details")}
                     <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1fr)", gap: "10px" }}>
+                      {renderAppliesToField(addon, false)}
                       <div style={{ display: "grid", gap: "6px" }}>
                         {fieldLabel("Category")}
                         <input
@@ -756,6 +1046,7 @@ export default function AddonsEditor({
                       {renderDescriptionField(addon, false)}
                     </div>
                     {renderVillaAssignmentSection(addon, false)}
+                    {renderEventServiceSection(addon, false)}
                   </div>
 
                   {(showErrors || addonWarnings.length > 0) && (
@@ -776,7 +1067,10 @@ export default function AddonsEditor({
               )}
             </div>
           );
-        })}
+              })}
+            </div>
+          ) : null
+        ))}
       </div>
 
       {isMobile && editingAddon && (
@@ -932,6 +1226,7 @@ export default function AddonsEditor({
               <div style={{ display: "grid", gap: "10px" }}>
                 {fieldLabel("Advanced details")}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "10px" }}>
+                  {renderAppliesToField(editingAddon, true)}
                   <div style={{ display: "grid", gap: "6px" }}>
                     {fieldLabel("Category")}
                     <input
@@ -949,6 +1244,7 @@ export default function AddonsEditor({
                   {renderDescriptionField(editingAddon, true)}
                 </div>
                 {renderVillaAssignmentSection(editingAddon, true)}
+                {renderEventServiceSection(editingAddon, true)}
               </div>
 
               {((validationAttempted && getAddonIssues(editingAddon.id, "error").length > 0) || getAddonIssues(editingAddon.id, "warning").length > 0) && (
@@ -1005,6 +1301,11 @@ export default function AddonsEditor({
       <datalist id="addon-category-options">
         {CATEGORY_OPTIONS.map((option) => (
           <option key={option.value} value={option.value} />
+        ))}
+      </datalist>
+      <datalist id="addon-unit-label-options">
+        {UNIT_LABEL_SUGGESTIONS.map((option) => (
+          <option key={option} value={option} />
         ))}
       </datalist>
     </div>
