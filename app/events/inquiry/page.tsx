@@ -13,6 +13,7 @@ import {
   type AddonOperationalFields,
 } from "@/lib/addon-operations";
 import { CANONICAL_EVENT_TYPES, normalizeEventType } from "@/lib/event-types";
+import { EVENT_SERVICE_GROUP_ORDER, EVENT_SERVICE_SEED_DEFINITIONS, findEventServiceSeedByLabel } from "@/lib/event-service-seed";
 import { supabase } from "@/lib/supabase";
 import { addDaysToDateOnly, rangesOverlap } from "@/lib/calendar/event-block";
 
@@ -32,20 +33,6 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // Old stored values (e.g. "Baptism / Family Gathering", "Wedding", "Birthday Party") are
 // handled by normalizeEventType() at the filtering and recommendation lookup sites.
 const EVENT_TYPES = CANONICAL_EVENT_TYPES;
-
-const FALLBACK_EVENT_SERVICE_DEFINITIONS = [
-  { label: "Basic seating setup", group: "Setup & Seating" },
-  { label: "Tables and chairs", group: "Setup & Seating" },
-  { label: "Umbrellas / shaded areas", group: "Setup & Seating" },
-  { label: "Catering / buffet setup", group: "Food & Hospitality" },
-  { label: "Service staff coordination", group: "Food & Hospitality" },
-  { label: "Decoration support", group: "Production & Atmosphere" },
-  { label: "AV / sound", group: "Production & Atmosphere" },
-  { label: "Lighting", group: "Production & Atmosphere" },
-  { label: "Music coordination", group: "Production & Atmosphere" },
-  { label: "Photography coordination", group: "Production & Atmosphere" },
-  { label: "Valet", group: "Arrival & Guest Flow" },
-] as const;
 
 // Keyed by canonical event type values only. normalizeEventType() is applied before lookup
 // so old stored values (e.g. "Baptism", "Wedding", "Birthday Party") resolve correctly.
@@ -87,14 +74,6 @@ const EVENT_RECOMMENDATIONS: Record<string, { guidance: string; recommended: str
     recommended: ["Basic seating setup", "Tables and chairs", "AV / sound", "Lighting", "Valet"],
   },
 };
-
-const EVENT_SERVICE_GROUP_ORDER = [
-  "Setup & Seating",
-  "Food & Hospitality",
-  "Production & Atmosphere",
-  "Arrival & Guest Flow",
-  "Requested Services",
-] as const;
 
 const DEFAULT_EVENT_SERVICE_MAX_QUANTITY = 250;
 
@@ -263,10 +242,8 @@ function getEventServiceUnitLabel(service: EventServiceOption): string | null {
 }
 
 function getEventServiceGroupTitle(service: EventServiceOption): string {
-  const fallbackMatch = FALLBACK_EVENT_SERVICE_DEFINITIONS.find(
-    (item) => item.label.toLowerCase() === service.label.toLowerCase()
-  );
-  if (fallbackMatch) return fallbackMatch.group;
+  const seedMatch = findEventServiceSeedByLabel(service.label);
+  if (seedMatch) return seedMatch.category;
   if (service.category?.trim()) {
     return service.category
       .trim()
@@ -569,20 +546,22 @@ function EventInquiryPageInner() {
 
   const fallbackEventServices = useMemo<EventServiceOption[]>(
     () =>
-      FALLBACK_EVENT_SERVICE_DEFINITIONS.map((service) => ({
+      EVENT_SERVICE_SEED_DEFINITIONS.map((service) => ({
         key: `fallback-${slugifyKey(service.label)}`,
         id: `fallback-${slugifyKey(service.label)}`,
         label: service.label,
         enabled: true,
         source: "fallback",
         applies_to: "event",
-        applicable_event_types: [],
+        applicable_event_types: [...service.applicable_event_types],
         quantity_enabled: false,
         unit_label: null,
         pricing_unit: null,
         min_quantity: null,
         max_quantity: null,
-        category: service.group,
+        category: service.category,
+        recommended: service.recommended,
+        display_order: service.display_order,
       })),
     []
   );
@@ -655,7 +634,7 @@ function EventInquiryPageInner() {
       return recommendation.recommended.some((label) => label.toLowerCase() === service.label.toLowerCase());
     });
     return { ...recommendation, recommendedServices };
-  }, [filteredEventServices, form.eventType]);
+  }, [filteredEventServices, form.eventType, hasManagedEventServices]);
   const serviceIntent = (() => {
     const count = selectedEventServices.length;
     if (count <= 2) return "Basic";
@@ -1605,4 +1584,3 @@ export default function EventInquiryPage() {
     </Suspense>
   );
 }
-

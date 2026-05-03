@@ -4,6 +4,7 @@ import AddonsEditor from "@/components/admin/AddonsEditor";
 import BasePricingEditor from "@/components/admin/BasePricingEditor";
 import { VILLA_BASE_PRICING_KEY, parseVillaPricingSetting, stringifyVillaPricingSetting, type VillaBasePricing } from "@/lib/admin-pricing";
 import { ADDON_OPERATIONAL_SETTINGS_KEY, mergeAddonsWithOperationalSettings, parseAddonOperationalSetting, stringifyAddonOperationalSetting } from "@/lib/addon-operations";
+import { EVENT_SERVICE_SEED_DEFINITIONS } from "@/lib/event-service-seed";
 import { validatePricing } from "@/lib/pricing/validation";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
 import { LATO } from "@/components/admin/theme";
@@ -19,31 +20,6 @@ function createAddonId() {
 }
 
 // ─── Event service seed data ──────────────────────────────────────────────────
-const SEED_EVENT_SERVICE_DEFS = [
-  { label: "Basic seating setup",        group: "Setup & Seating" },
-  { label: "Tables and chairs",          group: "Setup & Seating" },
-  { label: "Umbrellas / shaded areas",   group: "Setup & Seating" },
-  { label: "Catering / buffet setup",    group: "Food & Hospitality" },
-  { label: "Service staff coordination", group: "Food & Hospitality" },
-  { label: "Decoration support",         group: "Production & Atmosphere" },
-  { label: "AV / sound",                 group: "Production & Atmosphere" },
-  { label: "Lighting",                   group: "Production & Atmosphere" },
-  { label: "Music coordination",         group: "Production & Atmosphere" },
-  { label: "Photography coordination",   group: "Production & Atmosphere" },
-  { label: "Valet",                      group: "Arrival & Guest Flow" },
-] as const;
-
-// Labels that appear in at least one event type's recommendation list
-const SEED_RECOMMENDED_SET = new Set([
-  "Basic seating setup", "Tables and chairs", "Umbrellas / shaded areas",
-  "Catering / buffet setup", "Service staff coordination", "Decoration support",
-  "AV / sound", "Lighting", "Music coordination", "Valet",
-]);
-
-function makeStableEventServiceId(label: string): string {
-  return `event_svc_${label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "")}`;
-}
-
 export default function AdminRatesPage() {
   const { error, setError } = useAdminData();
   const [addons, setAddons] = useState<Addon[]>([]);
@@ -55,47 +31,41 @@ export default function AdminRatesPage() {
   const [pricingSaved, setPricingSaved] = useState(false);
   const [pricingValidationAttempted, setPricingValidationAttempted] = useState(false);
   const [ratesLoading, setRatesLoading] = useState(true);
-  const [seedingEventServices, setSeedingEventServices] = useState(false);
-  const [seedEventServicesDone, setSeedEventServicesDone] = useState(false);
+  const [syncingEventServices, setSyncingEventServices] = useState(false);
+  const [syncEventServicesDone, setSyncEventServicesDone] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
+  async function loadRatesPageData() {
+    setRatesLoading(true);
+    const [addonsResult, settingsResult] = await Promise.allSettled([
+      fetch("/api/addons", { cache: "no-store" }).then((r) => r.json()),
+      fetch("/api/admin/settings", adminApiFetchInit).then((r) => r.json()),
+    ]);
 
-    async function loadRatesPageData() {
-      const [addonsResult, settingsResult] = await Promise.allSettled([
-        fetch("/api/addons", { cache: "no-store" }).then((r) => r.json()),
-        fetch("/api/admin/settings", adminApiFetchInit).then((r) => r.json()),
-      ]);
-
-      if (cancelled) return;
-
-      if (addonsResult.status === "rejected") {
-        console.error("[admin] addons fetch error:", addonsResult.reason);
-      }
-
-      if (settingsResult.status === "rejected") {
-        console.error("[admin] pricing settings fetch error:", settingsResult.reason);
-        setRatesLoading(false);
-        return;
-      }
-
-      const rows = settingsResult.value.settings ?? [];
-      const pricingRow = rows.find((row: { key: string; value: string }) => row.key === VILLA_BASE_PRICING_KEY);
-      const addonOperationsRow = rows.find((row: { key: string; value: string }) => row.key === ADDON_OPERATIONAL_SETTINGS_KEY);
-      const operationalSettings = parseAddonOperationalSetting(addonOperationsRow?.value);
-      const addonRows = addonsResult.status === "fulfilled" && Array.isArray(addonsResult.value.addons)
-        ? addonsResult.value.addons
-        : [];
-
-      setVillaPricing(parseVillaPricingSetting(pricingRow?.value));
-      setAddons(mergeAddonsWithOperationalSettings(addonRows, operationalSettings));
-      setRatesLoading(false);
+    if (addonsResult.status === "rejected") {
+      console.error("[admin] addons fetch error:", addonsResult.reason);
     }
 
-    loadRatesPageData();
-    return () => {
-      cancelled = true;
-    };
+    if (settingsResult.status === "rejected") {
+      console.error("[admin] pricing settings fetch error:", settingsResult.reason);
+      setRatesLoading(false);
+      return;
+    }
+
+    const rows = settingsResult.value.settings ?? [];
+    const pricingRow = rows.find((row: { key: string; value: string }) => row.key === VILLA_BASE_PRICING_KEY);
+    const addonOperationsRow = rows.find((row: { key: string; value: string }) => row.key === ADDON_OPERATIONAL_SETTINGS_KEY);
+    const operationalSettings = parseAddonOperationalSetting(addonOperationsRow?.value);
+    const addonRows = addonsResult.status === "fulfilled" && Array.isArray(addonsResult.value.addons)
+      ? addonsResult.value.addons
+      : [];
+
+    setVillaPricing(parseVillaPricingSetting(pricingRow?.value));
+    setAddons(mergeAddonsWithOperationalSettings(addonRows, operationalSettings));
+    setRatesLoading(false);
+  }
+
+  useEffect(() => {
+    void loadRatesPageData();
   }, []);
 
   function updateAddon(id: string, patch: Partial<Addon>) {
@@ -166,82 +136,25 @@ export default function AdminRatesPage() {
     a.applies_to === "event" || a.applies_to === "both"
   ).length;
 
-  async function seedEventServices() {
-    setSeedingEventServices(true);
-    setSeedEventServicesDone(false);
+  async function syncEventServices() {
+    setSyncingEventServices(true);
+    setSyncEventServicesDone(false);
     setError("");
 
-    const existingIds = new Set(addons.map((a) => a.id));
-    const newSeedAddons: Addon[] = SEED_EVENT_SERVICE_DEFS
-      .filter((def) => !existingIds.has(makeStableEventServiceId(def.label)))
-      .map((def, idx) => ({
-        id: makeStableEventServiceId(def.label),
-        label: def.label,
-        currency: "USD",
-        price: 0,
-        pricing_model: "flat_fee" as const,
-        enabled: true,
-        preparation_time_hours: null,
-        cutoff_type: null,
-        requires_approval: false,
-        category: def.group,
-        enforcement_mode: "soft" as const,
-        applies_to: "event" as const,
-        applicable_event_types: [],
-        quantity_enabled: false,
-        unit_label: null,
-        pricing_unit: null,
-        min_quantity: null,
-        max_quantity: null,
-        recommended: SEED_RECOMMENDED_SET.has(def.label),
-        display_order: addons.length + idx,
-      }));
-
-    if (newSeedAddons.length === 0) {
-      setSeedingEventServices(false);
-      setSeedEventServicesDone(true);
-      setTimeout(() => setSeedEventServicesDone(false), 3000);
-      return;
-    }
-
-    const mergedAddons = [...addons, ...newSeedAddons];
-
-    const baseRes = await fetch("/api/admin/addons", {
+    const syncRes = await fetch("/api/admin/event-services/sync", {
       ...adminApiFetchInit,
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        addons: mergedAddons.map(({ id, label, enabled, currency, price, pricing_model }) => ({
-          id, label, enabled, currency, price, pricing_model,
-        })),
-      }),
     });
 
-    if (!baseRes.ok) {
-      setSeedingEventServices(false);
-      const d = await baseRes.json();
-      setError(d.error ?? "Failed to seed event services.");
-      return;
-    }
-
-    const opsRes = await fetch("/api/admin/settings", {
-      ...adminApiFetchInit,
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        key: ADDON_OPERATIONAL_SETTINGS_KEY,
-        value: stringifyAddonOperationalSetting(mergedAddons),
-      }),
-    });
-
-    setSeedingEventServices(false);
-    if (opsRes.ok) {
-      setAddons(mergedAddons);
-      setSeedEventServicesDone(true);
-      setTimeout(() => setSeedEventServicesDone(false), 3000);
+    setSyncingEventServices(false);
+    if (syncRes.ok) {
+      await loadRatesPageData();
+      setSyncEventServicesDone(true);
+      setTimeout(() => setSyncEventServicesDone(false), 3000);
     } else {
-      const d = await opsRes.json();
-      setError(d.error ?? "Failed to save event service settings.");
+      const d = await syncRes.json();
+      setError(d.error ?? "Failed to sync event services.");
     }
   }
 
@@ -477,27 +390,29 @@ export default function AdminRatesPage() {
         <p style={{ fontFamily: LATO, fontSize: "12px", color: "#8a8070", margin: "0 0 10px" }}>
           Event Services are managed here but pricing is not shown to guests until event quoting is enabled.
         </p>
-        {!ratesLoading && eventServiceCount === 0 && (
-          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
+        {!ratesLoading && (
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px", flexWrap: "wrap" }}>
             <button
-              onClick={seedEventServices}
-              disabled={seedingEventServices}
+              onClick={syncEventServices}
+              disabled={syncingEventServices}
               style={{
                 fontFamily: LATO, fontSize: "11px", letterSpacing: "1px",
-                textTransform: "uppercase", color: seedingEventServices ? "#8a8070" : "#C5A46D",
+                textTransform: "uppercase", color: syncingEventServices ? "#8a8070" : "#C5A46D",
                 background: "rgba(197,164,109,0.07)", border: "0.5px solid rgba(197,164,109,0.35)",
-                padding: "6px 14px", cursor: seedingEventServices ? "not-allowed" : "pointer",
+                padding: "6px 14px", cursor: syncingEventServices ? "not-allowed" : "pointer",
               }}
             >
-              {seedingEventServices ? "Seeding…" : "Seed default event services"}
+              {syncingEventServices ? "Syncing..." : "Sync Event Services"}
             </button>
-            {seedEventServicesDone && (
+            {syncEventServicesDone && (
               <span style={{ fontFamily: LATO, fontSize: "11px", color: "#7aad7a" }}>
-                Seeded successfully
+                Sync completed
               </span>
             )}
             <span style={{ fontFamily: LATO, fontSize: "11px", color: "#8a8070" }}>
-              No event services in database — click to import the 11 defaults.
+              {eventServiceCount === 0
+                ? `No managed event services detected. Sync will repair ${EVENT_SERVICE_SEED_DEFINITIONS.length} canonical services without duplicating rows.`
+                : "Sync repairs missing event-service metadata and inserts any missing canonical services without overwriting existing admin choices."}
             </span>
           </div>
         )}
