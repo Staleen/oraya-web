@@ -20,7 +20,13 @@ export default function RefundPage() {
       <p style={meta}>Last updated: 2026</p>
 
       <p style={body}>
-        We aim to keep cancellations simple and fair. The notes below describe the principles we follow — specific terms for your stay are confirmed by our team at the time of booking.
+        We aim to keep cancellations simple and fair. The notes below describe the principles we follow — specific terms for your stay are confirmed by our team when your booking moves from <strong>request</strong> to <strong>confirmed</strong>.
+      </p>
+      <p style={body}>
+        If you withdraw a <strong>pending request</strong> before Oraya has confirmed dates and requested payment, there is typically no deposit to refund; simply contact us at{" "}
+        <a href="mailto:hello@stayoraya.com" style={{ color: GOLD, textDecoration: "none" }}>hello@stayoraya.com</a>. Once a booking is confirmed and a deposit has been received, the principles below and any bespoke terms shared with you apply. Payment mechanics are described in our{" "}
+        <a href="/legal/payment" style={{ color: GOLD, textDecoration: "none" }}>Payment Policy</a>; general stay rules are in our{" "}
+        <a href="/legal/terms" style={{ color: GOLD, textDecoration: "none" }}>Terms &amp; Conditions</a>.
       </p>
 
       <h2 style={subheading}>Cancellation window</h2>

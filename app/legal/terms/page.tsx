@@ -26,13 +26,20 @@ export default function TermsPage() {
 
       <h2 style={subheading}>Booking is a request</h2>
       <p style={body}>
-        Submitting a booking on Oraya creates a request, not an instant confirmation. Our team reviews each request against availability and confirms the dates back to you. Oraya may accept or decline a request at its discretion.
+        Submitting a stay booking on Oraya creates a <strong>request</strong>, not an instant confirmation or automated checkout. Our team reviews each request against availability and operations, then confirms dates with you. Oraya may accept or decline a request at its discretion. A pending request does not guarantee that dates will be held until you receive confirmation and any requested deposit steps from us.
+      </p>
+
+      <h2 style={subheading}>Event inquiries and proposals</h2>
+      <p style={body}>
+        Event inquiries are reviewed individually. Oraya may respond with a <strong>custom written proposal</strong> (scope, pricing, and timing) rather than a standard villa checkout. An event is only confirmed when you and Oraya have agreed the proposal and any deposit or contract steps communicated by our team are complete.
       </p>
 
       <h2 style={subheading}>Confirmation and payment</h2>
       <p style={body}>
-        A reservation is considered secured only after Oraya confirms availability and the agreed deposit is received. Payment instructions are issued by our team after the booking is approved. See the{" "}
-        <a href="/legal/payment" style={{ color: GOLD, textDecoration: "none" }}>Payment Policy</a> for details.
+        A reservation is considered secured only after Oraya confirms availability and the agreed deposit is received. Payments are coordinated <strong>manually</strong> (for example Whish, bank transfer, or cash as described in our{" "}
+        <a href="/legal/payment" style={{ color: GOLD, textDecoration: "none" }}>Payment Policy</a>
+        {" "}) — there is no third-party payment processor completing the stay on your behalf at checkout. Cancellation and refund principles after confirmation are outlined in our{" "}
+        <a href="/legal/refund" style={{ color: GOLD, textDecoration: "none" }}>Cancellation &amp; Refund Policy</a>.
       </p>
 
       <h2 style={subheading}>Guest responsibilities</h2>

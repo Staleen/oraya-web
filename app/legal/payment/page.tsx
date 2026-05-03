@@ -23,6 +23,11 @@ export default function PaymentPage() {
       <p style={body}>
         Oraya handles every reservation directly. Our payment process is intentionally simple and reviewed by our team — there are no third-party booking intermediaries involved.
       </p>
+      <p style={body}>
+        A website submission is a <strong>booking request</strong> until we confirm availability and send you payment instructions. <strong>Confirmed</strong> stays and events are secured only after the agreed deposit (or full payment, if specified) is received using the methods below. For cancellation principles once you are confirmed, see our{" "}
+        <a href="/legal/refund" style={{ color: GOLD, textDecoration: "none" }}>Cancellation &amp; Refund Policy</a>; for stay and event rules, see{" "}
+        <a href="/legal/terms" style={{ color: GOLD, textDecoration: "none" }}>Terms &amp; Conditions</a>.
+      </p>
 
       <h2 style={subheading}>Accepted methods</h2>
       <ul style={list}>

@@ -1,6 +1,7 @@
 import { Resend } from "resend";
 import { LOGO_URL, SITE_URL } from "@/lib/brand";
 import { createActionToken } from "@/lib/booking-action-token";
+import { transactionalEmailFooterHtmlBlock, transactionalEmailFooterTextSuffix } from "@/lib/transactional-email-footer";
 
 const GOLD = "#C5A46D";
 const MIDNIGHT = "#1F2B38";
@@ -151,9 +152,7 @@ function renderShell(subject: string, eyebrow: string, heading: string, intro: s
           </tr>
           <tr>
             <td align="center" style="padding-top:32px;">
-              <p style="margin:0;font-size:11px;color:rgba(255,255,255,0.2);">
-                Oraya - Luxury Boutique Villas - Lebanon
-              </p>
+              ${transactionalEmailFooterHtmlBlock()}
             </td>
           </tr>
         </table>
@@ -382,7 +381,7 @@ async function sendPaymentEmail(
     "",
     `View your booking: ${viewUrl}`,
     "",
-    "Oraya - Luxury Boutique Villas - Lebanon",
+    ...transactionalEmailFooterTextSuffix(),
   ].join("\n");
 
   const { error } = await resend.emails.send({

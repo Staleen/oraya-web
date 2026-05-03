@@ -297,7 +297,7 @@ export default function Home() {
                   onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
                 >
-                  Book your stay
+                  Request a stay
                 </a>
                 <a
                   href="#villas"
@@ -649,8 +649,8 @@ export default function Home() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "2rem", textAlign: "left" }}>
             {[
               { title: "Direct booking, handled by Oraya", body: "Every reservation is reviewed and confirmed by our team — no third-party intermediaries." },
-              { title: "Secure booking confirmation",      body: "Your dates are reviewed against availability before any payment is requested." },
-              { title: "Personalized guest support",       body: "From arrival arrangements to add-on services, our team is reachable across your stay." },
+              { title: "Request first, then confirmation", body: "Submitting dates creates a booking request. We align availability and operations before inviting a deposit — there is no instant self-checkout without our confirmation." },
+              { title: "Personalized guest support",       body: "From arrival arrangements to add-on services, reach us at hello@stayoraya.com across your stay." },
             ].map((item) => (
               <div key={item.title} style={{ padding: "1.5rem", border: `0.5px solid rgba(197,164,109,0.2)`, backgroundColor: WHITE }}>
                 <p style={{ fontFamily: PLAYFAIR, fontSize: "16px", color: CHARCOAL, margin: "0 0 8px", lineHeight: 1.4 }}>
