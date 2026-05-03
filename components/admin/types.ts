@@ -120,6 +120,10 @@ export interface Booking {
   proposal_payment_methods?: string[] | null;
   proposal_sent_at?: string | null;
   proposal_responded_at?: string | null;
+  /** Phase 15F.7 — last admin-triggered feedback request email (cooldown + audit). */
+  feedback_requested_at?: string | null;
+  feedback_requested_channel?: string | null;
+  feedback_request_count?: number | null;
 }
 
 export interface Member {

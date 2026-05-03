@@ -15,6 +15,7 @@ import {
   buildStayFeedbackRequestMessage,
   buildWhatsAppFeedbackUrl,
 } from "@/lib/feedback-request-message";
+import { isFeedbackEmailCooldownActive } from "@/lib/booking-feedback-eligibility";
 
 type BookingSectionKey = "pending" | "confirmed" | "cancelled";
 type ConfirmedSortKey = "created_desc" | "created_asc" | "check_in_asc" | "check_in_desc";
@@ -798,6 +799,13 @@ function getBookingGuestDisplayName(booking: Booking, members: Member[]): string
   return "Guest";
 }
 
+/** Phase 15F.7 — compact completed-row line for feedback email audit. */
+function completedHistoryFeedbackLine(booking: Booking): string {
+  const when = formatDateTimeValue(booking.feedback_requested_at);
+  if (!when) return "Feedback · Not sent via system yet";
+  return `Feedback · Requested on ${when}`;
+}
+
 export default function BookingsTable({
   loading,
   filteredBookings: _filteredBookings,
@@ -831,10 +839,12 @@ export default function BookingsTable({
   updateStatus: (id: string, status: "confirmed" | "cancelled") => void;
   emailWarnings: Record<string, string>;
 }) {
-  const { bookings, setBookings, setError } = useAdminData();
+  const { bookings, setBookings, setError, loadData } = useAdminData();
   const [approvingAddonId, setApprovingAddonId] = useState<string | null>(null);
   const [feedbackPrepBookingId, setFeedbackPrepBookingId] = useState<string | null>(null);
   const [feedbackCopiedBookingId, setFeedbackCopiedBookingId] = useState<string | null>(null);
+  const [feedbackEmailModalBookingId, setFeedbackEmailModalBookingId] = useState<string | null>(null);
+  const [feedbackEmailSendingId, setFeedbackEmailSendingId] = useState<string | null>(null);
   const [expandedCompactId, setExpandedCompactId] = useState<string | null>(null);
   const [bulkActionBookingId, setBulkActionBookingId] = useState<string | null>(null);
   const [confirmedSort, setConfirmedSort] = useState<ConfirmedSortKey>("created_desc");
@@ -865,6 +875,37 @@ export default function BookingsTable({
     }
 
     throw new Error(data.error ?? "Failed to update add-on state.");
+  }
+
+  async function confirmSendFeedbackEmail() {
+    const id = feedbackEmailModalBookingId;
+    if (!id) return;
+    setFeedbackEmailSendingId(id);
+    setError("");
+    try {
+      const res = await fetch(`/api/admin/bookings/${id}/send-feedback`, {
+        ...adminApiFetchInit,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      let data: { error?: string; booking?: Booking } = {};
+      try {
+        data = (await res.json()) as { error?: string; booking?: Booking };
+      } catch {
+        data = {};
+      }
+      if (!res.ok) {
+        setError(typeof data.error === "string" ? data.error : "Could not send feedback email.");
+        return;
+      }
+      if (data.booking && typeof data.booking === "object" && data.booking.id) {
+        setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, ...data.booking } : b)));
+      }
+      await loadData(true);
+      setFeedbackEmailModalBookingId(null);
+    } finally {
+      setFeedbackEmailSendingId(null);
+    }
   }
 
   async function resolveAddon(bookingId: string, addonId: string, decision: "approve" | "decline") {
@@ -1863,6 +1904,14 @@ export default function BookingsTable({
     const mailtoUrl = email ? buildMailtoFeedbackUrl(email, message) : null;
     const open = feedbackPrepBookingId === booking.id;
     const isPrimary = emphasis === "completed";
+    const recipientEmail = getBookingGuestEmailForFeedback(booking, members);
+    const feedbackCooldown = isFeedbackEmailCooldownActive(booking.feedback_requested_at);
+    const feedbackSentAtLabel = formatDateTimeValue(booking.feedback_requested_at);
+    const hasPriorFeedbackEmail = Boolean(booking.feedback_requested_at);
+    const feedbackEmailSendDisabled =
+      !recipientEmail || feedbackCooldown || feedbackEmailSendingId === booking.id;
+    let feedbackEmailButtonLabel = "Send feedback request";
+    if (hasPriorFeedbackEmail && !feedbackCooldown) feedbackEmailButtonLabel = "Resend feedback request";
 
     async function copyFeedbackMessage() {
       try {
@@ -1888,6 +1937,72 @@ export default function BookingsTable({
           marginTop: "10px",
         }}
       >
+        {isPrimary ? (
+          <div
+            style={{
+              border: "0.5px solid rgba(111,207,138,0.22)",
+              backgroundColor: "rgba(80,180,100,0.06)",
+              padding: "12px 14px",
+              borderRadius: "8px",
+              marginBottom: "12px",
+            }}
+          >
+            <p
+              style={{
+                fontFamily: LATO,
+                fontSize: "10px",
+                letterSpacing: "1.5px",
+                textTransform: "uppercase",
+                color: "#7ddf9a",
+                margin: "0 0 8px",
+              }}
+            >
+              Feedback request email
+            </p>
+            {feedbackSentAtLabel ? (
+              <p style={{ fontFamily: LATO, fontSize: "11px", color: "rgba(255,255,255,0.82)", margin: "0 0 8px", lineHeight: 1.55 }}>
+                Feedback requested on {feedbackSentAtLabel}
+                {typeof booking.feedback_request_count === "number" && booking.feedback_request_count > 1
+                  ? ` · ${booking.feedback_request_count} sends logged`
+                  : ""}
+              </p>
+            ) : (
+              <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "0 0 8px", lineHeight: 1.55 }}>
+                Sends only after you confirm in the dialog — nothing is automatic.
+              </p>
+            )}
+            {feedbackCooldown ? (
+              <p style={{ fontFamily: LATO, fontSize: "11px", color: "#f0bd67", margin: "0 0 10px", lineHeight: 1.55 }}>
+                Feedback already requested recently. Wait for the 24-hour cooldown to resend.
+              </p>
+            ) : null}
+            {!recipientEmail ? (
+              <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "0 0 10px", lineHeight: 1.55 }}>
+                No guest email on file — add email or use the manual tools below.
+              </p>
+            ) : null}
+            <button
+              type="button"
+              disabled={feedbackEmailSendDisabled}
+              onClick={() => setFeedbackEmailModalBookingId(booking.id)}
+              style={{
+                fontFamily: LATO,
+                fontSize: "10px",
+                letterSpacing: "1.6px",
+                textTransform: "uppercase",
+                color: feedbackEmailSendDisabled ? MUTED : MIDNIGHT,
+                backgroundColor: feedbackEmailSendDisabled ? "rgba(255,255,255,0.06)" : "#6fcf8a",
+                border: feedbackEmailSendDisabled ? `0.5px solid ${BORDER}` : "none",
+                padding: "10px 16px",
+                borderRadius: "6px",
+                cursor: feedbackEmailSendDisabled ? "not-allowed" : "pointer",
+              }}
+            >
+              {feedbackEmailButtonLabel}
+            </button>
+          </div>
+        ) : null}
+
         <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: GOLD, margin: "0 0 6px" }}>
           Feedback request (manual)
         </p>
@@ -4471,7 +4586,7 @@ export default function BookingsTable({
                     {isEventInquiryBooking(booking) ? "Proposal / est. total" : "Est. total"} · {getCompletedHistoryTotalDisplay(booking)}
                   </p>
                   <p style={{ fontFamily: LATO, fontSize: "9px", color: MUTED, margin: "4px 0 0", lineHeight: 1.4 }}>
-                    Feedback · Not tracked in system (manual only)
+                    {completedHistoryFeedbackLine(booking)}
                   </p>
                 </>
               )}
@@ -4748,7 +4863,111 @@ export default function BookingsTable({
   }
 
   return (
-    <div style={{ display: "grid", gap: "1rem" }}>
+    <>
+      {feedbackEmailModalBookingId ? (() => {
+        const bookingForModal = bookings.find((b) => b.id === feedbackEmailModalBookingId);
+        if (!bookingForModal) return null;
+        const guestLabel = getBookingGuestDisplayName(bookingForModal, members);
+        const guestMail = getBookingGuestEmailForFeedback(bookingForModal, members);
+        const modalBusy = feedbackEmailSendingId === feedbackEmailModalBookingId;
+        return (
+          <div
+            role="presentation"
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 1400,
+              backgroundColor: "rgba(0,0,0,0.55)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "16px",
+            }}
+            onClick={() => {
+              if (!modalBusy) setFeedbackEmailModalBookingId(null);
+            }}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="feedback-email-confirm-title"
+              style={{
+                maxWidth: "420px",
+                width: "100%",
+                borderRadius: "14px",
+                border: `0.5px solid ${BORDER}`,
+                background: "linear-gradient(180deg, rgba(26,37,53,0.99) 0%, rgba(18,29,43,0.99) 100%)",
+                padding: isMobile ? "18px" : "22px",
+                boxShadow: "0 24px 60px rgba(0,0,0,0.35)",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p
+                id="feedback-email-confirm-title"
+                style={{ fontFamily: PLAYFAIR, fontSize: "1.35rem", color: WHITE, margin: "0 0 10px", lineHeight: 1.35 }}
+              >
+                Send feedback request to this guest?
+              </p>
+              <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: "0 0 6px", lineHeight: 1.55 }}>
+                {guestLabel}
+                {guestMail ? (
+                  <>
+                    {" "}
+                    · <span style={{ color: "rgba(255,255,255,0.78)" }}>{guestMail}</span>
+                  </>
+                ) : null}
+              </p>
+              <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "0 0 18px", lineHeight: 1.55 }}>
+                This sends one transactional email from Oraya Reservations. It is not automatic and does not publish testimonials.
+              </p>
+              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                <button
+                  type="button"
+                  disabled={modalBusy}
+                  onClick={() => setFeedbackEmailModalBookingId(null)}
+                  style={{
+                    fontFamily: LATO,
+                    fontSize: "11px",
+                    letterSpacing: "1.4px",
+                    textTransform: "uppercase",
+                    color: WHITE,
+                    backgroundColor: "transparent",
+                    border: `0.5px solid ${BORDER}`,
+                    padding: "10px 16px",
+                    borderRadius: "6px",
+                    cursor: modalBusy ? "not-allowed" : "pointer",
+                    opacity: modalBusy ? 0.6 : 1,
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={modalBusy || !guestMail}
+                  onClick={() => void confirmSendFeedbackEmail()}
+                  style={{
+                    fontFamily: LATO,
+                    fontSize: "11px",
+                    letterSpacing: "1.4px",
+                    textTransform: "uppercase",
+                    color: MIDNIGHT,
+                    backgroundColor: "#6fcf8a",
+                    border: "none",
+                    padding: "10px 16px",
+                    borderRadius: "6px",
+                    cursor: modalBusy || !guestMail ? "not-allowed" : "pointer",
+                    opacity: modalBusy || !guestMail ? 0.6 : 1,
+                  }}
+                >
+                  {modalBusy ? "Sending…" : "Send email"}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })() : null}
+
+      <div style={{ display: "grid", gap: "1rem" }}>
       <div
         style={{
           background: "linear-gradient(180deg, rgba(26,37,53,0.98) 0%, rgba(23,33,47,0.98) 100%)",
@@ -5148,8 +5367,8 @@ export default function BookingsTable({
                   Completed / Checked-out ({completedConfirmedBookings.length})
                 </p>
                 <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
-                  Shown when today is after the booking check-out date (stays) or the event date window end as stored. Feedback follow-up is manual — prioritize{" "}
-                  <span style={{ color: "rgba(255,255,255,0.75)", fontWeight: 600 }}>Prepare feedback request</span> here; it remains available in expanded upcoming rows if needed.
+                  Shown when today is after the booking window end on record. You can send a controlled feedback email from the expanded card (24-hour resend guard) or use{" "}
+                  <span style={{ color: "rgba(255,255,255,0.75)", fontWeight: 600 }}>Prepare feedback request</span> — nothing sends without your action.
                 </p>
                 {completedConfirmedBookings.map((booking) => renderCompactRow(booking, "confirmed", { confirmedBand: "completed" }))}
               </div>
@@ -5168,6 +5387,7 @@ export default function BookingsTable({
           {renderSectionTeaser("cancelled")}
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }
