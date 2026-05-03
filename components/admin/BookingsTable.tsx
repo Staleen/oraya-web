@@ -622,6 +622,12 @@ function isEventInquiryBooking(booking: Pick<Booking, "event_type" | "message">)
   return Boolean(booking.event_type) && typeof booking.message === "string" && booking.message.includes("[Event Inquiry]");
 }
 
+/** Advisory only: matches typical admin cancel email path when an address exists (auth email not available client-side for members). */
+function cancelFlowLikelySendsEmail(booking: Pick<Booking, "member_id" | "guest_email">, memberListEmail: string | null | undefined): boolean {
+  if (!booking.member_id) return Boolean(booking.guest_email?.trim());
+  return Boolean(memberListEmail?.trim());
+}
+
 // Phase 14L: build a copy-ready alternative-offer message for admin use.
 function buildAlternativeOfferMessage(
   guestName: string,
@@ -2649,6 +2655,26 @@ export default function BookingsTable({
     // Phase 14A: a pending booking that overlaps a confirmed booking cannot be confirmed without manual resolution.
     const confirmedConflicts = getConfirmedConflicts(booking);
     const conflictHold = booking.status === "pending" && confirmedConflicts.length > 0;
+    const confirmedHasEventBlocker = conflictHold && confirmedConflicts.some((c) => isEventInquiryBooking(c));
+    const confirmedHasStayBlocker = conflictHold && confirmedConflicts.some((c) => !isEventInquiryBooking(c));
+    const conflictPrimaryReason = !conflictHold
+      ? ""
+      : eventInquiry
+        ? confirmedHasEventBlocker && confirmedHasStayBlocker
+          ? "This event date conflicts with the calendar due to venue scheduling (including event setup windows) and overlapping stay dates."
+          : confirmedHasEventBlocker
+            ? "This event date conflicts with the calendar due to venue scheduling (including another event's setup window)."
+            : "This event date conflicts with existing stay dates on the calendar."
+        : confirmedHasEventBlocker && confirmedHasStayBlocker
+          ? "These stay dates overlap a confirmed stay and an event setup window from venue scheduling."
+          : confirmedHasEventBlocker
+            ? "These stay dates overlap an event setup window from venue scheduling."
+            : "These stay dates overlap a confirmed stay on the calendar.";
+    const cancelAdvisoryForConflictHold = conflictHold
+      ? cancelFlowLikelySendsEmail(booking, memberInfo?.email)
+        ? "Cancelling will notify the guest through the existing cancellation flow."
+        : "Cancelling changes the request status only. Contact the guest separately."
+      : "";
     const proposalAccepted = booking.proposal_status === "accepted";
     const canConfirm = booking.status === "pending" && !needsApproval && !conflictHold && (!eventInquiry || proposalAccepted);
     const canCancel = booking.status === "pending" || booking.status === "confirmed";
@@ -2988,7 +3014,24 @@ export default function BookingsTable({
               lineHeight: 1.2,
             }}
           >
-            {fmt(booking.check_in)} to {fmt(booking.check_out)}
+            {eventInquiry && (
+              <span
+                style={{
+                  display: "block",
+                  fontSize: "10px",
+                  fontWeight: 600,
+                  letterSpacing: "1.2px",
+                  textTransform: "uppercase",
+                  color: "#9db7d9",
+                  marginBottom: "6px",
+                }}
+              >
+                Event inquiry · requested event dates
+              </span>
+            )}
+            {eventInquiry
+              ? `${fmt(booking.check_in)} → ${fmt(booking.check_out)}`
+              : `${fmt(booking.check_in)} to ${fmt(booking.check_out)}`}
           </p>
         </div>
 
@@ -3076,7 +3119,7 @@ export default function BookingsTable({
           </div>
         )}
 
-        {/* Phase 14A: Conflict / On Hold warning — pending overlaps a confirmed booking */}
+        {/* Phase 14A + 14M: Conflict / On Hold — hierarchy: reason → alternatives → contact → manual cancel */}
         {conflictHold && (
           <div
             style={{
@@ -3091,20 +3134,30 @@ export default function BookingsTable({
             <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: "#e07070", margin: 0, fontWeight: 600 }}>
               Conflict / On Hold
             </p>
-            <p style={{ fontFamily: LATO, fontSize: "11px", color: "rgba(255,255,255,0.75)", margin: 0, lineHeight: 1.6 }}>
-              This request overlaps with a confirmed booking. Offer alternate dates or cancel manually.
+            {/* 1. Conflict reason */}
+            <p style={{ fontFamily: LATO, fontSize: "11px", color: "rgba(255,255,255,0.82)", margin: 0, lineHeight: 1.6 }}>
+              {conflictPrimaryReason}
+            </p>
+            <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
+              Resolve this request by offering alternate dates or cancelling it manually.
             </p>
             <div style={{ display: "grid", gap: "6px" }}>
               {confirmedConflicts.map((c) => (
                 <p key={c.id} style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
-                  Confirmed: {getBookingDisplayName(c)} · {fmt(c.check_in)} to {fmt(c.check_out)}
-                  {isEventInquiryBooking(c) && (
-                    <span style={{ color: "#e07070", marginLeft: "6px" }}>(blocked by event setup window)</span>
+                  {isEventInquiryBooking(c) ? (
+                    <>
+                      Confirmed event · venue scheduling · {getBookingDisplayName(c)} · setup window{" "}
+                      {fmt(addDaysToDateOnly(c.check_in, -1))} → {fmt(c.check_out)}
+                    </>
+                  ) : (
+                    <>
+                      Confirmed stay · {getBookingDisplayName(c)} · stay dates {fmt(c.check_in)} to {fmt(c.check_out)}
+                    </>
                   )}
                 </p>
               ))}
             </div>
-            {/* Phase 14K/14L: suggested alternatives with offer-prep actions */}
+            {/* 2. Suggested alternatives (Prepare offer lives here) */}
             {(() => {
               const suggestions = conflictSuggestionsMap.get(booking.id) ?? [];
               return (
@@ -3253,15 +3306,82 @@ export default function BookingsTable({
               );
             })()}
 
-            {booking.guest_phone && (
-              <a
-                href={`https://wa.me/${booking.guest_phone.replace(/[^0-9]/g, "")}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: "#7ecfcf", textDecoration: "none", borderBottom: "0.5px solid rgba(126,207,207,0.3)", paddingBottom: "2px", justifySelf: "start" }}
+            {/* 3. Contact guest */}
+            <div
+              style={{
+                borderTop: "0.5px solid rgba(224,112,112,0.18)",
+                paddingTop: "10px",
+                display: "grid",
+                gap: "6px",
+              }}
+            >
+              <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: "#e07070", margin: 0, fontWeight: 600 }}>
+                Contact guest
+              </p>
+              {booking.guest_phone ? (
+                <a
+                  href={`https://wa.me/${booking.guest_phone.replace(/[^0-9]/g, "")}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    fontFamily: LATO,
+                    fontSize: "10px",
+                    letterSpacing: "1.5px",
+                    textTransform: "uppercase",
+                    color: "#7ecfcf",
+                    textDecoration: "none",
+                    borderBottom: "0.5px solid rgba(126,207,207,0.3)",
+                    paddingBottom: "2px",
+                    justifySelf: "start",
+                  }}
+                >
+                  Open WhatsApp (no prefilled message) →
+                </a>
+              ) : (
+                <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+                  No phone on file — use email or your usual channel.
+                </p>
+              )}
+            </div>
+
+            {/* 4. Manual cancel */}
+            {canCancel && booking.status === "pending" && (
+              <div
+                style={{
+                  borderTop: "0.5px solid rgba(224,112,112,0.18)",
+                  paddingTop: "10px",
+                  display: "grid",
+                  gap: "8px",
+                }}
               >
-                Contact guest via WhatsApp →
-              </a>
+                <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: "#e07070", margin: 0, fontWeight: 600 }}>
+                  Manual cancellation
+                </p>
+                <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+                  {cancelAdvisoryForConflictHold}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => updateStatus(booking.id, "cancelled")}
+                  disabled={isUpdating}
+                  style={{
+                    fontFamily: LATO,
+                    fontSize: "11px",
+                    letterSpacing: "1.6px",
+                    textTransform: "uppercase",
+                    color: WHITE,
+                    backgroundColor: "transparent",
+                    border: "0.5px solid rgba(224,112,112,0.45)",
+                    padding: "12px 18px",
+                    cursor: isUpdating ? "not-allowed" : "pointer",
+                    justifySelf: "start",
+                    opacity: isUpdating ? 0.6 : 1,
+                    borderRadius: "6px",
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
             )}
           </div>
         )}
@@ -3913,8 +4033,8 @@ export default function BookingsTable({
             justifyContent: isMobile ? "stretch" : "flex-end",
           }}
         >
-          {/* Phase 13H.4: Cancel sits standalone on the left; primary actions group together on the right */}
-          {canCancel && (
+          {/* Phase 13H.4 + 14M: Cancel on the left except conflict/on-hold pending (Cancel lives inside conflict panel). */}
+          {canCancel && !(booking.status === "pending" && conflictHold) && (
             <button
               type="button"
               onClick={() => updateStatus(booking.id, "cancelled")}
@@ -4702,7 +4822,7 @@ export default function BookingsTable({
                   Conflict / On Hold ({conflictHoldBookings.length})
                 </p>
                 <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
-                  These pending requests overlap a confirmed booking. Offer alternate dates or cancel manually — no automatic action will be taken.
+                  These requests conflict with the calendar (confirmed stays or event setup windows). Resolve manually — no automatic action will be taken.
                 </p>
                 {conflictHoldBookings.map((booking) => renderCompactRow(booking, "pending"))}
               </div>

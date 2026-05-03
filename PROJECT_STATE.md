@@ -9,7 +9,7 @@ STOP and ask before proceeding.
 
 ## CURRENT PHASE
 
-Phase 13 -> COMPLETE | Phase 14 -> IN PROGRESS
+Phase 13 -> COMPLETE | Phase 14 -> COMPLETE (14M closure)
 
 ---
 
@@ -447,7 +447,7 @@ Phase 14 rules:
   - Pending cards compact by default with expandable details (reuses existing renderCompactRow pattern)
   - Full decision details preserved in expanded state
   - No schema/API changes
-- 14B Event System Separation + Blocking Audit [IN PROGRESS]
+- 14B Event System Separation + Blocking Audit [COMPLETE]
   - Event vs Stay classification added in admin (frontend-only via event_type + [Event Inquiry] marker)
   - Event Inquiries separated visually into their own admin pending group, distinct from Stay Requests
   - Event Inquiry compact-card badge with event_type label
@@ -528,6 +528,12 @@ Phase 14 rules:
   - `activeOfferKey` / `copiedOfferKey` state — one panel open at a time; toggling same button closes it
   - No auto-reschedule, no backend writes, no guest exposure
   - No schema/API changes
+- 14M Admin Conflict Decision Polish [COMPLETE]
+  - Conflict decision hierarchy clarified
+  - Compact reason labels preserved
+  - Cancel warning clarified
+  - Event/stay wording cleaned up
+  - No backend/API/schema changes
 ---
 
 ## AGENT EXECUTION RULES
