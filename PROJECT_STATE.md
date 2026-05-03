@@ -475,6 +475,13 @@ Phase 14 rules:
   - Data stored in existing settings JSON
   - No schema/API changes
   - No guest event pricing exposure
+- 14F Event Inquiry Service Selection [COMPLETE]
+  - `/events/inquiry` now loads admin-managed Event Services
+  - Event-type filtering implemented
+  - Quantity selection supported
+  - Selected services included in inquiry notes
+  - No event pricing exposed
+  - No schema/API changes
 ---
 
 ## AGENT EXECUTION RULES

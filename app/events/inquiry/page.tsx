@@ -1,10 +1,17 @@
 "use client";
-import { Suspense, useState, useEffect } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DayPicker } from "react-day-picker";
 import type { DateRange, Matcher } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 import OrayaEmblem from "@/components/OrayaEmblem";
+import {
+  ADDON_OPERATIONAL_SETTINGS_KEY,
+  getAddonAppliesTo,
+  mergeAddonsWithOperationalSettings,
+  parseAddonOperationalSetting,
+  type AddonOperationalFields,
+} from "@/lib/addon-operations";
 import { supabase } from "@/lib/supabase";
 
 // ─── Brand constants ──────────────────────────────────────────────────────────
@@ -26,19 +33,19 @@ const EVENT_TYPES: { value: string; label: string; description: string }[] = [
   { value: "Private Celebration",        label: "Private Celebration",        description: "Birthday, dinner, or private occasion with flexible add-ons and guest support." },
 ];
 
-const EVENT_SERVICES = [
-  "Basic seating setup",
-  "Tables and chairs",
-  "Umbrellas / shaded areas",
-  "Catering / buffet setup",
-  "Decoration support",
-  "AV / sound",
-  "Lighting",
-  "Music coordination",
-  "Photography coordination",
-  "Valet",
-  "Service staff coordination",
-];
+const FALLBACK_EVENT_SERVICE_DEFINITIONS = [
+  { label: "Basic seating setup", group: "Setup & Seating" },
+  { label: "Tables and chairs", group: "Setup & Seating" },
+  { label: "Umbrellas / shaded areas", group: "Setup & Seating" },
+  { label: "Catering / buffet setup", group: "Food & Hospitality" },
+  { label: "Service staff coordination", group: "Food & Hospitality" },
+  { label: "Decoration support", group: "Production & Atmosphere" },
+  { label: "AV / sound", group: "Production & Atmosphere" },
+  { label: "Lighting", group: "Production & Atmosphere" },
+  { label: "Music coordination", group: "Production & Atmosphere" },
+  { label: "Photography coordination", group: "Production & Atmosphere" },
+  { label: "Valet", group: "Arrival & Guest Flow" },
+] as const;
 
 const EVENT_RECOMMENDATIONS: Record<string, { guidance: string; recommended: string[] }> = {
   "Baptism / Family Gathering": {
@@ -59,24 +66,15 @@ const EVENT_RECOMMENDATIONS: Record<string, { guidance: string; recommended: str
   },
 };
 
-const EVENT_SERVICE_GROUPS: Array<{ title: string; services: string[] }> = [
-  {
-    title: "Setup & Seating",
-    services: ["Basic seating setup", "Tables and chairs", "Umbrellas / shaded areas"],
-  },
-  {
-    title: "Food & Hospitality",
-    services: ["Catering / buffet setup", "Service staff coordination"],
-  },
-  {
-    title: "Production & Atmosphere",
-    services: ["Decoration support", "AV / sound", "Lighting", "Music coordination", "Photography coordination"],
-  },
-  {
-    title: "Arrival & Guest Flow",
-    services: ["Valet"],
-  },
-];
+const EVENT_SERVICE_GROUP_ORDER = [
+  "Setup & Seating",
+  "Food & Hospitality",
+  "Production & Atmosphere",
+  "Arrival & Guest Flow",
+  "Requested Services",
+] as const;
+
+const DEFAULT_EVENT_SERVICE_MAX_QUANTITY = 250;
 
 const DIAL_CODES = [
   { flag: "🇱🇧", label: "Lebanon",       code: "+961" },
@@ -124,6 +122,22 @@ const labelStyle: React.CSSProperties = {
 // ─── Types ────────────────────────────────────────────────────────────────────
 type AuthStatus = "loading" | "member" | "none";
 interface ConfirmedRange { check_in: string; check_out: string; }
+interface PublicAddon {
+  id: string;
+  label: string;
+  enabled: boolean;
+  currency: string;
+  price: number | null;
+  pricing_model: "flat_fee" | "per_night" | "per_person_per_day" | "per_unit";
+}
+
+interface EventServiceOption extends AddonOperationalFields {
+  key: string;
+  id: string;
+  label: string;
+  enabled: boolean;
+  source: "managed" | "fallback";
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function toISO(d: Date): string {
@@ -164,6 +178,56 @@ function friendlyError(msg: string): string {
   if (msg.includes("unavailable"))
     return "Those dates are no longer available. Please choose different dates and try again.";
   return msg;
+}
+
+function slugifyKey(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+function getEventServiceMinQuantity(service: EventServiceOption): number {
+  if (typeof service.min_quantity === "number" && Number.isFinite(service.min_quantity) && service.min_quantity > 0) {
+    return Math.floor(service.min_quantity);
+  }
+  return 1;
+}
+
+function getEventServiceMaxQuantity(service: EventServiceOption): number {
+  const min = getEventServiceMinQuantity(service);
+  if (typeof service.max_quantity === "number" && Number.isFinite(service.max_quantity) && service.max_quantity >= min) {
+    return Math.floor(service.max_quantity);
+  }
+  return DEFAULT_EVENT_SERVICE_MAX_QUANTITY;
+}
+
+function getDefaultEventServiceQuantity(service: EventServiceOption): number {
+  return getEventServiceMinQuantity(service);
+}
+
+function getEventServiceUnitLabel(service: EventServiceOption): string | null {
+  return service.unit_label?.trim() ? service.unit_label.trim() : null;
+}
+
+function getEventServiceGroupTitle(service: EventServiceOption): string {
+  const fallbackMatch = FALLBACK_EVENT_SERVICE_DEFINITIONS.find(
+    (item) => item.label.toLowerCase() === service.label.toLowerCase()
+  );
+  if (fallbackMatch) return fallbackMatch.group;
+  if (service.category?.trim()) {
+    return service.category
+      .trim()
+      .split(/[\s_-]+/)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
+  }
+  return "Requested Services";
+}
+
+function formatSelectedEventService(service: EventServiceOption, quantity: number): string {
+  if (service.quantity_enabled) {
+    const unitLabel = getEventServiceUnitLabel(service) ?? "units";
+    return `${service.label} - ${quantity} ${unitLabel}`;
+  }
+  return `${service.label} - requested`;
 }
 
 // ─── Calendar CSS (dark-theme overrides) ──────────────────────────────────────
@@ -276,8 +340,9 @@ function EventInquiryPageInner() {
     message:        "",
   });
 
-  const [eventServices, setEventServices] = useState<string[]>([]);
-  const [dateRange,     setDateRange]     = useState<DateRange | undefined>();
+  const [managedEventServices, setManagedEventServices] = useState<EventServiceOption[]>([]);
+  const [selectedServiceQuantities, setSelectedServiceQuantities] = useState<Record<string, number>>({});
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
   const [guest, setGuest] = useState({
     fullName:    "",
@@ -303,6 +368,55 @@ function EventInquiryPageInner() {
         setAuthStatus("none");
       }
     });
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadEventServices() {
+      try {
+        const [addonsResponse, settingsResponse] = await Promise.all([
+          fetch("/api/addons", { cache: "no-store" }),
+          fetch(`/api/settings?key=${encodeURIComponent(ADDON_OPERATIONAL_SETTINGS_KEY)}`, { cache: "no-store" }),
+        ]);
+
+        const addonsJson = addonsResponse.ok ? await addonsResponse.json() : { addons: [] };
+        const settingsJson = settingsResponse.ok ? await settingsResponse.json() : { value: null };
+
+        const addons = Array.isArray(addonsJson.addons) ? (addonsJson.addons as PublicAddon[]) : [];
+        const operationalSettings = parseAddonOperationalSetting(
+          typeof settingsJson.value === "string" ? settingsJson.value : null
+        );
+
+        const merged = mergeAddonsWithOperationalSettings(addons, operationalSettings)
+          .filter((addon) => addon.enabled && ["event", "both"].includes(getAddonAppliesTo(addon.applies_to)))
+          .sort((left, right) => {
+            const leftOrder = typeof left.display_order === "number" ? left.display_order : Number.MAX_SAFE_INTEGER;
+            const rightOrder = typeof right.display_order === "number" ? right.display_order : Number.MAX_SAFE_INTEGER;
+            if (leftOrder !== rightOrder) return leftOrder - rightOrder;
+            return left.label.localeCompare(right.label);
+          })
+          .map((addon) => ({
+            ...addon,
+            key: addon.id,
+            source: "managed" as const,
+          }));
+
+        if (!cancelled) {
+          setManagedEventServices(merged);
+        }
+      } catch (loadError) {
+        console.error("[events] event services load error:", loadError);
+        if (!cancelled) {
+          setManagedEventServices([]);
+        }
+      }
+    }
+
+    void loadEventServices();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Reload availability whenever villa changes
@@ -336,19 +450,107 @@ function EventInquiryPageInner() {
     ...bookedRangeList,
   ];
 
-  const checkIn  = dateRange?.from ? toISO(dateRange.from) : "";
-  const checkOut = dateRange?.to   ? toISO(dateRange.to)   : "";
-  const nights   = nightCount(checkIn, checkOut);
-  const selectedEventRecommendation = form.eventType ? EVENT_RECOMMENDATIONS[form.eventType] : null;
+  const fallbackEventServices = useMemo<EventServiceOption[]>(
+    () =>
+      FALLBACK_EVENT_SERVICE_DEFINITIONS.map((service) => ({
+        key: `fallback-${slugifyKey(service.label)}`,
+        id: `fallback-${slugifyKey(service.label)}`,
+        label: service.label,
+        enabled: true,
+        source: "fallback",
+        applies_to: "event",
+        applicable_event_types: [],
+        quantity_enabled: false,
+        unit_label: null,
+        pricing_unit: null,
+        min_quantity: null,
+        max_quantity: null,
+        category: service.group,
+      })),
+    []
+  );
+
+  const hasManagedEventServices = managedEventServices.length > 0;
+  const eventServiceCatalog = hasManagedEventServices ? managedEventServices : fallbackEventServices;
+  const filteredEventServices = useMemo(
+    () =>
+      eventServiceCatalog.filter((service) => {
+        if (!hasManagedEventServices) return true;
+        const applicableEventTypes = service.applicable_event_types ?? [];
+        if (applicableEventTypes.length === 0) return true;
+        if (!form.eventType) return true;
+        return applicableEventTypes.includes(form.eventType);
+      }),
+    [eventServiceCatalog, form.eventType, hasManagedEventServices]
+  );
+
+  const groupedEventServices = useMemo(() => {
+    const grouped = new Map<string, EventServiceOption[]>();
+    for (const service of filteredEventServices) {
+      const title = getEventServiceGroupTitle(service);
+      const existing = grouped.get(title) ?? [];
+      existing.push(service);
+      grouped.set(title, existing);
+    }
+
+    return Array.from(grouped.entries())
+      .sort(([leftTitle], [rightTitle]) => {
+        const leftIndex = EVENT_SERVICE_GROUP_ORDER.indexOf(leftTitle as (typeof EVENT_SERVICE_GROUP_ORDER)[number]);
+        const rightIndex = EVENT_SERVICE_GROUP_ORDER.indexOf(rightTitle as (typeof EVENT_SERVICE_GROUP_ORDER)[number]);
+        const normalizedLeft = leftIndex === -1 ? Number.MAX_SAFE_INTEGER : leftIndex;
+        const normalizedRight = rightIndex === -1 ? Number.MAX_SAFE_INTEGER : rightIndex;
+        if (normalizedLeft !== normalizedRight) return normalizedLeft - normalizedRight;
+        return leftTitle.localeCompare(rightTitle);
+      })
+      .map(([title, services]) => ({ title, services }));
+  }, [filteredEventServices]);
+
+  const selectedEventServices = useMemo(() => {
+    const serviceLookup = new Map(eventServiceCatalog.map((service) => [service.key, service]));
+    return Object.entries(selectedServiceQuantities)
+      .map(([key, quantity]) => {
+        const service = serviceLookup.get(key);
+        if (!service) return null;
+        return { service, quantity };
+      })
+      .filter((entry): entry is { service: EventServiceOption; quantity: number } => entry !== null);
+  }, [eventServiceCatalog, selectedServiceQuantities]);
+
+  const checkIn = dateRange?.from ? toISO(dateRange.from) : "";
+  const checkOut = dateRange?.to ? toISO(dateRange.to) : "";
+  const nights = nightCount(checkIn, checkOut);
+  const selectedEventRecommendation = useMemo(() => {
+    if (!form.eventType) return null;
+    const recommendation = EVENT_RECOMMENDATIONS[form.eventType];
+    if (!recommendation) return null;
+    const recommendedServices = filteredEventServices.filter((service) =>
+      recommendation.recommended.some((label) => label.toLowerCase() === service.label.toLowerCase())
+    );
+    return { ...recommendation, recommendedServices };
+  }, [filteredEventServices, form.eventType]);
   const serviceIntent = (() => {
-    const count = eventServices.length;
+    const count = selectedEventServices.length;
     if (count <= 2) return "Basic";
     if (count >= 7) return "Premium";
     return "Full setup";
   })();
+  const selectedEventServiceSummaries = selectedEventServices.map(({ service, quantity }) =>
+    formatSelectedEventService(service, quantity)
+  );
 
   const guestEmail = guest.email.trim();
   const guestEmailInvalid = authStatus !== "member" && guestEmail.length > 0 && !EMAIL_RE.test(guestEmail);
+
+  useEffect(() => {
+    const visibleKeys = new Set(filteredEventServices.map((service) => service.key));
+    setSelectedServiceQuantities((previous) => {
+      const nextEntries = Object.entries(previous).filter(([key]) => visibleKeys.has(key));
+      if (nextEntries.length === Object.keys(previous).length) {
+        return previous;
+      }
+      return Object.fromEntries(nextEntries);
+    });
+  }, [filteredEventServices]);
 
   // ── Event handlers ────────────────────────────────────────────────────────
   function handleFormChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
@@ -381,14 +583,41 @@ function EventInquiryPageInner() {
     setDateRange(nextRange);
   }
 
-  function toggleService(service: string) {
-    setEventServices(prev =>
-      prev.includes(service) ? prev.filter(s => s !== service) : [...prev, service]
-    );
+  function toggleService(service: EventServiceOption) {
+    setSelectedServiceQuantities((previous) => {
+      if (service.key in previous) {
+        const { [service.key]: _removed, ...rest } = previous;
+        return rest;
+      }
+      return {
+        ...previous,
+        [service.key]: getDefaultEventServiceQuantity(service),
+      };
+    });
   }
 
-  function addRecommendedServices(services: string[]) {
-    setEventServices(prev => Array.from(new Set([...prev, ...services])));
+  function updateServiceQuantity(service: EventServiceOption, rawValue: string) {
+    const parsed = parseInt(rawValue, 10);
+    const min = getEventServiceMinQuantity(service);
+    const max = getEventServiceMaxQuantity(service);
+    const safeQuantity = Number.isFinite(parsed) ? Math.min(Math.max(parsed, min), max) : min;
+
+    setSelectedServiceQuantities((previous) => ({
+      ...previous,
+      [service.key]: safeQuantity,
+    }));
+  }
+
+  function addRecommendedServices(services: EventServiceOption[]) {
+    setSelectedServiceQuantities((previous) => {
+      const next = { ...previous };
+      for (const service of services) {
+        if (!(service.key in next)) {
+          next[service.key] = getDefaultEventServiceQuantity(service);
+        }
+      }
+      return next;
+    });
     setError("");
   }
 
@@ -447,7 +676,12 @@ function EventInquiryPageInner() {
       block.push(`Preferred Date(s): ${checkIn} → ${checkOut} (${nights} ${nights === 1 ? "night" : "nights"})`);
       if (form.dayVisitors)          block.push(`Expected Attendees: ${form.dayVisitors}`);
       if (form.sleepingGuests)       block.push(`Overnight Hosts: ${form.sleepingGuests}`);
-      if (eventServices.length > 0)  block.push(`Requested Services: ${eventServices.join(", ")}`);
+      if (selectedEventServiceSummaries.length > 0) {
+        block.push("Requested Event Services:");
+        for (const serviceSummary of selectedEventServiceSummaries) {
+          block.push(`- ${serviceSummary}`);
+        }
+      }
       block.push(`Service Intent: ${serviceIntent}`);
       block.push(`Notes: ${userNotes || "None"}`);
       const composedMessage = block.join("\n");
@@ -660,32 +894,34 @@ function EventInquiryPageInner() {
                         Recommended
                       </p>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                        {selectedEventRecommendation.recommended.map((service) => (
+                        {selectedEventRecommendation.recommendedServices.map((service) => (
                           <span
-                            key={service}
+                            key={service.key}
                             style={{
                               fontFamily: LATO,
                               fontSize: "11px",
-                              color: eventServices.includes(service) ? WHITE : "rgba(255,255,255,0.72)",
-                              border: `0.5px solid ${eventServices.includes(service) ? GOLD : "rgba(197,164,109,0.18)"}`,
-                              backgroundColor: eventServices.includes(service) ? "rgba(197,164,109,0.08)" : "rgba(255,255,255,0.02)",
+                              color: service.key in selectedServiceQuantities ? WHITE : "rgba(255,255,255,0.72)",
+                              border: `0.5px solid ${service.key in selectedServiceQuantities ? GOLD : "rgba(197,164,109,0.18)"}`,
+                              backgroundColor: service.key in selectedServiceQuantities ? "rgba(197,164,109,0.08)" : "rgba(255,255,255,0.02)",
                               padding: "7px 10px",
                             }}
                           >
-                            {service}
+                            {service.label}
                           </span>
                         ))}
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => addRecommendedServices(selectedEventRecommendation.recommended)}
-                      style={{ alignSelf: "flex-start", fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: CHARCOAL, backgroundColor: GOLD, border: "none", padding: "11px 18px", cursor: "pointer" }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
-                    >
-                      Add recommended services
-                    </button>
+                    {selectedEventRecommendation.recommendedServices.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => addRecommendedServices(selectedEventRecommendation.recommendedServices)}
+                        style={{ alignSelf: "flex-start", fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: CHARCOAL, backgroundColor: GOLD, border: "none", padding: "11px 18px", cursor: "pointer" }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
+                      >
+                        Add recommended services
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -799,89 +1035,114 @@ function EventInquiryPageInner() {
                 </p>
                 {selectedEventRecommendation && (
                   <p style={{ fontFamily: LATO, fontSize: "11px", color: "rgba(255,255,255,0.6)", margin: "0 0 16px", lineHeight: 1.6 }}>
-                    Recommended for {form.eventType}: {selectedEventRecommendation.recommended.join(", ")}.
+                    Recommended for {form.eventType}: {(selectedEventRecommendation.recommendedServices.length > 0
+                      ? selectedEventRecommendation.recommendedServices.map((service) => service.label)
+                      : selectedEventRecommendation.recommended
+                    ).join(", ")}.
                   </p>
                 )}
                 <div style={{ display: "flex", flexDirection: "column", gap: "18px", marginBottom: "16px" }}>
-                  {EVENT_SERVICE_GROUPS.map((group) => (
+                  {groupedEventServices.length > 0 ? groupedEventServices.map((group) => (
                     <div key={group.title}>
                       <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2.5px", textTransform: "uppercase", color: GOLD, margin: "0 0 10px" }}>
                         {group.title}
                       </p>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "8px" }}>
-                        {group.services.map(service => {
-                          const selected = eventServices.includes(service);
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "10px" }}>
+                        {group.services.map((service) => {
+                          const selected = service.key in selectedServiceQuantities;
+                          const quantity = selectedServiceQuantities[service.key] ?? getDefaultEventServiceQuantity(service);
+                          const unitLabel = getEventServiceUnitLabel(service);
+                          const minQuantity = getEventServiceMinQuantity(service);
+                          const maxQuantity = getEventServiceMaxQuantity(service);
+
                           return (
-                            <button
-                              key={`${group.title}-${service}`}
-                              type="button"
-                              onClick={() => toggleService(service)}
+                            <div
+                              key={service.key}
                               style={{
-                                display: "flex", alignItems: "center", gap: "10px",
-                                padding: "12px 14px", textAlign: "left",
                                 border: `0.5px solid ${selected ? GOLD : "rgba(197,164,109,0.18)"}`,
                                 backgroundColor: selected ? "rgba(197,164,109,0.08)" : "rgba(255,255,255,0.02)",
-                                cursor: "pointer",
-                                transition: "border-color 0.15s, background-color 0.15s",
+                                padding: "12px 14px",
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: "12px",
                               }}
                             >
-                              <div style={{
-                                width: "14px", height: "14px", flexShrink: 0,
-                                border: `1px solid ${selected ? GOLD : "rgba(197,164,109,0.3)"}`,
-                                backgroundColor: selected ? GOLD : "transparent",
-                                display: "flex", alignItems: "center", justifyContent: "center",
-                              }}>
-                                {selected && <span style={{ color: CHARCOAL, fontSize: "9px", fontWeight: 700, lineHeight: 1 }}>✓</span>}
-                              </div>
-                              <span style={{ fontFamily: LATO, fontSize: "12px", color: selected ? WHITE : "rgba(255,255,255,0.75)" }}>
-                                {service}
-                              </span>
-                            </button>
+                              <button
+                                type="button"
+                                onClick={() => toggleService(service)}
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "10px",
+                                  textAlign: "left",
+                                  backgroundColor: "transparent",
+                                  border: "none",
+                                  padding: 0,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                <div style={{
+                                  width: "14px", height: "14px", flexShrink: 0,
+                                  border: `1px solid ${selected ? GOLD : "rgba(197,164,109,0.3)"}`,
+                                  backgroundColor: selected ? GOLD : "transparent",
+                                  display: "flex", alignItems: "center", justifyContent: "center",
+                                }}>
+                                  {selected && <span style={{ color: CHARCOAL, fontSize: "9px", fontWeight: 700, lineHeight: 1 }}>✓</span>}
+                                </div>
+                                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                                  <span style={{ fontFamily: LATO, fontSize: "12px", color: selected ? WHITE : "rgba(255,255,255,0.75)" }}>
+                                    {service.label}
+                                  </span>
+                                  {service.quantity_enabled && (
+                                    <span style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, lineHeight: 1.5 }}>
+                                      Quantity supported{unitLabel ? ` - ${unitLabel}` : ""}
+                                    </span>
+                                  )}
+                                </div>
+                              </button>
+
+                              {selected && service.quantity_enabled && (
+                                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                                  <label style={{ ...labelStyle, marginBottom: 0 }}>
+                                    Quantity{unitLabel ? ` (${unitLabel})` : ""}
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min={minQuantity}
+                                    max={maxQuantity}
+                                    value={quantity}
+                                    onChange={(event) => updateServiceQuantity(service, event.target.value)}
+                                    onFocus={focusGold}
+                                    onBlur={blurGold}
+                                    style={{ ...inputStyle, padding: "12px 14px" }}
+                                  />
+                                  <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+                                    Requested quantity: {quantity} {unitLabel ?? "units"}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
                           );
                         })}
                       </div>
                     </div>
-                  ))}
-                </div>
-
-                <div style={{ display: "none" }} aria-hidden="true">
-                  {EVENT_SERVICES.map(service => {
-                    const selected = eventServices.includes(service);
-                    return (
-                      <button
-                        key={service}
-                        type="button"
-                        onClick={() => toggleService(service)}
-                        style={{
-                          display: "flex", alignItems: "center", gap: "10px",
-                          padding: "12px 14px", textAlign: "left",
-                          border: `0.5px solid ${selected ? GOLD : "rgba(197,164,109,0.18)"}`,
-                          backgroundColor: selected ? "rgba(197,164,109,0.08)" : "rgba(255,255,255,0.02)",
-                          cursor: "pointer",
-                          transition: "border-color 0.15s, background-color 0.15s",
-                        }}
-                      >
-                        <div style={{
-                          width: "14px", height: "14px", flexShrink: 0,
-                          border: `1px solid ${selected ? GOLD : "rgba(197,164,109,0.3)"}`,
-                          backgroundColor: selected ? GOLD : "transparent",
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                        }}>
-                          {selected && <span style={{ color: CHARCOAL, fontSize: "9px", fontWeight: 700, lineHeight: 1 }}>✓</span>}
-                        </div>
-                        <span style={{ fontFamily: LATO, fontSize: "12px", color: selected ? WHITE : "rgba(255,255,255,0.75)" }}>
-                          {service}
-                        </span>
-                      </button>
-                    );
-                  })}
+                  )) : (
+                    <div style={{ border: "0.5px solid rgba(197,164,109,0.18)", backgroundColor: "rgba(255,255,255,0.02)", padding: "16px 18px" }}>
+                      <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0, lineHeight: 1.6 }}>
+                        No event services are configured for this event type yet. Oraya will still review your requirements manually.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 
               {/* Inquiry-only copy */}
               <div style={{ border: "0.5px solid rgba(197,164,109,0.18)", backgroundColor: "rgba(197,164,109,0.04)", padding: "12px 16px" }}>
-                <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.6 }}>
+                <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "0 0 8px", lineHeight: 1.6 }}>
                   Oraya will review your event requirements and respond within 24 hours with availability, setup options, and a tailored proposal.
+                </p>
+                <p style={{ fontFamily: LATO, fontSize: "11px", color: "rgba(255,255,255,0.7)", margin: 0, lineHeight: 1.6 }}>
+                  Final event pricing is reviewed and quoted by Oraya.
                 </p>
               </div>
 
@@ -1070,11 +1331,11 @@ function EventInquiryPageInner() {
                     <p style={{ fontFamily: PLAYFAIR, fontSize: "18px", fontWeight: 400, color: WHITE, margin: "0 0 12px" }}>
                       Services Requested
                     </p>
-                    {eventServices.length > 0 ? (
+                    {selectedEventServiceSummaries.length > 0 ? (
                       <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                        {eventServices.map((service) => (
-                          <span key={service} style={{ fontFamily: LATO, fontSize: "11px", color: WHITE, border: "0.5px solid rgba(197,164,109,0.22)", backgroundColor: "rgba(197,164,109,0.05)", padding: "7px 10px" }}>
-                            {service}
+                        {selectedEventServiceSummaries.map((serviceSummary) => (
+                          <span key={serviceSummary} style={{ fontFamily: LATO, fontSize: "11px", color: WHITE, border: "0.5px solid rgba(197,164,109,0.22)", backgroundColor: "rgba(197,164,109,0.05)", padding: "7px 10px" }}>
+                            {serviceSummary}
                           </span>
                         ))}
                       </div>
@@ -1094,7 +1355,7 @@ function EventInquiryPageInner() {
                       ["Window",             `${nights} ${nights === 1 ? "night" : "nights"}`],
                       ["Expected attendees", form.dayVisitors],
                       ["Host overnight stay", form.sleepingGuests],
-                      ...(eventServices.length > 0 ? [["Requested services", eventServices.join(", ")]] : []),
+                      ...(selectedEventServiceSummaries.length > 0 ? [["Requested services", selectedEventServiceSummaries.join(", ")]] : []),
                       ...(form.message ? [["Notes", form.message]] : []),
                       ...(authStatus !== "member" ? [["Name", guest.fullName], ["Email", guest.email]] : []),
                     ] as [string, string][]
