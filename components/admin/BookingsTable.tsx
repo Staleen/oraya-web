@@ -6,7 +6,7 @@ import { AddonIcon } from "@/components/addon-icon";
 import { SkeletonBlock, SkeletonText } from "@/components/LoadingSkeleton";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
 import { BORDER, fieldStyle, fmt, GOLD, LATO, MIDNIGHT, MUTED, PLAYFAIR, WHITE } from "./theme";
-import { addDaysToDateOnly } from "@/lib/calendar/event-block";
+import { addDaysToDateOnly, getOperationalRange, rangesOverlap } from "@/lib/calendar/event-block";
 
 type BookingSectionKey = "pending" | "confirmed" | "cancelled";
 type ConfirmedSortKey = "created_desc" | "created_asc" | "check_in_asc" | "check_in_desc";
@@ -1161,7 +1161,8 @@ export default function BookingsTable({
     const pendingOnly = bookings.filter((b) => b.status === "pending");
     const confirmedOnly = bookings.filter((b) => b.status === "confirmed");
     for (const p of pendingOnly) {
-      const conflicts = confirmedOnly.filter((c) => c.villa === p.villa && bookingDateRangesOverlap(p, c));
+      const pRange = getOperationalRange(p);
+      const conflicts = confirmedOnly.filter((c) => c.villa === p.villa && rangesOverlap(pRange, getOperationalRange(c)));
       if (conflicts.length > 0) map.set(p.id, conflicts);
     }
     return map;
@@ -3045,6 +3046,9 @@ export default function BookingsTable({
               {confirmedConflicts.map((c) => (
                 <p key={c.id} style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
                   Confirmed: {getBookingDisplayName(c)} · {fmt(c.check_in)} to {fmt(c.check_out)}
+                  {isEventInquiryBooking(c) && (
+                    <span style={{ color: "#e07070", marginLeft: "6px" }}>(blocked by event setup window)</span>
+                  )}
                 </p>
               ))}
             </div>
