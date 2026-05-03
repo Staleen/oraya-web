@@ -1257,6 +1257,9 @@ function BookPageInner() {
       <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: "12px 0 0", lineHeight: 1.6 }}>
         This total is based on your selected dates, bedroom setup, and add-ons. Final confirmation is handled by Oraya.
       </p>
+      <p style={{ fontFamily: LATO, fontSize: "9px", color: "rgba(255,255,255,0.38)", margin: "10px 0 0", lineHeight: 1.5, letterSpacing: "0.02em" }}>
+        Each booking is manually reviewed to ensure availability and preparation quality.
+      </p>
       {selectedAddonQuoteCount > 0 && (
         <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: "8px 0 0", lineHeight: 1.6 }}>
           {selectedAddonQuoteCount} selected add-on{selectedAddonQuoteCount === 1 ? "" : "s"} with price on request are excluded from this estimate.
@@ -2342,6 +2345,9 @@ function BookPageInner() {
                 </p>
               )}
 
+              <p style={{ fontFamily: LATO, fontSize: "9px", color: "rgba(255,255,255,0.38)", margin: "0 0 10px", lineHeight: 1.5, textAlign: "center", letterSpacing: "0.02em" }}>
+                Each booking is manually reviewed to ensure availability and preparation quality.
+              </p>
               <div style={{ display: "flex", gap: "12px" }}>
                 <button onClick={goBack} disabled={loading}
                   style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", padding: "16px 24px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.5 : 1 }}

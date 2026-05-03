@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireAdminAuth } from "@/lib/admin-auth";
+import { parseTestimonialFeedbackLog, TESTIMONIAL_FEEDBACK_LOG_KEY } from "@/lib/testimonial-feedback-log";
 
 export const dynamic    = "force-dynamic";
 export const fetchCache = "force-no-store";  // prevent Next.js Data Cache on internal fetches
@@ -78,11 +79,24 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: calendarSourcesError.message }, { status: 500 });
   }
 
+  const { data: testimonialLogRow } = await supabaseAdmin
+    .from("settings")
+    .select("value")
+    .eq("key", TESTIMONIAL_FEEDBACK_LOG_KEY)
+    .maybeSingle();
+
+  const testimonial_feedback_log = parseTestimonialFeedbackLog(testimonialLogRow?.value ?? null);
+
   console.log(
     `[api/admin/data] returning ${bookings?.length ?? 0} bookings, ${membersWithEmail.length} members, ${calendarSources?.length ?? 0} calendar sources`
   );
   return NextResponse.json(
-    { bookings: bookings ?? [], members: membersWithEmail, calendar_sources: calendarSources ?? [] },
+    {
+      bookings: bookings ?? [],
+      members: membersWithEmail,
+      calendar_sources: calendarSources ?? [],
+      testimonial_feedback_log,
+    },
     { headers: { "Cache-Control": "no-store" } }
   );
 }

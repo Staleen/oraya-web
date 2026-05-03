@@ -75,6 +75,13 @@ function BookingConfirmedPageInner() {
           <span style={{ fontStyle: "italic" }}>has been received.</span>
         </h1>
 
+        <p style={{ fontFamily: LATO, fontSize: "13px", color: "rgba(255,255,255,0.78)", lineHeight: 1.75, margin: "0 0 10px", fontWeight: 300 }}>
+          Your request has been received and is being reviewed by the Oraya team.
+        </p>
+        <p style={{ fontFamily: LATO, fontSize: "13px", color: "rgba(255,255,255,0.78)", lineHeight: 1.75, margin: "0 0 1.25rem", fontWeight: 300 }}>
+          Confirmation and next steps will be sent to your email.
+        </p>
+
         <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, lineHeight: 1.8, marginBottom: "2.5rem" }}>
           Your booking is currently pending confirmation. We&apos;ll be in touch within 24 hours to confirm availability and arrange your stay.
         </p>

@@ -9,8 +9,10 @@ import {
 } from "@/lib/send-booking-payment-email";
 import { sendEventConfirmationEmail } from "@/lib/send-event-confirmation-email";
 import { sendEventProposalEmail } from "@/lib/send-event-proposal-email";
+import { sendGuestTestimonialRequestEmail } from "@/lib/send-guest-testimonial-request-email";
 import { appendPaymentReminderNote } from "@/lib/payment-reminders";
 import { findAvailabilityConflict } from "@/lib/calendar/availability";
+import { fetchTestimonialFeedbackLog, persistTestimonialFeedbackLog } from "@/lib/testimonial-feedback-log";
 
 function makeAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -68,6 +70,7 @@ export async function PATCH(
   const status = payload.status as unknown;
   const reminderRequested = payload.send_payment_reminder === true;
   const proposalSendRequested = payload.send_event_proposal === true;
+  const testimonialFeedbackRequested = payload.send_testimonial_feedback_request === true;
 
   const statusUpdateProvided = Object.prototype.hasOwnProperty.call(payload, "status");
   const paymentFieldNames = [
@@ -105,7 +108,14 @@ export async function PATCH(
     Object.prototype.hasOwnProperty.call(payload, field)
   );
 
-  if (!statusUpdateProvided && !paymentUpdateProvided && !proposalUpdateProvided && !reminderRequested && !proposalSendRequested) {
+  if (
+    !statusUpdateProvided &&
+    !paymentUpdateProvided &&
+    !proposalUpdateProvided &&
+    !reminderRequested &&
+    !proposalSendRequested &&
+    !testimonialFeedbackRequested
+  ) {
     return NextResponse.json({ error: "No booking updates provided." }, { status: 400 });
   }
 
@@ -164,6 +174,13 @@ export async function PATCH(
 
   if (proposalSendRequested && !isExistingEventInquiry) {
     return NextResponse.json({ error: "Event proposals are only available for event inquiries." }, { status: 400 });
+  }
+
+  if (testimonialFeedbackRequested && existingBooking.status !== "confirmed") {
+    return NextResponse.json(
+      { error: "Guest feedback emails can only be sent for confirmed bookings." },
+      { status: 400 }
+    );
   }
 
   if (status === "confirmed" && isExistingEventInquiry && existingBooking.proposal_status !== "accepted") {
@@ -636,5 +653,43 @@ export async function PATCH(
     }
   }
 
-  return NextResponse.json({ ok: true, booking: updated, email_sent: emailSent });
+  let testimonial_feedback_email_sent = false;
+  let testimonial_feedback_email_status: "sent" | "already_sent" | "skipped" = "skipped";
+
+  if (testimonialFeedbackRequested) {
+    try {
+      const { email: recipientEmail, name: recipientName } = await resolveRecipient(db, existingBooking);
+      if (!recipientEmail) {
+        return NextResponse.json(
+          { error: "No guest email on file — add guest email or link a member account before sending a feedback request." },
+          { status: 400 }
+        );
+      }
+
+      const log = await fetchTestimonialFeedbackLog(db);
+      if (log[bookingId]) {
+        testimonial_feedback_email_status = "already_sent";
+      } else {
+        await sendGuestTestimonialRequestEmail({ to: recipientEmail, guestName: recipientName });
+        log[bookingId] = new Date().toISOString();
+        await persistTestimonialFeedbackLog(db, log);
+        testimonial_feedback_email_sent = true;
+        testimonial_feedback_email_status = "sent";
+      }
+    } catch (testimonialErr) {
+      console.error("[api/admin/bookings] testimonial feedback email error:", testimonialErr);
+      return NextResponse.json(
+        { error: testimonialErr instanceof Error ? testimonialErr.message : "Could not send feedback request email." },
+        { status: 500 }
+      );
+    }
+  }
+
+  return NextResponse.json({
+    ok: true,
+    booking: updated,
+    email_sent: emailSent,
+    testimonial_feedback_email_sent,
+    testimonial_feedback_email_status,
+  });
 }

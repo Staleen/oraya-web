@@ -1549,6 +1549,10 @@ function EventInquiryPageInner() {
                 </p>
               )}
 
+              <p style={{ fontFamily: LATO, fontSize: "9px", color: "rgba(255,255,255,0.38)", margin: "0 0 10px", lineHeight: 1.5, textAlign: "center", letterSpacing: "0.02em" }}>
+                Each inquiry is manually reviewed to ensure availability and preparation quality.
+              </p>
+
               <div style={{ display: "flex", gap: "12px" }}>
                 <button onClick={goBack} disabled={loading}
                   style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", padding: "16px 24px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.5 : 1 }}>

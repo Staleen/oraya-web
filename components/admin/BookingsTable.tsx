@@ -732,6 +732,22 @@ function dateOnlyGapDays(startExclusive: string, endInclusiveStart: string) {
   return endSerial - startSerial;
 }
 
+function getBookingGuestEmailForFeedback(booking: Booking, members: Member[]): string | null {
+  const g = booking.guest_email?.trim();
+  if (g) return g;
+  if (booking.member_id) {
+    const m = members.find((x) => x.id === booking.member_id);
+    return m?.email?.trim() || null;
+  }
+  return null;
+}
+
+function isStayEndedByCheckoutDate(checkOut: string | null | undefined): boolean {
+  if (!checkOut || typeof checkOut !== "string") return false;
+  const today = new Date().toISOString().slice(0, 10);
+  return checkOut <= today;
+}
+
 export default function BookingsTable({
   loading,
   filteredBookings: _filteredBookings,
@@ -765,8 +781,9 @@ export default function BookingsTable({
   updateStatus: (id: string, status: "confirmed" | "cancelled") => void;
   emailWarnings: Record<string, string>;
 }) {
-  const { bookings, setBookings, setError } = useAdminData();
+  const { bookings, setBookings, setError, loadData, testimonialFeedbackLog, setTestimonialFeedbackLog } = useAdminData();
   const [approvingAddonId, setApprovingAddonId] = useState<string | null>(null);
+  const [testimonialSendingId, setTestimonialSendingId] = useState<string | null>(null);
   const [expandedCompactId, setExpandedCompactId] = useState<string | null>(null);
   const [bulkActionBookingId, setBulkActionBookingId] = useState<string | null>(null);
   const [confirmedSort, setConfirmedSort] = useState<ConfirmedSortKey>("created_desc");
@@ -797,6 +814,34 @@ export default function BookingsTable({
     }
 
     throw new Error(data.error ?? "Failed to update add-on state.");
+  }
+
+  async function sendTestimonialFeedbackRequest(bookingId: string) {
+    if (!confirm("Send a one-time email inviting the guest to share short feedback by reply? (No ratings form.)")) return;
+    setTestimonialSendingId(bookingId);
+    setError("");
+    try {
+      const res = await fetch(`/api/admin/bookings/${bookingId}`, {
+        ...adminApiFetchInit,
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ send_testimonial_feedback_request: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Failed to send feedback request.");
+        return;
+      }
+      if (data.testimonial_feedback_email_status === "already_sent") {
+        setError("A feedback invite was already sent for this booking.");
+      }
+      if (data.testimonial_feedback_email_status === "sent" && typeof data.booking?.id === "string") {
+        setTestimonialFeedbackLog((prev) => ({ ...prev, [bookingId]: new Date().toISOString() }));
+      }
+      await loadData(true);
+    } finally {
+      setTestimonialSendingId(null);
+    }
   }
 
   async function resolveAddon(bookingId: string, addonId: string, decision: "approve" | "decline") {
@@ -1773,6 +1818,71 @@ export default function BookingsTable({
         <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
           Approvals are saved to the booking record.
         </p>
+      </div>
+    );
+  }
+
+  function renderGuestFeedbackSection(booking: Booking) {
+    if (booking.status !== "confirmed") return null;
+    const email = getBookingGuestEmailForFeedback(booking, members);
+    const sentAt = testimonialFeedbackLog[booking.id];
+    const stayEnded = isStayEndedByCheckoutDate(booking.check_out);
+    const sending = testimonialSendingId === booking.id;
+
+    return (
+      <div
+        style={{
+          border: "0.5px solid rgba(197,164,109,0.22)",
+          backgroundColor: "rgba(255,255,255,0.02)",
+          padding: "12px 14px",
+          borderRadius: "8px",
+          marginTop: "10px",
+        }}
+      >
+        <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: GOLD, margin: "0 0 8px" }}>
+          Guest feedback
+        </p>
+        {!email ? (
+          <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
+            Add a guest email or link a member account to send a one-time reply-based feedback invite.
+          </p>
+        ) : sentAt ? (
+          <p style={{ fontFamily: LATO, fontSize: "11px", color: "#6fcf8a", margin: 0, lineHeight: 1.55 }}>
+            Feedback invite sent ({formatDateTimeValue(sentAt) || sentAt.slice(0, 10)}).
+          </p>
+        ) : (
+          <>
+            {stayEnded ? (
+              <p style={{ fontFamily: LATO, fontSize: "11px", color: "#d99644", margin: "0 0 10px", lineHeight: 1.55 }}>
+                Checkout date has passed — you can send a gentle, one-time email asking if they would like to share feedback (guest replies to hello@; nothing to fill in on the site).
+              </p>
+            ) : (
+              <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "0 0 10px", lineHeight: 1.55 }}>
+                Before checkout, only send if the stay is effectively finished. Otherwise wait until after departure.
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={() => void sendTestimonialFeedbackRequest(booking.id)}
+              disabled={sending}
+              style={{
+                fontFamily: LATO,
+                fontSize: "10px",
+                letterSpacing: "1.6px",
+                textTransform: "uppercase",
+                color: MIDNIGHT,
+                backgroundColor: GOLD,
+                border: "none",
+                padding: "10px 16px",
+                borderRadius: "6px",
+                cursor: sending ? "not-allowed" : "pointer",
+                opacity: sending ? 0.65 : 1,
+              }}
+            >
+              {sending ? "Sending…" : "Email feedback request"}
+            </button>
+          </>
+        )}
       </div>
     );
   }
@@ -3943,6 +4053,8 @@ export default function BookingsTable({
         })()}
 
         {renderPaymentSection(booking)}
+
+        {renderGuestFeedbackSection(booking)}
 
         {renderAddonRows(booking)}
 
