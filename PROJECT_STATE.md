@@ -408,6 +408,15 @@ Phase 13 — Real-world validation & stabilization:
   - No threshold-based scoring
   - No automation decisions
   - No backend/API/schema changes
+- 13Z Phase 13 Closure — Trust, Legal, Conversion Polish [COMPLETE]
+  - All 4 legal pages live (/legal/privacy, /legal/terms, /legal/refund, /legal/payment) with shared layout
+  - Trust layer implemented (homepage Why Oraya section + Guest Experiences placeholders)
+  - Guest experience placeholders added (no fake reviews)
+  - Payment trust clarified (Payment Policy page covers Whish/bank/cash + post-confirmation flow)
+  - Domain consistency fixed (hello@stayoraya.com everywhere; admin placeholder updated)
+  - Pricing disclaimer microlabel updated to comparison-aware copy
+  - No system logic changes
+  - Phase 13 fully complete
   - Admin-triggered payment reminder
   - Overdue escalation UI
   - Cron-ready reminder function prepared

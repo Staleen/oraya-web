@@ -123,7 +123,7 @@ export default function SettingsSections({
             type="text"
             value={notifEmails}
             onChange={(e) => setNotifEmails(e.target.value)}
-            placeholder="e.g. admin@oraya.com, ops@oraya.com"
+            placeholder="e.g. admin@stayoraya.com, ops@stayoraya.com"
             style={fieldStyle}
             onFocus={(e) => { e.currentTarget.style.borderColor = GOLD; }}
             onBlur={(e) => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}

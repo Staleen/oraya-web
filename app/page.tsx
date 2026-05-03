@@ -637,6 +637,58 @@ export default function Home() {
         </section>
       )}
 
+      {/* ── Phase 13Z: Trust Layer ── */}
+      <section style={{ backgroundColor: BEIGELIGHT, padding: "5rem 3rem" }}>
+        <div style={{ maxWidth: "1100px", margin: "0 auto", textAlign: "center" }}>
+          <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, marginBottom: "1rem" }}>
+            Why Oraya
+          </p>
+          <h2 style={{ fontFamily: PLAYFAIR, fontSize: "32px", color: CHARCOAL, fontWeight: 400, marginBottom: "3rem", lineHeight: 1.2 }}>
+            Booked directly. Handled with care.
+          </h2>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "2rem", textAlign: "left" }}>
+            {[
+              { title: "Direct booking, handled by Oraya", body: "Every reservation is reviewed and confirmed by our team — no third-party intermediaries." },
+              { title: "Secure booking confirmation",      body: "Your dates are reviewed against availability before any payment is requested." },
+              { title: "Personalized guest support",       body: "From arrival arrangements to add-on services, our team is reachable across your stay." },
+            ].map((item) => (
+              <div key={item.title} style={{ padding: "1.5rem", border: `0.5px solid rgba(197,164,109,0.2)`, backgroundColor: WHITE }}>
+                <p style={{ fontFamily: PLAYFAIR, fontSize: "16px", color: CHARCOAL, margin: "0 0 8px", lineHeight: 1.4 }}>
+                  {item.title}
+                </p>
+                <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0, lineHeight: 1.7, fontWeight: 300 }}>
+                  {item.body}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Phase 13Z: Guest Experiences placeholder (no fake reviews) ── */}
+      <section style={{ backgroundColor: WHITE, padding: "5rem 3rem", borderTop: `0.5px solid rgba(197,164,109,0.2)` }}>
+        <div style={{ maxWidth: "900px", margin: "0 auto", textAlign: "center" }}>
+          <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, marginBottom: "1rem" }}>
+            Guest Experiences
+          </p>
+          <h2 style={{ fontFamily: PLAYFAIR, fontSize: "28px", color: CHARCOAL, fontWeight: 400, marginBottom: "1.5rem", lineHeight: 1.2 }}>
+            What guests are saying
+          </h2>
+          <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, lineHeight: 1.8, marginBottom: "2.5rem", maxWidth: "560px", marginLeft: "auto", marginRight: "auto" }}>
+            Verified guest reviews coming soon. We&apos;re collecting feedback from recent stays and will share their words here.
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "1.25rem", textAlign: "left" }}>
+            {[1, 2, 3].map((i) => (
+              <div key={i} style={{ padding: "1.5rem", border: `0.5px dashed rgba(197,164,109,0.2)`, backgroundColor: BEIGELIGHT, minHeight: "140px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, fontStyle: "italic", textAlign: "center", lineHeight: 1.6 }}>
+                  Guest testimonial placeholder
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ── Social Strip ── */}
       <div className="text-center" style={{ backgroundColor: CHARCOAL, padding: "3rem" }}>
         <p
@@ -664,8 +716,8 @@ export default function Home() {
       {/* ── Footer ── */}
       <footer style={{ backgroundColor: CHARCOAL, padding: "4.5rem 3rem 2rem", borderTop: "0.5px solid rgba(255,255,255,0.05)" }}>
         <div
-          className="max-w-[1100px] mx-auto grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_1fr]"
-          style={{ gap: "3rem", marginBottom: "3rem" }}
+          className="max-w-[1100px] mx-auto grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_1fr_1fr]"
+          style={{ gap: "2.5rem", marginBottom: "3rem" }}
         >
           <div>
             <div style={{ width: "120px", marginBottom: "1.25rem" }}>
@@ -679,7 +731,8 @@ export default function Home() {
           {[
             { title: "Explore",  links: [{ label: "Villa Mechmech", href: "/villas/mechmech" }, { label: "Villa Byblos", href: "/villas/byblos" }, { label: "Gallery", href: "#" }, { label: "Events", href: "/events/inquiry" }] },
             { title: "Members",  links: [{ label: "Join Oraya", href: "/join" }, { label: "Sign in", href: "/login" }, { label: "My bookings", href: "#" }, { label: "My profile", href: "#" }] },
-            { title: "Contact",  links: [{ label: "hello@oraya.com", href: "mailto:hello@oraya.com" }, { label: "WhatsApp", href: "#" }, { label: "Instagram", href: "#" }, { label: "Lebanon", href: "#" }] },
+            { title: "Legal",    links: [{ label: "Privacy Policy", href: "/legal/privacy" }, { label: "Terms & Conditions", href: "/legal/terms" }, { label: "Cancellation & Refund", href: "/legal/refund" }, { label: "Payment Policy", href: "/legal/payment" }] },
+            { title: "Contact",  links: [{ label: "hello@stayoraya.com", href: "mailto:hello@stayoraya.com" }, { label: "WhatsApp", href: "#" }, { label: "Instagram", href: "#" }, { label: "Lebanon", href: "#" }] },
           ].map(({ title, links }) => (
             <div key={title}>
               <p

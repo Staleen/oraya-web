@@ -28,12 +28,21 @@ export default function SiteFooter() {
       ],
     },
     {
+      title: "Legal",
+      links: [
+        { label: "Privacy Policy",       href: "/legal/privacy" },
+        { label: "Terms & Conditions",   href: "/legal/terms" },
+        { label: "Cancellation & Refund",href: "/legal/refund" },
+        { label: "Payment Policy",       href: "/legal/payment" },
+      ],
+    },
+    {
       title: "Contact",
       links: [
-        { label: "hello@oraya.com", href: "mailto:hello@oraya.com" },
-        { label: "WhatsApp",        href: "#" },
-        { label: "Instagram",       href: "#" },
-        { label: "Lebanon",         href: "#" },
+        { label: "hello@stayoraya.com", href: "mailto:hello@stayoraya.com" },
+        { label: "WhatsApp",            href: "#" },
+        { label: "Instagram",           href: "#" },
+        { label: "Lebanon",             href: "#" },
       ],
     },
   ];
@@ -62,7 +71,7 @@ export default function SiteFooter() {
 
       {/* Footer */}
       <footer style={{ backgroundColor: CHARCOAL, padding: "4.5rem 3rem 2rem", borderTop: "0.5px solid rgba(255,255,255,0.05)" }}>
-        <div style={{ maxWidth: "1100px", margin: "0 auto", display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: "3rem", marginBottom: "3rem" }}>
+        <div style={{ maxWidth: "1100px", margin: "0 auto", display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr", gap: "2.5rem", marginBottom: "3rem" }}>
           <div>
             <div style={{ width: "120px", marginBottom: "1.25rem" }}>
               <OrayaLogoFull />

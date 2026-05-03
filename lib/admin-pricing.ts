@@ -111,4 +111,4 @@ export function formatVillaFromPrice(villa: string, pricing?: VillaBasePricing[]
   return `From $${price} / night`;
 }
 
-export const VILLA_FROM_PRICE_MICROLABEL = "Based on 1-bedroom weekday stay. Seasonal rates may apply.";
+export const VILLA_FROM_PRICE_MICROLABEL = "Final rates depend on selected dates, bedroom setup, and availability.";
