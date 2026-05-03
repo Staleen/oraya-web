@@ -489,6 +489,11 @@ Phase 14 rules:
   - Event remains custom and manual
   - No automatic confirmation or payment
   - Schema added additively
+- 14H Event Proposal Acceptance [COMPLETE]
+  - Guests can accept or decline event proposals
+  - Admin sees proposal response state
+  - Proposal expiry is handled visually only
+  - No auto-confirmation or payment is triggered
 ---
 
 ## AGENT EXECUTION RULES

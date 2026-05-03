@@ -154,6 +154,13 @@ function formatProposalIncludedService(service: ProposalIncludedService) {
   return `${service.label} - requested`;
 }
 
+function isProposalExpired(status: string | null | undefined, validUntil: string | null | undefined) {
+  if (status !== "sent" || !validUntil) return false;
+  const parsed = new Date(validUntil);
+  if (Number.isNaN(parsed.getTime())) return false;
+  return parsed.getTime() < Date.now();
+}
+
 function sumAddonPrices(addons: Addon[]): number | null {
   if (addons.length === 0) return 0;
   let total = 0;
@@ -253,7 +260,13 @@ function ErrorShell({ title, subtitle }: { title: string; subtitle: string }) {
   );
 }
 
-export default async function BookingViewPage({ params }: { params: { token: string } }) {
+export default async function BookingViewPage({
+  params,
+  searchParams,
+}: {
+  params: { token: string };
+  searchParams?: { proposal?: string };
+}) {
   const verified = verifyViewToken(decodeURIComponent(params.token));
 
   if (!verified.ok) {
@@ -330,6 +343,9 @@ export default async function BookingViewPage({ params }: { params: { token: str
   const proposalIncludedServices = Array.isArray(booking.proposal_included_services) ? booking.proposal_included_services : [];
   const proposalPaymentMethods = Array.isArray(booking.proposal_payment_methods) ? booking.proposal_payment_methods : [];
   const showEventProposal = isEventInquiry && booking.proposal_status === "sent";
+  const proposalExpired = isProposalExpired(booking.proposal_status, booking.proposal_valid_until);
+  const canRespondToProposal = showEventProposal && !proposalExpired;
+  const proposalState = typeof searchParams?.proposal === "string" ? searchParams.proposal : null;
   const paymentOverdue =
     booking.payment_status === "payment_requested" &&
     Boolean(booking.payment_due_at) &&
@@ -403,6 +419,38 @@ export default async function BookingViewPage({ params }: { params: { token: str
 
         {/* Gold rule */}
         <div style={{ width: "40px", height: "0.5px", backgroundColor: GOLD, margin: "0 auto 2.5rem", opacity: 0.4 }} />
+
+        {isEventInquiry && proposalState && (
+          <div
+            style={{
+              border:
+                proposalState === "accepted"
+                  ? "0.5px solid rgba(111,207,138,0.28)"
+                  : proposalState === "declined" || proposalState === "expired"
+                    ? "0.5px solid rgba(224,112,112,0.28)"
+                    : "0.5px solid rgba(197,164,109,0.2)",
+              backgroundColor:
+                proposalState === "accepted"
+                  ? "rgba(111,207,138,0.08)"
+                  : proposalState === "declined" || proposalState === "expired"
+                    ? "rgba(224,112,112,0.08)"
+                    : "rgba(197,164,109,0.04)",
+              padding: "14px 16px",
+              marginBottom: "2rem",
+              textAlign: "left",
+            }}
+          >
+            <p style={{ fontFamily: LATO, fontSize: "12px", color: proposalState === "accepted" ? "#6fcf8a" : proposalState === "declined" || proposalState === "expired" ? "#f2a7a7" : WHITE, lineHeight: 1.7, margin: 0 }}>
+              {proposalState === "accepted"
+                ? "You accepted this proposal."
+                : proposalState === "declined"
+                  ? "You declined this proposal."
+                  : proposalState === "expired"
+                    ? "This proposal has expired."
+                    : "Proposal response updated."}
+            </p>
+          </div>
+        )}
 
         {/* Details card */}
         <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", padding: "2rem", marginBottom: "2rem", textAlign: "left" }}>
@@ -501,7 +549,7 @@ export default async function BookingViewPage({ params }: { params: { token: str
 
         {/* Phase 13I: pricing block — stay bookings see Payment summary; event inquiries see no pricing */}
         {isEventInquiry ? (
-          showEventProposal ? (
+          showEventProposal || booking.proposal_status === "accepted" || booking.proposal_status === "declined" ? (
             <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", padding: "1.75rem", marginBottom: "2rem", textAlign: "left", backgroundColor: "rgba(197,164,109,0.04)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px", flexWrap: "wrap", marginBottom: "1rem" }}>
                 <div>
@@ -509,7 +557,13 @@ export default async function BookingViewPage({ params }: { params: { token: str
                     Event proposal
                   </p>
                   <p style={{ fontFamily: PLAYFAIR, fontSize: "1.2rem", color: WHITE, margin: 0 }}>
-                    Your custom proposal is ready
+                    {booking.proposal_status === "accepted"
+                      ? "Proposal accepted"
+                      : booking.proposal_status === "declined"
+                        ? "Proposal declined"
+                        : proposalExpired
+                          ? "Proposal expired"
+                          : "Your custom proposal is ready"}
                   </p>
                 </div>
                 <span
@@ -521,14 +575,35 @@ export default async function BookingViewPage({ params }: { params: { token: str
                     fontSize: "10px",
                     letterSpacing: "1.5px",
                     textTransform: "uppercase",
-                    color: "#6fcf8a",
-                    backgroundColor: "rgba(111,207,138,0.15)",
-                    border: "0.5px solid rgba(111,207,138,0.28)",
+                    color:
+                      booking.proposal_status === "accepted"
+                        ? "#6fcf8a"
+                        : booking.proposal_status === "declined" || proposalExpired
+                          ? "#f2a7a7"
+                          : GOLD,
+                    backgroundColor:
+                      booking.proposal_status === "accepted"
+                        ? "rgba(111,207,138,0.15)"
+                        : booking.proposal_status === "declined" || proposalExpired
+                          ? "rgba(224,112,112,0.12)"
+                          : "rgba(197,164,109,0.14)",
+                    border:
+                      booking.proposal_status === "accepted"
+                        ? "0.5px solid rgba(111,207,138,0.28)"
+                        : booking.proposal_status === "declined" || proposalExpired
+                          ? "0.5px solid rgba(224,112,112,0.28)"
+                          : "0.5px solid rgba(197,164,109,0.28)",
                     padding: "6px 12px",
                     whiteSpace: "nowrap",
                   }}
                 >
-                  Proposal sent
+                  {booking.proposal_status === "accepted"
+                    ? "Accepted"
+                    : booking.proposal_status === "declined"
+                      ? "Declined"
+                      : proposalExpired
+                        ? "Expired"
+                        : "Proposal sent"}
                 </span>
               </div>
 
@@ -615,9 +690,71 @@ export default async function BookingViewPage({ params }: { params: { token: str
               )}
 
               <div style={{ borderTop: "0.5px solid rgba(255,255,255,0.06)", marginTop: "14px", paddingTop: "14px" }}>
-                <p style={{ fontFamily: LATO, fontSize: "12px", color: WHITE, lineHeight: 1.75, margin: 0 }}>
-                  Contact Oraya to accept this proposal.
-                </p>
+                {canRespondToProposal ? (
+                  <div style={{ display: "grid", gap: "12px" }}>
+                    <p style={{ fontFamily: LATO, fontSize: "12px", color: WHITE, lineHeight: 1.75, margin: 0 }}>
+                      If you would like to proceed, let Oraya know using one of the actions below.
+                    </p>
+                    <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                      <form action="/api/booking-action/proposal" method="post">
+                        <input type="hidden" name="token" value={params.token} />
+                        <input type="hidden" name="response" value="accepted" />
+                        <button
+                          type="submit"
+                          style={{
+                            fontFamily: LATO,
+                            fontSize: "10px",
+                            letterSpacing: "2px",
+                            textTransform: "uppercase",
+                            color: CHARCOAL,
+                            backgroundColor: GOLD,
+                            border: "none",
+                            padding: "13px 18px",
+                            cursor: "pointer",
+                          }}
+                        >
+                          Accept proposal
+                        </button>
+                      </form>
+                      <form action="/api/booking-action/proposal" method="post">
+                        <input type="hidden" name="token" value={params.token} />
+                        <input type="hidden" name="response" value="declined" />
+                        <button
+                          type="submit"
+                          style={{
+                            fontFamily: LATO,
+                            fontSize: "10px",
+                            letterSpacing: "2px",
+                            textTransform: "uppercase",
+                            color: WHITE,
+                            backgroundColor: "rgba(255,255,255,0.04)",
+                            border: "0.5px solid rgba(255,255,255,0.12)",
+                            padding: "13px 18px",
+                            cursor: "pointer",
+                          }}
+                        >
+                          Decline proposal
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                ) : proposalExpired ? (
+                  <p style={{ fontFamily: LATO, fontSize: "12px", color: "#f2a7a7", lineHeight: 1.75, margin: 0 }}>
+                    Proposal expired.
+                  </p>
+                ) : booking.proposal_status === "accepted" ? (
+                  <p style={{ fontFamily: LATO, fontSize: "12px", color: "#6fcf8a", lineHeight: 1.75, margin: 0 }}>
+                    You accepted this proposal. Oraya will follow up manually with the next steps.
+                  </p>
+                ) : booking.proposal_status === "declined" ? (
+                  <p style={{ fontFamily: LATO, fontSize: "12px", color: "#f2a7a7", lineHeight: 1.75, margin: 0 }}>
+                    You declined this proposal. Oraya can revise the proposal if needed.
+                  </p>
+                ) : (
+                  <p style={{ fontFamily: LATO, fontSize: "12px", color: WHITE, lineHeight: 1.75, margin: 0 }}>
+                    Contact Oraya to discuss this proposal.
+                  </p>
+                )}
               </div>
             </div>
           ) : (

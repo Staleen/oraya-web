@@ -273,6 +273,13 @@ function formatEventProposalServiceLabel(service: EventProposalServiceOption | B
   return `${service.label} - requested`;
 }
 
+function isProposalExpired(status: string | null | undefined, validUntil: string | null | undefined) {
+  if (status !== "sent" || !validUntil) return false;
+  const parsed = new Date(validUntil);
+  if (Number.isNaN(parsed.getTime())) return false;
+  return parsed.getTime() < Date.now();
+}
+
 function getPricingIntelligenceMeta(booking: Booking) {
   return booking.pricing_snapshot?.internal_intelligence ?? null;
 }
@@ -2132,13 +2139,20 @@ export default function BookingsTable({
     const draft = getProposalDraft(booking);
     const requestedServices = parseRequestedEventServicesFromMessage(booking.message);
     const selectedIncludedKeys = new Set(draft.includedServiceKeys);
-    const proposalStatus = booking.proposal_status ?? "draft";
+    const proposalExpired = isProposalExpired(booking.proposal_status, booking.proposal_valid_until);
+    const proposalStatus = proposalExpired ? "expired" : booking.proposal_status ?? "draft";
     const statusLabel =
       proposalStatus === "sent"
         ? "Proposal sent"
-        : proposalStatus === "draft"
+      : proposalStatus === "draft"
           ? "Draft proposal"
-          : formatAdvisoryLabel(proposalStatus);
+          : proposalStatus === "accepted"
+            ? "Accepted"
+            : proposalStatus === "declined"
+              ? "Declined"
+              : proposalStatus === "expired"
+                ? "Proposal expired"
+                : formatAdvisoryLabel(proposalStatus);
     const validUntil = formatDateTimeValue(booking.proposal_valid_until);
     const sentAt = formatDateTimeValue(booking.proposal_sent_at);
     const isSavingDraft = paymentUpdatingId === `${booking.id}:save-proposal`;
@@ -2191,9 +2205,31 @@ export default function BookingsTable({
               fontSize: "9px",
               letterSpacing: "1.5px",
               textTransform: "uppercase",
-              color: proposalStatus === "sent" ? "#6fcf8a" : "#9db7d9",
-              backgroundColor: proposalStatus === "sent" ? "rgba(111,207,138,0.15)" : "rgba(157,183,217,0.14)",
-              border: `0.5px solid ${proposalStatus === "sent" ? "rgba(111,207,138,0.3)" : "rgba(157,183,217,0.26)"}`,
+              color:
+                proposalStatus === "accepted"
+                  ? "#6fcf8a"
+                  : proposalStatus === "declined" || proposalStatus === "expired"
+                    ? "#f2a7a7"
+                    : proposalStatus === "sent"
+                      ? GOLD
+                      : "#9db7d9",
+              backgroundColor:
+                proposalStatus === "accepted"
+                  ? "rgba(111,207,138,0.15)"
+                  : proposalStatus === "declined" || proposalStatus === "expired"
+                    ? "rgba(224,112,112,0.12)"
+                    : proposalStatus === "sent"
+                      ? "rgba(197,164,109,0.14)"
+                      : "rgba(157,183,217,0.14)",
+              border: `0.5px solid ${
+                proposalStatus === "accepted"
+                  ? "rgba(111,207,138,0.3)"
+                  : proposalStatus === "declined" || proposalStatus === "expired"
+                    ? "rgba(224,112,112,0.3)"
+                    : proposalStatus === "sent"
+                      ? "rgba(197,164,109,0.28)"
+                      : "rgba(157,183,217,0.26)"
+              }`,
               padding: "6px 10px",
               borderRadius: "6px",
               whiteSpace: "nowrap",
@@ -2206,6 +2242,44 @@ export default function BookingsTable({
         <p style={{ fontFamily: LATO, fontSize: "11px", color: "#9db7d9", margin: 0, lineHeight: 1.55 }}>
           Event pricing remains custom and manual. Guests only see this proposal after it is sent.
         </p>
+
+        {(proposalStatus === "accepted" || proposalStatus === "declined" || proposalStatus === "expired") && (
+          <div
+            style={{
+              border:
+                proposalStatus === "accepted"
+                  ? "0.5px solid rgba(111,207,138,0.26)"
+                  : "0.5px solid rgba(224,112,112,0.26)",
+              backgroundColor:
+                proposalStatus === "accepted"
+                  ? "rgba(111,207,138,0.08)"
+                  : "rgba(224,112,112,0.08)",
+              padding: "10px 12px",
+              borderRadius: "6px",
+            }}
+          >
+            <p
+              style={{
+                fontFamily: LATO,
+                fontSize: "11px",
+                color:
+                  proposalStatus === "accepted"
+                    ? "#6fcf8a"
+                    : proposalStatus === "declined"
+                      ? "#f2a7a7"
+                      : "#f0bd67",
+                margin: 0,
+                lineHeight: 1.55,
+              }}
+            >
+              {proposalStatus === "accepted"
+                ? "Guest accepted proposal — proceed with confirmation and payment manually."
+                : proposalStatus === "declined"
+                  ? "Guest declined proposal — revise or close request."
+                  : "Proposal expired."}
+            </p>
+          </div>
+        )}
 
         <div
           style={{
