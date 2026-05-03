@@ -9,7 +9,7 @@ STOP and ask before proceeding.
 
 ## CURRENT PHASE
 
-Phase 12 -> COMPLETE | Phase 13 -> IN PROGRESS
+Phase 13 -> COMPLETE | Phase 14 -> IN PROGRESS
 
 ---
 
@@ -399,6 +399,12 @@ Phase 13 — Real-world validation & stabilization:
   - No Stripe / payment processing
   - No schema / API changes
 - 13L.5 Payment Reminder & Overdue Control [COMPLETE]
+  - Admin-triggered payment reminder
+  - Overdue escalation UI
+  - Cron-ready reminder function prepared
+  - No auto-cancel logic
+  - No Stripe / payment processing
+  - No schema / API changes
 - 13N Revenue Optimization Layer [COMPLETE]
   - Relative revenue priority badges (high/medium/low — only on overlapping pendings, no thresholds)
   - Best booking highlight for overlaps
@@ -417,13 +423,31 @@ Phase 13 — Real-world validation & stabilization:
   - Pricing disclaimer microlabel updated to comparison-aware copy
   - No system logic changes
   - Phase 13 fully complete
+Phase 14 — Growth, Operations, and Event System Hardening
+
+Purpose:
+- improve admin workflow
+- separate stay and event operations
+- add safer operational guidance
+- improve conversion and trust
+- prepare future channel/payment/growth features
+
+Phase 14 rules:
+- No backend/API/schema changes unless explicitly approved per task
+- Event availability enforcement requires separate approval
+- No auto-cancel or auto-confirm logic
+- Admin guidance must remain advisory unless explicitly approved
+- Guest-facing pricing must remain accurate and consistent
+- Event pricing remains custom/manual until explicitly implemented
+- Payment remains manual/hybrid unless card gateway phase is approved
+
 - 14A Admin Pending Workflow Cleanup [COMPLETE]
   - Conflicting pending requests visually grouped as Conflict / On Hold (frontend-only detection vs confirmed bookings)
   - No auto-cancel logic — Cancel button preserved, optional WhatsApp link if guest_phone exists
   - Pending cards compact by default with expandable details (reuses existing renderCompactRow pattern)
   - Full decision details preserved in expanded state
   - No schema/API changes
-- 14B Event System Separation + Blocking Audit [COMPLETE]
+- 14B Event System Separation + Blocking Audit [IN PROGRESS]
   - Event vs Stay classification added in admin (frontend-only via event_type + [Event Inquiry] marker)
   - Event Inquiries separated visually into their own admin pending group, distinct from Stay Requests
   - Event Inquiry compact-card badge with event_type label
@@ -431,14 +455,6 @@ Phase 13 — Real-world validation & stabilization:
   - Event operational rules defined (single-day, multi-day) — see audit doc below
   - No availability changes implemented yet — audit only
   - No schema/API changes
-- 13L.5 Payment Reminder & Overdue Control [COMPLETE]
-  - Admin-triggered payment reminder
-  - Overdue escalation UI
-  - Cron-ready reminder function prepared
-  - No auto-cancel logic
-  - No Stripe / payment processing
-  - No schema / API changes
-
 ---
 
 ## AGENT EXECUTION RULES
