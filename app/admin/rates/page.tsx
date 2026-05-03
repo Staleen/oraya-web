@@ -107,6 +107,33 @@ export default function AdminRatesPage() {
     setAddonsSaved(false);
   }
 
+  function addEventServiceAddon() {
+    setAddons((prev) => ([
+      ...prev,
+      {
+        id: createAddonId(),
+        label: "",
+        currency: "USD",
+        price: 0,
+        pricing_model: "flat_fee" as const,
+        enabled: true,
+        preparation_time_hours: null,
+        cutoff_type: null,
+        requires_approval: false,
+        category: null,
+        enforcement_mode: "soft" as const,
+        applies_to: "event" as const,
+        applicable_event_types: [],
+        quantity_enabled: false,
+        unit_label: null,
+        pricing_unit: null,
+        min_quantity: null,
+        max_quantity: null,
+      },
+    ]));
+    setAddonsSaved(false);
+  }
+
   function validateAddons(items: Addon[]): AddonValidationIssue[] {
     const issues: AddonValidationIssue[] = [];
     const labelCounts = new Map<string, number>();
@@ -355,6 +382,7 @@ export default function AdminRatesPage() {
           addonsSaved={addonsSaved}
           updateAddon={updateAddon}
           addAddon={addAddon}
+          addEventServiceAddon={addEventServiceAddon}
           removeAddon={removeAddon}
           validationIssues={addonValidationIssues}
           validationAttempted={addonValidationAttempted}

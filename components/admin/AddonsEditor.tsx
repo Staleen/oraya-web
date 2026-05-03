@@ -78,13 +78,14 @@ function formatAddonUsageSummary(addon: Addon) {
 }
 
 export default function AddonsEditor({
-  addons, addonsSaving, addonsSaved, updateAddon, addAddon, removeAddon, validationIssues, validationAttempted, saveAddons,
+  addons, addonsSaving, addonsSaved, updateAddon, addAddon, addEventServiceAddon, removeAddon, validationIssues, validationAttempted, saveAddons,
 }: {
   addons: Addon[];
   addonsSaving: boolean;
   addonsSaved: boolean;
   updateAddon: (id: string, patch: Partial<Addon>) => void;
   addAddon: () => void;
+  addEventServiceAddon: () => void;
   removeAddon: (id: string) => void;
   validationIssues: AddonValidationIssue[];
   validationAttempted: boolean;
@@ -705,7 +706,7 @@ export default function AddonsEditor({
             disabled={addonsSaving}
             style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, backgroundColor: "transparent", border: `0.5px solid ${BORDER}`, padding: "10px 16px", cursor: addonsSaving ? "not-allowed" : "pointer", opacity: addonsSaving ? 0.7 : 1, width: isMobile ? "100%" : "auto" }}
           >
-            + Add Add-on
+            + Add Stay Add-on
           </button>
           <button
             onClick={saveAddons}
@@ -723,9 +724,9 @@ export default function AddonsEditor({
 
       <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
         {addonSections.map((section) => (
-          section.items.length > 0 ? (
-            <div key={section.key} style={{ display: "grid", gap: "10px" }}>
-              <div style={{ display: "grid", gap: "4px", paddingTop: section.key === "event" ? "8px" : 0 }}>
+          <div key={section.key} style={{ display: "grid", gap: "10px" }}>
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px", paddingTop: section.key === "event" ? "8px" : 0 }}>
+              <div style={{ display: "grid", gap: "4px" }}>
                 <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: section.key === "event" ? "#9db7d9" : GOLD, margin: 0 }}>
                   {section.title}
                 </p>
@@ -733,7 +734,21 @@ export default function AddonsEditor({
                   {section.subtitle}
                 </p>
               </div>
-              {section.items.map((addon) => {
+              {section.key === "event" && (
+                <button
+                  onClick={addEventServiceAddon}
+                  disabled={addonsSaving}
+                  style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "#9db7d9", backgroundColor: "transparent", border: "0.5px solid rgba(157,183,217,0.3)", padding: "8px 14px", cursor: addonsSaving ? "not-allowed" : "pointer", opacity: addonsSaving ? 0.7 : 1, whiteSpace: "nowrap", flexShrink: 0 }}
+                >
+                  + Add Event Service
+                </button>
+              )}
+            </div>
+            {section.items.length === 0 ? (
+              <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0 }}>
+                No {section.key === "event" ? "event services" : "stay add-ons"} configured yet.
+              </p>
+            ) : section.items.map((addon) => {
           const addonErrors = getAddonIssues(addon.id, "error");
           const addonWarnings = getAddonIssues(addon.id, "warning");
           const showErrors = validationAttempted && addonErrors.length > 0;
@@ -914,7 +929,19 @@ export default function AddonsEditor({
 
               {isExpanded && (
                 <div style={{ padding: isMobile ? "0 12px 12px" : "0 14px 14px", borderTop: "0.5px solid rgba(255,255,255,0.06)", display: "grid", gap: "14px" }}>
-                  <div style={{ display: "grid", gap: "10px", paddingTop: "14px" }}>
+                  <div style={{ display: "grid", gap: "6px", paddingTop: "14px" }}>
+                    {fieldLabel("Name")}
+                    <input
+                      type="text"
+                      value={addon.label}
+                      onChange={e => updateAddon(addon.id, { label: e.target.value })}
+                      placeholder="Add-on name"
+                      style={{ ...fieldStyle, padding: "10px 12px", fontSize: "13px", ...getFieldStatusStyle(addon.id, "label", addon.enabled) }}
+                      onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
+                      onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+                    />
+                  </div>
+                  <div style={{ display: "grid", gap: "10px" }}>
                     {fieldLabel("Pricing")}
                     <div style={{ display: "grid", gridTemplateColumns: expandedGridColumns, gap: "10px" }}>
                       <div style={{ display: "grid", gap: "6px" }}>
@@ -1067,9 +1094,8 @@ export default function AddonsEditor({
               )}
             </div>
           );
-              })}
-            </div>
-          ) : null
+            })}
+          </div>
         ))}
       </div>
 
@@ -1112,6 +1138,18 @@ export default function AddonsEditor({
             </div>
 
             <div style={{ overflowY: "auto", overflowX: "hidden", display: "grid", gap: "16px", padding: "14px 16px 8px", boxSizing: "border-box", minWidth: 0 }}>
+              <div style={{ display: "grid", gap: "6px" }}>
+                {fieldLabel("Name")}
+                <input
+                  type="text"
+                  value={editingAddon.label}
+                  onChange={e => updateAddon(editingAddon.id, { label: e.target.value })}
+                  placeholder="Add-on name"
+                  style={{ ...fieldStyle, width: "100%", boxSizing: "border-box", padding: "12px 14px", fontSize: "14px", minHeight: "48px", ...getFieldStatusStyle(editingAddon.id, "label", editingAddon.enabled) }}
+                  onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
+                  onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+                />
+              </div>
               <div style={{ display: "grid", gap: "10px" }}>
                 {fieldLabel("Pricing")}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "10px" }}>
