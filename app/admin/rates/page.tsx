@@ -18,6 +18,32 @@ function createAddonId() {
   return `addon_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+// ─── Event service seed data ──────────────────────────────────────────────────
+const SEED_EVENT_SERVICE_DEFS = [
+  { label: "Basic seating setup",        group: "Setup & Seating" },
+  { label: "Tables and chairs",          group: "Setup & Seating" },
+  { label: "Umbrellas / shaded areas",   group: "Setup & Seating" },
+  { label: "Catering / buffet setup",    group: "Food & Hospitality" },
+  { label: "Service staff coordination", group: "Food & Hospitality" },
+  { label: "Decoration support",         group: "Production & Atmosphere" },
+  { label: "AV / sound",                 group: "Production & Atmosphere" },
+  { label: "Lighting",                   group: "Production & Atmosphere" },
+  { label: "Music coordination",         group: "Production & Atmosphere" },
+  { label: "Photography coordination",   group: "Production & Atmosphere" },
+  { label: "Valet",                      group: "Arrival & Guest Flow" },
+] as const;
+
+// Labels that appear in at least one event type's recommendation list
+const SEED_RECOMMENDED_SET = new Set([
+  "Basic seating setup", "Tables and chairs", "Umbrellas / shaded areas",
+  "Catering / buffet setup", "Service staff coordination", "Decoration support",
+  "AV / sound", "Lighting", "Music coordination", "Valet",
+]);
+
+function makeStableEventServiceId(label: string): string {
+  return `event_svc_${label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "")}`;
+}
+
 export default function AdminRatesPage() {
   const { error, setError } = useAdminData();
   const [addons, setAddons] = useState<Addon[]>([]);
@@ -29,6 +55,8 @@ export default function AdminRatesPage() {
   const [pricingSaved, setPricingSaved] = useState(false);
   const [pricingValidationAttempted, setPricingValidationAttempted] = useState(false);
   const [ratesLoading, setRatesLoading] = useState(true);
+  const [seedingEventServices, setSeedingEventServices] = useState(false);
+  const [seedEventServicesDone, setSeedEventServicesDone] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -132,6 +160,89 @@ export default function AdminRatesPage() {
       },
     ]));
     setAddonsSaved(false);
+  }
+
+  const eventServiceCount = addons.filter((a) =>
+    a.applies_to === "event" || a.applies_to === "both"
+  ).length;
+
+  async function seedEventServices() {
+    setSeedingEventServices(true);
+    setSeedEventServicesDone(false);
+    setError("");
+
+    const existingIds = new Set(addons.map((a) => a.id));
+    const newSeedAddons: Addon[] = SEED_EVENT_SERVICE_DEFS
+      .filter((def) => !existingIds.has(makeStableEventServiceId(def.label)))
+      .map((def, idx) => ({
+        id: makeStableEventServiceId(def.label),
+        label: def.label,
+        currency: "USD",
+        price: 0,
+        pricing_model: "flat_fee" as const,
+        enabled: true,
+        preparation_time_hours: null,
+        cutoff_type: null,
+        requires_approval: false,
+        category: def.group,
+        enforcement_mode: "soft" as const,
+        applies_to: "event" as const,
+        applicable_event_types: [],
+        quantity_enabled: false,
+        unit_label: null,
+        pricing_unit: null,
+        min_quantity: null,
+        max_quantity: null,
+        recommended: SEED_RECOMMENDED_SET.has(def.label),
+        display_order: addons.length + idx,
+      }));
+
+    if (newSeedAddons.length === 0) {
+      setSeedingEventServices(false);
+      setSeedEventServicesDone(true);
+      setTimeout(() => setSeedEventServicesDone(false), 3000);
+      return;
+    }
+
+    const mergedAddons = [...addons, ...newSeedAddons];
+
+    const baseRes = await fetch("/api/admin/addons", {
+      ...adminApiFetchInit,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        addons: mergedAddons.map(({ id, label, enabled, currency, price, pricing_model }) => ({
+          id, label, enabled, currency, price, pricing_model,
+        })),
+      }),
+    });
+
+    if (!baseRes.ok) {
+      setSeedingEventServices(false);
+      const d = await baseRes.json();
+      setError(d.error ?? "Failed to seed event services.");
+      return;
+    }
+
+    const opsRes = await fetch("/api/admin/settings", {
+      ...adminApiFetchInit,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        key: ADDON_OPERATIONAL_SETTINGS_KEY,
+        value: stringifyAddonOperationalSetting(mergedAddons),
+      }),
+    });
+
+    setSeedingEventServices(false);
+    if (opsRes.ok) {
+      setAddons(mergedAddons);
+      setSeedEventServicesDone(true);
+      setTimeout(() => setSeedEventServicesDone(false), 3000);
+    } else {
+      const d = await opsRes.json();
+      setError(d.error ?? "Failed to save event service settings.");
+    }
   }
 
   function validateAddons(items: Addon[]): AddonValidationIssue[] {
@@ -363,9 +474,33 @@ export default function AdminRatesPage() {
         <p style={{ fontFamily: LATO, fontSize: "12px", color: "#8a8070", margin: "0 0 6px" }}>
           Existing optional extras remain separate from base villa pricing and continue to use their current admin flow.
         </p>
-        <p style={{ fontFamily: LATO, fontSize: "12px", color: "#8a8070", margin: 0 }}>
+        <p style={{ fontFamily: LATO, fontSize: "12px", color: "#8a8070", margin: "0 0 10px" }}>
           Event Services are managed here but pricing is not shown to guests until event quoting is enabled.
         </p>
+        {!ratesLoading && eventServiceCount === 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
+            <button
+              onClick={seedEventServices}
+              disabled={seedingEventServices}
+              style={{
+                fontFamily: LATO, fontSize: "11px", letterSpacing: "1px",
+                textTransform: "uppercase", color: seedingEventServices ? "#8a8070" : "#C5A46D",
+                background: "rgba(197,164,109,0.07)", border: "0.5px solid rgba(197,164,109,0.35)",
+                padding: "6px 14px", cursor: seedingEventServices ? "not-allowed" : "pointer",
+              }}
+            >
+              {seedingEventServices ? "Seeding…" : "Seed default event services"}
+            </button>
+            {seedEventServicesDone && (
+              <span style={{ fontFamily: LATO, fontSize: "11px", color: "#7aad7a" }}>
+                Seeded successfully
+              </span>
+            )}
+            <span style={{ fontFamily: LATO, fontSize: "11px", color: "#8a8070" }}>
+              No event services in database — click to import the 11 defaults.
+            </span>
+          </div>
+        )}
       </div>
       {ratesLoading ? (
         <div style={{ border: "0.5px solid rgba(197,164,109,0.12)", backgroundColor: "rgba(255,255,255,0.03)", padding: "1rem" }} aria-hidden="true">
