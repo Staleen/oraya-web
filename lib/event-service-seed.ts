@@ -16,6 +16,8 @@ export interface EventServiceSeedDefinition {
   /** Stable primary key for new inserts; existing rows may match by label / aliases first. */
   id: string;
   label: string;
+  /** Guest-safe copy; persisted in `addon_operational_settings.description` (not on `addons` row). */
+  description: string;
   /** Legacy or alternate labels that should merge onto this canonical service (no duplicate rows). */
   matchAliases?: readonly string[];
   category: string;
@@ -52,6 +54,8 @@ export const EVENT_SERVICE_SEED_DEFINITIONS: EventServiceSeedDefinition[] = [
   {
     id: "event_svc_basic_seating_setup",
     label: "Basic Seating Setup",
+    description:
+      "Basic seating arrangement for small private events, including simple guest seating layout and placement coordination.",
     matchAliases: ["Basic seating setup"],
     category: "Setup & Seating",
     price: 350,
@@ -72,6 +76,8 @@ export const EVENT_SERVICE_SEED_DEFINITIONS: EventServiceSeedDefinition[] = [
   {
     id: "event_svc_full_seating_setup_up_to_30_guests",
     label: "Full Seating Setup up to 30 guests",
+    description:
+      "Complete seating setup for up to 30 guests, including table and chair layout planning, placement, and setup coordination.",
     matchAliases: ["Tables and chairs"],
     category: "Setup & Seating",
     price: 550,
@@ -92,6 +98,8 @@ export const EVENT_SERVICE_SEED_DEFINITIONS: EventServiceSeedDefinition[] = [
   {
     id: "event_svc_premium_table_styling",
     label: "Premium Table Styling",
+    description:
+      "Enhanced table presentation with upgraded styling details for a more polished and premium event atmosphere.",
     category: "Setup & Seating",
     price: 250,
     currency: "USD",
@@ -117,6 +125,8 @@ export const EVENT_SERVICE_SEED_DEFINITIONS: EventServiceSeedDefinition[] = [
   {
     id: "event_svc_basic_decoration",
     label: "Basic Decoration",
+    description:
+      "Simple decorative setup adapted to the event type, including light styling elements to improve the overall presentation.",
     matchAliases: ["Decoration support"],
     category: "Decoration & Styling",
     price: 300,
@@ -145,6 +155,8 @@ export const EVENT_SERVICE_SEED_DEFINITIONS: EventServiceSeedDefinition[] = [
   {
     id: "event_svc_enhanced_decoration",
     label: "Enhanced Decoration",
+    description:
+      "A more complete decoration setup with stronger visual impact, suitable for celebrations, family milestones, and elegant private events.",
     category: "Decoration & Styling",
     price: 600,
     currency: "USD",
@@ -171,6 +183,8 @@ export const EVENT_SERVICE_SEED_DEFINITIONS: EventServiceSeedDefinition[] = [
   {
     id: "event_svc_premium_decoration_experience",
     label: "Premium Decoration Experience",
+    description:
+      "A high-touch decoration experience for premium occasions, with a more detailed visual concept and elevated styling execution.",
     category: "Decoration & Styling",
     price: 1200,
     currency: "USD",
@@ -195,6 +209,8 @@ export const EVENT_SERVICE_SEED_DEFINITIONS: EventServiceSeedDefinition[] = [
   {
     id: "event_svc_catering_coordination",
     label: "Catering Coordination",
+    description:
+      "Coordination of catering requirements with approved suppliers, including menu direction, timing, delivery coordination, and setup alignment.",
     matchAliases: ["Catering / buffet setup"],
     category: "Catering & Dining",
     price: 200,
@@ -215,6 +231,8 @@ export const EVENT_SERVICE_SEED_DEFINITIONS: EventServiceSeedDefinition[] = [
   {
     id: "event_svc_light_catering",
     label: "Light Catering",
+    description:
+      "Light food and refreshment service suitable for casual gatherings, family events, and daytime private occasions.",
     category: "Catering & Dining",
     price: 35,
     currency: "USD",
@@ -243,6 +261,8 @@ export const EVENT_SERVICE_SEED_DEFINITIONS: EventServiceSeedDefinition[] = [
   {
     id: "event_svc_standard_catering",
     label: "Standard Catering",
+    description:
+      "Balanced catering option for private events, including a fuller food service suitable for most gatherings up to 30 guests.",
     category: "Catering & Dining",
     price: 50,
     currency: "USD",
@@ -262,6 +282,8 @@ export const EVENT_SERVICE_SEED_DEFINITIONS: EventServiceSeedDefinition[] = [
   {
     id: "event_svc_premium_catering",
     label: "Premium Catering",
+    description:
+      "Higher-end catering option for more refined events, with upgraded menu direction and stronger service expectations.",
     category: "Catering & Dining",
     price: 75,
     currency: "USD",
@@ -288,6 +310,8 @@ export const EVENT_SERVICE_SEED_DEFINITIONS: EventServiceSeedDefinition[] = [
   {
     id: "event_svc_service_staff_1_person",
     label: "Service Staff - 1 Person",
+    description:
+      "One service staff member to support guest flow, light service needs, setup assistance, and event coordination during the booking.",
     category: "Staffing & Service",
     price: 100,
     currency: "USD",
@@ -307,6 +331,8 @@ export const EVENT_SERVICE_SEED_DEFINITIONS: EventServiceSeedDefinition[] = [
   {
     id: "event_svc_service_staff_bundle_2_to_3_people",
     label: "Service Staff Bundle 2 to 3 People",
+    description:
+      "Small service team for events requiring stronger guest support, food service assistance, and smoother event operation.",
     matchAliases: ["Service staff coordination"],
     category: "Staffing & Service",
     price: 250,
@@ -334,6 +360,8 @@ export const EVENT_SERVICE_SEED_DEFINITIONS: EventServiceSeedDefinition[] = [
   {
     id: "event_svc_music_setup",
     label: "Music Setup",
+    description:
+      "Basic music setup coordination for background music or simple entertainment needs during private events.",
     matchAliases: ["Music coordination"],
     category: "Entertainment & Music",
     price: 300,
@@ -360,6 +388,8 @@ export const EVENT_SERVICE_SEED_DEFINITIONS: EventServiceSeedDefinition[] = [
   {
     id: "event_svc_dj_service",
     label: "DJ Service",
+    description:
+      "DJ coordination for celebrations requiring a more active music experience and stronger entertainment atmosphere.",
     matchAliases: ["AV / sound"],
     category: "Entertainment & Music",
     price: 500,
@@ -380,6 +410,7 @@ export const EVENT_SERVICE_SEED_DEFINITIONS: EventServiceSeedDefinition[] = [
   {
     id: "event_svc_basic_lighting",
     label: "Basic Lighting",
+    description: "Simple ambience lighting setup to improve the evening atmosphere and enhance the event setting.",
     matchAliases: ["Lighting"],
     category: "Lighting & Ambience",
     price: 200,
@@ -400,6 +431,8 @@ export const EVENT_SERVICE_SEED_DEFINITIONS: EventServiceSeedDefinition[] = [
   {
     id: "event_svc_premium_lighting_atmosphere",
     label: "Premium Lighting Atmosphere",
+    description:
+      "Enhanced lighting atmosphere for premium celebrations, dinner events, and wedding or engagement-style setups.",
     category: "Lighting & Ambience",
     price: 450,
     currency: "USD",
@@ -419,6 +452,8 @@ export const EVENT_SERVICE_SEED_DEFINITIONS: EventServiceSeedDefinition[] = [
   {
     id: "event_svc_event_coordination",
     label: "Event Coordination",
+    description:
+      "Operational event coordination covering setup timing, supplier alignment, guest flow, and on-site readiness.",
     category: "Coordination & Logistics",
     price: 250,
     currency: "USD",
@@ -438,6 +473,8 @@ export const EVENT_SERVICE_SEED_DEFINITIONS: EventServiceSeedDefinition[] = [
   {
     id: "event_svc_valet_service",
     label: "Valet Service",
+    description:
+      "Valet or parking coordination support for selected private events where guest arrival flow requires additional assistance.",
     matchAliases: ["Valet"],
     category: "Coordination & Logistics",
     price: 200,
@@ -473,6 +510,27 @@ export function expandSeedApplicableEventTypes(
     }
   }
   return out;
+}
+
+function normLabelKey(s: string): string {
+  return s.trim().toLocaleLowerCase();
+}
+
+function labelMatchSetForSeed(seed: EventServiceSeedDefinition): Set<string> {
+  const s = new Set<string>();
+  s.add(normLabelKey(seed.label));
+  for (const a of seed.matchAliases ?? []) {
+    s.add(normLabelKey(a));
+  }
+  return s;
+}
+
+/** Resolve a DB addon row to a canonical seed (by id, then label / aliases). */
+export function findSeedForAddonRow(addon: { id: string; label: string }): EventServiceSeedDefinition | undefined {
+  const byId = EVENT_SERVICE_SEED_DEFINITIONS.find((s) => s.id === addon.id);
+  if (byId) return byId;
+  const nl = normLabelKey(addon.label);
+  return EVENT_SERVICE_SEED_DEFINITIONS.find((s) => labelMatchSetForSeed(s).has(nl));
 }
 
 export function findEventServiceSeedByLabel(label: string): EventServiceSeedDefinition | undefined {

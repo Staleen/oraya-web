@@ -621,6 +621,7 @@ function EventInquiryPageInner() {
         category: service.category,
         recommended: service.recommended,
         display_order: service.display_order,
+        description: service.description,
       })),
     []
   );
@@ -1300,6 +1301,11 @@ function EventInquiryPageInner() {
                                   <span style={{ fontFamily: LATO, fontSize: "12px", color: selected ? WHITE : "rgba(255,255,255,0.75)" }}>
                                     {service.label}
                                   </span>
+                                  {service.description?.trim() ? (
+                                    <span style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, lineHeight: 1.55, fontWeight: 300 }}>
+                                      {service.description.trim()}
+                                    </span>
+                                  ) : null}
                                   {service.quantity_enabled && (
                                     <span style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, lineHeight: 1.5 }}>
                                       Quantity supported{unitLabel ? ` - ${unitLabel}` : ""}

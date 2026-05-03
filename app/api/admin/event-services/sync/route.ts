@@ -10,6 +10,7 @@ import {
 import {
   EVENT_SERVICE_SEED_DEFINITIONS,
   expandSeedApplicableEventTypes,
+  findSeedForAddonRow,
   type EventServiceSeedDefinition,
 } from "@/lib/event-service-seed";
 import { CANONICAL_EVENT_TYPE_VALUES, normalizeEventType } from "@/lib/event-types";
@@ -31,10 +32,37 @@ function normLabel(s: string): string {
   return s.trim().toLocaleLowerCase();
 }
 
-function shouldRepairAddonPrice(price: number | null | undefined): boolean {
-  if (price === null || price === undefined) return true;
-  if (!Number.isFinite(price)) return true;
-  if (price === 0 || price === 90) return true;
+function labelMatchSet(seed: EventServiceSeedDefinition): Set<string> {
+  const s = new Set<string>();
+  s.add(normLabel(seed.label));
+  for (const a of seed.matchAliases ?? []) {
+    s.add(normLabel(a));
+  }
+  return s;
+}
+
+/** Coerce DB / JSON price to a finite number or null. */
+function coerceAddonPrice(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+/**
+ * Repair addon row price for canonical event services.
+ * Never treat 0 as intentional admin pricing — always replace with seed.
+ * Preserve only a positive finite value that is not a known placeholder (e.g. 90).
+ */
+function shouldRepairCanonicalAddonPrice(value: unknown): boolean {
+  const p = coerceAddonPrice(value);
+  if (p === null) return true;
+  if (!Number.isFinite(p)) return true;
+  if (p <= 0) return true;
+  if (p === 90) return true;
   return false;
 }
 
@@ -51,15 +79,6 @@ function normalizeApplicableEventTypesFromDb(list: string[] | null | undefined):
     }
   }
   return out;
-}
-
-function labelMatchSet(seed: EventServiceSeedDefinition): Set<string> {
-  const s = new Set<string>();
-  s.add(normLabel(seed.label));
-  for (const a of seed.matchAliases ?? []) {
-    s.add(normLabel(a));
-  }
-  return s;
 }
 
 function findAddonForSeed(
@@ -106,6 +125,7 @@ function buildOperationalForSeed(
   next.pricing_unit = seed.pricing_unit ?? null;
   next.min_quantity = seed.min_quantity;
   next.max_quantity = seed.max_quantity;
+  next.description = seed.description.trim();
 
   return next;
 }
@@ -113,6 +133,23 @@ function buildOperationalForSeed(
 function sortedOperationalSnapshot(rec: Record<string, AddonOperationalFields>): string {
   const keys = Object.keys(rec).sort();
   return JSON.stringify(keys.map((k) => [k, rec[k]]));
+}
+
+function scheduleCanonicalAddonUpsert(
+  map: Map<string, BaseAddonRow>,
+  row: BaseAddonRow,
+  seed: EventServiceSeedDefinition,
+): void {
+  const patch: Partial<BaseAddonRow> = {};
+  if (row.label !== seed.label) patch.label = seed.label;
+  if (shouldRepairCanonicalAddonPrice(row.price)) patch.price = seed.price;
+  if (row.currency !== seed.currency) patch.currency = seed.currency;
+  if (row.pricing_model !== seed.pricing_model) patch.pricing_model = seed.pricing_model;
+  const merged: BaseAddonRow = { ...row, ...patch };
+  if (!Number.isFinite(coerceAddonPrice(merged.price) ?? NaN) || (coerceAddonPrice(merged.price) ?? 0) <= 0) {
+    merged.price = seed.price;
+  }
+  map.set(merged.id, merged);
 }
 
 export async function POST(request: NextRequest) {
@@ -137,9 +174,8 @@ export async function POST(request: NextRequest) {
   const operationalBefore = sortedOperationalSnapshot(nextOperationalSettings);
 
   const claimedAddonIds = new Set<string>();
-  const addonRowsToUpsert: BaseAddonRow[] = [];
+  const addonUpsertById = new Map<string, BaseAddonRow>();
   let insertedAddons = 0;
-  let updatedAddons = 0;
 
   for (const seed of EVENT_SERVICE_SEED_DEFINITIONS) {
     const match = findAddonForSeed(seed, existingAddons, claimedAddonIds);
@@ -147,21 +183,11 @@ export async function POST(request: NextRequest) {
 
     if (match) {
       claimedAddonIds.add(match.id);
-    }
-
-    const addonPatch: Partial<BaseAddonRow> = {};
-    if (match) {
-      if (match.label !== seed.label) addonPatch.label = seed.label;
-      if (shouldRepairAddonPrice(match.price)) addonPatch.price = seed.price;
-      if (match.currency !== seed.currency) addonPatch.currency = seed.currency;
-      if (match.pricing_model !== seed.pricing_model) addonPatch.pricing_model = seed.pricing_model;
-      if (Object.keys(addonPatch).length > 0) {
-        addonRowsToUpsert.push({ ...match, ...addonPatch });
-        updatedAddons += 1;
-      }
+      const before = addonUpsertById.get(match.id) ?? match;
+      scheduleCanonicalAddonUpsert(addonUpsertById, before, seed);
     } else {
       claimedAddonIds.add(seed.id);
-      addonRowsToUpsert.push({
+      addonUpsertById.set(seed.id, {
         id: seed.id,
         label: seed.label,
         enabled: true,
@@ -173,18 +199,26 @@ export async function POST(request: NextRequest) {
     }
 
     const priorOp = nextOperationalSettings[resolvedId] ?? {};
-    const mergedOp = buildOperationalForSeed(seed, priorOp);
-    nextOperationalSettings[resolvedId] = mergedOp;
+    nextOperationalSettings[resolvedId] = buildOperationalForSeed(seed, priorOp);
   }
 
-  const operationalChanged = sortedOperationalSnapshot(nextOperationalSettings) !== operationalBefore;
+  // Catch duplicate legacy rows or anything that matches a seed by id/label but was not claimed above.
+  for (const addon of existingAddons) {
+    const seed = findSeedForAddonRow(addon);
+    if (!seed) continue;
+    if (!shouldRepairCanonicalAddonPrice(addon.price)) continue;
+    scheduleCanonicalAddonUpsert(addonUpsertById, addon, seed);
+  }
 
+  const addonRowsToUpsert = Array.from(addonUpsertById.values());
   if (addonRowsToUpsert.length > 0) {
     const { error: upsertAddonsError } = await supabaseAdmin.from("addons").upsert(addonRowsToUpsert, { onConflict: "id" });
     if (upsertAddonsError) {
       return NextResponse.json({ error: upsertAddonsError.message }, { status: 500 });
     }
   }
+
+  const operationalChanged = sortedOperationalSnapshot(nextOperationalSettings) !== operationalBefore;
 
   const operationalPayload = Object.entries(nextOperationalSettings).map(([id, fields]) => ({
     id,
@@ -206,7 +240,7 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({
     ok: true,
     inserted_addons: insertedAddons,
-    updated_addons: updatedAddons,
+    addons_upserted: addonRowsToUpsert.length,
     operational_settings_changed: operationalChanged,
     total_seed_services: EVENT_SERVICE_SEED_DEFINITIONS.length,
   });
