@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { requireAdminAuth } from "@/lib/admin-auth";
 import type { Addon } from "@/app/api/addons/route";
 
 export const dynamic = "force-dynamic";
@@ -7,6 +8,9 @@ export const dynamic = "force-dynamic";
 // POST — bulk upsert the full add-ons list into the addons table.
 // Merges on `id` so rows that already exist are updated in-place.
 export async function POST(request: NextRequest) {
+  const denied = requireAdminAuth(request);
+  if (denied) return denied;
+
   let addons: Addon[];
   try {
     const body = await request.json();

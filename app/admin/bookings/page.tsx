@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import BookingsTable from "@/components/admin/BookingsTable";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
 import { GOLD, LATO, MUTED, PLAYFAIR, WHITE } from "@/components/admin/theme";
+import { adminApiFetchInit } from "@/lib/admin-auth";
 
 export default function AdminBookingsPage() {
   const { bookings, setBookings, members, loading, error, setError, loadData } = useAdminData();
@@ -30,6 +31,7 @@ export default function AdminBookingsPage() {
     setUpdatingId(id);
 
     const res = await fetch(`/api/admin/bookings/${id}`, {
+      ...adminApiFetchInit,
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),

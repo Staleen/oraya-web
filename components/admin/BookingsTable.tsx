@@ -8,6 +8,7 @@ import { useAdminData } from "@/components/admin/AdminDataProvider";
 import { BORDER, fieldStyle, fmt, GOLD, LATO, MIDNIGHT, MUTED, PLAYFAIR, WHITE } from "./theme";
 import { addDaysToDateOnly, getOperationalRange, rangesOverlap } from "@/lib/calendar/event-block";
 import { findAlternativeDateSuggestions, type AlternativeSuggestion } from "@/lib/calendar/alternative-dates";
+import { adminApiFetchInit } from "@/lib/admin-auth";
 
 type BookingSectionKey = "pending" | "confirmed" | "cancelled";
 type ConfirmedSortKey = "created_desc" | "created_asc" | "check_in_asc" | "check_in_desc";
@@ -779,6 +780,7 @@ export default function BookingsTable({
 
   async function patchAddonResolution(bookingId: string, addonId: string, decision: "approve" | "decline") {
     const res = await fetch(`/api/admin/bookings/${bookingId}/approve-addon`, {
+      ...adminApiFetchInit,
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ addon_id: addonId, decision }),
@@ -918,6 +920,7 @@ export default function BookingsTable({
 
     try {
       const res = await fetch(`/api/admin/bookings/${bookingId}`, {
+        ...adminApiFetchInit,
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates),

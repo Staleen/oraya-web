@@ -9,7 +9,7 @@ STOP and ask before proceeding.
 
 ## CURRENT PHASE
 
-Phase 13 -> COMPLETE | Phase 14 -> COMPLETE (14M closure) | Phase 15A -> COMPLETE (readiness audit)
+Phase 13 -> COMPLETE | Phase 14 -> COMPLETE (14M closure) | Phase 15A -> COMPLETE (readiness audit) | Phase 15B -> COMPLETE (security hotfix)
 
 ---
 
@@ -542,6 +542,13 @@ Phase 15 — Production & growth readiness
   - Launch blockers identified
   - Production checklist prepared
   - No feature changes implemented
+- 15B Security + Reliability Hotfix [COMPLETE]
+  - BOOKING_ACTION_SECRET fallback removed
+  - Admin API routes protected server-side
+  - admin_password no longer exposed
+  - Admin password verification moved server-side if implemented
+  - CRON_SECRET enforced
+  - No booking/pricing/availability logic changes
 
 ---
 

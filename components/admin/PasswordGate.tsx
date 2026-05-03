@@ -1,7 +1,8 @@
 "use client";
 import { useState } from "react";
 import OrayaEmblem from "@/components/OrayaEmblem";
-import { GOLD, WHITE, MIDNIGHT, CHARCOAL, PLAYFAIR, LATO, SESSION_KEY, fieldStyle } from "./theme";
+import { adminApiFetchInit } from "@/lib/admin-auth";
+import { GOLD, WHITE, MIDNIGHT, CHARCOAL, PLAYFAIR, LATO, fieldStyle } from "./theme";
 
 export default function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
   const [input, setInput]   = useState("");
@@ -13,15 +14,17 @@ export default function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
     setError("");
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/settings");
-      const data = await res.json();
-      const row = (data.settings ?? []).find(
-        (s: { key: string; value: string }) => s.key === "admin_password"
-      );
-      const correct = row?.value ?? "Oraya2026";
-      if (input === correct) {
-        sessionStorage.setItem(SESSION_KEY, "1");
+      const res = await fetch("/api/admin/verify-password", {
+        ...adminApiFetchInit,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: input }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (res.ok && data.ok) {
         onSuccess();
+      } else if (res.status === 503) {
+        setError(data.error ?? "Server is not configured for admin access.");
       } else {
         setError("Incorrect password. Please try again.");
       }

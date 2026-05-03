@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { requireAdminAuth } from "@/lib/admin-auth";
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: { id: string } }
 ) {
+  const denied = requireAdminAuth(request);
+  if (denied) return denied;
+
   const { id } = params;
   if (!id) {
     return NextResponse.json({ error: "Member ID is required." }, { status: 400 });

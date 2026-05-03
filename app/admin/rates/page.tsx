@@ -7,6 +7,7 @@ import { ADDON_OPERATIONAL_SETTINGS_KEY, mergeAddonsWithOperationalSettings, par
 import { validatePricing } from "@/lib/pricing/validation";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
 import { LATO } from "@/components/admin/theme";
+import { adminApiFetchInit } from "@/lib/admin-auth";
 import { SkeletonBlock, SkeletonText } from "@/components/LoadingSkeleton";
 import type { Addon, AddonValidationIssue } from "@/components/admin/types";
 
@@ -35,7 +36,7 @@ export default function AdminRatesPage() {
     async function loadRatesPageData() {
       const [addonsResult, settingsResult] = await Promise.allSettled([
         fetch("/api/addons", { cache: "no-store" }).then((r) => r.json()),
-        fetch("/api/admin/settings", { cache: "no-store" }).then((r) => r.json()),
+        fetch("/api/admin/settings", adminApiFetchInit).then((r) => r.json()),
       ]);
 
       if (cancelled) return;
@@ -216,6 +217,7 @@ export default function AdminRatesPage() {
     setAddonsSaved(false);
     setError("");
     const baseAddonsRes = await fetch("/api/admin/addons", {
+      ...adminApiFetchInit,
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -237,6 +239,7 @@ export default function AdminRatesPage() {
     }
 
     const addonSettingsRes = await fetch("/api/admin/settings", {
+      ...adminApiFetchInit,
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -275,6 +278,7 @@ export default function AdminRatesPage() {
     setPricingSaved(false);
     setError("");
     const res = await fetch("/api/admin/settings", {
+      ...adminApiFetchInit,
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ key: VILLA_BASE_PRICING_KEY, value: stringifyVillaPricingSetting(villaPricing) }),

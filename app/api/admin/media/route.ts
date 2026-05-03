@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { requireAdminAuth } from "@/lib/admin-auth";
 
 export const maxDuration = 60;
 
 // GET ?villa=mechmech
 export async function GET(request: NextRequest) {
+  const denied = requireAdminAuth(request);
+  if (denied) return denied;
+
   const villa = request.nextUrl.searchParams.get("villa");
   if (!villa) return NextResponse.json({ error: "villa param required" }, { status: 400 });
 
@@ -20,6 +24,9 @@ export async function GET(request: NextRequest) {
 
 // POST - upload a file
 export async function POST(request: NextRequest) {
+  const denied = requireAdminAuth(request);
+  if (denied) return denied;
+
   try {
     const formData = await request.formData();
     const file     = formData.get("file")     as File   | null;
@@ -83,6 +90,9 @@ export async function POST(request: NextRequest) {
 
 // DELETE - { id, file_name }
 export async function DELETE(request: NextRequest) {
+  const denied = requireAdminAuth(request);
+  if (denied) return denied;
+
   try {
     const { id, file_name } = await request.json();
     if (!id || !file_name) return NextResponse.json({ error: "id and file_name required" }, { status: 400 });
@@ -102,6 +112,9 @@ export async function DELETE(request: NextRequest) {
 // PATCH - reorder: { updates: [{id, display_order}] }
 //       - category: { id, category }
 export async function PATCH(request: NextRequest) {
+  const denied = requireAdminAuth(request);
+  if (denied) return denied;
+
   try {
     const body = await request.json();
 

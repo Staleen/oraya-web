@@ -2,7 +2,8 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import PasswordGate from "@/components/admin/PasswordGate";
 import { SkeletonBlock, SkeletonText } from "@/components/LoadingSkeleton";
-import { BORDER, GOLD, MIDNIGHT, SESSION_KEY } from "@/components/admin/theme";
+import { adminApiFetchInit } from "@/lib/admin-auth";
+import { BORDER, GOLD, MIDNIGHT } from "@/components/admin/theme";
 import type { Booking, CalendarSource, Member } from "@/components/admin/types";
 
 interface AdminDataContextValue {
@@ -38,14 +39,33 @@ export default function AdminDataProvider({ children }: { children: React.ReactN
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const ok = sessionStorage.getItem(SESSION_KEY) === "1";
-    setAuthed(ok);
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch("/api/admin/data", adminApiFetchInit);
+        if (cancelled) return;
+        if (r.ok) {
+          setAuthed(true);
+        } else {
+          setAuthed(false);
+          setLoading(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setAuthed(false);
+          setLoading(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function loadData(silent = false) {
     if (!silent) setLoading(true);
     try {
-      const r = await fetch("/api/admin/data", { cache: "no-store" });
+      const r = await fetch("/api/admin/data", adminApiFetchInit);
       const text = await r.text();
       console.log("[admin] /api/admin/data raw response:", text);
       let d: Record<string, unknown>;
@@ -57,6 +77,7 @@ export default function AdminDataProvider({ children }: { children: React.ReactN
       if (d.error) {
         console.error("[admin] data error from API:", d.error);
         setError(d.error as string);
+        if (r.status === 401) setAuthed(false);
         return;
       }
       console.log(`[admin] loaded ${(d.bookings as unknown[])?.length ?? 0} bookings, ${(d.members as unknown[])?.length ?? 0} members`);
@@ -78,8 +99,9 @@ export default function AdminDataProvider({ children }: { children: React.ReactN
   }, [authed]);
 
   function signOut() {
-    sessionStorage.removeItem(SESSION_KEY);
+    void fetch("/api/admin/logout", { ...adminApiFetchInit, method: "POST" });
     setAuthed(false);
+    setLoading(false);
   }
 
   const value = useMemo<AdminDataContextValue>(() => ({

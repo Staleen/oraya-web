@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runCalendarSync } from "@/lib/calendar/sync";
+import { requireAdminAuth } from "@/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,10 @@ function toErrorMessage(error: unknown) {
   }
 }
 
-export async function POST() {
+export async function POST(request: Request) {
+  const denied = requireAdminAuth(request);
+  if (denied) return denied;
+
   try {
     const summary = await runCalendarSync();
     return NextResponse.json({

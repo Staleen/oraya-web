@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import SettingsSections from "@/components/admin/SettingsSections";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
 import { LATO } from "@/components/admin/theme";
+import { adminApiFetchInit } from "@/lib/admin-auth";
 
 export default function AdminSettingsPage() {
   const { error, setError } = useAdminData();
@@ -17,7 +18,7 @@ export default function AdminSettingsPage() {
   const [notifSaved, setNotifSaved] = useState(false);
 
   useEffect(() => {
-    fetch("/api/admin/settings", { cache: "no-store" })
+    fetch("/api/admin/settings", adminApiFetchInit)
       .then((r) => r.json())
       .then((d) => {
         const rows = d.settings ?? [];
@@ -33,6 +34,7 @@ export default function AdminSettingsPage() {
     setWhatsappSaving(true);
     setWhatsappSaved(false);
     const res = await fetch("/api/admin/settings", {
+      ...adminApiFetchInit,
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ key: "whatsapp_number", value: whatsappNum }),
@@ -52,6 +54,7 @@ export default function AdminSettingsPage() {
     setPwSaving(true);
     setPwSaved(false);
     const res = await fetch("/api/admin/settings", {
+      ...adminApiFetchInit,
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ key: "admin_password", value: newPassword }),
@@ -71,6 +74,7 @@ export default function AdminSettingsPage() {
     setNotifSaving(true);
     setNotifSaved(false);
     const res = await fetch("/api/admin/settings", {
+      ...adminApiFetchInit,
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ key: "notification_emails", value: notifEmails }),

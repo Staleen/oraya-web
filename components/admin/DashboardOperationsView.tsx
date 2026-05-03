@@ -5,6 +5,7 @@ import type { Booking, CalendarSource, Member } from "@/components/admin/types";
 import { BORDER, GOLD, LATO, MUTED, PLAYFAIR, SURFACE, WHITE, fmt } from "@/components/admin/theme";
 import { KNOWN_VILLAS } from "@/lib/calendar/villas";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
+import { adminApiFetchInit } from "@/lib/admin-auth";
 import { AddonIcon } from "@/components/addon-icon";
 import { SkeletonBlock, SkeletonText } from "@/components/LoadingSkeleton";
 
@@ -317,6 +318,7 @@ export default function DashboardOperationsView({
     setApprovingAddonId(key);
     try {
       const res = await fetch(`/api/admin/bookings/${bookingId}/approve-addon`, {
+        ...adminApiFetchInit,
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ addon_id: addonId, decision }),

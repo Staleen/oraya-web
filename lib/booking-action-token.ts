@@ -3,7 +3,7 @@
  *
  * Format:  base64url(JSON payload) . base64url(HMAC-SHA256 signature)
  * Payload: { booking_id, action, exp, jti }
- * Secret:  BOOKING_ACTION_SECRET env var (falls back to a dev default — MUST be set in prod)
+ * Secret:  BOOKING_ACTION_SECRET env var (required — no fallback)
  * Default TTL: 72 hours (overridable via `expiresAt` option)
  *
  * Actions:
@@ -16,8 +16,17 @@
 
 import { createHmac, timingSafeEqual, randomUUID } from "crypto";
 
-const SECRET      = process.env.BOOKING_ACTION_SECRET ?? "oraya-booking-action-secret-change-in-prod";
 const TTL_SECONDS = 72 * 60 * 60; // 72 hours
+
+function requireBookingActionSecret(): string {
+  const s = process.env.BOOKING_ACTION_SECRET?.trim();
+  if (!s) {
+    throw new Error(
+      "[booking-action-token] BOOKING_ACTION_SECRET is required but missing or empty. Set it in the server environment.",
+    );
+  }
+  return s;
+}
 
 // Strict set used by the locked /api/booking-action route — do not widen.
 export type BookingAction = "confirmed" | "cancelled";
@@ -53,11 +62,12 @@ export function createActionToken(
   action: AnyBookingAction,
   options?: CreateActionTokenOptions,
 ): ActionTokenResult {
+  const secret = requireBookingActionSecret();
   const jti     = randomUUID();
   const exp     = options?.expiresAt ?? Math.floor(Date.now() / 1000) + TTL_SECONDS;
   const payload = Buffer.from(JSON.stringify({ booking_id: bookingId, action, exp, jti }))
                     .toString("base64url");
-  const sig     = createHmac("sha256", SECRET).update(payload).digest("base64url");
+  const sig     = createHmac("sha256", secret).update(payload).digest("base64url");
   return { token: `${payload}.${sig}`, jti, exp };
 }
 
@@ -70,12 +80,13 @@ type ParsedToken =
 
 function parseAndVerify(token: string): ParsedToken {
   try {
+    const secret = requireBookingActionSecret();
     const dot = token.lastIndexOf(".");
     if (dot === -1) return { ok: false, reason: "invalid" };
 
     const payload     = token.slice(0, dot);
     const sig         = token.slice(dot + 1);
-    const expectedSig = createHmac("sha256", SECRET).update(payload).digest("base64url");
+    const expectedSig = createHmac("sha256", secret).update(payload).digest("base64url");
 
     // Constant-time comparison to prevent timing attacks
     const sigBuf      = Buffer.from(sig,         "base64url");

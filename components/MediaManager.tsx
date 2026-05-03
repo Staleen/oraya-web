@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef, DragEvent } from "react";
 import { SkeletonBlock } from "@/components/LoadingSkeleton";
+import { adminApiFetchInit } from "@/lib/admin-auth";
 
 const GOLD     = "#C5A46D";
 const WHITE    = "#FFFFFF";
@@ -57,7 +58,7 @@ export default function MediaManager() {
     if (loaded.current[villa]) return;
     setLoading(true);
     try {
-      const res  = await fetch(`/api/admin/media?villa=${villa}`);
+      const res  = await fetch(`/api/admin/media?villa=${villa}`, adminApiFetchInit);
       const data = await res.json();
       if (res.ok) {
         setMedia((prev) => ({ ...prev, [villa]: data.media ?? [] }));
@@ -99,7 +100,7 @@ export default function MediaManager() {
       fd.append("villa",    activeVilla);
       fd.append("category", "other");
 
-      const res  = await fetch("/api/admin/media", { method: "POST", body: fd });
+      const res  = await fetch("/api/admin/media", { ...adminApiFetchInit, method: "POST", body: fd });
       const data = await res.json();
 
       if (res.ok && data.media) {
@@ -169,6 +170,7 @@ export default function MediaManager() {
     resetDrag();
 
     fetch("/api/admin/media", {
+      ...adminApiFetchInit,
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ updates: reordered.map((m) => ({ id: m.id, display_order: m.display_order })) }),
@@ -181,6 +183,7 @@ export default function MediaManager() {
   async function handleDelete(id: string, file_name: string) {
     if (!confirm("Delete this photo permanently?")) return;
     const res = await fetch("/api/admin/media", {
+      ...adminApiFetchInit,
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, file_name }),
@@ -204,6 +207,7 @@ export default function MediaManager() {
       [activeVilla]: (prev[activeVilla] ?? []).map((m) => m.id === id ? { ...m, category } : m),
     }));
     await fetch("/api/admin/media", {
+      ...adminApiFetchInit,
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, category }),

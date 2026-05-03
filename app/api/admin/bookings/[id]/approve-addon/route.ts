@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireAdminAuth } from "@/lib/admin-auth";
 
 // Service-role client — bypasses RLS, admin-only route.
 function makeAdminClient() {
@@ -18,6 +19,9 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const denied = requireAdminAuth(request);
+  if (denied) return denied;
+
   let addon_id: string;
   let decision: "approve" | "decline" = "approve";
   try {

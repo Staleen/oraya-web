@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "crypto";
 import { runCalendarSync } from "@/lib/calendar/sync";
 
 export const dynamic = "force-dynamic";
@@ -13,14 +14,30 @@ function toErrorMessage(error: unknown) {
   }
 }
 
-function isAuthorized(request: Request) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
-  return request.headers.get("authorization") === `Bearer ${secret}`;
+function isCronAuthorized(request: Request): "ok" | "missing" | "unauthorized" {
+  const secret = process.env.CRON_SECRET?.trim();
+  if (!secret) return "missing";
+  const auth = request.headers.get("authorization") ?? "";
+  const expected = `Bearer ${secret}`;
+  const a = Buffer.from(auth, "utf8");
+  const b = Buffer.from(expected, "utf8");
+  if (a.length !== b.length) return "unauthorized";
+  try {
+    return timingSafeEqual(a, b) ? "ok" : "unauthorized";
+  } catch {
+    return "unauthorized";
+  }
 }
 
 export async function GET(request: Request) {
-  if (!isAuthorized(request)) {
+  const authz = isCronAuthorized(request);
+  if (authz === "missing") {
+    return new Response(JSON.stringify({ error: "CRON_SECRET is not configured on the server." }), {
+      status: 503,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+  if (authz === "unauthorized") {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { "Content-Type": "application/json" },

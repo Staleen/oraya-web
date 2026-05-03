@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import CalendarSyncPanel from "@/components/admin/CalendarSyncPanel";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
 import { LATO } from "@/components/admin/theme";
+import { adminApiFetchInit } from "@/lib/admin-auth";
 
 export default function AdminCalendarPage() {
   const { calendarSources, error, setError, loadData } = useAdminData();
@@ -24,7 +25,7 @@ export default function AdminCalendarPage() {
     setSyncMessage("");
     setError("");
     try {
-      const res = await fetch("/api/admin/calendar-sync/run", { method: "POST" });
+      const res = await fetch("/api/admin/calendar-sync/run", { ...adminApiFetchInit, method: "POST" });
       const data = await res.json();
       if (!res.ok) {
         setError(data.error ?? "Calendar sync failed.");

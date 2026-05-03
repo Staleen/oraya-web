@@ -3,6 +3,7 @@ import { useState } from "react";
 import MembersTable from "@/components/admin/MembersTable";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
 import { LATO } from "@/components/admin/theme";
+import { adminApiFetchInit } from "@/lib/admin-auth";
 
 export default function AdminMembersPage() {
   const { members, setMembers, loading, error, setError } = useAdminData();
@@ -11,7 +12,7 @@ export default function AdminMembersPage() {
   async function deleteMember(id: string, name: string) {
     if (!confirm(`Delete member "${name}"? This will permanently remove their account and they will not be able to sign in again.`)) return;
     setDeletingId(id);
-    const res = await fetch(`/api/admin/members/${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/admin/members/${id}`, { ...adminApiFetchInit, method: "DELETE" });
     setDeletingId(null);
     if (res.ok) {
       setMembers((prev) => prev.filter((m) => m.id !== id));

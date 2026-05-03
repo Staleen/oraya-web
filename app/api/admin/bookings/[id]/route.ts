@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAdminAuth } from "@/lib/admin-auth";
 import { createClient } from "@supabase/supabase-js";
 import { sendBookingEmail } from "@/lib/send-booking-email";
 import {
@@ -58,6 +59,9 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const denied = requireAdminAuth(request);
+  if (denied) return denied;
+
   const db = makeAdminClient();
   const payload = await request.json();
   const bookingId = params.id;
