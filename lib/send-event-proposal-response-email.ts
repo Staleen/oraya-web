@@ -6,8 +6,8 @@ const MIDNIGHT = "#1F2B38";
 const MUTED = "#8a8070";
 const WHITE = "#FFFFFF";
 const FROM_EMAIL = "Oraya Reservations <bookings@stayoraya.com>";
-const REPLY_TO = "bookings@stayoraya.com";
-const ADMIN_TO = "bookings@stayoraya.com";
+const REPLY_TO = "admin@stayoraya.com";
+const ADMIN_TO = "admin@stayoraya.com";
 const CURRENCY = "USD";
 
 type ProposalResponseStatus = "accepted" | "declined";

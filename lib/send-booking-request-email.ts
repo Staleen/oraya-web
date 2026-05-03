@@ -6,6 +6,7 @@ const GOLD    = "#C5A46D";
 const MIDNIGHT = "#1F2B38";
 const MUTED   = "#8a8070";
 const FROM_EMAIL = "Oraya Reservations <bookings@stayoraya.com>";
+const REPLY_TO = "admin@stayoraya.com";
 const WARN = "#e0b070";
 const CURRENCY = "USD";
 
@@ -424,6 +425,7 @@ export async function sendBookingRequestEmail(
   const { error } = await resend.emails.send({
     from:    FROM_EMAIL,
     to:      payload.recipients,
+    replyTo: REPLY_TO,
     subject: `Oraya - New Booking Request [${ref}]`,
     html,
     text,

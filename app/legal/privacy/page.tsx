@@ -48,7 +48,7 @@ export default function PrivacyPage() {
       <h2 style={subheading}>Contact</h2>
       <p style={body}>
         Questions about your data? Reach us at{" "}
-        <a href="mailto:hello@stayoraya.com" style={{ color: GOLD, textDecoration: "none" }}>hello@stayoraya.com</a>.
+        <a href="mailto:admin@stayoraya.com" style={{ color: GOLD, textDecoration: "none" }}>admin@stayoraya.com</a>.
       </p>
     </>
   );
