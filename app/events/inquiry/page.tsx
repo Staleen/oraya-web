@@ -13,7 +13,12 @@ import {
   type AddonOperationalFields,
 } from "@/lib/addon-operations";
 import { CANONICAL_EVENT_TYPES, normalizeEventType } from "@/lib/event-types";
-import { EVENT_SERVICE_GROUP_ORDER, EVENT_SERVICE_SEED_DEFINITIONS, findEventServiceSeedByLabel } from "@/lib/event-service-seed";
+import {
+  EVENT_SERVICE_GROUP_ORDER,
+  EVENT_SERVICE_SEED_DEFINITIONS,
+  expandSeedApplicableEventTypes,
+  findEventServiceSeedByLabel,
+} from "@/lib/event-service-seed";
 import { supabase } from "@/lib/supabase";
 import { addDaysToDateOnly, rangesOverlap } from "@/lib/calendar/event-block";
 
@@ -39,39 +44,93 @@ const EVENT_TYPES = CANONICAL_EVENT_TYPES;
 const EVENT_RECOMMENDATIONS: Record<string, { guidance: string; recommended: string[] }> = {
   "Private Celebration": {
     guidance: "Private celebrations typically include dining setup, decoration, music, lighting, and guest hospitality.",
-    recommended: ["Tables and chairs", "Catering / buffet setup", "Decoration support", "Music coordination", "Service staff coordination"],
+    recommended: [
+      "Basic Seating Setup",
+      "Standard Catering",
+      "Basic Decoration",
+      "Premium Lighting Atmosphere",
+      "Event Coordination",
+    ],
   },
   "Gender Reveal": {
     guidance: "Gender reveal setups typically include seating, decoration, catering, and light service coordination.",
-    recommended: ["Tables and chairs", "Basic seating setup", "Decoration support", "Catering / buffet setup", "Service staff coordination"],
+    recommended: [
+      "Basic Seating Setup",
+      "Basic Decoration",
+      "Light Catering",
+      "Enhanced Decoration",
+      "Event Coordination",
+    ],
   },
   "Baptism / First Communion": {
     guidance: "These events typically include family seating, shaded comfort, catering flow, and light service coordination.",
-    recommended: ["Basic seating setup", "Tables and chairs", "Umbrellas / shaded areas", "Catering / buffet setup", "Service staff coordination"],
+    recommended: [
+      "Basic Seating Setup",
+      "Basic Decoration",
+      "Catering Coordination",
+      "Light Catering",
+      "Event Coordination",
+    ],
   },
   "Wedding / Engagement": {
     guidance: "These events typically include seating, decoration, lighting, AV support, and coordinated guest flow.",
-    recommended: ["Tables and chairs", "Decoration support", "Lighting", "AV / sound", "Service staff coordination"],
+    recommended: [
+      "Full Seating Setup up to 30 guests",
+      "Premium Decoration Experience",
+      "Premium Lighting Atmosphere",
+      "DJ Service",
+      "Event Coordination",
+    ],
   },
   "Graduation Celebration": {
     guidance: "Graduation setups typically include flexible seating, catering, decoration, music, and guest support.",
-    recommended: ["Tables and chairs", "Catering / buffet setup", "Decoration support", "Music coordination", "Service staff coordination"],
+    recommended: [
+      "Full Seating Setup up to 30 guests",
+      "Standard Catering",
+      "Enhanced Decoration",
+      "Music Setup",
+      "Event Coordination",
+    ],
   },
   "Family Gathering / Reunion": {
     guidance: "Family gatherings typically include relaxed seating, shade, catering, and light hospitality.",
-    recommended: ["Basic seating setup", "Tables and chairs", "Umbrellas / shaded areas", "Catering / buffet setup", "Service staff coordination"],
+    recommended: [
+      "Basic Seating Setup",
+      "Standard Catering",
+      "Basic Decoration",
+      "Light Catering",
+      "Event Coordination",
+    ],
   },
   "Dinner Event": {
     guidance: "Dinner events typically include table service, lighting, catering coordination, and ambiance setup.",
-    recommended: ["Tables and chairs", "Catering / buffet setup", "Lighting", "Service staff coordination", "Decoration support"],
+    recommended: [
+      "Full Seating Setup up to 30 guests",
+      "Premium Lighting Atmosphere",
+      "Standard Catering",
+      "Basic Lighting",
+      "Event Coordination",
+    ],
   },
   "Wellness Retreat": {
     guidance: "Wellness retreats typically include shaded seating, catering, and a calm, coordinated hospitality setup.",
-    recommended: ["Basic seating setup", "Umbrellas / shaded areas", "Catering / buffet setup", "Service staff coordination", "Decoration support"],
+    recommended: [
+      "Basic Seating Setup",
+      "Light Catering",
+      "Standard Catering",
+      "Catering Coordination",
+      "Event Coordination",
+    ],
   },
   "Corporate Event": {
     guidance: "Corporate events typically include seating, AV support, lighting, service coordination, and a polished arrival flow.",
-    recommended: ["Basic seating setup", "Tables and chairs", "AV / sound", "Lighting", "Valet"],
+    recommended: [
+      "Basic Seating Setup",
+      "Premium Table Styling",
+      "Basic Lighting",
+      "Valet Service",
+      "Event Coordination",
+    ],
   },
 };
 
@@ -551,14 +610,14 @@ function EventInquiryPageInner() {
         id: `fallback-${slugifyKey(service.label)}`,
         label: service.label,
         enabled: true,
-        source: "fallback",
+        source: "fallback" as const,
         applies_to: "event",
-        applicable_event_types: [...service.applicable_event_types],
-        quantity_enabled: false,
-        unit_label: null,
-        pricing_unit: null,
-        min_quantity: null,
-        max_quantity: null,
+        applicable_event_types: expandSeedApplicableEventTypes(service.applicable_event_types),
+        quantity_enabled: service.quantity_enabled,
+        unit_label: service.unit_label,
+        pricing_unit: service.pricing_unit,
+        min_quantity: service.min_quantity,
+        max_quantity: service.max_quantity,
         category: service.category,
         recommended: service.recommended,
         display_order: service.display_order,

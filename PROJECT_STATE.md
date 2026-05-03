@@ -9,7 +9,7 @@ STOP and ask before proceeding.
 
 ## CURRENT PHASE
 
-Phase 13 -> COMPLETE | Phase 14 -> COMPLETE (14M closure) | Phase 15A -> COMPLETE (readiness audit) | Phase 15B -> COMPLETE (security hotfix) | Phase 15C -> COMPLETE (event inquiry calendar parity with stay picker) | Phase 15D -> COMPLETE (security cleanup + smoke test) | Phase 15E -> COMPLETE (local env parity + secret hygiene) | Phase 15F.1 -> COMPLETE (contact email consistency hotfix) | Phase 15F.2 -> COMPLETE (email identity hello standard) | Phase 15F.3 -> COMPLETE (privacy + legal communication alignment) | Phase 15F.4 -> COMPLETE (trust layer + legal entity + testimonial intake) | Phase 15F.5 -> COMPLETE (manual testimonial manager + feedback request tool) | Phase 15F.6 -> COMPLETE (completed reservations history + feedback follow-up) | Phase 15F.7 -> COMPLETE (manual feedback email trigger + tracking) | Phase 15G -> COMPLETE (event type taxonomy consolidation + normalization)
+Phase 13 -> COMPLETE | Phase 14 -> COMPLETE (14M closure) | Phase 15A -> COMPLETE (readiness audit) | Phase 15B -> COMPLETE (security hotfix) | Phase 15C -> COMPLETE (event inquiry calendar parity with stay picker) | Phase 15D -> COMPLETE (security cleanup + smoke test) | Phase 15E -> COMPLETE (local env parity + secret hygiene) | Phase 15F.1 -> COMPLETE (contact email consistency hotfix) | Phase 15F.2 -> COMPLETE (email identity hello standard) | Phase 15F.3 -> COMPLETE (privacy + legal communication alignment) | Phase 15F.4 -> COMPLETE (trust layer + legal entity + testimonial intake) | Phase 15F.5 -> COMPLETE (manual testimonial manager + feedback request tool) | Phase 15F.6 -> COMPLETE (completed reservations history + feedback follow-up) | Phase 15F.7 -> COMPLETE (manual feedback email trigger + tracking) | Phase 15G -> IN PROGRESS (event services consolidation; 15G.1 taxonomy + 15G.5 default configuration complete)
 
 ---
 
@@ -609,13 +609,15 @@ Phase 15 — Production & growth readiness
   - 24-hour duplicate guard on `feedback_requested_at` (response: `Feedback already requested recently`); resend allowed after cooldown; confirmation modal before send
   - Completed / Checked-out expanded card: send / resend + status line; compact row shows last requested time when logged; manual prepare / WhatsApp / copy unchanged
   - no booking pricing, payment totals math, or availability logic changes
-- 15G Event Type Taxonomy Consolidation + Normalization [COMPLETE]
-  - `lib/event-types.ts` — new shared module: `CANONICAL_EVENT_TYPES` (9 types as const), `CANONICAL_EVENT_TYPE_VALUES`, `CanonicalEventType` type, `normalizeEventType()` helper
-  - `NORMALIZATION_MAP` covers all 27 historical/intermediate type strings from 14N + prior phases → 9 canonical values; unknown strings pass through unchanged
-  - `app/events/inquiry/page.tsx` — EVENT_TYPES replaced with `CANONICAL_EVENT_TYPES` (23→9); EVENT_RECOMMENDATIONS collapsed to 9 canonical keys; `filteredEventServices` useMemo normalizes both `form.eventType` and stored `applicable_event_types` entries before comparison; `selectedEventRecommendation` normalized before lookup
-  - `components/admin/AddonsEditor.tsx` — EVENT_TYPE_OPTIONS collapsed to 9 canonical values (removed all legacy aliases from selector)
-  - Backward compatibility: existing bookings with old stored `applicable_event_types` values continue to match correctly via normalization at filter site; admin displays `event_type` raw (no normalization needed there)
-  - No backend/API/schema changes
+- 15G Event Services Consolidation [IN PROGRESS]
+  - **15G.1** Event Type Taxonomy Consolidation + Normalization [COMPLETE]
+    - `lib/event-types.ts` — `CANONICAL_EVENT_TYPES` (9), `CANONICAL_EVENT_TYPE_VALUES`, `CanonicalEventType`, `normalizeEventType()`; `NORMALIZATION_MAP` for legacy strings
+    - Guest inquiry + admin selectors use canonical types; filters normalize `applicable_event_types`; no schema change
+  - **15G.5** Event Services Default Configuration [COMPLETE]
+    - `lib/event-service-seed.ts` — 18 canonical event services with full defaults (price, `pricing_model` / operational `pricing_unit`, categories per spec, advance notice as `preparation_time_hours` + `cutoff_type: before_booking`, enforcement soft, approval flags, quantity bounds, `display_order`, `applicable_event_types` including `SEED_APPLICABLE_ALL_EVENT_TYPES` expansion; catering “per person” stored as `per_person_per_day` + operational `per_guest`; legacy `matchAliases` for idempotent merge (e.g. old “Tables and chairs” → Full Seating)
+    - `app/api/admin/event-services/sync/route.ts` — upserts addons + `addon_operational_settings`: match by stable `id` then label/aliases; repair price when null/0/90; set `applies_to` when missing/`stay`; fill empty category / empty applicable types; preserve non-empty category and non-placeholder prices; `operational_settings_changed` in JSON response
+    - `app/events/inquiry/page.tsx` — fallback catalog uses `expandSeedApplicableEventTypes`; recommendations updated to new service labels; guest UI still has no price display
+    - Phase **15G** overall remains **IN PROGRESS** until remaining 15G admin/guest QA sub-steps are closed
 
 ---
 
