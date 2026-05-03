@@ -4047,6 +4047,11 @@ export default function BookingsTable({
   function renderCompactRow(booking: Booking, section: "confirmed" | "cancelled" | "pending") {
     const expanded = expandedCompactId === booking.id;
     const conflictHoldRow = section === "pending" && hasConfirmedOverlap(booking);
+    const conflictHoldReason = conflictHoldRow
+      ? getConfirmedConflicts(booking).some((c) => isEventInquiryBooking(c))
+        ? "Blocked by event setup window"
+        : "Blocked by confirmed stay"
+      : null;
     const accent = section === "confirmed" ? "#6fcf8a" : section === "cancelled" ? "#e07070" : conflictHoldRow ? "#e07070" : GOLD;
     const isGuest = !booking.member_id;
     const memberInfo = getMember(booking);
@@ -4136,25 +4141,46 @@ export default function BookingsTable({
                 Event Inquiry{booking.event_type ? ` · ${booking.event_type}` : ""}
               </span>
             )}
-            {section === "pending" && conflictHoldRow && (
+            {section === "pending" && conflictHoldRow && conflictHoldReason && (
               <span
                 style={{
                   display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontFamily: LATO,
-                  fontSize: "9px",
-                  letterSpacing: "1.4px",
-                  textTransform: "uppercase",
-                  color: "#e07070",
-                  backgroundColor: "rgba(224,112,112,0.12)",
-                  border: "0.5px solid rgba(224,112,112,0.32)",
-                  padding: "5px 9px",
-                  borderRadius: "6px",
-                  whiteSpace: "nowrap",
+                  flexDirection: "column",
+                  alignItems: isMobile ? "flex-end" : "flex-start",
+                  gap: "3px",
+                  maxWidth: "100%",
                 }}
               >
-                Conflict / On Hold
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontFamily: LATO,
+                    fontSize: "9px",
+                    letterSpacing: "1.4px",
+                    textTransform: "uppercase",
+                    color: "#e07070",
+                    backgroundColor: "rgba(224,112,112,0.12)",
+                    border: "0.5px solid rgba(224,112,112,0.32)",
+                    padding: "5px 9px",
+                    borderRadius: "6px",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Conflict / On Hold
+                </span>
+                <span
+                  style={{
+                    fontFamily: LATO,
+                    fontSize: "10px",
+                    color: MUTED,
+                    lineHeight: 1.3,
+                    textAlign: isMobile ? "right" : "left",
+                  }}
+                >
+                  {conflictHoldReason}
+                </span>
               </span>
             )}
             {hasDeadDayUpsell && (
