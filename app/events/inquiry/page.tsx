@@ -13,6 +13,7 @@ import {
   type AddonOperationalFields,
 } from "@/lib/addon-operations";
 import { supabase } from "@/lib/supabase";
+import { addDaysToDateOnly, rangesOverlap } from "@/lib/calendar/event-block";
 
 // ─── Brand constants ──────────────────────────────────────────────────────────
 const GOLD     = "#C5A46D";
@@ -166,6 +167,39 @@ function nightCount(checkIn: string, checkOut: string): number {
   ));
 }
 
+/** Mirrors `detectDeadDaySuggestion` in app/book/page.tsx (Phase 12E) — same gap detection on merged ranges. */
+function detectDeadDaySuggestion(
+  checkIn: string,
+  checkOut: string,
+  confirmedRanges: ConfirmedRange[],
+): { suggestLateCheckout: boolean; suggestEarlyCheckin: boolean } {
+  if (!checkIn && !checkOut) return { suggestLateCheckout: false, suggestEarlyCheckin: false };
+  let suggestLateCheckout = false;
+  let suggestEarlyCheckin = false;
+
+  for (const rangeA of confirmedRanges) {
+    const checkoutMs = parseLocalISO(rangeA.check_out).getTime();
+    const nextBookingISO = toISO(new Date(checkoutMs + 2 * 86_400_000));
+    const hasNextBooking = confirmedRanges.some((r) => r.check_in === nextBookingISO);
+    if (!hasNextBooking) continue;
+
+    const gapDayISO = toISO(new Date(checkoutMs + 86_400_000));
+
+    if (checkOut && checkOut === rangeA.check_out) {
+      suggestLateCheckout = true;
+    }
+    if (checkIn && checkIn === gapDayISO) {
+      suggestEarlyCheckin = true;
+      suggestLateCheckout = true;
+    }
+  }
+
+  return { suggestLateCheckout, suggestEarlyCheckin };
+}
+
+/** Event inquiries: minimum one night between start and end (no pricing-driven min stay). Mirrors book default floor. */
+const MIN_EVENT_NIGHTS = 1;
+
 function friendlyError(msg: string): string {
   if (msg.includes("row-level security") || msg.includes("policy") || msg.includes("42501"))
     return "Unable to submit your inquiry. Please try again or contact us directly.";
@@ -267,6 +301,11 @@ const CALENDAR_CSS = `
   .oraya-cal .rdp-day_disabled {
     color: rgba(255,255,255,0.2) !important;
     text-decoration: line-through; opacity: 0.5;
+  }
+  .oraya-cal .rdp-day_deadCheckIn:not(.rdp-day_selected):not(.rdp-day_range_middle):not(.rdp-day_range_start):not(.rdp-day_range_end) {
+    color: rgba(255,255,255,0.28);
+    text-decoration: line-through;
+    cursor: not-allowed;
   }
   .oraya-cal .rdp-day_outside { color: rgba(255,255,255,0.15); }
   .oraya-cal .rdp-day_today:not(.rdp-day_selected):not(.rdp-day_range_middle):not(.rdp-day_range_start):not(.rdp-day_range_end) {
@@ -432,6 +471,10 @@ function EventInquiryPageInner() {
   // ── Derived values ────────────────────────────────────────────────────────
   const today = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; })();
 
+  /**
+   * Blocked day ranges for the calendar (same construction as app/book/page.tsx).
+   * `confirmedRanges` from /api/bookings/availability are already operational per lib/calendar/availability.ts.
+   */
   const bookedRangeList: Array<{ from: Date; to: Date }> = confirmedRanges.flatMap(r => {
     const from = parseLocalISO(r.check_in);
     const to   = parseLocalISO(r.check_out);
@@ -445,9 +488,62 @@ function EventInquiryPageInner() {
     return bookedRangeList.some(r => d >= r.from && d <= r.to);
   }
 
+  function addLocalDays(day: Date, days: number): Date {
+    const next = new Date(day.getTime());
+    next.setDate(next.getDate() + days);
+    return next;
+  }
+
+  /** Every calendar day in [check_in − 1, check_out) must be free — mirrors incoming event overlap in findAvailabilityConflict (event-block.ts). */
+  function isEventOperationalSpanClear(eventStart: Date, eventCheckout: Date): boolean {
+    if (eventCheckout <= eventStart) return false;
+    const setupISO = addDaysToDateOnly(toISO(eventStart), -1);
+    let d = parseLocalISO(setupISO);
+    for (; d < eventCheckout; d = addLocalDays(d, 1)) {
+      if (isCalendarDateBlocked(d)) return false;
+    }
+    return true;
+  }
+
+  function incomingOperationalOverlapsConfirmed(eventStart: Date, eventCheckout: Date): boolean {
+    const incomingOp = {
+      check_in: addDaysToDateOnly(toISO(eventStart), -1),
+      check_out: toISO(eventCheckout),
+    };
+    return confirmedRanges.some((r) =>
+      rangesOverlap(incomingOp, { check_in: r.check_in, check_out: r.check_out }),
+    );
+  }
+
+  function isValidEventCheckoutFrom(eventStart: Date, eventCheckout: Date): boolean {
+    if (eventCheckout <= eventStart) return false;
+    if (isCalendarDateBlocked(eventCheckout)) return false;
+    return isEventOperationalSpanClear(eventStart, eventCheckout);
+  }
+
+  function hasValidEventCheckoutFromCheckIn(checkInDay: Date): boolean {
+    const setupISO = addDaysToDateOnly(toISO(checkInDay), -1);
+    if (isCalendarDateBlocked(parseLocalISO(setupISO))) return false;
+
+    for (let n = MIN_EVENT_NIGHTS; n <= 366; n++) {
+      const candidateCheckout = addLocalDays(checkInDay, n);
+      if (isValidEventCheckoutFrom(checkInDay, candidateCheckout)) return true;
+    }
+    return false;
+  }
+
+  function isDeadEventCheckInDate(day: Date): boolean {
+    return !isCalendarDateBlocked(day) && !hasValidEventCheckoutFromCheckIn(day);
+  }
+
+  const isChoosingCheckout = Boolean(dateRange?.from && !dateRange.to);
+
   const disabledDays: Matcher[] = [
     { before: today },
     ...bookedRangeList,
+    ...(isChoosingCheckout
+      ? [(day: Date) => !isValidEventCheckoutFrom(dateRange!.from!, day)]
+      : [isDeadEventCheckInDate]),
   ];
 
   const fallbackEventServices = useMemo<EventServiceOption[]>(
@@ -519,6 +615,12 @@ function EventInquiryPageInner() {
   const checkIn = dateRange?.from ? toISO(dateRange.from) : "";
   const checkOut = dateRange?.to ? toISO(dateRange.to) : "";
   const nights = nightCount(checkIn, checkOut);
+
+  const eventDeadDayHints = useMemo(() => {
+    if (!checkIn || !checkOut) return null;
+    return detectDeadDaySuggestion(checkIn, checkOut, confirmedRanges);
+  }, [checkIn, checkOut, confirmedRanges]);
+
   const selectedEventRecommendation = useMemo(() => {
     if (!form.eventType) return null;
     const recommendation = EVENT_RECOMMENDATIONS[form.eventType];
@@ -568,17 +670,33 @@ function EventInquiryPageInner() {
     e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)";
   }
 
-  function handleDateSelect(nextRange: DateRange | undefined) {
-    if (nextRange?.from && nextRange.to) {
-      // Validate continuous range (no booked nights inside)
-      for (let n = new Date(nextRange.from.getTime()); n < nextRange.to; n.setDate(n.getDate() + 1)) {
-        if (isCalendarDateBlocked(n)) {
-          setDateRange(undefined);
-          setError("Those dates overlap an existing booking. Please choose different dates.");
-          return;
-        }
-      }
+  function handleDateSelect(nextRange: DateRange | undefined, selectedDay: Date) {
+    const startsNewRange =
+      !dateRange?.from ||
+      Boolean(dateRange.to) ||
+      toISO(selectedDay) <= toISO(dateRange.from);
+
+    if (startsNewRange && !hasValidEventCheckoutFromCheckIn(selectedDay)) {
+      setDateRange(undefined);
+      setError(
+        "Please choose an event start where the setup day before it and at least one valid end date are available.",
+      );
+      return;
     }
+
+    if (
+      nextRange?.from &&
+      nextRange.to &&
+      (!isValidEventCheckoutFrom(nextRange.from, nextRange.to) ||
+        incomingOperationalOverlapsConfirmed(nextRange.from, nextRange.to))
+    ) {
+      setDateRange(undefined);
+      setError(
+        "Those dates conflict with an existing reservation, block the setup window before your event, or cannot form a continuous event range. Please choose your dates again.",
+      );
+      return;
+    }
+
     setError("");
     setDateRange(nextRange);
   }
@@ -628,6 +746,18 @@ function EventInquiryPageInner() {
       if (!form.eventType)           { setError("Please choose an event type before continuing."); return; }
       if (!checkIn)                  { setError("Please select your preferred date(s) to continue."); return; }
       if (!checkOut)                 { setError("Please select an end date for your event window."); return; }
+      if (checkOut <= checkIn)       { setError("Your event end date must be after the start date."); return; }
+      if (
+        dateRange?.from &&
+        dateRange.to &&
+        (!isValidEventCheckoutFrom(dateRange.from, dateRange.to) ||
+          incomingOperationalOverlapsConfirmed(dateRange.from, dateRange.to))
+      ) {
+        setError(
+          "Those dates conflict with an existing reservation or the venue setup window. Please adjust your event dates.",
+        );
+        return;
+      }
       const attendees = parseInt(form.dayVisitors, 10);
       if (!Number.isFinite(attendees) || attendees < 1) {
         setError("Please enter the expected number of attendees."); return;
@@ -931,7 +1061,7 @@ function EventInquiryPageInner() {
                 <div>
                   <p style={{ ...labelStyle, marginBottom: "10px" }}>Preferred date(s)</p>
                   <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "0 0 12px", lineHeight: 1.6 }}>
-                    Choose your preferred event window. Oraya will confirm availability with the final proposal.
+                    Choose your event start and end. Dates already held—including the setup day before your start—are blocked the same way as stay booking. Oraya will confirm the final window with you.
                   </p>
                   <div style={{ border: "0.5px solid rgba(197,164,109,0.12)", backgroundColor: "rgba(255,255,255,0.01)", padding: "1.25rem" }}>
                     <div className="oraya-cal">
@@ -940,12 +1070,21 @@ function EventInquiryPageInner() {
                         selected={dateRange}
                         onSelect={handleDateSelect}
                         disabled={disabledDays}
+                        modifiers={{ deadCheckIn: isChoosingCheckout ? () => false : isDeadEventCheckInDate }}
                         numberOfMonths={2}
                         fromDate={today}
                         showOutsideDays
                       />
                     </div>
                   </div>
+
+                  {eventDeadDayHints && (eventDeadDayHints.suggestLateCheckout || eventDeadDayHints.suggestEarlyCheckin) && (
+                    <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "12px 0 0", lineHeight: 1.65 }}>
+                      {eventDeadDayHints.suggestEarlyCheckin
+                        ? "Your window sits next to a tight one-day gap between other reservations. Access and load-in timing may need extra coordination—we will confirm with the proposal."
+                        : "Your event end sits next to a short gap before the next hold. Wrap or load-out timing may need coordination—we will confirm with the proposal."}
+                    </p>
+                  )}
 
                   {checkIn && (
                     <div style={{ marginTop: "14px", padding: "14px 20px", border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: "rgba(197,164,109,0.04)", display: "flex", flexWrap: "wrap", gap: "28px" }}>
