@@ -9,7 +9,7 @@ STOP and ask before proceeding.
 
 ## CURRENT PHASE
 
-Phase 13 -> COMPLETE | Phase 14 -> COMPLETE (14M closure)
+Phase 13 -> COMPLETE | Phase 14 -> COMPLETE (14M closure) | Phase 15A -> COMPLETE (readiness audit)
 
 ---
 
@@ -534,6 +534,15 @@ Phase 14 rules:
   - Cancel warning clarified
   - Event/stay wording cleaned up
   - No backend/API/schema changes
+
+Phase 15 — Production & growth readiness
+
+- 15A Production Readiness Audit [COMPLETE]
+  - Full system audited
+  - Launch blockers identified
+  - Production checklist prepared
+  - No feature changes implemented
+
 ---
 
 ## AGENT EXECUTION RULES
