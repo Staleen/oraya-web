@@ -625,9 +625,13 @@ function EventInquiryPageInner() {
     if (!form.eventType) return null;
     const recommendation = EVENT_RECOMMENDATIONS[form.eventType];
     if (!recommendation) return null;
-    const recommendedServices = filteredEventServices.filter((service) =>
-      recommendation.recommended.some((label) => label.toLowerCase() === service.label.toLowerCase())
-    );
+    const recommendedServices = filteredEventServices.filter((service) => {
+      // For managed services: honour the admin recommended flag first;
+      // fall back to label-matching so existing services remain recommended
+      // without requiring admin to re-flag them after this change.
+      if (hasManagedEventServices && service.recommended === true) return true;
+      return recommendation.recommended.some((label) => label.toLowerCase() === service.label.toLowerCase());
+    });
     return { ...recommendation, recommendedServices };
   }, [filteredEventServices, form.eventType]);
   const serviceIntent = (() => {
