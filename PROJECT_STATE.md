@@ -9,7 +9,7 @@ STOP and ask before proceeding.
 
 ## CURRENT PHASE
 
-Phase 13 -> COMPLETE | Phase 14 -> COMPLETE (14M closure) | Phase 15A -> COMPLETE (readiness audit) | Phase 15B -> COMPLETE (security hotfix) | Phase 15C -> COMPLETE (event inquiry calendar parity with stay picker)
+Phase 13 -> COMPLETE | Phase 14 -> COMPLETE (14M closure) | Phase 15A -> COMPLETE (readiness audit) | Phase 15B -> COMPLETE (security hotfix) | Phase 15C -> COMPLETE (event inquiry calendar parity with stay picker) | Phase 15D -> COMPLETE (security cleanup + smoke test)
 
 ---
 
@@ -549,6 +549,12 @@ Phase 15 — Production & growth readiness
   - admin password verification moved server-side
   - CRON_SECRET enforced
   - no booking/pricing/availability logic changes
+- 15D Security Cleanup + Smoke Test [COMPLETE]
+  - temporary env debug route removed
+  - admin API auth smoke-tested
+  - cron authorization smoke-tested
+  - proposal schema verified
+  - no feature logic changed
 
 ---
 
