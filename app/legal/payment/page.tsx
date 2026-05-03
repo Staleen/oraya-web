@@ -49,7 +49,7 @@ export default function PaymentPage() {
       <h2 style={subheading}>Contact</h2>
       <p style={body}>
         Questions about payment?{" "}
-        <a href="mailto:admin@stayoraya.com" style={{ color: GOLD, textDecoration: "none" }}>admin@stayoraya.com</a>
+        <a href="mailto:hello@stayoraya.com" style={{ color: GOLD, textDecoration: "none" }}>hello@stayoraya.com</a>
         {" "}— we&apos;re happy to walk you through it.
       </p>
     </>

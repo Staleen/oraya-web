@@ -732,7 +732,7 @@ export default function Home() {
             { title: "Explore",  links: [{ label: "Villa Mechmech", href: "/villas/mechmech" }, { label: "Villa Byblos", href: "/villas/byblos" }, { label: "Gallery", href: "#" }, { label: "Events", href: "/events/inquiry" }] },
             { title: "Members",  links: [{ label: "Join Oraya", href: "/join" }, { label: "Sign in", href: "/login" }, { label: "My bookings", href: "#" }, { label: "My profile", href: "#" }] },
             { title: "Legal",    links: [{ label: "Privacy Policy", href: "/legal/privacy" }, { label: "Terms & Conditions", href: "/legal/terms" }, { label: "Cancellation & Refund", href: "/legal/refund" }, { label: "Payment Policy", href: "/legal/payment" }] },
-            { title: "Contact",  links: [{ label: "admin@stayoraya.com", href: "mailto:admin@stayoraya.com" }, { label: "WhatsApp", href: "#" }, { label: "Instagram", href: "#" }, { label: "Lebanon", href: "#" }] },
+            { title: "Contact",  links: [{ label: "hello@stayoraya.com", href: "mailto:hello@stayoraya.com" }, { label: "WhatsApp", href: "#" }, { label: "Instagram", href: "#" }, { label: "Lebanon", href: "#" }] },
           ].map(({ title, links }) => (
             <div key={title}>
               <p

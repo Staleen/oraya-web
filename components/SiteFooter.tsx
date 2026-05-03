@@ -39,7 +39,7 @@ export default function SiteFooter() {
     {
       title: "Contact",
       links: [
-        { label: "admin@stayoraya.com", href: "mailto:admin@stayoraya.com" },
+        { label: "hello@stayoraya.com", href: "mailto:hello@stayoraya.com" },
         { label: "WhatsApp",            href: "#" },
         { label: "Instagram",           href: "#" },
         { label: "Lebanon",             href: "#" },

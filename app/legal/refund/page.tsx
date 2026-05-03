@@ -46,7 +46,7 @@ export default function RefundPage() {
       <h2 style={subheading}>Contact</h2>
       <p style={body}>
         Need to discuss a change?{" "}
-        <a href="mailto:admin@stayoraya.com" style={{ color: GOLD, textDecoration: "none" }}>admin@stayoraya.com</a>
+        <a href="mailto:hello@stayoraya.com" style={{ color: GOLD, textDecoration: "none" }}>hello@stayoraya.com</a>
         {" "}— we read every message.
       </p>
     </>

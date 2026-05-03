@@ -51,7 +51,7 @@ export default function TermsPage() {
       <h2 style={subheading}>Contact</h2>
       <p style={body}>
         Questions about these terms? Reach us at{" "}
-        <a href="mailto:admin@stayoraya.com" style={{ color: GOLD, textDecoration: "none" }}>admin@stayoraya.com</a>.
+        <a href="mailto:hello@stayoraya.com" style={{ color: GOLD, textDecoration: "none" }}>hello@stayoraya.com</a>.
       </p>
     </>
   );

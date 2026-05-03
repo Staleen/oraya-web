@@ -6,7 +6,7 @@ const GOLD     = "#C5A46D";
 const MIDNIGHT = "#1F2B38";
 const MUTED    = "#8a8070";
 const FROM_EMAIL = "Oraya Reservations <bookings@stayoraya.com>";
-const REPLY_TO = "admin@stayoraya.com";
+const REPLY_TO = "hello@stayoraya.com";
 const CURRENCY = "USD";
 
 function fmtDate(iso: string) {
