@@ -295,6 +295,38 @@ function isPaymentOverdue(booking: Booking) {
   return dueDate.getTime() < Date.now();
 }
 
+// Phase 13N: due within next 24h, not yet overdue. Reuses existing overdue helper to avoid duplicate warnings.
+function isPaymentDueSoon(booking: Booking) {
+  if (getPaymentStatus(booking) !== "payment_requested" || !booking.payment_due_at) return false;
+  const dueDate = new Date(booking.payment_due_at);
+  if (Number.isNaN(dueDate.getTime())) return false;
+  const ms = dueDate.getTime() - Date.now();
+  return ms > 0 && ms < 24 * 60 * 60 * 1000;
+}
+
+// Phase 13N: comparison-based revenue total. Uses the same fallback chain as 13H.2/13H.3/13H.4 inline copies.
+// Returns null when no value is available — callers must skip rendering rather than guess.
+function getBookingTotal(b: Booking): number | null {
+  const intel = getPricingIntelligenceMeta(b);
+  const addonSubRaw = getAddonSnapshotsFromBooking(b).reduce((sum: number, addon) => {
+    return sum + (typeof addon.price === "number" && Number.isFinite(addon.price) ? addon.price : 0);
+  }, 0);
+  const stayRaw =
+    getSnapshotNumber(b.pricing_snapshot?.adjusted_stay_subtotal) ??
+    getSnapshotNumber(b.pricing_snapshot?.subtotal) ??
+    intel?.stay_value ??
+    getPersistedStayValue(b);
+  const addonsRaw =
+    intel?.addons_value ??
+    (getAddonSnapshotsFromBooking(b).length > 0 ? addonSubRaw : 0);
+  return (
+    getSnapshotNumber(b.pricing_snapshot?.estimated_total) ??
+    intel?.estimated_total ??
+    intel?.internal_value ??
+    (typeof stayRaw === "number" && typeof addonsRaw === "number" ? stayRaw + addonsRaw : null)
+  );
+}
+
 function getPaymentStatusStyle(status: string, overdue: boolean) {
   if (overdue) {
     return {
@@ -1892,6 +1924,40 @@ export default function BookingsTable({
     const offerSavingsTotal = getBookingOfferSavingsTotal(booking);
     const hasTrackedOffer = bookingHasDiscountedAddon(booking);
 
+    // Phase 13N: relative (comparison-based) revenue priority. Only meaningful when overlapping pending requests exist.
+    const currentBookingTotal = getBookingTotal(booking);
+    const overlapTotalsAll = hasPendingOverlap
+      ? overlappingPendingBookings.map(getBookingTotal)
+      : [];
+    const overlapTotalsNumeric = overlapTotalsAll.filter((n): n is number => typeof n === "number");
+    const allNumericTotals = typeof currentBookingTotal === "number"
+      ? [currentBookingTotal, ...overlapTotalsNumeric]
+      : overlapTotalsNumeric;
+    let revenueTier: "high" | "medium" | "low" | null = null;
+    let bestOptionTotal: number | null = null;
+    let isCurrentBest = false;
+    if (
+      booking.status === "pending" &&
+      hasPendingOverlap &&
+      typeof currentBookingTotal === "number" &&
+      overlapTotalsNumeric.length > 0
+    ) {
+      const max = Math.max(...allNumericTotals);
+      const min = Math.min(...allNumericTotals);
+      bestOptionTotal = max;
+      isCurrentBest = currentBookingTotal === max;
+      if (max === min) {
+        revenueTier = "medium";
+      } else if (currentBookingTotal === max) {
+        revenueTier = "high";
+      } else if (currentBookingTotal === min) {
+        revenueTier = "low";
+      } else {
+        revenueTier = "medium";
+      }
+    }
+    const dueSoon = isPaymentDueSoon(booking) && !isPaymentOverdue(booking);
+
     return (
       <div
         style={{
@@ -1920,6 +1986,39 @@ export default function BookingsTable({
               boxShadow: `0 0 0 3px ${accent.glow}`,
             }}
           />
+        )}
+
+        {/* Phase 13N: Best option highlight — only when overlapping pending requests exist */}
+        {bestOptionTotal !== null && (
+          <div
+            style={{
+              border: `0.5px solid ${isCurrentBest ? "rgba(126,207,207,0.32)" : "rgba(240,189,103,0.32)"}`,
+              backgroundColor: isCurrentBest ? "rgba(126,207,207,0.08)" : "rgba(240,189,103,0.08)",
+              padding: "10px 14px",
+              borderRadius: "8px",
+            }}
+          >
+            <p style={{ fontFamily: LATO, fontSize: "11px", color: isCurrentBest ? "#7ecfcf" : "#f0bd67", margin: 0, lineHeight: 1.5, fontWeight: 600 }}>
+              Best option: ${bestOptionTotal.toLocaleString("en-US")} booking
+              {isCurrentBest ? " — this request" : " — review competing request"}
+            </p>
+          </div>
+        )}
+
+        {/* Phase 13N: payment due soon (within 24h, not overdue) — overdue uses the existing 13L.5 warning */}
+        {dueSoon && (
+          <div
+            style={{
+              border: "0.5px solid rgba(240,189,103,0.32)",
+              backgroundColor: "rgba(240,189,103,0.08)",
+              padding: "8px 12px",
+              borderRadius: "6px",
+            }}
+          >
+            <p style={{ fontFamily: LATO, fontSize: "11px", color: "#f0bd67", margin: 0, lineHeight: 1.5, fontWeight: 600 }}>
+              Payment due soon
+            </p>
+          </div>
         )}
 
         <div
@@ -1967,6 +2066,45 @@ export default function BookingsTable({
           >
             <StatusBadge status={booking.status} />
             {booking.status === "confirmed" && renderPaymentStatusBadge(booking)}
+            {/* Phase 13N: relative revenue priority — only when overlapping pending requests exist */}
+            {revenueTier && (() => {
+              const tierLabel =
+                revenueTier === "high" ? "High value"
+                : revenueTier === "low" ? "Low value"
+                : "Medium value";
+              const tierColor =
+                revenueTier === "high" ? "#7ecfcf"
+                : revenueTier === "low" ? MUTED
+                : GOLD;
+              const tierBorder =
+                revenueTier === "high" ? "rgba(126,207,207,0.32)"
+                : revenueTier === "low" ? "rgba(255,255,255,0.18)"
+                : "rgba(197,164,109,0.32)";
+              const tierBg =
+                revenueTier === "high" ? "rgba(126,207,207,0.12)"
+                : revenueTier === "low" ? "rgba(255,255,255,0.04)"
+                : "rgba(197,164,109,0.12)";
+              return (
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontFamily: LATO,
+                    fontSize: "9px",
+                    letterSpacing: "1.5px",
+                    textTransform: "uppercase",
+                    color: tierColor,
+                    backgroundColor: tierBg,
+                    border: `0.5px solid ${tierBorder}`,
+                    padding: "6px 10px",
+                    borderRadius: "999px",
+                  }}
+                >
+                  {tierLabel}
+                </span>
+              );
+            })()}
             {hasDeadDayUpsell && (
               <span
                 style={{
@@ -2292,6 +2430,10 @@ export default function BookingsTable({
               gap: "8px",
             }}
           >
+            {/* Phase 13N: subtle dead-day heading */}
+            <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: "#7ecfcf", margin: 0, lineHeight: 1.5, fontWeight: 600 }}>
+              Opportunity: sell adjacent day (early check-in / late checkout)
+            </p>
             {deadDayUpsells.map((opportunity) => {
               const message =
                 opportunity.kind === "late_checkout"
@@ -2607,6 +2749,10 @@ export default function BookingsTable({
                   </p>
                 </div>
               )}
+              {/* Phase 13N: admin decision clarity helper */}
+              <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: 0, lineHeight: 1.5, fontStyle: "italic" }}>
+                Prioritize higher-value confirmed bookings when overlaps exist.
+              </p>
             </div>
           );
         })()}

@@ -399,6 +399,15 @@ Phase 13 — Real-world validation & stabilization:
   - No Stripe / payment processing
   - No schema / API changes
 - 13L.5 Payment Reminder & Overdue Control [COMPLETE]
+- 13N Revenue Optimization Layer [COMPLETE]
+  - Relative revenue priority badges (high/medium/low — only on overlapping pendings, no thresholds)
+  - Best booking highlight for overlaps
+  - Payment due-soon indicator (24h window, distinct from existing overdue)
+  - Refined dead-day hints (subtle heading)
+  - Admin decision clarity helper
+  - No threshold-based scoring
+  - No automation decisions
+  - No backend/API/schema changes
   - Admin-triggered payment reminder
   - Overdue escalation UI
   - Cron-ready reminder function prepared
