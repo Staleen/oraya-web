@@ -461,6 +461,13 @@ Phase 14 rules:
   - Implementation plan prepared
   - Backend implementation not yet applied
   - Explicit approval required before enforcement
+- 14D Event Add-ons Architecture [COMPLETE]
+  - Existing add-on engine audited
+  - Event service requirements defined
+  - Existing add-ons table + metadata settings path are sufficient for the foundation
+  - Admin UI plan prepared under the existing Rates / Add-ons area
+  - No event pricing exposed
+  - No schema/API changes applied
 ---
 
 ## AGENT EXECUTION RULES
