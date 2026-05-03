@@ -1,5 +1,6 @@
 import Link from "next/link";
 import OrayaEmblem from "@/components/OrayaEmblem";
+import LegalEntityNotice from "@/components/LegalEntityNotice";
 import SiteFooter from "@/components/SiteFooter";
 
 const GOLD     = "#C5A46D";
@@ -45,6 +46,7 @@ export default function LegalLayout({ children }: { children: React.ReactNode })
       <main style={{ backgroundColor: BEIGELIGHT, minHeight: "70vh", padding: "4rem 2rem" }}>
         <article style={{ maxWidth: "780px", margin: "0 auto", backgroundColor: WHITE, padding: "3.5rem 3rem", border: "0.5px solid rgba(197,164,109,0.18)" }}>
           {children}
+          <LegalEntityNotice variant="light" />
         </article>
       </main>
 

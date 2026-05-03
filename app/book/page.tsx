@@ -1296,8 +1296,12 @@ function BookPageInner() {
             <h1 style={{ fontFamily: PLAYFAIR, fontSize: "2rem", fontWeight: 400, color: WHITE, margin: "0 0 12px" }}>
               Request a booking
             </h1>
-            <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, lineHeight: 1.7, margin: 0 }}>
+            <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, lineHeight: 1.7, margin: "0 0 1rem" }}>
               Sign in for member benefits, or continue as guest.
+            </p>
+            <p style={{ fontFamily: LATO, fontSize: "11px", color: "rgba(255,255,255,0.45)", lineHeight: 1.65, margin: 0, maxWidth: "480px", marginLeft: "auto", marginRight: "auto" }}>
+              Booking on this site is direct with Oraya — not instant self-checkout. Every request is reviewed before confirmation; payment is requested only after that review. For help,{" "}
+              <a href="mailto:hello@stayoraya.com" style={{ color: GOLD, textDecoration: "none" }}>hello@stayoraya.com</a>.
             </p>
           </div>
           <div style={{ border: "0.5px solid rgba(197,164,109,0.3)", backgroundColor: "rgba(197,164,109,0.05)", padding: "2rem", display: "flex", gap: "10px", justifyContent: "center", flexWrap: "wrap" }}>
@@ -1355,9 +1359,21 @@ function BookPageInner() {
           <h1 style={{ fontFamily: PLAYFAIR, fontSize: "2rem", fontWeight: 400, color: WHITE, margin: "0 0 10px" }}>
             Request a booking
           </h1>
-          <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, lineHeight: 1.7, margin: 0 }}>
-            Submit your dates and we&apos;ll confirm availability within 24 hours.
+          <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, lineHeight: 1.7, margin: "0 0 1.25rem" }}>
+            Submit your dates for review. We aim to confirm availability within 24 hours — every stay is prepared by the Oraya team before confirmation.
           </p>
+          <div style={{ border: "0.5px solid rgba(197,164,109,0.22)", backgroundColor: "rgba(197,164,109,0.05)", padding: "14px 18px", textAlign: "left", maxWidth: "520px", margin: "0 auto" }}>
+            <p style={{ fontFamily: LATO, fontSize: "11px", color: "rgba(255,255,255,0.72)", margin: "0 0 8px", lineHeight: 1.65 }}>
+              Direct booking here does not mean instant or unverified checkout. Oraya reviews each request against availability and operations before confirming your stay.
+            </p>
+            <p style={{ fontFamily: LATO, fontSize: "11px", color: "rgba(255,255,255,0.62)", margin: "0 0 8px", lineHeight: 1.65 }}>
+              Payment is requested only after we confirm and align the reservation — not when you press submit. Guests receive coordinated support before arrival and during their stay. Automated arrival instructions are used only after confirmation and operational review.
+            </p>
+            <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.65 }}>
+              Questions:{" "}
+              <a href="mailto:hello@stayoraya.com" style={{ color: GOLD, textDecoration: "none" }}>hello@stayoraya.com</a>
+            </p>
+          </div>
         </div>
 
         {/* Auth identity banner */}
@@ -2312,11 +2328,12 @@ function BookPageInner() {
               </div>
 
               <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.8, textAlign: "center", margin: 0 }}>
-                Your booking request will be reviewed and confirmed by Oraya.
+                Your booking request will be reviewed and confirmed by Oraya — every stay is prepared by our team before confirmation.
               </p>
 
               <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, lineHeight: 1.6, textAlign: "center", margin: 0, fontStyle: "italic" }}>
-                After submission, Oraya will review your request and confirm availability.
+                After submission, we review availability and operations; payment is invited only after that confirmation. For support,{" "}
+                <a href="mailto:hello@stayoraya.com" style={{ color: GOLD, textDecoration: "none" }}>hello@stayoraya.com</a>.
               </p>
 
               {error && (

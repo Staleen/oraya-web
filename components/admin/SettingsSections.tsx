@@ -1,4 +1,5 @@
 "use client";
+import { GUEST_TESTIMONIALS_JSON_TEMPLATE } from "@/lib/guest-testimonials";
 import { GOLD, CHARCOAL, MUTED, LATO, SURFACE, BORDER, fieldStyle } from "./theme";
 
 export default function SettingsSections({
@@ -17,6 +18,11 @@ export default function SettingsSections({
   notifSaving,
   notifSaved,
   saveNotifEmails,
+  testimonialJson,
+  setTestimonialJson,
+  testimonialSaving,
+  testimonialSaved,
+  saveTestimonials,
 }: {
   whatsappNum: string;
   setWhatsappNum: (value: string) => void;
@@ -33,6 +39,11 @@ export default function SettingsSections({
   notifSaving: boolean;
   notifSaved: boolean;
   saveNotifEmails: () => void;
+  testimonialJson: string;
+  setTestimonialJson: (value: string) => void;
+  testimonialSaving: boolean;
+  testimonialSaved: boolean;
+  saveTestimonials: () => void;
 }) {
   const isMobile = typeof window !== "undefined" ? window.innerWidth <= 768 : false;
   return (
@@ -150,6 +161,52 @@ export default function SettingsSections({
             <span style={{ fontFamily: LATO, fontSize: "11px", color: "#6fcf8a", letterSpacing: "1px" }}>Saved</span>
           )}
         </div>
+      </div>
+
+      <div style={{ marginTop: "2rem", paddingTop: "1.5rem", borderTop: `0.5px solid ${BORDER}` }}>
+        <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 0.75rem" }}>
+          Guest testimonials (JSON)
+        </p>
+        <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "0 0 10px", lineHeight: 1.65 }}>
+          Stored in settings key <code style={{ color: CHARCOAL }}>guest_testimonials</code>. Only entries with{" "}
+          <code style={{ color: CHARCOAL }}>approved: true</code> appear on the public homepage. Do not publish quotes without guest permission.
+        </p>
+        <textarea
+          value={testimonialJson}
+          onChange={(e) => setTestimonialJson(e.target.value)}
+          spellCheck={false}
+          style={{
+            ...fieldStyle,
+            width: "100%",
+            minHeight: "220px",
+            fontFamily: "ui-monospace, monospace",
+            fontSize: "12px",
+            lineHeight: 1.5,
+            resize: "vertical",
+          }}
+          onFocus={(e) => { e.currentTarget.style.borderColor = GOLD; }}
+          onBlur={(e) => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+        />
+        <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: "8px 0 12px", whiteSpace: "pre-wrap" }}>
+          {`Shape per item: guest_label, villa, quote, reference_url (optional), approved (boolean), display_order (number).\nExample:\n${GUEST_TESTIMONIALS_JSON_TEMPLATE}`}
+        </p>
+        <button
+          type="button"
+          onClick={saveTestimonials}
+          disabled={testimonialSaving}
+          style={{
+            fontFamily: LATO, fontSize: "10px", letterSpacing: "2px",
+            textTransform: "uppercase", color: CHARCOAL, backgroundColor: GOLD,
+            border: "none", padding: "12px 28px",
+            cursor: testimonialSaving ? "not-allowed" : "pointer",
+            opacity: testimonialSaving ? 0.7 : 1,
+          }}
+        >
+          {testimonialSaving ? "Saving…" : "Save testimonials"}
+        </button>
+        {testimonialSaved && (
+          <span style={{ fontFamily: LATO, fontSize: "11px", color: "#6fcf8a", letterSpacing: "1px", marginLeft: "12px" }}>Saved</span>
+        )}
       </div>
     </div>
   );

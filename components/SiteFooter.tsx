@@ -1,4 +1,5 @@
 "use client";
+import LegalEntityNotice from "@/components/LegalEntityNotice";
 import OrayaLogoFull from "@/components/OrayaLogoFull";
 
 const GOLD    = "#C5A46D";
@@ -101,6 +102,10 @@ export default function SiteFooter() {
               </ul>
             </div>
           ))}
+        </div>
+
+        <div style={{ maxWidth: "1100px", margin: "0 auto", paddingBottom: "1.5rem" }}>
+          <LegalEntityNotice variant="dark" />
         </div>
 
         <div style={{ maxWidth: "1100px", margin: "0 auto", display: "flex", justifyContent: "space-between", borderTop: "0.5px solid rgba(255,255,255,0.07)", paddingTop: "1.5rem", fontFamily: LATO, fontSize: "11px", color: "rgba(255,255,255,0.18)" }}>

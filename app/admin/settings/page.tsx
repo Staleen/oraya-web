@@ -4,6 +4,7 @@ import SettingsSections from "@/components/admin/SettingsSections";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
 import { LATO } from "@/components/admin/theme";
 import { adminApiFetchInit } from "@/lib/admin-auth";
+import { GUEST_TESTIMONIALS_SETTINGS_KEY } from "@/lib/guest-testimonials";
 
 export default function AdminSettingsPage() {
   const { error, setError } = useAdminData();
@@ -16,6 +17,9 @@ export default function AdminSettingsPage() {
   const [notifEmails, setNotifEmails] = useState("");
   const [notifSaving, setNotifSaving] = useState(false);
   const [notifSaved, setNotifSaved] = useState(false);
+  const [testimonialJson, setTestimonialJson] = useState("[]");
+  const [testimonialSaving, setTestimonialSaving] = useState(false);
+  const [testimonialSaved, setTestimonialSaved] = useState(false);
 
   useEffect(() => {
     fetch("/api/admin/settings", adminApiFetchInit)
@@ -26,6 +30,15 @@ export default function AdminSettingsPage() {
         if (wa) setWhatsappNum(wa.value);
         const ne = rows.find((s: { key: string; value: string }) => s.key === "notification_emails");
         if (ne) setNotifEmails(ne.value);
+        const gt = rows.find((s: { key: string; value: string }) => s.key === GUEST_TESTIMONIALS_SETTINGS_KEY);
+        if (gt?.value != null && String(gt.value).trim() !== "") {
+          try {
+            const parsed = JSON.parse(String(gt.value));
+            setTestimonialJson(JSON.stringify(parsed, null, 2));
+          } catch {
+            setTestimonialJson(String(gt.value));
+          }
+        }
       })
       .catch((e) => console.error("[admin] settings fetch error:", e));
   }, []);
@@ -67,6 +80,36 @@ export default function AdminSettingsPage() {
     } else {
       const d = await res.json();
       setError(d.error ?? "Failed to save password.");
+    }
+  }
+
+  async function saveTestimonials() {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(testimonialJson);
+    } catch {
+      setError("Testimonials JSON is invalid. Fix syntax before saving.");
+      return;
+    }
+    if (!Array.isArray(parsed)) {
+      setError("Testimonials JSON must be an array.");
+      return;
+    }
+    setTestimonialSaving(true);
+    setTestimonialSaved(false);
+    const res = await fetch("/api/admin/settings", {
+      ...adminApiFetchInit,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: GUEST_TESTIMONIALS_SETTINGS_KEY, value: JSON.stringify(parsed) }),
+    });
+    setTestimonialSaving(false);
+    if (res.ok) {
+      setTestimonialSaved(true);
+      setTimeout(() => setTestimonialSaved(false), 3000);
+    } else {
+      const d = await res.json();
+      setError(d.error ?? "Failed to save testimonials.");
     }
   }
 
@@ -112,6 +155,11 @@ export default function AdminSettingsPage() {
         notifSaving={notifSaving}
         notifSaved={notifSaved}
         saveNotifEmails={saveNotifEmails}
+        testimonialJson={testimonialJson}
+        setTestimonialJson={(value) => { setTestimonialJson(value); setTestimonialSaved(false); }}
+        testimonialSaving={testimonialSaving}
+        testimonialSaved={testimonialSaved}
+        saveTestimonials={saveTestimonials}
       />
     </>
   );

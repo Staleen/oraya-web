@@ -2,7 +2,14 @@
 import { Fragment, useState, useEffect } from "react";
 import OrayaEmblem from "@/components/OrayaEmblem";
 import OrayaLogoFull from "@/components/OrayaLogoFull";
+import LegalEntityNotice from "@/components/LegalEntityNotice";
 import { VILLA_FROM_PRICE_MICROLABEL, formatVillaFromPrice } from "@/lib/admin-pricing";
+import {
+  GUEST_TESTIMONIALS_SETTINGS_KEY,
+  getApprovedPublicTestimonials,
+  parseGuestTestimonialsJson,
+  type GuestTestimonialRecord,
+} from "@/lib/guest-testimonials";
 import { usePublicPricing } from "@/lib/public-pricing";
 import { supabase } from "@/lib/supabase";
 
@@ -52,17 +59,17 @@ const villaMeta = [
 
 const experiences = [
   { num: "01", name: "Curated amenities",  desc: "Branded linens, robes, and bespoke toiletries throughout every villa" },
-  { num: "02", name: "Seamless check-in",  desc: "Automated arrival instructions and a personal welcome experience" },
+  { num: "02", name: "Coordinated arrival",  desc: "After confirmation and operational review, you receive clear arrival details — with our team available to support you before you reach the villa." },
   { num: "03", name: "Private events",     desc: "Intimate weddings, baptisms, and celebrations for small groups" },
-  { num: "04", name: "Member pricing",     desc: "Exclusive rates for registered Oraya members, always lower than platforms" },
+  { num: "04", name: "Member pricing",     desc: "Preferential rates for members who book directly with Oraya — without a marketplace in the middle." },
 ];
 
 const memberPerks = [
-  "Exclusive pricing — always lower than Airbnb & Booking.com",
+  "Preferential member rates when you book with us directly",
   "Personal guest profile with your preferences saved",
   "Priority access to availability and new dates",
-  "Direct communication — no platform in between",
-  "Event booking access for private occasions",
+  "Direct communication with our team — hello@stayoraya.com",
+  "Event inquiry access for private occasions",
 ];
 
 const values = [
@@ -83,6 +90,17 @@ export default function Home() {
   const [heroImg,      setHeroImg]      = useState("");
   const [mechmechImg,  setMechmechImg]  = useState("");
   const [byblosImg,    setByblosImg]    = useState("");
+  const [approvedTestimonials, setApprovedTestimonials] = useState<GuestTestimonialRecord[]>([]);
+
+  useEffect(() => {
+    fetch(`/api/settings?key=${encodeURIComponent(GUEST_TESTIMONIALS_SETTINGS_KEY)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d: { value?: string | null }) => {
+        const rows = parseGuestTestimonialsJson(d.value ?? null);
+        setApprovedTestimonials(getApprovedPublicTestimonials(rows));
+      })
+      .catch(() => setApprovedTestimonials([]));
+  }, []);
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
@@ -637,20 +655,24 @@ export default function Home() {
         </section>
       )}
 
-      {/* ── Phase 13Z: Trust Layer ── */}
+      {/* ── Phase 13Z / 15F.4: Trust Layer ── */}
       <section style={{ backgroundColor: BEIGELIGHT, padding: "5rem 3rem" }}>
         <div style={{ maxWidth: "1100px", margin: "0 auto", textAlign: "center" }}>
           <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, marginBottom: "1rem" }}>
             Why Oraya
           </p>
-          <h2 style={{ fontFamily: PLAYFAIR, fontSize: "32px", color: CHARCOAL, fontWeight: 400, marginBottom: "3rem", lineHeight: 1.2 }}>
+          <h2 style={{ fontFamily: PLAYFAIR, fontSize: "32px", color: CHARCOAL, fontWeight: 400, marginBottom: "1rem", lineHeight: 1.2 }}>
             Booked directly. Handled with care.
           </h2>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "2rem", textAlign: "left" }}>
+          <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, lineHeight: 1.75, margin: "0 auto 2.5rem", maxWidth: "640px", fontWeight: 300 }}>
+            Every stay is reviewed and prepared by the Oraya team before confirmation. Direct booking means your request is seen by us — not instant or unverified checkout. Guests receive coordinated support before arrival and during their stay.
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "2rem", textAlign: "left" }}>
             {[
-              { title: "Direct booking, handled by Oraya", body: "Every reservation is reviewed and confirmed by our team — no third-party intermediaries." },
-              { title: "Request first, then confirmation", body: "Submitting dates creates a booking request. We align availability and operations before inviting a deposit — there is no instant self-checkout without our confirmation." },
-              { title: "Personalized guest support",       body: "From arrival arrangements to add-on services, reach us at hello@stayoraya.com across your stay." },
+              { title: "Direct booking, reviewed by Oraya", body: "We review each request against availability and operations before confirming. Payment is requested only after that review — never as an unverified instant charge." },
+              { title: "Human preparation & support", body: "From villa readiness to add-ons and arrival timing, our team coordinates the details. Automated arrival instructions are used only after confirmation and operational review." },
+              { title: "Curated private villa stays", body: "Two boutique properties in Lebanon, each maintained and hosted to Oraya standards — intimate scale, not mass-market volume." },
+              { title: approvedTestimonials.length > 0 ? "Guest voices" : "Verified reviews (coming soon)", body: approvedTestimonials.length > 0 ? "Selected quotes from guests who have approved sharing their words on our site." : "Verified guest testimonials will appear here once published. We never display quotes without approval." },
             ].map((item) => (
               <div key={item.title} style={{ padding: "1.5rem", border: `0.5px solid rgba(197,164,109,0.2)`, backgroundColor: WHITE }}>
                 <p style={{ fontFamily: PLAYFAIR, fontSize: "16px", color: CHARCOAL, margin: "0 0 8px", lineHeight: 1.4 }}>
@@ -665,7 +687,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── Phase 13Z: Guest Experiences placeholder (no fake reviews) ── */}
+      {/* ── Phase 13Z / 15F.4: Guest Experiences — approved testimonials only (no fake reviews) ── */}
       <section style={{ backgroundColor: WHITE, padding: "5rem 3rem", borderTop: `0.5px solid rgba(197,164,109,0.2)` }}>
         <div style={{ maxWidth: "900px", margin: "0 auto", textAlign: "center" }}>
           <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, marginBottom: "1rem" }}>
@@ -674,18 +696,41 @@ export default function Home() {
           <h2 style={{ fontFamily: PLAYFAIR, fontSize: "28px", color: CHARCOAL, fontWeight: 400, marginBottom: "1.5rem", lineHeight: 1.2 }}>
             What guests are saying
           </h2>
-          <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, lineHeight: 1.8, marginBottom: "2.5rem", maxWidth: "560px", marginLeft: "auto", marginRight: "auto" }}>
-            Verified guest reviews coming soon. We&apos;re collecting feedback from recent stays and will share their words here.
-          </p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "1.25rem", textAlign: "left" }}>
-            {[1, 2, 3].map((i) => (
-              <div key={i} style={{ padding: "1.5rem", border: `0.5px dashed rgba(197,164,109,0.2)`, backgroundColor: BEIGELIGHT, minHeight: "140px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, fontStyle: "italic", textAlign: "center", lineHeight: 1.6 }}>
-                  Guest testimonial placeholder
-                </p>
+          {approvedTestimonials.length === 0 ? (
+            <>
+              <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, lineHeight: 1.8, marginBottom: "2.5rem", maxWidth: "560px", marginLeft: "auto", marginRight: "auto" }}>
+                Verified guest reviews coming soon. We&apos;re collecting feedback from recent stays and will share their words here once guests have approved publication.
+              </p>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "1.25rem", textAlign: "left" }}>
+                {[1, 2, 3].map((i) => (
+                  <div key={i} style={{ padding: "1.5rem", border: `0.5px dashed rgba(197,164,109,0.2)`, backgroundColor: BEIGELIGHT, minHeight: "140px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, fontStyle: "italic", textAlign: "center", lineHeight: 1.6 }}>
+                      Guest testimonial placeholder
+                    </p>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "1.25rem", textAlign: "left" }}>
+              {approvedTestimonials.map((t, idx) => (
+                <div key={`${t.guest_label}-${idx}`} style={{ padding: "1.5rem", border: `0.5px solid rgba(197,164,109,0.22)`, backgroundColor: BEIGELIGHT }}>
+                  <p style={{ fontFamily: PLAYFAIR, fontSize: "15px", color: CHARCOAL, margin: "0 0 12px", lineHeight: 1.55, fontStyle: "italic", fontWeight: 400 }}>
+                    &ldquo;{t.quote}&rdquo;
+                  </p>
+                  <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, letterSpacing: "1px", textTransform: "uppercase" }}>
+                    {t.guest_label}
+                    {t.villa ? ` · ${t.villa}` : ""}
+                  </p>
+                  {t.reference_url && /^https?:\/\//i.test(t.reference_url) ? (
+                    <a href={t.reference_url} target="_blank" rel="noopener noreferrer" style={{ fontFamily: LATO, fontSize: "10px", color: GOLD, marginTop: "10px", display: "inline-block", textDecoration: "none", borderBottom: "0.5px solid rgba(197,164,109,0.35)" }}>
+                      Reference link
+                    </a>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
@@ -758,6 +803,10 @@ export default function Home() {
               </ul>
             </div>
           ))}
+        </div>
+
+        <div className="max-w-[1100px] mx-auto" style={{ paddingBottom: "1.5rem" }}>
+          <LegalEntityNotice variant="dark" />
         </div>
 
         <div

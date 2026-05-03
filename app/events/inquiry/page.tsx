@@ -897,15 +897,19 @@ function EventInquiryPageInner() {
           <h1 style={{ fontFamily: PLAYFAIR, fontSize: "2rem", fontWeight: 400, color: WHITE, margin: "0 0 10px" }}>
             Plan Your Event
           </h1>
-          <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, lineHeight: 1.7, margin: 0 }}>
-            Tell us what you are planning. We will review availability, setup, and services, and respond within 24 hours with a tailored proposal.
+          <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, lineHeight: 1.7, margin: "0 0 10px" }}>
+            Tell us what you are planning. We will review availability, setup, and services, and respond with a tailored proposal (typically within one business day).
+          </p>
+          <p style={{ fontFamily: LATO, fontSize: "11px", color: "rgba(255,255,255,0.45)", lineHeight: 1.65, margin: 0 }}>
+            Every event is reviewed and prepared by the Oraya team before confirmation. Coordinated support continues through your date. Questions:{" "}
+            <a href="mailto:hello@stayoraya.com" style={{ color: GOLD, textDecoration: "none" }}>hello@stayoraya.com</a>
           </p>
         </div>
 
         {/* Standing inquiry banner */}
         <div style={{ border: "0.5px solid rgba(197,164,109,0.25)", backgroundColor: "rgba(197,164,109,0.06)", padding: "12px 16px", marginBottom: "1.5rem", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
           <p style={{ fontFamily: LATO, fontSize: "11px", color: "rgba(255,255,255,0.7)", margin: 0, lineHeight: 1.6, flex: 1, minWidth: "240px" }}>
-            This is an inquiry, not an instant booking. Event inquiries are reviewed as a full venue request, including guest flow, setup areas, and operational requirements.
+            This is an inquiry, not an instant booking. Event inquiries are reviewed as a full venue request, including guest flow, setup areas, and operational requirements. Nothing is confirmed until Oraya responds and aligns details with you.
           </p>
           <a
             href="/book"
@@ -1278,7 +1282,7 @@ function EventInquiryPageInner() {
               {/* Inquiry-only copy */}
               <div style={{ border: "0.5px solid rgba(197,164,109,0.18)", backgroundColor: "rgba(197,164,109,0.04)", padding: "12px 16px" }}>
                 <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "0 0 8px", lineHeight: 1.6 }}>
-                  Oraya will review your event requirements and respond within 24 hours with availability, setup options, and a tailored proposal.
+                  Oraya will review your event requirements and respond with availability, setup options, and a tailored proposal — typically within one business day.
                 </p>
                 <p style={{ fontFamily: LATO, fontSize: "11px", color: "rgba(255,255,255,0.7)", margin: 0, lineHeight: 1.6 }}>
                   Final event pricing is reviewed and quoted by Oraya.
