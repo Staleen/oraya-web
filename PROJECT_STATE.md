@@ -534,6 +534,16 @@ Phase 14 rules:
   - Cancel warning clarified
   - Event/stay wording cleaned up
   - No backend/API/schema changes
+- 14N Event Type Taxonomy Refactor + Event Services UX [COMPLETE]
+  - EVENT_TYPES expanded from 4 → 23 ordered types in guest inquiry
+  - EVENT_RECOMMENDATIONS extended to cover all 23 new types (stay/family/corporate/production/etc.)
+  - Legacy aliases kept for "Baptism / Family Gathering" and "Wedding / Engagement" — old stored requests remain readable
+  - EVENT_TYPE_OPTIONS in AddonsEditor updated to 23 new types + 2 legacy options at bottom
+  - Event type selector layout changed to 2-column responsive grid
+  - Event service cards visually distinct: blue-tinted border/background
+  - Compact row shows "Recommended" badge and applicable event types summary for event services
+  - "Recommended add-ons" → "Recommended services" wording in event service edit panel
+  - No backend/API/schema changes
 
 Phase 15 — Production & growth readiness
 

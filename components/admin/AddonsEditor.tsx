@@ -41,11 +41,32 @@ const APPLIES_TO_OPTIONS: Array<{ value: AddonAppliesTo; label: string }> = [
   { value: "both", label: ADDON_APPLIES_TO_LABELS.both },
 ];
 const EVENT_TYPE_OPTIONS = [
+  "Private Celebration",
+  "Birthday Party",
+  "Anniversary Celebration",
+  "Gender Reveal",
+  "Baby Shower",
+  "Wedding",
+  "Engagement",
+  "Baptism",
+  "First Communion",
+  "Graduation Celebration",
+  "Family Gathering",
+  "Family Reunion",
+  "Dinner Event",
+  "Friends Gathering",
+  "Corporate Event",
+  "Team Building",
+  "Product Launch",
+  "Networking Event",
+  "Workshop / Seminar",
+  "Photoshoot / Content Production",
+  "Filming / Production",
+  "Proposal Setup",
+  "Wellness Retreat",
+  // Legacy values — keep so existing services with old applicable_event_types remain editable
   "Wedding / Engagement",
   "Baptism / Family Gathering",
-  "Corporate Event",
-  "Private Celebration",
-  "Other",
 ] as const;
 const EVENT_PRICING_UNIT_OPTIONS: Array<{ value: AddonEventPricingUnit; label: string }> = [
   { value: "fixed", label: "Fixed" },
@@ -75,6 +96,13 @@ function formatAddonUsageSummary(addon: Addon) {
   if (appliesTo === "stay") return "Stay add-on";
   if (appliesTo === "both") return "Stay + Event service";
   return "Event service";
+}
+
+function formatApplicableEventTypesSummary(addon: Addon): string {
+  const types = addon.applicable_event_types ?? [];
+  if (types.length === 0) return "All event types";
+  if (types.length <= 2) return types.join(", ");
+  return `${types.slice(0, 2).join(", ")} +${types.length - 2} more`;
 }
 
 export default function AddonsEditor({
@@ -659,7 +687,7 @@ export default function AddonsEditor({
               flexShrink: 0,
             }}
           />
-          <span>Recommended add-ons are highlighted to guests.</span>
+          <span>Recommended {getAddonAppliesTo(addon.applies_to) !== "stay" ? "services" : "add-ons"} are highlighted to guests.</span>
         </span>
       </label>
     );
@@ -753,13 +781,15 @@ export default function AddonsEditor({
           const addonWarnings = getAddonIssues(addon.id, "warning");
           const showErrors = validationAttempted && addonErrors.length > 0;
           const isExpanded = !isMobile && expandedAddonId === addon.id;
+          const isEventService = getAddonAppliesTo(addon.applies_to) !== "stay";
 
           return (
             <div
               key={addon.id}
               style={{
-                border: `0.5px solid ${showErrors ? "rgba(224,112,112,0.45)" : isExpanded ? "rgba(197,164,109,0.25)" : "rgba(255,255,255,0.06)"}`,
-                backgroundColor: isExpanded ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.015)",
+                border: `0.5px solid ${showErrors ? "rgba(224,112,112,0.45)" : isExpanded ? "rgba(197,164,109,0.25)" : isEventService ? "rgba(157,183,217,0.18)" : "rgba(255,255,255,0.06)"}`,
+                backgroundColor: isExpanded ? "rgba(255,255,255,0.03)" : isEventService ? "rgba(157,183,217,0.025)" : "rgba(255,255,255,0.015)",
+                borderLeft: isEventService && !showErrors ? `2px solid rgba(157,183,217,0.35)` : undefined,
               }}
             >
               <div
@@ -798,15 +828,20 @@ export default function AddonsEditor({
                       </div>
 
                       <div style={{ minWidth: 0 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "7px", flexWrap: "wrap" }}>
                           <AddonIcon
                             label={addon.label}
                             size={18}
                             color={addon.enabled ? "rgba(197,164,109,0.55)" : "rgba(197,164,109,0.28)"}
                           />
-                          <span style={{ fontFamily: LATO, fontSize: "13px", color: addon.enabled ? "#FFFFFF" : "rgba(255,255,255,0.55)", lineHeight: 1.25, wordBreak: "break-word", minWidth: 0 }}>
+                          <span style={{ fontFamily: LATO, fontSize: "13px", color: addon.enabled ? "#FFFFFF" : "rgba(255,255,255,0.55)", lineHeight: 1.25, wordBreak: "break-word", minWidth: 0, flex: 1 }}>
                             {addon.label.trim() || "New add-on"}
                           </span>
+                          {isEventService && addon.recommended && (
+                            <span style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", color: "#9db7d9", border: "0.5px solid rgba(157,183,217,0.4)", backgroundColor: "rgba(157,183,217,0.07)", padding: "2px 6px", whiteSpace: "nowrap" }}>
+                              Recommended
+                            </span>
+                          )}
                         </div>
                       </div>
 
@@ -848,9 +883,15 @@ export default function AddonsEditor({
                         <span style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, display: "block", lineHeight: 1.3, wordBreak: "break-word", marginTop: "6px" }}>
                           {formatVillaApplicabilitySummary(addon)}
                         </span>
-                        <span style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, display: "block", lineHeight: 1.3, wordBreak: "break-word", marginTop: "6px" }}>
-                          {formatAddonUsageSummary(addon)}
-                        </span>
+                        {isEventService ? (
+                          <span style={{ fontFamily: LATO, fontSize: "11px", color: "rgba(157,183,217,0.75)", display: "block", lineHeight: 1.3, wordBreak: "break-word", marginTop: "6px" }}>
+                            {formatApplicableEventTypesSummary(addon)}
+                          </span>
+                        ) : (
+                          <span style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, display: "block", lineHeight: 1.3, wordBreak: "break-word", marginTop: "6px" }}>
+                            {formatAddonUsageSummary(addon)}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </>
@@ -878,16 +919,21 @@ export default function AddonsEditor({
                       </span>
                     </div>
 
-                    <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: "7px" }}>
+                    <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: "7px", flexWrap: "wrap" }}>
                       <AddonIcon
                         label={addon.label}
                         size={16}
                         color={addon.enabled ? "rgba(197,164,109,0.55)" : "rgba(197,164,109,0.28)"}
                         style={{ flexShrink: 0 }}
                       />
-                      <span style={{ fontFamily: LATO, fontSize: "13px", color: addon.enabled ? "#FFFFFF" : "rgba(255,255,255,0.55)", display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>
+                      <span style={{ fontFamily: LATO, fontSize: "13px", color: addon.enabled ? "#FFFFFF" : "rgba(255,255,255,0.55)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, flex: 1 }}>
                         {addon.label.trim() || "New add-on"}
                       </span>
+                      {isEventService && addon.recommended && (
+                        <span style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", color: "#9db7d9", border: "0.5px solid rgba(157,183,217,0.4)", backgroundColor: "rgba(157,183,217,0.07)", padding: "2px 6px", whiteSpace: "nowrap", flexShrink: 0 }}>
+                          Recommended
+                        </span>
+                      )}
                     </div>
 
                     <div style={{ minWidth: 0 }}>
@@ -903,9 +949,15 @@ export default function AddonsEditor({
                       <span style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginTop: "4px" }}>
                         {formatVillaApplicabilitySummary(addon)}
                       </span>
-                      <span style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginTop: "4px" }}>
-                        {formatAddonUsageSummary(addon)}
-                      </span>
+                      {isEventService ? (
+                        <span style={{ fontFamily: LATO, fontSize: "11px", color: "rgba(157,183,217,0.75)", display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginTop: "4px" }}>
+                          {formatApplicableEventTypesSummary(addon)}
+                        </span>
+                      ) : (
+                        <span style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginTop: "4px" }}>
+                          {formatAddonUsageSummary(addon)}
+                        </span>
+                      )}
                     </div>
 
                     <button
