@@ -15,9 +15,6 @@ interface AdminDataContextValue {
   setMembers: React.Dispatch<React.SetStateAction<Member[]>>;
   calendarSources: CalendarSource[];
   setCalendarSources: React.Dispatch<React.SetStateAction<CalendarSource[]>>;
-  /** Phase 15F.5: booking id → ISO time guest feedback request email was sent */
-  testimonialFeedbackLog: Record<string, string>;
-  setTestimonialFeedbackLog: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   loading: boolean;
   error: string;
   setError: React.Dispatch<React.SetStateAction<string>>;
@@ -38,7 +35,6 @@ export default function AdminDataProvider({ children }: { children: React.ReactN
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [calendarSources, setCalendarSources] = useState<CalendarSource[]>([]);
-  const [testimonialFeedbackLog, setTestimonialFeedbackLog] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -88,10 +84,6 @@ export default function AdminDataProvider({ children }: { children: React.ReactN
       setBookings((d.bookings as Booking[]) ?? []);
       setMembers((d.members as Member[]) ?? []);
       setCalendarSources((d.calendar_sources as CalendarSource[]) ?? []);
-      const log = d.testimonial_feedback_log;
-      setTestimonialFeedbackLog(
-        log && typeof log === "object" && !Array.isArray(log) ? (log as Record<string, string>) : {}
-      );
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error("[admin] fetch error:", msg);
@@ -121,14 +113,12 @@ export default function AdminDataProvider({ children }: { children: React.ReactN
     setMembers,
     calendarSources,
     setCalendarSources,
-    testimonialFeedbackLog,
-    setTestimonialFeedbackLog,
     loading,
     error,
     setError,
     loadData,
     signOut,
-  }), [authed, bookings, members, calendarSources, testimonialFeedbackLog, loading, error]);
+  }), [authed, bookings, members, calendarSources, loading, error]);
 
   if (authed === null) {
     return (

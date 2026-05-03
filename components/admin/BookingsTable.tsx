@@ -9,6 +9,12 @@ import { BORDER, fieldStyle, fmt, GOLD, LATO, MIDNIGHT, MUTED, PLAYFAIR, WHITE }
 import { addDaysToDateOnly, getOperationalRange, rangesOverlap } from "@/lib/calendar/event-block";
 import { findAlternativeDateSuggestions, type AlternativeSuggestion } from "@/lib/calendar/alternative-dates";
 import { adminApiFetchInit } from "@/lib/admin-auth";
+import {
+  buildEventFeedbackRequestMessage,
+  buildMailtoFeedbackUrl,
+  buildStayFeedbackRequestMessage,
+  buildWhatsAppFeedbackUrl,
+} from "@/lib/feedback-request-message";
 
 type BookingSectionKey = "pending" | "confirmed" | "cancelled";
 type ConfirmedSortKey = "created_desc" | "created_asc" | "check_in_asc" | "check_in_desc";
@@ -742,10 +748,24 @@ function getBookingGuestEmailForFeedback(booking: Booking, members: Member[]): s
   return null;
 }
 
-function isStayEndedByCheckoutDate(checkOut: string | null | undefined): boolean {
-  if (!checkOut || typeof checkOut !== "string") return false;
-  const today = new Date().toISOString().slice(0, 10);
-  return checkOut <= today;
+function getBookingGuestPhoneForFeedback(booking: Booking, members: Member[]): string | null {
+  const g = booking.guest_phone?.trim();
+  if (g) return g;
+  if (booking.member_id) {
+    const m = members.find((x) => x.id === booking.member_id);
+    return m?.phone?.trim() || null;
+  }
+  return null;
+}
+
+function getBookingGuestDisplayName(booking: Booking, members: Member[]): string {
+  const g = booking.guest_name?.trim();
+  if (g) return g;
+  if (booking.member_id) {
+    const m = members.find((x) => x.id === booking.member_id);
+    if (m?.full_name?.trim()) return m.full_name.trim();
+  }
+  return "Guest";
 }
 
 export default function BookingsTable({
@@ -781,9 +801,10 @@ export default function BookingsTable({
   updateStatus: (id: string, status: "confirmed" | "cancelled") => void;
   emailWarnings: Record<string, string>;
 }) {
-  const { bookings, setBookings, setError, loadData, testimonialFeedbackLog, setTestimonialFeedbackLog } = useAdminData();
+  const { bookings, setBookings, setError } = useAdminData();
   const [approvingAddonId, setApprovingAddonId] = useState<string | null>(null);
-  const [testimonialSendingId, setTestimonialSendingId] = useState<string | null>(null);
+  const [feedbackPrepBookingId, setFeedbackPrepBookingId] = useState<string | null>(null);
+  const [feedbackCopiedBookingId, setFeedbackCopiedBookingId] = useState<string | null>(null);
   const [expandedCompactId, setExpandedCompactId] = useState<string | null>(null);
   const [bulkActionBookingId, setBulkActionBookingId] = useState<string | null>(null);
   const [confirmedSort, setConfirmedSort] = useState<ConfirmedSortKey>("created_desc");
@@ -814,34 +835,6 @@ export default function BookingsTable({
     }
 
     throw new Error(data.error ?? "Failed to update add-on state.");
-  }
-
-  async function sendTestimonialFeedbackRequest(bookingId: string) {
-    if (!confirm("Send a one-time email inviting the guest to share short feedback by reply? (No ratings form.)")) return;
-    setTestimonialSendingId(bookingId);
-    setError("");
-    try {
-      const res = await fetch(`/api/admin/bookings/${bookingId}`, {
-        ...adminApiFetchInit,
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ send_testimonial_feedback_request: true }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error ?? "Failed to send feedback request.");
-        return;
-      }
-      if (data.testimonial_feedback_email_status === "already_sent") {
-        setError("A feedback invite was already sent for this booking.");
-      }
-      if (data.testimonial_feedback_email_status === "sent" && typeof data.booking?.id === "string") {
-        setTestimonialFeedbackLog((prev) => ({ ...prev, [bookingId]: new Date().toISOString() }));
-      }
-      await loadData(true);
-    } finally {
-      setTestimonialSendingId(null);
-    }
   }
 
   async function resolveAddon(bookingId: string, addonId: string, decision: "approve" | "decline") {
@@ -1824,10 +1817,24 @@ export default function BookingsTable({
 
   function renderGuestFeedbackSection(booking: Booking) {
     if (booking.status !== "confirmed") return null;
+    const guestName = getBookingGuestDisplayName(booking, members);
+    const eventInquiry = isEventInquiryBooking(booking);
+    const message = eventInquiry ? buildEventFeedbackRequestMessage(guestName) : buildStayFeedbackRequestMessage(guestName);
     const email = getBookingGuestEmailForFeedback(booking, members);
-    const sentAt = testimonialFeedbackLog[booking.id];
-    const stayEnded = isStayEndedByCheckoutDate(booking.check_out);
-    const sending = testimonialSendingId === booking.id;
+    const phone = getBookingGuestPhoneForFeedback(booking, members);
+    const waUrl = phone ? buildWhatsAppFeedbackUrl(phone, message) : null;
+    const mailtoUrl = email ? buildMailtoFeedbackUrl(email, message) : null;
+    const open = feedbackPrepBookingId === booking.id;
+
+    async function copyFeedbackMessage() {
+      try {
+        await navigator.clipboard.writeText(message);
+        setFeedbackCopiedBookingId(booking.id);
+        setTimeout(() => setFeedbackCopiedBookingId(null), 2200);
+      } catch {
+        setError("Could not copy to clipboard — select the text manually.");
+      }
+    }
 
     return (
       <div
@@ -1839,49 +1846,118 @@ export default function BookingsTable({
           marginTop: "10px",
         }}
       >
-        <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: GOLD, margin: "0 0 8px" }}>
-          Guest feedback
+        <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: GOLD, margin: "0 0 6px" }}>
+          Feedback request (manual)
         </p>
-        {!email ? (
-          <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
-            Add a guest email or link a member account to send a one-time reply-based feedback invite.
-          </p>
-        ) : sentAt ? (
-          <p style={{ fontFamily: LATO, fontSize: "11px", color: "#6fcf8a", margin: 0, lineHeight: 1.55 }}>
-            Feedback invite sent ({formatDateTimeValue(sentAt) || sentAt.slice(0, 10)}).
-          </p>
-        ) : (
-          <>
-            {stayEnded ? (
-              <p style={{ fontFamily: LATO, fontSize: "11px", color: "#d99644", margin: "0 0 10px", lineHeight: 1.55 }}>
-                Checkout date has passed — you can send a gentle, one-time email asking if they would like to share feedback (guest replies to hello@; nothing to fill in on the site).
-              </p>
-            ) : (
-              <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "0 0 10px", lineHeight: 1.55 }}>
-                Before checkout, only send if the stay is effectively finished. Otherwise wait until after departure.
-              </p>
-            )}
-            <button
-              type="button"
-              onClick={() => void sendTestimonialFeedbackRequest(booking.id)}
-              disabled={sending}
+        <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: "0 0 10px", lineHeight: 1.55 }}>
+          Nothing is sent from Oraya automatically. Copy the message or open WhatsApp / email with the text filled in — you send when ready.
+        </p>
+        <button
+          type="button"
+          onClick={() => setFeedbackPrepBookingId(open ? null : booking.id)}
+          style={{
+            fontFamily: LATO,
+            fontSize: "10px",
+            letterSpacing: "1.6px",
+            textTransform: "uppercase",
+            color: MIDNIGHT,
+            backgroundColor: GOLD,
+            border: "none",
+            padding: "10px 16px",
+            borderRadius: "6px",
+            cursor: "pointer",
+          }}
+        >
+          {open ? "Hide prepared message" : "Prepare feedback request"}
+        </button>
+        {open && (
+          <div style={{ marginTop: "12px", display: "grid", gap: "10px" }}>
+            <pre
               style={{
                 fontFamily: LATO,
-                fontSize: "10px",
-                letterSpacing: "1.6px",
-                textTransform: "uppercase",
-                color: MIDNIGHT,
-                backgroundColor: GOLD,
-                border: "none",
-                padding: "10px 16px",
+                fontSize: "11px",
+                color: "rgba(255,255,255,0.82)",
+                margin: 0,
+                whiteSpace: "pre-wrap",
+                lineHeight: 1.6,
+                padding: "10px 12px",
                 borderRadius: "6px",
-                cursor: sending ? "not-allowed" : "pointer",
-                opacity: sending ? 0.65 : 1,
+                border: "0.5px solid rgba(197,164,109,0.15)",
+                backgroundColor: "rgba(0,0,0,0.2)",
               }}
             >
-              {sending ? "Sending…" : "Email feedback request"}
-            </button>
-          </>
+              {message}
+            </pre>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
+              <button
+                type="button"
+                onClick={() => void copyFeedbackMessage()}
+                style={{
+                  fontFamily: LATO,
+                  fontSize: "10px",
+                  letterSpacing: "1.4px",
+                  textTransform: "uppercase",
+                  color: GOLD,
+                  backgroundColor: "transparent",
+                  border: "0.5px solid rgba(197,164,109,0.35)",
+                  padding: "8px 14px",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                }}
+              >
+                {feedbackCopiedBookingId === booking.id ? "Copied" : "Copy message"}
+              </button>
+              {waUrl ? (
+                <a
+                  href={waUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    fontFamily: LATO,
+                    fontSize: "10px",
+                    letterSpacing: "1.4px",
+                    textTransform: "uppercase",
+                    color: MIDNIGHT,
+                    backgroundColor: "rgba(197,164,109,0.85)",
+                    border: "none",
+                    padding: "8px 14px",
+                    borderRadius: "6px",
+                    textDecoration: "none",
+                  }}
+                >
+                  Open WhatsApp
+                </a>
+              ) : null}
+              {mailtoUrl ? (
+                <a
+                  href={mailtoUrl}
+                  style={{
+                    fontFamily: LATO,
+                    fontSize: "10px",
+                    letterSpacing: "1.4px",
+                    textTransform: "uppercase",
+                    color: GOLD,
+                    border: "0.5px solid rgba(197,164,109,0.35)",
+                    padding: "8px 14px",
+                    borderRadius: "6px",
+                    textDecoration: "none",
+                  }}
+                >
+                  Open in email
+                </a>
+              ) : null}
+            </div>
+            {!phone && !email ? (
+              <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+                No phone or email on file — copy the message and reach the guest your usual way.
+              </p>
+            ) : null}
+            {phone && !waUrl ? (
+              <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+                Phone on file could not be turned into a WhatsApp link — check the number format (country code).
+              </p>
+            ) : null}
+          </div>
         )}
       </div>
     );

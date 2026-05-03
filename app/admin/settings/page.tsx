@@ -1,10 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
 import SettingsSections from "@/components/admin/SettingsSections";
+import TestimonialManager from "@/components/admin/TestimonialManager";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
 import { LATO } from "@/components/admin/theme";
 import { adminApiFetchInit } from "@/lib/admin-auth";
-import { GUEST_TESTIMONIALS_SETTINGS_KEY } from "@/lib/guest-testimonials";
+import type { GuestTestimonialRecord } from "@/lib/guest-testimonials";
+import { GUEST_TESTIMONIALS_SETTINGS_KEY, parseGuestTestimonialsJson } from "@/lib/guest-testimonials";
 
 export default function AdminSettingsPage() {
   const { error, setError } = useAdminData();
@@ -17,7 +19,7 @@ export default function AdminSettingsPage() {
   const [notifEmails, setNotifEmails] = useState("");
   const [notifSaving, setNotifSaving] = useState(false);
   const [notifSaved, setNotifSaved] = useState(false);
-  const [testimonialJson, setTestimonialJson] = useState("[]");
+  const [testimonialRows, setTestimonialRows] = useState<GuestTestimonialRecord[]>([]);
   const [testimonialSaving, setTestimonialSaving] = useState(false);
   const [testimonialSaved, setTestimonialSaved] = useState(false);
 
@@ -32,12 +34,9 @@ export default function AdminSettingsPage() {
         if (ne) setNotifEmails(ne.value);
         const gt = rows.find((s: { key: string; value: string }) => s.key === GUEST_TESTIMONIALS_SETTINGS_KEY);
         if (gt?.value != null && String(gt.value).trim() !== "") {
-          try {
-            const parsed = JSON.parse(String(gt.value));
-            setTestimonialJson(JSON.stringify(parsed, null, 2));
-          } catch {
-            setTestimonialJson(String(gt.value));
-          }
+          setTestimonialRows(parseGuestTestimonialsJson(String(gt.value)));
+        } else {
+          setTestimonialRows([]);
         }
       })
       .catch((e) => console.error("[admin] settings fetch error:", e));
@@ -84,28 +83,36 @@ export default function AdminSettingsPage() {
   }
 
   async function saveTestimonials() {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(testimonialJson);
-    } catch {
-      setError("Testimonials JSON is invalid. Fix syntax before saving.");
-      return;
+    for (const r of testimonialRows) {
+      const hasL = Boolean(r.guest_label?.trim());
+      const hasQ = Boolean(r.quote?.trim());
+      if (hasL !== hasQ) {
+        setError("Each testimonial needs both a guest name and quote, or clear incomplete rows before saving.");
+        return;
+      }
     }
-    if (!Array.isArray(parsed)) {
-      setError("Testimonials JSON must be an array.");
-      return;
-    }
+    const clean = testimonialRows
+      .filter((r) => r.guest_label.trim() && r.quote.trim())
+      .map((r, i) => ({
+        guest_label: r.guest_label.trim(),
+        ...(r.villa?.trim() ? { villa: r.villa.trim() } : {}),
+        quote: r.quote.trim(),
+        reference_url: r.reference_url?.trim() || null,
+        approved: Boolean(r.approved),
+        display_order: typeof r.display_order === "number" && Number.isFinite(r.display_order) ? r.display_order : i,
+      }));
     setTestimonialSaving(true);
     setTestimonialSaved(false);
     const res = await fetch("/api/admin/settings", {
       ...adminApiFetchInit,
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key: GUEST_TESTIMONIALS_SETTINGS_KEY, value: JSON.stringify(parsed) }),
+      body: JSON.stringify({ key: GUEST_TESTIMONIALS_SETTINGS_KEY, value: JSON.stringify(clean) }),
     });
     setTestimonialSaving(false);
     if (res.ok) {
       setTestimonialSaved(true);
+      setTestimonialRows(clean);
       setTimeout(() => setTestimonialSaved(false), 3000);
     } else {
       const d = await res.json();
@@ -155,11 +162,16 @@ export default function AdminSettingsPage() {
         notifSaving={notifSaving}
         notifSaved={notifSaved}
         saveNotifEmails={saveNotifEmails}
-        testimonialJson={testimonialJson}
-        setTestimonialJson={(value) => { setTestimonialJson(value); setTestimonialSaved(false); }}
-        testimonialSaving={testimonialSaving}
-        testimonialSaved={testimonialSaved}
-        saveTestimonials={saveTestimonials}
+      />
+      <TestimonialManager
+        rows={testimonialRows}
+        setRows={(action) => {
+          setTestimonialSaved(false);
+          setTestimonialRows(action);
+        }}
+        onSave={saveTestimonials}
+        saving={testimonialSaving}
+        saved={testimonialSaved}
       />
     </>
   );

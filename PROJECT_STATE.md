@@ -9,7 +9,7 @@ STOP and ask before proceeding.
 
 ## CURRENT PHASE
 
-Phase 13 -> COMPLETE | Phase 14 -> COMPLETE (14M closure) | Phase 15A -> COMPLETE (readiness audit) | Phase 15B -> COMPLETE (security hotfix) | Phase 15C -> COMPLETE (event inquiry calendar parity with stay picker) | Phase 15D -> COMPLETE (security cleanup + smoke test) | Phase 15E -> COMPLETE (local env parity + secret hygiene) | Phase 15F.1 -> COMPLETE (contact email consistency hotfix) | Phase 15F.2 -> COMPLETE (email identity hello standard) | Phase 15F.3 -> COMPLETE (privacy + legal communication alignment) | Phase 15F.4 -> COMPLETE (trust layer + legal entity + testimonial intake) | Phase 15F.5 -> COMPLETE (trust activation)
+Phase 13 -> COMPLETE | Phase 14 -> COMPLETE (14M closure) | Phase 15A -> COMPLETE (readiness audit) | Phase 15B -> COMPLETE (security hotfix) | Phase 15C -> COMPLETE (event inquiry calendar parity with stay picker) | Phase 15D -> COMPLETE (security cleanup + smoke test) | Phase 15E -> COMPLETE (local env parity + secret hygiene) | Phase 15F.1 -> COMPLETE (contact email consistency hotfix) | Phase 15F.2 -> COMPLETE (email identity hello standard) | Phase 15F.3 -> COMPLETE (privacy + legal communication alignment) | Phase 15F.4 -> COMPLETE (trust layer + legal entity + testimonial intake) | Phase 15F.5 -> COMPLETE (manual testimonial manager + feedback request tool)
 
 ---
 
@@ -581,12 +581,12 @@ Phase 15 — Production & growth readiness
   - testimonial admin intake prepared without fake reviews (`settings` key `guest_testimonials`, JSON array; admin Settings UI)
   - approved-only public testimonial display on homepage via public `/api/settings?key=guest_testimonials`
   - no booking/payment/pricing/availability logic changes
-- 15F.5 Trust Activation [COMPLETE]
-  - testimonial acquisition initiated (admin-triggered reply-based feedback email for confirmed stays; dedupe log in `settings` key `testimonial_feedback_log`; in-admin reminder when checkout has passed and no invite logged)
-  - admin quick-add testimonial flow improved (Settings: “Add testimonial from message” → append unapproved draft to `guest_testimonials` JSON)
-  - booking confirmation reassurance added (`/booking-confirmed`)
-  - subtle trust signals added in stay booking flow (estimate + submit) and event inquiry submit
-  - no schema or pricing logic changes
+- 15F.5 Manual Testimonial Manager + Feedback Request Tool [COMPLETE]
+  - admin testimonial manager added (structured fields + approved toggle + order + remove; still persisted as `guest_testimonials` JSON in settings — no schema change)
+  - approved-only publishing clarified in admin; homepage unchanged (approved-only via existing parser)
+  - manual feedback request tool on confirmed booking cards: prepared copy, clipboard, optional WhatsApp and mailto links — **no** automatic feedback emails, cron, or auto-publish
+  - event inquiries use alternate line: “We hope your event experience with Oraya went well.”
+  - no booking/pricing logic changes
 
 ---
 
