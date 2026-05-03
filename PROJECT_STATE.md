@@ -417,6 +417,12 @@ Phase 13 — Real-world validation & stabilization:
   - Pricing disclaimer microlabel updated to comparison-aware copy
   - No system logic changes
   - Phase 13 fully complete
+- 14A Admin Pending Workflow Cleanup [COMPLETE]
+  - Conflicting pending requests visually grouped as Conflict / On Hold (frontend-only detection vs confirmed bookings)
+  - No auto-cancel logic — Cancel button preserved, optional WhatsApp link if guest_phone exists
+  - Pending cards compact by default with expandable details (reuses existing renderCompactRow pattern)
+  - Full decision details preserved in expanded state
+  - No schema/API changes
   - Admin-triggered payment reminder
   - Overdue escalation UI
   - Cron-ready reminder function prepared

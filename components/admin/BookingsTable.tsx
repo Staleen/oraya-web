@@ -948,6 +948,26 @@ export default function BookingsTable({
     return pendingOverlapMap.get(booking.id) ?? [];
   }
 
+  // Phase 14A: pending-vs-confirmed conflict detection. Frontend/admin-only — no backend changes.
+  const confirmedConflictMap = useMemo(() => {
+    const map = new Map<string, Booking[]>();
+    const pendingOnly = bookings.filter((b) => b.status === "pending");
+    const confirmedOnly = bookings.filter((b) => b.status === "confirmed");
+    for (const p of pendingOnly) {
+      const conflicts = confirmedOnly.filter((c) => c.villa === p.villa && bookingDateRangesOverlap(p, c));
+      if (conflicts.length > 0) map.set(p.id, conflicts);
+    }
+    return map;
+  }, [bookings]);
+
+  function getConfirmedConflicts(booking: Booking) {
+    return confirmedConflictMap.get(booking.id) ?? [];
+  }
+
+  function hasConfirmedOverlap(booking: Booking) {
+    return (confirmedConflictMap.get(booking.id) ?? []).length > 0;
+  }
+
   const deadDayUpsellMap = useMemo(() => {
     const byVilla = new Map<string, Booking[]>();
     const opportunities = new Map<string, DeadDayUpsellOpportunity[]>();
@@ -989,6 +1009,9 @@ export default function BookingsTable({
   }
 
   const pendingBookings = sortByNewest(visibleBookings.filter((booking) => bookingRequiresAction(booking)));
+  // Phase 14A: split pending into Action Required vs Conflict / On Hold for visual grouping. No DB status change.
+  const actionRequiredBookings = pendingBookings.filter((b) => !hasConfirmedOverlap(b));
+  const conflictHoldBookings = pendingBookings.filter((b) => hasConfirmedOverlap(b));
 
   const confirmedBookings = sortConfirmedBookings(
     visibleBookings.filter((booking) => booking.status === "confirmed" && !bookingRequiresAction(booking)),
@@ -1915,7 +1938,10 @@ export default function BookingsTable({
     const accent = getCardAccent(booking, needsApproval || needsAttention || booking.status === "pending");
     const isUpdating = updatingId === booking.id;
     const isBulkResolving = bulkActionBookingId === booking.id;
-    const canConfirm = booking.status === "pending" && !needsApproval;
+    // Phase 14A: a pending booking that overlaps a confirmed booking cannot be confirmed without manual resolution.
+    const confirmedConflicts = getConfirmedConflicts(booking);
+    const conflictHold = booking.status === "pending" && confirmedConflicts.length > 0;
+    const canConfirm = booking.status === "pending" && !needsApproval && !conflictHold;
     const canCancel = booking.status === "pending" || booking.status === "confirmed";
     const overlappingPendingBookings = getPendingOverlaps(booking);
     const hasPendingOverlap = overlappingPendingBookings.length > 0;
@@ -2338,6 +2364,44 @@ export default function BookingsTable({
             <p style={{ fontFamily: LATO, fontSize: "11px", color: "#7ecfcf", margin: 0, lineHeight: 1.5 }}>
               Total savings: {formatAddonPrice(offerSavingsTotal)}
             </p>
+          </div>
+        )}
+
+        {/* Phase 14A: Conflict / On Hold warning — pending overlaps a confirmed booking */}
+        {conflictHold && (
+          <div
+            style={{
+              border: "0.5px solid rgba(224,112,112,0.32)",
+              backgroundColor: "rgba(224,112,112,0.08)",
+              padding: "12px 14px",
+              borderRadius: "8px",
+              display: "grid",
+              gap: "8px",
+            }}
+          >
+            <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: "#e07070", margin: 0, fontWeight: 600 }}>
+              Conflict / On Hold
+            </p>
+            <p style={{ fontFamily: LATO, fontSize: "11px", color: "rgba(255,255,255,0.75)", margin: 0, lineHeight: 1.6 }}>
+              This request overlaps with a confirmed booking. Offer alternate dates or cancel manually.
+            </p>
+            <div style={{ display: "grid", gap: "6px" }}>
+              {confirmedConflicts.map((c) => (
+                <p key={c.id} style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+                  Confirmed: {getBookingDisplayName(c)} · {fmt(c.check_in)} to {fmt(c.check_out)}
+                </p>
+              ))}
+            </div>
+            {booking.guest_phone && (
+              <a
+                href={`https://wa.me/${booking.guest_phone.replace(/[^0-9]/g, "")}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: "#7ecfcf", textDecoration: "none", borderBottom: "0.5px solid rgba(126,207,207,0.3)", paddingBottom: "2px", justifySelf: "start" }}
+              >
+                Contact guest via WhatsApp →
+              </a>
+            )}
           </div>
         )}
 
@@ -3047,9 +3111,10 @@ export default function BookingsTable({
     );
   }
 
-  function renderCompactRow(booking: Booking, section: "confirmed" | "cancelled") {
+  function renderCompactRow(booking: Booking, section: "confirmed" | "cancelled" | "pending") {
     const expanded = expandedCompactId === booking.id;
-    const accent = section === "confirmed" ? "#6fcf8a" : "#e07070";
+    const conflictHoldRow = section === "pending" && hasConfirmedOverlap(booking);
+    const accent = section === "confirmed" ? "#6fcf8a" : section === "cancelled" ? "#e07070" : conflictHoldRow ? "#e07070" : GOLD;
     const isGuest = !booking.member_id;
     const memberInfo = getMember(booking);
     const displayName = isGuest ? booking.guest_name ?? "Guest" : memberInfo?.full_name ?? "Member";
@@ -3114,6 +3179,29 @@ export default function BookingsTable({
             )}
             <StatusBadge status={booking.status} />
             {section === "confirmed" && renderPaymentStatusBadge(booking)}
+            {/* Phase 14A: pending-row payment + conflict badges */}
+            {section === "pending" && getPaymentStatus(booking) === "payment_requested" && renderPaymentStatusBadge(booking)}
+            {section === "pending" && conflictHoldRow && (
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontFamily: LATO,
+                  fontSize: "9px",
+                  letterSpacing: "1.4px",
+                  textTransform: "uppercase",
+                  color: "#e07070",
+                  backgroundColor: "rgba(224,112,112,0.12)",
+                  border: "0.5px solid rgba(224,112,112,0.32)",
+                  padding: "5px 9px",
+                  borderRadius: "6px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Conflict / On Hold
+              </span>
+            )}
             {hasDeadDayUpsell && (
               <span
                 style={{
@@ -3606,10 +3694,27 @@ export default function BookingsTable({
         ) : sectionBookings.length === 0 ? (
           <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: 0 }}>{sectionEmptyCopy[activeSection]}</p>
         ) : activeSection === "pending" ? (
-          <div style={{ display: "grid", gap: "16px" }}>
-            {sectionBookings.map((booking) => (
-              <div key={booking.id}>{renderExpandedBookingDetails(booking, false)}</div>
-            ))}
+          // Phase 14A: pending section split into Action Required vs Conflict / On Hold; both compact-by-default.
+          <div style={{ display: "grid", gap: "20px" }}>
+            {actionRequiredBookings.length > 0 && (
+              <div style={{ display: "grid", gap: "12px" }}>
+                <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+                  Action Required ({actionRequiredBookings.length})
+                </p>
+                {actionRequiredBookings.map((booking) => renderCompactRow(booking, "pending"))}
+              </div>
+            )}
+            {conflictHoldBookings.length > 0 && (
+              <div style={{ display: "grid", gap: "12px" }}>
+                <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "#e07070", margin: 0 }}>
+                  Conflict / On Hold ({conflictHoldBookings.length})
+                </p>
+                <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+                  These pending requests overlap a confirmed booking. Offer alternate dates or cancel manually — no automatic action will be taken.
+                </p>
+                {conflictHoldBookings.map((booking) => renderCompactRow(booking, "pending"))}
+              </div>
+            )}
           </div>
         ) : (
           <div style={{ display: "grid", gap: "12px" }}>
