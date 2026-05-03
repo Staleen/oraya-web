@@ -455,6 +455,12 @@ Phase 14 rules:
   - Event operational rules defined (single-day, multi-day) — see audit doc below
   - No availability changes implemented yet — audit only
   - No schema/API changes
+- 14C Event Availability Enforcement Design [COMPLETE]
+  - Current availability logic audited
+  - Event blocking model defined
+  - Implementation plan prepared
+  - Backend implementation not yet applied
+  - Explicit approval required before enforcement
 ---
 
 ## AGENT EXECUTION RULES
