@@ -544,11 +544,11 @@ Phase 15 — Production & growth readiness
   - No feature changes implemented
 - 15B Security + Reliability Hotfix [COMPLETE]
   - BOOKING_ACTION_SECRET fallback removed
-  - Admin API routes protected server-side
+  - admin API routes protected server-side
   - admin_password no longer exposed
-  - Admin password verification moved server-side if implemented
+  - admin password verification moved server-side
   - CRON_SECRET enforced
-  - No booking/pricing/availability logic changes
+  - no booking/pricing/availability logic changes
 
 ---
 

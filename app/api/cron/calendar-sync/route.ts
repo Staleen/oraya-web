@@ -14,30 +14,23 @@ function toErrorMessage(error: unknown) {
   }
 }
 
-function isCronAuthorized(request: Request): "ok" | "missing" | "unauthorized" {
+function isCronAuthorized(request: Request): boolean {
   const secret = process.env.CRON_SECRET?.trim();
-  if (!secret) return "missing";
+  if (!secret) return false;
   const auth = request.headers.get("authorization") ?? "";
   const expected = `Bearer ${secret}`;
   const a = Buffer.from(auth, "utf8");
   const b = Buffer.from(expected, "utf8");
-  if (a.length !== b.length) return "unauthorized";
+  if (a.length !== b.length) return false;
   try {
-    return timingSafeEqual(a, b) ? "ok" : "unauthorized";
+    return timingSafeEqual(a, b);
   } catch {
-    return "unauthorized";
+    return false;
   }
 }
 
 export async function GET(request: Request) {
-  const authz = isCronAuthorized(request);
-  if (authz === "missing") {
-    return new Response(JSON.stringify({ error: "CRON_SECRET is not configured on the server." }), {
-      status: 503,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-  if (authz === "unauthorized") {
+  if (!isCronAuthorized(request)) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { "Content-Type": "application/json" },
