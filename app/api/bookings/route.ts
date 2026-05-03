@@ -173,7 +173,8 @@ export async function POST(request: Request) {
     }
 
     try {
-      const conflict = await findAvailabilityConflict(villa, check_in, check_out);
+      const incomingIsEvent = Boolean(event_type) && typeof message === "string" && message.includes("[Event Inquiry]");
+      const conflict = await findAvailabilityConflict(villa, check_in, check_out, undefined, incomingIsEvent);
       if (conflict) {
         return NextResponse.json(
           { error: `These dates are unavailable — ${villa} is already blocked for ${conflict.check_in} to ${conflict.check_out}. Please choose different dates.` },

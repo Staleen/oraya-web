@@ -47,7 +47,8 @@ export async function POST(request: NextRequest) {
 
   if (action === "confirmed") {
     try {
-      const conflict = await findAvailabilityConflict(booking.villa, booking.check_in, booking.check_out, booking_id);
+      const bookingIsEvent = Boolean(booking.event_type) && typeof booking.message === "string" && booking.message.includes("[Event Inquiry]");
+      const conflict = await findAvailabilityConflict(booking.villa, booking.check_in, booking.check_out, booking_id, bookingIsEvent);
       if (conflict) return toResult(request, "overlap_conflict");
     } catch (conflictErr) {
       console.error("[api/booking-action] conflict check error:", conflictErr);

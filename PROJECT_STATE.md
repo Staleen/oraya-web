@@ -500,6 +500,14 @@ Phase 14 rules:
   - Payment request reuses the existing manual payment system
   - No auto-confirmation or auto-payment is triggered
   - No schema/API changes
+- 14J Event Availability Enforcement [COMPLETE]
+  - `lib/calendar/event-block.ts` — shared helpers: `addDaysToDateOnly`, `isEventBookingRow`, `getOperationalRange`, `rangesOverlap`
+  - `lib/calendar/availability.ts` — rewritten to use event-block helpers; confirmed events return operational range (check_in - 1 day, check_out); `findAvailabilityConflict` accepts `incomingIsEvent` flag
+  - `/api/bookings` POST — detects event inquiry and passes `incomingIsEvent: true` to conflict check
+  - `/api/admin/bookings/[id]` PATCH — passes `isExistingEventInquiry` to conflict check on confirm
+  - `/api/booking-action` POST — passes `bookingIsEvent` to conflict check on confirm
+  - Admin UI: confirmed event cards show operational block range (setup day note)
+  - No schema/API response changes
 ---
 
 ## AGENT EXECUTION RULES

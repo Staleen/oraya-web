@@ -6,6 +6,7 @@ import { AddonIcon } from "@/components/addon-icon";
 import { SkeletonBlock, SkeletonText } from "@/components/LoadingSkeleton";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
 import { BORDER, fieldStyle, fmt, GOLD, LATO, MIDNIGHT, MUTED, PLAYFAIR, WHITE } from "./theme";
+import { addDaysToDateOnly } from "@/lib/calendar/event-block";
 
 type BookingSectionKey = "pending" | "confirmed" | "cancelled";
 type ConfirmedSortKey = "created_desc" | "created_asc" | "check_in_asc" | "check_in_desc";
@@ -3185,6 +3186,25 @@ export default function BookingsTable({
           >
             <p style={{ fontFamily: LATO, fontSize: "11px", color: "#9db7d9", margin: 0, lineHeight: 1.55 }}>
               Event pricing is customized after review. Stay totals shown elsewhere are for reference only and do not represent the event package price.
+            </p>
+          </div>
+        )}
+
+        {/* Phase 14J: confirmed event — show operational block range (setup day included) */}
+        {isEventInquiryBooking(booking) && booking.status === "confirmed" && (
+          <div
+            style={{
+              border: "0.5px solid rgba(197,164,109,0.25)",
+              backgroundColor: "rgba(197,164,109,0.05)",
+              padding: "10px 14px",
+              borderRadius: "8px",
+            }}
+          >
+            <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: GOLD, margin: "0 0 5px", fontWeight: 600 }}>
+              Operational block
+            </p>
+            <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
+              {fmt(addDaysToDateOnly(booking.check_in, -1))} to {fmt(booking.check_out)} — includes setup day (night before event).
             </p>
           </div>
         )}

@@ -122,13 +122,20 @@ export async function PATCH(
     }
   }
 
+  const isExistingEventInquiry = Boolean(
+    existingBooking.event_type &&
+    typeof existingBooking.message === "string" &&
+    existingBooking.message.includes("[Event Inquiry]")
+  );
+
   if (status === "confirmed") {
     try {
       const conflict = await findAvailabilityConflict(
         existingBooking.villa,
         existingBooking.check_in,
         existingBooking.check_out,
-        bookingId
+        bookingId,
+        isExistingEventInquiry
       );
       if (conflict) {
         return NextResponse.json(
@@ -150,12 +157,6 @@ export async function PATCH(
       return NextResponse.json({ error: "Payment reminders are only available when payment has been requested." }, { status: 400 });
     }
   }
-
-  const isExistingEventInquiry = Boolean(
-    existingBooking.event_type &&
-    typeof existingBooking.message === "string" &&
-    existingBooking.message.includes("[Event Inquiry]")
-  );
 
   if (proposalSendRequested && !isExistingEventInquiry) {
     return NextResponse.json({ error: "Event proposals are only available for event inquiries." }, { status: 400 });
