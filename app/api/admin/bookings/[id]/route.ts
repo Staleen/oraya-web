@@ -6,6 +6,7 @@ import {
   sendBookingPaymentReminderEmail,
   sendBookingPaymentRequestedEmail,
 } from "@/lib/send-booking-payment-email";
+import { sendEventProposalEmail } from "@/lib/send-event-proposal-email";
 import { appendPaymentReminderNote } from "@/lib/payment-reminders";
 import { findAvailabilityConflict } from "@/lib/calendar/availability";
 
@@ -16,6 +17,15 @@ function makeAdminClient() {
     throw new Error("[api/admin/bookings] NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is not set");
   }
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+}
+
+function parseStoredNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
 }
 
 async function resolveRecipient(db: ReturnType<typeof makeAdminClient>, booking: {
@@ -52,6 +62,7 @@ export async function PATCH(
   const bookingId = params.id;
   const status = payload.status as unknown;
   const reminderRequested = payload.send_payment_reminder === true;
+  const proposalSendRequested = payload.send_event_proposal === true;
 
   const statusUpdateProvided = Object.prototype.hasOwnProperty.call(payload, "status");
   const paymentFieldNames = [
@@ -72,14 +83,30 @@ export async function PATCH(
   const paymentUpdateProvided = paymentFieldNames.some((field) =>
     Object.prototype.hasOwnProperty.call(payload, field)
   );
+  const proposalFieldNames = [
+    "proposal_status",
+    "proposal_total_amount",
+    "proposal_deposit_amount",
+    "proposal_included_services",
+    "proposal_excluded_services",
+    "proposal_optional_services",
+    "proposal_notes",
+    "proposal_valid_until",
+    "proposal_payment_methods",
+    "proposal_sent_at",
+    "proposal_responded_at",
+  ] as const;
+  const proposalUpdateProvided = proposalFieldNames.some((field) =>
+    Object.prototype.hasOwnProperty.call(payload, field)
+  );
 
-  if (!statusUpdateProvided && !paymentUpdateProvided && !reminderRequested) {
+  if (!statusUpdateProvided && !paymentUpdateProvided && !proposalUpdateProvided && !reminderRequested && !proposalSendRequested) {
     return NextResponse.json({ error: "No booking updates provided." }, { status: 400 });
   }
 
   const { data: existingBooking, error: existingBookingError } = await db
     .from("bookings")
-    .select("id, villa, check_in, check_out, status, sleeping_guests, day_visitors, event_type, message, addons, addons_snapshot, pricing_subtotal, pricing_snapshot, member_id, guest_name, guest_email, payment_status, payment_method, deposit_amount, amount_paid, payment_reference, payment_due_at, payment_requested_at, payment_received_at, payment_notes, refund_status, refund_amount, refunded_at")
+    .select("id, villa, check_in, check_out, status, sleeping_guests, day_visitors, event_type, message, addons, addons_snapshot, pricing_subtotal, pricing_snapshot, member_id, guest_name, guest_email, payment_status, payment_method, deposit_amount, amount_paid, payment_reference, payment_due_at, payment_requested_at, payment_received_at, payment_notes, refund_status, refund_amount, refunded_at, proposal_status, proposal_total_amount, proposal_deposit_amount, proposal_included_services, proposal_excluded_services, proposal_optional_services, proposal_notes, proposal_valid_until, proposal_payment_methods, proposal_sent_at, proposal_responded_at")
     .eq("id", bookingId)
     .single();
 
@@ -123,9 +150,20 @@ export async function PATCH(
     }
   }
 
+  const isExistingEventInquiry = Boolean(
+    existingBooking.event_type &&
+    typeof existingBooking.message === "string" &&
+    existingBooking.message.includes("[Event Inquiry]")
+  );
+
+  if (proposalSendRequested && !isExistingEventInquiry) {
+    return NextResponse.json({ error: "Event proposals are only available for event inquiries." }, { status: 400 });
+  }
+
   const allowedPaymentStatuses = ["unpaid", "payment_requested", "deposit_paid", "paid_in_full"];
   const allowedPaymentMethods = ["whish", "cash", "bank_transfer", "card_manual", "other"];
   const allowedRefundStatuses = ["refund_pending", "partial_refund", "refunded"];
+  const allowedProposalStatuses = ["draft", "sent", "accepted", "declined", "expired"];
   const updatePayload: Record<string, unknown> = {};
 
   if (statusUpdateProvided) {
@@ -159,6 +197,45 @@ export async function PATCH(
   }
 
   function readOptionalTimestamp(field: (typeof paymentFieldNames)[number]) {
+    if (!Object.prototype.hasOwnProperty.call(payload, field)) return;
+    const value = payload[field];
+    if (value === null || value === "") {
+      updatePayload[field] = null;
+      return;
+    }
+    if (typeof value !== "string" || Number.isNaN(new Date(value).getTime())) {
+      throw new Error(`Invalid ${field} value.`);
+    }
+    updatePayload[field] = value;
+  }
+
+  function readOptionalProposalText(field: (typeof proposalFieldNames)[number]) {
+    if (!Object.prototype.hasOwnProperty.call(payload, field)) return;
+    const value = payload[field];
+    if (value === null || value === "") {
+      updatePayload[field] = null;
+      return;
+    }
+    if (typeof value !== "string") {
+      throw new Error(`Invalid ${field} value.`);
+    }
+    updatePayload[field] = value;
+  }
+
+  function readOptionalProposalNumber(field: (typeof proposalFieldNames)[number]) {
+    if (!Object.prototype.hasOwnProperty.call(payload, field)) return;
+    const value = payload[field];
+    if (value === null || value === "") {
+      updatePayload[field] = null;
+      return;
+    }
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+      throw new Error(`Invalid ${field} value.`);
+    }
+    updatePayload[field] = value;
+  }
+
+  function readOptionalProposalTimestamp(field: (typeof proposalFieldNames)[number]) {
     if (!Object.prototype.hasOwnProperty.call(payload, field)) return;
     const value = payload[field];
     if (value === null || value === "") {
@@ -215,16 +292,123 @@ export async function PATCH(
     readOptionalTimestamp("payment_received_at");
     readOptionalTimestamp("payment_due_at");
     readOptionalTimestamp("refunded_at");
+
+    if (Object.prototype.hasOwnProperty.call(payload, "proposal_status")) {
+      const proposalStatus = payload.proposal_status;
+      if (proposalStatus === null || proposalStatus === "") {
+        updatePayload.proposal_status = null;
+      } else if (typeof proposalStatus === "string" && allowedProposalStatuses.includes(proposalStatus)) {
+        updatePayload.proposal_status = proposalStatus;
+      } else {
+        return NextResponse.json({ error: "Invalid proposal_status value." }, { status: 400 });
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(payload, "proposal_payment_methods")) {
+      const proposalPaymentMethods = payload.proposal_payment_methods;
+      if (proposalPaymentMethods === null) {
+        updatePayload.proposal_payment_methods = [];
+      } else if (
+        Array.isArray(proposalPaymentMethods) &&
+        proposalPaymentMethods.every((value) => typeof value === "string" && allowedPaymentMethods.includes(value))
+      ) {
+        updatePayload.proposal_payment_methods = proposalPaymentMethods;
+      } else {
+        return NextResponse.json({ error: "Invalid proposal_payment_methods value." }, { status: 400 });
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(payload, "proposal_included_services")) {
+      const proposalIncludedServices = payload.proposal_included_services;
+      if (proposalIncludedServices === null) {
+        updatePayload.proposal_included_services = [];
+      } else if (Array.isArray(proposalIncludedServices)) {
+        const normalized = proposalIncludedServices.map((service) => {
+          if (!service || typeof service !== "object" || typeof service.label !== "string" || !service.label.trim()) {
+            throw new Error("Invalid proposal_included_services value.");
+          }
+
+          const nextService: Record<string, unknown> = {
+            label: service.label.trim(),
+          };
+          if (typeof service.id === "string" && service.id.trim()) {
+            nextService.id = service.id.trim();
+          }
+          if (service.unit_label === null || service.unit_label === undefined || service.unit_label === "") {
+            nextService.unit_label = null;
+          } else if (typeof service.unit_label === "string") {
+            nextService.unit_label = service.unit_label.trim();
+          } else {
+            throw new Error("Invalid proposal_included_services value.");
+          }
+          if (service.quantity === null || service.quantity === undefined || service.quantity === "") {
+            nextService.quantity = null;
+          } else if (typeof service.quantity === "number" && Number.isFinite(service.quantity) && service.quantity >= 0) {
+            nextService.quantity = service.quantity;
+          } else {
+            throw new Error("Invalid proposal_included_services value.");
+          }
+          return nextService;
+        });
+        updatePayload.proposal_included_services = normalized;
+      } else {
+        return NextResponse.json({ error: "Invalid proposal_included_services value." }, { status: 400 });
+      }
+    }
+
+    readOptionalProposalNumber("proposal_total_amount");
+    readOptionalProposalNumber("proposal_deposit_amount");
+    readOptionalProposalText("proposal_excluded_services");
+    readOptionalProposalText("proposal_optional_services");
+    readOptionalProposalText("proposal_notes");
+    readOptionalProposalTimestamp("proposal_valid_until");
+    readOptionalProposalTimestamp("proposal_sent_at");
+    readOptionalProposalTimestamp("proposal_responded_at");
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Invalid payment update." },
+      { error: error instanceof Error ? error.message : "Invalid booking update." },
       { status: 400 }
     );
   }
 
+  if (proposalSendRequested) {
+    updatePayload.proposal_status = "sent";
+    updatePayload.proposal_sent_at = new Date().toISOString();
+  }
+
+  if (proposalSendRequested) {
+    const proposalTotalAmount =
+      parseStoredNumber(updatePayload.proposal_total_amount) ??
+      parseStoredNumber(existingBooking.proposal_total_amount);
+    const proposalValidUntilRaw =
+      typeof updatePayload.proposal_valid_until === "string"
+        ? updatePayload.proposal_valid_until
+        : typeof existingBooking.proposal_valid_until === "string"
+          ? existingBooking.proposal_valid_until
+          : null;
+    const proposalPaymentMethodsRaw = Array.isArray(updatePayload.proposal_payment_methods)
+      ? updatePayload.proposal_payment_methods
+      : Array.isArray(existingBooking.proposal_payment_methods)
+        ? existingBooking.proposal_payment_methods
+        : [];
+    const proposalPaymentMethods = proposalPaymentMethodsRaw.filter(
+      (value: unknown): value is string => typeof value === "string" && value.trim().length > 0
+    );
+
+    if (proposalTotalAmount === null) {
+      return NextResponse.json({ error: "Enter a proposal total before sending the proposal." }, { status: 400 });
+    }
+    if (!proposalValidUntilRaw || Number.isNaN(new Date(proposalValidUntilRaw).getTime())) {
+      return NextResponse.json({ error: "Set a proposal validity date before sending the proposal." }, { status: 400 });
+    }
+    if (proposalPaymentMethods.length === 0) {
+      return NextResponse.json({ error: "Choose at least one payment method before sending the proposal." }, { status: 400 });
+    }
+  }
+
   let updated = existingBooking;
 
-  if (statusUpdateProvided || paymentUpdateProvided) {
+  if (statusUpdateProvided || paymentUpdateProvided || proposalUpdateProvided || proposalSendRequested) {
     const { data, error } = await db
       .from("bookings")
       .update(updatePayload)
@@ -379,6 +563,31 @@ export async function PATCH(
       }
     } catch (reminderErr) {
       console.error("[api/admin/bookings] payment reminder error:", reminderErr);
+    }
+  }
+
+  if (proposalSendRequested && isEventInquiry) {
+    try {
+      const { email: recipientEmail, name: recipientName } = await resolveRecipient(db, updated);
+
+      if (!recipientEmail) {
+        console.warn(`[api/admin/bookings] no email address for booking ${bookingId} proposal â€” skipping notification`);
+      } else {
+        await sendEventProposalEmail({
+          to: recipientEmail,
+          name: recipientName,
+          booking_id: bookingId,
+          villa: updated.villa,
+          check_out: updated.check_out,
+          event_type: updated.event_type ?? null,
+          proposal_total_amount: updated.proposal_total_amount ?? null,
+          proposal_deposit_amount: updated.proposal_deposit_amount ?? null,
+          proposal_valid_until: updated.proposal_valid_until ?? null,
+        });
+        emailSent = true;
+      }
+    } catch (proposalEmailErr) {
+      console.error("[api/admin/bookings] proposal email notification error:", proposalEmailErr);
     }
   }
 

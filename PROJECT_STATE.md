@@ -482,6 +482,13 @@ Phase 14 rules:
   - Selected services included in inquiry notes
   - No event pricing exposed
   - No schema/API changes
+- 14G Event Proposal Workflow [COMPLETE]
+  - Admin can draft and send custom event proposals
+  - Proposal is visible on the secure guest booking view
+  - Proposal email is sent through the existing secure token link
+  - Event remains custom and manual
+  - No automatic confirmation or payment
+  - Schema added additively
 ---
 
 ## AGENT EXECUTION RULES

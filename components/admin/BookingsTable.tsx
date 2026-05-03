@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { Booking, BookingAddonSnapshot, Member } from "./types";
+import type { Booking, BookingAddonSnapshot, BookingProposalIncludedService, Member } from "./types";
 import { AddonIcon } from "@/components/addon-icon";
 import { SkeletonBlock, SkeletonText } from "@/components/LoadingSkeleton";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
@@ -26,6 +26,31 @@ type PaymentDraft = {
   refundAmount: string;
   refundNote: string;
 };
+type EventProposalServiceOption = {
+  key: string;
+  id?: string | null;
+  label: string;
+  quantity: number | null;
+  unit_label: string | null;
+};
+type ProposalDraft = {
+  totalAmount: string;
+  depositAmount: string;
+  validUntil: string;
+  includedServiceKeys: string[];
+  excludedServices: string;
+  optionalServices: string;
+  proposalNotes: string;
+  paymentMethods: string[];
+};
+
+const EVENT_PROPOSAL_PAYMENT_METHODS = [
+  { value: "whish", label: "Whish" },
+  { value: "cash", label: "Cash" },
+  { value: "bank_transfer", label: "Bank transfer" },
+  { value: "card_manual", label: "Card manual" },
+  { value: "other", label: "Other" },
+] as const;
 
 function StatusBadge({ status }: { status: string }) {
   const tones: Record<string, { text: string; background: string; border: string }> = {
@@ -226,6 +251,26 @@ function toDateTimeLocalInput(value: string | null | undefined) {
 function formatAdvisoryLabel(value: string) {
   if (!value) return value;
   return `${value.charAt(0).toUpperCase()}${value.slice(1)}`;
+}
+
+function createEventServiceKey(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function formatPaymentMethodLabel(value: string) {
+  if (value === "bank_transfer") return "Bank transfer";
+  if (value === "card_manual") return "Card manual";
+  return formatAdvisoryLabel(value.replaceAll("_", " "));
+}
+
+function formatEventProposalServiceLabel(service: EventProposalServiceOption | BookingProposalIncludedService) {
+  if (typeof service.quantity === "number" && Number.isFinite(service.quantity) && service.quantity > 0) {
+    return `${service.label} - ${service.quantity}${service.unit_label ? ` ${service.unit_label}` : ""}`;
+  }
+  return `${service.label} - requested`;
 }
 
 function getPricingIntelligenceMeta(booking: Booking) {
@@ -568,6 +613,49 @@ function isEventInquiryBooking(booking: Pick<Booking, "event_type" | "message">)
   return Boolean(booking.event_type) && typeof booking.message === "string" && booking.message.includes("[Event Inquiry]");
 }
 
+function parseRequestedEventServicesFromMessage(message: string | null | undefined): EventProposalServiceOption[] {
+  if (typeof message !== "string" || !message.includes("Requested Event Services:")) return [];
+
+  const lines = message.split(/\r?\n/);
+  const startIndex = lines.findIndex((line) => line.trim() === "Requested Event Services:");
+  if (startIndex < 0) return [];
+
+  const services: EventProposalServiceOption[] = [];
+  for (let index = startIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index].trim();
+    if (!line) continue;
+    if (!line.startsWith("- ")) {
+      if (/^[A-Za-z][A-Za-z\s()/-]*:/.test(line)) break;
+      continue;
+    }
+
+    const content = line.slice(2).trim();
+    const parts = content.split(/\s+[—-]\s+/);
+    const label = parts[0]?.trim();
+    if (!label) continue;
+
+    let quantity: number | null = null;
+    let unitLabel: string | null = null;
+    const detail = parts.slice(1).join(" - ").trim();
+    if (detail && detail.toLowerCase() !== "requested") {
+      const quantityMatch = /^(\d+(?:\.\d+)?)\s+(.+)$/.exec(detail);
+      if (quantityMatch) {
+        quantity = Number(quantityMatch[1]);
+        unitLabel = quantityMatch[2].trim();
+      }
+    }
+
+    services.push({
+      key: createEventServiceKey(label),
+      label,
+      quantity,
+      unit_label: unitLabel,
+    });
+  }
+
+  return services;
+}
+
 function parseDateOnlyParts(value: string) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!match) return null;
@@ -643,6 +731,7 @@ export default function BookingsTable({
   const [hiddenCancelledIds, setHiddenCancelledIds] = useState<string[]>([]);
   const [paymentUpdatingId, setPaymentUpdatingId] = useState<string | null>(null);
   const [paymentDrafts, setPaymentDrafts] = useState<Record<string, PaymentDraft>>({});
+  const [proposalDrafts, setProposalDrafts] = useState<Record<string, ProposalDraft>>({});
 
   async function patchAddonResolution(bookingId: string, addonId: string, decision: "approve" | "decline") {
     const res = await fetch(`/api/admin/bookings/${bookingId}/approve-addon`, {
@@ -715,6 +804,31 @@ export default function BookingsTable({
     };
   }
 
+  function getProposalDraft(booking: Booking): ProposalDraft {
+    const requestedServices = parseRequestedEventServicesFromMessage(booking.message);
+    const persistedIncludedServices = Array.isArray(booking.proposal_included_services)
+      ? booking.proposal_included_services
+      : [];
+    const includedServiceKeys =
+      persistedIncludedServices.length > 0
+        ? persistedIncludedServices.map((service) => createEventServiceKey(service.id?.trim() || service.label))
+        : requestedServices.map((service) => service.key);
+
+    return proposalDrafts[booking.id] ?? {
+      totalAmount: booking.proposal_total_amount != null ? String(booking.proposal_total_amount) : "",
+      depositAmount: booking.proposal_deposit_amount != null ? String(booking.proposal_deposit_amount) : "",
+      validUntil: toDateTimeLocalInput(booking.proposal_valid_until),
+      includedServiceKeys,
+      excludedServices: booking.proposal_excluded_services ?? "",
+      optionalServices: booking.proposal_optional_services ?? "",
+      proposalNotes: booking.proposal_notes ?? "",
+      paymentMethods:
+        Array.isArray(booking.proposal_payment_methods) && booking.proposal_payment_methods.length > 0
+          ? booking.proposal_payment_methods
+          : ["whish", "bank_transfer", "cash"],
+    };
+  }
+
   function updatePaymentDraft(bookingId: string, updates: Partial<PaymentDraft>) {
     setPaymentDrafts((prev) => ({
       ...prev,
@@ -735,6 +849,25 @@ export default function BookingsTable({
     }));
   }
 
+  function updateProposalDraft(bookingId: string, updates: Partial<ProposalDraft>) {
+    setProposalDrafts((prev) => ({
+      ...prev,
+      [bookingId]: {
+        ...(prev[bookingId] ?? {
+          totalAmount: "",
+          depositAmount: "",
+          validUntil: "",
+          includedServiceKeys: [],
+          excludedServices: "",
+          optionalServices: "",
+          proposalNotes: "",
+          paymentMethods: ["whish", "bank_transfer", "cash"],
+        }),
+        ...updates,
+      },
+    }));
+  }
+
   async function patchBookingRecord(bookingId: string, updates: Record<string, unknown>, actionKey: string) {
     setError("");
     setPaymentUpdatingId(`${bookingId}:${actionKey}`);
@@ -748,7 +881,7 @@ export default function BookingsTable({
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error ?? "Failed to update payment details.");
+        setError(data.error ?? "Failed to update booking details.");
         return null;
       }
 
@@ -758,12 +891,24 @@ export default function BookingsTable({
 
       return data.booking as Booking | null;
     } catch (error) {
-      console.error("[admin] payment update error:", error);
-      setError("Failed to update payment details.");
+      console.error("[admin] booking update error:", error);
+      setError("Failed to update booking details.");
       return null;
     } finally {
       setPaymentUpdatingId(null);
     }
+  }
+
+  function getSelectedProposalServices(booking: Booking, draft: ProposalDraft): BookingProposalIncludedService[] {
+    const selectedKeys = new Set(draft.includedServiceKeys);
+    return parseRequestedEventServicesFromMessage(booking.message)
+      .filter((service) => selectedKeys.has(service.key))
+      .map((service) => ({
+        id: service.id ?? null,
+        label: service.label,
+        quantity: service.quantity,
+        unit_label: service.unit_label,
+      }));
   }
 
   async function requestDeposit(booking: Booking) {
@@ -876,6 +1021,54 @@ export default function BookingsTable({
       booking.id,
       { send_payment_reminder: true },
       "send-reminder",
+    );
+  }
+
+  async function saveEventProposalDraft(booking: Booking) {
+    const draft = getProposalDraft(booking);
+    const proposalTotalAmount = parseAmountInput(draft.totalAmount);
+    const proposalDepositAmount = parseAmountInput(draft.depositAmount);
+    const proposalValidUntil = draft.validUntil ? new Date(draft.validUntil).toISOString() : null;
+    const proposalIncludedServices = getSelectedProposalServices(booking, draft);
+
+    await patchBookingRecord(
+      booking.id,
+      {
+        proposal_status: "draft",
+        proposal_total_amount: proposalTotalAmount,
+        proposal_deposit_amount: proposalDepositAmount,
+        proposal_included_services: proposalIncludedServices,
+        proposal_excluded_services: draft.excludedServices.trim() || null,
+        proposal_optional_services: draft.optionalServices.trim() || null,
+        proposal_notes: draft.proposalNotes.trim() || null,
+        proposal_valid_until: proposalValidUntil,
+        proposal_payment_methods: draft.paymentMethods,
+      },
+      "save-proposal",
+    );
+  }
+
+  async function sendEventProposal(booking: Booking) {
+    const draft = getProposalDraft(booking);
+    const proposalTotalAmount = parseAmountInput(draft.totalAmount);
+    const proposalDepositAmount = parseAmountInput(draft.depositAmount);
+    const proposalValidUntil = draft.validUntil ? new Date(draft.validUntil).toISOString() : null;
+    const proposalIncludedServices = getSelectedProposalServices(booking, draft);
+
+    await patchBookingRecord(
+      booking.id,
+      {
+        proposal_total_amount: proposalTotalAmount,
+        proposal_deposit_amount: proposalDepositAmount,
+        proposal_included_services: proposalIncludedServices,
+        proposal_excluded_services: draft.excludedServices.trim() || null,
+        proposal_optional_services: draft.optionalServices.trim() || null,
+        proposal_notes: draft.proposalNotes.trim() || null,
+        proposal_valid_until: proposalValidUntil,
+        proposal_payment_methods: draft.paymentMethods,
+        send_event_proposal: true,
+      },
+      "send-proposal",
     );
   }
 
@@ -1933,6 +2126,315 @@ export default function BookingsTable({
     );
   }
 
+  function renderEventProposalSection(booking: Booking) {
+    if (!isEventInquiryBooking(booking)) return null;
+
+    const draft = getProposalDraft(booking);
+    const requestedServices = parseRequestedEventServicesFromMessage(booking.message);
+    const selectedIncludedKeys = new Set(draft.includedServiceKeys);
+    const proposalStatus = booking.proposal_status ?? "draft";
+    const statusLabel =
+      proposalStatus === "sent"
+        ? "Proposal sent"
+        : proposalStatus === "draft"
+          ? "Draft proposal"
+          : formatAdvisoryLabel(proposalStatus);
+    const validUntil = formatDateTimeValue(booking.proposal_valid_until);
+    const sentAt = formatDateTimeValue(booking.proposal_sent_at);
+    const isSavingDraft = paymentUpdatingId === `${booking.id}:save-proposal`;
+    const isSendingProposal = paymentUpdatingId === `${booking.id}:send-proposal`;
+    const proposalTotal = formatMoney(booking.proposal_total_amount);
+    const proposalDeposit = formatMoney(booking.proposal_deposit_amount);
+    const proposalPaymentMethods =
+      Array.isArray(booking.proposal_payment_methods) && booking.proposal_payment_methods.length > 0
+        ? booking.proposal_payment_methods
+        : draft.paymentMethods;
+    const includedServicesDisplay =
+      Array.isArray(booking.proposal_included_services) && booking.proposal_included_services.length > 0
+        ? booking.proposal_included_services
+        : getSelectedProposalServices(booking, draft);
+
+    return (
+      <div
+        style={{
+          border: "0.5px solid rgba(157,183,217,0.26)",
+          backgroundColor: "rgba(157,183,217,0.05)",
+          padding: "14px 16px",
+          borderRadius: "8px",
+          display: "grid",
+          gap: "14px",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            gap: "12px",
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ display: "grid", gap: "4px" }}>
+            <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: "#9db7d9", margin: 0 }}>
+              Event Proposal
+            </p>
+            <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
+              Draft and send a custom proposal without confirming the inquiry or triggering payment automatically.
+            </p>
+          </div>
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontFamily: LATO,
+              fontSize: "9px",
+              letterSpacing: "1.5px",
+              textTransform: "uppercase",
+              color: proposalStatus === "sent" ? "#6fcf8a" : "#9db7d9",
+              backgroundColor: proposalStatus === "sent" ? "rgba(111,207,138,0.15)" : "rgba(157,183,217,0.14)",
+              border: `0.5px solid ${proposalStatus === "sent" ? "rgba(111,207,138,0.3)" : "rgba(157,183,217,0.26)"}`,
+              padding: "6px 10px",
+              borderRadius: "6px",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {statusLabel}
+          </span>
+        </div>
+
+        <p style={{ fontFamily: LATO, fontSize: "11px", color: "#9db7d9", margin: 0, lineHeight: 1.55 }}>
+          Event pricing remains custom and manual. Guests only see this proposal after it is sent.
+        </p>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
+            gap: "12px",
+          }}
+        >
+          <input
+            value={draft.totalAmount}
+            onChange={(event) => updateProposalDraft(booking.id, { totalAmount: event.target.value })}
+            placeholder="Proposal total"
+            inputMode="decimal"
+            style={fieldStyle}
+          />
+          <input
+            value={draft.depositAmount}
+            onChange={(event) => updateProposalDraft(booking.id, { depositAmount: event.target.value })}
+            placeholder="Deposit amount"
+            inputMode="decimal"
+            style={fieldStyle}
+          />
+          <input
+            type="datetime-local"
+            value={draft.validUntil}
+            onChange={(event) => updateProposalDraft(booking.id, { validUntil: event.target.value })}
+            style={fieldStyle}
+          />
+        </div>
+
+        <div style={{ display: "grid", gap: "10px" }}>
+          <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: WHITE, margin: 0 }}>
+            Included requested services
+          </p>
+          {requestedServices.length > 0 ? (
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))", gap: "10px" }}>
+              {requestedServices.map((service) => {
+                const checked = selectedIncludedKeys.has(service.key);
+                return (
+                  <label
+                    key={service.key}
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: "10px",
+                      border: "0.5px solid rgba(255,255,255,0.08)",
+                      backgroundColor: checked ? "rgba(197,164,109,0.08)" : "rgba(255,255,255,0.02)",
+                      padding: "12px 14px",
+                      borderRadius: "8px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(event) => {
+                        const nextKeys = event.target.checked
+                          ? [...draft.includedServiceKeys, service.key]
+                          : draft.includedServiceKeys.filter((key) => key !== service.key);
+                        updateProposalDraft(booking.id, { includedServiceKeys: Array.from(new Set(nextKeys)) });
+                      }}
+                    />
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{ fontFamily: LATO, fontSize: "12px", color: WHITE, margin: "0 0 4px", lineHeight: 1.45 }}>
+                        {service.label}
+                      </p>
+                      <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+                        {formatEventProposalServiceLabel(service)}
+                      </p>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          ) : (
+            <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
+              No structured requested services were found in this inquiry. You can still add exclusions, options, and proposal notes below.
+            </p>
+          )}
+        </div>
+
+        <div style={{ display: "grid", gap: "10px" }}>
+          <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: WHITE, margin: 0 }}>
+            Payment methods
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+            {EVENT_PROPOSAL_PAYMENT_METHODS.map((method) => {
+              const selected = draft.paymentMethods.includes(method.value);
+              return (
+                <button
+                  key={method.value}
+                  type="button"
+                  onClick={() =>
+                    updateProposalDraft(booking.id, {
+                      paymentMethods: selected
+                        ? draft.paymentMethods.filter((value) => value !== method.value)
+                        : [...draft.paymentMethods, method.value],
+                    })
+                  }
+                  style={{
+                    fontFamily: LATO,
+                    fontSize: "10px",
+                    letterSpacing: "1.4px",
+                    textTransform: "uppercase",
+                    color: selected ? MIDNIGHT : WHITE,
+                    backgroundColor: selected ? GOLD : "rgba(255,255,255,0.04)",
+                    border: selected ? "none" : `0.5px solid ${BORDER}`,
+                    padding: "10px 12px",
+                    borderRadius: "999px",
+                    cursor: "pointer",
+                  }}
+                >
+                  {method.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))", gap: "12px" }}>
+          <textarea
+            value={draft.excludedServices}
+            onChange={(event) => updateProposalDraft(booking.id, { excludedServices: event.target.value })}
+            placeholder="Excluded services"
+            rows={4}
+            style={{ ...fieldStyle, resize: "vertical" }}
+          />
+          <textarea
+            value={draft.optionalServices}
+            onChange={(event) => updateProposalDraft(booking.id, { optionalServices: event.target.value })}
+            placeholder="Optional services"
+            rows={4}
+            style={{ ...fieldStyle, resize: "vertical" }}
+          />
+        </div>
+
+        <textarea
+          value={draft.proposalNotes}
+          onChange={(event) => updateProposalDraft(booking.id, { proposalNotes: event.target.value })}
+          placeholder="Proposal notes"
+          rows={4}
+          style={{ ...fieldStyle, resize: "vertical" }}
+        />
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
+            gap: "10px 16px",
+          }}
+        >
+          {renderRevenueEstimateRow("Proposal total", proposalTotal ?? "Not set")}
+          {renderRevenueEstimateRow("Deposit amount", proposalDeposit ?? "Not set")}
+          {renderRevenueEstimateRow("Valid until", validUntil ?? "Not set")}
+          {renderRevenueEstimateRow("Payment methods", proposalPaymentMethods.map((method) => formatPaymentMethodLabel(method)).join(", ") || "Not set")}
+          {sentAt ? renderRevenueEstimateRow("Sent at", sentAt) : null}
+        </div>
+
+        {includedServicesDisplay.length > 0 && (
+          <div style={{ display: "grid", gap: "8px" }}>
+            <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: WHITE, margin: 0 }}>
+              Current included services
+            </p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+              {includedServicesDisplay.map((service, index) => (
+                <span
+                  key={`${service.label}-${index}`}
+                  style={{
+                    fontFamily: LATO,
+                    fontSize: "11px",
+                    color: WHITE,
+                    border: "0.5px solid rgba(157,183,217,0.22)",
+                    backgroundColor: "rgba(157,183,217,0.05)",
+                    padding: "7px 10px",
+                  }}
+                >
+                  {formatEventProposalServiceLabel(service)}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={() => saveEventProposalDraft(booking)}
+            disabled={isSavingDraft}
+            style={{
+              fontFamily: LATO,
+              fontSize: "10px",
+              letterSpacing: "1.5px",
+              textTransform: "uppercase",
+              color: WHITE,
+              backgroundColor: "rgba(255,255,255,0.05)",
+              border: `0.5px solid ${BORDER}`,
+              padding: "12px 14px",
+              borderRadius: "6px",
+              cursor: isSavingDraft ? "not-allowed" : "pointer",
+              opacity: isSavingDraft ? 0.7 : 1,
+            }}
+          >
+            {isSavingDraft ? "Saving..." : "Save draft"}
+          </button>
+          <button
+            type="button"
+            onClick={() => sendEventProposal(booking)}
+            disabled={isSendingProposal}
+            style={{
+              fontFamily: LATO,
+              fontSize: "10px",
+              letterSpacing: "1.5px",
+              textTransform: "uppercase",
+              color: MIDNIGHT,
+              backgroundColor: GOLD,
+              border: "none",
+              padding: "12px 14px",
+              borderRadius: "6px",
+              cursor: isSendingProposal ? "not-allowed" : "pointer",
+              opacity: isSendingProposal ? 0.7 : 1,
+            }}
+          >
+            {isSendingProposal ? "Sending..." : "Send proposal"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   function renderExpandedBookingDetails(booking: Booking, compactMode: boolean) {
     const isGuest = !booking.member_id;
     const memberInfo = getMember(booking);
@@ -2541,6 +3043,8 @@ export default function BookingsTable({
             </p>
           </div>
         )}
+
+        {renderEventProposalSection(booking)}
 
         {/* Phase 13H.2: Decision Signal panel — pending bookings only. Reuses existing revenue/overlap data. */}
         {booking.status === "pending" && (() => {

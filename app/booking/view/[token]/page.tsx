@@ -25,6 +25,13 @@ type Addon = {
   same_day_warning?: "same_day_checkout" | "same_day_checkin" | null;
 };
 
+type ProposalIncludedService = {
+  id?: string | null;
+  label: string;
+  quantity?: number | null;
+  unit_label?: string | null;
+};
+
 interface BookingRow {
   id:               string;
   villa:            string;
@@ -52,6 +59,17 @@ interface BookingRow {
   refund_status:    string | null;
   refund_amount:    number | string | null;
   refunded_at:      string | null;
+  proposal_status: string | null;
+  proposal_total_amount: number | string | null;
+  proposal_deposit_amount: number | string | null;
+  proposal_included_services: ProposalIncludedService[] | null;
+  proposal_excluded_services: string | null;
+  proposal_optional_services: string | null;
+  proposal_notes: string | null;
+  proposal_valid_until: string | null;
+  proposal_payment_methods: string[] | null;
+  proposal_sent_at: string | null;
+  proposal_responded_at: string | null;
 }
 
 function fmtDate(iso: string) {
@@ -121,6 +139,19 @@ function paymentStatusTone(status: string | null | undefined) {
     return { color: GOLD, bg: "rgba(197,164,109,0.14)", border: "rgba(197,164,109,0.28)" };
   }
   return { color: MUTED, bg: "rgba(255,255,255,0.04)", border: "rgba(255,255,255,0.08)" };
+}
+
+function formatPaymentMethodLabel(value: string) {
+  if (value === "bank_transfer") return "Bank transfer";
+  if (value === "card_manual") return "Card manual";
+  return `${value.charAt(0).toUpperCase()}${value.slice(1).replaceAll("_", " ")}`;
+}
+
+function formatProposalIncludedService(service: ProposalIncludedService) {
+  if (typeof service.quantity === "number" && Number.isFinite(service.quantity) && service.quantity > 0) {
+    return `${service.label} - ${service.quantity}${service.unit_label ? ` ${service.unit_label}` : ""}`;
+  }
+  return `${service.label} - requested`;
 }
 
 function sumAddonPrices(addons: Addon[]): number | null {
@@ -244,7 +275,7 @@ export default async function BookingViewPage({ params }: { params: { token: str
 
   const { data: booking, error } = await supabaseAdmin
     .from("bookings")
-    .select("id, villa, check_in, check_out, sleeping_guests, day_visitors, event_type, message, addons, addons_snapshot, pricing_subtotal, pricing_snapshot, status, guest_name, member_id, payment_status, deposit_amount, amount_paid, payment_method, payment_reference, payment_requested_at, payment_received_at, payment_due_at, refund_status, refund_amount, refunded_at")
+    .select("id, villa, check_in, check_out, sleeping_guests, day_visitors, event_type, message, addons, addons_snapshot, pricing_subtotal, pricing_snapshot, status, guest_name, member_id, payment_status, deposit_amount, amount_paid, payment_method, payment_reference, payment_requested_at, payment_received_at, payment_due_at, refund_status, refund_amount, refunded_at, proposal_status, proposal_total_amount, proposal_deposit_amount, proposal_included_services, proposal_excluded_services, proposal_optional_services, proposal_notes, proposal_valid_until, proposal_payment_methods, proposal_sent_at, proposal_responded_at")
     .eq("id", verified.booking_id)
     .single<BookingRow>();
 
@@ -292,6 +323,13 @@ export default async function BookingViewPage({ params }: { params: { token: str
   const paymentReceivedAt = formatDateTime(booking.payment_received_at);
   const paymentDueAt = formatDateTime(booking.payment_due_at);
   const refundedAt = formatDateTime(booking.refunded_at);
+  const proposalValidUntil = formatDateTime(booking.proposal_valid_until);
+  const proposalSentAt = formatDateTime(booking.proposal_sent_at);
+  const proposalTotal = parseAmount(booking.proposal_total_amount);
+  const proposalDeposit = parseAmount(booking.proposal_deposit_amount);
+  const proposalIncludedServices = Array.isArray(booking.proposal_included_services) ? booking.proposal_included_services : [];
+  const proposalPaymentMethods = Array.isArray(booking.proposal_payment_methods) ? booking.proposal_payment_methods : [];
+  const showEventProposal = isEventInquiry && booking.proposal_status === "sent";
   const paymentOverdue =
     booking.payment_status === "payment_requested" &&
     Boolean(booking.payment_due_at) &&
@@ -463,14 +501,135 @@ export default async function BookingViewPage({ params }: { params: { token: str
 
         {/* Phase 13I: pricing block — stay bookings see Payment summary; event inquiries see no pricing */}
         {isEventInquiry ? (
-          <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", padding: "1.75rem", marginBottom: "2rem", textAlign: "left", backgroundColor: "rgba(197,164,109,0.04)" }}>
-            <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, marginBottom: "0.75rem" }}>
-              Next steps
-            </p>
-            <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, lineHeight: 1.7, margin: 0 }}>
-              Oraya will review your event request and follow up with availability, setup options, and a tailored proposal.
-            </p>
-          </div>
+          showEventProposal ? (
+            <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", padding: "1.75rem", marginBottom: "2rem", textAlign: "left", backgroundColor: "rgba(197,164,109,0.04)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px", flexWrap: "wrap", marginBottom: "1rem" }}>
+                <div>
+                  <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, marginBottom: "0.75rem" }}>
+                    Event proposal
+                  </p>
+                  <p style={{ fontFamily: PLAYFAIR, fontSize: "1.2rem", color: WHITE, margin: 0 }}>
+                    Your custom proposal is ready
+                  </p>
+                </div>
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontFamily: LATO,
+                    fontSize: "10px",
+                    letterSpacing: "1.5px",
+                    textTransform: "uppercase",
+                    color: "#6fcf8a",
+                    backgroundColor: "rgba(111,207,138,0.15)",
+                    border: "0.5px solid rgba(111,207,138,0.28)",
+                    padding: "6px 12px",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Proposal sent
+                </span>
+              </div>
+
+              <div style={{ display: "grid", gap: "10px" }}>
+                {proposalTotal !== null && (
+                  <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, lineHeight: 1.6, margin: 0 }}>
+                    Proposal total: <span style={{ color: GOLD }}>{formatMoney(proposalTotal)}</span>
+                  </p>
+                )}
+                {proposalDeposit !== null && (
+                  <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, lineHeight: 1.6, margin: 0 }}>
+                    Deposit required: <span style={{ color: GOLD }}>{formatMoney(proposalDeposit)}</span>
+                  </p>
+                )}
+                {proposalValidUntil && (
+                  <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, lineHeight: 1.6, margin: 0 }}>
+                    Valid until: <span style={{ color: GOLD }}>{proposalValidUntil}</span>
+                  </p>
+                )}
+                {proposalSentAt && (
+                  <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.6, margin: 0 }}>
+                    Sent on {proposalSentAt}
+                  </p>
+                )}
+              </div>
+
+              {proposalIncludedServices.length > 0 && (
+                <div style={{ borderTop: "0.5px solid rgba(255,255,255,0.06)", marginTop: "14px", paddingTop: "14px", display: "grid", gap: "8px" }}>
+                  <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+                    Included services
+                  </p>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                    {proposalIncludedServices.map((service, index) => (
+                      <span key={`${service.label}-${index}`} style={{ fontFamily: LATO, fontSize: "11px", color: WHITE, border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: "rgba(255,255,255,0.03)", padding: "7px 10px" }}>
+                        {formatProposalIncludedService(service)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {booking.proposal_excluded_services?.trim() && (
+                <div style={{ borderTop: "0.5px solid rgba(255,255,255,0.06)", marginTop: "14px", paddingTop: "14px" }}>
+                  <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: "0 0 8px" }}>
+                    Excluded services
+                  </p>
+                  <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.7, margin: 0, whiteSpace: "pre-wrap" }}>
+                    {booking.proposal_excluded_services}
+                  </p>
+                </div>
+              )}
+
+              {booking.proposal_optional_services?.trim() && (
+                <div style={{ borderTop: "0.5px solid rgba(255,255,255,0.06)", marginTop: "14px", paddingTop: "14px" }}>
+                  <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: "0 0 8px" }}>
+                    Optional services
+                  </p>
+                  <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.7, margin: 0, whiteSpace: "pre-wrap" }}>
+                    {booking.proposal_optional_services}
+                  </p>
+                </div>
+              )}
+
+              {booking.proposal_notes?.trim() && (
+                <div style={{ borderTop: "0.5px solid rgba(255,255,255,0.06)", marginTop: "14px", paddingTop: "14px" }}>
+                  <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: "0 0 8px" }}>
+                    Proposal notes
+                  </p>
+                  <p style={{ fontFamily: LATO, fontSize: "12px", color: WHITE, lineHeight: 1.7, margin: 0, whiteSpace: "pre-wrap" }}>
+                    {booking.proposal_notes}
+                  </p>
+                </div>
+              )}
+
+              {proposalPaymentMethods.length > 0 && (
+                <div style={{ borderTop: "0.5px solid rgba(255,255,255,0.06)", marginTop: "14px", paddingTop: "14px" }}>
+                  <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: "0 0 8px" }}>
+                    Payment methods
+                  </p>
+                  <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.7, margin: 0 }}>
+                    {proposalPaymentMethods.map((method) => formatPaymentMethodLabel(method)).join(", ")}
+                  </p>
+                </div>
+              )}
+
+              <div style={{ borderTop: "0.5px solid rgba(255,255,255,0.06)", marginTop: "14px", paddingTop: "14px" }}>
+                <p style={{ fontFamily: LATO, fontSize: "12px", color: WHITE, lineHeight: 1.75, margin: 0 }}>
+                  Contact Oraya to accept this proposal.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", padding: "1.75rem", marginBottom: "2rem", textAlign: "left", backgroundColor: "rgba(197,164,109,0.04)" }}>
+              <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, marginBottom: "0.75rem" }}>
+                Next steps
+              </p>
+              <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, lineHeight: 1.7, margin: 0 }}>
+                Oraya will review your event request and follow up with availability, setup options, and a tailored proposal.
+              </p>
+            </div>
+          )
         ) : (
           <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", padding: "1.75rem", marginBottom: "2rem", textAlign: "left", backgroundColor: "rgba(197,164,109,0.04)" }}>
             <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, marginBottom: "1rem" }}>

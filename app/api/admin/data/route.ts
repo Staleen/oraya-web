@@ -11,7 +11,7 @@ export async function GET() {
   const { data: bookings, error: bookingsError } = await supabaseAdmin
     .from("bookings")
     .select(
-      "id, member_id, villa, check_in, check_out, sleeping_guests, day_visitors, event_type, message, addons, addons_snapshot, pricing_subtotal, pricing_snapshot, status, created_at, guest_name, guest_email, guest_phone, guest_country, payment_status, payment_method, deposit_amount, amount_paid, payment_reference, payment_notes, payment_requested_at, payment_received_at, payment_due_at, payment_marked_by, refund_status, refund_amount, refunded_at"
+      "id, member_id, villa, check_in, check_out, sleeping_guests, day_visitors, event_type, message, addons, addons_snapshot, pricing_subtotal, pricing_snapshot, status, created_at, guest_name, guest_email, guest_phone, guest_country, payment_status, payment_method, deposit_amount, amount_paid, payment_reference, payment_notes, payment_requested_at, payment_received_at, payment_due_at, payment_marked_by, refund_status, refund_amount, refunded_at, proposal_status, proposal_total_amount, proposal_deposit_amount, proposal_included_services, proposal_excluded_services, proposal_optional_services, proposal_notes, proposal_valid_until, proposal_payment_methods, proposal_sent_at, proposal_responded_at"
     )
     .order("created_at", { ascending: false });
 

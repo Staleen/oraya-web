@@ -69,6 +69,13 @@ export interface BookingPricingSnapshot {
   internal_intelligence?: BookingPricingInternalIntelligence | null;
 }
 
+export interface BookingProposalIncludedService {
+  id?: string | null;
+  label: string;
+  quantity?: number | null;
+  unit_label?: string | null;
+}
+
 export interface Booking {
   id: string;
   villa: string;
@@ -102,6 +109,17 @@ export interface Booking {
   refund_status?: string | null;
   refund_amount?: number | null;
   refunded_at?: string | null;
+  proposal_status?: "draft" | "sent" | "accepted" | "declined" | "expired" | null;
+  proposal_total_amount?: number | null;
+  proposal_deposit_amount?: number | null;
+  proposal_included_services?: BookingProposalIncludedService[] | null;
+  proposal_excluded_services?: string | null;
+  proposal_optional_services?: string | null;
+  proposal_notes?: string | null;
+  proposal_valid_until?: string | null;
+  proposal_payment_methods?: string[] | null;
+  proposal_sent_at?: string | null;
+  proposal_responded_at?: string | null;
 }
 
 export interface Member {
