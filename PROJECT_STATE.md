@@ -518,6 +518,16 @@ Phase 14 rules:
   - Advisory copy: "Use these dates to offer the guest an alternative manually."
   - No auto-reschedule, no auto-confirm, no auto-cancel logic
   - No schema/API changes
+- 14L Conflict Resolution Actions [COMPLETE]
+  - `buildAlternativeOfferMessage` module-level function — pure, takes guestName + original dates + suggestion + isEvent flag
+  - Stay message: "Your requested stay dates are not available due to an existing confirmed booking."
+  - Event message: "Your requested event date is not available due to venue scheduling."
+  - Each suggestion row in Conflict / On Hold expanded card gets a "Prepare offer" toggle button
+  - Offer panel shows prepared message text, WhatsApp link (when phone exists, message pre-encoded in URL), Copy message button
+  - Copy button shows "Copied!" for 2 s, then resets
+  - `activeOfferKey` / `copiedOfferKey` state — one panel open at a time; toggling same button closes it
+  - No auto-reschedule, no backend writes, no guest exposure
+  - No schema/API changes
 ---
 
 ## AGENT EXECUTION RULES

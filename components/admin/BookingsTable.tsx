@@ -7,7 +7,7 @@ import { SkeletonBlock, SkeletonText } from "@/components/LoadingSkeleton";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
 import { BORDER, fieldStyle, fmt, GOLD, LATO, MIDNIGHT, MUTED, PLAYFAIR, WHITE } from "./theme";
 import { addDaysToDateOnly, getOperationalRange, rangesOverlap } from "@/lib/calendar/event-block";
-import { findAlternativeDateSuggestions } from "@/lib/calendar/alternative-dates";
+import { findAlternativeDateSuggestions, type AlternativeSuggestion } from "@/lib/calendar/alternative-dates";
 
 type BookingSectionKey = "pending" | "confirmed" | "cancelled";
 type ConfirmedSortKey = "created_desc" | "created_asc" | "check_in_asc" | "check_in_desc";
@@ -622,6 +622,32 @@ function isEventInquiryBooking(booking: Pick<Booking, "event_type" | "message">)
   return Boolean(booking.event_type) && typeof booking.message === "string" && booking.message.includes("[Event Inquiry]");
 }
 
+// Phase 14L: build a copy-ready alternative-offer message for admin use.
+function buildAlternativeOfferMessage(
+  guestName: string,
+  originalCheckIn: string,
+  originalCheckOut: string,
+  suggestion: AlternativeSuggestion,
+  isEvent: boolean,
+): string {
+  const conflictLine = isEvent
+    ? "Your requested event date is not available due to venue scheduling."
+    : "Your requested stay dates are not available due to an existing confirmed booking.";
+  return [
+    `Hi ${guestName},`,
+    "",
+    conflictLine,
+    "",
+    "We would like to suggest the following alternative:",
+    `${fmt(suggestion.check_in)} → ${fmt(suggestion.check_out)}`,
+    "",
+    "Would you like us to continue with these alternative dates?",
+    "",
+    "Best regards,",
+    "Oraya",
+  ].join("\n");
+}
+
 function parseRequestedEventServicesFromMessage(message: string | null | undefined): EventProposalServiceOption[] {
   if (typeof message !== "string" || !message.includes("Requested Event Services:")) return [];
 
@@ -741,6 +767,9 @@ export default function BookingsTable({
   const [paymentUpdatingId, setPaymentUpdatingId] = useState<string | null>(null);
   const [paymentDrafts, setPaymentDrafts] = useState<Record<string, PaymentDraft>>({});
   const [proposalDrafts, setProposalDrafts] = useState<Record<string, ProposalDraft>>({});
+  // Phase 14L: offer-prep panel state. Key = `${bookingId}:${suggestion.label}`.
+  const [activeOfferKey, setActiveOfferKey] = useState<string | null>(null);
+  const [copiedOfferKey, setCopiedOfferKey] = useState<string | null>(null);
 
   async function patchAddonResolution(bookingId: string, addonId: string, decision: "approve" | "decline") {
     const res = await fetch(`/api/admin/bookings/${bookingId}/approve-addon`, {
@@ -3075,7 +3104,7 @@ export default function BookingsTable({
                 </p>
               ))}
             </div>
-            {/* Phase 14K: suggested alternative dates */}
+            {/* Phase 14K/14L: suggested alternatives with offer-prep actions */}
             {(() => {
               const suggestions = conflictSuggestionsMap.get(booking.id) ?? [];
               return (
@@ -3095,24 +3124,130 @@ export default function BookingsTable({
                       No safe alternative dates found nearby.
                     </p>
                   ) : (
-                    <>
-                      <div style={{ display: "grid", gap: "6px" }}>
-                        {suggestions.map((s) => (
-                          <div key={s.label} style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: "8px", alignItems: "baseline" }}>
-                            <span style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, letterSpacing: "0.8px" }}>
-                              {s.label}
-                            </span>
-                            <span style={{ fontFamily: LATO, fontSize: "11px", color: "rgba(255,255,255,0.82)" }}>
-                              {fmt(s.check_in)} → {fmt(s.check_out)}
-                              <span style={{ color: MUTED, marginLeft: "8px", fontSize: "10px" }}>{s.reason}</span>
-                            </span>
+                    <div style={{ display: "grid", gap: "10px" }}>
+                      {suggestions.map((s) => {
+                        const offerKey = `${booking.id}:${s.label}`;
+                        const isActive = activeOfferKey === offerKey;
+                        const message = buildAlternativeOfferMessage(
+                          getBookingDisplayName(booking),
+                          booking.check_in,
+                          booking.check_out,
+                          s,
+                          eventInquiry,
+                        );
+                        const rawPhone = booking.guest_phone?.replace(/[^0-9]/g, "") ?? "";
+                        const waUrl = rawPhone
+                          ? `https://wa.me/${rawPhone}?text=${encodeURIComponent(message)}`
+                          : null;
+                        const isCopied = copiedOfferKey === offerKey;
+                        return (
+                          <div key={s.label} style={{ display: "grid", gap: "6px" }}>
+                            <div style={{ display: "grid", gridTemplateColumns: "130px 1fr auto", gap: "8px", alignItems: "center" }}>
+                              <span style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, letterSpacing: "0.8px" }}>
+                                {s.label}
+                              </span>
+                              <span style={{ fontFamily: LATO, fontSize: "11px", color: "rgba(255,255,255,0.82)" }}>
+                                {fmt(s.check_in)} → {fmt(s.check_out)}
+                                <span style={{ color: MUTED, marginLeft: "8px", fontSize: "10px" }}>{s.reason}</span>
+                              </span>
+                              <button
+                                onClick={() => setActiveOfferKey(isActive ? null : offerKey)}
+                                style={{
+                                  fontFamily: LATO,
+                                  fontSize: "10px",
+                                  letterSpacing: "1.2px",
+                                  textTransform: "uppercase",
+                                  color: isActive ? MUTED : GOLD,
+                                  background: "none",
+                                  border: `0.5px solid ${isActive ? "rgba(138,128,112,0.3)" : "rgba(197,164,109,0.35)"}`,
+                                  borderRadius: "4px",
+                                  padding: "5px 10px",
+                                  cursor: "pointer",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                {isActive ? "Close" : "Prepare offer"}
+                              </button>
+                            </div>
+                            {isActive && (
+                              <div
+                                style={{
+                                  backgroundColor: "rgba(0,0,0,0.22)",
+                                  border: "0.5px solid rgba(197,164,109,0.18)",
+                                  borderRadius: "6px",
+                                  padding: "12px 14px",
+                                  display: "grid",
+                                  gap: "10px",
+                                }}
+                              >
+                                <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+                                  Prepared Message
+                                </p>
+                                <pre
+                                  style={{
+                                    fontFamily: LATO,
+                                    fontSize: "11px",
+                                    color: "rgba(255,255,255,0.82)",
+                                    margin: 0,
+                                    lineHeight: 1.75,
+                                    whiteSpace: "pre-wrap",
+                                    wordBreak: "break-word",
+                                  }}
+                                >
+                                  {message}
+                                </pre>
+                                <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                                  {waUrl && (
+                                    <a
+                                      href={waUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      style={{
+                                        fontFamily: LATO,
+                                        fontSize: "10px",
+                                        letterSpacing: "1.2px",
+                                        textTransform: "uppercase",
+                                        color: "#7ecfcf",
+                                        textDecoration: "none",
+                                        border: "0.5px solid rgba(126,207,207,0.35)",
+                                        borderRadius: "4px",
+                                        padding: "5px 10px",
+                                      }}
+                                    >
+                                      Open in WhatsApp →
+                                    </a>
+                                  )}
+                                  <button
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(message).catch(() => {});
+                                      setCopiedOfferKey(offerKey);
+                                      setTimeout(() => setCopiedOfferKey((prev) => prev === offerKey ? null : prev), 2000);
+                                    }}
+                                    style={{
+                                      fontFamily: LATO,
+                                      fontSize: "10px",
+                                      letterSpacing: "1.2px",
+                                      textTransform: "uppercase",
+                                      color: isCopied ? "#6fcf8a" : "rgba(255,255,255,0.6)",
+                                      background: "none",
+                                      border: `0.5px solid ${isCopied ? "rgba(111,207,138,0.3)" : "rgba(255,255,255,0.15)"}`,
+                                      borderRadius: "4px",
+                                      padding: "5px 10px",
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    {isCopied ? "Copied!" : "Copy message"}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
                           </div>
-                        ))}
-                      </div>
+                        );
+                      })}
                       <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: 0, lineHeight: 1.5, fontStyle: "italic" }}>
                         Use these dates to offer the guest an alternative manually.
                       </p>
-                    </>
+                    </div>
                   )}
                 </div>
               );
