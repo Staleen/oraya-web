@@ -494,6 +494,12 @@ Phase 14 rules:
   - Admin sees proposal response state
   - Proposal expiry is handled visually only
   - No auto-confirmation or payment is triggered
+- 14I Event Confirmation + Payment Flow [COMPLETE]
+  - Event confirmation is gated by proposal acceptance
+  - Manual confirm action is added for accepted event inquiries
+  - Payment request reuses the existing manual payment system
+  - No auto-confirmation or auto-payment is triggered
+  - No schema/API changes
 ---
 
 ## AGENT EXECUTION RULES

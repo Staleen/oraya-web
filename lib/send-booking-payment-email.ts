@@ -28,6 +28,9 @@ export interface BookingPaymentEmailPayload {
   pricing_subtotal?: number | string | null;
   pricing_snapshot?: { subtotal?: number | string | null } | null;
   addons_snapshot?: Array<{ price?: number | null }> | null;
+  event_type?: string | null;
+  proposal_total_amount?: number | string | null;
+  is_event_inquiry?: boolean;
 }
 
 function fmtDate(iso: string): string {
@@ -235,22 +238,33 @@ async function sendPaymentEmail(
   const resend = new Resend(apiKey);
   const firstName = payload.name.split(" ")[0] || "Guest";
   const viewUrl = createViewUrl(payload.booking_id, payload.check_out);
+  const isEventInquiry = payload.is_event_inquiry === true;
   const staySubtotal = parseAmount(payload.pricing_snapshot?.subtotal ?? payload.pricing_subtotal);
   const addonsTotal = sumAddonPrices(payload.addons_snapshot);
-  const estimatedTotal = staySubtotal !== null && addonsTotal !== null
-    ? staySubtotal + addonsTotal
-    : null;
+  const proposalTotal = parseAmount(payload.proposal_total_amount);
+  const estimatedTotal = isEventInquiry
+    ? proposalTotal
+    : staySubtotal !== null && addonsTotal !== null
+      ? staySubtotal + addonsTotal
+      : null;
   const depositAmount = parseAmount(payload.deposit_amount);
   const amountPaid = parseAmount(payload.amount_paid);
   const remainingBalance = estimatedTotal !== null && amountPaid !== null
     ? Math.max(0, estimatedTotal - amountPaid)
     : null;
 
-  const summaryRows: Array<[string, string]> = [
-    ["Villa", payload.villa],
-    ["Dates", `${fmtDate(payload.check_in)} to ${fmtDate(payload.check_out)}`],
-    ["Estimated total", formatMoney(estimatedTotal)],
-  ];
+  const summaryRows: Array<[string, string]> = isEventInquiry
+    ? [
+        ["Villa", payload.villa],
+        ["Dates", `${fmtDate(payload.check_in)} to ${fmtDate(payload.check_out)}`],
+        ["Event type", payload.event_type || "Custom event"],
+        ["Proposal total", formatMoney(estimatedTotal)],
+      ]
+    : [
+        ["Villa", payload.villa],
+        ["Dates", `${fmtDate(payload.check_in)} to ${fmtDate(payload.check_out)}`],
+        ["Estimated total", formatMoney(estimatedTotal)],
+      ];
 
   let subject = "";
   let eyebrow = "";
@@ -263,12 +277,17 @@ async function sendPaymentEmail(
   if (variant === "requested") {
     subject = "Payment requested for your Oraya booking";
     eyebrow = "Payment requested";
-    heading = `A payment request has been prepared<br/><em>for your stay, ${escapeHtml(firstName)}.</em>`;
-    intro = "Please review the requested deposit below and use the secure booking link for the latest booking and payment instructions.";
+    heading = isEventInquiry
+      ? `A payment request has been prepared<br/><em>for your event, ${escapeHtml(firstName)}.</em>`
+      : `A payment request has been prepared<br/><em>for your stay, ${escapeHtml(firstName)}.</em>`;
+    intro = isEventInquiry
+      ? "Please review the requested deposit below and use the secure booking link for the latest event and payment instructions."
+      : "Please review the requested deposit below and use the secure booking link for the latest booking and payment instructions.";
     paymentTitle = "Deposit requested";
     paymentLines = [
       ["Deposit amount", formatMoney(depositAmount)],
       ["Due date", formatDateTime(payload.payment_due_at) ?? "Not provided"],
+      ...(payload.payment_method ? [["Preferred method", payload.payment_method.replaceAll("_", " ")] as [string, string]] : []),
     ];
     paymentExtra = `
       <div style="padding-top:14px;">
@@ -291,10 +310,10 @@ async function sendPaymentEmail(
     eyebrow = "Payment received";
     heading = fullyPaid
       ? `Your payment has been received<br/><em>in full, ${escapeHtml(firstName)}.</em>`
-      : `Your payment has been received<br/><em>and your booking is secured.</em>`;
+      : `Your payment has been received<br/><em>and your ${isEventInquiry ? "event" : "booking"} is secured.</em>`;
     intro = fullyPaid
-      ? "Thank you. We have recorded your payment in full for this stay."
-      : "Thank you. We have recorded your payment and noted the remaining balance for this stay.";
+      ? `Thank you. We have recorded your payment in full for this ${isEventInquiry ? "event" : "stay"}.`
+      : `Thank you. We have recorded your payment and noted the remaining balance for this ${isEventInquiry ? "event" : "stay"}.`;
     paymentTitle = fullyPaid ? "Booking fully paid" : "Payment received";
     paymentLines = [
       ["Amount received", formatMoney(amountPaid)],
@@ -306,11 +325,12 @@ async function sendPaymentEmail(
     subject = "Reminder: payment pending for your Oraya booking";
     eyebrow = "Payment reminder";
     heading = `A friendly reminder<br/><em>for your Oraya booking.</em>`;
-    intro = "This is a reminder that payment is still pending for your stay. Please review the requested amount and due date below.";
+    intro = `This is a reminder that payment is still pending for your ${isEventInquiry ? "event" : "stay"}. Please review the requested amount and due date below.`;
     paymentTitle = "Payment pending";
     paymentLines = [
       ["Deposit amount", formatMoney(depositAmount)],
       ["Due date", formatDateTime(payload.payment_due_at) ?? "Not provided"],
+      ...(payload.payment_method ? [["Preferred method", payload.payment_method.replaceAll("_", " ")] as [string, string]] : []),
     ];
     paymentExtra = `
       <div style="padding-top:14px;">

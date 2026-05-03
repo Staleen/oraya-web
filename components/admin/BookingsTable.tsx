@@ -932,6 +932,7 @@ export default function BookingsTable({
       booking.id,
       {
         deposit_amount: depositAmount,
+        payment_method: draft.paymentMethod || null,
         payment_due_at: dueAtIso,
         payment_notes: nextNotes,
         payment_status: "payment_requested",
@@ -1768,7 +1769,9 @@ export default function BookingsTable({
                 Payment
               </p>
               <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
-                Manual payment tracking for confirmed bookings only.
+                {isEventInquiryBooking(booking)
+                  ? "Events are confirmed manually and secured after payment."
+                  : "Manual payment tracking for confirmed bookings only."}
               </p>
             </div>
             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
@@ -1941,6 +1944,17 @@ export default function BookingsTable({
               inputMode="decimal"
               style={fieldStyle}
             />
+            <select
+              value={draft.paymentMethod}
+              onChange={(event) => updatePaymentDraft(booking.id, { paymentMethod: event.target.value })}
+              style={{ ...fieldStyle, cursor: "pointer" }}
+            >
+              <option value="whish" style={{ backgroundColor: MIDNIGHT }}>Whish</option>
+              <option value="cash" style={{ backgroundColor: MIDNIGHT }}>Cash</option>
+              <option value="bank_transfer" style={{ backgroundColor: MIDNIGHT }}>Bank transfer</option>
+              <option value="card_manual" style={{ backgroundColor: MIDNIGHT }}>Card manual</option>
+              <option value="other" style={{ backgroundColor: MIDNIGHT }}>Other</option>
+            </select>
             <input
               type="datetime-local"
               value={draft.dueAt}
@@ -2243,6 +2257,27 @@ export default function BookingsTable({
           Event pricing remains custom and manual. Guests only see this proposal after it is sent.
         </p>
 
+        <div
+          style={{
+            border: "0.5px solid rgba(255,255,255,0.08)",
+            backgroundColor: "rgba(255,255,255,0.02)",
+            padding: "10px 12px",
+            borderRadius: "6px",
+            display: "grid",
+            gap: "6px",
+          }}
+        >
+          <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: WHITE, margin: 0 }}>
+            Event flow
+          </p>
+          <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
+            Proposal sent {"->"} Accepted {"->"} Confirmed {"->"} Payment requested {"->"} Paid
+          </p>
+          <p style={{ fontFamily: LATO, fontSize: "11px", color: "#9db7d9", margin: 0, lineHeight: 1.55 }}>
+            Events are confirmed manually and secured after payment.
+          </p>
+        </div>
+
         {(proposalStatus === "accepted" || proposalStatus === "declined" || proposalStatus === "expired") && (
           <div
             style={{
@@ -2277,6 +2312,40 @@ export default function BookingsTable({
                 : proposalStatus === "declined"
                   ? "Guest declined proposal — revise or close request."
                   : "Proposal expired."}
+            </p>
+          </div>
+        )}
+
+        {proposalStatus === "accepted" && booking.status === "confirmed" && (
+          <div
+            style={{
+              border:
+                getPaymentStatus(booking) === "payment_requested" || getPaymentStatus(booking) === "deposit_paid" || getPaymentStatus(booking) === "paid_in_full"
+                  ? "0.5px solid rgba(111,207,138,0.26)"
+                  : "0.5px solid rgba(197,164,109,0.26)",
+              backgroundColor:
+                getPaymentStatus(booking) === "payment_requested" || getPaymentStatus(booking) === "deposit_paid" || getPaymentStatus(booking) === "paid_in_full"
+                  ? "rgba(111,207,138,0.08)"
+                  : "rgba(197,164,109,0.08)",
+              padding: "10px 12px",
+              borderRadius: "6px",
+            }}
+          >
+            <p
+              style={{
+                fontFamily: LATO,
+                fontSize: "11px",
+                color:
+                  getPaymentStatus(booking) === "payment_requested" || getPaymentStatus(booking) === "deposit_paid" || getPaymentStatus(booking) === "paid_in_full"
+                    ? "#6fcf8a"
+                    : GOLD,
+                margin: 0,
+                lineHeight: 1.55,
+              }}
+            >
+              {getPaymentStatus(booking) === "payment_requested" || getPaymentStatus(booking) === "deposit_paid" || getPaymentStatus(booking) === "paid_in_full"
+                ? "Event confirmed and payment is in progress."
+                : "Event confirmed. Request payment to secure the booking."}
             </p>
           </div>
         )}
@@ -2522,10 +2591,12 @@ export default function BookingsTable({
     const accent = getCardAccent(booking, needsApproval || needsAttention || booking.status === "pending");
     const isUpdating = updatingId === booking.id;
     const isBulkResolving = bulkActionBookingId === booking.id;
+    const eventInquiry = isEventInquiryBooking(booking);
     // Phase 14A: a pending booking that overlaps a confirmed booking cannot be confirmed without manual resolution.
     const confirmedConflicts = getConfirmedConflicts(booking);
     const conflictHold = booking.status === "pending" && confirmedConflicts.length > 0;
-    const canConfirm = booking.status === "pending" && !needsApproval && !conflictHold;
+    const proposalAccepted = booking.proposal_status === "accepted";
+    const canConfirm = booking.status === "pending" && !needsApproval && !conflictHold && (!eventInquiry || proposalAccepted);
     const canCancel = booking.status === "pending" || booking.status === "confirmed";
     const overlappingPendingBookings = getPendingOverlaps(booking);
     const hasPendingOverlap = overlappingPendingBookings.length > 0;
@@ -3596,6 +3667,18 @@ export default function BookingsTable({
           </p>
         )}
 
+        {eventInquiry && booking.status === "pending" && !proposalAccepted && (
+          <p style={{ fontFamily: LATO, fontSize: "10px", color: "#9db7d9", margin: 0, lineHeight: 1.5 }}>
+            Wait for guest acceptance before confirming.
+          </p>
+        )}
+
+        {eventInquiry && booking.status === "pending" && proposalAccepted && (
+          <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+            Confirm the event first, then request payment manually using the payment section.
+          </p>
+        )}
+
         <div
           style={{
             display: "flex",
@@ -3631,7 +3714,7 @@ export default function BookingsTable({
             </button>
           )}
 
-          {(needsApproval || canConfirm) && (
+          {(needsApproval || canConfirm || (eventInquiry && booking.status === "pending" && proposalAccepted)) && (
             <div
               style={{
                 display: "flex",
@@ -3688,7 +3771,30 @@ export default function BookingsTable({
                     borderRadius: "6px",
                   }}
                 >
-                  {readyToConfirm ? "Confirm booking" : "Confirm booking"}
+                  {eventInquiry ? "Confirm event" : (readyToConfirm ? "Confirm booking" : "Confirm booking")}
+                </button>
+              )}
+
+              {eventInquiry && booking.status === "pending" && proposalAccepted && (
+                <button
+                  type="button"
+                  disabled
+                  style={{
+                    fontFamily: LATO,
+                    fontSize: "11px",
+                    letterSpacing: "1.6px",
+                    textTransform: "uppercase",
+                    color: MUTED,
+                    backgroundColor: "rgba(255,255,255,0.04)",
+                    border: `0.5px solid ${BORDER}`,
+                    padding: "12px 18px",
+                    cursor: "not-allowed",
+                    minWidth: isMobile ? "100%" : "188px",
+                    borderRadius: "6px",
+                    opacity: 0.6,
+                  }}
+                >
+                  Request payment
                 </button>
               )}
             </div>

@@ -6,6 +6,7 @@ import {
   sendBookingPaymentReminderEmail,
   sendBookingPaymentRequestedEmail,
 } from "@/lib/send-booking-payment-email";
+import { sendEventConfirmationEmail } from "@/lib/send-event-confirmation-email";
 import { sendEventProposalEmail } from "@/lib/send-event-proposal-email";
 import { appendPaymentReminderNote } from "@/lib/payment-reminders";
 import { findAvailabilityConflict } from "@/lib/calendar/availability";
@@ -158,6 +159,10 @@ export async function PATCH(
 
   if (proposalSendRequested && !isExistingEventInquiry) {
     return NextResponse.json({ error: "Event proposals are only available for event inquiries." }, { status: 400 });
+  }
+
+  if (status === "confirmed" && isExistingEventInquiry && existingBooking.proposal_status !== "accepted") {
+    return NextResponse.json({ error: "Wait for guest acceptance before confirming this event." }, { status: 400 });
   }
 
   const allowedPaymentStatuses = ["unpaid", "payment_requested", "deposit_paid", "paid_in_full"];
@@ -408,6 +413,19 @@ export async function PATCH(
 
   let updated = existingBooking;
 
+  const nextStatus =
+    typeof updatePayload.status === "string"
+      ? updatePayload.status
+      : existingBooking.status;
+  const nextPaymentStatus =
+    typeof updatePayload.payment_status === "string"
+      ? updatePayload.payment_status
+      : existingBooking.payment_status;
+
+  if (isExistingEventInquiry && nextPaymentStatus === "payment_requested" && nextStatus !== "confirmed") {
+    return NextResponse.json({ error: "Confirm the event before requesting payment." }, { status: 400 });
+  }
+
   if (statusUpdateProvided || paymentUpdateProvided || proposalUpdateProvided || proposalSendRequested) {
     const { data, error } = await db
       .from("bookings")
@@ -441,23 +459,36 @@ export async function PATCH(
       if (!recipientEmail) {
         console.warn(`[api/admin/bookings] no email address for booking ${bookingId} — skipping notification`);
       } else {
-        await sendBookingEmail({
-          to: recipientEmail,
-          name: recipientName,
-          status: status as "confirmed" | "cancelled",
-          villa: updated.villa,
-          check_in: updated.check_in,
-          check_out: updated.check_out,
-          booking_id: bookingId,
-          sleeping_guests: updated.sleeping_guests,
-          day_visitors: updated.day_visitors,
-          event_type: updated.event_type ?? null,
-          message: updated.message ?? null,
-          addons: Array.isArray(updated.addons) ? updated.addons : [],
-          addons_snapshot: Array.isArray(updated.addons_snapshot) ? updated.addons_snapshot : null,
-          pricing_subtotal: updated.pricing_subtotal ?? null,
-          pricing_snapshot: updated.pricing_snapshot ?? null,
-        });
+        if (isEventInquiry && status === "confirmed") {
+          await sendEventConfirmationEmail({
+            to: recipientEmail,
+            name: recipientName,
+            booking_id: bookingId,
+            villa: updated.villa,
+            check_in: updated.check_in,
+            check_out: updated.check_out,
+            event_type: updated.event_type ?? null,
+            proposal_total_amount: updated.proposal_total_amount ?? null,
+          });
+        } else {
+          await sendBookingEmail({
+            to: recipientEmail,
+            name: recipientName,
+            status: status as "confirmed" | "cancelled",
+            villa: updated.villa,
+            check_in: updated.check_in,
+            check_out: updated.check_out,
+            booking_id: bookingId,
+            sleeping_guests: updated.sleeping_guests,
+            day_visitors: updated.day_visitors,
+            event_type: updated.event_type ?? null,
+            message: updated.message ?? null,
+            addons: Array.isArray(updated.addons) ? updated.addons : [],
+            addons_snapshot: Array.isArray(updated.addons_snapshot) ? updated.addons_snapshot : null,
+            pricing_subtotal: updated.pricing_subtotal ?? null,
+            pricing_snapshot: updated.pricing_snapshot ?? null,
+          });
+        }
         emailSent = true;
       }
     } catch (emailErr) {
@@ -469,7 +500,7 @@ export async function PATCH(
     typeof updated.payment_status === "string" &&
     updated.payment_status !== existingBooking.payment_status;
 
-  if (paymentStatusChanged && !isEventInquiry) {
+  if (paymentStatusChanged) {
     try {
       const { email: recipientEmail, name: recipientName } = await resolveRecipient(db, updated);
 
@@ -492,6 +523,9 @@ export async function PATCH(
           pricing_subtotal: updated.pricing_subtotal ?? null,
           pricing_snapshot: updated.pricing_snapshot ?? null,
           addons_snapshot: Array.isArray(updated.addons_snapshot) ? updated.addons_snapshot : null,
+          event_type: updated.event_type ?? null,
+          proposal_total_amount: updated.proposal_total_amount ?? null,
+          is_event_inquiry: isEventInquiry,
         });
         emailSent = true;
       } else if (updated.payment_status === "deposit_paid" || updated.payment_status === "paid_in_full") {
@@ -511,6 +545,9 @@ export async function PATCH(
           pricing_subtotal: updated.pricing_subtotal ?? null,
           pricing_snapshot: updated.pricing_snapshot ?? null,
           addons_snapshot: Array.isArray(updated.addons_snapshot) ? updated.addons_snapshot : null,
+          event_type: updated.event_type ?? null,
+          proposal_total_amount: updated.proposal_total_amount ?? null,
+          is_event_inquiry: isEventInquiry,
         });
         emailSent = true;
       }
@@ -519,7 +556,7 @@ export async function PATCH(
     }
   }
 
-  if (reminderRequested && !isEventInquiry) {
+  if (reminderRequested) {
     try {
       const { email: recipientEmail, name: recipientName } = await resolveRecipient(db, updated);
 
@@ -542,6 +579,9 @@ export async function PATCH(
           pricing_subtotal: updated.pricing_subtotal ?? null,
           pricing_snapshot: updated.pricing_snapshot ?? null,
           addons_snapshot: Array.isArray(updated.addons_snapshot) ? updated.addons_snapshot : null,
+          event_type: updated.event_type ?? null,
+          proposal_total_amount: updated.proposal_total_amount ?? null,
+          is_event_inquiry: isEventInquiry,
         });
 
         const reminderTimestamp = new Date().toISOString();

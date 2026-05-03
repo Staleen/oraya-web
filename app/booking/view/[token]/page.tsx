@@ -322,16 +322,9 @@ export default async function BookingViewPage({
       : [];
   const staySubtotal = parseAmount(booking.pricing_snapshot?.subtotal ?? booking.pricing_subtotal);
   const addonsTotal = sumAddonPrices(addons);
-  const estimatedTotal = staySubtotal !== null && addonsTotal !== null
-    ? staySubtotal + addonsTotal
-    : null;
   const depositAmount = parseAmount(booking.deposit_amount);
   const amountPaid = parseAmount(booking.amount_paid);
   const refundAmount = parseAmount(booking.refund_amount);
-  const balanceDue =
-    estimatedTotal !== null
-      ? Math.max(0, estimatedTotal - (amountPaid ?? 0))
-      : null;
   const paymentRequestedAt = formatDateTime(booking.payment_requested_at);
   const paymentReceivedAt = formatDateTime(booking.payment_received_at);
   const paymentDueAt = formatDateTime(booking.payment_due_at);
@@ -340,6 +333,15 @@ export default async function BookingViewPage({
   const proposalSentAt = formatDateTime(booking.proposal_sent_at);
   const proposalTotal = parseAmount(booking.proposal_total_amount);
   const proposalDeposit = parseAmount(booking.proposal_deposit_amount);
+  const estimatedTotal = isEventInquiry
+    ? proposalTotal
+    : staySubtotal !== null && addonsTotal !== null
+      ? staySubtotal + addonsTotal
+      : null;
+  const balanceDue =
+    estimatedTotal !== null
+      ? Math.max(0, estimatedTotal - (amountPaid ?? 0))
+      : null;
   const proposalIncludedServices = Array.isArray(booking.proposal_included_services) ? booking.proposal_included_services : [];
   const proposalPaymentMethods = Array.isArray(booking.proposal_payment_methods) ? booking.proposal_payment_methods : [];
   const showEventProposal = isEventInquiry && booking.proposal_status === "sent";
@@ -351,6 +353,12 @@ export default async function BookingViewPage({
     Boolean(booking.payment_due_at) &&
     !Number.isNaN(new Date(booking.payment_due_at ?? "").getTime()) &&
     new Date(booking.payment_due_at ?? "").getTime() < Date.now();
+  const showConfirmedPaymentCard =
+    booking.status === "confirmed" &&
+    (!isEventInquiry ||
+      booking.payment_status === "payment_requested" ||
+      booking.payment_status === "deposit_paid" ||
+      booking.payment_status === "paid_in_full");
   const paymentRows: Array<[string, string, boolean]> = [
     ["Stay subtotal", staySubtotal !== null ? formatMoney(staySubtotal) : "Not available", false],
     ["Add-ons total", addonsTotal !== null ? formatMoney(addonsTotal) : "Price on request", false],
@@ -744,7 +752,11 @@ export default async function BookingViewPage({
                   </p>
                 ) : booking.proposal_status === "accepted" ? (
                   <p style={{ fontFamily: LATO, fontSize: "12px", color: "#6fcf8a", lineHeight: 1.75, margin: 0 }}>
-                    You accepted this proposal. Oraya will follow up manually with the next steps.
+                    {booking.status === "confirmed"
+                      ? ((booking.payment_status === null || booking.payment_status === "unpaid")
+                          ? "Your event is confirmed. Payment details will be shared shortly."
+                          : "Your event has been confirmed and payment details are now available below.")
+                      : "Your event is awaiting confirmation from Oraya."}
                   </p>
                 ) : booking.proposal_status === "declined" ? (
                   <p style={{ fontFamily: LATO, fontSize: "12px", color: "#f2a7a7", lineHeight: 1.75, margin: 0 }}>
@@ -794,7 +806,7 @@ export default async function BookingViewPage({
           </div>
         )}
 
-        {!isEventInquiry && booking.status === "confirmed" && (
+        {showConfirmedPaymentCard && (
           <div
             style={{
               border: paymentOverdue ? "0.5px solid rgba(224,112,112,0.32)" : "0.5px solid rgba(197,164,109,0.2)",
