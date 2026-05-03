@@ -423,6 +423,15 @@ Phase 13 — Real-world validation & stabilization:
   - Pending cards compact by default with expandable details (reuses existing renderCompactRow pattern)
   - Full decision details preserved in expanded state
   - No schema/API changes
+- 14B Event System Separation + Blocking Audit [COMPLETE]
+  - Event vs Stay classification added in admin (frontend-only via event_type + [Event Inquiry] marker)
+  - Event Inquiries separated visually into their own admin pending group, distinct from Stay Requests
+  - Event Inquiry compact-card badge with event_type label
+  - Expanded event card shows "Event pricing is customized after review" disclaimer
+  - Event operational rules defined (single-day, multi-day) — see audit doc below
+  - No availability changes implemented yet — audit only
+  - No schema/API changes
+- 13L.5 Payment Reminder & Overdue Control [COMPLETE]
   - Admin-triggered payment reminder
   - Overdue escalation UI
   - Cron-ready reminder function prepared

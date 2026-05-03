@@ -563,6 +563,11 @@ function bookingDateRangesOverlap(a: Booking, b: Booking) {
   return a.check_in < b.check_out && b.check_in < a.check_out;
 }
 
+// Phase 14B: classify a booking as an event inquiry — both event_type set AND structured marker in notes.
+function isEventInquiryBooking(booking: Pick<Booking, "event_type" | "message">) {
+  return Boolean(booking.event_type) && typeof booking.message === "string" && booking.message.includes("[Event Inquiry]");
+}
+
 function parseDateOnlyParts(value: string) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!match) return null;
@@ -1012,6 +1017,9 @@ export default function BookingsTable({
   // Phase 14A: split pending into Action Required vs Conflict / On Hold for visual grouping. No DB status change.
   const actionRequiredBookings = pendingBookings.filter((b) => !hasConfirmedOverlap(b));
   const conflictHoldBookings = pendingBookings.filter((b) => hasConfirmedOverlap(b));
+  // Phase 14B: further split action-required into stay requests vs event inquiries (admin-only frontend classification).
+  const stayRequestBookings = actionRequiredBookings.filter((b) => !isEventInquiryBooking(b));
+  const eventInquiryBookings = actionRequiredBookings.filter((b) => isEventInquiryBooking(b));
 
   const confirmedBookings = sortConfirmedBookings(
     visibleBookings.filter((booking) => booking.status === "confirmed" && !bookingRequiresAction(booking)),
@@ -2518,6 +2526,22 @@ export default function BookingsTable({
           </div>
         )}
 
+        {/* Phase 14B: event-inquiry pricing disclaimer — replaces stay-style totals in the admin context */}
+        {isEventInquiryBooking(booking) && (
+          <div
+            style={{
+              border: "0.5px solid rgba(157,183,217,0.28)",
+              backgroundColor: "rgba(157,183,217,0.06)",
+              padding: "10px 14px",
+              borderRadius: "8px",
+            }}
+          >
+            <p style={{ fontFamily: LATO, fontSize: "11px", color: "#9db7d9", margin: 0, lineHeight: 1.55 }}>
+              Event pricing is customized after review. Stay totals shown elsewhere are for reference only and do not represent the event package price.
+            </p>
+          </div>
+        )}
+
         {/* Phase 13H.2: Decision Signal panel — pending bookings only. Reuses existing revenue/overlap data. */}
         {booking.status === "pending" && (() => {
           const pricingIntelligence = getPricingIntelligenceMeta(booking);
@@ -3181,6 +3205,28 @@ export default function BookingsTable({
             {section === "confirmed" && renderPaymentStatusBadge(booking)}
             {/* Phase 14A: pending-row payment + conflict badges */}
             {section === "pending" && getPaymentStatus(booking) === "payment_requested" && renderPaymentStatusBadge(booking)}
+            {/* Phase 14B: Event Inquiry badge (visible whenever the booking is classified as an event inquiry) */}
+            {isEventInquiryBooking(booking) && (
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontFamily: LATO,
+                  fontSize: "9px",
+                  letterSpacing: "1.4px",
+                  textTransform: "uppercase",
+                  color: "#9db7d9",
+                  backgroundColor: "rgba(157,183,217,0.14)",
+                  border: "0.5px solid rgba(157,183,217,0.32)",
+                  padding: "5px 9px",
+                  borderRadius: "6px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Event Inquiry{booking.event_type ? ` · ${booking.event_type}` : ""}
+              </span>
+            )}
             {section === "pending" && conflictHoldRow && (
               <span
                 style={{
@@ -3694,14 +3740,25 @@ export default function BookingsTable({
         ) : sectionBookings.length === 0 ? (
           <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: 0 }}>{sectionEmptyCopy[activeSection]}</p>
         ) : activeSection === "pending" ? (
-          // Phase 14A: pending section split into Action Required vs Conflict / On Hold; both compact-by-default.
+          // Phase 14A + 14B: pending section split into Stay Requests / Event Inquiries / Conflict / On Hold.
           <div style={{ display: "grid", gap: "20px" }}>
-            {actionRequiredBookings.length > 0 && (
+            {stayRequestBookings.length > 0 && (
               <div style={{ display: "grid", gap: "12px" }}>
                 <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
-                  Action Required ({actionRequiredBookings.length})
+                  Stay Requests ({stayRequestBookings.length})
                 </p>
-                {actionRequiredBookings.map((booking) => renderCompactRow(booking, "pending"))}
+                {stayRequestBookings.map((booking) => renderCompactRow(booking, "pending"))}
+              </div>
+            )}
+            {eventInquiryBookings.length > 0 && (
+              <div style={{ display: "grid", gap: "12px" }}>
+                <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "#9db7d9", margin: 0 }}>
+                  Event Inquiries ({eventInquiryBookings.length})
+                </p>
+                <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+                  Event inquiries are reviewed separately. Pricing is customized after review — stay totals do not apply.
+                </p>
+                {eventInquiryBookings.map((booking) => renderCompactRow(booking, "pending"))}
               </div>
             )}
             {conflictHoldBookings.length > 0 && (
