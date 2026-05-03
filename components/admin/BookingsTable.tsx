@@ -7,6 +7,7 @@ import { SkeletonBlock, SkeletonText } from "@/components/LoadingSkeleton";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
 import { BORDER, fieldStyle, fmt, GOLD, LATO, MIDNIGHT, MUTED, PLAYFAIR, WHITE } from "./theme";
 import { addDaysToDateOnly, getOperationalRange, rangesOverlap } from "@/lib/calendar/event-block";
+import { findAlternativeDateSuggestions } from "@/lib/calendar/alternative-dates";
 
 type BookingSectionKey = "pending" | "confirmed" | "cancelled";
 type ConfirmedSortKey = "created_desc" | "created_asc" | "check_in_asc" | "check_in_desc";
@@ -1175,6 +1176,28 @@ export default function BookingsTable({
   function hasConfirmedOverlap(booking: Booking) {
     return (confirmedConflictMap.get(booking.id) ?? []).length > 0;
   }
+
+  // Phase 14K: alternative date suggestions for conflict/on-hold pending bookings.
+  const conflictSuggestionsMap = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof findAlternativeDateSuggestions>>();
+    const confirmedOnly = bookings.filter((b) => b.status === "confirmed");
+    const pendingOnly = bookings.filter((b) => b.status === "pending");
+    for (const p of pendingOnly) {
+      if (!confirmedConflictMap.has(p.id)) continue;
+      map.set(
+        p.id,
+        findAlternativeDateSuggestions({
+          villa: p.villa,
+          check_in: p.check_in,
+          check_out: p.check_out,
+          isEvent: isEventInquiryBooking(p),
+          confirmedBookings: confirmedOnly,
+          excludeBookingId: p.id,
+        }),
+      );
+    }
+    return map;
+  }, [bookings, confirmedConflictMap]);
 
   const deadDayUpsellMap = useMemo(() => {
     const byVilla = new Map<string, Booking[]>();
@@ -3052,6 +3075,49 @@ export default function BookingsTable({
                 </p>
               ))}
             </div>
+            {/* Phase 14K: suggested alternative dates */}
+            {(() => {
+              const suggestions = conflictSuggestionsMap.get(booking.id) ?? [];
+              return (
+                <div
+                  style={{
+                    borderTop: "0.5px solid rgba(224,112,112,0.18)",
+                    paddingTop: "10px",
+                    display: "grid",
+                    gap: "8px",
+                  }}
+                >
+                  <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: "#e07070", margin: 0, fontWeight: 600 }}>
+                    Suggested Alternatives
+                  </p>
+                  {suggestions.length === 0 ? (
+                    <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+                      No safe alternative dates found nearby.
+                    </p>
+                  ) : (
+                    <>
+                      <div style={{ display: "grid", gap: "6px" }}>
+                        {suggestions.map((s) => (
+                          <div key={s.label} style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: "8px", alignItems: "baseline" }}>
+                            <span style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, letterSpacing: "0.8px" }}>
+                              {s.label}
+                            </span>
+                            <span style={{ fontFamily: LATO, fontSize: "11px", color: "rgba(255,255,255,0.82)" }}>
+                              {fmt(s.check_in)} → {fmt(s.check_out)}
+                              <span style={{ color: MUTED, marginLeft: "8px", fontSize: "10px" }}>{s.reason}</span>
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: 0, lineHeight: 1.5, fontStyle: "italic" }}>
+                        Use these dates to offer the guest an alternative manually.
+                      </p>
+                    </>
+                  )}
+                </div>
+              );
+            })()}
+
             {booking.guest_phone && (
               <a
                 href={`https://wa.me/${booking.guest_phone.replace(/[^0-9]/g, "")}`}

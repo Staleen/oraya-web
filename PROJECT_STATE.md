@@ -508,6 +508,16 @@ Phase 14 rules:
   - `/api/booking-action` POST — passes `bookingIsEvent` to conflict check on confirm
   - Admin UI: confirmed event cards show operational block range (setup day note)
   - No schema/API response changes
+- 14K Alternative Date Suggestions [COMPLETE]
+  - `lib/calendar/alternative-dates.ts` — pure helper `findAlternativeDateSuggestions`; returns up to 3 safe alternatives (Previous, Next, Same weekday next week)
+  - Stay and event inquiry suggestions both supported
+  - Event setup-window blocking from 14J respected (candidate operational range expanded by -1 day for event inquiries)
+  - `conflictSuggestionsMap` useMemo in `BookingsTable.tsx` — computed from confirmed bookings already in memory
+  - Admin Conflict / On Hold expanded card shows "Suggested Alternatives" section with date ranges and reasons
+  - Empty state: "No safe alternative dates found nearby."
+  - Advisory copy: "Use these dates to offer the guest an alternative manually."
+  - No auto-reschedule, no auto-confirm, no auto-cancel logic
+  - No schema/API changes
 ---
 
 ## AGENT EXECUTION RULES
