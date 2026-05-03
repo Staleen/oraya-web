@@ -9,7 +9,7 @@ STOP and ask before proceeding.
 
 ## CURRENT PHASE
 
-Phase 13 -> COMPLETE | Phase 14 -> COMPLETE (14M closure) | Phase 15A -> COMPLETE (readiness audit) | Phase 15B -> COMPLETE (security hotfix) | Phase 15C -> COMPLETE (event inquiry calendar parity with stay picker) | Phase 15D -> COMPLETE (security cleanup + smoke test) | Phase 15E -> COMPLETE (local env parity + secret hygiene) | Phase 15F.1 -> COMPLETE (contact email consistency hotfix) | Phase 15F.2 -> COMPLETE (email identity hello standard) | Phase 15F.3 -> COMPLETE (privacy + legal communication alignment) | Phase 15F.4 -> COMPLETE (trust layer + legal entity + testimonial intake) | Phase 15F.5 -> COMPLETE (manual testimonial manager + feedback request tool) | Phase 15F.6 -> COMPLETE (completed reservations history + feedback follow-up) | Phase 15F.7 -> COMPLETE (manual feedback email trigger + tracking)
+Phase 13 -> COMPLETE | Phase 14 -> COMPLETE (14M closure) | Phase 15A -> COMPLETE (readiness audit) | Phase 15B -> COMPLETE (security hotfix) | Phase 15C -> COMPLETE (event inquiry calendar parity with stay picker) | Phase 15D -> COMPLETE (security cleanup + smoke test) | Phase 15E -> COMPLETE (local env parity + secret hygiene) | Phase 15F.1 -> COMPLETE (contact email consistency hotfix) | Phase 15F.2 -> COMPLETE (email identity hello standard) | Phase 15F.3 -> COMPLETE (privacy + legal communication alignment) | Phase 15F.4 -> COMPLETE (trust layer + legal entity + testimonial intake) | Phase 15F.5 -> COMPLETE (manual testimonial manager + feedback request tool) | Phase 15F.6 -> COMPLETE (completed reservations history + feedback follow-up) | Phase 15F.7 -> COMPLETE (manual feedback email trigger + tracking) | Phase 15G -> COMPLETE (event type taxonomy consolidation + normalization)
 
 ---
 
@@ -609,6 +609,13 @@ Phase 15 — Production & growth readiness
   - 24-hour duplicate guard on `feedback_requested_at` (response: `Feedback already requested recently`); resend allowed after cooldown; confirmation modal before send
   - Completed / Checked-out expanded card: send / resend + status line; compact row shows last requested time when logged; manual prepare / WhatsApp / copy unchanged
   - no booking pricing, payment totals math, or availability logic changes
+- 15G Event Type Taxonomy Consolidation + Normalization [COMPLETE]
+  - `lib/event-types.ts` — new shared module: `CANONICAL_EVENT_TYPES` (9 types as const), `CANONICAL_EVENT_TYPE_VALUES`, `CanonicalEventType` type, `normalizeEventType()` helper
+  - `NORMALIZATION_MAP` covers all 27 historical/intermediate type strings from 14N + prior phases → 9 canonical values; unknown strings pass through unchanged
+  - `app/events/inquiry/page.tsx` — EVENT_TYPES replaced with `CANONICAL_EVENT_TYPES` (23→9); EVENT_RECOMMENDATIONS collapsed to 9 canonical keys; `filteredEventServices` useMemo normalizes both `form.eventType` and stored `applicable_event_types` entries before comparison; `selectedEventRecommendation` normalized before lookup
+  - `components/admin/AddonsEditor.tsx` — EVENT_TYPE_OPTIONS collapsed to 9 canonical values (removed all legacy aliases from selector)
+  - Backward compatibility: existing bookings with old stored `applicable_event_types` values continue to match correctly via normalization at filter site; admin displays `event_type` raw (no normalization needed there)
+  - No backend/API/schema changes
 
 ---
 

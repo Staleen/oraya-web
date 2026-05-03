@@ -12,6 +12,7 @@ import {
   parseAddonOperationalSetting,
   type AddonOperationalFields,
 } from "@/lib/addon-operations";
+import { CANONICAL_EVENT_TYPES, normalizeEventType } from "@/lib/event-types";
 import { supabase } from "@/lib/supabase";
 import { addDaysToDateOnly, rangesOverlap } from "@/lib/calendar/event-block";
 
@@ -27,31 +28,10 @@ const LATO     = "'Lato', system-ui, sans-serif";
 const VILLAS   = ["Villa Mechmech", "Villa Byblos"];
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const EVENT_TYPES: { value: string; label: string; description: string }[] = [
-  { value: "Private Celebration",             label: "Private Celebration",             description: "Birthday, dinner, or private occasion with flexible service setup and guest support." },
-  { value: "Birthday Party",                  label: "Birthday Party",                  description: "Festive setup with decoration, seating, catering, music, and lighting." },
-  { value: "Anniversary Celebration",         label: "Anniversary Celebration",         description: "Elegant milestone setup with seating, decoration, lighting, and music." },
-  { value: "Gender Reveal",                   label: "Gender Reveal",                   description: "Family-friendly setup with seating, decoration, catering, and light service support." },
-  { value: "Baby Shower",                     label: "Baby Shower",                     description: "Welcoming event with comfortable seating, decoration, catering, and hospitality." },
-  { value: "Wedding",                         label: "Wedding",                         description: "Premium celebration with seating, decoration, lighting, AV, and full service coordination." },
-  { value: "Engagement",                      label: "Engagement",                      description: "Intimate celebration with decoration, lighting, music, and personalized service." },
-  { value: "Baptism",                         label: "Baptism",                         description: "Family gathering with seating, shaded areas, catering, and light hospitality." },
-  { value: "First Communion",                 label: "First Communion",                 description: "Family celebration with seating, catering, decoration, and service support." },
-  { value: "Graduation Celebration",          label: "Graduation Celebration",          description: "Milestone celebration with seating, catering, decoration, and guest support." },
-  { value: "Family Gathering",                label: "Family Gathering",                description: "Relaxed multi-generation event with flexible seating, shade, and catering." },
-  { value: "Family Reunion",                  label: "Family Reunion",                  description: "Extended family event with seating, shade, catering, and guest flow support." },
-  { value: "Dinner Event",                    label: "Dinner Event",                    description: "Seated dining with table service, lighting, catering, and ambiance setup." },
-  { value: "Friends Gathering",               label: "Friends Gathering",               description: "Casual social setup with seating, catering, music, and light hospitality." },
-  { value: "Corporate Event",                 label: "Corporate Event",                 description: "Professional gathering with seating, AV, lighting, service, and arrival flow." },
-  { value: "Team Building",                   label: "Team Building",                   description: "Group activity setup with seating, catering, AV support, and service coordination." },
-  { value: "Product Launch",                  label: "Product Launch",                  description: "Branded event with seating, AV, lighting, decoration, and professional service." },
-  { value: "Networking Event",                label: "Networking Event",                description: "Professional social with flexible seating, catering, and a polished arrival experience." },
-  { value: "Workshop / Seminar",              label: "Workshop / Seminar",              description: "Structured session with seating, AV, lighting, and service coordination." },
-  { value: "Photoshoot / Content Production", label: "Photoshoot / Content Production", description: "Production day with lighting, photography coordination, and crew support." },
-  { value: "Filming / Production",            label: "Filming / Production",            description: "Full production setup with lighting, AV, photography, and crew support." },
-  { value: "Proposal Setup",                  label: "Proposal Setup",                  description: "Intimate setup with decoration, lighting, music, and discreet service." },
-  { value: "Wellness Retreat",                label: "Wellness Retreat",                description: "Calm group retreat with shade, seating, catering, and light hospitality." },
-];
+// Guest-facing event type list — canonical taxonomy, sourced from lib/event-types.ts.
+// Old stored values (e.g. "Baptism / Family Gathering", "Wedding", "Birthday Party") are
+// handled by normalizeEventType() at the filtering and recommendation lookup sites.
+const EVENT_TYPES = CANONICAL_EVENT_TYPES;
 
 const FALLBACK_EVENT_SERVICE_DEFINITIONS = [
   { label: "Basic seating setup", group: "Setup & Seating" },
@@ -67,107 +47,44 @@ const FALLBACK_EVENT_SERVICE_DEFINITIONS = [
   { label: "Valet", group: "Arrival & Guest Flow" },
 ] as const;
 
+// Keyed by canonical event type values only. normalizeEventType() is applied before lookup
+// so old stored values (e.g. "Baptism", "Wedding", "Birthday Party") resolve correctly.
 const EVENT_RECOMMENDATIONS: Record<string, { guidance: string; recommended: string[] }> = {
   "Private Celebration": {
     guidance: "Private celebrations typically include dining setup, decoration, music, lighting, and guest hospitality.",
     recommended: ["Tables and chairs", "Catering / buffet setup", "Decoration support", "Music coordination", "Service staff coordination"],
   },
-  "Birthday Party": {
-    guidance: "Birthday setups typically include tables, decoration, catering, music, and lighting for a festive atmosphere.",
-    recommended: ["Tables and chairs", "Decoration support", "Catering / buffet setup", "Music coordination", "Lighting"],
-  },
-  "Anniversary Celebration": {
-    guidance: "Anniversary setups typically include elegant seating, decoration, lighting, and music for an intimate atmosphere.",
-    recommended: ["Tables and chairs", "Decoration support", "Lighting", "Music coordination", "Catering / buffet setup"],
-  },
   "Gender Reveal": {
-    guidance: "Gender reveal setups typically include seating, decoration, catering, and light service coordination for family guests.",
+    guidance: "Gender reveal setups typically include seating, decoration, catering, and light service coordination.",
     recommended: ["Tables and chairs", "Basic seating setup", "Decoration support", "Catering / buffet setup", "Service staff coordination"],
   },
-  "Baby Shower": {
-    guidance: "Baby shower setups typically include comfortable seating, decoration, catering, and gentle hospitality.",
-    recommended: ["Tables and chairs", "Basic seating setup", "Decoration support", "Catering / buffet setup", "Service staff coordination"],
-  },
-  "Wedding": {
-    guidance: "Wedding setups typically include premium seating, decoration, lighting, AV support, and coordinated guest flow.",
-    recommended: ["Tables and chairs", "Decoration support", "Lighting", "AV / sound", "Service staff coordination"],
-  },
-  "Engagement": {
-    guidance: "Engagement setups typically include intimate seating, decoration, lighting, music, and personalized service.",
-    recommended: ["Tables and chairs", "Decoration support", "Lighting", "Music coordination", "Service staff coordination"],
-  },
-  "Baptism": {
-    guidance: "Baptism setups typically include family seating, shaded comfort, catering flow, and light service coordination.",
+  "Baptism / First Communion": {
+    guidance: "These events typically include family seating, shaded comfort, catering flow, and light service coordination.",
     recommended: ["Basic seating setup", "Tables and chairs", "Umbrellas / shaded areas", "Catering / buffet setup", "Service staff coordination"],
   },
-  "First Communion": {
-    guidance: "First Communion events typically include family seating, catering, decoration, and light service support.",
-    recommended: ["Basic seating setup", "Tables and chairs", "Catering / buffet setup", "Service staff coordination", "Decoration support"],
+  "Wedding / Engagement": {
+    guidance: "These events typically include seating, decoration, lighting, AV support, and coordinated guest flow.",
+    recommended: ["Tables and chairs", "Decoration support", "Lighting", "AV / sound", "Service staff coordination"],
   },
   "Graduation Celebration": {
     guidance: "Graduation setups typically include flexible seating, catering, decoration, music, and guest support.",
     recommended: ["Tables and chairs", "Catering / buffet setup", "Decoration support", "Music coordination", "Service staff coordination"],
   },
-  "Family Gathering": {
+  "Family Gathering / Reunion": {
     guidance: "Family gatherings typically include relaxed seating, shade, catering, and light hospitality.",
-    recommended: ["Basic seating setup", "Tables and chairs", "Umbrellas / shaded areas", "Catering / buffet setup", "Service staff coordination"],
-  },
-  "Family Reunion": {
-    guidance: "Family reunions typically include extended seating, shade, catering, and guest flow support.",
     recommended: ["Basic seating setup", "Tables and chairs", "Umbrellas / shaded areas", "Catering / buffet setup", "Service staff coordination"],
   },
   "Dinner Event": {
     guidance: "Dinner events typically include table service, lighting, catering coordination, and ambiance setup.",
     recommended: ["Tables and chairs", "Catering / buffet setup", "Lighting", "Service staff coordination", "Decoration support"],
   },
-  "Friends Gathering": {
-    guidance: "Friends gatherings typically include flexible seating, catering, music, and light hospitality.",
-    recommended: ["Tables and chairs", "Basic seating setup", "Catering / buffet setup", "Music coordination", "Service staff coordination"],
-  },
-  "Corporate Event": {
-    guidance: "Corporate events typically include seating, AV support, lighting, service coordination, and a polished arrival flow.",
-    recommended: ["Basic seating setup", "Tables and chairs", "AV / sound", "Lighting", "Valet"],
-  },
-  "Team Building": {
-    guidance: "Team building setups typically include group seating, catering, AV support, and service coordination.",
-    recommended: ["Basic seating setup", "Tables and chairs", "Catering / buffet setup", "Service staff coordination", "AV / sound"],
-  },
-  "Product Launch": {
-    guidance: "Product launches typically include branded seating, AV, lighting, decoration, and professional service.",
-    recommended: ["Tables and chairs", "AV / sound", "Lighting", "Service staff coordination", "Decoration support"],
-  },
-  "Networking Event": {
-    guidance: "Networking events typically include flexible seating, catering, guest flow, and a polished arrival experience.",
-    recommended: ["Basic seating setup", "Tables and chairs", "Catering / buffet setup", "Service staff coordination", "Valet"],
-  },
-  "Workshop / Seminar": {
-    guidance: "Workshops and seminars typically include structured seating, AV support, lighting, and service coordination.",
-    recommended: ["Basic seating setup", "Tables and chairs", "AV / sound", "Service staff coordination", "Lighting"],
-  },
-  "Photoshoot / Content Production": {
-    guidance: "Production days typically include lighting setup, photography coordination, crew support, and set preparation.",
-    recommended: ["Basic seating setup", "Lighting", "Photography coordination", "Decoration support", "Service staff coordination"],
-  },
-  "Filming / Production": {
-    guidance: "Film productions typically include comprehensive lighting, AV, photography coordination, and crew support.",
-    recommended: ["Basic seating setup", "Lighting", "AV / sound", "Photography coordination", "Service staff coordination"],
-  },
-  "Proposal Setup": {
-    guidance: "Proposal setups typically include intimate decoration, lighting, music, and discreet service coordination.",
-    recommended: ["Tables and chairs", "Decoration support", "Lighting", "Music coordination", "Service staff coordination"],
-  },
   "Wellness Retreat": {
     guidance: "Wellness retreats typically include shaded seating, catering, and a calm, coordinated hospitality setup.",
     recommended: ["Basic seating setup", "Umbrellas / shaded areas", "Catering / buffet setup", "Service staff coordination", "Decoration support"],
   },
-  // Legacy aliases — kept for existing stored event requests that used the old combined type strings
-  "Baptism / Family Gathering": {
-    guidance: "Family-style event setup with seating, shaded comfort, catering flow, and light service coordination.",
-    recommended: ["Basic seating setup", "Tables and chairs", "Umbrellas / shaded areas", "Catering / buffet setup", "Service staff coordination"],
-  },
-  "Wedding / Engagement": {
-    guidance: "Celebration-focused setup with seating, decoration, lighting, AV, and coordinated guest flow.",
-    recommended: ["Tables and chairs", "Decoration support", "Lighting", "AV / sound", "Service staff coordination"],
+  "Corporate Event": {
+    guidance: "Corporate events typically include seating, AV support, lighting, service coordination, and a polished arrival flow.",
+    recommended: ["Basic seating setup", "Tables and chairs", "AV / sound", "Lighting", "Valet"],
   },
 };
 
@@ -672,17 +589,17 @@ function EventInquiryPageInner() {
 
   const hasManagedEventServices = managedEventServices.length > 0;
   const eventServiceCatalog = hasManagedEventServices ? managedEventServices : fallbackEventServices;
-  const filteredEventServices = useMemo(
-    () =>
-      eventServiceCatalog.filter((service) => {
-        if (!hasManagedEventServices) return true;
-        const applicableEventTypes = service.applicable_event_types ?? [];
-        if (applicableEventTypes.length === 0) return true;
-        if (!form.eventType) return true;
-        return applicableEventTypes.includes(form.eventType);
-      }),
-    [eventServiceCatalog, form.eventType, hasManagedEventServices]
-  );
+  const filteredEventServices = useMemo(() => {
+    const normalizedFormType = form.eventType ? normalizeEventType(form.eventType) : null;
+    return eventServiceCatalog.filter((service) => {
+      if (!hasManagedEventServices) return true;
+      const applicableEventTypes = service.applicable_event_types ?? [];
+      if (applicableEventTypes.length === 0) return true;
+      if (!normalizedFormType) return true;
+      // Normalize stored applicable_event_types so old/intermediate values still match.
+      return applicableEventTypes.some((t) => normalizeEventType(t) === normalizedFormType);
+    });
+  }, [eventServiceCatalog, form.eventType, hasManagedEventServices]);
 
   const groupedEventServices = useMemo(() => {
     const grouped = new Map<string, EventServiceOption[]>();
@@ -727,7 +644,8 @@ function EventInquiryPageInner() {
 
   const selectedEventRecommendation = useMemo(() => {
     if (!form.eventType) return null;
-    const recommendation = EVENT_RECOMMENDATIONS[form.eventType];
+    // Normalize before lookup so any stored old value resolves to its canonical entry.
+    const recommendation = EVENT_RECOMMENDATIONS[normalizeEventType(form.eventType)];
     if (!recommendation) return null;
     const recommendedServices = filteredEventServices.filter((service) => {
       // For managed services: honour the admin recommended flag first;
