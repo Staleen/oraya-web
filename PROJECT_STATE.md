@@ -561,7 +561,7 @@ Phase 15 — Production & growth readiness
   - secret hygiene verified
   - no runtime logic changed
 - 15F.1 Contact Email Consistency Hotfix [COMPLETE]
-  - public contact email standardized to admin@stayoraya.com
+  - public contact + reply paths aligned to primary inbox alias (superseded by hello@ in 15F.2)
   - transactional reply-to audited
   - no booking/payment/schema logic changed
 - 15F.2 Email Identity Standardization [COMPLETE]
