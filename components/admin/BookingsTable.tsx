@@ -61,6 +61,10 @@ type ProposalDraft = {
   optionalServices: string;
   proposalNotes: string;
   paymentMethods: string[];
+  /** When true, changing proposal total does not recalculate deposit (admin overrode deposit). */
+  depositAutoSyncDisabled?: boolean;
+  /** When true, do not replace payment deadline with the check-in −7 default (admin chose a date). */
+  deadlineManuallyEdited?: boolean;
 };
 
 const EVENT_PROPOSAL_PAYMENT_METHODS = [
@@ -1001,7 +1005,7 @@ export default function BookingsTable({
     };
   }
 
-  function getProposalDraft(booking: Booking): ProposalDraft {
+  function buildInitialProposalDraftFromBooking(booking: Booking): ProposalDraft {
     const requestedServices = parseRequestedEventServicesFromMessage(booking.message);
     const persistedIncludedServices = Array.isArray(booking.proposal_included_services)
       ? booking.proposal_included_services
@@ -1013,19 +1017,35 @@ export default function BookingsTable({
 
     const estimate = isEventInquiryBooking(booking) ? parseEventSetupEstimateFromMessage(booking.message) : null;
     const estTotal = typeof estimate?.total === "number" && Number.isFinite(estimate.total) ? estimate.total : null;
+    const savedTotalNum =
+      typeof booking.proposal_total_amount === "number" && Number.isFinite(booking.proposal_total_amount)
+        ? booking.proposal_total_amount
+        : null;
     const defaultTotal =
-      booking.proposal_total_amount != null ? String(booking.proposal_total_amount) : estTotal != null ? String(estTotal) : "";
+      savedTotalNum != null ? String(savedTotalNum) : estTotal != null ? String(estTotal) : "";
+    const defaultDepositFromTotal =
+      defaultTotal !== "" ? computeProposalDepositFromTotal(Number(defaultTotal)) : null;
+    const savedDepNum =
+      typeof booking.proposal_deposit_amount === "number" && Number.isFinite(booking.proposal_deposit_amount)
+        ? booking.proposal_deposit_amount
+        : null;
     const defaultDeposit =
-      booking.proposal_deposit_amount != null
-        ? String(booking.proposal_deposit_amount)
-        : defaultTotal
-          ? String(computeProposalDepositFromTotal(Number(defaultTotal)))
+      savedDepNum != null
+        ? String(savedDepNum)
+        : defaultDepositFromTotal != null
+          ? String(defaultDepositFromTotal)
           : "";
+    const persistedDeadline = toDateTimeLocalInput(booking.proposal_valid_until);
     const defaultValidUntil =
-      toDateTimeLocalInput(booking.proposal_valid_until) ||
+      persistedDeadline ||
       (isEventInquiryBooking(booking) && booking.check_in ? computeDefaultProposalValidUntilInputValue(booking.check_in) : "");
+    const depositAutoSyncDisabledInit =
+      savedDepNum != null &&
+      defaultDepositFromTotal != null &&
+      Math.round(savedDepNum) !== Math.round(defaultDepositFromTotal);
+    const deadlineManuallyEditedInit = Boolean(persistedDeadline);
 
-    return proposalDrafts[booking.id] ?? {
+    return {
       totalAmount: defaultTotal,
       depositAmount: defaultDeposit,
       validUntil: defaultValidUntil,
@@ -1037,7 +1057,13 @@ export default function BookingsTable({
         Array.isArray(booking.proposal_payment_methods) && booking.proposal_payment_methods.length > 0
           ? booking.proposal_payment_methods
           : ["whish", "bank_transfer", "cash"],
+      depositAutoSyncDisabled: depositAutoSyncDisabledInit,
+      deadlineManuallyEdited: deadlineManuallyEditedInit,
     };
+  }
+
+  function getProposalDraft(booking: Booking): ProposalDraft {
+    return proposalDrafts[booking.id] ?? buildInitialProposalDraftFromBooking(booking);
   }
 
   function updatePaymentDraft(bookingId: string, updates: Partial<PaymentDraft>) {
@@ -1060,20 +1086,12 @@ export default function BookingsTable({
     }));
   }
 
-  function updateProposalDraft(bookingId: string, updates: Partial<ProposalDraft>) {
+  function updateProposalDraft(booking: Booking, updates: Partial<ProposalDraft>) {
+    const bookingId = booking.id;
     setProposalDrafts((prev) => ({
       ...prev,
       [bookingId]: {
-        ...(prev[bookingId] ?? {
-          totalAmount: "",
-          depositAmount: "",
-          validUntil: "",
-          includedServiceKeys: [],
-          excludedServices: "",
-          optionalServices: "",
-          proposalNotes: "",
-          paymentMethods: ["whish", "bank_transfer", "cash"],
-        }),
+        ...(prev[bookingId] ?? buildInitialProposalDraftFromBooking(booking)),
         ...updates,
       },
     }));
@@ -2842,11 +2860,11 @@ export default function BookingsTable({
             onChange={(event) => {
               const totalAmount = event.target.value;
               const parsed = parseAmountInput(totalAmount);
-              updateProposalDraft(booking.id, {
-                totalAmount,
-                depositAmount:
-                  parsed !== null ? String(computeProposalDepositFromTotal(parsed)) : draft.depositAmount,
-              });
+              const depositAmount =
+                !draft.depositAutoSyncDisabled && parsed !== null
+                  ? String(computeProposalDepositFromTotal(parsed))
+                  : draft.depositAmount;
+              updateProposalDraft(booking, { totalAmount, depositAmount });
             }}
             placeholder="Proposal total"
             inputMode="decimal"
@@ -2854,7 +2872,12 @@ export default function BookingsTable({
           />
           <input
             value={draft.depositAmount}
-            onChange={(event) => updateProposalDraft(booking.id, { depositAmount: event.target.value })}
+            onChange={(event) =>
+              updateProposalDraft(booking, {
+                depositAmount: event.target.value,
+                depositAutoSyncDisabled: true,
+              })
+            }
             placeholder="Deposit amount"
             inputMode="decimal"
             style={fieldStyle}
@@ -2862,7 +2885,9 @@ export default function BookingsTable({
           <input
             type="datetime-local"
             value={draft.validUntil}
-            onChange={(event) => updateProposalDraft(booking.id, { validUntil: event.target.value })}
+            onChange={(event) =>
+              updateProposalDraft(booking, { validUntil: event.target.value, deadlineManuallyEdited: true })
+            }
             style={fieldStyle}
           />
         </div>
@@ -2899,7 +2924,7 @@ export default function BookingsTable({
                         const nextKeys = event.target.checked
                           ? [...draft.includedServiceKeys, service.key]
                           : draft.includedServiceKeys.filter((key) => key !== service.key);
-                        updateProposalDraft(booking.id, { includedServiceKeys: Array.from(new Set(nextKeys)) });
+                        updateProposalDraft(booking, { includedServiceKeys: Array.from(new Set(nextKeys)) });
                       }}
                     />
                     <div style={{ minWidth: 0 }}>
@@ -2949,7 +2974,7 @@ export default function BookingsTable({
                   key={method.value}
                   type="button"
                   onClick={() =>
-                    updateProposalDraft(booking.id, {
+                    updateProposalDraft(booking, {
                       paymentMethods: selected
                         ? draft.paymentMethods.filter((value) => value !== method.value)
                         : [...draft.paymentMethods, method.value],
@@ -2978,14 +3003,14 @@ export default function BookingsTable({
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))", gap: "12px" }}>
           <textarea
             value={draft.excludedServices}
-            onChange={(event) => updateProposalDraft(booking.id, { excludedServices: event.target.value })}
+            onChange={(event) => updateProposalDraft(booking, { excludedServices: event.target.value })}
             placeholder="Excluded services"
             rows={4}
             style={{ ...fieldStyle, resize: "vertical" }}
           />
           <textarea
             value={draft.optionalServices}
-            onChange={(event) => updateProposalDraft(booking.id, { optionalServices: event.target.value })}
+            onChange={(event) => updateProposalDraft(booking, { optionalServices: event.target.value })}
             placeholder="Optional services"
             rows={4}
             style={{ ...fieldStyle, resize: "vertical" }}
@@ -2994,7 +3019,7 @@ export default function BookingsTable({
 
         <textarea
           value={draft.proposalNotes}
-          onChange={(event) => updateProposalDraft(booking.id, { proposalNotes: event.target.value })}
+          onChange={(event) => updateProposalDraft(booking, { proposalNotes: event.target.value })}
           placeholder="Proposal notes"
           rows={4}
           style={{ ...fieldStyle, resize: "vertical" }}
