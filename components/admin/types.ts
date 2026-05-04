@@ -74,6 +74,8 @@ export interface BookingProposalIncludedService {
   label: string;
   quantity?: number | null;
   unit_label?: string | null;
+  /** Admin review: omitted or "approved" = included in proposal; "declined" excludes from guest-facing proposal. */
+  admin_status?: "approved" | "declined" | null;
 }
 
 export interface Booking {

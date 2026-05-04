@@ -20,6 +20,7 @@ export const EVENT_SERVICE_SEED_IDS = {
   basicLighting: "event_svc_basic_lighting",
   premiumLighting: "event_svc_premium_lighting_atmosphere",
   eventCoordination: "event_svc_event_coordination",
+  umbrellasShaded: "event_svc_umbrellas_shaded_areas",
 } as const;
 
 /** Within each row, at most one seed id may be selected at a time. */
@@ -212,7 +213,9 @@ export function resolveRecommendedPackSeedIds(canonicalEventType: string): Set<s
   if (p.music === "setup") seeds.add(EVENT_SERVICE_SEED_IDS.musicSetup);
   if (p.music === "dj") seeds.add(EVENT_SERVICE_SEED_IDS.dj);
 
-  seeds.add(EVENT_SERVICE_SEED_IDS.eventCoordination);
+  if (p.seating === "full") {
+    seeds.add(EVENT_SERVICE_SEED_IDS.umbrellasShaded);
+  }
   return seeds;
 }
 

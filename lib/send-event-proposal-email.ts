@@ -2,6 +2,8 @@ import { Resend } from "resend";
 import { LOGO_URL, SITE_URL } from "@/lib/brand";
 import { createActionToken } from "@/lib/booking-action-token";
 import { transactionalEmailFooterHtmlBlock, transactionalEmailFooterTextSuffix } from "@/lib/transactional-email-footer";
+import type { ProposalEmailLineItem } from "@/lib/event-proposal-line-items";
+import { formatPaymentMethodLabel } from "@/lib/payment-method-labels";
 
 const GOLD = "#C5A46D";
 const MIDNIGHT = "#1F2B38";
@@ -16,11 +18,14 @@ export interface EventProposalEmailPayload {
   name: string;
   booking_id: string;
   villa: string;
+  check_in: string;
   check_out: string;
   event_type?: string | null;
   proposal_total_amount?: number | string | null;
   proposal_deposit_amount?: number | string | null;
   proposal_valid_until?: string | null;
+  proposal_payment_methods?: string[] | null;
+  service_lines?: ProposalEmailLineItem[];
 }
 
 function parseAmount(value: unknown): number | null {
@@ -69,12 +74,39 @@ function createViewUrl(bookingId: string, checkOut: string): string {
   return `${base}/booking/view/${encodeURIComponent(token)}`;
 }
 
+function renderPricingTableHtml(lines: ProposalEmailLineItem[]): string {
+  if (lines.length === 0) return "";
+  const header = `
+    <tr>
+      <th align="left" style="padding:8px 6px;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:${MUTED};border-bottom:0.5px solid rgba(255,255,255,0.08);">Service</th>
+      <th align="right" style="padding:8px 6px;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:${MUTED};border-bottom:0.5px solid rgba(255,255,255,0.08);">Qty</th>
+      <th align="right" style="padding:8px 6px;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:${MUTED};border-bottom:0.5px solid rgba(255,255,255,0.08);">Unit</th>
+      <th align="right" style="padding:8px 6px;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:${MUTED};border-bottom:0.5px solid rgba(255,255,255,0.08);">Subtotal</th>
+    </tr>`;
+  const body = lines
+    .map(
+      (row) => `
+    <tr>
+      <td style="padding:10px 6px;font-size:13px;color:${WHITE};border-bottom:0.5px solid rgba(255,255,255,0.05);">${escapeHtml(row.label)}</td>
+      <td align="right" style="padding:10px 6px;font-size:13px;color:${WHITE};border-bottom:0.5px solid rgba(255,255,255,0.05);">${row.quantity}</td>
+      <td align="right" style="padding:10px 6px;font-size:13px;color:${WHITE};border-bottom:0.5px solid rgba(255,255,255,0.05);">${formatMoney(row.unit_price)}</td>
+      <td align="right" style="padding:10px 6px;font-size:13px;color:${WHITE};border-bottom:0.5px solid rgba(255,255,255,0.05);">${formatMoney(row.line_total)}</td>
+    </tr>`,
+    )
+    .join("");
+  return `
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 16px;">
+      ${header}
+      ${body}
+    </table>`;
+}
+
 function renderShell(
   subject: string,
   heading: string,
   intro: string,
-  proposalRows: Array<[string, string]>,
-  viewUrl: string
+  innerHtml: string,
+  viewUrl: string,
 ): string {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -123,24 +155,9 @@ function renderShell(
           <tr>
             <td style="border:0.5px solid rgba(197,164,109,0.2);padding:28px;">
               <p style="margin:0 0 20px;font-size:9px;letter-spacing:3px;text-transform:uppercase;color:${GOLD};">
-                Proposal summary
+                Proposal details
               </p>
-              ${proposalRows
-                .map(
-                  ([label, value]) => `
-                <table width="100%" cellpadding="0" cellspacing="0" style="border-bottom:0.5px solid rgba(255,255,255,0.05);">
-                  <tr>
-                    <td style="padding:10px 0;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:${MUTED};">
-                      ${escapeHtml(label)}
-                    </td>
-                    <td align="right" style="padding:10px 0;font-size:13px;color:${WHITE};font-weight:300;">
-                      ${escapeHtml(value)}
-                    </td>
-                  </tr>
-                </table>
-              `
-                )
-                .join("")}
+              ${innerHtml}
             </td>
           </tr>
           <tr>
@@ -149,7 +166,7 @@ function renderShell(
                  style="display:inline-block;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;
                         font-size:11px;letter-spacing:2.5px;text-transform:uppercase;
                         color:#2E2E2E;background-color:${GOLD};text-decoration:none;padding:14px 32px;">
-                View proposal
+                Review &amp; accept proposal
               </a>
             </td>
           </tr>
@@ -177,34 +194,90 @@ export async function sendEventProposalEmail(payload: EventProposalEmailPayload)
   const firstName = payload.name.split(" ")[0] || "Guest";
   const proposalTotal = parseAmount(payload.proposal_total_amount);
   const proposalDeposit = parseAmount(payload.proposal_deposit_amount);
-  const validUntil = formatDateTime(payload.proposal_valid_until);
+  const paymentDeadline = formatDateTime(payload.proposal_valid_until);
   const viewUrl = createViewUrl(payload.booking_id, payload.check_out);
   const subject = "Your Oraya event proposal is ready";
   const heading = `Your event proposal is ready<br/><em>${escapeHtml(firstName)}.</em>`;
   const intro =
-    "Oraya has reviewed your event inquiry and prepared a custom proposal. Open the secure link below to review the full proposal and next steps.";
-  const proposalRows: Array<[string, string]> = [
-    ["Event type", payload.event_type || "Custom event"],
-    ["Villa", payload.villa],
-    ["Proposal total", formatMoney(proposalTotal)],
-    ["Deposit required", formatMoney(proposalDeposit)],
-    ["Valid until", validUntil ?? "To be confirmed"],
-  ];
+    "Oraya has reviewed your event inquiry and prepared a custom proposal. Review the line items below, then open your secure link to accept or decline.";
 
-  const html = renderShell(subject, heading, intro, proposalRows, viewUrl);
-  const text = [
+  const lines = Array.isArray(payload.service_lines) && payload.service_lines.length > 0
+    ? payload.service_lines
+    : proposalTotal !== null
+      ? [
+          {
+            label: "Event proposal (total)",
+            quantity: 1,
+            unit_price: proposalTotal,
+            line_total: proposalTotal,
+          },
+        ]
+      : [];
+
+  const tableHtml = renderPricingTableHtml(lines);
+
+  const methods = (payload.proposal_payment_methods ?? [])
+    .map((m) => formatPaymentMethodLabel(m))
+    .filter(Boolean);
+  const methodsDisplay = methods.length > 0 ? methods.join(", ") : "To be confirmed";
+
+  const summaryRowsHtml = `
+    ${tableHtml}
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px;">
+      <tr>
+        <td style="padding:10px 0;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:${MUTED};">Event setup total</td>
+        <td align="right" style="padding:10px 0;font-size:14px;color:${WHITE};">${escapeHtml(formatMoney(proposalTotal))}</td>
+      </tr>
+      <tr>
+        <td style="padding:10px 0;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:${MUTED};">Deposit required</td>
+        <td align="right" style="padding:10px 0;font-size:14px;color:${WHITE};">${escapeHtml(formatMoney(proposalDeposit))}</td>
+      </tr>
+      <tr>
+        <td style="padding:10px 0;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:${MUTED};">Payment deadline</td>
+        <td align="right" style="padding:10px 0;font-size:13px;color:${WHITE};">${escapeHtml(paymentDeadline ?? "To be confirmed")}</td>
+      </tr>
+      <tr>
+        <td colspan="2" style="padding:12px 0 0;font-size:12px;color:${MUTED};line-height:1.65;">
+          <span style="display:block;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:${GOLD};margin-bottom:6px;">Payment methods</span>
+          ${escapeHtml(methodsDisplay)}
+        </td>
+      </tr>
+    </table>
+    <p style="margin:16px 0 0;font-size:12px;color:${MUTED};line-height:1.65;">
+      Villa: <span style="color:${WHITE};">${escapeHtml(payload.villa)}</span>
+      · Event date: <span style="color:${WHITE};">${escapeHtml(payload.check_in)}</span>
+      · Type: <span style="color:${WHITE};">${escapeHtml(payload.event_type || "Custom event")}</span>
+    </p>
+  `;
+
+  const html = renderShell(subject, heading, intro, summaryRowsHtml, viewUrl);
+
+  const textLines: string[] = [
     subject,
     "",
     `Hello ${firstName},`,
     "",
     "Your Oraya event proposal is ready.",
     "",
-    ...proposalRows.map(([label, value]) => `${label}: ${value}`),
+    `Villa: ${payload.villa} | Event date: ${payload.check_in} | Type: ${payload.event_type || "Custom event"}`,
     "",
-    `View proposal: ${viewUrl}`,
+    "Services:",
+    ...lines.map(
+      (row) =>
+        `  - ${row.label} | Qty ${row.quantity} | Unit ${formatMoney(row.unit_price)} | Subtotal ${formatMoney(row.line_total)}`,
+    ),
+    "",
+    `Event setup total: ${formatMoney(proposalTotal)}`,
+    `Deposit required: ${formatMoney(proposalDeposit)}`,
+    `Payment deadline: ${paymentDeadline ?? "To be confirmed"}`,
+    `Payment methods: ${methodsDisplay}`,
+    "",
+    `Review and accept: ${viewUrl}`,
     "",
     ...transactionalEmailFooterTextSuffix(),
-  ].join("\n");
+  ];
+
+  const text = textLines.join("\n");
 
   const { error } = await resend.emails.send({
     from: FROM_EMAIL,

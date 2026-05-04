@@ -8,6 +8,8 @@ import {
   sendBookingPaymentRequestedEmail,
 } from "@/lib/send-booking-payment-email";
 import { sendEventConfirmationEmail } from "@/lib/send-event-confirmation-email";
+import { parseEventSetupEstimateFromMessage } from "@/lib/event-inquiry-message";
+import { buildProposalEmailLineItems } from "@/lib/event-proposal-line-items";
 import { sendEventProposalEmail } from "@/lib/send-event-proposal-email";
 import { appendPaymentReminderNote } from "@/lib/payment-reminders";
 import { findAvailabilityConflict } from "@/lib/calendar/availability";
@@ -357,6 +359,13 @@ export async function PATCH(
           } else {
             throw new Error("Invalid proposal_included_services value.");
           }
+          if (service.admin_status === undefined || service.admin_status === null || service.admin_status === "") {
+            nextService.admin_status = null;
+          } else if (service.admin_status === "approved" || service.admin_status === "declined") {
+            nextService.admin_status = service.admin_status;
+          } else {
+            throw new Error("Invalid proposal_included_services value.");
+          }
           return nextService;
         });
         updatePayload.proposal_included_services = normalized;
@@ -615,18 +624,29 @@ export async function PATCH(
       const { email: recipientEmail, name: recipientName } = await resolveRecipient(db, updated);
 
       if (!recipientEmail) {
-        console.warn(`[api/admin/bookings] no email address for booking ${bookingId} proposal â€” skipping notification`);
+        console.warn(`[api/admin/bookings] no email address for booking ${bookingId} proposal — skipping notification`);
       } else {
+        const estimate = parseEventSetupEstimateFromMessage(
+          typeof updated.message === "string" ? updated.message : "",
+        );
+        const includedRaw = Array.isArray(updated.proposal_included_services) ? updated.proposal_included_services : [];
+        const serviceLines = buildProposalEmailLineItems(includedRaw, estimate);
+        const proposalPaymentMethodsForEmail = Array.isArray(updated.proposal_payment_methods)
+          ? updated.proposal_payment_methods.filter((value: unknown): value is string => typeof value === "string")
+          : [];
         await sendEventProposalEmail({
           to: recipientEmail,
           name: recipientName,
           booking_id: bookingId,
           villa: updated.villa,
+          check_in: updated.check_in,
           check_out: updated.check_out,
           event_type: updated.event_type ?? null,
           proposal_total_amount: updated.proposal_total_amount ?? null,
           proposal_deposit_amount: updated.proposal_deposit_amount ?? null,
           proposal_valid_until: updated.proposal_valid_until ?? null,
+          proposal_payment_methods: proposalPaymentMethodsForEmail,
+          service_lines: serviceLines,
         });
         emailSent = true;
       }

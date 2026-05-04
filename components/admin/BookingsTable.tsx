@@ -17,10 +17,14 @@ import {
 } from "@/lib/feedback-request-message";
 import { isFeedbackEmailCooldownActive } from "@/lib/booking-feedback-eligibility";
 import {
+  extractEventInquiryGuestNotesLine,
+  EVENT_SETUP_ESTIMATE_PREFIX,
   isEventInquiryPayload,
   parseEventSetupEstimateFromMessage,
   stripEventSetupEstimateFromMessage,
 } from "@/lib/event-inquiry-message";
+import { computeDefaultProposalValidUntilInputValue, computeProposalDepositFromTotal } from "@/lib/event-proposal-defaults";
+import { formatPaymentMethodLabel as formatPaymentMethodLabelShared } from "@/lib/payment-method-labels";
 
 type BookingSectionKey = "pending" | "confirmed" | "cancelled";
 type ConfirmedSortKey = "created_desc" | "created_asc" | "check_in_asc" | "check_in_desc";
@@ -60,10 +64,10 @@ type ProposalDraft = {
 };
 
 const EVENT_PROPOSAL_PAYMENT_METHODS = [
-  { value: "whish", label: "Whish" },
+  { value: "whish", label: "Wish Money / Western Union / BOB Finance / OMT" },
   { value: "cash", label: "Cash" },
-  { value: "bank_transfer", label: "Bank transfer" },
-  { value: "card_manual", label: "Card manual" },
+  { value: "bank_transfer", label: "Bank Transfer" },
+  { value: "card_manual", label: "Debit / Credit Card" },
   { value: "other", label: "Other" },
 ] as const;
 
@@ -276,9 +280,7 @@ function createEventServiceKey(value: string) {
 }
 
 function formatPaymentMethodLabel(value: string) {
-  if (value === "bank_transfer") return "Bank transfer";
-  if (value === "card_manual") return "Card manual";
-  return formatAdvisoryLabel(value.replaceAll("_", " "));
+  return formatPaymentMethodLabelShared(value);
 }
 
 function formatEventProposalServiceLabel(service: EventProposalServiceOption | BookingProposalIncludedService) {
@@ -374,6 +376,10 @@ function isPaymentDueSoon(booking: Booking) {
 // Phase 13N: comparison-based revenue total. Uses the same fallback chain as 13H.2/13H.3/13H.4 inline copies.
 // Returns null when no value is available — callers must skip rendering rather than guess.
 function getBookingTotal(b: Booking): number | null {
+  if (isEventInquiryPayload(b.event_type, b.message)) {
+    const est = parseEventSetupEstimateFromMessage(b.message);
+    if (typeof est?.total === "number" && Number.isFinite(est.total)) return est.total;
+  }
   const intel = getPricingIntelligenceMeta(b);
   const addonSubRaw = getAddonSnapshotsFromBooking(b).reduce((sum: number, addon) => {
     return sum + (typeof addon.price === "number" && Number.isFinite(addon.price) ? addon.price : 0);
@@ -392,6 +398,26 @@ function getBookingTotal(b: Booking): number | null {
     intel?.internal_value ??
     (typeof stayRaw === "number" && typeof addonsRaw === "number" ? stayRaw + addonsRaw : null)
   );
+}
+
+/** Stay-only subtotal for overlap cards (compare stay vs event setup without add-ons). */
+function getStaySubtotalForOverlapComparison(b: Booking): number | null {
+  const intel = getPricingIntelligenceMeta(b);
+  return (
+    getSnapshotNumber(b.pricing_snapshot?.adjusted_stay_subtotal) ??
+    getSnapshotNumber(b.pricing_snapshot?.subtotal) ??
+    intel?.stay_value ??
+    getPersistedStayValue(b)
+  );
+}
+
+/** Single comparable figure: event setup estimate total, or stay subtotal. */
+function getOverlapComparisonTotal(b: Booking): number | null {
+  if (isEventInquiryBooking(b)) {
+    const est = parseEventSetupEstimateFromMessage(b.message);
+    return typeof est?.total === "number" && Number.isFinite(est.total) ? est.total : null;
+  }
+  return getStaySubtotalForOverlapComparison(b);
 }
 
 function getPaymentStatusStyle(status: string, overdue: boolean) {
@@ -678,6 +704,7 @@ function parseRequestedEventServicesFromMessage(message: string | null | undefin
   for (let index = startIndex + 1; index < lines.length; index += 1) {
     const line = lines[index].trim();
     if (!line) continue;
+    if (line.startsWith(EVENT_SETUP_ESTIMATE_PREFIX)) break;
     if (!line.startsWith("- ")) {
       if (/^[A-Za-z][A-Za-z\s()/-]*:/.test(line)) break;
       continue;
@@ -708,16 +735,6 @@ function parseRequestedEventServicesFromMessage(message: string | null | undefin
   }
 
   return services;
-}
-
-function extractEventInquiryNotesLine(message: string | null | undefined): string | null {
-  if (typeof message !== "string") return null;
-  const withoutEst = stripEventSetupEstimateFromMessage(message);
-  for (const line of withoutEst.split(/\r?\n/)) {
-    const t = line.trim();
-    if (t.startsWith("Notes:")) return t.slice(6).trim();
-  }
-  return null;
 }
 
 function eventInquiryNightCount(checkIn: string, checkOut: string): number {
@@ -994,10 +1011,24 @@ export default function BookingsTable({
         ? persistedIncludedServices.map((service) => createEventServiceKey(service.id?.trim() || service.label))
         : requestedServices.map((service) => service.key);
 
+    const estimate = isEventInquiryBooking(booking) ? parseEventSetupEstimateFromMessage(booking.message) : null;
+    const estTotal = typeof estimate?.total === "number" && Number.isFinite(estimate.total) ? estimate.total : null;
+    const defaultTotal =
+      booking.proposal_total_amount != null ? String(booking.proposal_total_amount) : estTotal != null ? String(estTotal) : "";
+    const defaultDeposit =
+      booking.proposal_deposit_amount != null
+        ? String(booking.proposal_deposit_amount)
+        : defaultTotal
+          ? String(computeProposalDepositFromTotal(Number(defaultTotal)))
+          : "";
+    const defaultValidUntil =
+      toDateTimeLocalInput(booking.proposal_valid_until) ||
+      (isEventInquiryBooking(booking) && booking.check_in ? computeDefaultProposalValidUntilInputValue(booking.check_in) : "");
+
     return proposalDrafts[booking.id] ?? {
-      totalAmount: booking.proposal_total_amount != null ? String(booking.proposal_total_amount) : "",
-      depositAmount: booking.proposal_deposit_amount != null ? String(booking.proposal_deposit_amount) : "",
-      validUntil: toDateTimeLocalInput(booking.proposal_valid_until),
+      totalAmount: defaultTotal,
+      depositAmount: defaultDeposit,
+      validUntil: defaultValidUntil,
       includedServiceKeys,
       excludedServices: booking.proposal_excluded_services ?? "",
       optionalServices: booking.proposal_optional_services ?? "",
@@ -1068,6 +1099,13 @@ export default function BookingsTable({
 
       if (data.booking) {
         setBookings((prev) => prev.map((booking) => (booking.id === bookingId ? { ...booking, ...data.booking } : booking)));
+        if (actionKey === "send-proposal") {
+          setProposalDrafts((prev) => {
+            const next = { ...prev };
+            delete next[bookingId];
+            return next;
+          });
+        }
       }
 
       return data.booking as Booking | null;
@@ -1089,6 +1127,7 @@ export default function BookingsTable({
         label: service.label,
         quantity: service.quantity,
         unit_label: service.unit_label,
+        admin_status: "approved" as const,
       }));
   }
 
@@ -1212,11 +1251,13 @@ export default function BookingsTable({
     const proposalDepositAmount = parseAmountInput(draft.depositAmount);
     const proposalValidUntil = draft.validUntil ? new Date(draft.validUntil).toISOString() : null;
     const proposalIncludedServices = getSelectedProposalServices(booking, draft);
+    const preserveProposalFlow =
+      booking.proposal_status === "sent" || booking.proposal_status === "accepted";
 
     await patchBookingRecord(
       booking.id,
       {
-        proposal_status: "draft",
+        ...(preserveProposalFlow ? {} : { proposal_status: "draft" }),
         proposal_total_amount: proposalTotalAmount,
         proposal_deposit_amount: proposalDepositAmount,
         proposal_included_services: proposalIncludedServices,
@@ -2605,8 +2646,11 @@ export default function BookingsTable({
                 : formatAdvisoryLabel(proposalStatus);
     const validUntil = formatDateTimeValue(booking.proposal_valid_until);
     const sentAt = formatDateTimeValue(booking.proposal_sent_at);
+    const respondedAt = formatDateTimeValue(booking.proposal_responded_at);
     const isSavingDraft = paymentUpdatingId === `${booking.id}:save-proposal`;
     const isSendingProposal = paymentUpdatingId === `${booking.id}:send-proposal`;
+    const cannotSendProposal = proposalStatus === "accepted";
+    const sendProposalLabel = proposalStatus === "sent" ? "Resend proposal" : "Send proposal";
     const proposalTotal = formatMoney(booking.proposal_total_amount);
     const proposalDeposit = formatMoney(booking.proposal_deposit_amount);
     const proposalPaymentMethods =
@@ -2795,7 +2839,15 @@ export default function BookingsTable({
         >
           <input
             value={draft.totalAmount}
-            onChange={(event) => updateProposalDraft(booking.id, { totalAmount: event.target.value })}
+            onChange={(event) => {
+              const totalAmount = event.target.value;
+              const parsed = parseAmountInput(totalAmount);
+              updateProposalDraft(booking.id, {
+                totalAmount,
+                depositAmount:
+                  parsed !== null ? String(computeProposalDepositFromTotal(parsed)) : draft.depositAmount,
+              });
+            }}
             placeholder="Proposal total"
             inputMode="decimal"
             style={fieldStyle}
@@ -2817,7 +2869,10 @@ export default function BookingsTable({
 
         <div style={{ display: "grid", gap: "10px" }}>
           <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: WHITE, margin: 0 }}>
-            Included requested services
+            Requested services (guest)
+          </p>
+          <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+            Checked = approved for this proposal (default: all on). Uncheck to decline a line — save draft to persist.
           </p>
           {requestedServices.length > 0 ? (
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))", gap: "10px" }}>
@@ -2851,9 +2906,25 @@ export default function BookingsTable({
                       <p style={{ fontFamily: LATO, fontSize: "12px", color: WHITE, margin: "0 0 4px", lineHeight: 1.45 }}>
                         {service.label}
                       </p>
-                      <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+                      <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "0 0 6px", lineHeight: 1.5 }}>
                         {formatEventProposalServiceLabel(service)}
                       </p>
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          fontFamily: LATO,
+                          fontSize: "9px",
+                          letterSpacing: "1.2px",
+                          textTransform: "uppercase",
+                          color: checked ? "#6fcf8a" : "#f2a7a7",
+                          backgroundColor: checked ? "rgba(111,207,138,0.12)" : "rgba(224,112,112,0.1)",
+                          border: `0.5px solid ${checked ? "rgba(111,207,138,0.28)" : "rgba(224,112,112,0.28)"}`,
+                          padding: "4px 8px",
+                          borderRadius: "4px",
+                        }}
+                      >
+                        {checked ? "Approved" : "Declined"}
+                      </span>
                     </div>
                   </label>
                 );
@@ -2938,9 +3009,12 @@ export default function BookingsTable({
         >
           {renderRevenueEstimateRow("Proposal total", proposalTotal ?? "Not set")}
           {renderRevenueEstimateRow("Deposit amount", proposalDeposit ?? "Not set")}
-          {renderRevenueEstimateRow("Valid until", validUntil ?? "Not set")}
+          {renderRevenueEstimateRow("Payment deadline (valid until)", validUntil ?? "Not set")}
           {renderRevenueEstimateRow("Payment methods", proposalPaymentMethods.map((method) => formatPaymentMethodLabel(method)).join(", ") || "Not set")}
           {sentAt ? renderRevenueEstimateRow("Sent at", sentAt) : null}
+          {respondedAt && (proposalStatus === "accepted" || proposalStatus === "declined")
+            ? renderRevenueEstimateRow("Guest responded at", respondedAt)
+            : null}
         </div>
 
         {includedServicesDisplay.length > 0 && (
@@ -2992,7 +3066,7 @@ export default function BookingsTable({
           <button
             type="button"
             onClick={() => sendEventProposal(booking)}
-            disabled={isSendingProposal}
+            disabled={isSendingProposal || cannotSendProposal}
             style={{
               fontFamily: LATO,
               fontSize: "10px",
@@ -3003,11 +3077,11 @@ export default function BookingsTable({
               border: "none",
               padding: "12px 14px",
               borderRadius: "6px",
-              cursor: isSendingProposal ? "not-allowed" : "pointer",
-              opacity: isSendingProposal ? 0.7 : 1,
+              cursor: isSendingProposal || cannotSendProposal ? "not-allowed" : "pointer",
+              opacity: isSendingProposal || cannotSendProposal ? 0.55 : 1,
             }}
           >
-            {isSendingProposal ? "Sending..." : "Send proposal"}
+            {isSendingProposal ? "Sending..." : cannotSendProposal ? "Proposal accepted" : sendProposalLabel}
           </button>
         </div>
       </div>
@@ -3033,7 +3107,7 @@ export default function BookingsTable({
     const isBulkResolving = bulkActionBookingId === booking.id;
     const eventInquiry = isEventInquiryBooking(booking);
     const eventSetupEstimate = eventInquiry ? parseEventSetupEstimateFromMessage(booking.message) : null;
-    const eventGuestNotes = eventInquiry ? extractEventInquiryNotesLine(booking.message) : null;
+    const eventGuestNotes = eventInquiry ? extractEventInquiryGuestNotesLine(booking.message) : null;
     const eventNightCount = eventInquiry ? eventInquiryNightCount(booking.check_in, booking.check_out) : 0;
     const eventInquiryParsedServices = eventInquiry ? parseRequestedEventServicesFromMessage(booking.message) : [];
     const stayReferenceSubtotal =
@@ -3079,9 +3153,10 @@ export default function BookingsTable({
     const hasTrackedOffer = bookingHasDiscountedAddon(booking);
 
     // Phase 13N: relative (comparison-based) revenue priority. Only meaningful when overlapping pending requests exist.
-    const currentBookingTotal = getBookingTotal(booking);
+    // When overlaps exist, compare event setup estimate vs stay subtotal (not full stay+addons) so mixed requests are legible.
+    const currentBookingTotal = hasPendingOverlap ? getOverlapComparisonTotal(booking) : getBookingTotal(booking);
     const overlapTotalsAll = hasPendingOverlap
-      ? overlappingPendingBookings.map(getBookingTotal)
+      ? overlappingPendingBookings.map(getOverlapComparisonTotal)
       : [];
     const overlapTotalsNumeric = overlapTotalsAll.filter((n): n is number => typeof n === "number");
     const allNumericTotals = typeof currentBookingTotal === "number"
@@ -3220,6 +3295,48 @@ export default function BookingsTable({
           >
             <StatusBadge status={booking.status} />
             {booking.status === "confirmed" && renderPaymentStatusBadge(booking)}
+            {eventInquiry && booking.status === "pending" && booking.proposal_status === "sent" && (
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontFamily: LATO,
+                  fontSize: "9px",
+                  letterSpacing: "1.4px",
+                  textTransform: "uppercase",
+                  color: GOLD,
+                  backgroundColor: "rgba(197,164,109,0.12)",
+                  border: "0.5px solid rgba(197,164,109,0.28)",
+                  padding: "6px 10px",
+                  borderRadius: "999px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Proposal sent
+              </span>
+            )}
+            {eventInquiry && booking.status === "pending" && booking.proposal_status === "accepted" && (
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontFamily: LATO,
+                  fontSize: "9px",
+                  letterSpacing: "1.4px",
+                  textTransform: "uppercase",
+                  color: "#7ecfcf",
+                  backgroundColor: "rgba(126,207,207,0.12)",
+                  border: "0.5px solid rgba(126,207,207,0.28)",
+                  padding: "6px 10px",
+                  borderRadius: "999px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Ready to confirm
+              </span>
+            )}
             {/* Phase 13N: relative revenue priority — only when overlapping pending requests exist */}
             {revenueTier && (() => {
               const tierLabel =
@@ -4076,6 +4193,11 @@ export default function BookingsTable({
                   : conflictNeedsAttention
                     ? "Add-ons need attention"
                     : null;
+                const conflictIsEvent = isEventInquiryBooking(conflict);
+                const conflictKind = conflictIsEvent ? "Event inquiry" : "Stay booking";
+                const conflictCompare = getOverlapComparisonTotal(conflict);
+                const conflictCompareLabel = conflictIsEvent ? "Est. event setup" : "Stay subtotal";
+                const conflictCompareDisplay = formatMoney(conflictCompare) ?? "—";
 
                 return (
                   <div
@@ -4094,6 +4216,11 @@ export default function BookingsTable({
                     <div style={{ display: "grid", gap: "4px", minWidth: 0 }}>
                       <p style={{ fontFamily: LATO, fontSize: "12px", color: WHITE, margin: 0, lineHeight: 1.5, fontWeight: 700 }}>
                         {getBookingDisplayName(conflict)}
+                      </p>
+                      <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+                        {conflictKind}
+                        {conflictIsEvent && conflict.event_type ? ` · ${conflict.event_type}` : ""} · {conflictCompareLabel}{" "}
+                        {conflictCompareDisplay}
                       </p>
                       <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
                         {conflict.villa} · {fmt(conflict.check_in)} to {fmt(conflict.check_out)}
@@ -4216,13 +4343,18 @@ export default function BookingsTable({
           const addonsValueRaw =
             pricingIntelligence?.addons_value ??
             (getAddonSnapshots(booking).length > 0 ? addonSubtotalRaw : 0);
+          const eventSetupEst = eventInquiry ? parseEventSetupEstimateFromMessage(booking.message) : null;
+          const eventSetupEstTotal =
+            typeof eventSetupEst?.total === "number" && Number.isFinite(eventSetupEst.total) ? eventSetupEst.total : null;
           const estimatedTotalRaw =
-            getSnapshotNumber(booking.pricing_snapshot?.estimated_total) ??
-            pricingIntelligence?.estimated_total ??
-            pricingIntelligence?.internal_value ??
-            (typeof stayValueRaw === "number" && typeof addonsValueRaw === "number"
-              ? stayValueRaw + addonsValueRaw
-              : null);
+            eventInquiry && eventSetupEstTotal !== null
+              ? eventSetupEstTotal
+              : getSnapshotNumber(booking.pricing_snapshot?.estimated_total) ??
+                pricingIntelligence?.estimated_total ??
+                pricingIntelligence?.internal_value ??
+                (typeof stayValueRaw === "number" && typeof addonsValueRaw === "number"
+                  ? stayValueRaw + addonsValueRaw
+                  : null);
 
           const totalDisplay = formatMoney(estimatedTotalRaw) ?? "Not calculated";
           const addonsDisplay = formatMoney(addonsValueRaw) ?? "—";
@@ -4273,7 +4405,7 @@ export default function BookingsTable({
               {/* Estimated total — prominent */}
               <div style={{ display: "grid", gap: "2px" }}>
                 <span style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED }}>
-                  Estimated total
+                  {eventInquiry ? "Event setup estimate" : "Estimated total"}
                 </span>
                 <span style={{ fontFamily: PLAYFAIR, fontSize: "22px", color: GOLD, lineHeight: 1.1 }}>
                   {totalDisplay}
@@ -4333,27 +4465,27 @@ export default function BookingsTable({
 
         {/* Phase 13H.3: Booking Comparison Layer — overlapping pending requests. Reuses existing overlap + revenue data. */}
         {booking.status === "pending" && hasPendingOverlap && (() => {
-          // Same fallback chain as Decision Signal — computed per booking, no recomputation of pricing.
-          function summarize(b: Booking) {
+          function summarizeOverlap(b: Booking) {
+            if (isEventInquiryBooking(b)) {
+              const est = parseEventSetupEstimateFromMessage(b.message);
+              const totalRaw = typeof est?.total === "number" && Number.isFinite(est.total) ? est.total : null;
+              const eventLabel = b.event_type?.trim() || "Event";
+              return {
+                totalRaw,
+                totalDisplay: formatMoney(totalRaw) ?? "—",
+                kindLine: `Event inquiry · ${eventLabel} · Est. event setup`,
+              };
+            }
             const intel = getPricingIntelligenceMeta(b);
             const addonSubRaw = getAddonSnapshots(b).reduce((sum, addon) => {
               return sum + (typeof addon.price === "number" && Number.isFinite(addon.price) ? addon.price : 0);
             }, 0);
-            const stayRaw =
-              getSnapshotNumber(b.pricing_snapshot?.adjusted_stay_subtotal) ??
-              getSnapshotNumber(b.pricing_snapshot?.subtotal) ??
-              intel?.stay_value ??
-              getPersistedStayValue(b);
+            const stayRaw = getStaySubtotalForOverlapComparison(b);
             const addonsRaw =
               intel?.addons_value ??
               (getAddonSnapshots(b).length > 0 ? addonSubRaw : 0);
-            const totalRaw =
-              getSnapshotNumber(b.pricing_snapshot?.estimated_total) ??
-              intel?.estimated_total ??
-              intel?.internal_value ??
-              (typeof stayRaw === "number" && typeof addonsRaw === "number"
-                ? stayRaw + addonsRaw
-                : null);
+            const addonsDisplay = formatMoney(typeof addonsRaw === "number" ? addonsRaw : null) ?? "—";
+            const hasAddons = typeof addonsRaw === "number" && addonsRaw > 0;
             const bedroomsRaw = b.pricing_snapshot?.bedrooms_to_be_used;
             const bedroomLabel =
               typeof bedroomsRaw === "number" && bedroomsRaw >= 1 && bedroomsRaw <= 3
@@ -4366,21 +4498,18 @@ export default function BookingsTable({
                   ? `${overnight} overnight + ${dayVis} day`
                   : `${overnight} ${overnight === 1 ? "guest" : "guests"}`)
               : "—";
+            const totalRaw = typeof stayRaw === "number" ? stayRaw : null;
             return {
               totalRaw,
               totalDisplay: formatMoney(totalRaw) ?? "—",
-              addonsRaw,
-              addonsDisplay: formatMoney(addonsRaw),
-              hasAddons: typeof addonsRaw === "number" && addonsRaw > 0,
-              bedroomLabel,
-              guestLabel,
+              kindLine: `Stay booking · Stay subtotal — ${bedroomLabel} — ${guestLabel} — ${hasAddons ? `${addonsDisplay} add-ons` : "no add-ons"}`,
             };
           }
 
-          const currentSummary = summarize(booking);
+          const currentSummary = summarizeOverlap(booking);
           const conflictSummaries = overlappingPendingBookings.map((conflict) => ({
             booking: conflict,
-            summary: summarize(conflict),
+            summary: summarizeOverlap(conflict),
           }));
 
           // Recommendation hint — advisory, based on numeric totals only (skip nulls).
@@ -4421,7 +4550,7 @@ export default function BookingsTable({
 
           function renderRow(
             label: "Current request" | "Competing request",
-            s: ReturnType<typeof summarize>,
+            s: ReturnType<typeof summarizeOverlap>,
             isCurrent: boolean,
           ) {
             return (
@@ -4443,8 +4572,7 @@ export default function BookingsTable({
                     {s.totalDisplay}
                   </span>
                   <span style={{ fontFamily: LATO, fontSize: "11px", color: "rgba(255,255,255,0.7)" }}>
-                    — {s.bedroomLabel} — {s.guestLabel} —{" "}
-                    {s.hasAddons ? `${s.addonsDisplay} add-ons` : "no add-ons"}
+                    {s.kindLine}
                   </span>
                 </div>
               </div>
@@ -4613,30 +4741,10 @@ export default function BookingsTable({
 
         {/* Phase 13H.4: Approval advisory — warns if a higher-value competing request exists */}
         {booking.status === "pending" && hasPendingOverlap && (() => {
-          function getTotal(b: Booking): number | null {
-            const intel = getPricingIntelligenceMeta(b);
-            const addonSubRaw = getAddonSnapshots(b).reduce((sum, addon) => {
-              return sum + (typeof addon.price === "number" && Number.isFinite(addon.price) ? addon.price : 0);
-            }, 0);
-            const stayRaw =
-              getSnapshotNumber(b.pricing_snapshot?.adjusted_stay_subtotal) ??
-              getSnapshotNumber(b.pricing_snapshot?.subtotal) ??
-              intel?.stay_value ??
-              getPersistedStayValue(b);
-            const addonsRaw =
-              intel?.addons_value ??
-              (getAddonSnapshots(b).length > 0 ? addonSubRaw : 0);
-            return (
-              getSnapshotNumber(b.pricing_snapshot?.estimated_total) ??
-              intel?.estimated_total ??
-              intel?.internal_value ??
-              (typeof stayRaw === "number" && typeof addonsRaw === "number" ? stayRaw + addonsRaw : null)
-            );
-          }
-          const currentTotal = getTotal(booking);
+          const currentTotal = getOverlapComparisonTotal(booking);
           if (typeof currentTotal !== "number") return null;
           const conflictTotals = overlappingPendingBookings
-            .map(getTotal)
+            .map(getOverlapComparisonTotal)
             .filter((n): n is number => typeof n === "number");
           if (conflictTotals.length === 0) return null;
           const maxConflict = Math.max(...conflictTotals);
@@ -4682,7 +4790,11 @@ export default function BookingsTable({
 
         {eventInquiry && booking.status === "pending" && !proposalAccepted && (
           <p style={{ fontFamily: LATO, fontSize: "10px", color: "#9db7d9", margin: 0, lineHeight: 1.5 }}>
-            Wait for guest acceptance before confirming.
+            {booking.proposal_status === "sent"
+              ? "Proposal sent — awaiting guest acceptance before you can confirm."
+              : booking.proposal_status === "declined"
+                ? "Guest declined the proposal — send a revised proposal or close the request."
+                : "Prepare and send a proposal so the guest can review and accept."}
           </p>
         )}
 
@@ -4854,6 +4966,34 @@ export default function BookingsTable({
     const hasDeadDayUpsell = getDeadDayUpsells(booking).length > 0;
     const feedbackEmphasisForExpand: "completed" | "upcoming" =
       section === "confirmed" && confirmedBand === "completed" ? "completed" : "upcoming";
+    const submittedAt = section === "pending" ? formatDateTimeValue(booking.created_at) : null;
+    const rowIsEvent = isEventInquiryBooking(booking);
+    const rowKind = rowIsEvent ? "Event inquiry" : "Stay booking";
+    const rowEventType = booking.event_type?.trim() || null;
+    const rowSetupEst = rowIsEvent ? parseEventSetupEstimateFromMessage(booking.message) : null;
+    const rowSetupTotal =
+      typeof rowSetupEst?.total === "number" && Number.isFinite(rowSetupEst.total) ? rowSetupEst.total : null;
+    const rowSetupDisplay = rowSetupTotal !== null ? formatMoney(rowSetupTotal) : null;
+    const rowProposalHint =
+      section === "pending" && rowIsEvent && booking.proposal_status === "accepted" && booking.status === "pending"
+        ? "Ready to confirm"
+        : section === "pending" && rowIsEvent && booking.proposal_status === "sent"
+          ? "Proposal sent"
+          : null;
+    const pendingSummaryLine =
+      section === "pending" && submittedAt
+        ? [
+            submittedAt,
+            rowKind,
+            rowEventType,
+            rowSetupDisplay ? `Est. setup ${rowSetupDisplay}` : null,
+            rowProposalHint,
+            `${fmt(booking.check_in)} → ${fmt(booking.check_out)}`,
+            booking.villa,
+          ]
+            .filter(Boolean)
+            .join(" · ")
+        : null;
 
     return (
       <div
@@ -4891,6 +5031,19 @@ export default function BookingsTable({
               <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
                 {booking.villa}
               </p>
+              {pendingSummaryLine && (
+                <p
+                  style={{
+                    fontFamily: LATO,
+                    fontSize: "10px",
+                    color: "rgba(245,241,235,0.72)",
+                    margin: "8px 0 0",
+                    lineHeight: 1.45,
+                  }}
+                >
+                  {pendingSummaryLine}
+                </p>
+              )}
               {isCompletedBand && (
                 <>
                   <p style={{ fontFamily: LATO, fontSize: "10px", color: "rgba(255,255,255,0.55)", margin: "8px 0 0", lineHeight: 1.45 }}>

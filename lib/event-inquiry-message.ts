@@ -58,3 +58,14 @@ export function stripEventSetupEstimateFromMessage(message: string | null | unde
     .join("\n")
     .trim();
 }
+
+/** Guest-visible free-text notes from an event inquiry message (excludes machine blocks). */
+export function extractEventInquiryGuestNotesLine(message: string | null | undefined): string | null {
+  if (typeof message !== "string") return null;
+  const withoutEst = stripEventSetupEstimateFromMessage(message);
+  for (const line of withoutEst.split(/\r?\n/)) {
+    const t = line.trim();
+    if (t.startsWith("Notes:")) return t.slice(6).trim();
+  }
+  return null;
+}

@@ -2,6 +2,9 @@ import Link from "next/link";
 import OrayaEmblem from "@/components/OrayaEmblem";
 import { AddonIcon } from "@/components/addon-icon";
 import CopyValueButton from "@/components/CopyValueButton";
+import { buildProposalEmailLineItems } from "@/lib/event-proposal-line-items";
+import { extractEventInquiryGuestNotesLine, parseEventSetupEstimateFromMessage } from "@/lib/event-inquiry-message";
+import { formatPaymentMethodLabel } from "@/lib/payment-method-labels";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { verifyViewToken } from "@/lib/booking-action-token";
 
@@ -30,6 +33,7 @@ type ProposalIncludedService = {
   label: string;
   quantity?: number | null;
   unit_label?: string | null;
+  admin_status?: string | null;
 };
 
 interface BookingRow {
@@ -79,8 +83,18 @@ function fmtDate(iso: string) {
   return `${parseInt(d)} ${months[parseInt(m) - 1]} ${y}`;
 }
 
-function statusVisual(status: string): { label: string; color: string; bg: string } {
+function statusVisual(
+  status: string,
+  opts?: { isEventInquiry?: boolean; proposalStatus?: string | null },
+): { label: string; color: string; bg: string } {
   const s = status.toLowerCase();
+  if (opts?.isEventInquiry && s === "pending" && opts.proposalStatus === "accepted") {
+    return {
+      label: "Proposal accepted · Awaiting confirmation",
+      color: "#7ecfcf",
+      bg: "rgba(126,207,207,0.15)",
+    };
+  }
   if (s === "confirmed") return { label: "Confirmed", color: "#6fcf8a", bg: "rgba(111,207,138,0.15)" };
   if (s === "cancelled") return { label: "Cancelled", color: "#e07070", bg: "rgba(224,112,112,0.15)" };
   return { label: "Pending", color: GOLD, bg: "rgba(197,164,109,0.15)" };
@@ -139,12 +153,6 @@ function paymentStatusTone(status: string | null | undefined) {
     return { color: GOLD, bg: "rgba(197,164,109,0.14)", border: "rgba(197,164,109,0.28)" };
   }
   return { color: MUTED, bg: "rgba(255,255,255,0.04)", border: "rgba(255,255,255,0.08)" };
-}
-
-function formatPaymentMethodLabel(value: string) {
-  if (value === "bank_transfer") return "Bank transfer";
-  if (value === "card_manual") return "Card manual";
-  return `${value.charAt(0).toUpperCase()}${value.slice(1).replaceAll("_", " ")}`;
 }
 
 function formatProposalIncludedService(service: ProposalIncludedService) {
@@ -302,13 +310,13 @@ export default async function BookingViewPage({
   }
 
   const { whatsappNumber, whishNumber } = await getContactSettings();
-  const ref     = booking.id.slice(0, 8).toUpperCase();
-  const visual  = statusVisual(booking.status);
+  const ref = booking.id.slice(0, 8).toUpperCase();
   // Phase 13I: detect event inquiry — both conditions required (event_type set + structured notes marker).
   const isEventInquiry =
     !!booking.event_type &&
     typeof booking.message === "string" &&
     booking.message.includes("[Event Inquiry]");
+  const visual = statusVisual(booking.status, { isEventInquiry, proposalStatus: booking.proposal_status });
   // Phase 13I: bedroom setup label (stay bookings only) from snapshot persisted in 13H.
   const bedroomsRaw = booking.pricing_snapshot?.bedrooms_to_be_used;
   const bedroomLabel =
@@ -344,6 +352,11 @@ export default async function BookingViewPage({
       : null;
   const proposalIncludedServices = Array.isArray(booking.proposal_included_services) ? booking.proposal_included_services : [];
   const proposalPaymentMethods = Array.isArray(booking.proposal_payment_methods) ? booking.proposal_payment_methods : [];
+  const proposalPricingRows = buildProposalEmailLineItems(
+    proposalIncludedServices,
+    parseEventSetupEstimateFromMessage(booking.message),
+  );
+  const eventGuestNotes = isEventInquiry ? extractEventInquiryGuestNotesLine(booking.message) : null;
   const showEventProposal = isEventInquiry && booking.proposal_status === "sent";
   const proposalExpired = isProposalExpired(booking.proposal_status, booking.proposal_valid_until);
   const canRespondToProposal = showEventProposal && !proposalExpired;
@@ -626,9 +639,61 @@ export default async function BookingViewPage({
                     Deposit required: <span style={{ color: GOLD }}>{formatMoney(proposalDeposit)}</span>
                   </p>
                 )}
+
+                {proposalPricingRows.length > 0 && (
+                  <div style={{ borderTop: "0.5px solid rgba(255,255,255,0.06)", marginTop: "14px", paddingTop: "14px" }}>
+                    <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: "0 0 10px" }}>
+                      Pricing
+                    </p>
+                    <div style={{ display: "grid", gap: "0" }}>
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr auto auto auto",
+                          gap: "8px",
+                          padding: "6px 0",
+                          borderBottom: "0.5px solid rgba(255,255,255,0.08)",
+                          fontFamily: LATO,
+                          fontSize: "10px",
+                          letterSpacing: "1.5px",
+                          textTransform: "uppercase",
+                          color: MUTED,
+                        }}
+                      >
+                        <span>Service</span>
+                        <span style={{ textAlign: "right" }}>Qty</span>
+                        <span style={{ textAlign: "right" }}>Unit</span>
+                        <span style={{ textAlign: "right" }}>Subtotal</span>
+                      </div>
+                      {proposalPricingRows.map((row, idx) => (
+                        <div
+                          key={`${row.label}-${idx}`}
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "1fr auto auto auto",
+                            gap: "8px",
+                            padding: "10px 0",
+                            borderBottom:
+                              idx === proposalPricingRows.length - 1 ? "none" : "0.5px solid rgba(255,255,255,0.05)",
+                            fontFamily: LATO,
+                            fontSize: "12px",
+                            color: WHITE,
+                            lineHeight: 1.45,
+                          }}
+                        >
+                          <span style={{ minWidth: 0 }}>{row.label}</span>
+                          <span style={{ textAlign: "right" }}>{row.quantity}</span>
+                          <span style={{ textAlign: "right", color: MUTED }}>{formatMoney(row.unit_price)}</span>
+                          <span style={{ textAlign: "right", color: GOLD }}>{formatMoney(row.line_total)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {proposalValidUntil && (
                   <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, lineHeight: 1.6, margin: 0 }}>
-                    Valid until: <span style={{ color: GOLD }}>{proposalValidUntil}</span>
+                    Payment deadline: <span style={{ color: GOLD }}>{proposalValidUntil}</span>
                   </p>
                 )}
                 {proposalSentAt && (
@@ -1034,14 +1099,14 @@ export default async function BookingViewPage({
           </div>
         )}
 
-        {/* Message card (if any) */}
-        {booking.message && (
+        {/* Message card (if any) — event inquiries: guest text only (no structured estimate JSON). */}
+        {((isEventInquiry && eventGuestNotes) || (!isEventInquiry && booking.message)) && (
           <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", padding: "1.75rem", marginBottom: "2.5rem", textAlign: "left" }}>
             <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, marginBottom: "0.75rem" }}>
               Your note
             </p>
             <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, lineHeight: 1.7, margin: 0, whiteSpace: "pre-wrap" }}>
-              {booking.message}
+              {isEventInquiry ? eventGuestNotes : booking.message}
             </p>
           </div>
         )}

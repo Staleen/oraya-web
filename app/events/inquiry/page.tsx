@@ -66,7 +66,6 @@ const EVENT_RECOMMENDATIONS: Record<string, { guidance: string; recommended: str
       "Standard Catering",
       "Basic Decoration",
       "Premium Lighting Atmosphere",
-      "Event Coordination",
     ],
   },
   "Gender Reveal": {
@@ -76,7 +75,6 @@ const EVENT_RECOMMENDATIONS: Record<string, { guidance: string; recommended: str
       "Basic Decoration",
       "Light Catering",
       "Enhanced Decoration",
-      "Event Coordination",
     ],
   },
   "Baptism / First Communion": {
@@ -86,7 +84,6 @@ const EVENT_RECOMMENDATIONS: Record<string, { guidance: string; recommended: str
       "Basic Decoration",
       "Catering Coordination",
       "Light Catering",
-      "Event Coordination",
     ],
   },
   "Wedding / Engagement": {
@@ -96,7 +93,6 @@ const EVENT_RECOMMENDATIONS: Record<string, { guidance: string; recommended: str
       "Premium Decoration Experience",
       "Premium Lighting Atmosphere",
       "DJ Service",
-      "Event Coordination",
     ],
   },
   "Graduation Celebration": {
@@ -106,7 +102,6 @@ const EVENT_RECOMMENDATIONS: Record<string, { guidance: string; recommended: str
       "Standard Catering",
       "Enhanced Decoration",
       "Music Setup",
-      "Event Coordination",
     ],
   },
   "Family Gathering / Reunion": {
@@ -116,7 +111,6 @@ const EVENT_RECOMMENDATIONS: Record<string, { guidance: string; recommended: str
       "Standard Catering",
       "Basic Decoration",
       "Light Catering",
-      "Event Coordination",
     ],
   },
   "Dinner Event": {
@@ -126,7 +120,6 @@ const EVENT_RECOMMENDATIONS: Record<string, { guidance: string; recommended: str
       "Premium Lighting Atmosphere",
       "Standard Catering",
       "Basic Lighting",
-      "Event Coordination",
     ],
   },
   "Wellness Retreat": {
@@ -136,7 +129,6 @@ const EVENT_RECOMMENDATIONS: Record<string, { guidance: string; recommended: str
       "Light Catering",
       "Standard Catering",
       "Catering Coordination",
-      "Event Coordination",
     ],
   },
   "Corporate Event": {
@@ -146,7 +138,6 @@ const EVENT_RECOMMENDATIONS: Record<string, { guidance: string; recommended: str
       "Premium Table Styling",
       "Basic Lighting",
       "Valet Service",
-      "Event Coordination",
     ],
   },
 };
