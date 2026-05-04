@@ -38,6 +38,11 @@ import {
   resolveRecommendedPackSeedIds,
   type CatalogRow,
 } from "@/lib/event-service-exclusivity";
+import {
+  EVENT_SERVICE_GROUP_LABELS,
+  getMissingRequiredEventServiceGroups,
+  getRequiredEventServiceGroups,
+} from "@/lib/event-service-requirements";
 
 // ─── Brand constants ──────────────────────────────────────────────────────────
 const GOLD     = "#C5A46D";
@@ -855,15 +860,15 @@ function EventInquiryPageInner() {
     // Normalize before lookup so any stored old value resolves to its canonical entry.
     const recommendation = EVENT_RECOMMENDATIONS[normalizeEventType(form.eventType)];
     if (!recommendation) return null;
+    // Source-of-truth: the seed pack the "Add recommended" button actually applies. Keeps the chip list,
+    // the action, the persisted estimate, and the admin proposal default in sync (Bug 2).
+    const packSeedIds = resolveRecommendedPackSeedIds(normalizeEventType(form.eventType));
     const recommendedServices = filteredEventServices.filter((service) => {
-      // For managed services: honour the admin recommended flag first;
-      // fall back to label-matching so existing services remain recommended
-      // without requiring admin to re-flag them after this change.
-      if (hasManagedEventServices && service.recommended === true) return true;
-      return recommendation.recommended.some((label) => label.toLowerCase() === service.label.toLowerCase());
+      const seedId = canonicalSeedIdForCatalogRow(service);
+      return seedId ? packSeedIds.has(seedId) : false;
     });
     return { ...recommendation, recommendedServices };
-  }, [filteredEventServices, form.eventType, hasManagedEventServices]);
+  }, [filteredEventServices, form.eventType]);
   const serviceIntent = (() => {
     const count = selectedEventServices.length;
     if (count <= 2) return "Basic";
@@ -1086,6 +1091,19 @@ function EventInquiryPageInner() {
         return;
       }
     }
+    if (step === 2) {
+      const missingGroups = getMissingRequiredEventServiceGroups(
+        form.eventType,
+        selectedEventServices.map(({ service }) => ({ id: service.id, label: service.label })),
+      );
+      if (missingGroups.length > 0) {
+        const missingLabels = missingGroups.map((g) => EVENT_SERVICE_GROUP_LABELS[g]).join(", ");
+        setError(
+          `To prepare this event properly, please include the required setup for your selected event type. Missing: ${missingLabels}.`,
+        );
+        return;
+      }
+    }
     setStep(s => s + 1);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -1109,6 +1127,16 @@ function EventInquiryPageInner() {
       if (attendees > MAX_EVENT_ATTENDEES) throw new Error(EVENT_ATTENDEE_CAP_ERROR);
       const sleeping = parseInt(form.sleepingGuests, 10);
       if (!sleeping || sleeping < 1) throw new Error("Please enter the host overnight stay count (at least 1).");
+      const missingGroups = getMissingRequiredEventServiceGroups(
+        form.eventType,
+        selectedEventServices.map(({ service }) => ({ id: service.id, label: service.label })),
+      );
+      if (missingGroups.length > 0) {
+        const missingLabels = missingGroups.map((g) => EVENT_SERVICE_GROUP_LABELS[g]).join(", ");
+        throw new Error(
+          `To prepare this event properly, please include the required setup for your selected event type. Missing: ${missingLabels}.`,
+        );
+      }
       if (authStatus !== "member") {
         if (!guest.fullName.trim()) throw new Error("Please enter your full name so we know who to contact.");
         if (!guestEmail) throw new Error("Please enter your email address so we can reach you about your event.");
@@ -1397,6 +1425,8 @@ function EventInquiryPageInner() {
                   <div style={{ border: "0.5px solid rgba(197,164,109,0.12)", backgroundColor: "rgba(255,255,255,0.01)", padding: "1.25rem" }}>
                     <div className="oraya-cal">
                       <DayPicker
+                        // Remount when the prefilled start month changes so DayPicker focuses August (or whatever the guest picked) instead of today.
+                        key={dateRange?.from ? `${dateRange.from.getFullYear()}-${dateRange.from.getMonth()}` : "today"}
                         mode="range"
                         selected={dateRange}
                         onSelect={handleDateSelect}
@@ -1404,6 +1434,7 @@ function EventInquiryPageInner() {
                         modifiers={{ deadCheckIn: isChoosingCheckout ? () => false : isDeadEventCheckInDate }}
                         numberOfMonths={2}
                         fromDate={today}
+                        defaultMonth={dateRange?.from ?? today}
                         showOutsideDays
                       />
                     </div>
@@ -1503,12 +1534,9 @@ function EventInquiryPageInner() {
                 <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "0 0 16px", lineHeight: 1.6 }}>
                   Select the services you may need. Oraya will review and confirm the final setup.
                 </p>
-                {selectedEventRecommendation && (
+                {selectedEventRecommendation && selectedEventRecommendation.recommendedServices.length > 0 && (
                   <p style={{ fontFamily: LATO, fontSize: "11px", color: "rgba(255,255,255,0.6)", margin: "0 0 16px", lineHeight: 1.6 }}>
-                    Recommended for {form.eventType}: {(selectedEventRecommendation.recommendedServices.length > 0
-                      ? selectedEventRecommendation.recommendedServices.map((service) => service.label)
-                      : selectedEventRecommendation.recommended
-                    ).join(", ")}.
+                    Recommended for {form.eventType}: {selectedEventRecommendation.recommendedServices.map((service) => service.label).join(", ")}.
                   </p>
                 )}
                 <div style={{ display: "flex", flexDirection: "column", gap: "18px", marginBottom: "16px" }}>
@@ -1620,6 +1648,34 @@ function EventInquiryPageInner() {
                   Final event pricing is reviewed and quoted by Oraya.
                 </p>
               </div>
+
+              {(() => {
+                const required = getRequiredEventServiceGroups(form.eventType);
+                if (required.length === 0) return null;
+                const missing = getMissingRequiredEventServiceGroups(
+                  form.eventType,
+                  selectedEventServices.map(({ service }) => ({ id: service.id, label: service.label })),
+                );
+                if (missing.length === 0) {
+                  return (
+                    <p style={{ fontFamily: LATO, fontSize: "11px", color: "#6fcf8a", margin: 0, lineHeight: 1.6 }}>
+                      Required setup for {form.eventType}: complete.
+                    </p>
+                  );
+                }
+                const missingLabels = missing.map((g) => EVENT_SERVICE_GROUP_LABELS[g]).join(", ");
+                const requiredLabels = required.map((g) => EVENT_SERVICE_GROUP_LABELS[g]).join(", ");
+                return (
+                  <div style={{ border: "0.5px solid rgba(240,189,103,0.32)", backgroundColor: "rgba(240,189,103,0.06)", padding: "12px 16px" }}>
+                    <p style={{ fontFamily: LATO, fontSize: "11px", color: "#f0bd67", margin: "0 0 6px", lineHeight: 1.6 }}>
+                      To prepare this event properly, please include the required setup for {form.eventType}.
+                    </p>
+                    <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.6 }}>
+                      Required: {requiredLabels}. Missing: {missingLabels}.
+                    </p>
+                  </div>
+                );
+              })()}
 
               {eventSetupEstimate && <EventEstimatePanel estimate={eventSetupEstimate} />}
 

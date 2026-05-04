@@ -2,6 +2,7 @@ import { Resend } from "resend";
 import { LOGO_URL, SITE_URL } from "@/lib/brand";
 import { createActionToken } from "@/lib/booking-action-token";
 import {
+  extractEventInquiryGuestNotesLine,
   isEventInquiryPayload,
   parseEventSetupEstimateFromMessage,
 } from "@/lib/event-inquiry-message";
@@ -144,6 +145,10 @@ export async function sendBookingPendingEmail(payload: BookingPendingEmailPayloa
 
   const isEventInquiry = isEventInquiryPayload(payload.event_type, payload.message);
   const eventEstimate = isEventInquiry ? parseEventSetupEstimateFromMessage(payload.message) : null;
+  // Bug 3: only show free-text guest notes — never the raw [Event Inquiry] / [EventSetupEstimate] block.
+  const cleanGuestNote = isEventInquiry
+    ? extractEventInquiryGuestNotesLine(payload.message)?.trim() ?? ""
+    : (payload.message ?? "").trim();
   const subject = isEventInquiry ? "Oraya - Event inquiry received" : "Oraya - Booking Request Received";
 
   const summaryRows: Array<[string, string]> = isEventInquiry
@@ -372,14 +377,14 @@ export async function sendBookingPendingEmail(payload: BookingPendingEmailPayloa
 
           <tr><td style="padding-top:16px;">${paymentHtml}</td></tr>
 
-          ${payload.message?.trim() ? `
+          ${cleanGuestNote ? `
           <tr><td style="padding-top:16px;">
             <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="border:0.5px solid rgba(197,164,109,0.18);padding:22px 24px;">
               <p style="margin:0 0 10px;font-size:9px;letter-spacing:3px;text-transform:uppercase;color:${GOLD};">
                 Special Request / Notes
               </p>
               <p style="margin:0;font-size:13px;line-height:1.75;color:#ffffff;white-space:pre-line;">
-                ${escapeHtml(payload.message.trim())}
+                ${escapeHtml(cleanGuestNote)}
               </p>
             </td></tr></table>
           </td></tr>` : ""}
@@ -431,7 +436,7 @@ export async function sendBookingPendingEmail(payload: BookingPendingEmailPayloa
     "",
     `${paymentSectionTitle}:`,
     ...paymentRows.map(([label, value]) => `${label}: ${value}`),
-    ...(payload.message?.trim() ? ["", `Special Request / Notes: ${payload.message.trim()}`] : []),
+    ...(cleanGuestNote ? ["", `Special Request / Notes: ${cleanGuestNote}`] : []),
     "",
     `View online copy: ${viewUrl}`,
     "",

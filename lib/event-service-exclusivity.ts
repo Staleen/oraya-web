@@ -213,9 +213,6 @@ export function resolveRecommendedPackSeedIds(canonicalEventType: string): Set<s
   if (p.music === "setup") seeds.add(EVENT_SERVICE_SEED_IDS.musicSetup);
   if (p.music === "dj") seeds.add(EVENT_SERVICE_SEED_IDS.dj);
 
-  if (p.seating === "full") {
-    seeds.add(EVENT_SERVICE_SEED_IDS.umbrellasShaded);
-  }
   return seeds;
 }
 

@@ -2,6 +2,7 @@ import { Resend } from "resend";
 import { LOGO_URL } from "@/lib/brand";
 import { formatBeirutDateTime } from "@/lib/format-date";
 import {
+  extractEventInquiryGuestNotesLine,
   isEventInquiryPayload,
   parseEventSetupEstimateFromMessage,
   type EventSetupEstimatePayload,
@@ -275,7 +276,12 @@ export async function sendBookingRequestEmail(
 
   const resend    = new Resend(apiKey);
   const ref       = payload.booking_id.slice(0, 8).toUpperCase();
-  const noteText = payload.message?.trim() ? payload.message.trim() : "No special request provided.";
+  const isEventInquiry = isEventInquiryPayload(payload.event_type, payload.message);
+  // Bug 3: only show free-text guest notes — never the raw [Event Inquiry] / [EventSetupEstimate] block.
+  const cleanGuestNote = isEventInquiry
+    ? extractEventInquiryGuestNotesLine(payload.message)?.trim() ?? ""
+    : (payload.message ?? "").trim();
+  const noteText = cleanGuestNote || "No special request provided.";
   const addonRows = (payload.addons_snapshot && payload.addons_snapshot.length > 0
     ? payload.addons_snapshot
     : payload.addons.map((addon) => ({
@@ -297,7 +303,6 @@ export async function sendBookingRequestEmail(
     ? staySubtotal + addonsTotal
     : null;
 
-  const isEventInquiry = isEventInquiryPayload(payload.event_type, payload.message);
   const eventEstimate = isEventInquiry ? parseEventSetupEstimateFromMessage(payload.message) : null;
 
   const rows: [string, string][] = isEventInquiry

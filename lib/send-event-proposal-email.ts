@@ -78,24 +78,24 @@ function renderPricingTableHtml(lines: ProposalEmailLineItem[]): string {
   if (lines.length === 0) return "";
   const header = `
     <tr>
-      <th align="left" style="padding:8px 6px;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:${MUTED};border-bottom:0.5px solid rgba(255,255,255,0.08);">Service</th>
-      <th align="right" style="padding:8px 6px;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:${MUTED};border-bottom:0.5px solid rgba(255,255,255,0.08);">Qty</th>
-      <th align="right" style="padding:8px 6px;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:${MUTED};border-bottom:0.5px solid rgba(255,255,255,0.08);">Unit</th>
-      <th align="right" style="padding:8px 6px;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:${MUTED};border-bottom:0.5px solid rgba(255,255,255,0.08);">Subtotal</th>
+      <th align="left" style="padding:8px 6px;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:${MUTED};border-bottom:0.5px solid rgba(255,255,255,0.08);width:48%;">Service</th>
+      <th align="right" style="padding:8px 6px;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:${MUTED};border-bottom:0.5px solid rgba(255,255,255,0.08);width:10%;">Qty</th>
+      <th align="right" style="padding:8px 6px;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:${MUTED};border-bottom:0.5px solid rgba(255,255,255,0.08);width:21%;">Unit</th>
+      <th align="right" style="padding:8px 6px;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:${MUTED};border-bottom:0.5px solid rgba(255,255,255,0.08);width:21%;">Subtotal</th>
     </tr>`;
   const body = lines
     .map(
       (row) => `
     <tr>
-      <td style="padding:10px 6px;font-size:13px;color:${WHITE};border-bottom:0.5px solid rgba(255,255,255,0.05);">${escapeHtml(row.label)}</td>
-      <td align="right" style="padding:10px 6px;font-size:13px;color:${WHITE};border-bottom:0.5px solid rgba(255,255,255,0.05);">${row.quantity}</td>
-      <td align="right" style="padding:10px 6px;font-size:13px;color:${WHITE};border-bottom:0.5px solid rgba(255,255,255,0.05);">${formatMoney(row.unit_price)}</td>
-      <td align="right" style="padding:10px 6px;font-size:13px;color:${WHITE};border-bottom:0.5px solid rgba(255,255,255,0.05);">${formatMoney(row.line_total)}</td>
+      <td style="padding:10px 6px;font-size:13px;line-height:1.45;color:${WHITE};border-bottom:0.5px solid rgba(255,255,255,0.05);word-break:break-word;">${escapeHtml(row.label)}</td>
+      <td align="right" style="padding:10px 6px;font-size:13px;color:${WHITE};border-bottom:0.5px solid rgba(255,255,255,0.05);white-space:nowrap;">${row.quantity}</td>
+      <td align="right" style="padding:10px 6px;font-size:13px;color:${WHITE};border-bottom:0.5px solid rgba(255,255,255,0.05);white-space:nowrap;">${formatMoney(row.unit_price)}</td>
+      <td align="right" style="padding:10px 6px;font-size:13px;color:${GOLD};border-bottom:0.5px solid rgba(255,255,255,0.05);white-space:nowrap;">${formatMoney(row.line_total)}</td>
     </tr>`,
     )
     .join("");
   return `
-    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 16px;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 16px;table-layout:fixed;">
       ${header}
       ${body}
     </table>`;
@@ -221,17 +221,29 @@ export async function sendEventProposalEmail(payload: EventProposalEmailPayload)
     .filter(Boolean);
   const methodsDisplay = methods.length > 0 ? methods.join(", ") : "To be confirmed";
 
+  const balanceDue =
+    proposalTotal !== null && proposalDeposit !== null && proposalTotal - proposalDeposit > 0
+      ? proposalTotal - proposalDeposit
+      : null;
   const summaryRowsHtml = `
     ${tableHtml}
     <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px;">
       <tr>
-        <td style="padding:10px 0;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:${MUTED};">Event setup total</td>
+        <td style="padding:10px 0;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:${MUTED};">Final event total</td>
         <td align="right" style="padding:10px 0;font-size:14px;color:${WHITE};">${escapeHtml(formatMoney(proposalTotal))}</td>
       </tr>
       <tr>
         <td style="padding:10px 0;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:${MUTED};">Deposit required</td>
         <td align="right" style="padding:10px 0;font-size:14px;color:${WHITE};">${escapeHtml(formatMoney(proposalDeposit))}</td>
       </tr>
+      ${
+        balanceDue !== null
+          ? `<tr>
+        <td style="padding:10px 0;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:${MUTED};">Balance due</td>
+        <td align="right" style="padding:10px 0;font-size:14px;color:${WHITE};">${escapeHtml(formatMoney(balanceDue))}</td>
+      </tr>`
+          : ""
+      }
       <tr>
         <td style="padding:10px 0;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:${MUTED};">Payment deadline</td>
         <td align="right" style="padding:10px 0;font-size:13px;color:${WHITE};">${escapeHtml(paymentDeadline ?? "To be confirmed")}</td>
@@ -267,8 +279,9 @@ export async function sendEventProposalEmail(payload: EventProposalEmailPayload)
         `  - ${row.label} | Qty ${row.quantity} | Unit ${formatMoney(row.unit_price)} | Subtotal ${formatMoney(row.line_total)}`,
     ),
     "",
-    `Event setup total: ${formatMoney(proposalTotal)}`,
+    `Final event total: ${formatMoney(proposalTotal)}`,
     `Deposit required: ${formatMoney(proposalDeposit)}`,
+    ...(balanceDue !== null ? [`Balance due: ${formatMoney(balanceDue)}`] : []),
     `Payment deadline: ${paymentDeadline ?? "To be confirmed"}`,
     `Payment methods: ${methodsDisplay}`,
     "",

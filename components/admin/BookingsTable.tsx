@@ -353,6 +353,37 @@ function getBookingRevenueData(booking: Booking) {
   };
 }
 
+/**
+ * Bug 8: payment basis for confirmed bookings.
+ * Event inquiries with a proposal total → use proposal total / proposal deposit (event setup is the contract,
+ * not the host stay nights). Stay bookings → fall back to stay subtotal + add-ons via getBookingRevenueData.
+ */
+function getBookingPaymentBasis(booking: Booking) {
+  if (isEventInquiryPayload(booking.event_type, booking.message)) {
+    const proposalTotal =
+      typeof booking.proposal_total_amount === "number" && Number.isFinite(booking.proposal_total_amount)
+        ? booking.proposal_total_amount
+        : null;
+    const proposalDeposit =
+      typeof booking.proposal_deposit_amount === "number" && Number.isFinite(booking.proposal_deposit_amount)
+        ? booking.proposal_deposit_amount
+        : null;
+    if (proposalTotal !== null) {
+      return {
+        totalRaw: proposalTotal,
+        depositRaw: proposalDeposit,
+        source: "event_proposal" as const,
+      };
+    }
+  }
+  const { estimatedTotalRaw } = getBookingRevenueData(booking);
+  return {
+    totalRaw: estimatedTotalRaw,
+    depositRaw: null as number | null,
+    source: "stay_estimate" as const,
+  };
+}
+
 function getAddonSnapshotsFromBooking(booking: Booking) {
   return booking.addons_snapshot ?? [];
 }
@@ -992,9 +1023,34 @@ export default function BookingsTable({
   }
 
   function getPaymentDraft(booking: Booking): PaymentDraft {
-    return paymentDrafts[booking.id] ?? {
-      depositAmount: booking.deposit_amount != null ? String(booking.deposit_amount) : "",
-      dueAt: toDateTimeLocalInput(booking.payment_due_at),
+    if (paymentDrafts[booking.id]) return paymentDrafts[booking.id];
+    // Bug 8: for confirmed event inquiries, default the deposit to the proposal deposit (not stay deposit_amount).
+    const proposalDepositForEvent =
+      isEventInquiryPayload(booking.event_type, booking.message) &&
+      typeof booking.proposal_deposit_amount === "number" &&
+      Number.isFinite(booking.proposal_deposit_amount)
+        ? booking.proposal_deposit_amount
+        : null;
+    const depositSeed =
+      booking.deposit_amount != null
+        ? String(booking.deposit_amount)
+        : proposalDepositForEvent != null
+          ? String(proposalDepositForEvent)
+          : "";
+    const dueDateSeed = toDateTimeLocalInput(booking.payment_due_at) || (() => {
+      // Bug 8: default the payment due date to the proposal payment deadline (proposal_valid_until).
+      if (
+        isEventInquiryPayload(booking.event_type, booking.message) &&
+        typeof booking.proposal_valid_until === "string" &&
+        booking.proposal_valid_until.trim()
+      ) {
+        return toDateTimeLocalInput(booking.proposal_valid_until);
+      }
+      return "";
+    })();
+    return {
+      depositAmount: depositSeed,
+      dueAt: dueDateSeed,
       requestNote: "",
       paymentAmount: "",
       paymentMethod: booking.payment_method ?? "whish",
@@ -1192,10 +1248,12 @@ export default function BookingsTable({
     const currentPaid = typeof booking.amount_paid === "number" && Number.isFinite(booking.amount_paid)
       ? booking.amount_paid
       : 0;
-    const { estimatedTotalRaw } = getBookingRevenueData(booking);
+    // Bug 8: for event inquiries with a proposal total, use that total as the paid-in-full basis,
+    // not the host stay nights.
+    const { totalRaw } = getBookingPaymentBasis(booking);
     const nextAmountPaid = currentPaid + receivedAmount;
     const nextPaymentStatus =
-      typeof estimatedTotalRaw === "number" && nextAmountPaid >= estimatedTotalRaw
+      typeof totalRaw === "number" && nextAmountPaid >= totalRaw
         ? "paid_in_full"
         : "deposit_paid";
     const nextNotes = draft.paymentNotes.trim() || booking.payment_notes || null;
@@ -2218,15 +2276,19 @@ export default function BookingsTable({
     const paymentTone = getPaymentStatusStyle(paymentStatus, overdue);
     const depositAmount = formatMoney(booking.deposit_amount);
     const amountPaid = formatMoney(booking.amount_paid);
-    const { stayValueRaw, addonsValueRaw, estimatedTotalRaw } = getBookingRevenueData(booking);
+    const { stayValueRaw, addonsValueRaw } = getBookingRevenueData(booking);
+    const paymentBasis = getBookingPaymentBasis(booking);
+    const isEventBasis = paymentBasis.source === "event_proposal";
     const stayValue = formatMoney(stayValueRaw);
     const addonsValue = formatMoney(addonsValueRaw);
-    const estimatedTotal = formatMoney(estimatedTotalRaw);
+    const estimatedTotal = formatMoney(paymentBasis.totalRaw);
+    const proposalTotalDisplay = isEventBasis ? formatMoney(paymentBasis.totalRaw) : null;
+    const proposalDepositDisplay = isEventBasis ? formatMoney(paymentBasis.depositRaw) : null;
     const amountPaidRaw =
       typeof booking.amount_paid === "number" && Number.isFinite(booking.amount_paid) ? booking.amount_paid : 0;
     const remainingBalanceRaw =
-      typeof estimatedTotalRaw === "number" && Number.isFinite(estimatedTotalRaw)
-        ? Math.max(0, estimatedTotalRaw - amountPaidRaw)
+      typeof paymentBasis.totalRaw === "number" && Number.isFinite(paymentBasis.totalRaw)
+        ? Math.max(0, paymentBasis.totalRaw - amountPaidRaw)
         : null;
     const remainingBalance = formatMoney(remainingBalanceRaw);
     const requestSentAt = formatDateTimeValue(booking.payment_requested_at);
@@ -2383,9 +2445,18 @@ export default function BookingsTable({
             gap: "12px 16px",
           }}
         >
-          {renderRevenueEstimateRow("Stay value", stayValue ?? "Unavailable")}
-          {renderRevenueEstimateRow("Add-ons value", addonsValue ?? "Unavailable")}
-          {renderRevenueEstimateRow("Estimated total", estimatedTotal ?? "Unavailable")}
+          {isEventBasis ? (
+            <>
+              {renderRevenueEstimateRow("Final event total", proposalTotalDisplay ?? "Not set")}
+              {renderRevenueEstimateRow("Proposal deposit", proposalDepositDisplay ?? "Not set")}
+            </>
+          ) : (
+            <>
+              {renderRevenueEstimateRow("Stay value", stayValue ?? "Unavailable")}
+              {renderRevenueEstimateRow("Add-ons value", addonsValue ?? "Unavailable")}
+              {renderRevenueEstimateRow("Estimated total", estimatedTotal ?? "Unavailable")}
+            </>
+          )}
           {renderRevenueEstimateRow("Payment status", formatAdvisoryLabel(paymentStatus.replaceAll("_", " ")))}
           {renderRevenueEstimateRow("Deposit amount", depositAmount ?? "Not set")}
           {renderRevenueEstimateRow("Amount paid", amountPaid ?? "$0")}
@@ -2656,7 +2727,9 @@ export default function BookingsTable({
       : proposalStatus === "draft"
           ? "Draft proposal"
           : proposalStatus === "accepted"
-            ? "Accepted"
+            ? booking.status === "confirmed"
+              ? "Accepted · Confirmed"
+              : "Accepted · Awaiting deposit"
             : proposalStatus === "declined"
               ? "Declined"
               : proposalStatus === "expired"
@@ -2806,7 +2879,9 @@ export default function BookingsTable({
               }}
             >
               {proposalStatus === "accepted"
-                ? "Guest accepted proposal — proceed with confirmation and payment manually."
+                ? booking.status === "confirmed"
+                  ? "Proposal accepted — confirmed. Continue manual deposit follow-up below."
+                  : "Proposal accepted — awaiting deposit confirmation. Confirm event after deposit received."
                 : proposalStatus === "declined"
                   ? "Guest declined proposal — revise or close request."
                   : "Proposal expired."}
@@ -3000,30 +3075,56 @@ export default function BookingsTable({
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))", gap: "12px" }}>
-          <textarea
-            value={draft.excludedServices}
-            onChange={(event) => updateProposalDraft(booking, { excludedServices: event.target.value })}
-            placeholder="Excluded services"
-            rows={4}
-            style={{ ...fieldStyle, resize: "vertical" }}
-          />
-          <textarea
-            value={draft.optionalServices}
-            onChange={(event) => updateProposalDraft(booking, { optionalServices: event.target.value })}
-            placeholder="Optional services"
-            rows={4}
-            style={{ ...fieldStyle, resize: "vertical" }}
-          />
-        </div>
-
-        <textarea
-          value={draft.proposalNotes}
-          onChange={(event) => updateProposalDraft(booking, { proposalNotes: event.target.value })}
-          placeholder="Proposal notes"
-          rows={4}
-          style={{ ...fieldStyle, resize: "vertical" }}
-        />
+        {/* Bug 9: collapse advanced/optional fields by default — open only if any has content. */}
+        <details
+          open={Boolean(
+            draft.excludedServices.trim() || draft.optionalServices.trim() || draft.proposalNotes.trim(),
+          )}
+          style={{
+            border: `0.5px solid ${BORDER}`,
+            backgroundColor: "rgba(255,255,255,0.02)",
+            padding: "10px 12px",
+            borderRadius: "8px",
+          }}
+        >
+          <summary
+            style={{
+              cursor: "pointer",
+              fontFamily: LATO,
+              fontSize: "10px",
+              letterSpacing: "1.5px",
+              textTransform: "uppercase",
+              color: "#9db7d9",
+            }}
+          >
+            Advanced (optional / excluded services + proposal notes)
+          </summary>
+          <div style={{ display: "grid", gap: "10px", marginTop: "10px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))", gap: "12px" }}>
+              <textarea
+                value={draft.excludedServices}
+                onChange={(event) => updateProposalDraft(booking, { excludedServices: event.target.value })}
+                placeholder="Excluded services (optional)"
+                rows={3}
+                style={{ ...fieldStyle, resize: "vertical" }}
+              />
+              <textarea
+                value={draft.optionalServices}
+                onChange={(event) => updateProposalDraft(booking, { optionalServices: event.target.value })}
+                placeholder="Optional services (optional)"
+                rows={3}
+                style={{ ...fieldStyle, resize: "vertical" }}
+              />
+            </div>
+            <textarea
+              value={draft.proposalNotes}
+              onChange={(event) => updateProposalDraft(booking, { proposalNotes: event.target.value })}
+              placeholder="Proposal notes (optional)"
+              rows={3}
+              style={{ ...fieldStyle, resize: "vertical" }}
+            />
+          </div>
+        </details>
 
         <div
           style={{
@@ -3032,8 +3133,8 @@ export default function BookingsTable({
             gap: "10px 16px",
           }}
         >
-          {renderRevenueEstimateRow("Proposal total", proposalTotal ?? "Not set")}
-          {renderRevenueEstimateRow("Deposit amount", proposalDeposit ?? "Not set")}
+          {renderRevenueEstimateRow("Proposal total (admin)", proposalTotal ?? "Not set")}
+          {renderRevenueEstimateRow("Proposal deposit (admin)", proposalDeposit ?? "Not set")}
           {renderRevenueEstimateRow("Payment deadline (valid until)", validUntil ?? "Not set")}
           {renderRevenueEstimateRow("Payment methods", proposalPaymentMethods.map((method) => formatPaymentMethodLabel(method)).join(", ") || "Not set")}
           {sentAt ? renderRevenueEstimateRow("Sent at", sentAt) : null}
@@ -4921,7 +5022,11 @@ export default function BookingsTable({
                     borderRadius: "6px",
                   }}
                 >
-                  {eventInquiry ? "Confirm event" : (readyToConfirm ? "Confirm booking" : "Confirm booking")}
+                  {eventInquiry
+                    ? proposalAccepted
+                      ? "Confirm event (after deposit)"
+                      : "Confirm event"
+                    : (readyToConfirm ? "Confirm booking" : "Confirm booking")}
                 </button>
               )}
 
@@ -5000,21 +5105,27 @@ export default function BookingsTable({
       typeof rowSetupEst?.total === "number" && Number.isFinite(rowSetupEst.total) ? rowSetupEst.total : null;
     const rowSetupDisplay = rowSetupTotal !== null ? formatMoney(rowSetupTotal) : null;
     const rowProposalHint =
-      section === "pending" && rowIsEvent && booking.proposal_status === "accepted" && booking.status === "pending"
-        ? "Ready to confirm"
-        : section === "pending" && rowIsEvent && booking.proposal_status === "sent"
-          ? "Proposal sent"
-          : null;
+      section === "pending" && rowIsEvent
+        ? booking.proposal_status === "accepted" && booking.status === "pending"
+          ? "Accepted · awaiting deposit"
+          : booking.proposal_status === "sent"
+            ? "Proposal sent"
+            : booking.proposal_status === "draft"
+              ? "Proposal draft"
+              : booking.proposal_status === "declined"
+                ? "Proposal declined"
+                : null
+        : null;
+    // Bug 10: ordered, semicolon-style line keeps related signals grouped (kind & event type | dates & villa | submitted | totals & state).
     const pendingSummaryLine =
       section === "pending" && submittedAt
         ? [
-            submittedAt,
-            rowKind,
-            rowEventType,
-            rowSetupDisplay ? `Est. setup ${rowSetupDisplay}` : null,
-            rowProposalHint,
+            [rowKind, rowEventType].filter(Boolean).join(" · "),
             `${fmt(booking.check_in)} → ${fmt(booking.check_out)}`,
             booking.villa,
+            `Submitted ${submittedAt}`,
+            rowSetupDisplay ? `Est. setup ${rowSetupDisplay}` : null,
+            rowProposalHint,
           ]
             .filter(Boolean)
             .join(" · ")

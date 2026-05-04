@@ -631,12 +631,17 @@ export default async function BookingViewPage({
               <div style={{ display: "grid", gap: "10px" }}>
                 {proposalTotal !== null && (
                   <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, lineHeight: 1.6, margin: 0 }}>
-                    Proposal total: <span style={{ color: GOLD }}>{formatMoney(proposalTotal)}</span>
+                    Final event total: <span style={{ color: GOLD }}>{formatMoney(proposalTotal)}</span>
                   </p>
                 )}
                 {proposalDeposit !== null && (
                   <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, lineHeight: 1.6, margin: 0 }}>
                     Deposit required: <span style={{ color: GOLD }}>{formatMoney(proposalDeposit)}</span>
+                  </p>
+                )}
+                {proposalTotal !== null && proposalDeposit !== null && proposalTotal - proposalDeposit > 0 && (
+                  <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, lineHeight: 1.6, margin: 0 }}>
+                    Balance due: <span style={{ color: GOLD }}>{formatMoney(proposalTotal - proposalDeposit)}</span>
                   </p>
                 )}
 
