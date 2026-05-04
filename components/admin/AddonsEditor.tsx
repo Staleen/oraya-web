@@ -299,9 +299,6 @@ export default function AddonsEditor({
     return (
       <div style={{ display: "grid", gap: "10px" }}>
         {fieldLabel("Event service settings")}
-        <p style={{ fontFamily: LATO, fontSize: mobile ? "12px" : "11px", color: MUTED, lineHeight: 1.6, margin: 0 }}>
-          Event Services are managed here but pricing is not shown to guests until event quoting is enabled.
-        </p>
         <div style={{ display: "grid", gap: "10px" }}>
           <div style={{ display: "grid", gap: "8px" }}>
             {fieldLabel("Applicable event types")}
@@ -589,29 +586,46 @@ export default function AddonsEditor({
   }
 
   function renderDescriptionField(addon: Addon, mobile: boolean) {
+    // Task 5: collapsed by default — opens automatically when content is present.
     return (
-      <div style={{ display: "grid", gap: "6px" }}>
-        {fieldLabel("Guest description")}
+      <details
+        open={Boolean(addon.description?.trim())}
+        style={{ display: "grid", gap: "6px" }}
+      >
+        <summary
+          style={{
+            cursor: "pointer",
+            fontFamily: LATO,
+            fontSize: "9px",
+            letterSpacing: "2px",
+            textTransform: "uppercase",
+            color: MUTED,
+            padding: "4px 0",
+          }}
+        >
+          Guest description (optional)
+        </summary>
         <textarea
           value={addon.description ?? ""}
           onChange={e => updateAddon(addon.id, { description: e.target.value })}
-          rows={mobile ? 4 : 3}
-          placeholder="Describe what the guest receives (e.g., Heated pool ready before arrival, includes full-day heating)"
+          rows={mobile ? 3 : 2}
+          placeholder="Short, guest-facing copy (e.g., Heated pool ready before arrival)."
           style={{
             ...fieldStyle,
             width: "100%",
             boxSizing: "border-box",
             padding: mobile ? "12px 14px" : "10px 12px",
             fontSize: mobile ? "14px" : "13px",
-            lineHeight: 1.6,
+            lineHeight: 1.55,
             resize: "vertical",
-            minHeight: mobile ? "108px" : "92px",
+            minHeight: mobile ? "84px" : "70px",
+            marginTop: "6px",
             opacity: addon.enabled ? 1 : 0.5,
           }}
           onFocus={e => { e.currentTarget.style.borderColor = GOLD; }}
           onBlur={e => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
         />
-      </div>
+      </details>
     );
   }
 
@@ -682,9 +696,22 @@ export default function AddonsEditor({
   const stayAddons = addons.filter((addon) => getAddonAppliesTo(addon.applies_to) === "stay");
   const eventServiceAddons = addons.filter((addon) => getAddonAppliesTo(addon.applies_to) !== "stay");
   const addonSections = [
-    { key: "stay", title: "Stay Add-ons", subtitle: "Optional stay extras and operational add-ons.", items: stayAddons },
-    { key: "event", title: "Event Services", subtitle: "Service options for event inquiry workflows and future event quoting.", items: eventServiceAddons },
+    { key: "stay", title: "Stay Add-ons", subtitle: "Optional stay extras.", items: stayAddons },
+    { key: "event", title: "Event Services", subtitle: "Event inquiry services.", items: eventServiceAddons },
   ];
+  const blockingErrors = validationIssues.filter((issue) => issue.level === "error");
+  const errorAddonIds = Array.from(new Set(blockingErrors.map((issue) => issue.addon_id)));
+  const showSaveBlockedBanner = validationAttempted && blockingErrors.length > 0;
+
+  function handleSaveClick() {
+    // Bug fix (Task 3): if save is blocked by errors, auto-expand the first offending row so the
+    // admin can see the inline "Label is required" / "Label must be unique" / etc. error immediately.
+    if (blockingErrors.length > 0 && errorAddonIds.length > 0) {
+      const firstId = errorAddonIds[0];
+      if (firstId) setExpandedAddonId(firstId);
+    }
+    saveAddons();
+  }
   const mobileOverlayShell = {
     width: "100%",
     maxWidth: "100vw",
@@ -720,7 +747,7 @@ export default function AddonsEditor({
             + Add Stay Add-on
           </button>
           <button
-            onClick={saveAddons}
+            onClick={handleSaveClick}
             disabled={addonsSaving}
             style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: CHARCOAL, backgroundColor: GOLD, border: "none", padding: "10px 20px", cursor: addonsSaving ? "not-allowed" : "pointer", opacity: addonsSaving ? 0.7 : 1, width: isMobile ? "100%" : "auto" }}
           >
@@ -729,9 +756,24 @@ export default function AddonsEditor({
         </div>
       </div>
 
-      <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.6, margin: "0 0 14px" }}>
-        Event Services are managed here but pricing is not shown to guests until event quoting is enabled.
-      </p>
+      {showSaveBlockedBanner && (
+        <div
+          style={{
+            border: "0.5px solid rgba(224,112,112,0.34)",
+            backgroundColor: "rgba(224,112,112,0.08)",
+            padding: "10px 14px",
+            margin: "0 0 12px",
+            borderRadius: "6px",
+          }}
+        >
+          <p style={{ fontFamily: LATO, fontSize: "12px", color: "#f4b3b3", margin: "0 0 4px", lineHeight: 1.6 }}>
+            Couldn’t save — {errorAddonIds.length} add-on{errorAddonIds.length === 1 ? "" : "s"} need attention.
+          </p>
+          <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+            {blockingErrors[0]?.message ?? "Fix the highlighted fields below."} Open the highlighted row to fix it.
+          </p>
+        </div>
+      )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
         {addonSections.map((section) => (

@@ -79,6 +79,23 @@ export function getAddonAppliesTo(
   return appliesTo ?? "stay";
 }
 
+/**
+ * Normalize legacy / typo applies_to values from older settings rows.
+ * "events" / "event_only" → "event"; "stay_only" / "stays" → "stay"; "all" / "any" → "both".
+ * Anything unrecognized falls back to "stay" (the historical default).
+ */
+export function normalizeAddonAppliesTo(value: unknown): AddonAppliesTo {
+  if (typeof value !== "string") return "stay";
+  const trimmed = value.trim().toLowerCase();
+  if (VALID_APPLIES_TO.has(trimmed as AddonAppliesTo)) {
+    return trimmed as AddonAppliesTo;
+  }
+  if (trimmed === "events" || trimmed === "event_only" || trimmed === "event-only") return "event";
+  if (trimmed === "stays" || trimmed === "stay_only" || trimmed === "stay-only") return "stay";
+  if (trimmed === "all" || trimmed === "any" || trimmed === "stay+event" || trimmed === "stay_event") return "both";
+  return "stay";
+}
+
 export function derivePreparationUnit(hours: number | null | undefined): PreparationUnit {
   return typeof hours === "number" && Number.isFinite(hours) && hours >= 24 && hours % 24 === 0
     ? "days"
@@ -168,10 +185,7 @@ function parseOperationalFields(value: unknown): AddonOperationalFields {
     typeof item.percentage_value === "number" && Number.isFinite(item.percentage_value)
       ? item.percentage_value
       : null;
-  const appliesTo =
-    typeof item.applies_to === "string" && VALID_APPLIES_TO.has(item.applies_to as AddonAppliesTo)
-      ? (item.applies_to as AddonAppliesTo)
-      : "stay";
+  const appliesTo = normalizeAddonAppliesTo(item.applies_to);
   const applicableEventTypes = Array.isArray(item.applicable_event_types)
     ? item.applicable_event_types.filter((eventType): eventType is string => typeof eventType === "string" && eventType.trim().length > 0)
     : [];

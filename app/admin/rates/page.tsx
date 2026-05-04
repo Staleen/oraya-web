@@ -384,11 +384,8 @@ export default function AdminRatesPage() {
         <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: "#C5A46D", margin: "0 0 8px" }}>
           Add-ons
         </p>
-        <p style={{ fontFamily: LATO, fontSize: "12px", color: "#8a8070", margin: "0 0 6px" }}>
-          Existing optional extras remain separate from base villa pricing and continue to use their current admin flow.
-        </p>
         <p style={{ fontFamily: LATO, fontSize: "12px", color: "#8a8070", margin: "0 0 10px" }}>
-          Event Services are managed here but pricing is not shown to guests until event quoting is enabled.
+          Stay extras and event services. Set <em>Applies to</em> on each row to control where it appears.
         </p>
         {!ratesLoading && (
           <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px", flexWrap: "wrap" }}>
@@ -411,8 +408,8 @@ export default function AdminRatesPage() {
             )}
             <span style={{ fontFamily: LATO, fontSize: "11px", color: "#8a8070" }}>
               {eventServiceCount === 0
-                ? `No managed event services detected. Sync will repair ${EVENT_SERVICE_SEED_DEFINITIONS.length} canonical services without duplicating rows.`
-                : "Sync repairs missing event-service metadata and inserts any missing canonical services without overwriting existing admin choices."}
+                ? `Repairs ${EVENT_SERVICE_SEED_DEFINITIONS.length} canonical services (no duplicates).`
+                : "Repairs metadata + inserts missing canonical services."}
             </span>
           </div>
         )}

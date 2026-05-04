@@ -6,7 +6,7 @@ import type { DateRange, Matcher } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 import OrayaEmblem from "@/components/OrayaEmblem";
 import { getVillaBasePrice, getVillaPricing } from "@/lib/admin-pricing";
-import { ADDON_OPERATIONAL_SETTINGS_KEY, formatPreparationTime, getAddonEnforcementMode, getAddonTimingType, mergeAddonsWithOperationalSettings, parseAddonOperationalSetting, type AddonCategory, type AddonCutoffType, type AddonEnforcementMode, type AddonPricingType } from "@/lib/addon-operations";
+import { ADDON_OPERATIONAL_SETTINGS_KEY, formatPreparationTime, getAddonAppliesTo, getAddonEnforcementMode, getAddonTimingType, mergeAddonsWithOperationalSettings, parseAddonOperationalSetting, type AddonCategory, type AddonCutoffType, type AddonEnforcementMode, type AddonPricingType } from "@/lib/addon-operations";
 import { usePublicPricing } from "@/lib/public-pricing";
 import { calculateStayPricing } from "@/lib/pricing/engine";
 import { applyBedroomFactorToNightlyRates, computeBedroomFactor } from "@/lib/pricing/intelligence";
@@ -636,7 +636,11 @@ function BookPageInner() {
         const addonRows = Array.isArray(addonsData.addons) ? addonsData.addons as Addon[] : [];
         const operationalSettings = parseAddonOperationalSetting(addonSettingsData.value);
         setAddons(
-          mergeAddonsWithOperationalSettings(addonRows, operationalSettings).filter((addon) => addon.enabled),
+          mergeAddonsWithOperationalSettings(addonRows, operationalSettings).filter(
+            (addon) =>
+              addon.enabled &&
+              ["stay", "both"].includes(getAddonAppliesTo(addon.applies_to)),
+          ),
         );
       })
       .catch(() => setAddons([]))
