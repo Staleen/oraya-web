@@ -24,6 +24,7 @@ import {
   stripEventSetupEstimateFromMessage,
 } from "@/lib/event-inquiry-message";
 import { computeDefaultProposalValidUntilInputValue, computeProposalDepositFromTotal } from "@/lib/event-proposal-defaults";
+import { roundMoney, sumMoney } from "@/lib/money";
 import { formatPaymentMethodLabel as formatPaymentMethodLabelShared } from "@/lib/payment-method-labels";
 
 type BookingSectionKey = "pending" | "confirmed" | "cancelled";
@@ -81,8 +82,6 @@ type ProposalDraft = {
   optionalServices: string;
   proposalNotes: string;
   paymentMethods: string[];
-  /** When true, changing the line-item total does not recalculate deposit (admin overrode deposit). */
-  depositAutoSyncDisabled?: boolean;
   /** When true, do not replace payment deadline with the check-in −7 default (admin chose a date). */
   deadlineManuallyEdited?: boolean;
 };
@@ -308,17 +307,22 @@ function createCustomLineItemKey() {
   return `custom-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-/** Phase 15H — parse a number string for line-item math. Empty / invalid → 0. */
+/**
+ * Phase 15H — parse a number string for line-item math. Empty / invalid → 0.
+ * Phase 15H.1 — every parsed value is run through roundMoney so user input drives
+ * the same precision as the rest of the totals pipeline.
+ */
 function parseLineItemNumber(value: string): number {
   if (typeof value !== "string" || value.trim() === "") return 0;
   const n = Number(value);
-  return Number.isFinite(n) && n >= 0 ? n : 0;
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return roundMoney(n);
 }
 
-/** Phase 15H — line total = unit_price × quantity (rounded to cents). */
+/** Phase 15H.1 — line total = unit_price × quantity, 2-decimal safe. */
 function computeProposalLineTotal(unitPrice: number, quantity: number): number {
   if (!Number.isFinite(unitPrice) || !Number.isFinite(quantity)) return 0;
-  return Math.round(unitPrice * quantity * 100) / 100;
+  return roundMoney(unitPrice * quantity);
 }
 
 interface ProposalLineDraftLike {
@@ -327,14 +331,13 @@ interface ProposalLineDraftLike {
   included: boolean;
 }
 
-/** Phase 15H — proposal grand total = sum of line totals where `included === true`. */
+/** Phase 15H.1 — proposal grand total = sumMoney of line totals where `included === true`. */
 function sumProposalLineItemDrafts(lines: ProposalLineDraftLike[]): number {
-  let total = 0;
-  for (const line of lines) {
-    if (!line.included) continue;
-    total += computeProposalLineTotal(parseLineItemNumber(line.unitPrice), parseLineItemNumber(line.quantity));
-  }
-  return Math.round(total * 100) / 100;
+  return sumMoney(
+    lines
+      .filter((line) => line.included)
+      .map((line) => computeProposalLineTotal(parseLineItemNumber(line.unitPrice), parseLineItemNumber(line.quantity))),
+  );
 }
 
 function formatPaymentMethodLabel(value: string) {
@@ -1184,34 +1187,31 @@ export default function BookingsTable({
       }
     }
 
+    /**
+     * Phase 15H.1 — deposit prefill is FIRST DRAFT ONLY.
+     * If the booking already has a saved `proposal_deposit_amount`, use it as-is.
+     * Otherwise (new draft), seed at 50% of the computed total, rounded up to the nearest $100
+     * (`computeProposalDepositFromTotal`). After this seed runs, no auto-sync ever fires —
+     * `setProposalLineItems` doesn't touch the deposit.
+     */
     const computedTotal = sumProposalLineItemDrafts(lineItems);
-    const savedTotalNum =
-      typeof booking.proposal_total_amount === "number" && Number.isFinite(booking.proposal_total_amount)
-        ? booking.proposal_total_amount
-        : null;
-    const defaultDepositFromTotal =
-      computedTotal > 0 ? computeProposalDepositFromTotal(computedTotal) : null;
     const savedDepNum =
       typeof booking.proposal_deposit_amount === "number" && Number.isFinite(booking.proposal_deposit_amount)
         ? booking.proposal_deposit_amount
         : null;
+    const firstDraftDepositSeed =
+      computedTotal > 0 ? roundMoney(computeProposalDepositFromTotal(computedTotal)) : null;
     const defaultDeposit =
       savedDepNum != null
-        ? String(savedDepNum)
-        : defaultDepositFromTotal != null
-          ? String(defaultDepositFromTotal)
+        ? String(roundMoney(savedDepNum))
+        : firstDraftDepositSeed != null
+          ? String(firstDraftDepositSeed)
           : "";
     const persistedDeadline = toDateTimeLocalInput(booking.proposal_valid_until);
     const defaultValidUntil =
       persistedDeadline ||
       (isEventInquiryBooking(booking) && booking.check_in ? computeDefaultProposalValidUntilInputValue(booking.check_in) : "");
-    const depositAutoSyncDisabledInit =
-      savedDepNum != null &&
-      defaultDepositFromTotal != null &&
-      Math.round(savedDepNum) !== Math.round(defaultDepositFromTotal);
     const deadlineManuallyEditedInit = Boolean(persistedDeadline);
-    // If the saved proposal_total_amount existed but didn't match the line-item sum, treat the line-item sum as truth (it is now).
-    void savedTotalNum;
 
     return {
       lineItems,
@@ -1224,7 +1224,6 @@ export default function BookingsTable({
         Array.isArray(booking.proposal_payment_methods) && booking.proposal_payment_methods.length > 0
           ? booking.proposal_payment_methods
           : ["whish", "bank_transfer", "cash"],
-      depositAutoSyncDisabled: depositAutoSyncDisabledInit,
       deadlineManuallyEdited: deadlineManuallyEditedInit,
     };
   }
@@ -1547,19 +1546,17 @@ export default function BookingsTable({
     return { ok: true };
   }
 
-  /** Phase 15H — line-item draft mutations (centralized so the deposit auto-sync stays consistent). */
+  /**
+   * Phase 15H.1 — line-item draft mutations.
+   * Deposit is admin-controlled: prefilled once in `buildInitialProposalDraftFromBooking`
+   * and never touched again when line items change. The total recomputes; the deposit doesn't.
+   */
   function setProposalLineItems(
     booking: Booking,
     nextLineItems: ProposalLineItemDraft[],
     extraDraftPatch?: Partial<ProposalDraft>,
   ) {
-    const total = sumProposalLineItemDrafts(nextLineItems);
-    const draft = getProposalDraft(booking);
-    const patch: Partial<ProposalDraft> = { lineItems: nextLineItems, ...(extraDraftPatch ?? {}) };
-    if (!draft.depositAutoSyncDisabled) {
-      patch.depositAmount = total > 0 ? String(computeProposalDepositFromTotal(total)) : "";
-    }
-    updateProposalDraft(booking, patch);
+    updateProposalDraft(booking, { lineItems: nextLineItems, ...(extraDraftPatch ?? {}) });
   }
 
   function updateProposalLineItem(
@@ -2975,8 +2972,6 @@ export default function BookingsTable({
     // Phase 15H: live-computed totals + draft-level send validation drive the side panel + button state.
     const liveTotalNum = sumProposalLineItemDrafts(draft.lineItems);
     const liveDepositNum = parseAmountInput(draft.depositAmount);
-    const proposalTotal = liveTotalNum > 0 ? formatMoney(liveTotalNum) : formatMoney(booking.proposal_total_amount);
-    const proposalDeposit = formatMoney(booking.proposal_deposit_amount);
     const proposalPaymentMethods =
       Array.isArray(booking.proposal_payment_methods) && booking.proposal_payment_methods.length > 0
         ? booking.proposal_payment_methods
@@ -2985,6 +2980,134 @@ export default function BookingsTable({
     const originalRequestedServices = parseRequestedEventServicesFromMessage(booking.message);
     const sendValidation = validateProposalForSend(draft);
     const sendBlockedReason = sendValidation.ok ? null : sendValidation.error;
+
+    const includedLines = draft.lineItems.filter((line) => line.included);
+    const excludedLines = draft.lineItems.filter((line) => !line.included);
+    const subtotalRounded = roundMoney(liveTotalNum);
+    const finalTotalRounded = roundMoney(subtotalRounded);
+    const depositRounded =
+      liveDepositNum != null && Number.isFinite(liveDepositNum) ? roundMoney(liveDepositNum) : roundMoney(0);
+    const remainingBalanceRounded = roundMoney(Math.max(0, roundMoney(finalTotalRounded - depositRounded)));
+
+    const renderProposalLineCard = (line: ProposalLineItemDraft) => {
+      const lineUnit = parseLineItemNumber(line.unitPrice);
+      const lineQty = parseLineItemNumber(line.quantity);
+      const lineTotal = computeProposalLineTotal(lineUnit, lineQty);
+      return (
+        <div
+          key={line.key}
+          style={{
+            border: `0.5px solid ${line.included ? "rgba(157,183,217,0.32)" : "rgba(255,255,255,0.08)"}`,
+            backgroundColor: line.included ? "rgba(157,183,217,0.06)" : "rgba(255,255,255,0.015)",
+            padding: "10px 12px",
+            borderRadius: "8px",
+            display: "grid",
+            gap: "8px",
+            opacity: line.included ? 1 : 0.7,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", flexWrap: "wrap" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={line.included}
+                onChange={() => toggleProposalLineIncluded(booking, line.key)}
+                style={{ accentColor: GOLD, width: "14px", height: "14px", cursor: "pointer" }}
+              />
+              <span style={{ fontFamily: LATO, fontSize: "11px", color: line.included ? "#6fcf8a" : "#f2a7a7", textTransform: "uppercase", letterSpacing: "1px" }}>
+                {line.included ? "Included" : "Excluded"}
+              </span>
+              <span
+                style={{
+                  fontFamily: LATO,
+                  fontSize: "9px",
+                  letterSpacing: "1.2px",
+                  textTransform: "uppercase",
+                  color: line.source === "custom" ? GOLD : "#9db7d9",
+                  border: `0.5px solid ${line.source === "custom" ? "rgba(197,164,109,0.32)" : "rgba(157,183,217,0.32)"}`,
+                  padding: "2px 6px",
+                  borderRadius: "4px",
+                }}
+              >
+                {line.source === "custom" ? "Custom" : "Guest request"}
+              </span>
+            </label>
+            {line.source === "custom" ? (
+              <button
+                type="button"
+                onClick={() => removeProposalLineItem(booking, line.key)}
+                style={{
+                  fontFamily: LATO,
+                  fontSize: "10px",
+                  letterSpacing: "1.4px",
+                  textTransform: "uppercase",
+                  color: "#f2a7a7",
+                  backgroundColor: "transparent",
+                  border: "none",
+                  padding: 0,
+                  cursor: "pointer",
+                }}
+              >
+                Remove
+              </button>
+            ) : null}
+          </div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.1fr) auto",
+              gap: "8px",
+              alignItems: "center",
+            }}
+          >
+            <input
+              value={line.label}
+              onChange={(event) => updateProposalLineItem(booking, line.key, { label: event.target.value })}
+              placeholder="Service name"
+              style={fieldStyle}
+            />
+            <input
+              value={line.quantity}
+              onChange={(event) => updateProposalLineItem(booking, line.key, { quantity: event.target.value })}
+              placeholder="Qty"
+              inputMode="decimal"
+              style={fieldStyle}
+            />
+            <input
+              value={line.unitLabel}
+              onChange={(event) => updateProposalLineItem(booking, line.key, { unitLabel: event.target.value })}
+              placeholder="Unit (guest, hour…)"
+              style={fieldStyle}
+            />
+            <input
+              value={line.unitPrice}
+              onChange={(event) => updateProposalLineItem(booking, line.key, { unitPrice: event.target.value })}
+              placeholder="Unit price"
+              inputMode="decimal"
+              style={fieldStyle}
+            />
+            <span
+              style={{
+                fontFamily: LATO,
+                fontSize: "12px",
+                color: line.included ? GOLD : MUTED,
+                whiteSpace: "nowrap",
+                textAlign: "right",
+                minWidth: "80px",
+              }}
+            >
+              {formatMoney(roundMoney(lineTotal)) ?? "—"}
+            </span>
+          </div>
+          <input
+            value={line.notes}
+            onChange={(event) => updateProposalLineItem(booking, line.key, { notes: event.target.value })}
+            placeholder="Internal note (optional)"
+            style={{ ...fieldStyle, fontSize: "12px" }}
+          />
+        </div>
+      );
+    };
 
     return (
       <div
@@ -3178,21 +3301,24 @@ export default function BookingsTable({
               Proposal total (computed)
             </span>
             <span style={{ fontFamily: LATO, fontSize: "13px", color: liveTotalNum > 0 ? GOLD : MUTED }}>
-              {liveTotalNum > 0 ? formatMoney(liveTotalNum) : "Add line items below"}
+              {liveTotalNum > 0 ? formatMoney(roundMoney(liveTotalNum)) : "Add line items below"}
             </span>
           </div>
-          <input
-            value={draft.depositAmount}
-            onChange={(event) =>
-              updateProposalDraft(booking, {
-                depositAmount: event.target.value,
-                depositAutoSyncDisabled: true,
-              })
-            }
-            placeholder="Deposit amount"
-            inputMode="decimal"
-            style={fieldStyle}
-          />
+          {/* Phase 15H.1 — deposit is admin-controlled. Prefilled at 50% on first draft only. */}
+          <div style={{ display: "grid", gap: "4px" }}>
+            <input
+              value={draft.depositAmount}
+              onChange={(event) =>
+                updateProposalDraft(booking, { depositAmount: event.target.value })
+              }
+              placeholder="Deposit amount"
+              inputMode="decimal"
+              style={fieldStyle}
+            />
+            <span style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, lineHeight: 1.5 }}>
+              Suggested: 50% deposit (editable)
+            </span>
+          </div>
           <input
             type="datetime-local"
             value={draft.validUntil}
@@ -3229,8 +3355,8 @@ export default function BookingsTable({
             </button>
           </div>
           <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
-            Toggle <em>Include</em> off to keep a line on the proposal but exclude it from the total.
-            Custom rows can be removed entirely. Original guest request stays preserved below.
+            Toggle <em>Include</em> off to keep a line on the proposal but exclude it from the billable subtotal.
+            Optional / excluded lines stay editable and can be toggled back to included. Custom rows can be removed entirely. Original guest request stays preserved below.
           </p>
 
           {draft.lineItems.length === 0 ? (
@@ -3238,125 +3364,33 @@ export default function BookingsTable({
               No line items yet. Add a custom service or wait for guest-requested services to populate.
             </p>
           ) : (
-            <div style={{ display: "grid", gap: "8px" }}>
-              {draft.lineItems.map((line) => {
-                const lineUnit = parseLineItemNumber(line.unitPrice);
-                const lineQty = parseLineItemNumber(line.quantity);
-                const lineTotal = computeProposalLineTotal(lineUnit, lineQty);
-                return (
-                  <div
-                    key={line.key}
-                    style={{
-                      border: `0.5px solid ${line.included ? "rgba(157,183,217,0.32)" : "rgba(255,255,255,0.08)"}`,
-                      backgroundColor: line.included ? "rgba(157,183,217,0.06)" : "rgba(255,255,255,0.015)",
-                      padding: "10px 12px",
-                      borderRadius: "8px",
-                      display: "grid",
-                      gap: "8px",
-                      opacity: line.included ? 1 : 0.7,
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", flexWrap: "wrap" }}>
-                      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
-                        <input
-                          type="checkbox"
-                          checked={line.included}
-                          onChange={() => toggleProposalLineIncluded(booking, line.key)}
-                          style={{ accentColor: GOLD, width: "14px", height: "14px", cursor: "pointer" }}
-                        />
-                        <span style={{ fontFamily: LATO, fontSize: "11px", color: line.included ? "#6fcf8a" : "#f2a7a7", textTransform: "uppercase", letterSpacing: "1px" }}>
-                          {line.included ? "Included" : "Excluded"}
-                        </span>
-                        <span style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "1.2px", textTransform: "uppercase", color: line.source === "custom" ? GOLD : "#9db7d9", border: `0.5px solid ${line.source === "custom" ? "rgba(197,164,109,0.32)" : "rgba(157,183,217,0.32)"}`, padding: "2px 6px", borderRadius: "4px" }}>
-                          {line.source === "custom" ? "Custom" : "Guest request"}
-                        </span>
-                      </label>
-                      {line.source === "custom" ? (
-                        <button
-                          type="button"
-                          onClick={() => removeProposalLineItem(booking, line.key)}
-                          style={{
-                            fontFamily: LATO,
-                            fontSize: "10px",
-                            letterSpacing: "1.4px",
-                            textTransform: "uppercase",
-                            color: "#f2a7a7",
-                            backgroundColor: "transparent",
-                            border: "none",
-                            padding: 0,
-                            cursor: "pointer",
-                          }}
-                        >
-                          Remove
-                        </button>
-                      ) : null}
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.1fr) auto", gap: "8px", alignItems: "center" }}>
-                      <input
-                        value={line.label}
-                        onChange={(event) => updateProposalLineItem(booking, line.key, { label: event.target.value })}
-                        placeholder="Service name"
-                        style={fieldStyle}
-                      />
-                      <input
-                        value={line.quantity}
-                        onChange={(event) => updateProposalLineItem(booking, line.key, { quantity: event.target.value })}
-                        placeholder="Qty"
-                        inputMode="decimal"
-                        style={fieldStyle}
-                      />
-                      <input
-                        value={line.unitLabel}
-                        onChange={(event) => updateProposalLineItem(booking, line.key, { unitLabel: event.target.value })}
-                        placeholder="Unit (guest, hour…)"
-                        style={fieldStyle}
-                      />
-                      <input
-                        value={line.unitPrice}
-                        onChange={(event) => updateProposalLineItem(booking, line.key, { unitPrice: event.target.value })}
-                        placeholder="Unit price"
-                        inputMode="decimal"
-                        style={fieldStyle}
-                      />
-                      <span
-                        style={{
-                          fontFamily: LATO,
-                          fontSize: "12px",
-                          color: line.included ? GOLD : MUTED,
-                          whiteSpace: "nowrap",
-                          textAlign: "right",
-                          minWidth: "80px",
-                        }}
-                      >
-                        {formatMoney(lineTotal) ?? "—"}
-                      </span>
-                    </div>
-                    <input
-                      value={line.notes}
-                      onChange={(event) => updateProposalLineItem(booking, line.key, { notes: event.target.value })}
-                      placeholder="Internal note (optional)"
-                      style={{ ...fieldStyle, fontSize: "12px" }}
-                    />
-                  </div>
-                );
-              })}
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  border: "0.5px solid rgba(197,164,109,0.32)",
-                  backgroundColor: "rgba(197,164,109,0.06)",
-                  padding: "10px 12px",
-                  borderRadius: "8px",
-                }}
-              >
-                <span style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: GOLD }}>
-                  Proposal total
-                </span>
-                <span style={{ fontFamily: LATO, fontSize: "14px", color: GOLD }}>
-                  {liveTotalNum > 0 ? formatMoney(liveTotalNum) : "—"}
-                </span>
+            <div style={{ display: "grid", gap: "14px" }}>
+              <div style={{ display: "grid", gap: "8px" }}>
+                <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: "#6fcf8a", margin: 0 }}>
+                  Included services (billable)
+                </p>
+                {includedLines.length === 0 ? (
+                  <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
+                    No billable lines — turn <em>Include</em> on for rows below, or add a custom service.
+                  </p>
+                ) : (
+                  <div style={{ display: "grid", gap: "8px" }}>{includedLines.map((line) => renderProposalLineCard(line))}</div>
+                )}
+              </div>
+              <div style={{ display: "grid", gap: "8px" }}>
+                <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: "#9db7d9", margin: 0 }}>
+                  Optional / excluded services
+                </p>
+                <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: 0, lineHeight: 1.45 }}>
+                  Not included in subtotal. Still editable; use Include to move a line back to billable.
+                </p>
+                {excludedLines.length === 0 ? (
+                  <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
+                    No optional or excluded lines.
+                  </p>
+                ) : (
+                  <div style={{ display: "grid", gap: "8px" }}>{excludedLines.map((line) => renderProposalLineCard(line))}</div>
+                )}
               </div>
             </div>
           )}
@@ -3470,13 +3504,33 @@ export default function BookingsTable({
 
         <div
           style={{
+            border: "0.5px solid rgba(197,164,109,0.28)",
+            backgroundColor: "rgba(197,164,109,0.06)",
+            padding: "12px 14px",
+            borderRadius: "8px",
+            display: "grid",
+            gap: "10px",
+          }}
+        >
+          <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+            Totals breakdown
+          </p>
+          {renderRevenueEstimateRow("Subtotal (included line items)", formatMoney(subtotalRounded) ?? "—")}
+          {renderRevenueEstimateRow("Final total", formatMoney(finalTotalRounded) ?? "—")}
+          {renderRevenueEstimateRow(
+            "Deposit required (manual)",
+            liveDepositNum != null ? formatMoney(depositRounded) ?? "—" : "—",
+          )}
+          {renderRevenueEstimateRow("Remaining balance", formatMoney(remainingBalanceRounded) ?? "—")}
+        </div>
+
+        <div
+          style={{
             display: "grid",
             gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
             gap: "10px 16px",
           }}
         >
-          {renderRevenueEstimateRow("Proposal total (computed)", proposalTotal ?? "Not set")}
-          {renderRevenueEstimateRow("Proposal deposit", proposalDeposit ?? (liveDepositNum != null ? formatMoney(liveDepositNum) ?? "Not set" : "Not set"))}
           {renderRevenueEstimateRow("Payment deadline (valid until)", validUntil ?? "Not set")}
           {renderRevenueEstimateRow("Payment methods", proposalPaymentMethods.map((method) => formatPaymentMethodLabel(method)).join(", ") || "Not set")}
           {sentAt ? renderRevenueEstimateRow("Sent at", sentAt) : null}

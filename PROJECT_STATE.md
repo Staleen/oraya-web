@@ -641,13 +641,19 @@ Phase 15 — Production & growth readiness
 Phase 15H — Event Quote Line-Item Manager [COMPLETE]
 - **No schema change.** `proposal_included_services` is JSONB; new optional fields (`unit_price`, `line_total`, `source`, `notes`) added per-row. Server normalizer in `app/api/admin/bookings/[id]/route.ts` now accepts/validates them; legacy rows without the new fields keep working
 - **Admin quote builder (`components/admin/BookingsTable.tsx`):** new `ProposalLineItemDraft` working state replaces the old "checkbox + free-form total" model. Each row is editable (label / quantity / unit_label / unit price / internal note); guest-requested services seed in with `source: "requested"`, custom rows added via **+ Add custom service** carry `source: "custom"` and have a **Remove** action. Per-row **Include / Exclude** toggle: excluded rows persist with `admin_status: "declined"` and drop out of the total + the guest view
-- **Computed total:** proposal total is now read-only and derived from `sum of included line totals`. Deposit auto-syncs to 50% of the live total (15G.10 deposit-rounded-up rule preserved); manual deposit entry still disables auto-sync
+- **Computed total:** proposal total is now read-only and derived from `sum of included line totals`. Deposit is **manual** (admin-editable; suggested 50% copy only; no auto-sync to line total)
 - **Save / send (`saveEventProposalDraft`, `sendEventProposal`):** save persists every line (included + excluded) plus the computed total. Send runs `validateProposalForSend()` first — blocks on no included billable line, missing label, qty ≤ 0, missing/invalid unit price, total ≤ 0, deposit > total, no payment methods, no deadline. Yellow inline banner shows the blocking reason; the **Send proposal** button disables while invalid
 - **Original inquiry preserved:** `parseRequestedEventServicesFromMessage` snapshot rendered in a collapsed "Original guest request" `<details>` panel; never mutated by proposal edits
 - **Guest view (`app/booking/view/[token]/page.tsx`):** pricing table now reads admin-set `unit_price` / `line_total` directly (estimate fallback only for legacy proposals), shows `unit_label` next to the service name, and surfaces the **Final event total** in a footer row under the table; declined services are filtered out of the "Included services" chip list
 - **Email (`lib/send-event-proposal-email.ts` via `buildProposalEmailLineItems`):** same precedence — admin price wins, estimate fallback for legacy data; `unit_label`, `source`, `notes` carried through
 - No payment portal added; no auto-confirm; no auto-payment; stay booking flow / stay pricing / availability untouched
 - `npx tsc --noEmit` + `next build` pass
+  - **15H.1** Proposal Pricing Corrections [COMPLETE]
+    - Deposit is manual (no auto-sync)
+    - Rounding applied to all monetary values in the proposal breakdown (`roundMoney` / `sumMoney` for line math; breakdown rows use `roundMoney` for subtotal, final total, deposit, remaining balance)
+    - Included vs excluded services split in UI (two sections: **Included services (billable)** vs **Optional / excluded services**; same row editor + toggle; no duplicate `lineItems` state)
+    - Totals breakdown panel: Subtotal (included), Final total, Deposit required (manual), Remaining balance = final − deposit
+    - No booking/payment API/email/guest proposal logic changed in this step
 
 Phase 15 remains active.
 
