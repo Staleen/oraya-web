@@ -350,7 +350,10 @@ export default async function BookingViewPage({
     estimatedTotal !== null
       ? Math.max(0, estimatedTotal - (amountPaid ?? 0))
       : null;
-  const proposalIncludedServices = Array.isArray(booking.proposal_included_services) ? booking.proposal_included_services : [];
+  // Phase 15H — guests only see services the admin actually included (admin_status === "approved" or unset).
+  // Declined lines stay persisted for admin audit but never surface here.
+  const proposalIncludedServices = (Array.isArray(booking.proposal_included_services) ? booking.proposal_included_services : [])
+    .filter((service) => service?.admin_status !== "declined");
   const proposalPaymentMethods = Array.isArray(booking.proposal_payment_methods) ? booking.proposal_payment_methods : [];
   const proposalPricingRows = buildProposalEmailLineItems(
     proposalIncludedServices,
@@ -686,12 +689,38 @@ export default async function BookingViewPage({
                             lineHeight: 1.45,
                           }}
                         >
-                          <span style={{ minWidth: 0 }}>{row.label}</span>
+                          <span style={{ minWidth: 0 }}>
+                            {row.label}
+                            {row.unit_label ? (
+                              <span style={{ color: MUTED, fontSize: "11px", marginLeft: "6px" }}>
+                                · {row.unit_label}
+                              </span>
+                            ) : null}
+                          </span>
                           <span style={{ textAlign: "right" }}>{row.quantity}</span>
                           <span style={{ textAlign: "right", color: MUTED }}>{formatMoney(row.unit_price)}</span>
                           <span style={{ textAlign: "right", color: GOLD }}>{formatMoney(row.line_total)}</span>
                         </div>
                       ))}
+                      {/* Phase 15H — show the proposal grand total directly under the line table. */}
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr auto",
+                          gap: "8px",
+                          padding: "12px 0 0",
+                          borderTop: "0.5px solid rgba(197,164,109,0.28)",
+                          marginTop: "4px",
+                          fontFamily: LATO,
+                        }}
+                      >
+                        <span style={{ fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED }}>
+                          Final event total
+                        </span>
+                        <span style={{ fontSize: "14px", color: GOLD, textAlign: "right" }}>
+                          {proposalTotal !== null ? formatMoney(proposalTotal) : "—"}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 )}

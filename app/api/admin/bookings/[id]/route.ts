@@ -366,6 +366,35 @@ export async function PATCH(
           } else {
             throw new Error("Invalid proposal_included_services value.");
           }
+          // Phase 15H — line-item pricing fields. All optional; null clears.
+          if (service.unit_price === null || service.unit_price === undefined || service.unit_price === "") {
+            nextService.unit_price = null;
+          } else if (typeof service.unit_price === "number" && Number.isFinite(service.unit_price) && service.unit_price >= 0) {
+            nextService.unit_price = service.unit_price;
+          } else {
+            throw new Error("Invalid proposal_included_services value.");
+          }
+          if (service.line_total === null || service.line_total === undefined || service.line_total === "") {
+            nextService.line_total = null;
+          } else if (typeof service.line_total === "number" && Number.isFinite(service.line_total) && service.line_total >= 0) {
+            nextService.line_total = service.line_total;
+          } else {
+            throw new Error("Invalid proposal_included_services value.");
+          }
+          if (service.source === undefined || service.source === null || service.source === "") {
+            nextService.source = null;
+          } else if (service.source === "requested" || service.source === "custom") {
+            nextService.source = service.source;
+          } else {
+            throw new Error("Invalid proposal_included_services value.");
+          }
+          if (service.notes === undefined || service.notes === null || service.notes === "") {
+            nextService.notes = null;
+          } else if (typeof service.notes === "string") {
+            nextService.notes = service.notes.trim() || null;
+          } else {
+            throw new Error("Invalid proposal_included_services value.");
+          }
           return nextService;
         });
         updatePayload.proposal_included_services = normalized;

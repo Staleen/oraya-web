@@ -76,6 +76,14 @@ export interface BookingProposalIncludedService {
   unit_label?: string | null;
   /** Admin review: omitted or "approved" = included in proposal; "declined" excludes from guest-facing proposal. */
   admin_status?: "approved" | "declined" | null;
+  /** Phase 15H — admin-set unit price for the line. Source of truth when present. */
+  unit_price?: number | null;
+  /** Phase 15H — admin-confirmed line total (= unit_price × quantity). Persisted so guest view doesn't recompute. */
+  line_total?: number | null;
+  /** Phase 15H — origin of the line: "requested" (from guest inquiry) or "custom" (added by admin). */
+  source?: "requested" | "custom" | null;
+  /** Phase 15H — optional admin note attached to the line. */
+  notes?: string | null;
 }
 
 export interface Booking {
