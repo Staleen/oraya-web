@@ -1,6 +1,11 @@
 import { Resend } from "resend";
 import { LOGO_URL } from "@/lib/brand";
 import { formatBeirutDateTime } from "@/lib/format-date";
+import {
+  isEventInquiryPayload,
+  parseEventSetupEstimateFromMessage,
+  type EventSetupEstimatePayload,
+} from "@/lib/event-inquiry-message";
 import { transactionalEmailFooterHtmlBlock, transactionalEmailFooterTextSuffix } from "@/lib/transactional-email-footer";
 
 const GOLD    = "#C5A46D";
@@ -43,6 +48,135 @@ function parseAmount(value: unknown): number | null {
 
 function formatMoney(value: number): string {
   return `${CURRENCY} ${Math.round(value).toLocaleString("en-US")}`;
+}
+
+function formatEventEstimateMoney(value: number): string {
+  return `${CURRENCY} ${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function buildEventInquiryFinancialHtml(params: {
+  eventEstimate: EventSetupEstimatePayload | null;
+  staySubtotal: number | null;
+  addonsTotal: number | null;
+  addonRows: Array<{ label: string; price: number | null }>;
+}): string {
+  const { eventEstimate, staySubtotal, addonsTotal, addonRows } = params;
+  const pk = eventEstimate?.pack_keys ?? [];
+  const rec = eventEstimate?.recommended_subtotal;
+  const upg = eventEstimate?.upgrades_subtotal;
+  const showBreakdown =
+    Boolean(eventEstimate) &&
+    pk.length > 0 &&
+    typeof rec === "number" &&
+    typeof upg === "number";
+
+  const estimateRows: [string, string][] = [];
+  if (showBreakdown) {
+    estimateRows.push(["Recommended setup (estimate)", formatEventEstimateMoney(rec!)]);
+    if (upg! > 0) {
+      estimateRows.push(["Optional upgrades selected (estimate)", formatEventEstimateMoney(upg!)]);
+    }
+  }
+  estimateRows.push([
+    "Estimated event setup total",
+    eventEstimate ? formatEventEstimateMoney(eventEstimate.total) : "Not available",
+  ]);
+
+  const estimateRowsHtml = estimateRows
+    .map(
+      ([label, value]) => `
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-top:0.5px solid rgba(255,255,255,0.05);">
+      <tr>
+        <td style="padding:9px 0 0;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:${MUTED};">
+          ${escapeHtml(label)}
+        </td>
+        <td align="right" style="padding:9px 0 0;font-size:13px;color:#ffffff;font-weight:300;">
+          ${escapeHtml(value)}
+        </td>
+      </tr>
+    </table>`,
+    )
+    .join("");
+
+  const lines = eventEstimate?.lines ?? [];
+  const servicesTable =
+    lines.length === 0
+      ? ""
+      : `
+    <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="border:0.5px solid rgba(197,164,109,0.18);padding:22px 24px;margin-top:16px;">
+      <p style="margin:0 0 14px;font-size:9px;letter-spacing:3px;text-transform:uppercase;color:${GOLD};">
+        Selected services
+      </p>
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-bottom:0.5px solid rgba(255,255,255,0.08);margin-bottom:8px;">
+        <tr>
+          <td style="padding:6px 0;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:${MUTED};">Service</td>
+          <td style="padding:6px 0;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:${MUTED};">Qty</td>
+          <td align="right" style="padding:6px 0;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:${MUTED};">Unit</td>
+          <td align="right" style="padding:6px 0;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:${MUTED};">Subtotal</td>
+        </tr>
+      </table>
+      ${lines
+        .map(
+          (row) => `
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-top:0.5px solid rgba(255,255,255,0.05);">
+        <tr>
+          <td style="padding:8px 0;font-size:13px;color:#ffffff;">${escapeHtml(row.label)}</td>
+          <td style="padding:8px 0;font-size:12px;color:${MUTED};">×${escapeHtml(String(row.quantity))}</td>
+          <td align="right" style="padding:8px 0;font-size:12px;color:${MUTED};">${escapeHtml(formatEventEstimateMoney(row.unit_price))}</td>
+          <td align="right" style="padding:8px 0;font-size:13px;color:#ffffff;">${escapeHtml(formatEventEstimateMoney(row.line_total))}</td>
+        </tr>
+      </table>`,
+        )
+        .join("")}
+    </td></tr></table>`;
+
+  const stayRows: [string, string][] = [];
+  if (staySubtotal !== null) {
+    stayRows.push(["Villa nights (reference, non-binding)", formatMoney(staySubtotal)]);
+  }
+  if (addonRows.length > 0) {
+    stayRows.push([
+      "Villa add-ons total (reference)",
+      addonsTotal !== null ? formatMoney(addonsTotal) : "Price on request",
+    ]);
+  }
+  const stayRefHtml =
+    stayRows.length === 0
+      ? ""
+      : `
+    <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="border:0.5px solid rgba(255,255,255,0.12);padding:22px 24px;background-color:rgba(255,255,255,0.02);margin-top:16px;">
+      <p style="margin:0 0 14px;font-size:9px;letter-spacing:3px;text-transform:uppercase;color:${MUTED};">
+        Host overnight stay reference
+      </p>
+      ${stayRows
+        .map(
+          ([label, value]) => `
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-top:0.5px solid rgba(255,255,255,0.05);">
+        <tr>
+          <td style="padding:9px 0 0;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:${MUTED};">
+            ${escapeHtml(label)}
+          </td>
+          <td align="right" style="padding:9px 0 0;font-size:13px;color:#ffffff;font-weight:300;">
+            ${escapeHtml(value)}
+          </td>
+        </tr>
+      </table>`,
+        )
+        .join("")}
+    </td></tr></table>`;
+
+  return `
+    <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="border:0.5px solid rgba(197,164,109,0.18);padding:22px 24px;background-color:rgba(197,164,109,0.04);">
+      <p style="margin:0 0 14px;font-size:9px;letter-spacing:3px;text-transform:uppercase;color:${GOLD};">
+        Event setup (estimate)
+      </p>
+      <p style="margin:0 0 12px;font-size:11px;line-height:1.65;color:${MUTED};">
+        Starting from · non-binding. Final proposal will be confirmed by Oraya after review.
+      </p>
+      ${estimateRowsHtml}
+    </td></tr></table>
+    ${servicesTable}
+    ${stayRefHtml}`;
 }
 
 function sumAddonPrices(addons: Array<{ price: number | null }>): number | null {
@@ -156,25 +290,42 @@ export async function sendBookingRequestEmail(
         same_day_warning: null,
       }))
   );
-  const staySubtotal = parseAmount(payload.pricing_snapshot?.subtotal ?? payload.pricing_subtotal);
+  const snap = payload.pricing_snapshot as { adjusted_stay_subtotal?: unknown; subtotal?: unknown } | undefined;
+  const staySubtotal = parseAmount(snap?.adjusted_stay_subtotal ?? snap?.subtotal ?? payload.pricing_subtotal);
   const addonsTotal = sumAddonPrices(addonRows);
   const estimatedTotal = staySubtotal !== null && addonsTotal !== null
     ? staySubtotal + addonsTotal
     : null;
 
-  const rows: [string, string][] = [
-    ["Reference",       ref],
-    ["Name",            payload.requester_name],
-    ["Email",           payload.requester_email],
-    ...(payload.requester_phone ? [["Phone", payload.requester_phone] as [string, string]] : []),
-    ["Villa",           payload.villa],
-    ["Check-in",        fmtDate(payload.check_in)],
-    ["Check-out",       fmtDate(payload.check_out)],
-    ["Sleeping guests", String(payload.sleeping_guests)],
-    ["Day visitors",    String(payload.day_visitors)],
-    ...(payload.event_type ? [["Event type", payload.event_type] as [string, string]] : []),
-    ["Submitted",       formatBeirutDateTime(payload.created_at)],
-  ];
+  const isEventInquiry = isEventInquiryPayload(payload.event_type, payload.message);
+  const eventEstimate = isEventInquiry ? parseEventSetupEstimateFromMessage(payload.message) : null;
+
+  const rows: [string, string][] = isEventInquiry
+    ? [
+        ["Reference", ref],
+        ["Name", payload.requester_name],
+        ["Email", payload.requester_email],
+        ...(payload.requester_phone ? [["Phone", payload.requester_phone] as [string, string]] : []),
+        ["Event type", payload.event_type ?? "—"],
+        ["Villa", payload.villa],
+        ["Preferred dates", `${fmtDate(payload.check_in)} → ${fmtDate(payload.check_out)}`],
+        ["Expected attendees", String(payload.day_visitors)],
+        ["Overnight hosts", String(payload.sleeping_guests)],
+        ["Submitted", formatBeirutDateTime(payload.created_at)],
+      ]
+    : [
+        ["Reference", ref],
+        ["Name", payload.requester_name],
+        ["Email", payload.requester_email],
+        ...(payload.requester_phone ? [["Phone", payload.requester_phone] as [string, string]] : []),
+        ["Villa", payload.villa],
+        ["Check-in", fmtDate(payload.check_in)],
+        ["Check-out", fmtDate(payload.check_out)],
+        ["Sleeping guests", String(payload.sleeping_guests)],
+        ["Day visitors", String(payload.day_visitors)],
+        ...(payload.event_type ? [["Event type", payload.event_type] as [string, string]] : []),
+        ["Submitted", formatBeirutDateTime(payload.created_at)],
+      ];
 
   const rowsHtml = rows.map(([label, value]) => `
     <table width="100%" cellpadding="0" cellspacing="0"
@@ -226,20 +377,32 @@ export async function sendBookingRequestEmail(
       `).join("")}
     </td></tr></table>`;
 
+  const eventInquiryPaymentHtml = buildEventInquiryFinancialHtml({
+    eventEstimate,
+    staySubtotal,
+    addonsTotal,
+    addonRows,
+  });
+
+  const topPaymentHtml = isEventInquiry ? eventInquiryPaymentHtml : paymentHtml;
+
+  const addonSectionTitle = isEventInquiry ? "Villa add-ons" : "Add-ons";
+  const addonSectionEmpty = isEventInquiry ? "No villa add-ons for this inquiry." : "No add-ons selected.";
+
   const addonsHtml = addonRows.length === 0
     ? `
       <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="border:0.5px solid rgba(197,164,109,0.18);padding:22px 24px;">
         <p style="margin:0 0 14px;font-size:9px;letter-spacing:3px;text-transform:uppercase;color:${GOLD};">
-          Add-ons
+          ${addonSectionTitle}
         </p>
         <p style="margin:0;font-size:13px;line-height:1.75;color:#ffffff;">
-          No add-ons selected.
+          ${addonSectionEmpty}
         </p>
       </td></tr></table>`
     : `
       <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="border:0.5px solid rgba(197,164,109,0.18);padding:22px 24px;">
         <p style="margin:0 0 14px;font-size:9px;letter-spacing:3px;text-transform:uppercase;color:${GOLD};">
-          Add-ons
+          ${addonSectionTitle}
         </p>
         ${addonRows.map((addon) => {
           const lines = [
@@ -314,12 +477,66 @@ export async function sendBookingRequestEmail(
          </td></tr>`
       : "";
 
+  const emailTitle = isEventInquiry ? "New Event Inquiry" : "New Booking Request";
+  const eyebrowText = isEventInquiry ? "New Event Inquiry Submitted" : "New Booking Request";
+  const headingHtml = isEventInquiry
+    ? `A new event inquiry has been<br/><em>submitted for review.</em>`
+    : `A new booking request has been<br/><em>submitted for review.</em>`;
+  const detailsCardLabel = isEventInquiry ? "Event inquiry" : "Booking Details";
+
+  const subjectPrefix = isEventInquiry ? "Oraya - New event inquiry" : "Oraya - New Booking Request";
+  const subject = `${subjectPrefix} [${ref}]`;
+
+  const eventPaymentTextLines: string[] = isEventInquiry
+    ? (() => {
+        const lines: string[] = [];
+        const pk = eventEstimate?.pack_keys ?? [];
+        const rec = eventEstimate?.recommended_subtotal;
+        const upg = eventEstimate?.upgrades_subtotal;
+        if (eventEstimate && pk.length > 0 && typeof rec === "number" && typeof upg === "number") {
+          lines.push(`Recommended setup (estimate): ${formatEventEstimateMoney(rec)}`);
+          if (upg > 0) {
+            lines.push(`Optional upgrades selected (estimate): ${formatEventEstimateMoney(upg)}`);
+          }
+        }
+        lines.push(
+          `Estimated event setup total: ${
+            eventEstimate ? formatEventEstimateMoney(eventEstimate.total) : "Not available"
+          }`,
+        );
+        if (staySubtotal !== null) {
+          lines.push(`Villa nights (reference, non-binding): ${formatMoney(staySubtotal)}`);
+        }
+        if (addonRows.length > 0) {
+          lines.push(
+            `Villa add-ons total (reference): ${
+              addonsTotal !== null ? formatMoney(addonsTotal) : "Price on request"
+            }`,
+          );
+        }
+        if (eventEstimate?.lines?.length) {
+          lines.push("", "Selected services:");
+          for (const row of eventEstimate.lines) {
+            lines.push(
+              `  - ${row.label} ×${row.quantity} @ ${formatEventEstimateMoney(row.unit_price)} → ${formatEventEstimateMoney(row.line_total)}`,
+            );
+          }
+        }
+        return lines;
+      })()
+    : [];
+
+  const paymentSummaryLabel = isEventInquiry ? "Event setup (estimate):" : "Payment Summary:";
+  const textIntro = isEventInquiry
+    ? "A new event inquiry has been submitted for review."
+    : "A new booking request has been submitted for review.";
+
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>New Booking Request</title>
+  <title>${emailTitle}</title>
 </head>
 <body style="margin:0;padding:0;background-color:${MIDNIGHT};
              font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
@@ -346,13 +563,13 @@ export async function sendBookingRequestEmail(
         <!-- Eyebrow -->
         <tr><td align="center" style="padding-bottom:12px;">
           <p style="margin:0;font-size:10px;letter-spacing:4px;
-                    text-transform:uppercase;color:${GOLD};">New Booking Request</p>
+                    text-transform:uppercase;color:${GOLD};">${eyebrowText}</p>
         </td></tr>
 
         <!-- Heading -->
         <tr><td align="center" style="padding-bottom:24px;">
           <h1 style="margin:0;font-size:24px;font-weight:400;color:#ffffff;line-height:1.35;">
-            A new booking request has been<br/><em>submitted for review.</em>
+            ${headingHtml}
           </h1>
         </td></tr>
 
@@ -364,11 +581,11 @@ export async function sendBookingRequestEmail(
         <!-- Details card -->
         <tr><td style="border:0.5px solid rgba(197,164,109,0.2);padding:28px;">
           <p style="margin:0 0 20px;font-size:9px;letter-spacing:3px;
-                    text-transform:uppercase;color:${GOLD};">Booking Details</p>
+                    text-transform:uppercase;color:${GOLD};">${detailsCardLabel}</p>
           ${rowsHtml}
         </td></tr>
 
-        <tr><td style="padding-top:16px;">${paymentHtml}</td></tr>
+        <tr><td style="padding-top:16px;">${topPaymentHtml}</td></tr>
 
         <tr><td style="padding-top:16px;">${notesHtml}</td></tr>
 
@@ -389,20 +606,20 @@ export async function sendBookingRequestEmail(
 </html>`;
 
   const text = [
-    `Oraya - New Booking Request [${ref}]`,
+    subject,
     "",
-    "A new booking request has been submitted for review.",
+    textIntro,
     "",
     ...rows.map(([label, value]) => `${label}: ${value.replace(/<[^>]+>/g, "")}`),
     "",
-    "Payment Summary:",
-    ...paymentRows.map(([label, value]) => `${label}: ${value}`),
+    paymentSummaryLabel,
+    ...(isEventInquiry ? eventPaymentTextLines : paymentRows.map(([label, value]) => `${label}: ${value}`)),
     "",
     `Special Request / Notes: ${noteText}`,
     "",
-    "Add-ons:",
+    `${addonSectionTitle}:`,
     ...(addonRows.length === 0
-      ? ["- No add-ons selected."]
+      ? [`- ${addonSectionEmpty}`]
       : addonRows.flatMap((addon) => {
           const lines = [
             `- ${addon.label}`,
@@ -425,7 +642,7 @@ export async function sendBookingRequestEmail(
     from:    FROM_EMAIL,
     to:      payload.recipients,
     replyTo: REPLY_TO,
-    subject: `Oraya - New Booking Request [${ref}]`,
+    subject,
     html,
     text,
   });

@@ -1,6 +1,16 @@
 /** Structured event setup estimate appended to booking `message` (no schema change). */
 
+export const EVENT_INQUIRY_MARKER = "[Event Inquiry]";
+
 export const EVENT_SETUP_ESTIMATE_PREFIX = "[EventSetupEstimate]";
+
+/** Matches admin/API classification: canonical event type plus structured inquiry marker in notes. */
+export function isEventInquiryPayload(
+  eventType: string | null | undefined,
+  message: string | null | undefined,
+): boolean {
+  return Boolean(eventType?.trim()) && typeof message === "string" && message.includes(EVENT_INQUIRY_MARKER);
+}
 
 export type EventSetupEstimateLine = {
   label: string;
@@ -15,6 +25,12 @@ export type EventSetupEstimatePayload = {
   currency: string;
   total: number;
   lines: EventSetupEstimateLine[];
+  /** Catalog keys included in the last "Add recommended" apply (for guest breakdown). */
+  pack_keys?: string[];
+  /** Subtotal for pack keys still selected (optional; older inquiries omit). */
+  recommended_subtotal?: number;
+  /** Subtotal for selected services not in the pack (optional). */
+  upgrades_subtotal?: number;
 };
 
 export function parseEventSetupEstimateFromMessage(message: string | null | undefined): EventSetupEstimatePayload | null {

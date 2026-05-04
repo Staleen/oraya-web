@@ -30,6 +30,14 @@ import {
   MAX_EVENT_ATTENDEES,
   type EventServicePricingRow,
 } from "@/lib/event-inquiry-pricing";
+import {
+  buildRecommendedQuantities,
+  catalogKeysForSeedIds,
+  canonicalSeedIdForCatalogRow,
+  getSeedIdsToClearWhenSelecting,
+  resolveRecommendedPackSeedIds,
+  type CatalogRow,
+} from "@/lib/event-service-exclusivity";
 
 // ─── Brand constants ──────────────────────────────────────────────────────────
 const GOLD     = "#C5A46D";
@@ -439,6 +447,71 @@ function StepIndicator({ step }: { step: number }) {
   );
 }
 
+function EventEstimatePanel({
+  estimate,
+  totalFontSize = "22px",
+}: {
+  estimate: EventSetupEstimatePayload;
+  totalFontSize?: string;
+}) {
+  const cur = estimate.currency;
+  const fmt = (n: number) =>
+    n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const pk = estimate.pack_keys ?? [];
+  const rec = estimate.recommended_subtotal;
+  const upg = estimate.upgrades_subtotal;
+  const showBreakdown =
+    pk.length > 0 && typeof rec === "number" && typeof upg === "number";
+
+  return (
+    <div
+      style={{
+        border: "0.5px solid rgba(197,164,109,0.22)",
+        backgroundColor: "rgba(255,255,255,0.025)",
+        padding: "16px 18px",
+        display: "flex",
+        flexDirection: "column",
+        gap: "10px",
+      }}
+    >
+      <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2.5px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+        Estimated event setup
+      </p>
+      <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0 }}>Starting from</p>
+      {showBreakdown ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+          <p style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.88)", margin: 0 }}>
+            Recommended setup: {cur} {fmt(rec)}
+          </p>
+          {upg > 0 ? (
+            <p style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.88)", margin: 0 }}>
+              Optional upgrades selected: {cur} {fmt(upg)}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+      <p
+        style={{
+          fontFamily: LATO,
+          fontSize: "10px",
+          letterSpacing: "1.5px",
+          textTransform: "uppercase",
+          color: MUTED,
+          margin: "4px 0 0",
+        }}
+      >
+        Estimated total
+      </p>
+      <p style={{ fontFamily: PLAYFAIR, fontSize: totalFontSize, fontWeight: 400, color: WHITE, margin: 0 }}>
+        {cur} {fmt(estimate.total)}
+      </p>
+      <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.65 }}>
+        Final proposal will be confirmed by Oraya after review. This is an estimate only, not a final quote.
+      </p>
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 function EventInquiryPageInner() {
   const router = useRouter();
@@ -461,6 +534,8 @@ function EventInquiryPageInner() {
 
   const [managedEventServices, setManagedEventServices] = useState<EventServiceOption[]>([]);
   const [selectedServiceQuantities, setSelectedServiceQuantities] = useState<Record<string, number>>({});
+  /** Catalog keys last applied via "Add recommended" (for estimate breakdown). */
+  const [recommendedPackKeys, setRecommendedPackKeys] = useState<string[]>([]);
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
   const [guest, setGuest] = useState({
@@ -766,6 +841,15 @@ function EventInquiryPageInner() {
       .filter((entry): entry is { service: EventServiceOption; quantity: number } => entry !== null);
   }, [eventServiceCatalog, selectedServiceQuantities]);
 
+  const catalogRowsForExclusivity: CatalogRow[] = useMemo(
+    () => eventServiceCatalog.map((s) => ({ id: s.id, label: s.label, key: s.key })),
+    [eventServiceCatalog],
+  );
+
+  useEffect(() => {
+    setRecommendedPackKeys((prev) => prev.filter((k) => k in selectedServiceQuantities));
+  }, [selectedServiceQuantities]);
+
   const checkIn = dateRange?.from ? toISO(dateRange.from) : "";
   const checkOut = dateRange?.to ? toISO(dateRange.to) : "";
   const nights = nightCount(checkIn, checkOut);
@@ -804,12 +888,17 @@ function EventInquiryPageInner() {
     const lines: EventSetupEstimatePayload["lines"] = [];
     let total = 0;
     let currency = "USD";
+    const packKeySet = new Set(recommendedPackKeys.filter((k) => k in selectedServiceQuantities));
+    let recommendedSubtotal = 0;
+    let upgradesSubtotal = 0;
     for (const { service, quantity } of selectedEventServices) {
       if (service.currency) currency = service.currency;
       const row = service as unknown as EventServicePricingRow;
       const lineRaw = computeEventServiceLineSubtotal(row, quantity, nights);
       const line = Math.round(lineRaw * 100) / 100;
       total += line;
+      if (packKeySet.size > 0 && packKeySet.has(service.key)) recommendedSubtotal += line;
+      else upgradesSubtotal += line;
       const qtyDisplay = service.quantity_enabled ? quantity : 1;
       const unitPrice =
         service.quantity_enabled && qtyDisplay > 0
@@ -825,8 +914,21 @@ function EventInquiryPageInner() {
         pricing_model: service.pricing_model,
       });
     }
-    return { version: 1, currency, total: Math.round(total * 100) / 100, lines };
-  }, [selectedEventServices, nights]);
+    const roundedTotal = Math.round(total * 100) / 100;
+    const packKeysPersist = Array.from(packKeySet);
+    const base: EventSetupEstimatePayload = {
+      version: 1,
+      currency,
+      total: roundedTotal,
+      lines,
+    };
+    if (packKeysPersist.length > 0) {
+      base.pack_keys = packKeysPersist;
+      base.recommended_subtotal = Math.round(recommendedSubtotal * 100) / 100;
+      base.upgrades_subtotal = Math.round(upgradesSubtotal * 100) / 100;
+    }
+    return base;
+  }, [selectedEventServices, nights, recommendedPackKeys, selectedServiceQuantities]);
 
   const guestEmail = guest.email.trim();
   const guestEmailInvalid = authStatus !== "member" && guestEmail.length > 0 && !EMAIL_RE.test(guestEmail);
@@ -906,10 +1008,20 @@ function EventInquiryPageInner() {
         const { [service.key]: _removed, ...rest } = previous;
         return rest;
       }
-      return {
-        ...previous,
-        [service.key]: getInitialQuantityForEventService(service, effectiveAttendees),
-      };
+      const qty = getInitialQuantityForEventService(service, effectiveAttendees);
+      let next: Record<string, number> = { ...previous, [service.key]: qty };
+      const sid = canonicalSeedIdForCatalogRow(service);
+      if (sid) {
+        const removeSeedIds = getSeedIdsToClearWhenSelecting(sid);
+        const clearKeys = new Set(catalogKeysForSeedIds(catalogRowsForExclusivity, removeSeedIds));
+        for (const ck of Array.from(clearKeys)) {
+          if (ck !== service.key) {
+            delete next[ck];
+            quantityManuallyAdjustedRef.current.delete(ck);
+          }
+        }
+      }
+      return next;
     });
   }
 
@@ -926,15 +1038,31 @@ function EventInquiryPageInner() {
     }));
   }
 
-  function addRecommendedServices(services: EventServiceOption[]) {
-    setSelectedServiceQuantities((previous) => {
-      const next = { ...previous };
-      for (const service of services) {
-        if (!(service.key in next)) {
-          next[service.key] = getInitialQuantityForEventService(service, effectiveAttendees);
+  function addRecommendedPack() {
+    if (!form.eventType) {
+      setError("Please choose an event type before adding a recommended setup.");
+      return;
+    }
+    const normalized = normalizeEventType(form.eventType);
+    const seedPack = resolveRecommendedPackSeedIds(normalized);
+    const quantities = buildRecommendedQuantities(catalogRowsForExclusivity, seedPack, effectiveAttendees);
+    const packKeyList = Object.keys(quantities);
+    setRecommendedPackKeys(packKeyList);
+    setSelectedServiceQuantities((prev) => {
+      const toRemove = new Set<string>();
+      for (const sid of Array.from(seedPack)) {
+        for (const rid of Array.from(getSeedIdsToClearWhenSelecting(sid))) {
+          for (const ck of catalogKeysForSeedIds(catalogRowsForExclusivity, new Set([rid]))) {
+            toRemove.add(ck);
+          }
         }
       }
-      return next;
+      const next = { ...prev };
+      for (const k of Array.from(toRemove)) {
+        if (!(k in quantities)) delete next[k];
+      }
+      quantityManuallyAdjustedRef.current.clear();
+      return { ...next, ...quantities };
     });
     setError("");
   }
@@ -1256,12 +1384,12 @@ function EventInquiryPageInner() {
                     {selectedEventRecommendation.recommendedServices.length > 0 && (
                       <button
                         type="button"
-                        onClick={() => addRecommendedServices(selectedEventRecommendation.recommendedServices)}
+                        onClick={addRecommendedPack}
                         style={{ alignSelf: "flex-start", fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: CHARCOAL, backgroundColor: GOLD, border: "none", padding: "11px 18px", cursor: "pointer" }}
                         onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
                         onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
                       >
-                        Add recommended services
+                        Add recommended setup
                       </button>
                     )}
                   </div>
@@ -1502,20 +1630,7 @@ function EventInquiryPageInner() {
                 </p>
               </div>
 
-              {eventSetupEstimate && (
-                <div style={{ border: "0.5px solid rgba(197,164,109,0.22)", backgroundColor: "rgba(255,255,255,0.025)", padding: "16px 18px", display: "flex", flexDirection: "column", gap: "10px" }}>
-                  <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2.5px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
-                    Estimated event setup total
-                  </p>
-                  <p style={{ fontFamily: PLAYFAIR, fontSize: "22px", fontWeight: 400, color: WHITE, margin: 0 }}>
-                    {eventSetupEstimate.currency}{" "}
-                    {eventSetupEstimate.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </p>
-                  <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.65 }}>
-                    Final proposal will be confirmed by Oraya after review. This is an estimate only, not a final quote.
-                  </p>
-                </div>
-              )}
+              {eventSetupEstimate && <EventEstimatePanel estimate={eventSetupEstimate} />}
 
               {error && (
                 <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070", textAlign: "center", lineHeight: 1.6, margin: 0 }}>
@@ -1694,20 +1809,7 @@ function EventInquiryPageInner() {
                 </div>
               </div>
 
-              {eventSetupEstimate && (
-                <div style={{ border: "0.5px solid rgba(197,164,109,0.22)", backgroundColor: "rgba(197,164,109,0.04)", padding: "16px 20px" }}>
-                  <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 10px" }}>
-                    Estimated event setup total
-                  </p>
-                  <p style={{ fontFamily: PLAYFAIR, fontSize: "24px", fontWeight: 400, color: WHITE, margin: "0 0 10px" }}>
-                    {eventSetupEstimate.currency}{" "}
-                    {eventSetupEstimate.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </p>
-                  <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.65 }}>
-                    Final proposal will be confirmed by Oraya after review. This is an estimate only, not a final quote.
-                  </p>
-                </div>
-              )}
+              {eventSetupEstimate && <EventEstimatePanel estimate={eventSetupEstimate} totalFontSize="24px" />}
 
               <div style={{ border: "0.5px solid rgba(197,164,109,0.22)", backgroundColor: "rgba(197,164,109,0.04)", padding: "16px 20px" }}>
                 <p style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.75)", margin: 0, lineHeight: 1.6 }}>

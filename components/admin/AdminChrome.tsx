@@ -1,9 +1,11 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useMemo } from "react";
 import OrayaEmblem from "@/components/OrayaEmblem";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
 import { BORDER, GOLD, MUTED, PLAYFAIR, WHITE, LATO } from "@/components/admin/theme";
+import { adminBookingRequiresAction } from "@/lib/admin-booking-action";
 
 const NAV_ITEMS = [
   { href: "/admin/dashboard", label: "Dashboard" },
@@ -17,8 +19,12 @@ const NAV_ITEMS = [
 
 export default function AdminChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { signOut } = useAdminData();
+  const { signOut, bookings } = useAdminData();
   const isMobile = typeof window !== "undefined" ? window.innerWidth <= 768 : false;
+  const actionBookingCount = useMemo(
+    () => bookings.filter((b) => adminBookingRequiresAction(b)).length,
+    [bookings],
+  );
 
   return (
     <main style={{ backgroundColor: "#1F2B38", minHeight: "100vh", padding: "0", overflowX: "hidden" }}>
@@ -71,7 +77,9 @@ export default function AdminChrome({ children }: { children: React.ReactNode })
               key={item.href}
               href={item.href}
               style={{
-                display: "inline-block",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
                 fontFamily: LATO, fontSize: "10px", letterSpacing: "2.5px",
                 textTransform: "uppercase", color: pathname === item.href ? GOLD : MUTED,
                 textDecoration: "none",
@@ -80,6 +88,29 @@ export default function AdminChrome({ children }: { children: React.ReactNode })
               }}
             >
               {item.label}
+              {item.href === "/admin/bookings" && actionBookingCount > 0 ? (
+                <span
+                  title={`${actionBookingCount} booking${actionBookingCount === 1 ? "" : "s"} need attention`}
+                  style={{
+                    minWidth: "18px",
+                    height: "18px",
+                    padding: "0 5px",
+                    borderRadius: "999px",
+                    backgroundColor: "rgba(224,112,112,0.95)",
+                    color: "#fff",
+                    fontSize: "10px",
+                    fontWeight: 700,
+                    letterSpacing: 0,
+                    textTransform: "none",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    lineHeight: 1,
+                  }}
+                >
+                  {actionBookingCount > 99 ? "99+" : actionBookingCount}
+                </span>
+              ) : null}
             </Link>
           ))}
         </div>

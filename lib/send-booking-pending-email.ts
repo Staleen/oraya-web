@@ -1,6 +1,10 @@
 import { Resend } from "resend";
 import { LOGO_URL, SITE_URL } from "@/lib/brand";
 import { createActionToken } from "@/lib/booking-action-token";
+import {
+  isEventInquiryPayload,
+  parseEventSetupEstimateFromMessage,
+} from "@/lib/event-inquiry-message";
 import { transactionalEmailFooterHtmlBlock, transactionalEmailFooterTextSuffix } from "@/lib/transactional-email-footer";
 
 const GOLD     = "#C5A46D";
@@ -42,6 +46,10 @@ function parseAmount(value: unknown): number | null {
 
 function formatMoney(value: number): string {
   return `${CURRENCY} ${Math.round(value).toLocaleString("en-US")}`;
+}
+
+function formatEventEstimateMoney(value: number): string {
+  return `${CURRENCY} ${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function sumAddonPrices(addons: Array<{ price: number | null | undefined }>): number | null {
@@ -118,7 +126,6 @@ export async function sendBookingPendingEmail(payload: BookingPendingEmailPayloa
 
   const ref       = payload.booking_id.slice(0, 8).toUpperCase();
   const firstName = payload.name.split(" ")[0] || "Guest";
-  const subject   = "Oraya - Booking Request Received";
   const addonRows = (payload.addons_snapshot && payload.addons_snapshot.length > 0
     ? payload.addons_snapshot
     : (payload.addons ?? []).map((addon) => ({
@@ -128,32 +135,55 @@ export async function sendBookingPendingEmail(payload: BookingPendingEmailPayloa
         same_day_warning: null,
       }))
   );
-  const staySubtotal = parseAmount(payload.pricing_snapshot?.subtotal ?? payload.pricing_subtotal);
+  const snap = payload.pricing_snapshot as { adjusted_stay_subtotal?: unknown; subtotal?: unknown } | undefined;
+  const staySubtotal = parseAmount(snap?.adjusted_stay_subtotal ?? snap?.subtotal ?? payload.pricing_subtotal);
   const addonsTotal = sumAddonPrices(addonRows);
   const estimatedTotal = staySubtotal !== null && addonsTotal !== null
     ? staySubtotal + addonsTotal
     : null;
-  const summaryRows: Array<[string, string]> = [
-    ["Villa", payload.villa],
-    ["Dates", `${fmtDate(payload.check_in)} to ${fmtDate(payload.check_out)}`],
-    ...(typeof payload.sleeping_guests === "number" ? [["Guests", String(payload.sleeping_guests)] as [string, string]] : []),
-    ...(typeof payload.day_visitors === "number" ? [["Visitors", String(payload.day_visitors)] as [string, string]] : []),
-    ...(payload.event_type ? [["Event type", payload.event_type] as [string, string]] : []),
-    ["Status", "Pending"],
-    ["Reference", ref],
-  ];
+
+  const isEventInquiry = isEventInquiryPayload(payload.event_type, payload.message);
+  const eventEstimate = isEventInquiry ? parseEventSetupEstimateFromMessage(payload.message) : null;
+  const subject = isEventInquiry ? "Oraya - Event inquiry received" : "Oraya - Booking Request Received";
+
+  const summaryRows: Array<[string, string]> = isEventInquiry
+    ? [
+        ["Villa", payload.villa],
+        ["Preferred dates", `${fmtDate(payload.check_in)} → ${fmtDate(payload.check_out)}`],
+        ...(payload.event_type ? [["Event type", payload.event_type] as [string, string]] : []),
+        ...(typeof payload.day_visitors === "number"
+          ? [["Expected attendees", String(payload.day_visitors)] as [string, string]]
+          : []),
+        ...(typeof payload.sleeping_guests === "number"
+          ? [["Overnight hosts", String(payload.sleeping_guests)] as [string, string]]
+          : []),
+        ["Status", "Pending"],
+        ["Reference", ref],
+      ]
+    : [
+        ["Villa", payload.villa],
+        ["Dates", `${fmtDate(payload.check_in)} to ${fmtDate(payload.check_out)}`],
+        ...(typeof payload.sleeping_guests === "number" ? [["Guests", String(payload.sleeping_guests)] as [string, string]] : []),
+        ...(typeof payload.day_visitors === "number" ? [["Visitors", String(payload.day_visitors)] as [string, string]] : []),
+        ...(payload.event_type ? [["Event type", payload.event_type] as [string, string]] : []),
+        ["Status", "Pending"],
+        ["Reference", ref],
+      ];
+  const addonSectionTitle = isEventInquiry ? "Villa add-ons" : "Add-ons";
+  const addonSectionEmpty = isEventInquiry ? "No villa add-ons for this inquiry." : "No add-ons selected.";
+
   const addonsHtml = addonRows.length === 0
     ? `
       <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="border:0.5px solid rgba(197,164,109,0.18);padding:22px 24px;">
         <p style="margin:0 0 14px;font-size:9px;letter-spacing:3px;text-transform:uppercase;color:${GOLD};">
-          Add-ons
+          ${addonSectionTitle}
         </p>
-        <p style="margin:0;font-size:13px;line-height:1.75;color:#ffffff;">No add-ons selected.</p>
+        <p style="margin:0;font-size:13px;line-height:1.75;color:#ffffff;">${addonSectionEmpty}</p>
       </td></tr></table>`
     : `
       <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="border:0.5px solid rgba(197,164,109,0.18);padding:22px 24px;">
         <p style="margin:0 0 14px;font-size:9px;letter-spacing:3px;text-transform:uppercase;color:${GOLD};">
-          Add-ons
+          ${addonSectionTitle}
         </p>
         ${addonRows.map((addon) => {
           const notes = [
@@ -183,15 +213,53 @@ export async function sendBookingPendingEmail(payload: BookingPendingEmailPayloa
             </table>`;
         }).join("")}
       </td></tr></table>`;
-  const paymentRows: [string, string, boolean][] = [
+  const stayBookingPaymentRows: [string, string, boolean][] = [
     ["Stay subtotal", staySubtotal !== null ? formatMoney(staySubtotal) : "Not available", false],
     ["Add-ons total", addonsTotal !== null ? formatMoney(addonsTotal) : "Price on request", false],
     ["Total estimated", estimatedTotal !== null ? formatMoney(estimatedTotal) : "Not available", true],
   ];
+
+  const eventGuestEstimateRows: [string, string, boolean][] = (() => {
+    const pk = eventEstimate?.pack_keys ?? [];
+    const rec = eventEstimate?.recommended_subtotal;
+    const upg = eventEstimate?.upgrades_subtotal;
+    const showBreakdown =
+      Boolean(eventEstimate) &&
+      pk.length > 0 &&
+      typeof rec === "number" &&
+      typeof upg === "number";
+    const rowsOut: [string, string, boolean][] = [];
+    if (showBreakdown) {
+      rowsOut.push(["Recommended setup (estimate)", formatEventEstimateMoney(rec!), false]);
+      if (upg! > 0) {
+        rowsOut.push(["Optional upgrades selected (estimate)", formatEventEstimateMoney(upg!), false]);
+      }
+    }
+    rowsOut.push([
+      "Estimated event setup total",
+      eventEstimate ? formatEventEstimateMoney(eventEstimate.total) : "Not available",
+      true,
+    ]);
+    if (staySubtotal !== null) {
+      rowsOut.push(["Villa nights (reference)", formatMoney(staySubtotal), false]);
+    }
+    if (addonRows.length > 0) {
+      rowsOut.push([
+        "Villa add-ons total (reference)",
+        addonsTotal !== null ? formatMoney(addonsTotal) : "Price on request",
+        false,
+      ]);
+    }
+    return rowsOut;
+  })();
+
+  const paymentRows = isEventInquiry ? eventGuestEstimateRows : stayBookingPaymentRows;
+  const paymentSectionTitle = isEventInquiry ? "Event setup (estimate)" : "Payment Summary";
+
   const paymentHtml = `
     <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="border:0.5px solid rgba(197,164,109,0.18);padding:22px 24px;background-color:rgba(197,164,109,0.04);">
       <p style="margin:0 0 14px;font-size:9px;letter-spacing:3px;text-transform:uppercase;color:${GOLD};">
-        Payment Summary
+        ${paymentSectionTitle}
       </p>
       ${paymentRows.map(([label, value, isTotal]) => `
         <table width="100%" cellpadding="0" cellspacing="0"
@@ -244,7 +312,7 @@ export async function sendBookingPendingEmail(payload: BookingPendingEmailPayloa
           <tr>
             <td align="center" style="padding-bottom:12px;">
               <p style="margin:0;font-size:10px;letter-spacing:4px;text-transform:uppercase;color:${GOLD};">
-                Booking Request Received
+                ${isEventInquiry ? "Event Inquiry Received" : "Booking Request Received"}
               </p>
             </td>
           </tr>
@@ -262,7 +330,9 @@ export async function sendBookingPendingEmail(payload: BookingPendingEmailPayloa
           <tr>
             <td align="center" style="padding-bottom:32px;">
               <p style="margin:0;font-size:13px;color:${MUTED};line-height:1.8;max-width:400px;">
-                This is a transactional email to confirm we received your booking request. We will review availability shortly. You can use the link below to review your booking details at any time.
+                ${isEventInquiry
+                  ? "This email confirms we received your event inquiry. We will review dates and setup details shortly. Final pricing follows Oraya’s proposal after review. You can open your reference copy below at any time."
+                  : "This is a transactional email to confirm we received your booking request. We will review availability shortly. You can use the link below to review your booking details at any time."}
               </p>
             </td>
           </tr>
@@ -278,7 +348,7 @@ export async function sendBookingPendingEmail(payload: BookingPendingEmailPayloa
           <tr>
             <td style="border:0.5px solid rgba(197,164,109,0.2);padding:28px;">
               <p style="margin:0 0 20px;font-size:9px;letter-spacing:3px;text-transform:uppercase;color:${GOLD};">
-                Booking Summary
+                ${isEventInquiry ? "Event inquiry summary" : "Booking Summary"}
               </p>
 
               ${summaryRows.map(([label, value]) => `
@@ -345,19 +415,21 @@ export async function sendBookingPendingEmail(payload: BookingPendingEmailPayloa
     "",
     `Hello ${firstName},`,
     "",
-    "This is a transactional email to confirm we received your booking request.",
+    isEventInquiry
+      ? "This email confirms we received your event inquiry."
+      : "This is a transactional email to confirm we received your booking request.",
     "",
     ...summaryRows.map(([label, value]) => `${label}: ${value}`),
     "",
-    "Add-ons:",
+    `${addonSectionTitle}:`,
     ...(addonRows.length === 0
-      ? ["- No add-ons selected."]
+      ? [`- ${addonSectionEmpty}`]
       : addonRows.flatMap((addon) => [
           `- ${addon.label}: ${formatAddonPrice(addon.price)}`,
           ...(addon.requires_approval ? ["  Subject to confirmation"] : []),
         ])),
     "",
-    "Payment Summary:",
+    `${paymentSectionTitle}:`,
     ...paymentRows.map(([label, value]) => `${label}: ${value}`),
     ...(payload.message?.trim() ? ["", `Special Request / Notes: ${payload.message.trim()}`] : []),
     "",

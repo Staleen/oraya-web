@@ -16,7 +16,11 @@ import {
   buildWhatsAppFeedbackUrl,
 } from "@/lib/feedback-request-message";
 import { isFeedbackEmailCooldownActive } from "@/lib/booking-feedback-eligibility";
-import { parseEventSetupEstimateFromMessage, stripEventSetupEstimateFromMessage } from "@/lib/event-inquiry-message";
+import {
+  isEventInquiryPayload,
+  parseEventSetupEstimateFromMessage,
+  stripEventSetupEstimateFromMessage,
+} from "@/lib/event-inquiry-message";
 
 type BookingSectionKey = "pending" | "confirmed" | "cancelled";
 type ConfirmedSortKey = "created_desc" | "created_asc" | "check_in_asc" | "check_in_desc";
@@ -628,7 +632,7 @@ function bookingDateRangesOverlap(a: Booking, b: Booking) {
 
 // Phase 14B: classify a booking as an event inquiry — both event_type set AND structured marker in notes.
 function isEventInquiryBooking(booking: Pick<Booking, "event_type" | "message">) {
-  return Boolean(booking.event_type) && typeof booking.message === "string" && booking.message.includes("[Event Inquiry]");
+  return isEventInquiryPayload(booking.event_type, booking.message);
 }
 
 /** Advisory only: matches typical admin cancel email path when an address exists (auth email not available client-side for members). */
@@ -3032,6 +3036,15 @@ export default function BookingsTable({
     const eventGuestNotes = eventInquiry ? extractEventInquiryNotesLine(booking.message) : null;
     const eventNightCount = eventInquiry ? eventInquiryNightCount(booking.check_in, booking.check_out) : 0;
     const eventInquiryParsedServices = eventInquiry ? parseRequestedEventServicesFromMessage(booking.message) : [];
+    const stayReferenceSubtotal =
+      typeof booking.pricing_snapshot?.adjusted_stay_subtotal === "number"
+        ? booking.pricing_snapshot.adjusted_stay_subtotal
+        : typeof booking.pricing_snapshot?.subtotal === "number"
+          ? booking.pricing_snapshot.subtotal
+          : typeof booking.pricing_subtotal === "number"
+            ? booking.pricing_subtotal
+            : null;
+    const stayAddonSnapshots = booking.addons_snapshot ?? [];
     // Phase 14A: a pending booking that overlaps a confirmed booking cannot be confirmed without manual resolution.
     const confirmedConflicts = getConfirmedConflicts(booking);
     const conflictHold = booking.status === "pending" && confirmedConflicts.length > 0;
@@ -3456,6 +3469,60 @@ export default function BookingsTable({
                 </p>
               </div>
 
+              {eventSetupEstimate ? (
+                <div
+                  style={{
+                    border: "0.5px solid rgba(197,164,109,0.22)",
+                    borderRadius: "10px",
+                    padding: "14px 16px",
+                    backgroundColor: "rgba(197,164,109,0.06)",
+                  }}
+                >
+                  <p
+                    style={{
+                      fontFamily: LATO,
+                      fontSize: "10px",
+                      letterSpacing: "1.5px",
+                      textTransform: "uppercase",
+                      color: GOLD,
+                      margin: "0 0 8px",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Estimated event setup
+                  </p>
+                  <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "0 0 10px", lineHeight: 1.55 }}>
+                    Starting from · non-binding. Final proposal after Oraya review.
+                  </p>
+                  {(() => {
+                    const pk = eventSetupEstimate.pack_keys ?? [];
+                    const rec = eventSetupEstimate.recommended_subtotal;
+                    const upg = eventSetupEstimate.upgrades_subtotal;
+                    const showBreakdown =
+                      pk.length > 0 && typeof rec === "number" && typeof upg === "number";
+                    if (!showBreakdown) return null;
+                    return (
+                      <div style={{ display: "grid", gap: "6px", marginBottom: "10px" }}>
+                        <p style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.88)", margin: 0 }}>
+                          Recommended setup · {formatMoney(rec) ?? "—"}
+                        </p>
+                        {upg > 0 ? (
+                          <p style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.88)", margin: 0 }}>
+                            Optional upgrades selected · {formatMoney(upg) ?? "—"}
+                          </p>
+                        ) : null}
+                      </div>
+                    );
+                  })()}
+                  <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.2px", textTransform: "uppercase", color: MUTED, margin: "0 0 4px" }}>
+                    Estimated event setup total
+                  </p>
+                  <p style={{ fontFamily: PLAYFAIR, fontSize: "22px", color: WHITE, margin: 0 }}>
+                    {formatMoney(eventSetupEstimate.total) ?? "—"}
+                  </p>
+                </div>
+              ) : null}
+
               <div
                 style={{
                   border: "0.5px solid rgba(197,164,109,0.2)",
@@ -3479,6 +3546,26 @@ export default function BookingsTable({
                 </p>
                 {eventSetupEstimate && eventSetupEstimate.lines.length > 0 ? (
                   <div style={{ display: "grid", gap: "8px" }}>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr auto auto auto",
+                        gap: "10px",
+                        alignItems: "baseline",
+                        fontFamily: LATO,
+                        fontSize: "10px",
+                        letterSpacing: "0.6px",
+                        textTransform: "uppercase",
+                        color: MUTED,
+                        paddingBottom: "4px",
+                        borderBottom: "0.5px solid rgba(255,255,255,0.06)",
+                      }}
+                    >
+                      <span>Service</span>
+                      <span>Qty</span>
+                      <span style={{ textAlign: "right" }}>Unit</span>
+                      <span style={{ textAlign: "right" }}>Subtotal</span>
+                    </div>
                     {eventSetupEstimate.lines.map((row, i) => (
                       <div
                         key={`${row.label}-${i}`}
@@ -3498,21 +3585,6 @@ export default function BookingsTable({
                         <span style={{ textAlign: "right", color: WHITE }}>{formatMoney(row.line_total) ?? "—"}</span>
                       </div>
                     ))}
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        marginTop: "6px",
-                        paddingTop: "10px",
-                        borderTop: "0.5px solid rgba(255,255,255,0.08)",
-                        fontFamily: LATO,
-                        fontSize: "13px",
-                        color: GOLD,
-                      }}
-                    >
-                      <span>Estimated setup subtotal (non-binding)</span>
-                      <span>{formatMoney(eventSetupEstimate.total) ?? "—"}</span>
-                    </div>
                   </div>
                 ) : eventInquiryParsedServices.length > 0 ? (
                   <ul style={{ margin: 0, paddingLeft: "18px", fontFamily: LATO, fontSize: "12px", lineHeight: 1.7 }}>
@@ -3524,6 +3596,64 @@ export default function BookingsTable({
                   <p style={{ fontFamily: LATO, fontSize: "12px", margin: 0 }}>—</p>
                 )}
               </div>
+
+              {(stayReferenceSubtotal !== null || stayAddonSnapshots.length > 0) && (
+                <div
+                  style={{
+                    border: "0.5px solid rgba(255,255,255,0.1)",
+                    borderRadius: "10px",
+                    padding: "14px 16px",
+                    backgroundColor: "rgba(255,255,255,0.02)",
+                  }}
+                >
+                  <p
+                    style={{
+                      fontFamily: LATO,
+                      fontSize: "10px",
+                      letterSpacing: "1.5px",
+                      textTransform: "uppercase",
+                      color: MUTED,
+                      margin: "0 0 10px",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Host overnight stay reference
+                  </p>
+                  {stayReferenceSubtotal !== null ? (
+                    <p style={{ fontFamily: LATO, fontSize: "12px", color: WHITE, margin: "0 0 10px", lineHeight: 1.55 }}>
+                      Villa nights (reference, non-binding) · {formatMoney(stayReferenceSubtotal) ?? "—"}
+                    </p>
+                  ) : null}
+                  {stayAddonSnapshots.length > 0 ? (
+                    <>
+                      <p
+                        style={{
+                          fontFamily: LATO,
+                          fontSize: "10px",
+                          letterSpacing: "1.2px",
+                          textTransform: "uppercase",
+                          color: MUTED,
+                          margin: "0 0 6px",
+                        }}
+                      >
+                        Villa add-ons
+                      </p>
+                      <ul style={{ margin: 0, paddingLeft: "18px", fontFamily: LATO, fontSize: "12px", lineHeight: 1.65 }}>
+                        {stayAddonSnapshots.map((addon) => (
+                          <li key={addon.id}>
+                            {addon.label}
+                            {typeof addon.price === "number" ? ` · ${formatAddonPrice(addon.price)}` : ""}
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : (
+                    <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
+                      No villa add-ons on this inquiry.
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div style={{ border: "0.5px solid rgba(255,255,255,0.08)", borderRadius: "10px", padding: "14px 16px" }}>
                 <p
