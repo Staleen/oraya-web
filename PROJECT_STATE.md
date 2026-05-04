@@ -9,7 +9,7 @@ STOP and ask before proceeding.
 
 ## CURRENT PHASE
 
-Phase 13 -> COMPLETE | Phase 14 -> COMPLETE (14M closure) | Phase 15A -> COMPLETE (readiness audit) | Phase 15B -> COMPLETE (security hotfix) | Phase 15C -> COMPLETE (event inquiry calendar parity with stay picker) | Phase 15D -> COMPLETE (security cleanup + smoke test) | Phase 15E -> COMPLETE (local env parity + secret hygiene) | Phase 15F.1 -> COMPLETE (contact email consistency hotfix) | Phase 15F.2 -> COMPLETE (email identity hello standard) | Phase 15F.3 -> COMPLETE (privacy + legal communication alignment) | Phase 15F.4 -> COMPLETE (trust layer + legal entity + testimonial intake) | Phase 15F.5 -> COMPLETE (manual testimonial manager + feedback request tool) | Phase 15F.6 -> COMPLETE (completed reservations history + feedback follow-up) | Phase 15F.7 -> COMPLETE (manual feedback email trigger + tracking) | Phase 15G -> IN PROGRESS (event services consolidation; 15G.1 taxonomy + 15G.5 default configuration + 15G.6 price and description repair + 15G.7 inquiry UX and estimate connection + **15G.10** event proposal QA + auto financial fields + **15G.11** minimum service group validation + **15G.12** event proposal/calendar/payment basis QA fix + **15G.13** add-ons filtering + admin editing fix complete) | **Phase 15H -> COMPLETE (event quote line-item manager — admin builds proposal as line items; total derives from included rows; original guest request preserved; no schema change)**
+Phase 13 -> COMPLETE | Phase 14 -> COMPLETE (14M closure) | Phase 15A -> COMPLETE (readiness audit) | Phase 15B -> COMPLETE (security hotfix) | Phase 15C -> COMPLETE (event inquiry calendar parity with stay picker) | Phase 15D -> COMPLETE (security cleanup + smoke test) | Phase 15E -> COMPLETE (local env parity + secret hygiene) | Phase 15F.1 -> COMPLETE (contact email consistency hotfix) | Phase 15F.2 -> COMPLETE (email identity hello standard) | Phase 15F.3 -> COMPLETE (privacy + legal communication alignment) | Phase 15F.4 -> COMPLETE (trust layer + legal entity + testimonial intake) | Phase 15F.5 -> COMPLETE (manual testimonial manager + feedback request tool) | Phase 15F.6 -> COMPLETE (completed reservations history + feedback follow-up) | Phase 15F.7 -> COMPLETE (manual feedback email trigger + tracking) | **Phase 15G -> COMPLETE** (event services consolidation: 15G.1 taxonomy + 15G.5–7 + 15G.10–13 as documented below) | **Phase 15H -> COMPLETE** (event quote line-item manager + **15H.1** admin proposal UI: included/excluded split, totals breakdown, `roundMoney`; no schema change) | **15I.1 -> COMPLETE** (payment foundation: booking ledger columns + admin overview + manual record; see Phase 15I.1 below)**
 
 ---
 
@@ -609,7 +609,7 @@ Phase 15 — Production & growth readiness
   - 24-hour duplicate guard on `feedback_requested_at` (response: `Feedback already requested recently`); resend allowed after cooldown; confirmation modal before send
   - Completed / Checked-out expanded card: send / resend + status line; compact row shows last requested time when logged; manual prepare / WhatsApp / copy unchanged
   - no booking pricing, payment totals math, or availability logic changes
-- 15G Event Services Consolidation [IN PROGRESS]
+- 15G Event Services Consolidation [COMPLETE]
   - **15G.1** Event Type Taxonomy Consolidation + Normalization [COMPLETE]
     - `lib/event-types.ts` — `CANONICAL_EVENT_TYPES` (9), `CANONICAL_EVENT_TYPE_VALUES`, `CanonicalEventType`, `normalizeEventType()`; `NORMALIZATION_MAP` for legacy strings
     - Guest inquiry + admin selectors use canonical types; filters normalize `applicable_event_types`; no schema change
@@ -633,11 +633,26 @@ Phase 15 — Production & growth readiness
     - Proposal panel auto-fields (`BookingsTable`): **total** defaults from inquiry estimate when `proposal_total_amount` unset; **deposit** defaults to 50% of total rounded **up** to $100 (`computeProposalDepositFromTotal`); **deadline** defaults to event `check_in` − 7 days (`computeDefaultProposalValidUntilInputValue`, or safe “today EOD” when sooner); local flags **`depositAutoSyncDisabled`** (manual deposit edit, or saved deposit ≠ formula) stops deposit auto-sync when **total** changes; **`deadlineManuallyEdited`** (any deadline field edit, or persisted `proposal_valid_until`) preserves admin deadline; `buildInitialProposalDraftFromBooking` + `updateProposalDraft(booking, …)` so first partial update inherits full defaults
     - Guest `booking/view`: status pill **Proposal accepted · Awaiting confirmation**; **Your note** shows guest text only (no raw estimate JSON); proposal **Pricing** table (Service / Qty / Unit / Subtotal); **Payment deadline** label; shared payment method labels
     - `lib/send-event-proposal-email.ts` + `app/api/admin/bookings/[id]/route.ts` — proposal email HTML table + totals + payment methods + **Review & accept** CTA; `buildProposalEmailLineItems` + `parseEventSetupEstimateFromMessage`; optional `admin_status` on `proposal_included_services` JSON (approved/declined)
-    - Phase **15G** overall remains **IN PROGRESS** until any further 15G sub-steps are closed
   - **15G.11** Event Inquiry Minimum Service Validation [COMPLETE]
     - `lib/event-service-requirements.ts` — `getRequiredEventServiceGroups(eventType)` and `getMissingRequiredEventServiceGroups()`; canonical groups (seating / decoration / catering / staff / lighting); event-type → required-group map (Wedding requires lighting, others omit)
     - `app/events/inquiry/page.tsx` Step 2: live status hint (green “complete” / amber missing-list); Continue + Submit blocked with `“To prepare this event properly, please include the required setup for your selected event type. Missing: …”`
     - No schema/API changes
+  - **15G.12** Event Proposal / Calendar / Payment Basis QA Fix [COMPLETE]
+    - `app/events/inquiry/page.tsx` — `<DayPicker>` `defaultMonth` + key reset uses `dateRange.from`, so handed-off August dates open August (not today); recommendation chip list now derives from `resolveRecommendedPackSeedIds` so the labels match what **Add recommended setup** actually applies
+    - `lib/event-service-exclusivity.ts` — Umbrellas / shaded areas removed from auto-applied recommended pack (paid line only when manually selected; seed price stays $150 with description; sync repairs $0/null/placeholder)
+    - `lib/send-booking-pending-email.ts` + `lib/send-booking-request-email.ts` — guest-visible Notes section uses `extractEventInquiryGuestNotesLine` for event inquiries (no raw `[Event Inquiry]` / `[EventSetupEstimate]` JSON in guest or admin emails)
+    - `lib/send-event-proposal-email.ts` — fixed-layout pricing table with right-aligned `nowrap` numeric cells and `word-break` labels (mobile-safe); guest-facing labels: **Final event total**, **Deposit required**, **Balance due**, **Payment deadline**
+    - `app/booking/view/[token]/page.tsx` — guest-facing proposal block now reads **Final event total** / **Deposit required** / **Balance due** (admin still uses internal “Proposal total”)
+    - `components/admin/BookingsTable.tsx` — **`getBookingPaymentBasis(booking)`**: confirmed event inquiries use `proposal_total_amount` / `proposal_deposit_amount` as the payment basis (not stay subtotal); `recordPayment`, “Estimated total”, and remaining-balance derive from this basis; `getPaymentDraft` defaults Request-deposit deposit + due date from `proposal_deposit_amount` + `proposal_valid_until`; advanced “excluded / optional / notes” fields collapsed into a single `<details>` until used; admin compact pending row reordered to `[kind · event_type] · [dates] · [villa] · Submitted X · Est. setup $Y · proposal hint`; “Accepted · Awaiting deposit” pill + “Confirm event (after deposit)” button + “Proposal accepted — awaiting deposit confirmation. Confirm event after deposit received.” copy
+    - No schema/API/availability/conflict logic changes
+    - Typecheck + `next build` pass
+  - **15G.13** Add-ons Filtering + Admin Editing Fix [COMPLETE]
+    - `app/book/page.tsx` — stay add-on fetch now filters `applies_to ∈ {stay, both}`; event-only services no longer appear in the stay flow (the event inquiry filter at `app/events/inquiry/page.tsx:617` already enforced `{event, both}`)
+    - `lib/addon-operations.ts` — new `normalizeAddonAppliesTo()` coerces legacy / typo values (`events`, `event_only`, `stays`, `stay_only`, `all`, `any`, `stay+event`) onto the canonical `stay | event | both` set; `parseOperationalFields` calls it so existing settings normalize on load — no destructive migration
+    - `components/admin/AddonsEditor.tsx` — Save button now opens the first invalid row and shows a top-level red banner with the blocking error count + first message, so empty-label / duplicate-label / invalid-price errors stop being silent; `handleSaveClick` wraps `saveAddons` (existing field-level error highlighting unchanged)
+    - UX declutter: removed redundant “Event Services are managed here…” paragraph (already covered by section heading); guest description editor collapsed into a `<details>` summary that opens automatically when the field has content; rates page intro condensed; sync hint shortened
+    - No booking / pricing / proposal / payment / availability logic touched; `/api/admin/addons` upsert path unchanged so price / currency / pricing_model / quantity / approval / event applicability / display_order / villa mapping / `applies_to` all preserve through save
+    - Typecheck + `next build` pass
 Phase 15H — Event Quote Line-Item Manager [COMPLETE]
 - **No schema change.** `proposal_included_services` is JSONB; new optional fields (`unit_price`, `line_total`, `source`, `notes`) added per-row. Server normalizer in `app/api/admin/bookings/[id]/route.ts` now accepts/validates them; legacy rows without the new fields keep working
 - **Admin quote builder (`components/admin/BookingsTable.tsx`):** new `ProposalLineItemDraft` working state replaces the old "checkbox + free-form total" model. Each row is editable (label / quantity / unit_label / unit price / internal note); guest-requested services seed in with `source: "requested"`, custom rows added via **+ Add custom service** carry `source: "custom"` and have a **Remove** action. Per-row **Include / Exclude** toggle: excluded rows persist with `admin_status: "declined"` and drop out of the total + the guest view
@@ -648,31 +663,20 @@ Phase 15H — Event Quote Line-Item Manager [COMPLETE]
 - **Email (`lib/send-event-proposal-email.ts` via `buildProposalEmailLineItems`):** same precedence — admin price wins, estimate fallback for legacy data; `unit_label`, `source`, `notes` carried through
 - No payment portal added; no auto-confirm; no auto-payment; stay booking flow / stay pricing / availability untouched
 - `npx tsc --noEmit` + `next build` pass
-  - **15H.1** Proposal Pricing Corrections [COMPLETE]
-    - Deposit is manual (no auto-sync)
-    - Rounding applied to all monetary values in the proposal breakdown (`roundMoney` / `sumMoney` for line math; breakdown rows use `roundMoney` for subtotal, final total, deposit, remaining balance)
-    - Included vs excluded services split in UI (two sections: **Included services (billable)** vs **Optional / excluded services**; same row editor + toggle; no duplicate `lineItems` state)
-    - Totals breakdown panel: Subtotal (included), Final total, Deposit required (manual), Remaining balance = final − deposit
-    - No booking/payment API/email/guest proposal logic changed in this step
+- **15H.1** Proposal Pricing Corrections [COMPLETE]
+  - Deposit is manual (no auto-sync)
+  - Rounding applied to all monetary values in the proposal breakdown (`roundMoney` / `sumMoney` for line math; breakdown rows use `roundMoney` for subtotal, final total, deposit, remaining balance)
+  - Included vs excluded services split in UI (two sections: **Included services (billable)** vs **Optional / excluded services**; same row editor + toggle; no duplicate `lineItems` state)
+  - Totals breakdown panel: Subtotal (included), Final total, Deposit required (manual), Remaining balance = final − deposit
+  - No booking/payment API/email/guest proposal logic changed in this step
 
-Phase 15 remains active.
+Phase 15 remains active (documentation + future sub-phases only unless product reopens scope).
 
-  - **15G.13** Add-ons Filtering + Admin Editing Fix [COMPLETE]
-    - `app/book/page.tsx` — stay add-on fetch now filters `applies_to ∈ {stay, both}`; event-only services no longer appear in the stay flow (the event inquiry filter at `app/events/inquiry/page.tsx:617` already enforced `{event, both}`)
-    - `lib/addon-operations.ts` — new `normalizeAddonAppliesTo()` coerces legacy / typo values (`events`, `event_only`, `stays`, `stay_only`, `all`, `any`, `stay+event`) onto the canonical `stay | event | both` set; `parseOperationalFields` calls it so existing settings normalize on load — no destructive migration
-    - `components/admin/AddonsEditor.tsx` — Save button now opens the first invalid row and shows a top-level red banner with the blocking error count + first message, so empty-label / duplicate-label / invalid-price errors stop being silent; `handleSaveClick` wraps `saveAddons` (existing field-level error highlighting unchanged)
-    - UX declutter: removed redundant “Event Services are managed here…” paragraph (already covered by section heading); guest description editor collapsed into a `<details>` summary that opens automatically when the field has content; rates page intro condensed; sync hint shortened
-    - No booking / pricing / proposal / payment / availability logic touched; `/api/admin/addons` upsert path unchanged so price / currency / pricing_model / quantity / approval / event applicability / display_order / villa mapping / `applies_to` all preserve through save
-    - Typecheck + `next build` pass
-  - **15G.12** Event Proposal / Calendar / Payment Basis QA Fix [COMPLETE]
-    - `app/events/inquiry/page.tsx` — `<DayPicker>` `defaultMonth` + key reset uses `dateRange.from`, so handed-off August dates open August (not today); recommendation chip list now derives from `resolveRecommendedPackSeedIds` so the labels match what **Add recommended setup** actually applies
-    - `lib/event-service-exclusivity.ts` — Umbrellas / shaded areas removed from auto-applied recommended pack (paid line only when manually selected; seed price stays $150 with description; sync repairs $0/null/placeholder)
-    - `lib/send-booking-pending-email.ts` + `lib/send-booking-request-email.ts` — guest-visible Notes section uses `extractEventInquiryGuestNotesLine` for event inquiries (no raw `[Event Inquiry]` / `[EventSetupEstimate]` JSON in guest or admin emails)
-    - `lib/send-event-proposal-email.ts` — fixed-layout pricing table with right-aligned `nowrap` numeric cells and `word-break` labels (mobile-safe); guest-facing labels: **Final event total**, **Deposit required**, **Balance due**, **Payment deadline**
-    - `app/booking/view/[token]/page.tsx` — guest-facing proposal block now reads **Final event total** / **Deposit required** / **Balance due** (admin still uses internal “Proposal total”)
-    - `components/admin/BookingsTable.tsx` — **`getBookingPaymentBasis(booking)`**: confirmed event inquiries use `proposal_total_amount` / `proposal_deposit_amount` as the payment basis (not stay subtotal); `recordPayment`, “Estimated total”, and remaining-balance derive from this basis; `getPaymentDraft` defaults Request-deposit deposit + due date from `proposal_deposit_amount` + `proposal_valid_until`; advanced “excluded / optional / notes” fields collapsed into a single `<details>` until used; admin compact pending row reordered to `[kind · event_type] · [dates] · [villa] · Submitted X · Est. setup $Y · proposal hint`; “Accepted · Awaiting deposit” pill + “Confirm event (after deposit)” button + “Proposal accepted — awaiting deposit confirmation. Confirm event after deposit received.” copy
-    - No schema/API/availability/conflict logic changes
-    - Typecheck + `next build` pass
+**15I.1 Payment Foundation [COMPLETE]**
+- SQL: `sql/phase-15i1-payment-foundation.sql` — adds `payment_stage` (default `none`), `amount_total`, `amount_due`, `payment_last_at` (`payment_status`, `amount_paid`, `deposit_amount`, `payment_method` unchanged)
+- `lib/payment-foundation.ts` — contract total = stay estimated total vs event `proposal_total_amount`; `amount_due` = total − paid; ledger stage `none` | `unpaid` | `partially_paid` | `fully_paid` (guest-facing **workflow** still uses legacy `payment_status`: `payment_requested`, `deposit_paid`, `paid_in_full`)
+- Admin `BookingsTable`: **Payment Overview** (totals, deposit, ledger badge, last payment date) + **Record payment** persists foundation fields alongside existing behavior; no guest page, gateway, or booking-creation changes
+- No payment portal, no gateway integration, no user payment flow in this step
 
 ---
 

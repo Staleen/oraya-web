@@ -73,9 +73,13 @@ export async function PATCH(
   const statusUpdateProvided = Object.prototype.hasOwnProperty.call(payload, "status");
   const paymentFieldNames = [
     "payment_status",
+    "payment_stage",
     "payment_method",
     "deposit_amount",
     "amount_paid",
+    "amount_total",
+    "amount_due",
+    "payment_last_at",
     "payment_reference",
     "payment_notes",
     "payment_requested_at",
@@ -112,7 +116,7 @@ export async function PATCH(
 
   const { data: existingBooking, error: existingBookingError } = await db
     .from("bookings")
-    .select("id, villa, check_in, check_out, status, sleeping_guests, day_visitors, event_type, message, addons, addons_snapshot, pricing_subtotal, pricing_snapshot, member_id, guest_name, guest_email, payment_status, payment_method, deposit_amount, amount_paid, payment_reference, payment_due_at, payment_requested_at, payment_received_at, payment_notes, refund_status, refund_amount, refunded_at, proposal_status, proposal_total_amount, proposal_deposit_amount, proposal_included_services, proposal_excluded_services, proposal_optional_services, proposal_notes, proposal_valid_until, proposal_payment_methods, proposal_sent_at, proposal_responded_at")
+    .select("id, villa, check_in, check_out, status, sleeping_guests, day_visitors, event_type, message, addons, addons_snapshot, pricing_subtotal, pricing_snapshot, member_id, guest_name, guest_email, payment_status, payment_stage, payment_method, deposit_amount, amount_paid, amount_total, amount_due, payment_last_at, payment_reference, payment_due_at, payment_requested_at, payment_received_at, payment_notes, refund_status, refund_amount, refunded_at, proposal_status, proposal_total_amount, proposal_deposit_amount, proposal_included_services, proposal_excluded_services, proposal_optional_services, proposal_notes, proposal_valid_until, proposal_payment_methods, proposal_sent_at, proposal_responded_at")
     .eq("id", bookingId)
     .single();
 
@@ -172,6 +176,7 @@ export async function PATCH(
   }
 
   const allowedPaymentStatuses = ["unpaid", "payment_requested", "deposit_paid", "paid_in_full"];
+  const allowedPaymentStages = ["none", "unpaid", "partially_paid", "fully_paid"];
   const allowedPaymentMethods = ["whish", "cash", "bank_transfer", "card_manual", "other"];
   const allowedRefundStatuses = ["refund_pending", "partial_refund", "refunded"];
   const allowedProposalStatuses = ["draft", "sent", "accepted", "declined", "expired"];
@@ -271,6 +276,17 @@ export async function PATCH(
       }
     }
 
+    if (Object.prototype.hasOwnProperty.call(payload, "payment_stage")) {
+      const paymentStage = payload.payment_stage;
+      if (paymentStage === null || paymentStage === "") {
+        updatePayload.payment_stage = null;
+      } else if (typeof paymentStage === "string" && allowedPaymentStages.includes(paymentStage)) {
+        updatePayload.payment_stage = paymentStage;
+      } else {
+        return NextResponse.json({ error: "Invalid payment_stage value." }, { status: 400 });
+      }
+    }
+
     if (Object.prototype.hasOwnProperty.call(payload, "payment_method")) {
       const paymentMethod = payload.payment_method;
       if (paymentMethod === null || paymentMethod === "") {
@@ -295,12 +311,15 @@ export async function PATCH(
 
     readOptionalNumber("deposit_amount");
     readOptionalNumber("amount_paid");
+    readOptionalNumber("amount_total");
+    readOptionalNumber("amount_due");
     readOptionalNumber("refund_amount");
     readOptionalText("payment_reference");
     readOptionalText("payment_notes");
     readOptionalText("payment_marked_by");
     readOptionalTimestamp("payment_requested_at");
     readOptionalTimestamp("payment_received_at");
+    readOptionalTimestamp("payment_last_at");
     readOptionalTimestamp("payment_due_at");
     readOptionalTimestamp("refunded_at");
 

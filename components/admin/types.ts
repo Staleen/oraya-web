@@ -107,9 +107,14 @@ export interface Booking {
   guest_phone: string | null;
   guest_country: string | null;
   payment_status?: string | null;
+  /** Phase 15I.1 — ledger balance tier (none | unpaid | partially_paid | fully_paid); guest workflow still uses `payment_status`. */
+  payment_stage?: string | null;
+  amount_total?: number | null;
+  amount_paid?: number | null;
+  amount_due?: number | null;
   payment_method?: string | null;
   deposit_amount?: number | null;
-  amount_paid?: number | null;
+  payment_last_at?: string | null;
   payment_reference?: string | null;
   payment_notes?: string | null;
   payment_requested_at?: string | null;

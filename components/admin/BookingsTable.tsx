@@ -25,6 +25,12 @@ import {
 } from "@/lib/event-inquiry-message";
 import { computeDefaultProposalValidUntilInputValue, computeProposalDepositFromTotal } from "@/lib/event-proposal-defaults";
 import { roundMoney, sumMoney } from "@/lib/money";
+import {
+  computeFoundationAmountDue,
+  derivePaymentFoundationStage,
+  getFoundationAmountTotal,
+  getFoundationDepositDisplay,
+} from "@/lib/payment-foundation";
 import { formatPaymentMethodLabel as formatPaymentMethodLabelShared } from "@/lib/payment-method-labels";
 
 type BookingSectionKey = "pending" | "confirmed" | "cancelled";
@@ -559,6 +565,72 @@ function getPaymentStatusStyle(status: string, overdue: boolean) {
 
 function renderPaymentStatusBadge(booking: Booking) {
   const tone = getPaymentStatusStyle(getPaymentStatus(booking), isPaymentOverdue(booking));
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontFamily: LATO,
+        fontSize: "9px",
+        letterSpacing: "1.5px",
+        textTransform: "uppercase",
+        color: tone.color,
+        backgroundColor: tone.background,
+        border: `0.5px solid ${tone.border}`,
+        padding: "6px 10px",
+        borderRadius: "6px",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {tone.label}
+    </span>
+  );
+}
+
+/** Phase 15I.1 — guest-facing workflow still uses `payment_status`; this badge reflects ledger balance (Paid / Partially Paid / Unpaid). */
+function resolveFoundationLedgerBadgeStyle(booking: Booking) {
+  const paid =
+    typeof booking.amount_paid === "number" && Number.isFinite(booking.amount_paid)
+      ? roundMoney(Math.max(0, booking.amount_paid))
+      : 0;
+  const storedTotal =
+    typeof booking.amount_total === "number" && Number.isFinite(booking.amount_total) ? roundMoney(booking.amount_total) : null;
+  const computedTotal = getFoundationAmountTotal(booking);
+  const total = storedTotal !== null ? storedTotal : computedTotal;
+  const flow = getPaymentStatus(booking);
+  const stage = booking.payment_stage?.trim() ?? "";
+
+  if (stage === "fully_paid" || flow === "paid_in_full" || (total !== null && total > 0 && paid >= total)) {
+    return {
+      label: "Paid",
+      color: "#6fcf8a",
+      background: "rgba(80,180,100,0.16)",
+      border: "rgba(111,207,138,0.34)",
+    };
+  }
+  if (
+    stage === "partially_paid" ||
+    flow === "deposit_paid" ||
+    (paid > 0 && (total === null || (total > 0 && paid < total)))
+  ) {
+    return {
+      label: "Partially Paid",
+      color: "#e8c98a",
+      background: "rgba(232,201,138,0.12)",
+      border: "rgba(232,201,138,0.28)",
+    };
+  }
+  return {
+    label: "Unpaid",
+    color: MUTED,
+    background: "rgba(255,255,255,0.04)",
+    border: BORDER,
+  };
+}
+
+function renderFoundationLedgerBadge(booking: Booking) {
+  const tone = resolveFoundationLedgerBadgeStyle(booking);
   return (
     <span
       style={{
@@ -1384,6 +1456,11 @@ export default function BookingsTable({
         : "deposit_paid";
     const nextNotes = draft.paymentNotes.trim() || booking.payment_notes || null;
 
+    const foundationTotal = getFoundationAmountTotal(booking);
+    const foundationDue = computeFoundationAmountDue(foundationTotal, nextAmountPaid);
+    const foundationStage = derivePaymentFoundationStage(nextAmountPaid, foundationTotal);
+    const recordedAt = new Date().toISOString();
+
     const updated = await patchBookingRecord(
       booking.id,
       {
@@ -1391,7 +1468,11 @@ export default function BookingsTable({
         amount_paid: nextAmountPaid,
         payment_reference: draft.paymentReference.trim() || null,
         payment_notes: nextNotes,
-        payment_received_at: new Date().toISOString(),
+        payment_received_at: recordedAt,
+        payment_last_at: recordedAt,
+        amount_total: foundationTotal,
+        amount_due: foundationDue,
+        payment_stage: foundationStage,
         payment_status: nextPaymentStatus,
       },
       "record-payment",
@@ -2529,6 +2610,17 @@ export default function BookingsTable({
     const isRefunding = paymentUpdatingId === `${booking.id}:issue-refund`;
     const isReminderSending = paymentUpdatingId === `${booking.id}:send-reminder`;
 
+    const foundationStoredTotal =
+      typeof booking.amount_total === "number" && Number.isFinite(booking.amount_total) ? roundMoney(booking.amount_total) : null;
+    const foundationComputedTotal = getFoundationAmountTotal(booking);
+    const effectiveAmountTotal = foundationStoredTotal ?? foundationComputedTotal;
+    const effectiveAmountDue =
+      typeof booking.amount_due === "number" && Number.isFinite(booking.amount_due)
+        ? roundMoney(booking.amount_due)
+        : computeFoundationAmountDue(effectiveAmountTotal, amountPaidRaw);
+    const foundationDepositForOverview = getFoundationDepositDisplay(booking);
+    const lastFoundationPaymentAt = formatDateTimeValue(booking.payment_last_at);
+
     return (
       <div
         style={{
@@ -2540,6 +2632,46 @@ export default function BookingsTable({
           gap: "12px",
         }}
       >
+        <div
+          style={{
+            border: "0.5px solid rgba(197,164,109,0.22)",
+            backgroundColor: "rgba(197,164,109,0.06)",
+            padding: "12px 14px",
+            borderRadius: "8px",
+            display: "grid",
+            gap: "10px",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px", flexWrap: "wrap" }}>
+            <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+              Payment Overview
+            </p>
+            {renderFoundationLedgerBadge(booking)}
+          </div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
+              gap: "10px 14px",
+            }}
+          >
+            {renderRevenueEstimateRow(
+              "Total amount",
+              effectiveAmountTotal !== null ? formatMoney(effectiveAmountTotal) ?? "Not available" : "Not available",
+            )}
+            {renderRevenueEstimateRow("Amount paid", formatMoney(amountPaidRaw) ?? "$0")}
+            {renderRevenueEstimateRow(
+              "Amount due",
+              effectiveAmountDue !== null ? formatMoney(effectiveAmountDue) ?? "Not available" : "Not available",
+            )}
+            {renderRevenueEstimateRow(
+              "Deposit",
+              foundationDepositForOverview !== null ? formatMoney(foundationDepositForOverview) ?? "—" : "—",
+            )}
+            {renderRevenueEstimateRow("Last payment date", lastFoundationPaymentAt ?? "—")}
+          </div>
+        </div>
+
         <div style={{ display: "grid", gap: "8px" }}>
           <div
             style={{
@@ -2798,21 +2930,24 @@ export default function BookingsTable({
             <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: WHITE, margin: 0 }}>
               Record payment
             </p>
+            <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.45 }}>
+              Add payment amount (admin ledger). Guest workflow and emails still use the legacy payment status below.
+            </p>
             <select
               value={draft.paymentMethod}
               onChange={(event) => updatePaymentDraft(booking.id, { paymentMethod: event.target.value })}
               style={{ ...fieldStyle, cursor: "pointer" }}
             >
-              <option value="whish" style={{ backgroundColor: MIDNIGHT }}>Whish</option>
               <option value="cash" style={{ backgroundColor: MIDNIGHT }}>Cash</option>
-              <option value="bank_transfer" style={{ backgroundColor: MIDNIGHT }}>Bank transfer</option>
-              <option value="card_manual" style={{ backgroundColor: MIDNIGHT }}>Card manual</option>
+              <option value="bank_transfer" style={{ backgroundColor: MIDNIGHT }}>Bank</option>
               <option value="other" style={{ backgroundColor: MIDNIGHT }}>Other</option>
+              <option value="whish" style={{ backgroundColor: MIDNIGHT }}>Whish</option>
+              <option value="card_manual" style={{ backgroundColor: MIDNIGHT }}>Card manual</option>
             </select>
             <input
               value={draft.paymentAmount}
               onChange={(event) => updatePaymentDraft(booking.id, { paymentAmount: event.target.value })}
-              placeholder="Amount received"
+              placeholder="Add payment amount"
               inputMode="decimal"
               style={fieldStyle}
             />
