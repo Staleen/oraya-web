@@ -16,6 +16,7 @@ import {
   buildWhatsAppFeedbackUrl,
 } from "@/lib/feedback-request-message";
 import { isFeedbackEmailCooldownActive } from "@/lib/booking-feedback-eligibility";
+import { parseEventSetupEstimateFromMessage, stripEventSetupEstimateFromMessage } from "@/lib/event-inquiry-message";
 
 type BookingSectionKey = "pending" | "confirmed" | "cancelled";
 type ConfirmedSortKey = "created_desc" | "created_asc" | "check_in_asc" | "check_in_desc";
@@ -703,6 +704,26 @@ function parseRequestedEventServicesFromMessage(message: string | null | undefin
   }
 
   return services;
+}
+
+function extractEventInquiryNotesLine(message: string | null | undefined): string | null {
+  if (typeof message !== "string") return null;
+  const withoutEst = stripEventSetupEstimateFromMessage(message);
+  for (const line of withoutEst.split(/\r?\n/)) {
+    const t = line.trim();
+    if (t.startsWith("Notes:")) return t.slice(6).trim();
+  }
+  return null;
+}
+
+function eventInquiryNightCount(checkIn: string, checkOut: string): number {
+  const a = /^(\d{4})-(\d{2})-(\d{2})$/.exec(checkIn);
+  const b = /^(\d{4})-(\d{2})-(\d{2})$/.exec(checkOut);
+  if (!a || !b) return 0;
+  const s = new Date(Number(a[1]), Number(a[2]) - 1, Number(a[3]));
+  const e = new Date(Number(b[1]), Number(b[2]) - 1, Number(b[3]));
+  const diff = Math.round((e.getTime() - s.getTime()) / 86_400_000);
+  return Math.max(0, diff);
 }
 
 function parseDateOnlyParts(value: string) {
@@ -3007,6 +3028,10 @@ export default function BookingsTable({
     const isUpdating = updatingId === booking.id;
     const isBulkResolving = bulkActionBookingId === booking.id;
     const eventInquiry = isEventInquiryBooking(booking);
+    const eventSetupEstimate = eventInquiry ? parseEventSetupEstimateFromMessage(booking.message) : null;
+    const eventGuestNotes = eventInquiry ? extractEventInquiryNotesLine(booking.message) : null;
+    const eventNightCount = eventInquiry ? eventInquiryNightCount(booking.check_in, booking.check_out) : 0;
+    const eventInquiryParsedServices = eventInquiry ? parseRequestedEventServicesFromMessage(booking.message) : [];
     // Phase 14A: a pending booking that overlaps a confirmed booking cannot be confirmed without manual resolution.
     const confirmedConflicts = getConfirmedConflicts(booking);
     const conflictHold = booking.status === "pending" && confirmedConflicts.length > 0;
@@ -3390,28 +3415,184 @@ export default function BookingsTable({
           </p>
         </div>
 
-        <div style={{ display: "grid", gap: "10px", color: MUTED }}>
-          <p style={{ fontFamily: LATO, fontSize: "15px", color: WHITE, margin: 0 }}>{booking.villa}</p>
-          <p style={{ fontFamily: LATO, fontSize: "13px", margin: 0, lineHeight: 1.6 }}>
-            {displayEmail}
-            {displayPhone ? ` | ${displayPhone}` : ""}
-            {displayCountry ? ` | ${displayCountry}` : ""}
-          </p>
-          <p style={{ fontFamily: LATO, fontSize: "13px", margin: 0, lineHeight: 1.6 }}>
-            {booking.sleeping_guests} sleeping
-            {booking.day_visitors > 0 ? ` | ${booking.day_visitors} visitors` : ""}
-          </p>
-          <p
-            style={{
-              fontFamily: LATO,
-              fontSize: "12px",
-              margin: 0,
-              lineHeight: 1.65,
-              opacity: booking.message?.trim() ? 1 : 0.8,
-            }}
-          >
-            {booking.message?.trim() || "-"}
-          </p>
+        <div style={{ display: "grid", gap: "12px", color: MUTED }}>
+          {eventInquiry ? (
+            <>
+              <div
+                style={{
+                  border: "0.5px solid rgba(157,183,217,0.22)",
+                  borderRadius: "10px",
+                  padding: "14px 16px",
+                  backgroundColor: "rgba(157,183,217,0.05)",
+                }}
+              >
+                <p
+                  style={{
+                    fontFamily: LATO,
+                    fontSize: "10px",
+                    letterSpacing: "1.5px",
+                    textTransform: "uppercase",
+                    color: "#9db7d9",
+                    margin: "0 0 10px",
+                    fontWeight: 600,
+                  }}
+                >
+                  Event basics
+                </p>
+                <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, margin: "0 0 6px", lineHeight: 1.55 }}>{booking.villa}</p>
+                <p style={{ fontFamily: LATO, fontSize: "12px", margin: "0 0 4px", lineHeight: 1.55 }}>
+                  {fmt(booking.check_in)} → {fmt(booking.check_out)}
+                  {eventNightCount > 0 ? ` · ${eventNightCount} night${eventNightCount === 1 ? "" : "s"}` : ""}
+                </p>
+                {booking.event_type ? (
+                  <p style={{ fontFamily: LATO, fontSize: "12px", margin: 0, lineHeight: 1.55 }}>
+                    Event type · <span style={{ color: GOLD }}>{booking.event_type}</span>
+                  </p>
+                ) : null}
+                <p style={{ fontFamily: LATO, fontSize: "12px", margin: "8px 0 0", lineHeight: 1.55 }}>
+                  Attendees · <span style={{ color: WHITE }}>{booking.day_visitors}</span>
+                  {" · "}
+                  Host overnight stay · <span style={{ color: WHITE }}>{booking.sleeping_guests}</span>
+                </p>
+              </div>
+
+              <div
+                style={{
+                  border: "0.5px solid rgba(197,164,109,0.2)",
+                  borderRadius: "10px",
+                  padding: "14px 16px",
+                  backgroundColor: "rgba(255,255,255,0.02)",
+                }}
+              >
+                <p
+                  style={{
+                    fontFamily: LATO,
+                    fontSize: "10px",
+                    letterSpacing: "1.5px",
+                    textTransform: "uppercase",
+                    color: GOLD,
+                    margin: "0 0 10px",
+                    fontWeight: 600,
+                  }}
+                >
+                  Selected services
+                </p>
+                {eventSetupEstimate && eventSetupEstimate.lines.length > 0 ? (
+                  <div style={{ display: "grid", gap: "8px" }}>
+                    {eventSetupEstimate.lines.map((row, i) => (
+                      <div
+                        key={`${row.label}-${i}`}
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr auto auto auto",
+                          gap: "10px",
+                          alignItems: "baseline",
+                          fontFamily: LATO,
+                          fontSize: "12px",
+                          color: "rgba(255,255,255,0.88)",
+                        }}
+                      >
+                        <span>{row.label}</span>
+                        <span style={{ color: MUTED }}>×{row.quantity}</span>
+                        <span style={{ color: MUTED, textAlign: "right" }}>{formatMoney(row.unit_price) ?? "—"}</span>
+                        <span style={{ textAlign: "right", color: WHITE }}>{formatMoney(row.line_total) ?? "—"}</span>
+                      </div>
+                    ))}
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        marginTop: "6px",
+                        paddingTop: "10px",
+                        borderTop: "0.5px solid rgba(255,255,255,0.08)",
+                        fontFamily: LATO,
+                        fontSize: "13px",
+                        color: GOLD,
+                      }}
+                    >
+                      <span>Estimated setup subtotal (non-binding)</span>
+                      <span>{formatMoney(eventSetupEstimate.total) ?? "—"}</span>
+                    </div>
+                  </div>
+                ) : eventInquiryParsedServices.length > 0 ? (
+                  <ul style={{ margin: 0, paddingLeft: "18px", fontFamily: LATO, fontSize: "12px", lineHeight: 1.7 }}>
+                    {eventInquiryParsedServices.map((s) => (
+                      <li key={s.key}>{formatEventProposalServiceLabel(s)}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p style={{ fontFamily: LATO, fontSize: "12px", margin: 0 }}>—</p>
+                )}
+              </div>
+
+              <div style={{ border: "0.5px solid rgba(255,255,255,0.08)", borderRadius: "10px", padding: "14px 16px" }}>
+                <p
+                  style={{
+                    fontFamily: LATO,
+                    fontSize: "10px",
+                    letterSpacing: "1.5px",
+                    textTransform: "uppercase",
+                    color: MUTED,
+                    margin: "0 0 8px",
+                    fontWeight: 600,
+                  }}
+                >
+                  Guest details
+                </p>
+                <p style={{ fontFamily: LATO, fontSize: "13px", margin: 0, lineHeight: 1.6, color: WHITE }}>
+                  {displayName}
+                </p>
+                <p style={{ fontFamily: LATO, fontSize: "12px", margin: "6px 0 0", lineHeight: 1.6 }}>
+                  {displayEmail}
+                  {displayPhone ? ` · ${displayPhone}` : ""}
+                  {displayCountry ? ` · ${displayCountry}` : ""}
+                </p>
+              </div>
+
+              {eventGuestNotes && eventGuestNotes !== "None" ? (
+                <div style={{ border: "0.5px solid rgba(255,255,255,0.08)", borderRadius: "10px", padding: "14px 16px" }}>
+                  <p
+                    style={{
+                      fontFamily: LATO,
+                      fontSize: "10px",
+                      letterSpacing: "1.5px",
+                      textTransform: "uppercase",
+                      color: MUTED,
+                      margin: "0 0 8px",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Notes
+                  </p>
+                  <p style={{ fontFamily: LATO, fontSize: "12px", margin: 0, lineHeight: 1.65, whiteSpace: "pre-wrap" }}>{eventGuestNotes}</p>
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <p style={{ fontFamily: LATO, fontSize: "15px", color: WHITE, margin: 0 }}>{booking.villa}</p>
+              <p style={{ fontFamily: LATO, fontSize: "13px", margin: 0, lineHeight: 1.6 }}>
+                {displayEmail}
+                {displayPhone ? ` | ${displayPhone}` : ""}
+                {displayCountry ? ` | ${displayCountry}` : ""}
+              </p>
+              <p style={{ fontFamily: LATO, fontSize: "13px", margin: 0, lineHeight: 1.6 }}>
+                {booking.sleeping_guests} sleeping
+                {booking.day_visitors > 0 ? ` | ${booking.day_visitors} visitors` : ""}
+              </p>
+              <p
+                style={{
+                  fontFamily: LATO,
+                  fontSize: "12px",
+                  margin: 0,
+                  lineHeight: 1.65,
+                  opacity: booking.message?.trim() ? 1 : 0.8,
+                }}
+              >
+                {booking.message?.trim() || "-"}
+              </p>
+            </>
+          )}
         </div>
 
         {needsAttention && (
@@ -3865,7 +4046,7 @@ export default function BookingsTable({
             }}
           >
             <p style={{ fontFamily: LATO, fontSize: "11px", color: "#9db7d9", margin: 0, lineHeight: 1.55 }}>
-              Event pricing is customized after review. Stay totals shown elsewhere are for reference only and do not represent the event package price.
+              Event inquiries use stay-date fields for calendar blocking only. The guest-facing setup estimate in the inquiry summary is a non-binding services subtotal; the formal proposal (when sent) remains the commercial reference.
             </p>
           </div>
         )}

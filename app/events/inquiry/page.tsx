@@ -1,6 +1,6 @@
 "use client";
-import { Suspense, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { DayPicker } from "react-day-picker";
 import type { DateRange, Matcher } from "react-day-picker";
 import "react-day-picker/dist/style.css";
@@ -21,6 +21,15 @@ import {
 } from "@/lib/event-service-seed";
 import { supabase } from "@/lib/supabase";
 import { addDaysToDateOnly, rangesOverlap } from "@/lib/calendar/event-block";
+import { takeBookToEventHandoffIfLock } from "@/lib/event-inquiry-handoff";
+import { EVENT_SETUP_ESTIMATE_PREFIX, type EventSetupEstimatePayload } from "@/lib/event-inquiry-message";
+import {
+  clampEventAttendees,
+  computeEventServiceLineSubtotal,
+  isEventServiceQuantityTiedToAttendees,
+  MAX_EVENT_ATTENDEES,
+  type EventServicePricingRow,
+} from "@/lib/event-inquiry-pricing";
 
 // ─── Brand constants ──────────────────────────────────────────────────────────
 const GOLD     = "#C5A46D";
@@ -134,7 +143,7 @@ const EVENT_RECOMMENDATIONS: Record<string, { guidance: string; recommended: str
   },
 };
 
-const DEFAULT_EVENT_SERVICE_MAX_QUANTITY = 250;
+const EVENT_ATTENDEE_CAP_ERROR = "Oraya private events are limited to 30 attendees.";
 
 const DIAL_CODES = [
   { flag: "🇱🇧", label: "Lebanon",       code: "+961" },
@@ -197,6 +206,9 @@ interface EventServiceOption extends AddonOperationalFields {
   label: string;
   enabled: boolean;
   source: "managed" | "fallback";
+  price: number | null;
+  currency: string;
+  pricing_model: "flat_fee" | "per_night" | "per_person_per_day" | "per_unit";
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -260,6 +272,7 @@ function detectDeadDaySuggestion(
 const MIN_EVENT_NIGHTS = 1;
 
 function friendlyError(msg: string): string {
+  if (msg.includes("Oraya private events are limited to 30 attendees")) return msg;
   if (msg.includes("row-level security") || msg.includes("policy") || msg.includes("42501"))
     return "Unable to submit your inquiry. Please try again or contact us directly.";
   if (msg.includes("Invalid email address"))
@@ -286,14 +299,21 @@ function getEventServiceMinQuantity(service: EventServiceOption): number {
 
 function getEventServiceMaxQuantity(service: EventServiceOption): number {
   const min = getEventServiceMinQuantity(service);
+  let cap = MAX_EVENT_ATTENDEES;
   if (typeof service.max_quantity === "number" && Number.isFinite(service.max_quantity) && service.max_quantity >= min) {
-    return Math.floor(service.max_quantity);
+    cap = Math.min(Math.floor(service.max_quantity), MAX_EVENT_ATTENDEES);
   }
-  return DEFAULT_EVENT_SERVICE_MAX_QUANTITY;
+  return Math.max(min, cap);
 }
 
-function getDefaultEventServiceQuantity(service: EventServiceOption): number {
-  return getEventServiceMinQuantity(service);
+function getInitialQuantityForEventService(service: EventServiceOption, attendeeCap: number): number {
+  if (!service.quantity_enabled) return 1;
+  const min = getEventServiceMinQuantity(service);
+  const max = getEventServiceMaxQuantity(service);
+  if (isEventServiceQuantityTiedToAttendees(service)) {
+    return Math.min(Math.max(attendeeCap, min), max);
+  }
+  return min;
 }
 
 function getEventServiceUnitLabel(service: EventServiceOption): string | null {
@@ -382,11 +402,11 @@ const CALENDAR_CSS = `
 
 // ─── Step indicator ───────────────────────────────────────────────────────────
 function StepIndicator({ step }: { step: number }) {
-  const labels = ["Event Basics", "Services", "Host Details", "Review"];
+  const labels = ["Event Basics", "Services", "Review & submit"];
   return (
     <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-        {([1, 2, 3, 4] as const).map((s, i) => (
+        {([1, 2, 3] as const).map((s, i) => (
           <div key={s} style={{ display: "flex", alignItems: "center" }}>
             <div style={{
               width: "26px", height: "26px", borderRadius: "50%", flexShrink: 0,
@@ -399,7 +419,7 @@ function StepIndicator({ step }: { step: number }) {
             }}>
               {step > s ? "✓" : s}
             </div>
-            {i < 3 && (
+            {i < 2 && (
               <div style={{
                 width: "40px", height: "0.5px",
                 backgroundColor: step > s ? GOLD : "rgba(197,164,109,0.15)",
@@ -422,6 +442,9 @@ function StepIndicator({ step }: { step: number }) {
 // ─── Main component ───────────────────────────────────────────────────────────
 function EventInquiryPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const quantityManuallyAdjustedRef = useRef<Set<string>>(new Set());
+  const prevVillaRef = useRef<string>("");
 
   const [authStatus, setAuthStatus] = useState<AuthStatus>("loading");
   const [memberName, setMemberName] = useState("");
@@ -451,6 +474,41 @@ function EventInquiryPageInner() {
   const [confirmedRanges, setConfirmedRanges] = useState<ConfirmedRange[]>([]);
   const [error,           setError]           = useState("");
   const [loading,         setLoading]         = useState(false);
+
+  const effectiveAttendees = useMemo(
+    () => clampEventAttendees(parseInt(form.dayVisitors, 10) || 1),
+    [form.dayVisitors],
+  );
+
+  /** Stay → event handoff: `?prefill=book&hl=<lockId>` + sessionStorage (see `lib/event-inquiry-handoff.ts`). */
+  useEffect(() => {
+    if (searchParams.get("prefill") !== "book") return;
+    const lockId = searchParams.get("hl");
+    const payload = takeBookToEventHandoffIfLock(lockId);
+    if (!payload) {
+      router.replace("/events/inquiry", { scroll: false });
+      return;
+    }
+    const dv = clampEventAttendees(parseInt(payload.day_visitors, 10) || 1);
+    const villaOk = VILLAS.includes(payload.villa);
+    setForm((f) => ({
+      ...f,
+      ...(villaOk ? { villa: payload.villa } : {}),
+      sleepingGuests: payload.sleeping_guests,
+      dayVisitors: String(dv),
+    }));
+    setDateRange({ from: parseLocalISO(payload.check_in), to: parseLocalISO(payload.check_out) });
+    if (payload.guest) {
+      setGuest({
+        fullName: payload.guest.fullName ?? "",
+        email: payload.guest.email ?? "",
+        dialCode: payload.guest.dialCode || "+961",
+        phoneNumber: payload.guest.phoneNumber ?? "",
+        country: payload.guest.country || "Lebanon",
+      });
+    }
+    router.replace("/events/inquiry", { scroll: false });
+  }, [router, searchParams]);
 
   // Auth check on mount
   useEffect(() => {
@@ -499,7 +557,7 @@ function EventInquiryPageInner() {
           }));
 
         if (!cancelled) {
-          setManagedEventServices(merged);
+          setManagedEventServices(merged as EventServiceOption[]);
         }
       } catch (loadError) {
         console.error("[events] event services load error:", loadError);
@@ -515,10 +573,17 @@ function EventInquiryPageInner() {
     };
   }, []);
 
-  // Reload availability whenever villa changes
+  // Reload availability whenever villa changes (clear dates only when switching villa, not on first select)
   useEffect(() => {
-    setDateRange(undefined);
-    if (!form.villa) { setConfirmedRanges([]); return; }
+    if (!form.villa) {
+      prevVillaRef.current = "";
+      setConfirmedRanges([]);
+      return;
+    }
+    if (prevVillaRef.current && prevVillaRef.current !== form.villa) {
+      setDateRange(undefined);
+    }
+    prevVillaRef.current = form.villa;
     fetch(`/api/bookings/availability?villa=${encodeURIComponent(form.villa)}`)
       .then(r => r.json())
       .then(d => setConfirmedRanges(Array.isArray(d.ranges) ? d.ranges : []))
@@ -622,12 +687,41 @@ function EventInquiryPageInner() {
         recommended: service.recommended,
         display_order: service.display_order,
         description: service.description,
+        price: service.price,
+        currency: service.currency,
+        pricing_model: service.pricing_model,
       })),
     []
   );
 
   const hasManagedEventServices = managedEventServices.length > 0;
   const eventServiceCatalog = hasManagedEventServices ? managedEventServices : fallbackEventServices;
+
+  // When attendee count changes, refresh attendee-linked service quantities (unless the guest edited that row).
+  useEffect(() => {
+    const cap = effectiveAttendees;
+    setSelectedServiceQuantities((previous) => {
+      let changed = false;
+      const next: Record<string, number> = { ...previous };
+      for (const key of Object.keys(previous)) {
+        const svc = eventServiceCatalog.find((s) => s.key === key);
+        if (!svc) continue;
+        const maxQ = getEventServiceMaxQuantity(svc);
+        if (isEventServiceQuantityTiedToAttendees(svc) && !quantityManuallyAdjustedRef.current.has(key)) {
+          const desired = getInitialQuantityForEventService(svc, cap);
+          if (next[key] !== desired) {
+            next[key] = desired;
+            changed = true;
+          }
+        } else if (next[key] > maxQ) {
+          next[key] = maxQ;
+          changed = true;
+        }
+      }
+      return changed ? next : previous;
+    });
+  }, [effectiveAttendees, eventServiceCatalog]);
+
   const filteredEventServices = useMemo(() => {
     const normalizedFormType = form.eventType ? normalizeEventType(form.eventType) : null;
     return eventServiceCatalog.filter((service) => {
@@ -705,6 +799,35 @@ function EventInquiryPageInner() {
     formatSelectedEventService(service, quantity)
   );
 
+  const eventSetupEstimate = useMemo((): EventSetupEstimatePayload | null => {
+    if (selectedEventServices.length === 0) return null;
+    const lines: EventSetupEstimatePayload["lines"] = [];
+    let total = 0;
+    let currency = "USD";
+    for (const { service, quantity } of selectedEventServices) {
+      if (service.currency) currency = service.currency;
+      const row = service as unknown as EventServicePricingRow;
+      const lineRaw = computeEventServiceLineSubtotal(row, quantity, nights);
+      const line = Math.round(lineRaw * 100) / 100;
+      total += line;
+      const qtyDisplay = service.quantity_enabled ? quantity : 1;
+      const unitPrice =
+        service.quantity_enabled && qtyDisplay > 0
+          ? Math.round((line / qtyDisplay) * 100) / 100
+          : typeof service.price === "number" && Number.isFinite(service.price)
+            ? Math.round(service.price * 100) / 100
+            : 0;
+      lines.push({
+        label: service.label,
+        quantity: qtyDisplay,
+        unit_price: unitPrice,
+        line_total: line,
+        pricing_model: service.pricing_model,
+      });
+    }
+    return { version: 1, currency, total: Math.round(total * 100) / 100, lines };
+  }, [selectedEventServices, nights]);
+
   const guestEmail = guest.email.trim();
   const guestEmailInvalid = authStatus !== "member" && guestEmail.length > 0 && !EMAIL_RE.test(guestEmail);
 
@@ -721,7 +844,17 @@ function EventInquiryPageInner() {
 
   // ── Event handlers ────────────────────────────────────────────────────────
   function handleFormChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
-    setForm(f => ({ ...f, [e.target.name]: e.target.value }));
+    if (e.target.name === "dayVisitors") {
+      const raw = e.target.value;
+      const n = parseInt(raw, 10);
+      if (raw !== "" && Number.isFinite(n) && n > MAX_EVENT_ATTENDEES) {
+        setError(EVENT_ATTENDEE_CAP_ERROR);
+        setForm((f) => ({ ...f, dayVisitors: String(MAX_EVENT_ATTENDEES) }));
+        return;
+      }
+      setError("");
+    }
+    setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
   }
 
   function handleGuestChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
@@ -769,17 +902,19 @@ function EventInquiryPageInner() {
   function toggleService(service: EventServiceOption) {
     setSelectedServiceQuantities((previous) => {
       if (service.key in previous) {
+        quantityManuallyAdjustedRef.current.delete(service.key);
         const { [service.key]: _removed, ...rest } = previous;
         return rest;
       }
       return {
         ...previous,
-        [service.key]: getDefaultEventServiceQuantity(service),
+        [service.key]: getInitialQuantityForEventService(service, effectiveAttendees),
       };
     });
   }
 
   function updateServiceQuantity(service: EventServiceOption, rawValue: string) {
+    quantityManuallyAdjustedRef.current.add(service.key);
     const parsed = parseInt(rawValue, 10);
     const min = getEventServiceMinQuantity(service);
     const max = getEventServiceMaxQuantity(service);
@@ -796,7 +931,7 @@ function EventInquiryPageInner() {
       const next = { ...previous };
       for (const service of services) {
         if (!(service.key in next)) {
-          next[service.key] = getDefaultEventServiceQuantity(service);
+          next[service.key] = getInitialQuantityForEventService(service, effectiveAttendees);
         }
       }
       return next;
@@ -827,14 +962,9 @@ function EventInquiryPageInner() {
       if (!Number.isFinite(attendees) || attendees < 1) {
         setError("Please enter the expected number of attendees."); return;
       }
-    }
-    if (step === 3) {
-      const sleeping = parseInt(form.sleepingGuests, 10);
-      if (!sleeping || sleeping < 1) { setError("Please enter the host overnight stay count (at least 1)."); return; }
-      if (authStatus !== "member") {
-        if (!guest.fullName.trim())                  { setError("Please enter your full name so we know who to contact."); return; }
-        if (!guestEmail)                             { setError("Please enter your email address so we can reach you about your event."); return; }
-        if (!EMAIL_RE.test(guestEmail))              { setError("Please enter a valid email address."); return; }
+      if (attendees > MAX_EVENT_ATTENDEES) {
+        setError(EVENT_ATTENDEE_CAP_ERROR);
+        return;
       }
     }
     setStep(s => s + 1);
@@ -843,7 +973,7 @@ function EventInquiryPageInner() {
 
   function goBack() {
     setError("");
-    setStep(s => s - 1);
+    setStep((s) => (s <= 1 ? 1 : s - 1));
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -851,10 +981,20 @@ function EventInquiryPageInner() {
     setError("");
     setLoading(true);
     try {
-      if (authStatus !== "member" && !EMAIL_RE.test(guestEmail)) {
-        throw new Error("Invalid email address.");
+      if (!form.villa) throw new Error("Please select a villa preference.");
+      if (!form.eventType) throw new Error("Please choose an event type.");
+      if (!checkIn || !checkOut) throw new Error("Please select your preferred event dates.");
+      if (checkOut <= checkIn) throw new Error("Your event end date must be after the start date.");
+      const attendees = parseInt(form.dayVisitors, 10);
+      if (!Number.isFinite(attendees) || attendees < 1) throw new Error("Please enter the expected number of attendees.");
+      if (attendees > MAX_EVENT_ATTENDEES) throw new Error(EVENT_ATTENDEE_CAP_ERROR);
+      const sleeping = parseInt(form.sleepingGuests, 10);
+      if (!sleeping || sleeping < 1) throw new Error("Please enter the host overnight stay count (at least 1).");
+      if (authStatus !== "member") {
+        if (!guest.fullName.trim()) throw new Error("Please enter your full name so we know who to contact.");
+        if (!guestEmail) throw new Error("Please enter your email address so we can reach you about your event.");
+        if (!EMAIL_RE.test(guestEmail)) throw new Error("Please enter a valid email address.");
       }
-
       const { data: { user }, error: authErr } = await supabase.auth.getUser();
       if (authErr) console.error("[events] auth.getUser error:", authErr);
 
@@ -879,6 +1019,9 @@ function EventInquiryPageInner() {
       }
       block.push(`Service Intent: ${serviceIntent}`);
       block.push(`Notes: ${userNotes || "None"}`);
+      if (eventSetupEstimate) {
+        block.push(`${EVENT_SETUP_ESTIMATE_PREFIX} ${JSON.stringify(eventSetupEstimate)}`);
+      }
       const composedMessage = block.join("\n");
 
       const body: Record<string, unknown> = {
@@ -1198,16 +1341,16 @@ function EventInquiryPageInner() {
                   type="number"
                   required
                   min={1}
-                  max={300}
+                  max={MAX_EVENT_ATTENDEES}
                   value={form.dayVisitors}
                   onChange={handleFormChange}
                   onFocus={focusGold}
                   onBlur={blurGold}
                   style={inputStyle}
-                  placeholder="e.g. 60"
+                  placeholder="e.g. 24"
                 />
                 <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, marginTop: "6px", lineHeight: 1.5 }}>
-                  This is your estimate. Final attendee capacity is reviewed by Oraya based on the event area.
+                  Private events at Oraya are limited to {MAX_EVENT_ATTENDEES} attendees. Final capacity is confirmed after review.
                 </p>
               </div>
 
@@ -1258,7 +1401,7 @@ function EventInquiryPageInner() {
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "10px" }}>
                         {group.services.map((service) => {
                           const selected = service.key in selectedServiceQuantities;
-                          const quantity = selectedServiceQuantities[service.key] ?? getDefaultEventServiceQuantity(service);
+                          const quantity = selectedServiceQuantities[service.key] ?? getInitialQuantityForEventService(service, effectiveAttendees);
                           const unitLabel = getEventServiceUnitLabel(service);
                           const minQuantity = getEventServiceMinQuantity(service);
                           const maxQuantity = getEventServiceMaxQuantity(service);
@@ -1359,6 +1502,21 @@ function EventInquiryPageInner() {
                 </p>
               </div>
 
+              {eventSetupEstimate && (
+                <div style={{ border: "0.5px solid rgba(197,164,109,0.22)", backgroundColor: "rgba(255,255,255,0.025)", padding: "16px 18px", display: "flex", flexDirection: "column", gap: "10px" }}>
+                  <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2.5px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+                    Estimated event setup total
+                  </p>
+                  <p style={{ fontFamily: PLAYFAIR, fontSize: "22px", fontWeight: 400, color: WHITE, margin: 0 }}>
+                    {eventSetupEstimate.currency}{" "}
+                    {eventSetupEstimate.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                  <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.65 }}>
+                    Final proposal will be confirmed by Oraya after review. This is an estimate only, not a final quote.
+                  </p>
+                </div>
+              )}
+
               {error && (
                 <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070", textAlign: "center", lineHeight: 1.6, margin: 0 }}>
                   {error}
@@ -1379,7 +1537,7 @@ function EventInquiryPageInner() {
           )}
 
           {/* ════════════════════════════════════════════════════════════════
-              STEP 3 — Host Details: overnight hosts + contact + notes
+              STEP 3 — Host details, summary, and submit
           ════════════════════════════════════════════════════════════════ */}
           {step === 3 && (
             <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
@@ -1389,7 +1547,7 @@ function EventInquiryPageInner() {
                   Host Details
                 </p>
                 <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "0 0 6px", lineHeight: 1.6 }}>
-                  Event packages include overnight stay for the hosts. Oraya will review the full package before confirmation.
+                  Event packages include overnight stay for the hosts. Review the summary below, then submit your inquiry in one step.
                 </p>
               </div>
 
@@ -1482,39 +1640,14 @@ function EventInquiryPageInner() {
                   style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6 }} />
               </div>
 
-              {error && (
-                <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070", textAlign: "center", lineHeight: 1.6, margin: 0 }}>
-                  {error}
-                </p>
-              )}
-
-              <div style={{ display: "flex", gap: "12px" }}>
-                <button onClick={goBack}
-                  style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", padding: "16px 24px", cursor: "pointer" }}>
-                  ← Back
-                </button>
-                <button onClick={goNext}
-                  style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2.5px", textTransform: "uppercase", color: CHARCOAL, backgroundColor: GOLD, border: "none", padding: "16px", flex: 1, cursor: "pointer" }}>
-                  Review →
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* ════════════════════════════════════════════════════════════════
-              STEP 4 — Review & Submit
-          ════════════════════════════════════════════════════════════════ */}
-          {step === 4 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-
               <div>
                 <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 14px" }}>
-                  Event Inquiry Summary
+                  Event inquiry summary
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginBottom: "16px" }}>
                   <div style={{ border: "0.5px solid rgba(197,164,109,0.18)", padding: "1.25rem", backgroundColor: "rgba(255,255,255,0.015)" }}>
                     <p style={{ fontFamily: PLAYFAIR, fontSize: "18px", fontWeight: 400, color: WHITE, margin: "0 0 12px" }}>
-                      Event Overview
+                      Event overview
                     </p>
                     {(
                       [
@@ -1542,7 +1675,7 @@ function EventInquiryPageInner() {
 
                   <div style={{ border: "0.5px solid rgba(197,164,109,0.18)", padding: "1.25rem", backgroundColor: "rgba(255,255,255,0.015)" }}>
                     <p style={{ fontFamily: PLAYFAIR, fontSize: "18px", fontWeight: 400, color: WHITE, margin: "0 0 12px" }}>
-                      Services Requested
+                      Selected services
                     </p>
                     {selectedEventServiceSummaries.length > 0 ? (
                       <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
@@ -1554,61 +1687,30 @@ function EventInquiryPageInner() {
                       </div>
                     ) : (
                       <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0, lineHeight: 1.6 }}>
-                        No services selected yet. Oraya can still recommend setup options after review.
+                        No services selected yet. Oraya can still recommend options after review.
                       </p>
                     )}
                   </div>
                 </div>
-                <div style={{ display: "none" }} aria-hidden="true">
-                  {(
-                    [
-                      ["Villa preference",   form.villa],
-                      ["Event type",         form.eventType],
-                      ["Preferred dates",    `${fmtDate(checkIn)} → ${fmtDate(checkOut)}`],
-                      ["Window",             `${nights} ${nights === 1 ? "night" : "nights"}`],
-                      ["Expected attendees", form.dayVisitors],
-                      ["Host overnight stay", form.sleepingGuests],
-                      ...(selectedEventServiceSummaries.length > 0 ? [["Requested services", selectedEventServiceSummaries.join(", ")]] : []),
-                      ...(form.message ? [["Notes", form.message]] : []),
-                      ...(authStatus !== "member" ? [["Name", guest.fullName], ["Email", guest.email]] : []),
-                    ] as [string, string][]
-                  ).map(([label, value]) => {
-                    const isHighlight = label === "Event type" || label === "Preferred dates" || label === "Expected attendees" || label === "Host overnight stay";
-                    return (
-                      <div key={label} style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "flex-start",
-                        padding: isHighlight ? "12px 0" : "9px 0",
-                        borderBottom: "0.5px solid rgba(255,255,255,0.05)",
-                        gap: "16px",
-                      }}>
-                        <span style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED, flexShrink: 0, paddingRight: "16px" }}>
-                          {label}
-                        </span>
-                        <span style={{
-                          fontFamily: LATO,
-                          fontSize: isHighlight ? "14px" : "13px",
-                          color: isHighlight ? GOLD : WHITE,
-                          fontWeight: isHighlight ? 400 : 300,
-                          textAlign: "right",
-                          lineHeight: 1.5,
-                          maxWidth: "60%",
-                        }}>
-                          {value}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
               </div>
 
-              {/* Event package + no pricing copy */}
+              {eventSetupEstimate && (
+                <div style={{ border: "0.5px solid rgba(197,164,109,0.22)", backgroundColor: "rgba(197,164,109,0.04)", padding: "16px 20px" }}>
+                  <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 10px" }}>
+                    Estimated event setup total
+                  </p>
+                  <p style={{ fontFamily: PLAYFAIR, fontSize: "24px", fontWeight: 400, color: WHITE, margin: "0 0 10px" }}>
+                    {eventSetupEstimate.currency}{" "}
+                    {eventSetupEstimate.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                  <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.65 }}>
+                    Final proposal will be confirmed by Oraya after review. This is an estimate only, not a final quote.
+                  </p>
+                </div>
+              )}
+
               <div style={{ border: "0.5px solid rgba(197,164,109,0.22)", backgroundColor: "rgba(197,164,109,0.04)", padding: "16px 20px" }}>
-                <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 10px" }}>
-                  Event Package
-                </p>
-                <p style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.75)", margin: "0 0 8px", lineHeight: 1.6 }}>
+                <p style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.75)", margin: 0, lineHeight: 1.6 }}>
                   This request will be reviewed as a full event setup and you will receive a tailored proposal.
                 </p>
               </div>

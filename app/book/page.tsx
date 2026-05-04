@@ -13,6 +13,7 @@ import { applyBedroomFactorToNightlyRates, computeBedroomFactor } from "@/lib/pr
 import type { NightSource } from "@/lib/pricing/types";
 import { formatBeirutMonthDay, getBeirutDay } from "@/lib/utils/date-beirut";
 import { supabase } from "@/lib/supabase";
+import { writeBookToEventHandoff } from "@/lib/event-inquiry-handoff";
 import { AddonIcon } from "@/components/addon-icon";
 import { SkeletonBlock, SkeletonText } from "@/components/LoadingSkeleton";
 
@@ -1739,7 +1740,33 @@ function BookPageInner() {
                 </p>
                 <button
                   type="button"
-                  onClick={() => router.push("/events/inquiry")}
+                  onClick={() => {
+                    if (form.villa && checkIn && checkOut) {
+                      const lock = writeBookToEventHandoff({
+                        villa: form.villa,
+                        check_in: checkIn,
+                        check_out: checkOut,
+                        sleeping_guests: form.sleepingGuests,
+                        day_visitors: form.dayVisitors,
+                        ...(guestMode
+                          ? {
+                              guest: {
+                                fullName: guest.fullName,
+                                email: guest.email,
+                                dialCode: guest.dialCode,
+                                phoneNumber: guest.phoneNumber,
+                                country: guest.country,
+                              },
+                            }
+                          : {}),
+                      });
+                      if (lock) {
+                        router.push(`/events/inquiry?prefill=book&hl=${encodeURIComponent(lock)}`);
+                        return;
+                      }
+                    }
+                    router.push("/events/inquiry");
+                  }}
                   style={{ alignSelf: "flex-start", fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: CHARCOAL, backgroundColor: GOLD, border: "none", padding: "11px 22px", cursor: "pointer" }}
                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}

@@ -9,7 +9,7 @@ STOP and ask before proceeding.
 
 ## CURRENT PHASE
 
-Phase 13 -> COMPLETE | Phase 14 -> COMPLETE (14M closure) | Phase 15A -> COMPLETE (readiness audit) | Phase 15B -> COMPLETE (security hotfix) | Phase 15C -> COMPLETE (event inquiry calendar parity with stay picker) | Phase 15D -> COMPLETE (security cleanup + smoke test) | Phase 15E -> COMPLETE (local env parity + secret hygiene) | Phase 15F.1 -> COMPLETE (contact email consistency hotfix) | Phase 15F.2 -> COMPLETE (email identity hello standard) | Phase 15F.3 -> COMPLETE (privacy + legal communication alignment) | Phase 15F.4 -> COMPLETE (trust layer + legal entity + testimonial intake) | Phase 15F.5 -> COMPLETE (manual testimonial manager + feedback request tool) | Phase 15F.6 -> COMPLETE (completed reservations history + feedback follow-up) | Phase 15F.7 -> COMPLETE (manual feedback email trigger + tracking) | Phase 15G -> IN PROGRESS (event services consolidation; 15G.1 taxonomy + 15G.5 default configuration + 15G.6 price and description repair complete)
+Phase 13 -> COMPLETE | Phase 14 -> COMPLETE (14M closure) | Phase 15A -> COMPLETE (readiness audit) | Phase 15B -> COMPLETE (security hotfix) | Phase 15C -> COMPLETE (event inquiry calendar parity with stay picker) | Phase 15D -> COMPLETE (security cleanup + smoke test) | Phase 15E -> COMPLETE (local env parity + secret hygiene) | Phase 15F.1 -> COMPLETE (contact email consistency hotfix) | Phase 15F.2 -> COMPLETE (email identity hello standard) | Phase 15F.3 -> COMPLETE (privacy + legal communication alignment) | Phase 15F.4 -> COMPLETE (trust layer + legal entity + testimonial intake) | Phase 15F.5 -> COMPLETE (manual testimonial manager + feedback request tool) | Phase 15F.6 -> COMPLETE (completed reservations history + feedback follow-up) | Phase 15F.7 -> COMPLETE (manual feedback email trigger + tracking) | Phase 15G -> IN PROGRESS (event services consolidation; 15G.1 taxonomy + 15G.5 default configuration + 15G.6 price and description repair + 15G.7 inquiry UX and estimate connection complete)
 
 ---
 
@@ -616,12 +616,18 @@ Phase 15 — Production & growth readiness
   - **15G.5** Event Services Default Configuration [COMPLETE]
     - `lib/event-service-seed.ts` — 18 canonical event services with full defaults (price, `pricing_model` / operational `pricing_unit`, categories per spec, advance notice as `preparation_time_hours` + `cutoff_type: before_booking`, enforcement soft, approval flags, quantity bounds, `display_order`, `applicable_event_types` including `SEED_APPLICABLE_ALL_EVENT_TYPES` expansion; catering “per person” stored as `per_person_per_day` + operational `per_guest`; legacy `matchAliases` for idempotent merge (e.g. old “Tables and chairs” → Full Seating)
     - `app/api/admin/event-services/sync/route.ts` — upserts addons + `addon_operational_settings`: match by stable `id` then label/aliases; repair price when null/0/90; set `applies_to` when missing/`stay`; fill empty category / empty applicable types; preserve non-empty category and non-placeholder prices; `operational_settings_changed` in JSON response
-    - `app/events/inquiry/page.tsx` — fallback catalog uses `expandSeedApplicableEventTypes`; recommendations updated to new service labels; guest UI still has no price display
+    - `app/events/inquiry/page.tsx` — fallback catalog uses `expandSeedApplicableEventTypes`; recommendations updated to new service labels (line-level guest estimates added in **15G.7**)
   - **15G.6** Event Services Price + Description Repair [COMPLETE]
     - `lib/event-service-seed.ts` — each canonical service includes `description` (guest-safe copy); `findSeedForAddonRow()` for id/label/alias matching on legacy rows
     - `app/api/admin/event-services/sync/route.ts` — repair canonical addon price when null, non-finite, ≤0, or placeholder **90** (never treat 0 as intentional); post-pass upsert for matched rows missed in main loop; merge operational `description` from seed; `Array.from` for Map upsert batch (TS downlevel)
-    - `app/events/inquiry/page.tsx` — optional service descriptions on inquiry step 2; no prices shown
+    - `app/events/inquiry/page.tsx` — optional service descriptions on inquiry step 2; no per-service price display (non-binding setup total added in **15G.7**)
     - Admin description remains in operational settings JSON (no new `addons.description` column); `AddonsEditor` guest description field unchanged
+  - **15G.7** Event Inquiry UX + Pricing Estimate Connection [COMPLETE]
+    - `lib/event-inquiry-handoff.ts` — stay→event session handoff with `lockId` + URL `?prefill=book&hl=` (PII not in query string); `lib/event-inquiry-pricing.ts` + `lib/event-inquiry-message.ts` — attendee cap 30, line subtotals, `[EventSetupEstimate]` JSON in `bookings.message` (no schema change)
+    - `app/book/page.tsx` — “Plan your event” writes handoff when villa + dates exist; pre-fills guest contact when in guest mode
+    - `app/events/inquiry/page.tsx` — consumes handoff; villa change clears dates only when switching villa; attendees capped (UI + `goNext` + submit); per-guest / `per_person_per_day` quantities default to attendee count and sync unless manually edited; service qty max capped at 30; **estimated event setup total** on steps 2–3 with required disclaimer copy; 3-step flow (merged review + **Submit Event Inquiry**); estimate persisted for admin
+    - `app/api/bookings/route.ts` — event inquiries: `day_visitors` 1–30 validation
+    - `components/admin/BookingsTable.tsx` — event inquiry card: sections (basics, selected services with unit/line when estimate present, subtotal, guest, notes); clearer calendar vs estimate disclaimer
     - Phase **15G** overall remains **IN PROGRESS** until remaining 15G admin/guest QA sub-steps are closed
 
 ---

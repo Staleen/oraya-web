@@ -174,6 +174,21 @@ export async function POST(request: Request) {
 
     try {
       const incomingIsEvent = Boolean(event_type) && typeof message === "string" && message.includes("[Event Inquiry]");
+      if (incomingIsEvent) {
+        const attendeeCount = parseInt(String(day_visitors ?? ""), 10);
+        if (!Number.isFinite(attendeeCount) || attendeeCount < 1) {
+          return NextResponse.json(
+            { error: "Please enter a valid expected attendee count for your event inquiry." },
+            { status: 400 },
+          );
+        }
+        if (attendeeCount > 30) {
+          return NextResponse.json(
+            { error: "Oraya private events are limited to 30 attendees." },
+            { status: 400 },
+          );
+        }
+      }
       const conflict = await findAvailabilityConflict(villa, check_in, check_out, undefined, incomingIsEvent);
       if (conflict) {
         return NextResponse.json(
