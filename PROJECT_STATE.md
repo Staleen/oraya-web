@@ -9,7 +9,7 @@ STOP and ask before proceeding.
 
 ## CURRENT PHASE
 
-Phase 13 -> COMPLETE | Phase 14 -> COMPLETE (14M closure) | Phase 15A -> COMPLETE (readiness audit) | Phase 15B -> COMPLETE (security hotfix) | Phase 15C -> COMPLETE (event inquiry calendar parity with stay picker) | Phase 15D -> COMPLETE (security cleanup + smoke test) | Phase 15E -> COMPLETE (local env parity + secret hygiene) | Phase 15F.1 -> COMPLETE (contact email consistency hotfix) | Phase 15F.2 -> COMPLETE (email identity hello standard) | Phase 15F.3 -> COMPLETE (privacy + legal communication alignment) | Phase 15F.4 -> COMPLETE (trust layer + legal entity + testimonial intake) | Phase 15F.5 -> COMPLETE (manual testimonial manager + feedback request tool) | Phase 15F.6 -> COMPLETE (completed reservations history + feedback follow-up) | Phase 15F.7 -> COMPLETE (manual feedback email trigger + tracking) | **Phase 15G -> COMPLETE** (event services consolidation: 15G.1 taxonomy + 15G.5–7 + 15G.10–13 as documented below) | **Phase 15H -> COMPLETE** (event quote line-item manager + **15H.1** admin proposal UI: included/excluded split, totals breakdown, `roundMoney`; no schema change) | **15I.1 -> COMPLETE** (payment foundation: booking ledger columns + admin overview + manual record; see Phase 15I.1 below)**
+Phase 13 -> COMPLETE | Phase 14 -> COMPLETE (14M closure) | Phase 15A -> COMPLETE (readiness audit) | Phase 15B -> COMPLETE (security hotfix) | Phase 15C -> COMPLETE (event inquiry calendar parity with stay picker) | Phase 15D -> COMPLETE (security cleanup + smoke test) | Phase 15E -> COMPLETE (local env parity + secret hygiene) | Phase 15F.1 -> COMPLETE (contact email consistency hotfix) | Phase 15F.2 -> COMPLETE (email identity hello standard) | Phase 15F.3 -> COMPLETE (privacy + legal communication alignment) | Phase 15F.4 -> COMPLETE (trust layer + legal entity + testimonial intake) | Phase 15F.5 -> COMPLETE (manual testimonial manager + feedback request tool) | Phase 15F.6 -> COMPLETE (completed reservations history + feedback follow-up) | Phase 15F.7 -> COMPLETE (manual feedback email trigger + tracking) | **Phase 15G -> COMPLETE** (event services consolidation: 15G.1 taxonomy + 15G.5–7 + 15G.10–13 as documented below) | **Phase 15H -> COMPLETE** (event quote line-item manager + **15H.1** admin proposal UI: included/excluded split, totals breakdown, `roundMoney`; no schema change) | **15I.1 -> COMPLETE** (payment foundation: booking ledger columns + admin overview + manual record; see Phase 15I.1 below) | **15I.2 -> COMPLETE** (admin booking expanded-card UX cleanup: collapsible secondary sections, revenue estimate block removed; no booking/payment/pricing/proposal logic change; see 15I.2 below)**
 
 ---
 
@@ -677,6 +677,13 @@ Phase 15 remains active (documentation + future sub-phases only unless product r
 - `lib/payment-foundation.ts` — contract total = stay estimated total vs event `proposal_total_amount`; `amount_due` = total − paid; ledger stage `none` | `unpaid` | `partially_paid` | `fully_paid` (guest-facing **workflow** still uses legacy `payment_status`: `payment_requested`, `deposit_paid`, `paid_in_full`)
 - Admin `BookingsTable`: **Payment Overview** (totals, deposit, ledger badge, last payment date) + **Record payment** persists foundation fields alongside existing behavior; no guest page, gateway, or booking-creation changes
 - No payment portal, no gateway integration, no user payment flow in this step
+
+**15I.2 Admin Booking UX Cleanup [COMPLETE]**
+- Expanded booking cards decluttered with collapsible sections (proposal, payment, guest inquiry detail, calendar & operations, feedback, add-ons when present)
+- Revenue estimate block removed from booking cards (payment overview + proposal totals remain authoritative)
+- Proposal / payment / feedback / operational detail grouped cleanly; long helper copy folded into short labels and `<details>` / “View details” toggles where appropriate
+- Critical warnings remain visible when relevant (conflicts, validation, payment overdue, proposal send errors, missing guest email, failed actions)
+- No booking, payment, pricing, proposal, API, schema, guest page, or email behavior changes
 
 ---
 

@@ -654,64 +654,6 @@ function renderFoundationLedgerBadge(booking: Booking) {
   );
 }
 
-function renderPricingIntelligenceBadge(label: string, value: string, tone: "tier" | "confidence") {
-  const styles =
-    tone === "tier"
-      ? {
-          color: GOLD,
-          backgroundColor: "rgba(197,164,109,0.14)",
-          border: "rgba(197,164,109,0.3)",
-        }
-      : {
-          color: "#9db7d9",
-          backgroundColor: "rgba(157,183,217,0.14)",
-          border: "rgba(157,183,217,0.26)",
-        };
-
-  return (
-    <div
-      style={{
-        display: "grid",
-        gap: "4px",
-        minWidth: 0,
-      }}
-    >
-      <p
-        style={{
-          fontFamily: LATO,
-          fontSize: "9px",
-          letterSpacing: "1.4px",
-          textTransform: "uppercase",
-          color: MUTED,
-          margin: 0,
-        }}
-      >
-        {label}
-      </p>
-      <span
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          width: "fit-content",
-          fontFamily: LATO,
-          fontSize: "10px",
-          letterSpacing: "1.4px",
-          textTransform: "uppercase",
-          color: styles.color,
-          backgroundColor: styles.backgroundColor,
-          border: `0.5px solid ${styles.border}`,
-          borderRadius: "999px",
-          padding: "6px 10px",
-          whiteSpace: "nowrap",
-        }}
-      >
-        {formatAdvisoryLabel(value)}
-      </span>
-    </div>
-  );
-}
-
 function renderRevenueEstimateRow(label: string, value: string) {
   return (
     <div
@@ -823,6 +765,29 @@ function bookingDateRangesOverlap(a: Booking, b: Booking) {
 // Phase 14B: classify a booking as an event inquiry — both event_type set AND structured marker in notes.
 function isEventInquiryBooking(booking: Pick<Booking, "event_type" | "message">) {
   return isEventInquiryPayload(booking.event_type, booking.message);
+}
+
+/** Phase 15I.2 — default expanded proposal panel when event proposal work is likely. */
+function computeDefaultProposalPanelOpen(b: Booking): boolean {
+  if (!isEventInquiryBooking(b)) return false;
+  if (isProposalExpired(b.proposal_status, b.proposal_valid_until)) return false;
+  const s = b.proposal_status ?? "draft";
+  return s === "draft" || s === "sent";
+}
+
+/** Phase 15I.2 — default expanded payment panel when follow-up is likely. */
+function computeDefaultPaymentPanelOpen(b: Booking): boolean {
+  if (b.status !== "confirmed") return false;
+  if (isPaymentOverdue(b)) return true;
+  const ps = getPaymentStatus(b);
+  if (ps === "payment_requested") return true;
+  if (ps === "unpaid") return true;
+  if (ps === "deposit_paid") {
+    const paid = typeof b.amount_paid === "number" && Number.isFinite(b.amount_paid) ? b.amount_paid : 0;
+    const t = getFoundationAmountTotal(b);
+    return typeof t === "number" && paid < t;
+  }
+  return false;
 }
 
 /** Advisory only: matches typical admin cancel email path when an address exists (auth email not available client-side for members). */
@@ -1061,6 +1026,10 @@ export default function BookingsTable({
   // Phase 14L: offer-prep panel state. Key = `${bookingId}:${suggestion.label}`.
   const [activeOfferKey, setActiveOfferKey] = useState<string | null>(null);
   const [copiedOfferKey, setCopiedOfferKey] = useState<string | null>(null);
+  /** Phase 15I.2 — per-booking collapsible panels (undefined = use default for that panel). */
+  const [bookingCardPanels, setBookingCardPanels] = useState<
+    Record<string, Partial<Record<"proposal" | "payment" | "guestDetail" | "operationsContext" | "feedback" | "addons", boolean>>>
+  >({});
 
   async function patchAddonResolution(bookingId: string, addonId: string, decision: "approve" | "decline") {
     const res = await fetch(`/api/admin/bookings/${bookingId}/approve-addon`, {
@@ -2584,23 +2553,8 @@ export default function BookingsTable({
     const paymentStatus = getPaymentStatus(booking);
     const overdue = isPaymentOverdue(booking);
     const paymentTone = getPaymentStatusStyle(paymentStatus, overdue);
-    const depositAmount = formatMoney(booking.deposit_amount);
-    const amountPaid = formatMoney(booking.amount_paid);
-    const { stayValueRaw, addonsValueRaw } = getBookingRevenueData(booking);
-    const paymentBasis = getBookingPaymentBasis(booking);
-    const isEventBasis = paymentBasis.source === "event_proposal";
-    const stayValue = formatMoney(stayValueRaw);
-    const addonsValue = formatMoney(addonsValueRaw);
-    const estimatedTotal = formatMoney(paymentBasis.totalRaw);
-    const proposalTotalDisplay = isEventBasis ? formatMoney(paymentBasis.totalRaw) : null;
-    const proposalDepositDisplay = isEventBasis ? formatMoney(paymentBasis.depositRaw) : null;
     const amountPaidRaw =
       typeof booking.amount_paid === "number" && Number.isFinite(booking.amount_paid) ? booking.amount_paid : 0;
-    const remainingBalanceRaw =
-      typeof paymentBasis.totalRaw === "number" && Number.isFinite(paymentBasis.totalRaw)
-        ? Math.max(0, paymentBasis.totalRaw - amountPaidRaw)
-        : null;
-    const remainingBalance = formatMoney(remainingBalanceRaw);
     const requestSentAt = formatDateTimeValue(booking.payment_requested_at);
     const receivedAt = formatDateTimeValue(booking.payment_received_at);
     const dueAt = formatDateTimeValue(booking.payment_due_at);
@@ -2621,6 +2575,10 @@ export default function BookingsTable({
     const foundationDepositForOverview = getFoundationDepositDisplay(booking);
     const lastFoundationPaymentAt = formatDateTimeValue(booking.payment_last_at);
 
+    const paymentDefaultOpen = computeDefaultPaymentPanelOpen(booking);
+    const storedPaymentOpen = bookingCardPanels[booking.id]?.payment;
+    const paymentPanelOpen = storedPaymentOpen !== undefined ? storedPaymentOpen : paymentDefaultOpen;
+
     return (
       <div
         style={{
@@ -2632,217 +2590,160 @@ export default function BookingsTable({
           gap: "12px",
         }}
       >
-        <div
-          style={{
-            border: "0.5px solid rgba(197,164,109,0.22)",
-            backgroundColor: "rgba(197,164,109,0.06)",
-            padding: "12px 14px",
-            borderRadius: "8px",
-            display: "grid",
-            gap: "10px",
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px", flexWrap: "wrap" }}>
-            <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
-              Payment Overview
-            </p>
-            {renderFoundationLedgerBadge(booking)}
-          </div>
+        {overdue && (
           <div
             style={{
-              display: "grid",
-              gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
-              gap: "10px 14px",
+              border: "0.5px solid rgba(224,112,112,0.3)",
+              backgroundColor: "rgba(224,112,112,0.12)",
+              padding: "10px 12px",
+              borderRadius: "6px",
             }}
           >
-            {renderRevenueEstimateRow(
-              "Total amount",
-              effectiveAmountTotal !== null ? formatMoney(effectiveAmountTotal) ?? "Not available" : "Not available",
-            )}
-            {renderRevenueEstimateRow("Amount paid", formatMoney(amountPaidRaw) ?? "$0")}
-            {renderRevenueEstimateRow(
-              "Amount due",
-              effectiveAmountDue !== null ? formatMoney(effectiveAmountDue) ?? "Not available" : "Not available",
-            )}
-            {renderRevenueEstimateRow(
-              "Deposit",
-              foundationDepositForOverview !== null ? formatMoney(foundationDepositForOverview) ?? "—" : "—",
-            )}
-            {renderRevenueEstimateRow("Last payment date", lastFoundationPaymentAt ?? "—")}
-          </div>
-        </div>
-
-        <div style={{ display: "grid", gap: "8px" }}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-start",
-              gap: "12px",
-              flexWrap: "wrap",
-            }}
-          >
-            <div style={{ display: "grid", gap: "4px" }}>
-              <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: paymentTone.color, margin: 0 }}>
-                Payment
-              </p>
-              <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
-                {isEventInquiryBooking(booking)
-                  ? "Events are confirmed manually and secured after payment."
-                  : "Manual payment tracking for confirmed bookings only."}
-              </p>
-            </div>
-            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
-              {renderPaymentStatusBadge(booking)}
-              {booking.refund_status === "refunded" && (
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontFamily: LATO,
-                    fontSize: "9px",
-                    letterSpacing: "1.5px",
-                    textTransform: "uppercase",
-                    color: "#f08b8b",
-                    backgroundColor: "rgba(224,112,112,0.14)",
-                    border: "0.5px solid rgba(224,112,112,0.32)",
-                    padding: "6px 10px",
-                    borderRadius: "6px",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  Refunded
-                </span>
-              )}
-            </div>
-          </div>
-
-          {overdue && (
-            <div
-              style={{
-                border: "0.5px solid rgba(224,112,112,0.3)",
-                backgroundColor: "rgba(224,112,112,0.12)",
-                padding: "10px 12px",
-                borderRadius: "6px",
-                display: "grid",
-                gap: "4px",
-              }}
-            >
-              <p style={{ fontFamily: LATO, fontSize: "11px", color: "#f4b3b3", margin: 0, lineHeight: 1.5 }}>
-                Overdue — payment not received.
-              </p>
-              <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
-                Consider cancelling or following up.
-              </p>
-            </div>
-          )}
-        </div>
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: isMobile ? "1fr" : "repeat(4, minmax(0, 1fr))",
-            gap: "12px",
-          }}
-        >
-          <div
-            style={{
-              border: `0.5px solid ${paymentTone.border}`,
-              backgroundColor: "rgba(255,255,255,0.03)",
-              padding: "12px 14px",
-              borderRadius: "8px",
-              display: "grid",
-              gap: "6px",
-            }}
-          >
-            <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "1.4px", textTransform: "uppercase", color: MUTED, margin: 0 }}>
-              Status
+            <p style={{ fontFamily: LATO, fontSize: "11px", color: "#f4b3b3", margin: 0, lineHeight: 1.5 }}>
+              Payment overdue — follow up with the guest.
             </p>
-            <p style={{ fontFamily: PLAYFAIR, fontSize: "1.05rem", color: paymentTone.color, lineHeight: 1.2, margin: 0 }}>
-              {paymentTone.label}
-            </p>
-          </div>
-          <div
-            style={{
-              border: "0.5px solid rgba(255,255,255,0.08)",
-              backgroundColor: "rgba(255,255,255,0.03)",
-              padding: "12px 14px",
-              borderRadius: "8px",
-              display: "grid",
-              gap: "6px",
-            }}
-          >
-            <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "1.4px", textTransform: "uppercase", color: MUTED, margin: 0 }}>
-              Amount paid
-            </p>
-            <p style={{ fontFamily: PLAYFAIR, fontSize: "1.05rem", color: paymentStatus === "paid_in_full" || paymentStatus === "deposit_paid" ? "#6fcf8a" : WHITE, lineHeight: 1.2, margin: 0 }}>
-              {amountPaid ?? "$0"}
-            </p>
-          </div>
-          <div
-            style={{
-              border: "0.5px solid rgba(255,255,255,0.08)",
-              backgroundColor: "rgba(255,255,255,0.03)",
-              padding: "12px 14px",
-              borderRadius: "8px",
-              display: "grid",
-              gap: "6px",
-            }}
-          >
-            <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "1.4px", textTransform: "uppercase", color: MUTED, margin: 0 }}>
-              Remaining balance
-            </p>
-            <p style={{ fontFamily: PLAYFAIR, fontSize: "1.05rem", color: remainingBalanceRaw === 0 ? "#6fcf8a" : GOLD, lineHeight: 1.2, margin: 0 }}>
-              {remainingBalance ?? "Unavailable"}
-            </p>
-          </div>
-        </div>
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
-            gap: "12px 16px",
-          }}
-        >
-          {isEventBasis ? (
-            <>
-              {renderRevenueEstimateRow("Final event total", proposalTotalDisplay ?? "Not set")}
-              {renderRevenueEstimateRow("Proposal deposit", proposalDepositDisplay ?? "Not set")}
-            </>
-          ) : (
-            <>
-              {renderRevenueEstimateRow("Stay value", stayValue ?? "Unavailable")}
-              {renderRevenueEstimateRow("Add-ons value", addonsValue ?? "Unavailable")}
-              {renderRevenueEstimateRow("Estimated total", estimatedTotal ?? "Unavailable")}
-            </>
-          )}
-          {renderRevenueEstimateRow("Payment status", formatAdvisoryLabel(paymentStatus.replaceAll("_", " ")))}
-          {renderRevenueEstimateRow("Deposit amount", depositAmount ?? "Not set")}
-          {renderRevenueEstimateRow("Amount paid", amountPaid ?? "$0")}
-          {renderRevenueEstimateRow("Remaining balance", remainingBalance ?? "Unavailable")}
-          {renderRevenueEstimateRow("Method", booking.payment_method ? formatAdvisoryLabel(booking.payment_method.replaceAll("_", " ")) : "Not set")}
-          {renderRevenueEstimateRow("Reference", booking.payment_reference?.trim() || "Not set")}
-          {renderRevenueEstimateRow("Due date", dueAt ?? "Not set")}
-        </div>
-
-        {(requestSentAt || receivedAt || refundedAt || booking.payment_notes?.trim()) && (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
-              gap: "10px 16px",
-            }}
-          >
-            {requestSentAt ? renderRevenueEstimateRow("Requested", requestSentAt) : null}
-            {receivedAt ? renderRevenueEstimateRow("Received", receivedAt) : null}
-            {refundedAt ? renderRevenueEstimateRow("Refunded", refundedAt) : null}
-            {booking.payment_notes?.trim()
-              ? renderRevenueEstimateRow("Notes", booking.payment_notes.trim())
-              : null}
           </div>
         )}
+
+        <button
+          type="button"
+          onClick={() =>
+            setBookingCardPanels((prev) => {
+              const cur = prev[booking.id]?.payment;
+              const isOpen = cur !== undefined ? cur : paymentDefaultOpen;
+              return { ...prev, [booking.id]: { ...prev[booking.id], payment: !isOpen } };
+            })
+          }
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "12px",
+            flexWrap: "wrap",
+            width: "100%",
+            cursor: "pointer",
+            backgroundColor: "rgba(255,255,255,0.03)",
+            border: `0.5px solid ${BORDER}`,
+            borderRadius: "8px",
+            padding: "10px 12px",
+          }}
+        >
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
+            <span style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: paymentTone.color }}>
+              Payment
+            </span>
+            {renderPaymentStatusBadge(booking)}
+            {renderFoundationLedgerBadge(booking)}
+            {booking.refund_status === "refunded" && (
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontFamily: LATO,
+                  fontSize: "9px",
+                  letterSpacing: "1.5px",
+                  textTransform: "uppercase",
+                  color: "#f08b8b",
+                  backgroundColor: "rgba(224,112,112,0.14)",
+                  border: "0.5px solid rgba(224,112,112,0.32)",
+                  padding: "6px 10px",
+                  borderRadius: "6px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Refunded
+              </span>
+            )}
+          </div>
+          <span style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.2px", textTransform: "uppercase", color: GOLD }}>
+            {paymentPanelOpen ? "Hide details" : "View details"}
+          </span>
+        </button>
+
+        {paymentPanelOpen && (
+          <>
+            <div
+              style={{
+                border: "0.5px solid rgba(197,164,109,0.22)",
+                backgroundColor: "rgba(197,164,109,0.06)",
+                padding: "12px 14px",
+                borderRadius: "8px",
+                display: "grid",
+                gap: "10px",
+              }}
+            >
+              <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+                Summary
+              </p>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
+                  gap: "10px 14px",
+                }}
+              >
+                {renderRevenueEstimateRow(
+                  "Total amount",
+                  effectiveAmountTotal !== null ? formatMoney(effectiveAmountTotal) ?? "Not available" : "Not available",
+                )}
+                {renderRevenueEstimateRow("Amount paid", formatMoney(amountPaidRaw) ?? "$0")}
+                {renderRevenueEstimateRow(
+                  "Amount due / remaining",
+                  effectiveAmountDue !== null ? formatMoney(effectiveAmountDue) ?? "Not available" : "Not available",
+                )}
+                {renderRevenueEstimateRow(
+                  "Deposit",
+                  foundationDepositForOverview !== null ? formatMoney(foundationDepositForOverview) ?? "—" : "—",
+                )}
+                {renderRevenueEstimateRow("Last payment date", lastFoundationPaymentAt ?? "—")}
+              </div>
+            </div>
+
+            <details
+              style={{
+                border: `0.5px solid ${BORDER}`,
+                backgroundColor: "rgba(255,255,255,0.02)",
+                padding: "10px 12px",
+                borderRadius: "8px",
+              }}
+            >
+              <summary
+                style={{
+                  cursor: "pointer",
+                  fontFamily: LATO,
+                  fontSize: "10px",
+                  letterSpacing: "1.2px",
+                  textTransform: "uppercase",
+                  color: MUTED,
+                }}
+              >
+                References & timestamps
+              </summary>
+              <div
+                style={{
+                  marginTop: "10px",
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
+                  gap: "10px 16px",
+                }}
+              >
+                {booking.payment_method
+                  ? renderRevenueEstimateRow(
+                      "Recorded method",
+                      formatAdvisoryLabel(booking.payment_method.replaceAll("_", " ")),
+                    )
+                  : null}
+                {dueAt ? renderRevenueEstimateRow("Due date", dueAt) : null}
+                {requestSentAt ? renderRevenueEstimateRow("Requested", requestSentAt) : null}
+                {receivedAt ? renderRevenueEstimateRow("Received", receivedAt) : null}
+                {refundedAt ? renderRevenueEstimateRow("Refunded", refundedAt) : null}
+                {booking.payment_reference?.trim()
+                  ? renderRevenueEstimateRow("Reference", booking.payment_reference.trim())
+                  : null}
+                {booking.payment_notes?.trim() ? renderRevenueEstimateRow("Notes", booking.payment_notes.trim()) : null}
+              </div>
+            </details>
 
         <div
           style={{
@@ -2929,9 +2830,6 @@ export default function BookingsTable({
           >
             <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: WHITE, margin: 0 }}>
               Record payment
-            </p>
-            <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.45 }}>
-              Add payment amount (admin ledger). Guest workflow and emails still use the legacy payment status below.
             </p>
             <select
               value={draft.paymentMethod}
@@ -3048,8 +2946,8 @@ export default function BookingsTable({
             <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: WHITE, margin: 0 }}>
               Send reminder
             </p>
-            <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
-              Resend the payment reminder email and append a reminder timestamp to payment notes.
+            <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: 0, lineHeight: 1.45 }}>
+              Resend reminder email and log a note.
             </p>
             <button
               type="button"
@@ -3073,6 +2971,8 @@ export default function BookingsTable({
             </button>
           </div>
         </div>
+          </>
+        )}
       </div>
     );
   }
@@ -3107,10 +3007,6 @@ export default function BookingsTable({
     // Phase 15H: live-computed totals + draft-level send validation drive the side panel + button state.
     const liveTotalNum = sumProposalLineItemDrafts(draft.lineItems);
     const liveDepositNum = parseAmountInput(draft.depositAmount);
-    const proposalPaymentMethods =
-      Array.isArray(booking.proposal_payment_methods) && booking.proposal_payment_methods.length > 0
-        ? booking.proposal_payment_methods
-        : draft.paymentMethods;
     // Original guest-requested services — preserved snapshot, never mutated by proposal edits.
     const originalRequestedServices = parseRequestedEventServicesFromMessage(booking.message);
     const sendValidation = validateProposalForSend(draft);
@@ -3268,8 +3164,8 @@ export default function BookingsTable({
             <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: "#9db7d9", margin: 0 }}>
               Event Proposal
             </p>
-            <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
-              Draft and send a custom proposal without confirming the inquiry or triggering payment automatically.
+            <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.45 }}>
+              Draft, send, and revise — no auto-confirm or payment.
             </p>
           </div>
           <span
@@ -3315,30 +3211,35 @@ export default function BookingsTable({
           </span>
         </div>
 
-        <p style={{ fontFamily: LATO, fontSize: "11px", color: "#9db7d9", margin: 0, lineHeight: 1.55 }}>
-          Event pricing remains custom and manual. Guests only see this proposal after it is sent.
-        </p>
-
-        <div
+        <details
           style={{
-            border: "0.5px solid rgba(255,255,255,0.08)",
-            backgroundColor: "rgba(255,255,255,0.02)",
-            padding: "10px 12px",
-            borderRadius: "6px",
-            display: "grid",
-            gap: "6px",
+            border: "0.5px solid rgba(157,183,217,0.22)",
+            borderRadius: "8px",
+            padding: "8px 12px",
+            backgroundColor: "rgba(157,183,217,0.04)",
           }}
         >
-          <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: WHITE, margin: 0 }}>
-            Event flow
-          </p>
-          <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
-            Proposal sent {"->"} Accepted {"->"} Confirmed {"->"} Payment requested {"->"} Paid
-          </p>
-          <p style={{ fontFamily: LATO, fontSize: "11px", color: "#9db7d9", margin: 0, lineHeight: 1.55 }}>
-            Events are confirmed manually and secured after payment.
-          </p>
-        </div>
+          <summary
+            style={{
+              cursor: "pointer",
+              fontFamily: LATO,
+              fontSize: "10px",
+              letterSpacing: "1.3px",
+              textTransform: "uppercase",
+              color: "#9db7d9",
+            }}
+          >
+            Info — pricing & flow
+          </summary>
+          <div style={{ marginTop: "10px", display: "grid", gap: "8px" }}>
+            <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+              Custom pricing; guests only see the proposal after send.
+            </p>
+            <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+              Flow: sent → accepted → confirmed → payment requested → paid.
+            </p>
+          </div>
+        </details>
 
         {(proposalStatus === "accepted" || proposalStatus === "declined" || proposalStatus === "expired") && (
           <div
@@ -3489,10 +3390,14 @@ export default function BookingsTable({
               + Add custom service
             </button>
           </div>
-          <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
-            Toggle <em>Include</em> off to keep a line on the proposal but exclude it from the billable subtotal.
-            Optional / excluded lines stay editable and can be toggled back to included. Custom rows can be removed entirely. Original guest request stays preserved below.
-          </p>
+          <details style={{ margin: 0 }}>
+            <summary style={{ cursor: "pointer", fontFamily: LATO, fontSize: "10px", color: MUTED }}>
+              Line items — Include / Exclude
+            </summary>
+            <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: "8px 0 0", lineHeight: 1.45 }}>
+              Exclude toggles a line off the billable subtotal; optional rows stay editable. Original guest request is preserved below.
+            </p>
+          </details>
 
           {draft.lineItems.length === 0 ? (
             <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
@@ -3515,9 +3420,6 @@ export default function BookingsTable({
               <div style={{ display: "grid", gap: "8px" }}>
                 <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: "#9db7d9", margin: 0 }}>
                   Optional / excluded services
-                </p>
-                <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: 0, lineHeight: 1.45 }}>
-                  Not included in subtotal. Still editable; use Include to move a line back to billable.
                 </p>
                 {excludedLines.length === 0 ? (
                   <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
@@ -3548,11 +3450,27 @@ export default function BookingsTable({
           </details>
         )}
 
-        <div style={{ display: "grid", gap: "10px" }}>
-          <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: WHITE, margin: 0 }}>
-            Payment methods
-          </p>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+        <details
+          style={{
+            border: `0.5px solid ${BORDER}`,
+            backgroundColor: "rgba(255,255,255,0.02)",
+            padding: "10px 12px",
+            borderRadius: "8px",
+          }}
+        >
+          <summary
+            style={{
+              cursor: "pointer",
+              fontFamily: LATO,
+              fontSize: "10px",
+              letterSpacing: "1.3px",
+              textTransform: "uppercase",
+              color: WHITE,
+            }}
+          >
+            Guest payment options (required to send) · {draft.paymentMethods.length} selected
+          </summary>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "10px" }}>
             {EVENT_PROPOSAL_PAYMENT_METHODS.map((method) => {
               const selected = draft.paymentMethods.includes(method.value);
               return (
@@ -3584,7 +3502,7 @@ export default function BookingsTable({
               );
             })}
           </div>
-        </div>
+        </details>
 
         {/* Bug 9: collapse advanced/optional fields by default — open only if any has content. */}
         <details
@@ -3667,7 +3585,6 @@ export default function BookingsTable({
           }}
         >
           {renderRevenueEstimateRow("Payment deadline (valid until)", validUntil ?? "Not set")}
-          {renderRevenueEstimateRow("Payment methods", proposalPaymentMethods.map((method) => formatPaymentMethodLabel(method)).join(", ") || "Not set")}
           {sentAt ? renderRevenueEstimateRow("Sent at", sentAt) : null}
           {respondedAt && (proposalStatus === "accepted" || proposalStatus === "declined")
             ? renderRevenueEstimateRow("Guest responded at", respondedAt)
@@ -4233,6 +4150,27 @@ export default function BookingsTable({
                 </p>
               </div>
 
+              <details
+                style={{
+                  border: "0.5px solid rgba(157,183,217,0.22)",
+                  borderRadius: "10px",
+                  padding: "8px 12px",
+                  backgroundColor: "rgba(157,183,217,0.04)",
+                }}
+              >
+                <summary
+                  style={{
+                    cursor: "pointer",
+                    fontFamily: LATO,
+                    fontSize: "10px",
+                    letterSpacing: "1.4px",
+                    textTransform: "uppercase",
+                    color: "#9db7d9",
+                  }}
+                >
+                  Guest inquiry detail
+                </summary>
+                <div style={{ display: "grid", gap: "12px", marginTop: "12px" }}>
               {eventSetupEstimate ? (
                 <div
                   style={{
@@ -4461,6 +4399,8 @@ export default function BookingsTable({
                   <p style={{ fontFamily: LATO, fontSize: "12px", margin: 0, lineHeight: 1.65, whiteSpace: "pre-wrap" }}>{eventGuestNotes}</p>
                 </div>
               ) : null}
+                </div>
+              </details>
             </>
           ) : (
             <>
@@ -4474,17 +4414,31 @@ export default function BookingsTable({
                 {booking.sleeping_guests} sleeping
                 {booking.day_visitors > 0 ? ` | ${booking.day_visitors} visitors` : ""}
               </p>
-              <p
-                style={{
-                  fontFamily: LATO,
-                  fontSize: "12px",
-                  margin: 0,
-                  lineHeight: 1.65,
-                  opacity: booking.message?.trim() ? 1 : 0.8,
-                }}
-              >
-                {booking.message?.trim() || "-"}
-              </p>
+              <details style={{ border: "0.5px solid rgba(255,255,255,0.08)", borderRadius: "8px", padding: "8px 12px" }}>
+                <summary
+                  style={{
+                    cursor: "pointer",
+                    fontFamily: LATO,
+                    fontSize: "10px",
+                    letterSpacing: "1.4px",
+                    textTransform: "uppercase",
+                    color: MUTED,
+                  }}
+                >
+                  Guest message
+                </summary>
+                <p
+                  style={{
+                    fontFamily: LATO,
+                    fontSize: "12px",
+                    margin: "10px 0 0",
+                    lineHeight: 1.65,
+                    opacity: booking.message?.trim() ? 1 : 0.8,
+                  }}
+                >
+                  {booking.message?.trim() || "—"}
+                </p>
+              </details>
             </>
           )}
         </div>
@@ -4904,77 +4858,150 @@ export default function BookingsTable({
           </div>
         )}
 
-        {hasDeadDayUpsell && (
-          <div
-            style={{
-              border: "0.5px solid rgba(126,207,207,0.26)",
-              backgroundColor: "rgba(126,207,207,0.08)",
-              padding: "12px 14px",
-              borderRadius: "8px",
-              display: "grid",
-              gap: "8px",
-            }}
-          >
-            {/* Phase 13N: subtle dead-day heading */}
-            <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: "#7ecfcf", margin: 0, lineHeight: 1.5, fontWeight: 600 }}>
-              Opportunity: sell adjacent day (early check-in / late checkout)
-            </p>
-            {deadDayUpsells.map((opportunity) => {
-              const message =
-                opportunity.kind === "late_checkout"
-                  ? `Late checkout opportunity: ${opportunity.dateLabel}`
-                  : `Early check-in opportunity: ${opportunity.dateLabel}`;
+        {(hasDeadDayUpsell || eventInquiry) && (
+          <div style={{ display: "grid", gap: "8px" }}>
+            <button
+              type="button"
+              onClick={() =>
+                setBookingCardPanels((prev) => {
+                  const cur = prev[booking.id]?.operationsContext;
+                  const def = false;
+                  const isOpen = cur !== undefined ? cur : def;
+                  return { ...prev, [booking.id]: { ...prev[booking.id], operationsContext: !isOpen } };
+                })
+              }
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                width: "100%",
+                cursor: "pointer",
+                backgroundColor: "rgba(255,255,255,0.03)",
+                border: `0.5px solid ${BORDER}`,
+                borderRadius: "8px",
+                padding: "10px 12px",
+              }}
+            >
+              <span style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.4px", textTransform: "uppercase", color: GOLD }}>
+                Calendar & operations context
+              </span>
+              <span style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.2px", textTransform: "uppercase", color: MUTED }}>
+                {(bookingCardPanels[booking.id]?.operationsContext ?? false) ? "Hide details" : "View details"}
+              </span>
+            </button>
+            {(bookingCardPanels[booking.id]?.operationsContext ?? false) && (
+              <>
+                {hasDeadDayUpsell && (
+                  <div
+                    style={{
+                      border: "0.5px solid rgba(126,207,207,0.26)",
+                      backgroundColor: "rgba(126,207,207,0.08)",
+                      padding: "12px 14px",
+                      borderRadius: "8px",
+                      display: "grid",
+                      gap: "8px",
+                    }}
+                  >
+                    <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: "#7ecfcf", margin: 0, lineHeight: 1.5, fontWeight: 600 }}>
+                      Adjacent-day opportunity
+                    </p>
+                    {deadDayUpsells.map((opportunity) => {
+                      const message =
+                        opportunity.kind === "late_checkout"
+                          ? `Late checkout: ${opportunity.dateLabel}`
+                          : `Early check-in: ${opportunity.dateLabel}`;
 
-              return (
-                <div key={`${opportunity.kind}-${opportunity.dateISO}-${opportunity.pairedBooking.id}`}>
-                  <p style={{ fontFamily: LATO, fontSize: "11px", color: "#7ecfcf", margin: "0 0 4px", lineHeight: 1.5 }}>
-                    {message}
-                  </p>
-                  <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
-                    Adjacent booking: {fmt(opportunity.pairedBooking.check_in)} to {fmt(opportunity.pairedBooking.check_out)}
-                  </p>
-                </div>
-              );
-            })}
+                      return (
+                        <div key={`${opportunity.kind}-${opportunity.dateISO}-${opportunity.pairedBooking.id}`}>
+                          <p style={{ fontFamily: LATO, fontSize: "11px", color: "#7ecfcf", margin: "0 0 4px", lineHeight: 1.5 }}>
+                            {message}
+                          </p>
+                          <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+                            Adjacent: {fmt(opportunity.pairedBooking.check_in)} → {fmt(opportunity.pairedBooking.check_out)}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {isEventInquiryBooking(booking) && (
+                  <div
+                    style={{
+                      border: "0.5px solid rgba(157,183,217,0.28)",
+                      backgroundColor: "rgba(157,183,217,0.06)",
+                      padding: "10px 14px",
+                      borderRadius: "8px",
+                    }}
+                  >
+                    <p style={{ fontFamily: LATO, fontSize: "11px", color: "#9db7d9", margin: 0, lineHeight: 1.5 }}>
+                      Event inquiries: calendar dates block the venue; inquiry estimate is non-binding until a proposal is sent.
+                    </p>
+                  </div>
+                )}
+
+                {isEventInquiryBooking(booking) && booking.status === "confirmed" && (
+                  <div
+                    style={{
+                      border: "0.5px solid rgba(197,164,109,0.25)",
+                      backgroundColor: "rgba(197,164,109,0.05)",
+                      padding: "10px 14px",
+                      borderRadius: "8px",
+                    }}
+                  >
+                    <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: GOLD, margin: "0 0 5px", fontWeight: 600 }}>
+                      Operational block
+                    </p>
+                    <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
+                      {fmt(addDaysToDateOnly(booking.check_in, -1))} to {fmt(booking.check_out)} — includes setup day (night before event).
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
 
-        {/* Phase 14B: event-inquiry pricing disclaimer — replaces stay-style totals in the admin context */}
-        {isEventInquiryBooking(booking) && (
-          <div
-            style={{
-              border: "0.5px solid rgba(157,183,217,0.28)",
-              backgroundColor: "rgba(157,183,217,0.06)",
-              padding: "10px 14px",
-              borderRadius: "8px",
-            }}
-          >
-            <p style={{ fontFamily: LATO, fontSize: "11px", color: "#9db7d9", margin: 0, lineHeight: 1.55 }}>
-              Event inquiries use stay-date fields for calendar blocking only. The guest-facing setup estimate in the inquiry summary is a non-binding services subtotal; the formal proposal (when sent) remains the commercial reference.
-            </p>
+        {eventInquiry && (
+          <div style={{ display: "grid", gap: "8px" }}>
+            <button
+              type="button"
+              onClick={() =>
+                setBookingCardPanels((prev) => {
+                  const cur = prev[booking.id]?.proposal;
+                  const def = computeDefaultProposalPanelOpen(booking);
+                  const isOpen = cur !== undefined ? cur : def;
+                  return { ...prev, [booking.id]: { ...prev[booking.id], proposal: !isOpen } };
+                })
+              }
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                width: "100%",
+                cursor: "pointer",
+                backgroundColor: "rgba(255,255,255,0.03)",
+                border: `0.5px solid ${BORDER}`,
+                borderRadius: "8px",
+                padding: "10px 12px",
+              }}
+            >
+              <span style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.4px", textTransform: "uppercase", color: "#9db7d9" }}>
+                Event proposal
+              </span>
+              <span style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.2px", textTransform: "uppercase", color: MUTED }}>
+                {(bookingCardPanels[booking.id]?.proposal !== undefined
+                  ? bookingCardPanels[booking.id]!.proposal
+                  : computeDefaultProposalPanelOpen(booking))
+                  ? "Hide details"
+                  : "View details"}
+              </span>
+            </button>
+            {(bookingCardPanels[booking.id]?.proposal !== undefined
+              ? bookingCardPanels[booking.id]!.proposal
+              : computeDefaultProposalPanelOpen(booking)) && renderEventProposalSection(booking)}
           </div>
         )}
-
-        {/* Phase 14J: confirmed event — show operational block range (setup day included) */}
-        {isEventInquiryBooking(booking) && booking.status === "confirmed" && (
-          <div
-            style={{
-              border: "0.5px solid rgba(197,164,109,0.25)",
-              backgroundColor: "rgba(197,164,109,0.05)",
-              padding: "10px 14px",
-              borderRadius: "8px",
-            }}
-          >
-            <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: GOLD, margin: "0 0 5px", fontWeight: 600 }}>
-              Operational block
-            </p>
-            <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
-              {fmt(addDaysToDateOnly(booking.check_in, -1))} to {fmt(booking.check_out)} — includes setup day (night before event).
-            </p>
-          </div>
-        )}
-
-        {renderEventProposalSection(booking)}
 
         {/* Phase 13H.2: Decision Signal panel — pending bookings only. Reuses existing revenue/overlap data. */}
         {booking.status === "pending" && (() => {
@@ -5280,111 +5307,77 @@ export default function BookingsTable({
           );
         })()}
 
-        {(() => {
-          const pricingIntelligence = getPricingIntelligenceMeta(booking);
-          const addonSubtotalRaw = getAddonSnapshots(booking).reduce((sum, addon) => {
-            return sum + (typeof addon.price === "number" && Number.isFinite(addon.price) ? addon.price : 0);
-          }, 0);
-          const stayValueRaw =
-            getSnapshotNumber(booking.pricing_snapshot?.adjusted_stay_subtotal) ??
-            getSnapshotNumber(booking.pricing_snapshot?.subtotal) ??
-            pricingIntelligence?.stay_value ??
-            getPersistedStayValue(booking);
-          const addonsValueRaw =
-            pricingIntelligence?.addons_value ??
-            (getAddonSnapshots(booking).length > 0 ? addonSubtotalRaw : 0);
-          const estimatedTotalRaw =
-            getSnapshotNumber(booking.pricing_snapshot?.estimated_total) ??
-            pricingIntelligence?.estimated_total ??
-            pricingIntelligence?.internal_value ??
-            (typeof stayValueRaw === "number" && typeof addonsValueRaw === "number"
-              ? stayValueRaw + addonsValueRaw
-              : null);
-          const stayValue = formatMoney(stayValueRaw);
-          const addonsValue = formatMoney(addonsValueRaw);
-          const estimatedTotal = formatMoney(estimatedTotalRaw);
-          const hasAnyRevenueData = stayValue !== null || addonsValue !== null || estimatedTotal !== null;
-          const tierLabel =
-            pricingIntelligence?.tier && pricingIntelligence.tier !== "unknown"
-              ? formatAdvisoryLabel(pricingIntelligence.tier)
-              : "Not calculated";
-          const confidenceLabel =
-            pricingIntelligence?.tier && pricingIntelligence.tier !== "unknown"
-              ? formatAdvisoryLabel(pricingIntelligence.confidence)
-              : "Not calculated";
-          const isUnavailableFallback =
-            pricingIntelligence?.basis.reason === "intelligence_unavailable" && !hasAnyRevenueData;
-
-          return (
-          <div
-            style={{
-              border: "0.5px solid rgba(197,164,109,0.24)",
-              backgroundColor: "rgba(197,164,109,0.06)",
-              padding: "12px 14px 13px",
-              borderRadius: "8px",
-              display: "grid",
-              gap: "10px",
-            }}
-          >
-            <div style={{ display: "grid", gap: "4px" }}>
-              <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
-                Revenue Estimate
-              </p>
-              <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
-                Advisory signal based on stay value, guest load, add-ons, and service intent.
-              </p>
-            </div>
-
-            {hasAnyRevenueData ? (
-              <>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
-                    gap: "12px 16px",
-                  }}
-                >
-                  {stayValue
-                    ? renderRevenueEstimateRow("Stay value", stayValue)
-                    : renderRevenueEstimateRow("Stay value", "Unavailable")}
-                  {addonsValue
-                    ? renderRevenueEstimateRow("Add-ons value", addonsValue)
-                    : renderRevenueEstimateRow("Add-ons value", "Unavailable")}
-                  {estimatedTotal
-                    ? renderRevenueEstimateRow("Estimated total", estimatedTotal)
-                    : renderRevenueEstimateRow("Estimated total", "Unavailable")}
-                </div>
-
-                <div
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: "12px 16px",
-                    alignItems: "center",
-                  }}
-                >
-                  {renderPricingIntelligenceBadge("Revenue signal", tierLabel, "tier")}
-                  {renderPricingIntelligenceBadge("Signal confidence", confidenceLabel, "confidence")}
-                </div>
-              </>
-            ) : pricingIntelligence && isUnavailableFallback ? (
-              <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
-                Revenue estimate currently unavailable for this booking.
-              </p>
-            ) : (
-              <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
-                Revenue estimate unavailable for older booking.
-              </p>
-            )}
-          </div>
-          );
-        })()}
-
         {renderPaymentSection(booking)}
 
-        {renderGuestFeedbackSection(booking, feedbackEmphasis)}
+        {booking.status === "confirmed" && (
+          <div style={{ display: "grid", gap: "8px" }}>
+            <button
+              type="button"
+              onClick={() =>
+                setBookingCardPanels((prev) => {
+                  const cur = prev[booking.id]?.feedback;
+                  const def = false;
+                  const isOpen = cur !== undefined ? cur : def;
+                  return { ...prev, [booking.id]: { ...prev[booking.id], feedback: !isOpen } };
+                })
+              }
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                width: "100%",
+                cursor: "pointer",
+                backgroundColor: "rgba(255,255,255,0.03)",
+                border: `0.5px solid ${BORDER}`,
+                borderRadius: "8px",
+                padding: "10px 12px",
+              }}
+            >
+              <span style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.4px", textTransform: "uppercase", color: GOLD }}>
+                Feedback
+              </span>
+              <span style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.2px", textTransform: "uppercase", color: MUTED }}>
+                {(bookingCardPanels[booking.id]?.feedback ?? false) ? "Hide details" : "View details"}
+              </span>
+            </button>
+            {(bookingCardPanels[booking.id]?.feedback ?? false) ? renderGuestFeedbackSection(booking, feedbackEmphasis) : null}
+          </div>
+        )}
 
-        {renderAddonRows(booking)}
+        {getAddonSnapshots(booking).length > 0 && (
+          <div style={{ display: "grid", gap: "8px" }}>
+            <button
+              type="button"
+              onClick={() =>
+                setBookingCardPanels((prev) => {
+                  const cur = prev[booking.id]?.addons;
+                  const def = false;
+                  const isOpen = cur !== undefined ? cur : def;
+                  return { ...prev, [booking.id]: { ...prev[booking.id], addons: !isOpen } };
+                })
+              }
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                width: "100%",
+                cursor: "pointer",
+                backgroundColor: "rgba(255,255,255,0.03)",
+                border: `0.5px solid ${BORDER}`,
+                borderRadius: "8px",
+                padding: "10px 12px",
+              }}
+            >
+              <span style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.4px", textTransform: "uppercase", color: GOLD }}>
+                Add-ons
+              </span>
+              <span style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.2px", textTransform: "uppercase", color: MUTED }}>
+                {(bookingCardPanels[booking.id]?.addons ?? false) ? "Hide details" : "View details"}
+              </span>
+            </button>
+            {(bookingCardPanels[booking.id]?.addons ?? false) ? renderAddonRows(booking) : null}
+          </div>
+        )}
 
         {/* Phase 13H.4: Approval advisory — warns if a higher-value competing request exists */}
         {booking.status === "pending" && hasPendingOverlap && (() => {
@@ -5430,8 +5423,8 @@ export default function BookingsTable({
 
         {/* Phase 13H.4: subtle confirmation context — pending bookings only */}
         {booking.status === "pending" && (canConfirm || needsApproval || canCancel) && (
-          <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: 0, lineHeight: 1.5, fontStyle: "italic" }}>
-            Confirming this request will move it to Confirmed bookings. Review conflicts and revenue before confirming.
+          <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: 0, lineHeight: 1.45, fontStyle: "italic" }}>
+            Confirm moves this request to Confirmed — review overlaps and decision signal first.
           </p>
         )}
 
