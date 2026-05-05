@@ -161,22 +161,42 @@ const inputStyle: React.CSSProperties = {
   width: "100%",
   backgroundColor: "rgba(255,255,255,0.04)",
   border: "0.5px solid rgba(197,164,109,0.25)",
-  padding: "14px 16px",
+  padding: "12px 14px",
   fontFamily: LATO,
-  fontSize: "14px",
+  fontSize: "13px",
   color: WHITE,
   outline: "none",
   boxSizing: "border-box",
   appearance: "none",
 };
 
+/** Form labels — sans only, consistent micro-cap style across /book */
 const labelStyle: React.CSSProperties = {
   fontFamily: LATO,
-  fontSize: "14px",
-  letterSpacing: "0.4px",
-  color: "rgba(255,255,255,0.82)",
+  fontSize: "11px",
+  letterSpacing: "2px",
+  textTransform: "uppercase",
+  color: "rgba(255,255,255,0.7)",
   display: "block",
   marginBottom: "8px",
+  fontWeight: 400,
+};
+
+/** Label row: fixed height so paired inputs align when one row has an info trigger */
+const labelRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
+  minHeight: "36px",
+  marginBottom: "8px",
+};
+
+const labelRowTextStyle: React.CSSProperties = {
+  ...labelStyle,
+  marginBottom: 0,
+  flex: "1 1 auto",
+  minWidth: 0,
+  lineHeight: 1.35,
 };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -515,6 +535,38 @@ const CALENDAR_CSS = `
     to   { opacity: 1; transform: translateY(0);   }
   }
   .step-content { animation: stepFadeIn 0.25s ease forwards; }
+
+  /* Info popovers — compact trigger, floating panel (no layout shift) */
+  .book-info-popover {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    vertical-align: middle;
+  }
+  .book-info-popover > summary::-webkit-details-marker { display: none; }
+  .book-info-popover > summary { list-style: none; }
+  .book-info-panel {
+    position: absolute;
+    z-index: 50;
+    top: calc(100% + 6px);
+    right: 0;
+    width: min(280px, calc(100vw - 40px));
+    padding: 10px 12px;
+    background-color: rgba(31,43,56,0.98);
+    border: 0.5px solid rgba(197,164,109,0.28);
+    box-shadow: 0 12px 36px rgba(0,0,0,0.4);
+    font-family: 'Lato', system-ui, sans-serif;
+    font-size: 12px;
+    line-height: 1.55;
+    color: rgba(255,255,255,0.86);
+  }
+  @media (max-width: 480px) {
+    .book-info-panel {
+      left: 0;
+      right: auto;
+    }
+  }
 `;
 
 // ─── Step indicator ───────────────────────────────────────────────────────────
@@ -546,7 +598,7 @@ function StepIndicator({ step }: { step: number }) {
           </div>
         ))}
       </div>
-      <p style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.7px", color: GOLD, marginTop: "10px", marginBottom: 0 }}>
+      <p style={{ fontFamily: LATO, fontSize: "12px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, marginTop: "12px", marginBottom: 0, fontWeight: 400 }}>
         {labels[step - 1]}
       </p>
     </div>
@@ -555,45 +607,30 @@ function StepIndicator({ step }: { step: number }) {
 
 function InfoPopover({ label, text }: { label: string; text: string }) {
   return (
-    <details style={{ position: "relative", display: "inline-block" }}>
+    <details className="book-info-popover">
       <summary
         aria-label={label}
         title={label}
         style={{
-          listStyle: "none",
           cursor: "pointer",
-          width: "18px",
-          height: "18px",
+          width: "16px",
+          height: "16px",
           borderRadius: "50%",
-          border: "0.5px solid rgba(197,164,109,0.4)",
+          border: "0.5px solid rgba(197,164,109,0.45)",
           color: GOLD,
           fontFamily: LATO,
-          fontSize: "11px",
+          fontSize: "10px",
+          fontWeight: 700,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           userSelect: "none",
+          lineHeight: 1,
         }}
       >
         i
       </summary>
-      <div
-        role="note"
-        style={{
-          position: "absolute",
-          top: "24px",
-          right: 0,
-          zIndex: 5,
-          width: "min(300px, calc(100vw - 72px))",
-          padding: "10px 12px",
-          backgroundColor: "rgba(31,43,56,0.98)",
-          border: "0.5px solid rgba(197,164,109,0.25)",
-          color: "rgba(255,255,255,0.82)",
-          fontFamily: LATO,
-          fontSize: "12px",
-          lineHeight: 1.6,
-        }}
-      >
+      <div className="book-info-panel" role="note">
         {text}
       </div>
     </details>
@@ -1334,9 +1371,9 @@ function BookPageInner() {
   // ── Auth gate (not member, not yet chosen guest) ──────────────────────────
   // Phase 13C.2: simplified stay pricing panel — Estimated Booking Total prominent, then small detail lines.
   const estimatePanel = checkIn && checkOut && staySubtotal !== null ? (
-    <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: "rgba(197,164,109,0.04)", padding: "1.25rem" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", margin: "0 0 8px" }}>
-        <p style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "1px", color: GOLD, margin: 0 }}>
+    <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: "rgba(197,164,109,0.045)", padding: "1rem 1.15rem" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", margin: "0 0 6px" }}>
+        <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
           Estimated booking total
         </p>
         <InfoPopover
@@ -1344,25 +1381,25 @@ function BookPageInner() {
           text="Based on selected dates, bedroom setup, and selected add-ons. Final confirmation is reviewed by Oraya."
         />
       </div>
-      <p style={{ fontFamily: PLAYFAIR, fontSize: "26px", color: GOLD, margin: "0 0 14px", lineHeight: 1.2 }}>
+      <p style={{ fontFamily: LATO, fontSize: "21px", fontWeight: 600, color: GOLD, margin: "0 0 10px", lineHeight: 1.2, letterSpacing: "0.02em" }}>
         {formatUsd(estimatedTotal)}
       </p>
-      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: "16px" }}>
-          <span style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.8)" }}>Duration</span>
-          <span style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.82)", textAlign: "right" }}>
+          <span style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.72)" }}>Duration</span>
+          <span style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.88)", textAlign: "right" }}>
             {nights} {nights === 1 ? "night" : "nights"}
           </span>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", gap: "16px" }}>
-          <span style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.8)" }}>Selected add-ons</span>
-          <span style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.82)", textAlign: "right" }}>
+          <span style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.72)" }}>Selected add-ons</span>
+          <span style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.88)", textAlign: "right" }}>
             {formatUsd(selectedAddonSubtotal)}
           </span>
         </div>
       </div>
       {selectedAddonQuoteCount > 0 && (
-        <p style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.76)", margin: "10px 0 0", lineHeight: 1.65 }}>
+        <p style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.68)", margin: "10px 0 0", lineHeight: 1.55 }}>
           {selectedAddonQuoteCount} selected add-on{selectedAddonQuoteCount === 1 ? "" : "s"} with price on request are excluded from this estimate.
         </p>
       )}
@@ -1377,7 +1414,7 @@ function BookPageInner() {
         return (
           <p
             key={`${warning.kind}-${i}`}
-            style={{ fontFamily: LATO, fontSize: "14px", color: "#e0b070", margin: "10px 0 0", lineHeight: 1.65 }}
+            style={{ fontFamily: LATO, fontSize: "12px", color: "#e0b070", margin: "10px 0 0", lineHeight: 1.55 }}
           >
             {message}
           </p>
@@ -1650,7 +1687,7 @@ function BookPageInner() {
               <button
                 type="button"
                 onClick={goNext}
-                style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: CHARCOAL, backgroundColor: GOLD, border: "none", padding: "16px", cursor: "pointer" }}
+                style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: CHARCOAL, backgroundColor: GOLD, border: "none", padding: "14px 16px", minHeight: "50px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
               >
@@ -1667,8 +1704,8 @@ function BookPageInner() {
 
               {/* Guest contact fields (only when not a member) */}
               {guestMode && (
-                <div style={{ order: 0, border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: "rgba(255,255,255,0.02)", padding: "1.5rem", display: "flex", flexDirection: "column", gap: "16px" }}>
-                  <p style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "1px", color: GOLD, margin: 0 }}>
+                <div style={{ order: 0, border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: "rgba(255,255,255,0.02)", padding: "1.5rem", display: "flex", flexDirection: "column", gap: "14px" }}>
+                  <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
                     Your details
                   </p>
 
@@ -1688,7 +1725,7 @@ function BookPageInner() {
                       }}
                       onFocus={focusGold} onBlur={blurGold} />
                     {guestEmailInvalid && (
-                    <p style={{ fontFamily: LATO, fontSize: "14px", color: "#e07070", marginTop: "8px", lineHeight: 1.6 }}>
+                    <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070", marginTop: "8px", lineHeight: 1.55 }}>
                         Please enter a valid email address so we can contact you about your booking.
                       </p>
                     )}
@@ -1697,7 +1734,7 @@ function BookPageInner() {
                   <div>
                     <label style={labelStyle}>
                       Phone number{" "}
-                      <span style={{ color: "rgba(138,128,112,0.5)", letterSpacing: 0 }}>(optional)</span>
+                      <span style={{ color: "rgba(138,128,112,0.55)", letterSpacing: "0.4px", textTransform: "none", fontSize: "10px" }}>(optional)</span>
                     </label>
                     <div style={{ display: "flex" }}>
                       <select name="dialCode" value={guest.dialCode} onChange={handleGuestChange}
@@ -1735,8 +1772,8 @@ function BookPageInner() {
               {/* Bedroom-based stay setup */}
               <div style={{ order: 1, display: "flex", flexDirection: "column", gap: "16px" }}>
                 <div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", marginBottom: "14px" }}>
-                    <label style={{ ...labelStyle, marginBottom: 0 }}>Bedrooms to be used</label>
+                  <div style={{ ...labelRowStyle, marginBottom: "12px" }}>
+                    <span style={labelRowTextStyle}>Bedrooms to be used</span>
                     <InfoPopover
                       label="Bedroom setup info"
                       text="Choose how many bedrooms to prepare. If guest count exceeds bedroom capacity, extra bedding or sofa setup may be required."
@@ -1754,6 +1791,11 @@ function BookPageInner() {
                             border: `0.5px solid ${selected ? GOLD : "rgba(197,164,109,0.2)"}`,
                             backgroundColor: selected ? "rgba(197,164,109,0.08)" : "rgba(255,255,255,0.02)",
                             padding: "14px 12px",
+                            minHeight: "104px",
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            justifyContent: "center",
                             cursor: "pointer",
                             textAlign: "center",
                             transition: "border-color 0.15s, background-color 0.15s",
@@ -1771,10 +1813,10 @@ function BookPageInner() {
                             }
                           }}
                         >
-                          <span style={{ fontFamily: PLAYFAIR, fontSize: "16px", color: selected ? GOLD : WHITE, display: "block", marginBottom: "4px" }}>
+                          <span style={{ fontFamily: LATO, fontSize: "15px", fontWeight: 600, letterSpacing: "0.06em", color: selected ? GOLD : WHITE, display: "block", marginBottom: "6px" }}>
                             {formatBedroomLabel(bedroomCount)}
                           </span>
-                          <span style={{ fontFamily: LATO, fontSize: "13px", color: "rgba(255,255,255,0.76)", letterSpacing: "0.2px" }}>
+                          <span style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.72)", lineHeight: 1.45 }}>
                             {BEDROOM_CAPACITY_COPY[bedroomCount]}
                           </span>
                         </button>
@@ -1783,10 +1825,10 @@ function BookPageInner() {
                   </div>
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px", alignItems: "start" }}>
                   <div>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", marginBottom: "8px" }}>
-                      <label style={{ ...labelStyle, marginBottom: 0 }}>Estimated number of guests</label>
+                    <div style={labelRowStyle}>
+                      <span style={labelRowTextStyle}>Estimated number of guests</span>
                       <InfoPopover
                         label="Guest estimate info"
                         text="Optional helper for preparation. Bedroom selection remains the primary setup preference."
@@ -1796,18 +1838,20 @@ function BookPageInner() {
                       value={form.sleepingGuests} onChange={handleFormChange}
                       onFocus={focusGold} onBlur={blurGold} style={inputStyle} />
                     {bedroomCapacityWarning && (
-                      <p style={{ fontFamily: LATO, fontSize: "14px", color: "#e2ab5a", marginTop: "8px", lineHeight: 1.6 }}>
+                      <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e2ab5a", marginTop: "8px", lineHeight: 1.55 }}>
                         {bedroomCapacityWarning}
                       </p>
                   )}
                   {sleepingGuestsCount >= EXTRA_BEDDING_REQUIRED_GUESTS && (
-                    <p style={{ fontFamily: LATO, fontSize: "14px", color: GOLD, marginTop: "8px", lineHeight: 1.6 }}>
+                    <p style={{ fontFamily: LATO, fontSize: "12px", color: GOLD, marginTop: "8px", lineHeight: 1.55 }}>
                       7–8 guests require extra bedding / sofa setup.
                     </p>
                   )}
                   </div>
                   <div>
-                    <label style={labelStyle}>Expected day visitors</label>
+                    <div style={labelRowStyle}>
+                      <span style={labelRowTextStyle}>Expected day visitors</span>
+                    </div>
                     <input name="dayVisitors" type="number" required min={0} max={25}
                       value={form.dayVisitors} onChange={handleFormChange}
                       onFocus={focusGold} onBlur={blurGold} style={inputStyle} />
@@ -1817,16 +1861,16 @@ function BookPageInner() {
 
               {/* Premium stay-to-event upgrade CTA — routes to /events/inquiry */}
               <div style={{ order: 2, border: "0.5px solid rgba(197,164,109,0.26)", backgroundColor: "rgba(255,255,255,0.03)", padding: "18px 20px", display: "flex", flexDirection: "column", gap: "10px", boxShadow: "inset 0 0 0 1px rgba(197,164,109,0.04)" }}>
-                <p style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "1px", color: GOLD, margin: 0 }}>
+                <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
                   Hosted Experiences
                 </p>
-                <p style={{ fontFamily: PLAYFAIR, fontSize: "16px", fontWeight: 400, color: WHITE, margin: "0 0 6px" }}>
+                <p style={{ fontFamily: LATO, fontSize: "16px", fontWeight: 500, color: WHITE, margin: "0 0 4px", letterSpacing: "0.02em" }}>
                   Planning something more than a stay?
                 </p>
-                <p style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.8)", margin: "0 0 14px", lineHeight: 1.65 }}>
+                <p style={{ fontFamily: LATO, fontSize: "13px", color: "rgba(255,255,255,0.78)", margin: "0 0 12px", lineHeight: 1.6 }}>
                   Turn your villa booking into a fully hosted experience - celebrations, private gatherings, and curated event services.
                 </p>
-                <p style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.72)", margin: "0", lineHeight: 1.6 }}>
+                <p style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.68)", margin: "0", lineHeight: 1.55 }}>
                   Event inquiries are reviewed separately and confirmed by Oraya.
                 </p>
                 <button
@@ -1874,7 +1918,7 @@ function BookPageInner() {
               <div style={{ order: 4 }}>
                 <label style={labelStyle}>
                   Special requests{" "}
-                  <span style={{ color: "rgba(138,128,112,0.5)", letterSpacing: 0 }}>(optional)</span>
+                  <span style={{ color: "rgba(138,128,112,0.55)", letterSpacing: "0.4px", textTransform: "none", fontSize: "10px" }}>(optional)</span>
                 </label>
                 <textarea name="message" value={form.message} onChange={handleFormChange}
                   onFocus={focusGold} onBlur={blurGold}
@@ -1891,15 +1935,15 @@ function BookPageInner() {
                 </div>
               )}
 
-              <div style={{ order: 6, display: "flex", gap: "12px" }}>
+              <div style={{ order: 6, display: "flex", gap: "12px", alignItems: "stretch", marginTop: "4px" }}>
                 <button type="button" onClick={goBack}
-                  style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: "rgba(255,255,255,0.8)", backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", padding: "16px 24px", cursor: "pointer" }}
+                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: "rgba(255,255,255,0.85)", backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", padding: "14px 22px", cursor: "pointer", minHeight: "50px", display: "flex", alignItems: "center", justifyContent: "center" }}
                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = GOLD; (e.currentTarget as HTMLElement).style.color = GOLD; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(197,164,109,0.25)"; (e.currentTarget as HTMLElement).style.color = MUTED; }}>
                   ← Back
                 </button>
                 <button type="button" onClick={goNext}
-                  style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: CHARCOAL, backgroundColor: GOLD, border: "none", padding: "16px", flex: 1, cursor: "pointer" }}
+                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: CHARCOAL, backgroundColor: GOLD, border: "none", padding: "14px 16px", flex: 1, cursor: "pointer", minHeight: "50px", display: "flex", alignItems: "center", justifyContent: "center" }}
                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}>
                   Continue to add-ons
@@ -2387,15 +2431,15 @@ function BookPageInner() {
                   {error}
                 </p>
               )}
-              <div style={{ display: "flex", gap: "12px" }}>
-                <button onClick={goBack}
-                  style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: "rgba(255,255,255,0.8)", backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", padding: "16px 24px", cursor: "pointer" }}
+              <div style={{ display: "flex", gap: "12px", alignItems: "stretch" }}>
+                <button type="button" onClick={goBack}
+                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: "rgba(255,255,255,0.85)", backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", padding: "14px 22px", minHeight: "50px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = GOLD; (e.currentTarget as HTMLElement).style.color = GOLD; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(197,164,109,0.25)"; (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.8)"; }}>
                   ← Back
                 </button>
                 <button type="button" onClick={goNext}
-                  style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: CHARCOAL, backgroundColor: GOLD, border: "none", padding: "16px", flex: 1, cursor: "pointer" }}
+                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: CHARCOAL, backgroundColor: GOLD, border: "none", padding: "14px 16px", flex: 1, minHeight: "50px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}>
                   Continue to review
@@ -2424,8 +2468,8 @@ function BookPageInner() {
                     ] as [string, string][]
                   ).map(([label, value]) => (
                     <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "10px 0", borderBottom: "0.5px solid rgba(255,255,255,0.05)", gap: "16px" }}>
-                      <span style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.76)", flexShrink: 0, paddingRight: "16px" }}>{label}</span>
-                      <span style={{ fontFamily: LATO, fontSize: "14px", color: WHITE, textAlign: "right", lineHeight: 1.5, maxWidth: "60%" }}>{value}</span>
+                      <span style={{ fontFamily: LATO, fontSize: "12px", letterSpacing: "1px", textTransform: "uppercase", color: "rgba(255,255,255,0.62)", flexShrink: 0, paddingRight: "16px" }}>{label}</span>
+                      <span style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, textAlign: "right", lineHeight: 1.5, maxWidth: "60%" }}>{value}</span>
                     </div>
                   ))}
                 </div>
@@ -2434,13 +2478,13 @@ function BookPageInner() {
               {estimatePanel}
 
               <div style={{ border: "0.5px solid rgba(197,164,109,0.24)", backgroundColor: "rgba(197,164,109,0.05)", padding: "16px 18px", display: "grid", gap: "10px" }}>
-                <p style={{ fontFamily: PLAYFAIR, fontSize: "18px", color: WHITE, margin: 0 }}>Payment options</p>
-                <p style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.78)", margin: 0, lineHeight: 1.6 }}>
+                <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>Payment options</p>
+                <p style={{ fontFamily: LATO, fontSize: "13px", color: "rgba(255,255,255,0.78)", margin: 0, lineHeight: 1.6 }}>
                   No payment is taken on this page. Payment does not confirm the booking until Oraya reviews and approves your request; deposit or full payment links will be shared after confirmation when applicable.
                 </p>
                 <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                  <button type="button" disabled style={{ fontFamily: LATO, fontSize: "14px", color: MUTED, border: "0.5px solid rgba(197,164,109,0.3)", backgroundColor: "rgba(255,255,255,0.02)", padding: "10px 16px", cursor: "not-allowed" }}>Pay deposit (coming soon)</button>
-                  <button type="button" disabled style={{ fontFamily: LATO, fontSize: "14px", color: MUTED, border: "0.5px solid rgba(197,164,109,0.3)", backgroundColor: "rgba(255,255,255,0.02)", padding: "10px 16px", cursor: "not-allowed" }}>Pay full amount (coming soon)</button>
+                  <button type="button" disabled style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, border: "0.5px solid rgba(197,164,109,0.3)", backgroundColor: "rgba(255,255,255,0.02)", padding: "10px 14px", cursor: "not-allowed" }}>Pay deposit (coming soon)</button>
+                  <button type="button" disabled style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, border: "0.5px solid rgba(197,164,109,0.3)", backgroundColor: "rgba(255,255,255,0.02)", padding: "10px 14px", cursor: "not-allowed" }}>Pay full amount (coming soon)</button>
                 </div>
               </div>
 
@@ -2450,13 +2494,13 @@ function BookPageInner() {
                 </p>
               )}
 
-              <div style={{ display: "flex", gap: "12px" }}>
-                <button onClick={goBack} disabled={loading}
-                  style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: "rgba(255,255,255,0.8)", backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", padding: "16px 24px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.5 : 1 }}>
+              <div style={{ display: "flex", gap: "12px", alignItems: "stretch" }}>
+                <button type="button" onClick={goBack} disabled={loading}
+                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: "rgba(255,255,255,0.85)", backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", padding: "14px 22px", minHeight: "50px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.5 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   ← Back
                 </button>
                 <button type="button" onClick={() => { void handleSubmit(); }} disabled={loading}
-                  style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: CHARCOAL, backgroundColor: GOLD, border: "none", padding: "16px", flex: 1, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1 }}>
+                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: CHARCOAL, backgroundColor: GOLD, border: "none", padding: "14px 16px", flex: 1, minHeight: "50px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   {loading ? "Submitting…" : "Submit booking request"}
                 </button>
               </div>
