@@ -152,8 +152,8 @@ export default function Home() {
           borderBottom: "0.5px solid rgba(197,164,109,0.2)",
         }}
       >
-        <a href="/" className="shrink-0 block" style={{ cursor: "pointer", width: "120px" }}>
-          <OrayaLogoFull />
+        <a href="/" className="w-11 h-11 shrink-0 block" style={{ cursor: "pointer" }}>
+          <OrayaEmblem />
         </a>
 
         <ul className="hidden md:flex gap-10 list-none">
@@ -293,6 +293,10 @@ export default function Home() {
           >
             Lebanon · Exclusive villas
           </p>
+
+          <div className="w-[280px] mx-auto mb-10">
+            <OrayaLogoFull />
+          </div>
 
           <p
             className="uppercase mb-12 italic"
