@@ -1149,8 +1149,8 @@ function BookPageInner() {
     }
     if (step === 2) {
       if (!form.bedroomCount)                  { setError("Please select how many bedrooms you would like prepared."); return; }
-      if (guestMode && !guest.fullName.trim()) { setError("Please enter your full name so we know who the booking request is for."); return; }
-      if (guestMode && !guestEmail)            { setError("Please enter your email address so we can contact you about your booking."); return; }
+      if (guestMode && !guest.fullName.trim()) { setError("Please enter your name so we know who the booking is for."); return; }
+      if (guestMode && !guestEmail)            { setError("Please enter your email so we can contact you about your booking."); return; }
       if (guestMode && !EMAIL_RE.test(guestEmail)) { setError("Please enter a valid email address so we can contact you about your booking."); return; }
       const sleeping = parseInt(form.sleepingGuests, 10);
       if (!sleeping || sleeping < 1)           { setError("Please enter at least 1 estimated guest before continuing."); return; }
@@ -1191,8 +1191,16 @@ function BookPageInner() {
     setError("");
     setLoading(true);
     try {
-      if (guestMode && !EMAIL_RE.test(guestEmail)) {
-        throw new Error("Invalid email address.");
+      if (guestMode) {
+        if (!guest.fullName.trim()) {
+          throw new Error("Please enter your name so we know who the booking is for.");
+        }
+        if (!guestEmail) {
+          throw new Error("Please enter your email so we can contact you about your booking.");
+        }
+        if (!EMAIL_RE.test(guestEmail)) {
+          throw new Error("Invalid email address.");
+        }
       }
 
       const { data: { user }, error: authErr } = await supabase.auth.getUser();
@@ -1640,12 +1648,13 @@ function BookPageInner() {
               )}
 
               <button
+                type="button"
                 onClick={goNext}
                 style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: CHARCOAL, backgroundColor: GOLD, border: "none", padding: "16px", cursor: "pointer" }}
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
               >
-                Continue →
+                Continue to stay setup
               </button>
             </div>
           )}
@@ -1658,7 +1667,7 @@ function BookPageInner() {
 
               {/* Guest contact fields (only when not a member) */}
               {guestMode && (
-                <div style={{ order: 6, border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: "rgba(255,255,255,0.02)", padding: "1.5rem", display: "flex", flexDirection: "column", gap: "16px" }}>
+                <div style={{ order: 0, border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: "rgba(255,255,255,0.02)", padding: "1.5rem", display: "flex", flexDirection: "column", gap: "16px" }}>
                   <p style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "1px", color: GOLD, margin: 0 }}>
                     Your details
                   </p>
@@ -1807,7 +1816,7 @@ function BookPageInner() {
               </div>
 
               {/* Premium stay-to-event upgrade CTA — routes to /events/inquiry */}
-              <div style={{ order: 7, border: "0.5px solid rgba(197,164,109,0.26)", backgroundColor: "rgba(255,255,255,0.03)", padding: "18px 20px", display: "flex", flexDirection: "column", gap: "10px", boxShadow: "inset 0 0 0 1px rgba(197,164,109,0.04)" }}>
+              <div style={{ order: 2, border: "0.5px solid rgba(197,164,109,0.26)", backgroundColor: "rgba(255,255,255,0.03)", padding: "18px 20px", display: "flex", flexDirection: "column", gap: "10px", boxShadow: "inset 0 0 0 1px rgba(197,164,109,0.04)" }}>
                 <p style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "1px", color: GOLD, margin: 0 }}>
                   Hosted Experiences
                 </p>
@@ -1857,12 +1866,12 @@ function BookPageInner() {
                 </button>
               </div>
 
-              <div style={{ order: 2 }}>
+              <div style={{ order: 3 }}>
                 {estimatePanel}
               </div>
 
               {/* Notes */}
-              <div style={{ order: 3 }}>
+              <div style={{ order: 4 }}>
                 <label style={labelStyle}>
                   Special requests{" "}
                   <span style={{ color: "rgba(138,128,112,0.5)", letterSpacing: 0 }}>(optional)</span>
@@ -1875,23 +1884,25 @@ function BookPageInner() {
               </div>
 
               {error && (
-                <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070", textAlign: "center", lineHeight: 1.6, margin: 0 }}>
-                  {error}
-                </p>
+                <div style={{ order: 5, width: "100%" }}>
+                  <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070", textAlign: "center", lineHeight: 1.6, margin: 0 }}>
+                    {error}
+                  </p>
+                </div>
               )}
 
-              <div style={{ order: 4, display: "flex", gap: "12px" }}>
-                <button onClick={goBack}
+              <div style={{ order: 6, display: "flex", gap: "12px" }}>
+                <button type="button" onClick={goBack}
                   style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: "rgba(255,255,255,0.8)", backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", padding: "16px 24px", cursor: "pointer" }}
                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = GOLD; (e.currentTarget as HTMLElement).style.color = GOLD; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(197,164,109,0.25)"; (e.currentTarget as HTMLElement).style.color = MUTED; }}>
                   ← Back
                 </button>
-                <button onClick={goNext}
+                <button type="button" onClick={goNext}
                   style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: CHARCOAL, backgroundColor: GOLD, border: "none", padding: "16px", flex: 1, cursor: "pointer" }}
                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}>
-                  Review →
+                  Continue to add-ons
                 </button>
               </div>
             </div>
@@ -2383,11 +2394,11 @@ function BookPageInner() {
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(197,164,109,0.25)"; (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.8)"; }}>
                   ← Back
                 </button>
-                <button onClick={goNext}
+                <button type="button" onClick={goNext}
                   style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: CHARCOAL, backgroundColor: GOLD, border: "none", padding: "16px", flex: 1, cursor: "pointer" }}
                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}>
-                  Continue to review →
+                  Continue to review
                 </button>
               </div>
             </div>
@@ -2425,7 +2436,7 @@ function BookPageInner() {
               <div style={{ border: "0.5px solid rgba(197,164,109,0.24)", backgroundColor: "rgba(197,164,109,0.05)", padding: "16px 18px", display: "grid", gap: "10px" }}>
                 <p style={{ fontFamily: PLAYFAIR, fontSize: "18px", color: WHITE, margin: 0 }}>Payment options</p>
                 <p style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.78)", margin: 0, lineHeight: 1.6 }}>
-                  Payment does not confirm the booking until Oraya reviews and approves the request.
+                  No payment is taken on this page. Payment does not confirm the booking until Oraya reviews and approves your request; deposit or full payment links will be shared after confirmation when applicable.
                 </p>
                 <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
                   <button type="button" disabled style={{ fontFamily: LATO, fontSize: "14px", color: MUTED, border: "0.5px solid rgba(197,164,109,0.3)", backgroundColor: "rgba(255,255,255,0.02)", padding: "10px 16px", cursor: "not-allowed" }}>Pay deposit (coming soon)</button>
@@ -2446,7 +2457,7 @@ function BookPageInner() {
                 </button>
                 <button type="button" onClick={() => { void handleSubmit(); }} disabled={loading}
                   style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: CHARCOAL, backgroundColor: GOLD, border: "none", padding: "16px", flex: 1, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1 }}>
-                  {loading ? "Submitting…" : "Submit request without payment"}
+                  {loading ? "Submitting…" : "Submit booking request"}
                 </button>
               </div>
             </div>

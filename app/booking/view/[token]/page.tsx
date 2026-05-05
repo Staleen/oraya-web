@@ -2,6 +2,7 @@ import Link from "next/link";
 import OrayaEmblem from "@/components/OrayaEmblem";
 import { AddonIcon } from "@/components/addon-icon";
 import CopyValueButton from "@/components/CopyValueButton";
+import { BookingViewMemberLink } from "@/components/BookingViewMemberLink";
 import { buildProposalEmailLineItems } from "@/lib/event-proposal-line-items";
 import { extractEventInquiryGuestNotesLine, parseEventSetupEstimateFromMessage } from "@/lib/event-inquiry-message";
 import { formatPaymentMethodLabel } from "@/lib/payment-method-labels";
@@ -204,6 +205,12 @@ function sameDayWarningText(value: Addon["same_day_warning"]): string | null {
   return null;
 }
 
+function whatsappDigits(phone: string | null | undefined): string | null {
+  if (!phone?.trim()) return null;
+  const d = phone.replace(/\D/g, "");
+  return d.length > 0 ? d : null;
+}
+
 async function getContactSettings(): Promise<{ whatsappNumber: string | null; whishNumber: string | null }> {
   try {
     const { data } = await supabaseAdmin
@@ -310,6 +317,7 @@ export default async function BookingViewPage({
   }
 
   const { whatsappNumber, whishNumber } = await getContactSettings();
+  const waLinkDigits = whatsappDigits(whatsappNumber);
   const ref = booking.id.slice(0, 8).toUpperCase();
   // Phase 13I: detect event inquiry — both conditions required (event_type set + structured notes marker).
   const isEventInquiry =
@@ -391,7 +399,6 @@ export default async function BookingViewPage({
     { label: isEventInquiry ? "Overnight hosts" : "Guests staying", value: String(booking.sleeping_guests ?? "—") },
     { label: isEventInquiry ? "Expected attendees" : "Expected visitors", value: String(booking.day_visitors ?? 0) },
     ...(booking.event_type ? [{ label: "Event type", value: booking.event_type }] : []),
-    { label: "Reference",    value: ref },
   ];
 
   return (
@@ -424,6 +431,9 @@ export default async function BookingViewPage({
           {booking.villa}
         </h1>
 
+        <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, margin: "0 0 10px" }}>
+          Booking status
+        </p>
         {/* Status pill */}
         <div
           style={{
@@ -435,10 +445,34 @@ export default async function BookingViewPage({
             color:          visual.color,
             backgroundColor: visual.bg,
             padding:        "6px 14px",
-            marginBottom:   "2rem",
+            marginBottom:   "1.5rem",
           }}
         >
           {visual.label}
+        </div>
+
+        {/* Reference — prominent */}
+        <div
+          style={{
+            border: "0.5px solid rgba(197,164,109,0.28)",
+            backgroundColor: "rgba(197,164,109,0.06)",
+            padding: "1.25rem 1.5rem",
+            marginBottom: "2rem",
+            textAlign: "center",
+          }}
+        >
+          <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 10px" }}>
+            Booking reference
+          </p>
+          <p style={{ fontFamily: PLAYFAIR, fontSize: "1.65rem", color: WHITE, margin: "0 0 12px", letterSpacing: "2px" }}>
+            {ref}
+          </p>
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <CopyValueButton value={ref} buttonLabel="Copy reference" />
+          </div>
+          <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, lineHeight: 1.6, margin: "12px 0 0" }}>
+            Use this reference in emails or messages to Oraya about this request.
+          </p>
         </div>
 
         {/* Gold rule */}
@@ -876,6 +910,9 @@ export default async function BookingViewPage({
               <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, lineHeight: 1.7, margin: 0 }}>
                 Oraya will review your event request and follow up with availability, setup options, and a tailored proposal.
               </p>
+              <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.7, margin: "12px 0 0" }}>
+                Payment is not processed on this page. Instructions are shared after Oraya confirms availability and next steps.
+              </p>
             </div>
           )
         ) : (
@@ -902,6 +939,28 @@ export default async function BookingViewPage({
                 </span>
               </div>
             ))}
+          </div>
+        )}
+
+        {booking.status === "pending" && !isEventInquiry && (
+          <div
+            style={{
+              border: "0.5px solid rgba(197,164,109,0.22)",
+              padding: "1.75rem",
+              marginBottom: "2rem",
+              textAlign: "left",
+              backgroundColor: "rgba(255,255,255,0.02)",
+            }}
+          >
+            <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 12px" }}>
+              Payment
+            </p>
+            <p style={{ fontFamily: PLAYFAIR, fontSize: "1.05rem", color: WHITE, margin: "0 0 10px", lineHeight: 1.35 }}>
+              Online payment portal (coming soon)
+            </p>
+            <p style={{ fontFamily: LATO, fontSize: "13px", color: "rgba(255,255,255,0.82)", lineHeight: 1.7, margin: 0 }}>
+              Payment is not processed yet. Oraya will confirm availability and review your request first; payment will be requested only after your stay is confirmed and coordinated with you.
+            </p>
           </div>
         )}
 
@@ -1147,6 +1206,7 @@ export default async function BookingViewPage({
 
         {/* CTAs */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
+          <BookingViewMemberLink bookingMemberId={booking.member_id} />
           <Link
             href="/"
             style={{
@@ -1163,9 +1223,26 @@ export default async function BookingViewPage({
           >
             Back to home
           </Link>
-          {whatsappNumber && (
+          <a
+            href={`mailto:hello@stayoraya.com?subject=${encodeURIComponent(`Booking ${ref}`)}&body=${encodeURIComponent(`Hello Oraya,\n\nMy booking reference is ${ref}.\n\n`)}`}
+            style={{
+              display:        "inline-block",
+              fontFamily:     LATO,
+              fontSize:       "11px",
+              letterSpacing:  "2px",
+              textTransform:  "uppercase",
+              color:          WHITE,
+              backgroundColor: "rgba(255,255,255,0.06)",
+              border:         "0.5px solid rgba(197,164,109,0.35)",
+              padding:        "15px 36px",
+              textDecoration: "none",
+            }}
+          >
+            Email hello@stayoraya.com
+          </a>
+          {waLinkDigits && (
             <a
-              href={`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(`Hello Oraya! I have a question about my booking. My reference is ${ref}.`)}`}
+              href={`https://wa.me/${waLinkDigits}?text=${encodeURIComponent(`Hello Oraya! I have a question about my booking. My reference is ${ref}.`)}`}
               target="_blank"
               rel="noopener noreferrer"
               style={{
