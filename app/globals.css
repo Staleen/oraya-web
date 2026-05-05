@@ -17,12 +17,14 @@ html[data-theme="dark"] {
   color-scheme: dark;
 
   --oraya-gold: #c5a46d;
-  --oraya-ink: #2e2e2e;
-  --oraya-text-muted: #8a8070;
-  --oraya-surface: #ffffff;
-  --oraya-surface-muted: #eae3d9;
-  --oraya-bg: #f5f1eb;
-  --oraya-border: rgba(197, 164, 109, 0.2);
+  /** Primary text on navy surfaces (body, headings on public shell) */
+  --oraya-ink: rgba(245, 241, 235, 0.96);
+  --oraya-text-muted: rgba(245, 241, 235, 0.55);
+  --oraya-surface: #252d38;
+  --oraya-surface-muted: #2f3a48;
+  --oraya-bg: #1f2b38;
+  --oraya-gold-cta-text: #1f2b38;
+  --oraya-border: rgba(197, 164, 109, 0.22);
   --oraya-hero-overlay: rgba(15, 25, 35, 0.55);
   /** Solid fallback behind hero imagery — stays deep navy in both themes for legibility */
   --oraya-hero-canvas: #1f2b38;
@@ -46,9 +48,9 @@ html[data-theme="dark"] {
   --oraya-footer-legal: rgba(255, 255, 255, 0.42);
   --oraya-footer-legal-muted: rgba(255, 255, 255, 0.32);
 
-  --oraya-nav-bg: rgba(255, 255, 255, 0.97);
-  --oraya-nav-text: #2e2e2e;
-  --oraya-nav-border: rgba(197, 164, 109, 0.2);
+  --oraya-nav-bg: rgba(31, 43, 56, 0.94);
+  --oraya-nav-text: rgba(245, 241, 235, 0.96);
+  --oraya-nav-border: rgba(197, 164, 109, 0.28);
 
   /* /book flow */
   --oraya-book-bg: #1f2b38;
@@ -111,6 +113,7 @@ html[data-theme="light"] {
   --oraya-surface: #faf7f2;
   --oraya-surface-muted: #e8e0d4;
   --oraya-bg: #ede6dc;
+  --oraya-gold-cta-text: #1f2b38;
   --oraya-border: rgba(31, 43, 56, 0.12);
   --oraya-hero-overlay: rgba(22, 32, 42, 0.52);
   --oraya-hero-canvas: #1f2b38;

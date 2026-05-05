@@ -18,11 +18,12 @@ import { AddonIcon } from "@/components/addon-icon";
 import { SkeletonBlock, SkeletonText } from "@/components/LoadingSkeleton";
 import PublicThemeToggle from "@/components/PublicThemeToggle";
 
-// ─── Brand constants (theme tokens; dark mode matches prior production palette) ─
+// ─── Brand constants (theme tokens from globals.css) ─
 const GOLD      = "var(--oraya-gold)";
 const PAGE_BG   = "var(--oraya-book-bg)";
 const WHITE     = "var(--oraya-book-heading)";
 const CHARCOAL  = "var(--oraya-ink)";
+const GOLD_CTA  = "var(--oraya-gold-cta-text)";
 const MUTED     = "var(--oraya-book-muted)";
 const BOOK_SOFT = "var(--oraya-book-text-soft)";
 const BOOK_SOFT2 = "var(--oraya-book-text-soft-2)";
@@ -490,7 +491,7 @@ const CALENDAR_CSS = `
   .oraya-cal .rdp-day_range_start,
   .oraya-cal .rdp-day_range_end {
     background-color: var(--oraya-gold) !important;
-    color: var(--oraya-ink) !important;
+    color: var(--oraya-gold-cta-text) !important;
     font-weight: 700;
     border-radius: 2px !important;
   }
@@ -1450,7 +1451,7 @@ function BookPageInner() {
           <div style={{ border: "0.5px solid rgba(197,164,109,0.3)", backgroundColor: "rgba(197,164,109,0.05)", padding: "2rem", display: "flex", gap: "10px", justifyContent: "center", flexWrap: "wrap" }}>
             <a
               href="/login?redirect=/book"
-              style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: CHARCOAL, backgroundColor: GOLD, padding: "14px 34px", textDecoration: "none", display: "inline-block" }}
+              style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, padding: "14px 34px", textDecoration: "none", display: "inline-block" }}
               onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
             >
@@ -1692,7 +1693,7 @@ function BookPageInner() {
               <button
                 type="button"
                 onClick={goNext}
-                style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: CHARCOAL, backgroundColor: GOLD, border: "none", padding: "14px 16px", minHeight: "50px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 16px", minHeight: "50px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
               >
@@ -1907,7 +1908,7 @@ function BookPageInner() {
                     }
                     router.push("/events/inquiry");
                   }}
-                  style={{ alignSelf: "flex-start", fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: CHARCOAL, backgroundColor: GOLD, border: "none", padding: "12px 24px", cursor: "pointer" }}
+                  style={{ alignSelf: "flex-start", fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "12px 24px", cursor: "pointer" }}
                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
                 >
@@ -1948,7 +1949,7 @@ function BookPageInner() {
                   ← Back
                 </button>
                 <button type="button" onClick={goNext}
-                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: CHARCOAL, backgroundColor: GOLD, border: "none", padding: "14px 16px", flex: 1, cursor: "pointer", minHeight: "50px", display: "flex", alignItems: "center", justifyContent: "center" }}
+                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 16px", flex: 1, cursor: "pointer", minHeight: "50px", display: "flex", alignItems: "center", justifyContent: "center" }}
                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}>
                   Continue to add-ons
@@ -2444,7 +2445,7 @@ function BookPageInner() {
                   ← Back
                 </button>
                 <button type="button" onClick={goNext}
-                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: CHARCOAL, backgroundColor: GOLD, border: "none", padding: "14px 16px", flex: 1, minHeight: "50px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 16px", flex: 1, minHeight: "50px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}>
                   Continue to review
@@ -2505,7 +2506,7 @@ function BookPageInner() {
                   ← Back
                 </button>
                 <button type="button" onClick={() => { void handleSubmit(); }} disabled={loading}
-                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: CHARCOAL, backgroundColor: GOLD, border: "none", padding: "14px 16px", flex: 1, minHeight: "50px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 16px", flex: 1, minHeight: "50px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   {loading ? "Submitting…" : "Submit booking request"}
                 </button>
               </div>

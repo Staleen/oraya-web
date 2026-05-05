@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useLayoutEffect, useState } from "react";
 
 export const ORAYA_THEME_STORAGE_KEY = "oraya-theme";
 
@@ -37,29 +37,24 @@ export default function PublicThemeToggle({
   /** "public" = light nav bar; "onDark" = for dark page backgrounds (e.g. book) */
   variant?: "public" | "onDark";
 }) {
-  const [theme, setTheme] = useState<OrayaTheme | null>(null);
+  /** Matches SSR default (`light`); `useLayoutEffect` syncs from `data-theme` before paint. */
+  const [theme, setTheme] = useState<OrayaTheme>("light");
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const a = document.documentElement.getAttribute("data-theme");
+    let t: OrayaTheme;
     if (a === "light" || a === "dark") {
-      setTheme(a);
-      return;
+      t = a;
+    } else {
+      t = readStoredTheme();
+      applyOrayaTheme(t);
     }
-    const t = readStoredTheme();
-    applyOrayaTheme(t);
     setTheme(t);
   }, []);
 
   function toggle() {
     setTheme((prev) => {
-      let current: OrayaTheme;
-      if (prev === "light" || prev === "dark") {
-        current = prev;
-      } else {
-        const a = document.documentElement.getAttribute("data-theme");
-        current = a === "dark" ? "dark" : "light";
-      }
-      const next = current === "light" ? "dark" : "light";
+      const next = prev === "light" ? "dark" : "light";
       applyOrayaTheme(next);
       return next;
     });
@@ -93,7 +88,7 @@ export default function PublicThemeToggle({
         textTransform: "uppercase" as const,
         padding: "8px 10px",
         borderRadius: "2px",
-        cursor: theme === null ? "wait" : "pointer",
+        cursor: "pointer",
         display: "inline-flex",
         alignItems: "center",
         gap: "6px",
@@ -102,9 +97,9 @@ export default function PublicThemeToggle({
       }}
     >
       <span aria-hidden style={{ fontSize: "14px", lineHeight: 1 }}>
-        {theme === null ? "···" : isDark ? "☀" : "☾"}
+        {isDark ? "☀" : "☾"}
       </span>
-      <span className="hidden min-[400px]:inline">{theme === null ? "" : isDark ? "Light" : "Dark"}</span>
+      <span className="hidden min-[400px]:inline">{isDark ? "Light" : "Dark"}</span>
     </button>
   );
 }

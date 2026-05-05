@@ -30,6 +30,7 @@ const WHITE      = "var(--oraya-surface)";
 const BEIGE      = "var(--oraya-surface-muted)";
 const BEIGELIGHT = "var(--oraya-bg)";
 const CHARCOAL   = "var(--oraya-ink)";
+const GOLD_CTA   = "var(--oraya-gold-cta-text)";
 const MIDNIGHT   = "var(--oraya-band-dark-bg)";
 const MUTED      = "var(--oraya-text-muted)";
 const BAND_TEXT  = "var(--oraya-band-text)";
@@ -639,7 +640,7 @@ export default function Home() {
             href="/events/inquiry"
             style={{
               display: "inline-block", fontFamily: LATO, fontSize: "11px", letterSpacing: "2.5px",
-              textTransform: "uppercase", color: CHARCOAL, backgroundColor: GOLD,
+              textTransform: "uppercase", color: GOLD_CTA, backgroundColor: GOLD,
               padding: "15px 44px", textDecoration: "none",
             }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
