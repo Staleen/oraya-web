@@ -12,9 +12,12 @@ import {
   bookingWhatsAppChangePrefill,
   bookingWhatsAppPrefill,
   CANCELLATION_HINT,
-  CANCELLATION_PROMPT,
+  REFUND_POLICY_HREF,
+  VIEW_CHANGE_CANCEL_BODY,
+  VIEW_CHANGE_CANCEL_TITLE,
   VIEW_CONFIRMED_LINES,
   VIEW_PENDING_LINES,
+  VIEW_REFUND_POLICY_LINK_LABEL,
   viewStatusHeadline,
   type BookingViewStatusNorm,
   WHATSAPP_SUPPORT_LINE,
@@ -1244,7 +1247,10 @@ export default async function BookingViewPage({
           }}
         >
           <p style={{ fontFamily: LATO, fontSize: "12px", color: WHITE, margin: "0 0 6px", lineHeight: 1.6 }}>
-            {CANCELLATION_PROMPT}
+            {VIEW_CHANGE_CANCEL_TITLE}
+          </p>
+          <p style={{ fontFamily: LATO, fontSize: "12px", color: "var(--oraya-book-p78)", margin: "0 0 8px", lineHeight: 1.65 }}>
+            {VIEW_CHANGE_CANCEL_BODY}
           </p>
           <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "0 0 12px", lineHeight: 1.65 }}>
             {CANCELLATION_HINT}
@@ -1280,6 +1286,19 @@ export default async function BookingViewPage({
                 WhatsApp
               </a>
             )}
+            <Link
+              href={REFUND_POLICY_HREF}
+              style={{
+                fontFamily: LATO,
+                fontSize: "11px",
+                letterSpacing: "1.5px",
+                textTransform: "uppercase",
+                color: GOLD,
+                textDecoration: "none",
+              }}
+            >
+              {VIEW_REFUND_POLICY_LINK_LABEL}
+            </Link>
           </div>
         </div>
 

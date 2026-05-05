@@ -8,7 +8,10 @@ import {
   CANCELLATION_HINT,
   CANCELLATION_PROMPT,
   CONFIRMED_PAGE,
+  CONFIRMED_REFUND_POLICY_LINK_LABEL,
+  CONFIRMED_REFUND_REASSURANCE,
   digitsOnlyPhone,
+  REFUND_POLICY_HREF,
   VIEW_PENDING_LINES,
   VIEW_STATUS_HEADLINE,
   WHATSAPP_CANCEL_CHANGE_NO_REF,
@@ -105,6 +108,13 @@ function BookingConfirmedPageInner() {
             {WHATSAPP_SUPPORT_LINE}
           </p>
         </div>
+
+        <p style={{ fontFamily: LATO, fontSize: "12px", color: BOOK_P78, lineHeight: 1.65, margin: "0 0 1rem", textAlign: "left", fontWeight: 300 }}>
+          {CONFIRMED_REFUND_REASSURANCE}{" "}
+          <a href={REFUND_POLICY_HREF} className="oraya-link-text" style={{ color: GOLD, textDecoration: "underline", textUnderlineOffset: "3px" }}>
+            {CONFIRMED_REFUND_POLICY_LINK_LABEL}
+          </a>
+        </p>
 
         {whatsappDigits && (
           <div style={{ display: "flex", justifyContent: "center", marginBottom: "2rem" }}>

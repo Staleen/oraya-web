@@ -26,6 +26,8 @@ import {
   CANCELLATION_HINT,
   CANCELLATION_PROMPT,
   digitsOnlyPhone,
+  REFUND_POLICY_HREF,
+  STEP4_REFUND_TRUST,
   STEP4_TRUST,
   WHATSAPP_CANCEL_CHANGE_NO_REF,
   WHATSAPP_SUPPORT_LINE,
@@ -2921,6 +2923,22 @@ function BookPageInner() {
                   <button type="button" disabled style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, border: "0.5px solid rgba(197,164,109,0.3)", backgroundColor: GLASS1, padding: "10px 14px", cursor: "not-allowed" }}>Pay deposit (coming soon)</button>
                   <button type="button" disabled style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, border: "0.5px solid rgba(197,164,109,0.3)", backgroundColor: GLASS1, padding: "10px 14px", cursor: "not-allowed" }}>Pay full amount (coming soon)</button>
                 </div>
+              </div>
+
+              <div style={{ border: "0.5px solid rgba(197,164,109,0.22)", backgroundColor: "rgba(197,164,109,0.04)", padding: "14px 16px", display: "grid", gap: "10px" }}>
+                <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+                  {STEP4_REFUND_TRUST.title}
+                </p>
+                <p style={{ fontFamily: LATO, fontSize: "12px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65 }}>
+                  {STEP4_REFUND_TRUST.body}
+                </p>
+                <a
+                  href={REFUND_POLICY_HREF}
+                  className="oraya-link-text"
+                  style={{ fontFamily: LATO, fontSize: "12px", color: GOLD, textDecoration: "underline", textUnderlineOffset: "3px", justifySelf: "start" }}
+                >
+                  {STEP4_REFUND_TRUST.linkLabel}
+                </a>
               </div>
 
               {error && (

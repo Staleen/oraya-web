@@ -77,6 +77,28 @@ export const CANCELLATION_PROMPT = "Need to cancel or change your booking?";
 export const CANCELLATION_HINT =
   "Self-service cancellation is not available yet — reach out on WhatsApp or email and we will help.";
 
+/** Guest legal page — cancellation & refund (no automatic refund implied here). */
+export const REFUND_POLICY_HREF = "/legal/refund";
+
+/** Step 4 review — visible before submit */
+export const STEP4_REFUND_TRUST = {
+  title: "Cancellation & Refund",
+  body:
+    "Plans can change. Cancellation and refund eligibility depends on timing, booking status, and the selected services.",
+  linkLabel: "View cancellation & refund policy",
+} as const;
+
+/** Booking view — compact block near contact */
+export const VIEW_CHANGE_CANCEL_TITLE = "Need to change or cancel?";
+export const VIEW_CHANGE_CANCEL_BODY =
+  "Cancellation and refund requests are handled according to Oraya's policy.";
+export const VIEW_REFUND_POLICY_LINK_LABEL = "Cancellation & refund policy";
+
+/** Booking-confirmed reassurance */
+export const CONFIRMED_REFUND_REASSURANCE =
+  "You can request changes or cancellations according to Oraya's cancellation and refund policy.";
+export const CONFIRMED_REFUND_POLICY_LINK_LABEL = "View policy";
+
 export function digitsOnlyPhone(value: string | null | undefined): string | null {
   if (!value?.trim()) return null;
   const d = value.replace(/\D/g, "");
