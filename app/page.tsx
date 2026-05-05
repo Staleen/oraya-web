@@ -437,7 +437,7 @@ export default function Home() {
             <a
               key={name}
               href={href}
-              className="oraya-card-interactive oraya-card-interactive--border h-full min-w-0 flex flex-col"
+              className="oraya-villa-card-link oraya-card-interactive oraya-card-interactive--border h-full min-w-0 flex flex-col"
               style={{
                 textDecoration: "none",
                 cursor: "pointer",

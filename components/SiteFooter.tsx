@@ -60,9 +60,8 @@ export default function SiteFooter() {
             <a
               key={s}
               href="#"
-              style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, textDecoration: "none", borderBottom: "0.5px solid var(--oraya-border)", paddingBottom: "2px" }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderBottomColor = GOLD; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderBottomColor = "var(--oraya-border)"; }}
+              className="oraya-link-cta"
+              style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, paddingBottom: "2px" }}
             >
               {s}
             </a>
@@ -91,9 +90,8 @@ export default function SiteFooter() {
                   <li key={label} style={{ marginBottom: "8px" }}>
                     <a
                       href={href}
+                      className="oraya-link-footer"
                       style={{ fontFamily: LATO, fontSize: "13px", fontWeight: 300, color: "var(--oraya-footer-link)", textDecoration: "none" }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = GOLD; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--oraya-footer-link)"; }}
                     >
                       {label}
                     </a>

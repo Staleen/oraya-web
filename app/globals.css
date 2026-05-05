@@ -407,6 +407,17 @@ a.oraya-card-interactive:active {
   transform: scale(0.995);
 }
 
+/** Homepage villa grid: keyboard focus ring (theme-aware gold blend, no layout shift) */
+a.oraya-villa-card-link:focus {
+  outline: none;
+}
+a.oraya-villa-card-link:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--oraya-gold) 72%, var(--oraya-ink));
+  outline-offset: 4px;
+  position: relative;
+  z-index: 1;
+}
+
 .oraya-section-tone {
   transition: background-color 320ms ease;
 }
@@ -432,6 +443,10 @@ a.oraya-card-interactive:active {
   .oraya-pressable:active,
   a.oraya-card-interactive:active {
     transform: none !important;
+  }
+
+  a.oraya-villa-card-link:focus-visible {
+    outline-offset: 2px;
   }
 
   .animate-fade-up {

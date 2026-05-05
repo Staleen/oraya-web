@@ -562,7 +562,7 @@ function EventsInquiryNav() {
         borderBottom: "0.5px solid var(--oraya-nav-border)",
       }}
     >
-      <a href="/" className="w-11 h-11 shrink-0 block" style={{ cursor: "pointer" }}>
+      <a href="/" className="oraya-pressable w-11 h-11 shrink-0 block" style={{ cursor: "pointer" }}>
         <OrayaEmblem />
       </a>
       <PublicThemeToggle variant="public" />
@@ -1319,7 +1319,7 @@ function EventInquiryPageInner() {
           </p>
           <p style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_P72, lineHeight: 1.7, margin: 0 }}>
             Every event is reviewed and prepared by the Oraya team before confirmation. Coordinated support continues through your date. Questions:{" "}
-            <a href="mailto:hello@stayoraya.com" style={{ color: GOLD, textDecoration: "none" }}>hello@stayoraya.com</a>
+            <a href="mailto:hello@stayoraya.com" className="oraya-link-text" style={{ color: GOLD }}>hello@stayoraya.com</a>
           </p>
         </div>
 
@@ -1330,9 +1330,8 @@ function EventInquiryPageInner() {
           </p>
           <a
             href="/book"
+            className="oraya-pressable oraya-cta-book-back"
             style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.6px", color: BOOK_P82, backgroundColor: "transparent", border: "0.5px solid var(--oraya-book-input-border)", padding: "10px 16px", textDecoration: "none", whiteSpace: "nowrap" }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = GOLD; (e.currentTarget as HTMLElement).style.color = GOLD; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "var(--oraya-book-input-border)"; (e.currentTarget as HTMLElement).style.color = MUTED; }}
           >
             Book a stay instead
           </a>
@@ -1344,9 +1343,7 @@ function EventInquiryPageInner() {
             <p style={{ fontFamily: LATO, fontSize: "12px", color: BOOK_P60, margin: 0 }}>
               Inquiring as <span style={{ color: GOLD }}>{memberName || "member"}</span>
             </p>
-            <a href="/login" style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED, textDecoration: "none" }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = GOLD; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = MUTED; }}>
+            <a href="/login" className="oraya-link-text" style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED }}>
               Not you?
             </a>
           </div>
@@ -1372,6 +1369,7 @@ function EventInquiryPageInner() {
                       <button
                         key={villa}
                         type="button"
+                        className="oraya-pressable"
                         onClick={() => { setForm(f => ({ ...f, villa })); setError(""); }}
                         style={{
                           fontFamily: LATO, fontSize: "12px",
@@ -1400,6 +1398,7 @@ function EventInquiryPageInner() {
                       <button
                         key={et.value}
                         type="button"
+                        className="oraya-pressable"
                         onClick={() => setForm(f => ({ ...f, eventType: selected ? "" : et.value }))}
                         style={{
                           display: "flex", alignItems: "flex-start", gap: "12px",
@@ -1465,10 +1464,9 @@ function EventInquiryPageInner() {
                     {selectedEventRecommendation.recommendedServices.length > 0 && (
                       <button
                         type="button"
+                        className="oraya-pressable oraya-cta-gold-hover"
                         onClick={addRecommendedPack}
                         style={{ alignSelf: "flex-start", fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "11px 18px", cursor: "pointer" }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
                       >
                         Add recommended setup
                       </button>
@@ -1573,10 +1571,10 @@ function EventInquiryPageInner() {
               )}
 
               <button
+                type="button"
+                className="oraya-pressable oraya-cta-gold-hover"
                 onClick={goNext}
                 style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "16px", cursor: "pointer" }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
               >
                 Continue →
               </button>
@@ -1629,6 +1627,7 @@ function EventInquiryPageInner() {
                             >
                               <button
                                 type="button"
+                                className="oraya-pressable"
                                 onClick={() => toggleService(service)}
                                 style={{
                                   display: "flex",
@@ -1748,11 +1747,13 @@ function EventInquiryPageInner() {
               )}
 
               <div style={{ display: "flex", gap: "12px" }}>
-                <button onClick={goBack}
+                <button type="button" onClick={goBack}
+                  className="oraya-pressable oraya-cta-book-back"
                   style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: BOOK_P78, backgroundColor: "transparent", border: "0.5px solid var(--oraya-book-input-border)", padding: "16px 24px", cursor: "pointer" }}>
                   ← Back
                 </button>
-                <button onClick={goNext}
+                <button type="button" onClick={goNext}
+                  className="oraya-pressable oraya-cta-gold-hover"
                   style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "16px", flex: 1, cursor: "pointer" }}>
                   Continue →
                 </button>
@@ -1937,11 +1938,13 @@ function EventInquiryPageInner() {
               </p>
 
               <div style={{ display: "flex", gap: "12px" }}>
-                <button onClick={goBack} disabled={loading}
+                <button type="button" onClick={goBack} disabled={loading}
+                  className={loading ? undefined : "oraya-pressable oraya-cta-book-back"}
                   style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: BOOK_P78, backgroundColor: "transparent", border: "0.5px solid var(--oraya-book-input-border)", padding: "16px 24px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.5 : 1 }}>
                   ← Back
                 </button>
-                <button onClick={handleSubmit} disabled={loading}
+                <button type="button" onClick={handleSubmit} disabled={loading}
+                  className={loading ? undefined : "oraya-pressable oraya-cta-gold-hover"}
                   style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "16px", flex: 1, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1 }}>
                   {loading ? "Submitting…" : "Submit Event Inquiry"}
                 </button>

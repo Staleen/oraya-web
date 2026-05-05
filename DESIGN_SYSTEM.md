@@ -115,7 +115,34 @@ Standard marketing block order:
 
 ---
 
-## 7. Implementation notes (do not regress)
+## 8. Micro-interaction utilities
+
+Defined in **`app/globals.css`** (block after `.oraya-text-muted`). Use these **classes** on public/guest UI for consistent hover, press, focus partners, and theme transitions—**without** one-off `onMouseEnter` / `onMouseLeave` where a class suffices.
+
+| Class | Purpose | When to use |
+|--------|---------|-------------|
+| **`.oraya-pressable`** | Adds ~**180ms** transitions on transform, shadow, background, border, color; **`active`** scale to **0.98** (subtle press). | Primary/secondary **buttons**, pill actions, emblem/home links that should feel tactile. Pair with fill/outline utilities below. |
+| **`.oraya-card-interactive`** | **Hover** (fine pointer only): soft elevation shadow; optional **`--border`** variant adds a light gold ring + shadow. **`a.oraya-card-interactive:active`** scales to **0.995**. | Marketing **cards**, full-card links, tiles that are interactive. **Do not** rely on hover-only affordances for touch-only tasks. |
+| **`.oraya-cta-gold-hover`** | Solid gold control: **hover** (not `:disabled`) warms fill to **`#d4b98a`**. | **`<button>`** or **`<a>`** with gold background + readable label (`--oraya-gold-cta-text` / `--oraya-on-gold-text`). |
+| **`.oraya-link-nav`** | Uppercase nav-style **link**: **hover** shifts color to **`--oraya-gold`**; no underline. | **Desktop nav** items (Our villas, Experience, etc.). |
+| **`.oraya-link-text`** | **Underline** with gold-tinted decoration; **hover** strengthens underline + text toward gold. | Inline **mailto**, “Sign in”, legal adjacency, body **text links** where underline aids scan. |
+| **`.oraya-link-cta`** | **No** text underline; **bottom border** hairline that strengthens on **hover**. | **Social strip**, “marketing underline” CTAs that are not full buttons. |
+| **`.oraya-link-footer`** | Muted **footer column** links: **hover** to gold (`!important` over inline footer color). | **`SiteFooter`** and homepage footer link columns. |
+| **`.oraya-section-tone`** | **`background-color`** transition ~**320ms** when **`data-theme`** changes. | Major **`<section>`** / wrappers that switch surface with light/dark toggle. |
+
+**Related (same file, not duplicated in the table):** `.oraya-cta-nav-reserve` (outline Reserve → gold fill on hover), `.oraya-cta-hero-ghost` (hero outline CTAs), `.oraya-cta-book-guest` / `.oraya-cta-book-back` (booking flow ghosts)—compose with **`.oraya-pressable`** where press feedback is desired.
+
+**Interaction rules**
+
+- **Hover:** Elevation and gold hovers apply under **`@media (hover: hover) and (pointer: fine)`** where specified (cards); touch devices do not get fake hover states.
+- **Active / press:** **`.oraya-pressable`** and **`a.oraya-card-interactive`** use transform scale; avoid combining with **layout-affecting** hover (no extra margin/padding on hover).
+- **Reduced motion:** Under **`prefers-reduced-motion: reduce`**, transitions collapse to **0.01ms**, **active transforms are disabled**, and **`a.oraya-villa-card-link:focus-visible`** uses a slightly tighter **outline-offset**. **`scroll-behavior`** on **`html`** is **`auto`**.
+
+**Homepage villa cards (accessibility):** add **`oraya-villa-card-link`** on the full-card **`<a>`** for a **`:focus-visible`** outline (gold/ink mix). Does not replace visible focus for other controls.
+
+---
+
+## 9. Implementation notes (do not regress)
 
 - Public pages use **`data-theme="light"` | `"dark"`** on `<html>`; default is light; dark is explicit user choice (`localStorage` key `oraya-theme`).
 - **Colors and fonts:** project convention uses **inline styles** for themed colors and typography on key pages—not Tailwind color/font utility classes (utilities were unreliable for custom theme).
@@ -124,4 +151,4 @@ Standard marketing block order:
 
 ---
 
-*Last aligned with `app/globals.css` and public booking/home patterns. Update this file when intentionally changing brand tokens or section patterns.*
+*Last aligned with `app/globals.css`, micro-interaction utilities, and public booking/home patterns. Update this file when intentionally changing brand tokens, utilities, or section patterns.*

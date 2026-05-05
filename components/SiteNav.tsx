@@ -72,7 +72,7 @@ export default function SiteNav({ base = "" }: Props) {
       backdropFilter: "blur(8px)",
       minWidth: 0,
     }}>
-      <a href="/" style={{ width: "44px", height: "44px", flexShrink: 0, display: "block", cursor: "pointer" }}>
+      <a href="/" className="oraya-pressable" style={{ width: "44px", height: "44px", flexShrink: 0, display: "block", cursor: "pointer" }}>
         <OrayaEmblem />
       </a>
 
@@ -81,9 +81,8 @@ export default function SiteNav({ base = "" }: Props) {
           <li key={label}>
             <a
               href={href}
+              className="oraya-link-nav"
               style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: CHARCOAL, textDecoration: "none" }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = GOLD; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = CHARCOAL; }}
             >
               {label}
             </a>
@@ -103,6 +102,8 @@ export default function SiteNav({ base = "" }: Props) {
             onMouseLeave={scheduleDrop}
           >
             <button
+              type="button"
+              className="oraya-pressable"
               style={{
                 fontFamily: LATO, fontSize: "11px", letterSpacing: "1.5px",
                 textTransform: "uppercase", color: GOLD,
@@ -131,6 +132,7 @@ export default function SiteNav({ base = "" }: Props) {
               }}>
                 <a
                   href="/profile"
+                  className="oraya-pressable"
                   style={{
                     display: "block", padding: "13px 20px",
                     fontFamily: LATO, fontSize: "10px", letterSpacing: "2px",
@@ -150,6 +152,8 @@ export default function SiteNav({ base = "" }: Props) {
                   My Profile
                 </a>
                 <button
+                  type="button"
+                  className="oraya-pressable"
                   onClick={signOut}
                   style={{
                     display: "block", width: "100%",
@@ -178,27 +182,19 @@ export default function SiteNav({ base = "" }: Props) {
           <div style={{ display: "flex", alignItems: "center", gap: "20px", marginLeft: "8px" }}>
             <a
               href="/login"
+              className="oraya-link-nav"
               style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: CHARCOAL, textDecoration: "none" }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = GOLD; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = CHARCOAL; }}
             >
               Sign In
             </a>
             <a
               href="/book"
+              className="oraya-pressable oraya-cta-nav-reserve"
               style={{
                 fontFamily: LATO, fontSize: "11px", letterSpacing: "2px",
                 textTransform: "uppercase", color: GOLD,
                 border: "0.5px solid var(--oraya-gold)", padding: "10px 28px",
                 backgroundColor: "transparent", textDecoration: "none",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.backgroundColor = GOLD;
-                (e.currentTarget as HTMLElement).style.color = "var(--oraya-on-gold-text)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
-                (e.currentTarget as HTMLElement).style.color = GOLD;
               }}
             >
               Reserve

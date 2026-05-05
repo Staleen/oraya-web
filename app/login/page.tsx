@@ -99,7 +99,7 @@ function LoginPageInner() {
           borderBottom: "0.5px solid var(--oraya-nav-border)",
         }}
       >
-        <a href="/" className="w-11 h-11 shrink-0 block" style={{ cursor: "pointer" }}>
+        <a href="/" className="oraya-pressable w-11 h-11 shrink-0 block" style={{ cursor: "pointer" }}>
           <OrayaEmblem />
         </a>
         <PublicThemeToggle variant="public" />
@@ -184,9 +184,8 @@ function LoginPageInner() {
                 <label style={{ ...labelStyle, marginBottom: 0 }}>Password</label>
                 <a
                   href="/forgot-password"
-                  style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, textDecoration: "none", letterSpacing: "0.5px" }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = GOLD; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = MUTED; }}
+                  className="oraya-link-text"
+                  style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, letterSpacing: "0.5px" }}
                 >
                   Forgot password?
                 </a>
@@ -213,6 +212,7 @@ function LoginPageInner() {
             <button
               type="submit"
               disabled={loading}
+              className={loading ? undefined : "oraya-pressable oraya-cta-gold-hover"}
               style={{
                 fontFamily: LATO,
                 fontSize: "11px",
@@ -235,9 +235,8 @@ function LoginPageInner() {
             Not a member yet?{" "}
             <a
               href="/join"
-              style={{ color: GOLD, textDecoration: "none" }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = "underline"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = "none"; }}
+              className="oraya-link-text"
+              style={{ color: GOLD }}
             >
               Join Oraya
             </a>

@@ -243,7 +243,7 @@ export default function JoinPage() {
           borderBottom: "0.5px solid var(--oraya-nav-border)",
         }}
       >
-        <a href="/" className="w-11 h-11 shrink-0 block" style={{ cursor: "pointer" }}>
+        <a href="/" className="oraya-pressable w-11 h-11 shrink-0 block" style={{ cursor: "pointer" }}>
           <OrayaEmblem />
         </a>
         <PublicThemeToggle variant="public" />
@@ -405,6 +405,7 @@ export default function JoinPage() {
             <button
               type="submit"
               disabled={loading}
+              className={loading ? undefined : "oraya-pressable oraya-cta-gold-hover"}
               style={{
                 fontFamily: LATO,
                 fontSize: "11px",
@@ -427,9 +428,8 @@ export default function JoinPage() {
             Already a member?{" "}
             <a
               href="/login"
-              style={{ color: GOLD, textDecoration: "none" }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = "underline"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = "none"; }}
+              className="oraya-link-text"
+              style={{ color: GOLD }}
             >
               Sign in
             </a>
