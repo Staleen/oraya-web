@@ -579,8 +579,45 @@ const CALENDAR_CSS = `
   }
 `;
 
+type BookingPath = null | "instant" | "request";
+
 // ─── Step indicator ───────────────────────────────────────────────────────────
-function StepIndicator({ step }: { step: number }) {
+function StepIndicator({ step, bookingPath }: { step: number; bookingPath: BookingPath }) {
+  if (bookingPath === "instant") {
+    const labels = ["Villa & Dates", "Review & Payment"];
+    return (
+      <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {([1, 2] as const).map((s, i) => (
+            <div key={s} style={{ display: "flex", alignItems: "center" }}>
+              <div style={{
+                width: "26px", height: "26px", borderRadius: "50%", flexShrink: 0,
+                border: `1px solid ${step >= s ? GOLD : "var(--oraya-border)"}`,
+                backgroundColor: step === s ? GOLD : "transparent",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontFamily: LATO, fontSize: "10px",
+                color: step === s ? CHARCOAL : step > s ? GOLD : "var(--oraya-step-inactive)",
+                transition: "background-color 0.2s, border-color 0.2s",
+              }}>
+                {step > s ? "✓" : s}
+              </div>
+              {i < 1 && (
+                <div style={{
+                  width: "52px", height: "0.5px",
+                  backgroundColor: step > s ? GOLD : "var(--oraya-step-line)",
+                  transition: "background-color 0.2s",
+                }} />
+              )}
+            </div>
+          ))}
+        </div>
+        <p style={{ fontFamily: LATO, fontSize: "12px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, marginTop: "12px", marginBottom: 0, fontWeight: 400 }}>
+          {labels[step - 1]}
+        </p>
+      </div>
+    );
+  }
+
   const labels = ["Villa & Dates", "Stay Setup", "Add-ons", "Review & Submit"];
   return (
     <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
@@ -660,6 +697,8 @@ function BookPageInner() {
 
   // Step
   const [step, setStep] = useState(1);
+  /** Phase 15I.9 — instant vs reserve UX paths (UI only; no alternate booking creation). */
+  const [bookingPath, setBookingPath] = useState<BookingPath>(null);
 
   // Form (persisted across steps)
   const [form, setForm] = useState({
@@ -1125,6 +1164,24 @@ function BookPageInner() {
     return "instant";
   })();
 
+  /** Phase 15I.9 — Instant Book gate: stay-only page + existing calendar/add-on signals only (no new backend rules). */
+  const hasStrictAddonSelected = selectedAddons.some((id) => {
+    const addon = stayApplicableAddons.find((a) => a.id === id);
+    if (!addon) return false;
+    return getAddonEnforcementMode(addon.enforcement_mode) === "strict";
+  });
+  const hasOperationalWarningSelection = selectedAddons.some((id) => {
+    const addon = stayApplicableAddons.find((a) => a.id === id);
+    if (!addon) return false;
+    return getAddonOperationalFeedback(addon).some((m) => m.tone === "warning");
+  });
+  const instantEligible =
+    Boolean(form.villa && checkIn && checkOut && checkOut > checkIn) &&
+    !dateConflict &&
+    !hasStrictAddonSelected &&
+    !hasOperationalWarningSelection &&
+    bookingTrustMode === "instant";
+
   /**
    * Phase 12E Batch 5: timing add-ons eligible for the dead-day discount offer.
    * Only populated when a dead-day gap is detected adjacent to the user's dates,
@@ -1242,16 +1299,44 @@ function BookPageInner() {
     setDateRange(nextRange);
   }
 
+  function validateStep1Basics(): boolean {
+    if (!form.villa)         { setError("Please select a villa before continuing.");                          return false; }
+    if (!checkIn)            { setError("Please select your check-in and check-out dates to continue.");     return false; }
+    if (!checkOut)           { setError("Please select a check-out date to complete your stay details.");    return false; }
+    if (checkOut <= checkIn) { setError("Your check-out date must be after your check-in date.");            return false; }
+    if (dateConflict)        { setError(dateConflict);                                                        return false; }
+    return true;
+  }
+
+  function proceedFromStep1ToReserve() {
+    setError("");
+    if (!validateStep1Basics()) return;
+    setBookingPath("request");
+    setStep(2);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function proceedFromStep1ToInstant() {
+    setError("");
+    if (!validateStep1Basics()) return;
+    setBookingPath("instant");
+    setStep(2);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  /** From instant Step 2 — jump into full request flow at add-ons (stay setup still required before submit). */
+  function switchInstantFlowToAddons() {
+    setError("");
+    setBookingPath("request");
+    setStep(3);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   function goNext() {
     setError("");
-    if (step === 1) {
-      if (!form.villa)         { setError("Please select a villa before continuing.");                          return; }
-      if (!checkIn)            { setError("Please select your check-in and check-out dates to continue.");     return; }
-      if (!checkOut)           { setError("Please select a check-out date to complete your stay details.");    return; }
-      if (checkOut <= checkIn) { setError("Your check-out date must be after your check-in date.");            return; }
-      if (dateConflict)        { setError(dateConflict);                                                        return; }
-    }
+    if (step === 2 && bookingPath === "instant") return;
     if (step === 2) {
+      if (bookingPath !== "request") return;
       if (!form.bedroomCount)                  { setError("Please select how many bedrooms you would like prepared."); return; }
       if (guestMode && !guest.fullName.trim()) { setError("Please enter your name so we know who the booking is for."); return; }
       if (guestMode && !guestEmail)            { setError("Please enter your email so we can contact you about your booking."); return; }
@@ -1287,11 +1372,17 @@ function BookPageInner() {
 
   function goBack() {
     setError("");
-    setStep(s => s - 1);
+    if (step === 2 && bookingPath === "instant") {
+      setBookingPath(null);
+      setStep(1);
+    } else {
+      setStep(s => s - 1);
+    }
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   async function handleSubmit() {
+    if (step !== 4 || bookingPath !== "request") return;
     setError("");
     setLoading(true);
     try {
@@ -1567,16 +1658,16 @@ function BookPageInner() {
         {step !== 1 && (
           <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
             <h1 style={{ fontFamily: PLAYFAIR, fontSize: "2rem", fontWeight: 400, color: WHITE, margin: 0 }}>
-              Request a booking
+              {bookingPath === "instant" ? "Instant booking" : "Request a booking"}
             </h1>
           </div>
         )}
 
         {/* Step indicator */}
-        <StepIndicator step={step} />
+        <StepIndicator step={step} bookingPath={bookingPath} />
 
         {/* Step content — keyed so the fade animation re-fires on each step change */}
-        <div key={step} className="step-content">
+        <div key={`${step}-${bookingPath ?? "none"}`} className="step-content">
 
           {/* ════════════════════════════════════════════════════════════════
               STEP 1 — Villa & Dates
@@ -1758,21 +1849,235 @@ function BookPageInner() {
                 </p>
               )}
 
+              {instantEligible && checkOut ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                  <p style={{ fontFamily: PLAYFAIR, fontSize: "22px", fontWeight: 400, color: WHITE, margin: 0, textAlign: "center", lineHeight: 1.3 }}>
+                    Choose how you want to book
+                  </p>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "14px" }}>
+                    <div
+                      style={{
+                        border: "0.5px solid rgba(197,164,109,0.42)",
+                        backgroundColor: "rgba(197,164,109,0.07)",
+                        padding: "18px 18px 16px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "12px",
+                        textAlign: "left",
+                      }}
+                    >
+                      <span
+                        style={{
+                          alignSelf: "flex-start",
+                          fontFamily: LATO,
+                          fontSize: "9px",
+                          letterSpacing: "2px",
+                          textTransform: "uppercase",
+                          color: GOLD,
+                          border: "0.5px solid rgba(197,164,109,0.35)",
+                          backgroundColor: "rgba(197,164,109,0.06)",
+                          padding: "5px 10px",
+                        }}
+                      >
+                        Instant booking eligible
+                      </span>
+                      <p style={{ fontFamily: PLAYFAIR, fontSize: "18px", fontWeight: 400, color: WHITE, margin: 0, lineHeight: 1.35 }}>
+                        Instant Book
+                      </p>
+                      <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65, fontWeight: 300 }}>
+                        Pay online and confirm immediately
+                      </p>
+                      <button
+                        type="button"
+                        className="oraya-pressable oraya-cta-gold-hover"
+                        onClick={proceedFromStep1ToInstant}
+                        style={{
+                          fontFamily: LATO,
+                          fontSize: "12px",
+                          letterSpacing: "0.8px",
+                          color: GOLD_CTA,
+                          backgroundColor: GOLD,
+                          border: "none",
+                          padding: "13px 14px",
+                          marginTop: "4px",
+                          cursor: "pointer",
+                          textAlign: "center",
+                        }}
+                      >
+                        Continue to payment
+                      </button>
+                    </div>
+                    <div
+                      style={{
+                        border: "0.5px solid rgba(197,164,109,0.18)",
+                        backgroundColor: GLASS1,
+                        padding: "18px 18px 16px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "12px",
+                        textAlign: "left",
+                      }}
+                    >
+                      <p style={{ fontFamily: PLAYFAIR, fontSize: "18px", fontWeight: 400, color: WHITE, margin: 0, lineHeight: 1.35 }}>
+                        Reserve Your Stay
+                      </p>
+                      <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65, fontWeight: 300 }}>
+                        Submit a request and Oraya will confirm your stay
+                      </p>
+                      <button
+                        type="button"
+                        className="oraya-pressable"
+                        onClick={proceedFromStep1ToReserve}
+                        style={{
+                          fontFamily: LATO,
+                          fontSize: "12px",
+                          letterSpacing: "0.8px",
+                          color: GOLD,
+                          backgroundColor: "transparent",
+                          border: "0.5px solid rgba(197,164,109,0.35)",
+                          padding: "13px 14px",
+                          marginTop: "4px",
+                          cursor: "pointer",
+                          textAlign: "center",
+                        }}
+                      >
+                        Continue to reservation
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="oraya-pressable oraya-cta-gold-hover"
+                  onClick={proceedFromStep1ToReserve}
+                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 16px", minHeight: "50px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                >
+                  Reserve Your Stay
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* ════════════════════════════════════════════════════════════════
+              STEP 2 — Instant path — Review & payment placeholder (no submission)
+          ════════════════════════════════════════════════════════════════ */}
+          {step === 2 && bookingPath === "instant" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+              <div style={{ display: "flex", justifyContent: "center" }}>
+                <span
+                  style={{
+                    fontFamily: LATO,
+                    fontSize: "9px",
+                    letterSpacing: "2.2px",
+                    textTransform: "uppercase",
+                    color: GOLD,
+                    border: "0.5px solid rgba(197,164,109,0.45)",
+                    backgroundColor: "rgba(197,164,109,0.08)",
+                    padding: "6px 14px",
+                  }}
+                >
+                  Instant booking eligible
+                </span>
+              </div>
+              <div>
+                <p style={{ fontFamily: PLAYFAIR, fontSize: "20px", fontWeight: 400, color: WHITE, margin: "0 0 10px", textAlign: "center" }}>
+                  Review & payment
+                </p>
+                <div style={{ border: "0.5px solid rgba(197,164,109,0.18)", padding: "1.25rem", backgroundColor: GLASS3 }}>
+                  {(
+                    [
+                      ["Villa", form.villa],
+                      ["Check-in", fmtDate(checkIn)],
+                      ["Check-out", fmtDate(checkOut)],
+                      ["Duration", `${nights} ${nights === 1 ? "night" : "nights"}`],
+                      ["Bedrooms", formatBedroomLabel(form.bedroomCount)],
+                      ["Guest estimate", form.sleepingGuests],
+                    ] as [string, string][]
+                  ).map(([label, value]) => (
+                    <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "10px 0", borderBottom: "0.5px solid var(--oraya-book-subtle-border)", gap: "16px" }}>
+                      <span style={{ fontFamily: LATO, fontSize: "12px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--oraya-book-p62)", flexShrink: 0, paddingRight: "16px" }}>{label}</span>
+                      <span style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, textAlign: "right", lineHeight: 1.5, maxWidth: "60%" }}>{value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {estimatePanel}
+
+              <div style={{ border: "0.5px solid rgba(197,164,109,0.24)", backgroundColor: "rgba(197,164,109,0.05)", padding: "16px 18px", display: "grid", gap: "10px" }}>
+                <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65 }}>
+                  This stay is eligible for instant booking.
+                </p>
+                <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65 }}>
+                  Online payment will be enabled in the next phase.
+                </p>
+                <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65 }}>
+                  You will receive access automatically after payment.
+                </p>
+              </div>
+
+              <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: GLASS1, padding: "14px 16px", textAlign: "center" }}>
+                <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: "0 0 10px" }}>
+                  Payment
+                </p>
+                <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "0 0 14px", lineHeight: 1.6 }}>
+                  Placeholder — checkout connects in Phase 16. No charge is made from this screen.
+                </p>
+                <button
+                  type="button"
+                  disabled
+                  style={{
+                    fontFamily: LATO,
+                    fontSize: "13px",
+                    letterSpacing: "0.6px",
+                    color: MUTED,
+                    backgroundColor: "rgba(197,164,109,0.08)",
+                    border: "0.5px solid rgba(197,164,109,0.22)",
+                    padding: "14px 18px",
+                    cursor: "not-allowed",
+                    width: "100%",
+                    maxWidth: "340px",
+                  }}
+                >
+                  Continue to payment (coming soon)
+                </button>
+              </div>
+
               <button
                 type="button"
-                className="oraya-pressable oraya-cta-gold-hover"
-                onClick={goNext}
-                style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 16px", minHeight: "50px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                className="oraya-link-text"
+                onClick={switchInstantFlowToAddons}
+                style={{
+                  fontFamily: LATO,
+                  fontSize: "12px",
+                  color: GOLD,
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  textDecoration: "underline",
+                  textUnderlineOffset: "3px",
+                  padding: "4px 0",
+                  alignSelf: "center",
+                }}
               >
-                Continue to stay setup
+                Add services to your stay
               </button>
+
+              <div style={{ display: "flex", gap: "12px", alignItems: "stretch" }}>
+                <button type="button" onClick={goBack}
+                  className="oraya-pressable oraya-cta-book-back"
+                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: "var(--oraya-book-text)", backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", padding: "14px 22px", minHeight: "50px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  ← Back
+                </button>
+              </div>
             </div>
           )}
 
           {/* ════════════════════════════════════════════════════════════════
               STEP 2 — Stay Details
           ════════════════════════════════════════════════════════════════ */}
-          {step === 2 && (
+          {step === 2 && bookingPath === "request" && (
             <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
 
               {/* Guest contact fields (only when not a member) */}
@@ -2026,7 +2331,7 @@ function BookPageInner() {
           {/* ════════════════════════════════════════════════════════════════
               STEP 3 — Add-ons & Review
           ════════════════════════════════════════════════════════════════ */}
-          {step === 3 && (
+          {step === 3 && bookingPath === "request" && (
             <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
 
               {/* ── Add-ons ─────────────────────────────────────────────── */}
@@ -2521,7 +2826,7 @@ function BookPageInner() {
             </div>
           )}
 
-          {step === 4 && (
+          {step === 4 && bookingPath === "request" && (
             <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
               <div>
                 <p style={{ fontFamily: PLAYFAIR, fontSize: "20px", fontWeight: 400, color: WHITE, margin: "0 0 10px" }}>
@@ -2675,7 +2980,7 @@ function BookPageInner() {
               <button
                 type="button"
                 className="oraya-pressable"
-                onClick={() => { setGuestMode(false); setStep(1); setError(""); }}
+                onClick={() => { setGuestMode(false); setBookingPath(null); setStep(1); setError(""); }}
                 style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, backgroundColor: "transparent", border: "none", cursor: "pointer", letterSpacing: "1px" }}>
                 Sign in instead
               </button>
