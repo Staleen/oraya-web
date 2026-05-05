@@ -30,6 +30,12 @@ import {
   WHATSAPP_CANCEL_CHANGE_NO_REF,
   WHATSAPP_SUPPORT_LINE,
 } from "@/lib/booking-trust-messaging";
+import {
+  INSTANT_BOOKING_SETTING_KEYS,
+  instantBookingEnabledForVilla,
+  parseInstantBookingSetting,
+  type InstantBookingFlags,
+} from "@/lib/instant-booking-settings";
 
 // ─── Brand constants (theme tokens from globals.css) ─
 const GOLD      = "var(--oraya-gold)";
@@ -738,6 +744,10 @@ function BookPageInner() {
   const [mechmechCover, setMechmechCover] = useState("");
   const [byblosCover, setByblosCover] = useState("");
   const [whatsappDigits, setWhatsappDigits] = useState<string | null>(null);
+  const [instantBookingFlags, setInstantBookingFlags] = useState<InstantBookingFlags>({
+    "Villa Mechmech": true,
+    "Villa Byblos": true,
+  });
 
   // Pre-select villa from ?villa= query param
   useEffect(() => {
@@ -791,6 +801,24 @@ function BookPageInner() {
       .then((r) => r.json())
       .then((d: { value?: string }) => setWhatsappDigits(digitsOnlyPhone(d.value ?? null)))
       .catch(() => setWhatsappDigits(null));
+  }, []);
+
+  useEffect(() => {
+    Promise.all([
+      fetch(`/api/settings?key=${encodeURIComponent(INSTANT_BOOKING_SETTING_KEYS["Villa Mechmech"])}`)
+        .then((r) => r.json())
+        .then((d: { value?: string }) => parseInstantBookingSetting(d.value)),
+      fetch(`/api/settings?key=${encodeURIComponent(INSTANT_BOOKING_SETTING_KEYS["Villa Byblos"])}`)
+        .then((r) => r.json())
+        .then((d: { value?: string }) => parseInstantBookingSetting(d.value)),
+    ])
+      .then(([mech, byl]) => {
+        setInstantBookingFlags({
+          "Villa Mechmech": mech,
+          "Villa Byblos": byl,
+        });
+      })
+      .catch(() => {});
   }, []);
 
   // Fetch enabled add-ons the first time the user reaches step 3
@@ -1180,7 +1208,8 @@ function BookPageInner() {
     !dateConflict &&
     !hasStrictAddonSelected &&
     !hasOperationalWarningSelection &&
-    bookingTrustMode === "instant";
+    bookingTrustMode === "instant" &&
+    instantBookingEnabledForVilla(form.villa, instantBookingFlags);
 
   /**
    * Phase 12E Batch 5: timing add-ons eligible for the dead-day discount offer.
