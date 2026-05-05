@@ -649,7 +649,6 @@ function BookPageInner() {
   const [guestEstimateManuallyChanged, setGuestEstimateManuallyChanged] = useState(false);
   const [mechmechCover, setMechmechCover] = useState("");
   const [byblosCover, setByblosCover] = useState("");
-  const [submissionFallbackComplete, setSubmissionFallbackComplete] = useState(false);
 
   // Pre-select villa from ?villa= query param
   useEffect(() => {
@@ -1258,21 +1257,31 @@ function BookPageInner() {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
 
-      const res  = await fetch("/api/bookings", { method: "POST", headers, body: JSON.stringify(body) });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Failed to submit booking.");
+      const res = await fetch("/api/bookings", { method: "POST", headers, body: JSON.stringify(body) });
+      let json: unknown;
+      try {
+        json = await res.json();
+      } catch {
+        throw new Error("Invalid response from server.");
+      }
+      const payload = json && typeof json === "object" ? (json as Record<string, unknown>) : {};
+      if (!res.ok) {
+        const errMsg = typeof payload.error === "string" ? payload.error : "Failed to submit booking.";
+        throw new Error(errMsg);
+      }
 
-      const booking = json.booking;
+      const booking = payload.booking;
+      const bookingObj = booking && typeof booking === "object" ? (booking as Record<string, unknown>) : null;
       const bookingToken =
-        (typeof json?.token === "string" && json.token.trim()) ||
-        (typeof booking?.token === "string" && booking.token.trim()) ||
-        (typeof booking?.view_token === "string" && booking.view_token.trim()) ||
+        (typeof payload.token === "string" && payload.token.trim()) ||
+        (typeof bookingObj?.token === "string" && String(bookingObj.token).trim()) ||
+        (typeof bookingObj?.view_token === "string" && String(bookingObj.view_token).trim()) ||
         "";
       if (bookingToken) {
-        router.push(`/booking/view/${encodeURIComponent(bookingToken)}`);
+        // Full navigation is reliable across App Router edge cases; token is base64url + single dot (path-safe).
+        window.location.assign(`/booking/view/${bookingToken}`);
         return;
       }
-      setSubmissionFallbackComplete(false);
       setError("Booking was created but redirect token was missing. Please retry or contact support.");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Something went wrong. Please try again.";
@@ -2424,12 +2433,6 @@ function BookPageInner() {
                 </div>
               </div>
 
-              {submissionFallbackComplete && (
-                <p style={{ fontFamily: LATO, fontSize: "14px", color: "#6fcf8a", margin: 0, lineHeight: 1.6 }}>
-                  Request submitted successfully. We will contact you shortly.
-                </p>
-              )}
-
               {error && (
                 <p style={{ fontFamily: LATO, fontSize: "14px", color: "#e07070", textAlign: "center", lineHeight: 1.6, margin: 0 }}>
                   {error}
@@ -2441,7 +2444,7 @@ function BookPageInner() {
                   style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: "rgba(255,255,255,0.8)", backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", padding: "16px 24px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.5 : 1 }}>
                   ← Back
                 </button>
-                <button onClick={handleSubmit} disabled={loading}
+                <button type="button" onClick={() => { void handleSubmit(); }} disabled={loading}
                   style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: CHARCOAL, backgroundColor: GOLD, border: "none", padding: "16px", flex: 1, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1 }}>
                   {loading ? "Submitting…" : "Submit request without payment"}
                 </button>
