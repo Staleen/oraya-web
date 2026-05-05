@@ -763,10 +763,10 @@ export default function Home() {
       {/* ── Footer ── */}
       <footer style={{ backgroundColor: CHARCOAL, padding: "4.5rem clamp(1rem, 4vw, 3rem) 2rem", borderTop: "0.5px solid rgba(255,255,255,0.05)" }}>
         <div
-          className="max-w-[1100px] mx-auto grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_1fr_1fr]"
-          style={{ gap: "2.5rem", marginBottom: "3rem" }}
+          className="max-w-[1100px] mx-auto grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_1fr_1fr] gap-6 min-w-0 md:gap-[2.5rem]"
+          style={{ marginBottom: "3rem" }}
         >
-          <div>
+          <div className="min-w-0">
             <div style={{ width: "120px", marginBottom: "1.25rem" }}>
               <OrayaLogoFull />
             </div>
@@ -775,36 +775,38 @@ export default function Home() {
             </p>
           </div>
 
-          {[
-            { title: "Explore",  links: [{ label: "Villa Mechmech", href: "/villas/mechmech" }, { label: "Villa Byblos", href: "/villas/byblos" }, { label: "Gallery", href: "#" }, { label: "Events", href: "/events/inquiry" }] },
-            { title: "Members",  links: [{ label: "Join Oraya", href: "/join" }, { label: "Sign in", href: "/login" }, { label: "My bookings", href: "#" }, { label: "My profile", href: "#" }] },
-            { title: "Legal",    links: [{ label: "Privacy Policy", href: "/legal/privacy" }, { label: "Terms & Conditions", href: "/legal/terms" }, { label: "Cancellation & Refund", href: "/legal/refund" }, { label: "Payment Policy", href: "/legal/payment" }] },
-            { title: "Contact",  links: [{ label: "hello@stayoraya.com", href: "mailto:hello@stayoraya.com" }, { label: "WhatsApp", href: "#" }, { label: "Instagram", href: "#" }, { label: "Lebanon", href: "#" }] },
-          ].map(({ title, links }) => (
-            <div key={title}>
-              <p
-                className="uppercase mb-4"
-                style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2.5px", color: GOLD }}
-              >
-                {title}
-              </p>
-              <ul className="list-none">
-                {links.map(({ label, href }) => (
-                  <li key={label} style={{ marginBottom: "8px" }}>
-                    <a
-                      href={href}
-                      className="no-underline"
-                      style={{ fontFamily: LATO, fontSize: "13px", fontWeight: 300, color: "rgba(255,255,255,0.35)", overflowWrap: "anywhere" }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = GOLD; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.35)"; }}
-                    >
-                      {label}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+          <div className="grid min-w-0 w-full grid-cols-2 max-[300px]:grid-cols-1 gap-x-3 gap-y-4 md:contents">
+            {[
+              { title: "Explore",  links: [{ label: "Villa Mechmech", href: "/villas/mechmech" }, { label: "Villa Byblos", href: "/villas/byblos" }, { label: "Gallery", href: "#" }, { label: "Events", href: "/events/inquiry" }] },
+              { title: "Members",  links: [{ label: "Join Oraya", href: "/join" }, { label: "Sign in", href: "/login" }, { label: "My bookings", href: "#" }, { label: "My profile", href: "#" }] },
+              { title: "Legal",    links: [{ label: "Privacy Policy", href: "/legal/privacy" }, { label: "Terms & Conditions", href: "/legal/terms" }, { label: "Cancellation & Refund", href: "/legal/refund" }, { label: "Payment Policy", href: "/legal/payment" }] },
+              { title: "Contact",  links: [{ label: "hello@stayoraya.com", href: "mailto:hello@stayoraya.com" }, { label: "WhatsApp", href: "#" }, { label: "Instagram", href: "#" }, { label: "Lebanon", href: "#" }] },
+            ].map(({ title, links }) => (
+              <div key={title} className="min-w-0">
+                <p
+                  className="uppercase mb-4"
+                  style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2.5px", color: GOLD }}
+                >
+                  {title}
+                </p>
+                <ul className="list-none min-w-0">
+                  {links.map(({ label, href }) => (
+                    <li key={label} className="min-w-0" style={{ marginBottom: "8px" }}>
+                      <a
+                        href={href}
+                        className="no-underline block min-w-0"
+                        style={{ fontFamily: LATO, fontSize: "13px", fontWeight: 300, color: "rgba(255,255,255,0.35)", overflowWrap: "anywhere", wordBreak: "break-word" }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = GOLD; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.35)"; }}
+                      >
+                        {label}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className="max-w-[1100px] mx-auto" style={{ paddingBottom: "1.5rem" }}>
