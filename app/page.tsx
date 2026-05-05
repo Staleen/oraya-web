@@ -142,7 +142,7 @@ export default function Home() {
   ];
 
   return (
-    <>
+    <div style={{ overflowX: "hidden" }}>
       {/* ── Nav ── */}
       <nav
         className="fixed top-0 left-0 right-0 z-[100] flex justify-between items-center backdrop-blur-[8px]"
@@ -186,9 +186,11 @@ export default function Home() {
                 textTransform: "uppercase", color: GOLD,
                 backgroundColor: "transparent", border: "none",
                 cursor: "pointer", display: "flex", alignItems: "center", gap: "6px",
-                padding: "10px 0",
+                padding: "10px 0", maxWidth: "min(52vw, 240px)",
               }}>
-                Hi, {memberName || "Member"}
+                <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  Hi, {memberName || "Member"}
+                </span>
                 <span style={{ fontSize: "7px", opacity: 0.5, marginTop: "1px" }}>▾</span>
               </button>
               {dropOpen && (
@@ -742,7 +744,7 @@ export default function Home() {
         >
           Follow Oraya
         </p>
-        <div className="flex justify-center" style={{ gap: "2.5rem" }}>
+        <div className="flex justify-center flex-wrap" style={{ gap: "1.25rem 2rem" }}>
           {["Instagram", "TikTok", "Facebook"].map((social) => (
             <a
               key={social}
@@ -759,7 +761,7 @@ export default function Home() {
       </div>
 
       {/* ── Footer ── */}
-      <footer style={{ backgroundColor: CHARCOAL, padding: "4.5rem 3rem 2rem", borderTop: "0.5px solid rgba(255,255,255,0.05)" }}>
+      <footer style={{ backgroundColor: CHARCOAL, padding: "4.5rem clamp(1rem, 4vw, 3rem) 2rem", borderTop: "0.5px solid rgba(255,255,255,0.05)" }}>
         <div
           className="max-w-[1100px] mx-auto grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_1fr_1fr]"
           style={{ gap: "2.5rem", marginBottom: "3rem" }}
@@ -810,13 +812,13 @@ export default function Home() {
         </div>
 
         <div
-          className="max-w-[1100px] mx-auto flex justify-between"
+          className="max-w-[1100px] mx-auto flex justify-between flex-wrap"
           style={{ borderTop: "0.5px solid rgba(255,255,255,0.07)", paddingTop: "1.5rem", fontFamily: LATO, fontSize: "11px", color: "rgba(255,255,255,0.18)" }}
         >
           <span>© 2026 Oraya. All rights reserved.</span>
           <span>Lebanon · Boutique Villas</span>
         </div>
       </footer>
-    </>
+    </div>
   );
 }
