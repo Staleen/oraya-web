@@ -20,6 +20,11 @@ export type AddonAuditInput = {
     has_same_day_checkin: boolean;
   };
   now?: Date;
+  /**
+   * Add-on ids that skip strict preparation-time blocking (e.g. Phase 15I.5 heated pool
+   * carry-over — eligibility must be validated server-side before populating this set).
+   */
+  strict_preparation_waivers?: ReadonlySet<string>;
 };
 
 export type AddonAuditResult = {
@@ -66,7 +71,9 @@ export function runAddonAudit(input: AddonAuditInput): AddonAuditResult {
     const preparationTimeHours = addon.preparation_time_hours ?? null;
     const enforcementMode = getAddonEnforcementMode(addon.enforcement_mode);
     const timingType = getAddonTimingType(addon);
+    const timingWaived = input.strict_preparation_waivers?.has(addon.id) ?? false;
     const hasTimeWarning =
+      !timingWaived &&
       typeof preparationTimeHours === "number" &&
       Number.isFinite(preparationTimeHours) &&
       preparationTimeHours > 0 &&
@@ -96,6 +103,7 @@ export function runAddonAudit(input: AddonAuditInput): AddonAuditResult {
   });
 
   const insufficientPreparationTime = input.addons.some((addon) => {
+    if (input.strict_preparation_waivers?.has(addon.id)) return false;
     const preparationTimeHours = addon.preparation_time_hours ?? null;
     const enforcementMode = getAddonEnforcementMode(addon.enforcement_mode);
     return typeof preparationTimeHours === "number" &&

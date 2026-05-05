@@ -17,6 +17,10 @@ import { writeBookToEventHandoff } from "@/lib/event-inquiry-handoff";
 import { AddonIcon } from "@/components/addon-icon";
 import { SkeletonBlock, SkeletonText } from "@/components/LoadingSkeleton";
 import PublicThemeToggle from "@/components/PublicThemeToggle";
+import {
+  HEATED_POOL_CARRYOVER_GUEST_NOTE,
+  isHeatedPoolAddon,
+} from "@/lib/heated-pool-carryover";
 
 // ─── Brand constants (theme tokens from globals.css) ─
 const GOLD      = "var(--oraya-gold)";
@@ -669,6 +673,8 @@ function BookPageInner() {
 
   // Availability
   const [confirmedRanges, setConfirmedRanges] = useState<ConfirmedRange[]>([]);
+  /** Phase 15I.5 — server-aligned hint for heated pool prep carry-over (advisory; API enforces). */
+  const [heatedPoolCarryover, setHeatedPoolCarryover] = useState(false);
 
   // Add-ons
   const [addons,         setAddons]         = useState<Addon[]>([]);
@@ -754,14 +760,9 @@ function BookPageInner() {
       .finally(() => setAddonsLoading(false));
   }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Reload availability whenever villa changes; also clear the date selection
+  // Clear stay dates when villa changes; availability is fetched after check-in is derived (see below).
   useEffect(() => {
     setDateRange(undefined);
-    if (!form.villa) { setConfirmedRanges([]); return; }
-    fetch(`/api/bookings/availability?villa=${encodeURIComponent(form.villa)}`)
-      .then(r => r.json())
-      .then(d => setConfirmedRanges(Array.isArray(d.ranges) ? d.ranges : []))
-      .catch(() => setConfirmedRanges([]));
   }, [form.villa]);
 
   // ── Derived values ────────────────────────────────────────────────────────
@@ -862,6 +863,26 @@ function BookPageInner() {
   const checkIn  = dateRange?.from ? toISO(dateRange.from) : "";
   const checkOut = dateRange?.to   ? toISO(dateRange.to)   : "";
   const nights   = nightCount(checkIn, checkOut);
+
+  useEffect(() => {
+    if (!form.villa) {
+      setConfirmedRanges([]);
+      setHeatedPoolCarryover(false);
+      return;
+    }
+    const qs = new URLSearchParams({ villa: form.villa });
+    if (checkIn) qs.set("check_in", checkIn);
+    fetch(`/api/bookings/availability?${qs}`)
+      .then((r) => r.json())
+      .then((d: { ranges?: unknown; heated_pool_carryover?: unknown }) => {
+        setConfirmedRanges(Array.isArray(d.ranges) ? d.ranges : []);
+        setHeatedPoolCarryover(d.heated_pool_carryover === true);
+      })
+      .catch(() => {
+        setConfirmedRanges([]);
+        setHeatedPoolCarryover(false);
+      });
+  }, [form.villa, checkIn]);
   const sleepingGuestsCount = parseInt(form.sleepingGuests, 10) || 0;
   const selectedBedroomsCount = parseInt(form.bedroomCount, 10) || 3;
   const sleepingSetupLabel = getSleepingSetupLabel(sleepingGuestsCount);
@@ -994,6 +1015,23 @@ function BookPageInner() {
     }
 
     const hoursUntilCheckIn = (parseLocalISO(checkIn).getTime() - Date.now()) / 3_600_000;
+    if (
+      heatedPoolCarryover &&
+      isHeatedPoolAddon(addon) &&
+      enforcementMode === "strict" &&
+      typeof preparationHours === "number" &&
+      Number.isFinite(preparationHours) &&
+      preparationHours > 0 &&
+      hoursUntilCheckIn < preparationHours
+    ) {
+      return {
+        available: true,
+        selectable: true,
+        warning: "",
+        mode: enforcementMode,
+        carryoverNote: HEATED_POOL_CARRYOVER_GUEST_NOTE,
+      };
+    }
     const available = hoursUntilCheckIn >= preparationHours;
     if (available) {
       return {
@@ -1096,9 +1134,11 @@ function BookPageInner() {
       }
 
       const hoursUntilCheckIn = (parseLocalISO(checkIn).getTime() - Date.now()) / 3_600_000;
-      return hoursUntilCheckIn >= preparationHours;
+      if (hoursUntilCheckIn >= preparationHours) return true;
+      if (heatedPoolCarryover && isHeatedPoolAddon(addon)) return true;
+      return false;
     }));
-  }, [checkIn, form.villa, stayApplicableAddons]);
+  }, [checkIn, form.villa, stayApplicableAddons, heatedPoolCarryover]);
 
   // Clear applied discounts whenever dates change — the discount amount is date-dependent.
   useEffect(() => { setAppliedDiscounts([]); }, [dateRange]);
@@ -2224,6 +2264,11 @@ function BookPageInner() {
                               {!availability.available && (
                                 <span style={{ fontFamily: LATO, fontSize: "11px", color: availability.mode === "soft" ? "#e2ab5a" : "#e07070", display: "block", marginTop: "6px", lineHeight: 1.5 }}>
                                   {availability.warning}
+                                </span>
+                              )}
+                              {(availability as { carryoverNote?: string }).carryoverNote && (
+                                <span style={{ fontFamily: LATO, fontSize: "11px", color: "rgba(111,207,138,0.88)", display: "block", marginTop: "6px", lineHeight: 1.5 }}>
+                                  {(availability as { carryoverNote: string }).carryoverNote}
                                 </span>
                               )}
                               {sameDayWarning && (

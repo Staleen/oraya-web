@@ -17,6 +17,7 @@ import {
 import { buildPricingSnapshot, runPricingAudit, type PricingSnapshot } from "@/lib/pricing/server-audit";
 import { ADDON_OPERATIONAL_SETTINGS_KEY, formatPreparationTime, getAddonEnforcementMode, getAddonTimingType, mergeAddonsWithOperationalSettings, parseAddonOperationalSetting } from "@/lib/addon-operations";
 import { runAddonAudit } from "@/lib/addon-audit";
+import { heatedPoolCarryoverFromPriorBooking, isHeatedPoolAddon } from "@/lib/heated-pool-carryover";
 
 const ALLOWED_VILLAS = ["Villa Mechmech", "Villa Byblos"];
 const ISO_DATE_RE    = /^\d{4}-\d{2}-\d{2}$/;
@@ -375,7 +376,14 @@ export async function POST(request: Request) {
       }
 
       if (selectedAddonIds.length > 0) {
-        const [addonsResponse, addonSettingsResponse, sameDayCheckoutResponse, sameDayCheckinResponse, confirmedRangesResponse] = await Promise.all([
+        const [
+          addonsResponse,
+          addonSettingsResponse,
+          sameDayCheckoutResponse,
+          sameDayCheckinResponse,
+          confirmedRangesResponse,
+          priorStayForPoolCarryoverResponse,
+        ] = await Promise.all([
           supabaseAdmin
             .from("addons")
             .select("id, label, price, enabled")
@@ -404,6 +412,15 @@ export async function POST(request: Request) {
             .select("check_in, check_out")
             .eq("villa", villa)
             .eq("status", "confirmed"),
+          supabaseAdmin
+            .from("bookings")
+            .select("check_out, addons_snapshot")
+            .eq("villa", villa)
+            .eq("status", "confirmed")
+            .lte("check_out", check_in)
+            .order("check_out", { ascending: false })
+            .limit(1)
+            .maybeSingle(),
         ]);
 
         if (addonsResponse.error) {
@@ -420,6 +437,9 @@ export async function POST(request: Request) {
         }
         if (confirmedRangesResponse.error) {
           throw confirmedRangesResponse.error;
+        }
+        if (priorStayForPoolCarryoverResponse.error) {
+          throw priorStayForPoolCarryoverResponse.error;
         }
 
         const operationalSettings = parseAddonOperationalSetting(addonSettingsResponse.data?.value);
@@ -442,11 +462,30 @@ export async function POST(request: Request) {
             requires_approval: addon.requires_approval ?? false,
             enforcement_mode: addon.enforcement_mode ?? null,
           }));
+        const priorStay = priorStayForPoolCarryoverResponse.data;
+        const poolCarryoverApplies =
+          priorStay &&
+          typeof priorStay.check_out === "string" &&
+          heatedPoolCarryoverFromPriorBooking({
+            newCheckIn: check_in,
+            priorCheckOut: priorStay.check_out,
+            priorAddonsSnapshot: priorStay.addons_snapshot,
+          });
+        const strictPreparationWaivers = new Set<string>();
+        if (poolCarryoverApplies) {
+          for (const addon of mergedAddons) {
+            if (!selectedAddonIds.includes(addon.id)) continue;
+            if (!isHeatedPoolAddon({ id: addon.id, label: addon.label ?? null })) continue;
+            strictPreparationWaivers.add(addon.id);
+          }
+        }
+
         const addonAudit = runAddonAudit({
           addons: selectedAddonAuditRows,
           check_in,
           check_out,
           same_day_context: sameDayContext,
+          strict_preparation_waivers: strictPreparationWaivers,
         });
         const addonStatuses = new Map(addonAudit.items.map((item) => [item.id, item.status]));
         const addonAuditItems = new Map(addonAudit.items.map((item) => [item.id, item]));
