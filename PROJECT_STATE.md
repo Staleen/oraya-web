@@ -5,6 +5,8 @@ This file defines the current system architecture, constraints, and rules.
 If any instruction conflicts with this file:
 STOP and ask before proceeding.
 
+Guest-facing visual and UX conventions are summarized in **`DESIGN_SYSTEM.md`** (reference only; does not override this file).
+
 ---
 
 ## CURRENT PHASE
