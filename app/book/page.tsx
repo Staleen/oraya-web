@@ -1485,32 +1485,29 @@ function BookPageInner() {
             </p>
             <p style={{ fontFamily: LATO, fontSize: "14px", color: "var(--oraya-book-p72)", lineHeight: 1.7, margin: 0, maxWidth: "520px", marginLeft: "auto", marginRight: "auto" }}>
               Booking on this site is direct with Oraya — not instant self-checkout. Every request is reviewed before confirmation; payment is requested only after that review. For help,{" "}
-              <a href="mailto:hello@stayoraya.com" style={{ color: GOLD, textDecoration: "none" }}>hello@stayoraya.com</a>.
+              <a href="mailto:hello@stayoraya.com" className="oraya-link-text" style={{ color: GOLD }}>hello@stayoraya.com</a>.
             </p>
           </div>
           <div style={{ border: "0.5px solid rgba(197,164,109,0.3)", backgroundColor: "rgba(197,164,109,0.05)", padding: "2rem", display: "flex", gap: "10px", justifyContent: "center", flexWrap: "wrap" }}>
             <a
               href="/login?redirect=/book"
+              className="oraya-pressable oraya-cta-gold-hover"
               style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, padding: "14px 34px", textDecoration: "none", display: "inline-block" }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
             >
               Sign In
             </a>
             <button
+              type="button"
+              className="oraya-pressable oraya-cta-book-guest"
               onClick={() => setGuestMode(true)}
               style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: GOLD, backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.4)", padding: "14px 34px", cursor: "pointer" }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = GOLD; (e.currentTarget as HTMLElement).style.color = WHITE; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(197,164,109,0.4)"; (e.currentTarget as HTMLElement).style.color = GOLD; }}
             >
               Continue as Guest
             </button>
           </div>
           <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, textAlign: "center", marginTop: "2rem" }}>
             Already a member?{" "}
-            <a href="/login?redirect=/book" style={{ color: GOLD, textDecoration: "none" }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.textDecoration = "underline"; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.textDecoration = "none"; }}>
+            <a href="/login?redirect=/book" className="oraya-link-text" style={{ color: GOLD }}>
               Sign in
             </a>
             {" "}for member benefits.
@@ -1573,6 +1570,7 @@ function BookPageInner() {
                       <button
                         key={villa}
                         type="button"
+                        className="oraya-pressable"
                         onClick={() => handleVillaSelect(villa)}
                         aria-pressed={selected}
                         style={{
@@ -1582,7 +1580,7 @@ function BookPageInner() {
                           border: `0.5px solid ${selected ? GOLD : "rgba(197,164,109,0.18)"}`,
                           backgroundColor: selected ? "rgba(197,164,109,0.08)" : GLASS1,
                           cursor: "pointer",
-                          transition: "border-color 0.15s, background-color 0.15s, transform 0.15s",
+                          transition: "border-color 180ms ease, background-color 180ms ease, transform 180ms ease",
                         }}
                       >
                         <div
@@ -1609,7 +1607,7 @@ function BookPageInner() {
                             style={{
                               position: "absolute",
                               inset: 0,
-                              background: "linear-gradient(180deg, rgba(31,43,56,0.12), rgba(31,43,56,0.45))",
+                              background: "var(--oraya-book-villa-thumb-scrim)",
                               pointerEvents: "none",
                             }}
                           />
@@ -1732,10 +1730,9 @@ function BookPageInner() {
 
               <button
                 type="button"
+                className="oraya-pressable oraya-cta-gold-hover"
                 onClick={goNext}
                 style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 16px", minHeight: "50px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
               >
                 Continue to stay setup
               </button>
@@ -1832,6 +1829,7 @@ function BookPageInner() {
                         <button
                           key={bedroomCount}
                           type="button"
+                          className="oraya-pressable"
                           onClick={() => handleBedroomSelect(bedroomCount)}
                           style={{
                             border: `0.5px solid ${selected ? GOLD : "rgba(197,164,109,0.2)"}`,
@@ -1844,7 +1842,7 @@ function BookPageInner() {
                             justifyContent: "center",
                             cursor: "pointer",
                             textAlign: "center",
-                            transition: "border-color 0.15s, background-color 0.15s",
+                            transition: "border-color 180ms ease, background-color 180ms ease, transform 180ms ease",
                           }}
                           onMouseEnter={e => {
                             if (!selected) {
@@ -1921,6 +1919,7 @@ function BookPageInner() {
                 </p>
                 <button
                   type="button"
+                  className="oraya-pressable oraya-cta-gold-hover"
                   onClick={() => {
                     if (form.villa && checkIn && checkOut) {
                       const lock = writeBookToEventHandoff({
@@ -1949,8 +1948,6 @@ function BookPageInner() {
                     router.push("/events/inquiry");
                   }}
                   style={{ alignSelf: "flex-start", fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "12px 24px", cursor: "pointer" }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
                 >
                   Plan your event
                 </button>
@@ -1983,15 +1980,13 @@ function BookPageInner() {
 
               <div style={{ order: 6, display: "flex", gap: "12px", alignItems: "stretch", marginTop: "4px" }}>
                 <button type="button" onClick={goBack}
-                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: "var(--oraya-book-text)", backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", padding: "14px 22px", cursor: "pointer", minHeight: "50px", display: "flex", alignItems: "center", justifyContent: "center" }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = GOLD; (e.currentTarget as HTMLElement).style.color = GOLD; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(197,164,109,0.25)"; (e.currentTarget as HTMLElement).style.color = MUTED; }}>
+                  className="oraya-pressable oraya-cta-book-back"
+                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: "var(--oraya-book-text)", backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", padding: "14px 22px", cursor: "pointer", minHeight: "50px", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   ← Back
                 </button>
                 <button type="button" onClick={goNext}
-                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 16px", flex: 1, cursor: "pointer", minHeight: "50px", display: "flex", alignItems: "center", justifyContent: "center" }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}>
+                  className="oraya-pressable oraya-cta-gold-hover"
+                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 16px", flex: 1, cursor: "pointer", minHeight: "50px", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   Continue to add-ons
                 </button>
               </div>
@@ -2414,6 +2409,7 @@ function BookPageInner() {
                             </div>
                             <button
                               type="button"
+                              className={alreadyApplied ? undefined : "oraya-pressable oraya-cta-gold-hover"}
                               onClick={() => applyDeadDayOffer(offerAddon.id)}
                               disabled={alreadyApplied}
                               style={{
@@ -2429,8 +2425,6 @@ function BookPageInner() {
                                 flexShrink: 0,
                                 whiteSpace: "nowrap",
                               }}
-                              onMouseEnter={e => { if (!alreadyApplied) (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
-                              onMouseLeave={e => { if (!alreadyApplied) (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
                             >
                               {alreadyApplied ? "Applied ✓" : "Apply offer"}
                             </button>
@@ -2484,15 +2478,13 @@ function BookPageInner() {
               )}
               <div style={{ display: "flex", gap: "12px", alignItems: "stretch" }}>
                 <button type="button" onClick={goBack}
-                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: "var(--oraya-book-text)", backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", padding: "14px 22px", minHeight: "50px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = GOLD; (e.currentTarget as HTMLElement).style.color = GOLD; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(197,164,109,0.25)"; (e.currentTarget as HTMLElement).style.color = "var(--oraya-book-text-soft-2)"; }}>
+                  className="oraya-pressable oraya-cta-book-back"
+                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: "var(--oraya-book-text)", backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", padding: "14px 22px", minHeight: "50px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   ← Back
                 </button>
                 <button type="button" onClick={goNext}
-                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 16px", flex: 1, minHeight: "50px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}>
+                  className="oraya-pressable oraya-cta-gold-hover"
+                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 16px", flex: 1, minHeight: "50px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   Continue to review
                 </button>
               </div>
@@ -2547,10 +2539,12 @@ function BookPageInner() {
 
               <div style={{ display: "flex", gap: "12px", alignItems: "stretch" }}>
                 <button type="button" onClick={goBack} disabled={loading}
+                  className={loading ? undefined : "oraya-pressable oraya-cta-book-back"}
                   style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: "var(--oraya-book-text)", backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", padding: "14px 22px", minHeight: "50px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.5 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   ← Back
                 </button>
                 <button type="button" onClick={() => { void handleSubmit(); }} disabled={loading}
+                  className={loading ? undefined : "oraya-pressable oraya-cta-gold-hover"}
                   style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 16px", flex: 1, minHeight: "50px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   {loading ? "Submitting…" : "Submit booking request"}
                 </button>
@@ -2572,14 +2566,14 @@ function BookPageInner() {
           </p>
           <p style={{ fontFamily: LATO, fontSize: "14px", color: "var(--oraya-book-p76)", margin: 0, lineHeight: 1.7 }}>
             Questions:{" "}
-            <a href="mailto:hello@stayoraya.com" style={{ color: GOLD, textDecoration: "none" }}>hello@stayoraya.com</a>
+            <a href="mailto:hello@stayoraya.com" className="oraya-link-text" style={{ color: GOLD }}>hello@stayoraya.com</a>
           </p>
           {authStatus === "member" ? (
             <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: "rgba(197,164,109,0.04)", padding: "0.875rem 1.25rem", marginTop: "12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <p style={{ fontFamily: LATO, fontSize: "12px", color: "var(--oraya-book-p60)", margin: 0 }}>
                 Booking as <span style={{ color: GOLD }}>{memberName || "member"}</span>
               </p>
-              <a href="/login" style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED, textDecoration: "none" }}>
+              <a href="/login" className="oraya-link-text" style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED }}>
                 Not you?
               </a>
             </div>
@@ -2587,6 +2581,8 @@ function BookPageInner() {
             <div style={{ border: "0.5px solid rgba(197,164,109,0.12)", backgroundColor: GLASS1, padding: "0.75rem 1.25rem", marginTop: "12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0 }}>Continuing as guest</p>
               <button
+                type="button"
+                className="oraya-pressable"
                 onClick={() => { setGuestMode(false); setStep(1); setError(""); }}
                 style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, backgroundColor: "transparent", border: "none", cursor: "pointer", letterSpacing: "1px" }}>
                 Sign in instead

@@ -28,6 +28,7 @@ export default function CopyValueButton({
   return (
     <button
       type="button"
+      className="oraya-pressable"
       onClick={handleCopy}
       style={{
         display: "inline-flex",
@@ -44,6 +45,7 @@ export default function CopyValueButton({
         padding: "7px 12px",
         cursor: "pointer",
         whiteSpace: "nowrap",
+        transition: "background-color 180ms ease, border-color 180ms ease, color 180ms ease",
       }}
       aria-label={`${buttonLabel} ${value}`}
       title={copied ? "Copied" : buttonLabel}

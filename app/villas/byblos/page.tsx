@@ -66,7 +66,7 @@ export default function VillaByblosPage() {
       <SiteNav base="/" />
 
       {/* ── Hero ── */}
-      <section style={{ paddingTop: "80px", backgroundColor: MIDNIGHT, minHeight: "65vh", display: "flex", flexDirection: "column" }}>
+      <section className="oraya-section-tone" style={{ paddingTop: "80px", backgroundColor: MIDNIGHT, minHeight: "65vh", display: "flex", flexDirection: "column" }}>
         <div style={{
           flex: 1,
           minHeight: "520px",
@@ -94,8 +94,8 @@ export default function VillaByblosPage() {
             position: "absolute",
             bottom: 0, left: 0, right: 0,
             background: heroImg
-              ? "linear-gradient(to top, rgba(10,20,28,0.95) 0%, rgba(10,20,28,0.6) 50%, transparent 100%)"
-              : "linear-gradient(to top, rgba(8,14,6,0.98) 0%, rgba(8,14,6,0.7) 55%, transparent 100%)",
+              ? "var(--oraya-villa-hero-scrim-image)"
+              : "var(--oraya-villa-hero-scrim-fallback)",
             padding: "2.5rem 3rem 2rem",
             display: "flex",
             alignItems: "flex-end",
@@ -124,14 +124,13 @@ export default function VillaByblosPage() {
             </div>
             <a
               href="/book?villa=Villa+Byblos"
+              className="oraya-pressable oraya-cta-gold-hover"
               style={{
                 fontFamily: LATO, fontSize: "11px", letterSpacing: "2.5px",
                 textTransform: "uppercase", color: GOLD_CTA,
                 backgroundColor: GOLD, padding: "14px 36px",
                 textDecoration: "none", flexShrink: 0,
               }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
             >
               Book this villa
             </a>
@@ -141,7 +140,7 @@ export default function VillaByblosPage() {
 
       {/* ── Photo gallery strip ── */}
       {galleryMedia.length > 0 && (
-        <section style={{ backgroundColor: "var(--oraya-surface-muted)", overflow: "hidden" }}>
+        <section className="oraya-section-tone" style={{ backgroundColor: "var(--oraya-surface-muted)", overflow: "hidden" }}>
           <div style={{
             display: "flex",
             overflowX: "auto",
@@ -168,10 +167,10 @@ export default function VillaByblosPage() {
                 />
                 <div style={{
                   position: "absolute", bottom: 0, left: 0, right: 0,
-                  background: "linear-gradient(to top, rgba(0,0,0,0.65) 0%, transparent 100%)",
+                  background: "var(--oraya-villa-gallery-scrim)",
                   padding: "6px 10px",
                 }}>
-                  <span style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "rgba(255,255,255,0.55)" }}>
+                  <span style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: HERO_TAG }}>
                     {img.category}
                   </span>
                 </div>
@@ -182,7 +181,7 @@ export default function VillaByblosPage() {
       )}
 
       {/* ── Description ── */}
-      <section style={{ backgroundColor: WHITE, padding: "5rem 3rem" }}>
+      <section className="oraya-section-tone" style={{ backgroundColor: WHITE, padding: "5rem 3rem" }}>
         <div style={{ maxWidth: "760px", margin: "0 auto" }}>
           <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "4px", textTransform: "uppercase", color: GOLD, marginBottom: "1rem" }}>
             About the villa
@@ -198,7 +197,7 @@ export default function VillaByblosPage() {
       </section>
 
       {/* ── Details ── */}
-      <section style={{ backgroundColor: BEIGELIGHT, padding: "5rem 3rem" }}>
+      <section className="oraya-section-tone" style={{ backgroundColor: BEIGELIGHT, padding: "5rem 3rem" }}>
         <div style={{ maxWidth: "1100px", margin: "0 auto" }}>
           <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "4px", textTransform: "uppercase", color: GOLD, marginBottom: "1rem" }}>
             Villa details
@@ -222,7 +221,7 @@ export default function VillaByblosPage() {
       </section>
 
       {/* ── Highlights ── */}
-      <section style={{ backgroundColor: MIDNIGHT, padding: "5rem 3rem" }}>
+      <section className="oraya-section-tone" style={{ backgroundColor: MIDNIGHT, padding: "5rem 3rem" }}>
         <div style={{ maxWidth: "760px", margin: "0 auto" }}>
           <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "4px", textTransform: "uppercase", color: GOLD, marginBottom: "1rem" }}>
             Why Byblos
@@ -240,6 +239,7 @@ export default function VillaByblosPage() {
           </ul>
           <a
             href="/book?villa=Villa+Byblos"
+            className="oraya-pressable oraya-cta-gold-hover"
             style={{
               display: "inline-block",
               fontFamily: LATO, fontSize: "11px", letterSpacing: "2.5px",
@@ -247,8 +247,6 @@ export default function VillaByblosPage() {
               backgroundColor: GOLD, padding: "15px 44px",
               textDecoration: "none",
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
           >
             Book this villa
           </a>

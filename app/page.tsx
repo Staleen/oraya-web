@@ -165,7 +165,7 @@ export default function Home() {
           borderBottom: "0.5px solid var(--oraya-nav-border)",
         }}
       >
-        <a href="/" className="w-11 h-11 shrink-0 block" style={{ cursor: "pointer" }}>
+        <a href="/" className="oraya-pressable w-11 h-11 shrink-0 block" style={{ cursor: "pointer" }}>
           <OrayaEmblem />
         </a>
 
@@ -174,10 +174,8 @@ export default function Home() {
             <li key={href}>
               <a
                 href={href}
-                className="no-underline"
+                className="no-underline oraya-link-nav"
                 style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: CHARCOAL }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = GOLD; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = CHARCOAL; }}
               >
                 {label}
               </a>
@@ -196,7 +194,7 @@ export default function Home() {
               onMouseEnter={() => setDropOpen(true)}
               onMouseLeave={() => setDropOpen(false)}
             >
-              <button style={{
+              <button type="button" className="oraya-pressable" style={{
                 fontFamily: LATO, fontSize: "11px", letterSpacing: "1.5px",
                 textTransform: "uppercase", color: GOLD,
                 backgroundColor: "transparent", border: "none",
@@ -218,6 +216,7 @@ export default function Home() {
                 }}>
                   <a
                     href="/profile"
+                    className="oraya-pressable"
                     style={{
                       display: "block", padding: "13px 20px",
                       fontFamily: LATO, fontSize: "10px", letterSpacing: "2px",
@@ -230,6 +229,8 @@ export default function Home() {
                     My Profile
                   </a>
                   <button
+                    type="button"
+                    className="oraya-pressable"
                     onClick={signOut}
                     style={{
                       display: "block", width: "100%", padding: "13px 20px", textAlign: "left",
@@ -250,29 +251,19 @@ export default function Home() {
             <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", justifyContent: "flex-end" }}>
               <a
                 href="/login"
-                className="no-underline hidden sm:inline"
+                className="no-underline hidden sm:inline oraya-link-nav"
                 style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: CHARCOAL }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = GOLD; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = CHARCOAL; }}
               >
                 Sign In
               </a>
               <a
                 href="/book"
-                className="no-underline"
+                className="no-underline oraya-pressable oraya-cta-nav-reserve"
                 style={{
                   fontFamily: LATO, fontSize: "11px", letterSpacing: "2px",
                   textTransform: "uppercase", color: GOLD,
                   border: "0.5px solid #C5A46D", padding: "10px 28px",
                   backgroundColor: "transparent",
-                }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLElement).style.backgroundColor = GOLD;
-                  (e.currentTarget as HTMLElement).style.color = ON_GOLD;
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
-                  (e.currentTarget as HTMLElement).style.color = GOLD;
                 }}
               >
                 Reserve
@@ -285,7 +276,7 @@ export default function Home() {
 
       {/* ── Hero ── */}
       <section
-        className="min-h-screen flex items-center justify-center relative overflow-hidden"
+        className="oraya-section-tone min-h-screen flex items-center justify-center relative overflow-hidden"
         style={{
           backgroundColor: "var(--oraya-hero-canvas)",
           ...(heroImg
@@ -328,25 +319,15 @@ export default function Home() {
               <>
                 <a
                   href="/book"
-                  className="no-underline inline-block max-md:shadow-[0_6px_24px_rgba(0,0,0,0.2)]"
+                  className="no-underline inline-block max-md:shadow-[0_6px_24px_rgba(0,0,0,0.2)] oraya-pressable oraya-cta-gold-hover"
                   style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: ON_GOLD, backgroundColor: GOLD, padding: "15px 44px" }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
                 >
                   Request a stay
                 </a>
                 <a
                   href="#villas"
-                  className="no-underline inline-block border-[0.5px] border-white/30 max-md:border-white/50 bg-transparent text-white"
+                  className="no-underline inline-block border-[0.5px] border-white/30 max-md:border-white/50 bg-transparent text-white oraya-pressable oraya-cta-hero-ghost"
                   style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", padding: "15px 44px" }}
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLElement).style.borderColor = GOLD;
-                    (e.currentTarget as HTMLElement).style.color = GOLD;
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLElement).style.removeProperty("border-color");
-                    (e.currentTarget as HTMLElement).style.removeProperty("color");
-                  }}
                 >
                   Explore our villas
                 </a>
@@ -355,25 +336,15 @@ export default function Home() {
               <>
                 <a
                   href="#villas"
-                  className="no-underline inline-block max-md:shadow-[0_6px_24px_rgba(0,0,0,0.2)]"
+                  className="no-underline inline-block max-md:shadow-[0_6px_24px_rgba(0,0,0,0.2)] oraya-pressable oraya-cta-gold-hover"
                   style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: ON_GOLD, backgroundColor: GOLD, padding: "15px 44px" }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
                 >
                   Explore our villas
                 </a>
                 <a
                   href="/join"
-                  className="no-underline inline-block border-[0.5px] border-white/30 max-md:border-white/50 bg-transparent text-white"
+                  className="no-underline inline-block border-[0.5px] border-white/30 max-md:border-white/50 bg-transparent text-white oraya-pressable oraya-cta-hero-ghost"
                   style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", padding: "15px 44px" }}
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLElement).style.borderColor = GOLD;
-                    (e.currentTarget as HTMLElement).style.color = GOLD;
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLElement).style.removeProperty("border-color");
-                    (e.currentTarget as HTMLElement).style.removeProperty("color");
-                  }}
                 >
                   Join as member
                 </a>
@@ -392,7 +363,7 @@ export default function Home() {
       </section>
 
       {/* ── Intro / Philosophy ── */}
-      <div style={{ backgroundColor: BEIGELIGHT }}>
+      <div className="oraya-section-tone" style={{ backgroundColor: BEIGELIGHT }}>
         <div
           className={`max-w-[1100px] mx-auto grid grid-cols-1 md:grid-cols-2 items-center min-w-0 ${SEC.px} ${SEC.medY} gap-8 md:gap-20`}
         >
@@ -421,7 +392,7 @@ export default function Home() {
             {values.map(({ name, desc }) => (
               <div
                 key={name}
-                className="p-4 md:p-5 h-full flex flex-col min-w-0 max-md:shadow-[0_2px_20px_rgba(46,46,46,0.07)] md:shadow-none"
+                className="oraya-card-interactive oraya-card-interactive--border p-4 md:p-5 h-full flex flex-col min-w-0 max-md:shadow-[0_2px_20px_rgba(46,46,46,0.07)] md:shadow-none"
                 style={{ backgroundColor: WHITE, border: "0.5px solid rgba(197,164,109,0.2)" }}
               >
                 <p style={{ fontFamily: PLAYFAIR, fontSize: "15px", color: CHARCOAL, marginBottom: "4px" }}>{name}</p>
@@ -438,7 +409,7 @@ export default function Home() {
       </div>
 
       {/* ── Villas ── */}
-      <section id="villas" className={`${SEC.px} ${SEC.medY}`} style={{ backgroundColor: WHITE }}>
+      <section id="villas" className={`oraya-section-tone ${SEC.px} ${SEC.medY}`} style={{ backgroundColor: WHITE }}>
         <div className="text-center mb-10 md:mb-16 min-w-0">
           <p
             className="uppercase mb-4"
@@ -466,20 +437,10 @@ export default function Home() {
             <a
               key={name}
               href={href}
-              className="h-full min-w-0 flex flex-col"
+              className="oraya-card-interactive oraya-card-interactive--border h-full min-w-0 flex flex-col"
               style={{
                 textDecoration: "none",
-                overflow: "hidden",
                 cursor: "pointer",
-                transition: "transform 0.25s ease, box-shadow 0.25s ease",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.transform = "translateY(-4px)";
-                (e.currentTarget as HTMLElement).style.boxShadow = "0 20px 56px rgba(0,0,0,0.13)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
-                (e.currentTarget as HTMLElement).style.boxShadow = "none";
               }}
             >
               {/* Image area */}
@@ -511,7 +472,7 @@ export default function Home() {
                   position: "absolute",
                   bottom: 0, left: 0, right: 0,
                   height: "80px",
-                  background: "linear-gradient(to bottom, transparent, rgba(255,255,255,0.06))",
+                  background: "var(--oraya-villa-card-image-fade)",
                   pointerEvents: "none",
                 }} />
               </div>
@@ -570,7 +531,7 @@ export default function Home() {
       {/* ── Experience ── */}
       <section
         id="experience"
-        className={`relative max-md:shadow-[inset_0_36px_48px_-36px_rgba(234,227,217,0.18)] md:shadow-none ${SEC.px} py-12 md:py-24`}
+        className={`oraya-section-tone relative max-md:shadow-[inset_0_36px_48px_-36px_rgba(234,227,217,0.18)] md:shadow-none ${SEC.px} py-12 md:py-24`}
         style={{ backgroundColor: MIDNIGHT }}
       >
         <div
@@ -601,7 +562,7 @@ export default function Home() {
             {experiences.map(({ num, name, desc }) => (
               <div
                 key={num}
-                className="py-7 px-5 md:py-8 md:px-6"
+                className="oraya-card-interactive py-7 px-5 md:py-8 md:px-6"
                 style={{ backgroundColor: "var(--oraya-band-card-fill)", border: "0.5px solid var(--oraya-band-card-border)" }}
               >
                 <p
@@ -621,7 +582,7 @@ export default function Home() {
       </section>
 
       {/* ── Events ── */}
-      <section id="events" className={`${SEC.px} py-10 md:py-24`} style={{ backgroundColor: BEIGELIGHT }}>
+      <section id="events" className={`oraya-section-tone ${SEC.px} py-10 md:py-24`} style={{ backgroundColor: BEIGELIGHT }}>
         <div className="max-w-[1100px] mx-auto min-w-0" style={{ textAlign: "center" }}>
           <p className="uppercase mb-4" style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "3px", color: GOLD }}>
             Private events
@@ -638,13 +599,12 @@ export default function Home() {
           </p>
           <a
             href="/events/inquiry"
+            className="oraya-pressable oraya-cta-gold-hover"
             style={{
               display: "inline-block", fontFamily: LATO, fontSize: "11px", letterSpacing: "2.5px",
               textTransform: "uppercase", color: GOLD_CTA, backgroundColor: GOLD,
               padding: "15px 44px", textDecoration: "none",
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
           >
             Enquire about events
           </a>
@@ -655,7 +615,7 @@ export default function Home() {
       {!isLoggedIn && (
         <section
           id="membership"
-          className={`text-center ${SEC.px} ${SEC.medY}`}
+          className={`oraya-section-tone text-center ${SEC.px} ${SEC.medY}`}
           style={{ backgroundColor: WHITE }}
         >
           <p
@@ -711,7 +671,7 @@ export default function Home() {
                   style={{ fontFamily: LATO, fontSize: "14px", fontWeight: 300, lineHeight: 1.65 }}
                 >
                   {parts[0]}
-                  <a href="mailto:hello@stayoraya.com" className="no-underline break-all" style={{ color: GOLD }}>
+                  <a href="mailto:hello@stayoraya.com" className="break-all oraya-link-text" style={{ color: GOLD }}>
                     hello@stayoraya.com
                   </a>
                   {parts[1] ?? ""}
@@ -720,10 +680,8 @@ export default function Home() {
             })()}
             <a
               href="/join"
-              className="no-underline block text-center uppercase mt-8"
+              className="no-underline block text-center uppercase mt-8 oraya-pressable oraya-cta-gold-hover"
               style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", color: ON_GOLD, backgroundColor: GOLD, padding: "15px 44px" }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
             >
               Create your member account
             </a>
@@ -732,7 +690,7 @@ export default function Home() {
       )}
 
       {/* ── Phase 13Z / 15F.4: Trust Layer ── */}
-      <section className={`${SEC.px} ${SEC.trustY} min-w-0`} style={{ backgroundColor: BEIGELIGHT }}>
+      <section className={`oraya-section-tone ${SEC.px} ${SEC.trustY} min-w-0`} style={{ backgroundColor: BEIGELIGHT }}>
         <div className="max-w-[1100px] mx-auto text-center min-w-0">
           <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, marginBottom: "1rem" }}>
             Why Oraya
@@ -753,7 +711,7 @@ export default function Home() {
               { title: "Curated private villa stays", body: "Two boutique properties in Lebanon, each maintained and hosted to Oraya standards — intimate scale, not mass-market volume." },
               { title: approvedTestimonials.length > 0 ? "Guest voices" : "Verified reviews (coming soon)", body: approvedTestimonials.length > 0 ? "Selected quotes from guests who have approved sharing their words on our site." : "Verified guest testimonials will appear here once published. We never display quotes without approval." },
             ].map((item) => (
-              <div key={item.title} className="p-5 md:p-6 min-w-0 max-md:shadow-[0_2px_18px_rgba(46,46,46,0.06)] md:shadow-none" style={{ border: `0.5px solid rgba(197,164,109,0.2)`, backgroundColor: WHITE }}>
+              <div key={item.title} className="oraya-card-interactive oraya-card-interactive--border p-5 md:p-6 min-w-0 max-md:shadow-[0_2px_18px_rgba(46,46,46,0.06)] md:shadow-none" style={{ border: `0.5px solid rgba(197,164,109,0.2)`, backgroundColor: WHITE }}>
                 <p style={{ fontFamily: PLAYFAIR, fontSize: "16px", color: CHARCOAL, margin: "0 0 8px", lineHeight: 1.4 }}>
                   {item.title}
                 </p>
@@ -767,7 +725,7 @@ export default function Home() {
       </section>
 
       {/* ── Phase 13Z / 15F.4: Guest Experiences — approved testimonials only (no fake reviews) ── */}
-      <section className={`${SEC.px} ${SEC.trustY} min-w-0 border-t border-[rgba(197,164,109,0.2)]`} style={{ backgroundColor: WHITE }}>
+      <section className={`oraya-section-tone ${SEC.px} ${SEC.trustY} min-w-0 border-t border-[rgba(197,164,109,0.2)]`} style={{ backgroundColor: WHITE }}>
         <div className="max-w-[900px] mx-auto text-center min-w-0">
           <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, marginBottom: "1rem" }}>
             Guest Experiences
@@ -785,7 +743,7 @@ export default function Home() {
               </p>
               <div className="grid gap-5 min-w-0 text-left" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))" }}>
                 {[1, 2, 3].map((i) => (
-                  <div key={i} className="p-5 min-w-0 max-md:shadow-[0_2px_16px_rgba(46,46,46,0.05)] md:shadow-none" style={{ border: `0.5px dashed rgba(197,164,109,0.2)`, backgroundColor: BEIGELIGHT, minHeight: "140px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div key={i} className="oraya-card-interactive p-5 min-w-0 max-md:shadow-[0_2px_16px_rgba(46,46,46,0.05)] md:shadow-none" style={{ border: `0.5px dashed rgba(197,164,109,0.2)`, backgroundColor: BEIGELIGHT, minHeight: "140px", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <p className="oraya-text-muted" style={{ fontFamily: LATO, fontSize: "11px", margin: 0, fontStyle: "italic", textAlign: "center", lineHeight: 1.6 }}>
                       Guest testimonial placeholder
                     </p>
@@ -796,7 +754,7 @@ export default function Home() {
           ) : (
             <div className="grid gap-5 min-w-0 text-left" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))" }}>
               {approvedTestimonials.map((t, idx) => (
-                <div key={`${t.guest_label}-${idx}`} className="p-5 min-w-0 max-md:shadow-[0_2px_16px_rgba(46,46,46,0.06)] md:shadow-none" style={{ border: `0.5px solid rgba(197,164,109,0.22)`, backgroundColor: BEIGELIGHT }}>
+                <div key={`${t.guest_label}-${idx}`} className="oraya-card-interactive oraya-card-interactive--border p-5 min-w-0 max-md:shadow-[0_2px_16px_rgba(46,46,46,0.06)] md:shadow-none" style={{ border: `0.5px solid rgba(197,164,109,0.22)`, backgroundColor: BEIGELIGHT }}>
                   <p style={{ fontFamily: PLAYFAIR, fontSize: "15px", color: CHARCOAL, margin: "0 0 12px", lineHeight: 1.55, fontStyle: "italic", fontWeight: 400 }}>
                     &ldquo;{t.quote}&rdquo;
                   </p>
@@ -805,7 +763,7 @@ export default function Home() {
                     {t.villa ? ` · ${t.villa}` : ""}
                   </p>
                   {t.reference_url && /^https?:\/\//i.test(t.reference_url) ? (
-                    <a href={t.reference_url} target="_blank" rel="noopener noreferrer" style={{ fontFamily: LATO, fontSize: "10px", color: GOLD, marginTop: "10px", display: "inline-block", textDecoration: "none", borderBottom: "0.5px solid rgba(197,164,109,0.35)" }}>
+                    <a href={t.reference_url} target="_blank" rel="noopener noreferrer" className="oraya-link-text" style={{ fontFamily: LATO, fontSize: "10px", color: GOLD, marginTop: "10px", display: "inline-block" }}>
                       Reference link
                     </a>
                   ) : null}
@@ -829,10 +787,8 @@ export default function Home() {
             <a
               key={social}
               href="#"
-              className="no-underline uppercase"
-              style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", color: GOLD, borderBottom: "0.5px solid rgba(197,164,109,0.25)", paddingBottom: "2px" }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderBottomColor = GOLD; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderBottomColor = "rgba(197,164,109,0.25)"; }}
+              className="no-underline uppercase oraya-link-cta"
+              style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", color: GOLD, paddingBottom: "2px" }}
             >
               {social}
             </a>
@@ -874,10 +830,8 @@ export default function Home() {
                     <li key={label} className="min-w-0" style={{ marginBottom: "8px" }}>
                       <a
                         href={href}
-                        className="no-underline block min-w-0"
+                        className="no-underline block min-w-0 oraya-link-footer"
                         style={{ fontFamily: LATO, fontSize: "13px", fontWeight: 300, color: "var(--oraya-footer-link)", overflowWrap: "anywhere", wordBreak: "break-word" }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = GOLD; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--oraya-footer-link)"; }}
                       >
                         {label}
                       </a>

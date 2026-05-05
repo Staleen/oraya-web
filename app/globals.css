@@ -102,6 +102,35 @@ html[data-theme="dark"] {
   --oraya-step-inactive: rgba(197, 164, 109, 0.3);
   --oraya-step-line: rgba(197, 164, 109, 0.15);
   --oraya-on-gold-text: #ffffff;
+
+  /* Villa / booking imagery scrims — derived from hero tokens (lighter than legacy 65% black) */
+  --oraya-villa-hero-scrim-image: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--oraya-hero-canvas) 84%, transparent) 0%,
+    color-mix(in srgb, var(--oraya-hero-overlay) 72%, transparent) 52%,
+    transparent 100%
+  );
+  --oraya-villa-hero-scrim-fallback: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--oraya-hero-canvas) 92%, transparent) 0%,
+    color-mix(in srgb, var(--oraya-hero-canvas) 58%, transparent) 55%,
+    transparent 100%
+  );
+  --oraya-villa-gallery-scrim: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--oraya-hero-overlay) 40%, transparent) 0%,
+    transparent 100%
+  );
+  --oraya-villa-card-image-fade: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in srgb, var(--oraya-surface) 9%, transparent)
+  );
+  --oraya-book-villa-thumb-scrim: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--oraya-hero-overlay) 16%, transparent),
+    color-mix(in srgb, var(--oraya-hero-overlay) 44%, transparent)
+  );
 }
 
 html[data-theme="light"] {
@@ -190,6 +219,34 @@ html[data-theme="light"] {
   --oraya-step-inactive: rgba(197, 164, 109, 0.45);
   --oraya-step-line: rgba(197, 164, 109, 0.25);
   --oraya-on-gold-text: #ffffff;
+
+  --oraya-villa-hero-scrim-image: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--oraya-hero-canvas) 84%, transparent) 0%,
+    color-mix(in srgb, var(--oraya-hero-overlay) 72%, transparent) 52%,
+    transparent 100%
+  );
+  --oraya-villa-hero-scrim-fallback: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--oraya-hero-canvas) 92%, transparent) 0%,
+    color-mix(in srgb, var(--oraya-hero-canvas) 58%, transparent) 55%,
+    transparent 100%
+  );
+  --oraya-villa-gallery-scrim: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--oraya-hero-overlay) 40%, transparent) 0%,
+    transparent 100%
+  );
+  --oraya-villa-card-image-fade: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in srgb, var(--oraya-surface) 9%, transparent)
+  );
+  --oraya-book-villa-thumb-scrim: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--oraya-hero-overlay) 16%, transparent),
+    color-mix(in srgb, var(--oraya-hero-overlay) 44%, transparent)
+  );
 }
 
 * {
@@ -239,4 +296,152 @@ body {
 /** Theme-aware muted copy on public pages */
 .oraya-text-muted {
   color: var(--oraya-text-muted);
+}
+
+/* ── Phase 15I.8: public micro-polish (press, cards, links, section tone) ── */
+
+.oraya-pressable {
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease;
+  transform-origin: center;
+}
+
+.oraya-pressable:active {
+  transform: scale(0.98);
+}
+
+.oraya-cta-gold-hover:hover:not(:disabled) {
+  background-color: #d4b98a !important;
+}
+
+.oraya-cta-nav-reserve:hover {
+  background-color: var(--oraya-gold) !important;
+  color: var(--oraya-on-gold-text) !important;
+}
+
+.oraya-cta-hero-ghost {
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    background-color 180ms ease;
+}
+
+.oraya-cta-hero-ghost:hover {
+  border-color: var(--oraya-gold) !important;
+  color: var(--oraya-gold) !important;
+}
+
+.oraya-cta-book-guest:hover {
+  border-color: var(--oraya-gold) !important;
+  color: var(--oraya-book-heading) !important;
+}
+
+.oraya-cta-book-back:hover {
+  border-color: var(--oraya-gold) !important;
+  color: var(--oraya-gold) !important;
+}
+
+.oraya-link-nav {
+  text-decoration: none;
+  transition: color 180ms ease;
+}
+
+.oraya-link-nav:hover {
+  color: var(--oraya-gold);
+}
+
+.oraya-link-text {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--oraya-gold) 38%, transparent);
+  text-underline-offset: 3px;
+  transition: color 180ms ease, text-decoration-color 180ms ease;
+}
+
+.oraya-link-text:hover {
+  text-decoration-color: var(--oraya-gold);
+  color: var(--oraya-gold);
+}
+
+.oraya-link-cta {
+  text-decoration: none;
+  border-bottom: 0.5px solid color-mix(in srgb, var(--oraya-gold) 28%, transparent);
+  padding-bottom: 2px;
+  transition: border-color 180ms ease, color 180ms ease;
+}
+
+.oraya-link-cta:hover {
+  border-bottom-color: var(--oraya-gold);
+}
+
+.oraya-link-footer {
+  transition: color 180ms ease;
+}
+
+.oraya-link-footer:hover {
+  color: var(--oraya-gold) !important;
+}
+
+.oraya-card-interactive {
+  transition: box-shadow 180ms ease, transform 180ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .oraya-card-interactive:hover {
+    box-shadow: 0 14px 40px rgba(31, 43, 56, 0.1);
+  }
+
+  .oraya-card-interactive--border:hover {
+    box-shadow:
+      0 0 0 0.5px color-mix(in srgb, var(--oraya-gold) 32%, transparent),
+      0 14px 36px rgba(31, 43, 56, 0.08);
+  }
+}
+
+/* Scale on press only for real links/cards — not static content tiles */
+a.oraya-card-interactive:active {
+  transform: scale(0.995);
+}
+
+.oraya-section-tone {
+  transition: background-color 320ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .oraya-pressable,
+  .oraya-card-interactive,
+  .oraya-section-tone,
+  .oraya-link-nav,
+  .oraya-link-text,
+  .oraya-link-cta,
+  .oraya-cta-hero-ghost,
+  .oraya-cta-book-guest,
+  .oraya-cta-book-back,
+  .oraya-link-footer {
+    transition-duration: 0.01ms !important;
+  }
+
+  .oraya-pressable:active,
+  a.oraya-card-interactive:active {
+    transform: none !important;
+  }
+
+  .animate-fade-up {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .animate-pulse-line {
+    animation: none !important;
+    opacity: 0.45;
+  }
 }

@@ -30,7 +30,7 @@ export default function PublicTrustShell({
           borderBottom: "0.5px solid var(--oraya-nav-border)",
         }}
       >
-        <a href="/" className="w-11 h-11 shrink-0 block" style={{ cursor: "pointer" }}>
+        <a href="/" className="oraya-pressable w-11 h-11 shrink-0 block" style={{ cursor: "pointer" }}>
           <OrayaEmblem />
         </a>
         <PublicThemeToggle variant="public" />
