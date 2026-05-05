@@ -4,6 +4,6 @@
  */
 
 export const SITE_URL     = "https://stayoraya.com";
-export const LOGO_URL     = `${SITE_URL}/logos/ORAYA_emblem.png`;
+export const LOGO_URL     = `${SITE_URL}/logos/ORAYA_logo_full.png`;
 export const EMBLEM_URL   = `${SITE_URL}/logos/ORAYA_emblem.png`;
-export const OG_IMAGE_URL = `${SITE_URL}/logos/ORAYA_emblem.png`;
+export const OG_IMAGE_URL = `${SITE_URL}/logos/ORAYA_logo_full.png`;

@@ -685,6 +685,24 @@ Phase 15 remains active (documentation + future sub-phases only unless product r
 - Critical warnings remain visible when relevant (conflicts, validation, payment overdue, proposal send errors, missing guest email, failed actions)
 - No booking, payment, pricing, proposal, API, schema, guest page, or email behavior changes
 
+**15I.3 Booking Flow UX Restructure [COMPLETE]**
+- Booking steps reorganized around user actions (4-step flow: villa/dates → stay setup → add-ons → review/submit)
+- Long explanatory text moved lower/collapsed into compact “Booking details” sections
+- Villa cards in booking flow now use homepage cover imagery path with clear starting-price bedroom basis labels
+- Step 2 prioritizes bedroom selection and total visibility before lower-priority context sections
+- Step 4 includes payment opportunity placeholders (deposit/full) with no gateway processing or auto-confirm behavior
+- Readability improved (larger body/label/button text, reduced dense uppercase treatment, better muted contrast/spacing)
+- Updated logo asset applied in booking flow and brand metadata image references
+- No booking/pricing/backend logic changed
+
+**15I.3.1 Booking Flow Fixes [COMPLETE]**
+- Intro/disclaimer moved to bottom collapsible section
+- Identity banner moved out of top flow
+- Step 2 prioritizes bedroom selection and estimate
+- Submit booking now redirects correctly after success
+- Loading state no longer stuck
+- No booking/pricing/backend logic changed
+
 ---
 
 ## AGENT EXECUTION RULES

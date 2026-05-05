@@ -16,7 +16,7 @@ const lato = Lato({
 });
 
 const SITE_URL   = "https://stayoraya.com";
-const OG_IMAGE   = `${SITE_URL}/logos/ORAYA_emblem.png`;
+const OG_IMAGE   = `${SITE_URL}/logos/ORAYA_logo_full.png`;
 const TITLE      = "Oraya | Luxury Boutique Villas in Lebanon";
 const DESCRIPTION =
   "Oraya offers an exclusive collection of luxury boutique villas in Lebanon, where timeless elegance meets authentic Lebanese hospitality.";
