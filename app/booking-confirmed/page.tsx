@@ -1,13 +1,14 @@
 "use client";
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import OrayaEmblem from "@/components/OrayaEmblem";
+import PublicTrustShell from "@/components/PublicTrustShell";
 
-const GOLD     = "#C5A46D";
-const WHITE    = "#FFFFFF";
-const MIDNIGHT = "#1F2B38";
-const CHARCOAL = "#2E2E2E";
-const MUTED    = "#8a8070";
+const GOLD     = "var(--oraya-gold)";
+const GOLD_CTA = "var(--oraya-gold-cta-text)";
+const WHITE    = "var(--oraya-book-heading)";
+const MUTED    = "var(--oraya-book-muted)";
+const BOOK_P78 = "var(--oraya-book-p78)";
+const BOOK_P20 = "var(--oraya-book-p20)";
 const PLAYFAIR = "'Playfair Display', Georgia, serif";
 const LATO     = "'Lato', system-ui, sans-serif";
 
@@ -51,16 +52,8 @@ function BookingConfirmedPageInner() {
   ];
 
   return (
-    <main
-      className="min-h-screen flex items-center justify-center"
-      style={{ backgroundColor: MIDNIGHT, padding: "80px 24px" }}
-    >
+    <PublicTrustShell mainStyle={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{ width: "100%", maxWidth: "520px", textAlign: "center" }}>
-        {/* Emblem */}
-        <a href="/" style={{ display: "block", width: "60px", margin: "0 auto 2.5rem", cursor: "pointer" }}>
-          <OrayaEmblem />
-        </a>
-
         {/* Gold rule */}
         <div style={{ width: "40px", height: "0.5px", backgroundColor: GOLD, margin: "0 auto 2rem", opacity: 0.6 }} />
 
@@ -75,10 +68,10 @@ function BookingConfirmedPageInner() {
           <span style={{ fontStyle: "italic" }}>has been received.</span>
         </h1>
 
-        <p style={{ fontFamily: LATO, fontSize: "13px", color: "rgba(255,255,255,0.78)", lineHeight: 1.75, margin: "0 0 10px", fontWeight: 300 }}>
+        <p style={{ fontFamily: LATO, fontSize: "13px", color: BOOK_P78, lineHeight: 1.75, margin: "0 0 10px", fontWeight: 300 }}>
           Your request has been received and is being reviewed by the Oraya team.
         </p>
-        <p style={{ fontFamily: LATO, fontSize: "13px", color: "rgba(255,255,255,0.78)", lineHeight: 1.75, margin: "0 0 1.25rem", fontWeight: 300 }}>
+        <p style={{ fontFamily: LATO, fontSize: "13px", color: BOOK_P78, lineHeight: 1.75, margin: "0 0 1.25rem", fontWeight: 300 }}>
           Confirmation and next steps will be sent to your email.
         </p>
 
@@ -90,14 +83,14 @@ function BookingConfirmedPageInner() {
         <div style={{ width: "40px", height: "0.5px", backgroundColor: GOLD, margin: "0 auto 2.5rem", opacity: 0.4 }} />
 
         {/* Booking details card */}
-        <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", padding: "2rem", marginBottom: "2.5rem", textAlign: "left" }}>
+        <div style={{ border: "0.5px solid var(--oraya-border)", padding: "2rem", marginBottom: "2.5rem", textAlign: "left" }}>
           <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, marginBottom: "1.25rem" }}>
             Booking summary
           </p>
           {details.map(({ label, value }) => (
             <div
               key={label}
-              style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "10px 0", borderBottom: "0.5px solid rgba(255,255,255,0.05)" }}
+              style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "10px 0", borderBottom: "0.5px solid var(--oraya-book-subtle-line)" }}
             >
               <span style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED }}>
                 {label}
@@ -113,7 +106,7 @@ function BookingConfirmedPageInner() {
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
           <a
             href="/"
-            style={{ display: "inline-block", fontFamily: LATO, fontSize: "11px", letterSpacing: "2.5px", textTransform: "uppercase", color: CHARCOAL, backgroundColor: GOLD, padding: "15px 36px", textDecoration: "none" }}
+            style={{ display: "inline-block", fontFamily: LATO, fontSize: "11px", letterSpacing: "2.5px", textTransform: "uppercase", color: GOLD_CTA, backgroundColor: GOLD, padding: "15px 36px", textDecoration: "none" }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
           >
@@ -121,13 +114,13 @@ function BookingConfirmedPageInner() {
           </a>
           <a
             href="/book"
-            style={{ display: "inline-block", fontFamily: LATO, fontSize: "11px", letterSpacing: "2.5px", textTransform: "uppercase", color: GOLD, backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.4)", padding: "15px 36px", textDecoration: "none" }}
+            style={{ display: "inline-block", fontFamily: LATO, fontSize: "11px", letterSpacing: "2.5px", textTransform: "uppercase", color: GOLD, backgroundColor: "transparent", border: "0.5px solid var(--oraya-book-input-border)", padding: "15px 36px", textDecoration: "none" }}
             onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.borderColor = GOLD;
+              (e.currentTarget as HTMLElement).style.borderColor = "var(--oraya-gold)";
               (e.currentTarget as HTMLElement).style.color = WHITE;
             }}
             onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.borderColor = "rgba(197,164,109,0.4)";
+              (e.currentTarget as HTMLElement).style.borderColor = "var(--oraya-book-input-border)";
               (e.currentTarget as HTMLElement).style.color = GOLD;
             }}
           >
@@ -164,11 +157,11 @@ function BookingConfirmedPageInner() {
           </div>
         )}
 
-        <p style={{ fontFamily: LATO, fontSize: "11px", color: "rgba(255,255,255,0.2)", marginTop: "2.5rem" }}>
+        <p style={{ fontFamily: LATO, fontSize: "11px", color: BOOK_P20, marginTop: "2.5rem" }}>
           You&apos;ll receive an email once your booking has been reviewed.
         </p>
       </div>
-    </main>
+    </PublicTrustShell>
   );
 }
 

@@ -1,24 +1,23 @@
 "use client";
 import { useState } from "react";
-import OrayaEmblem from "@/components/OrayaEmblem";
+import PublicTrustShell from "@/components/PublicTrustShell";
 import { supabase } from "@/lib/supabase";
 
-const GOLD     = "#C5A46D";
-const WHITE    = "#FFFFFF";
-const MIDNIGHT = "#1F2B38";
-const CHARCOAL = "#2E2E2E";
-const MUTED    = "#8a8070";
+const GOLD     = "var(--oraya-gold)";
+const GOLD_CTA = "var(--oraya-gold-cta-text)";
+const WHITE    = "var(--oraya-book-heading)";
+const MUTED    = "var(--oraya-book-muted)";
 const PLAYFAIR = "'Playfair Display', Georgia, serif";
 const LATO     = "'Lato', system-ui, sans-serif";
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
-  backgroundColor: "rgba(255,255,255,0.04)",
-  border: "0.5px solid rgba(197,164,109,0.25)",
+  backgroundColor: "var(--oraya-book-input-bg)",
+  border: "0.5px solid var(--oraya-book-input-border)",
   padding: "14px 16px",
   fontFamily: LATO,
   fontSize: "14px",
-  color: WHITE,
+  color: "var(--oraya-book-text-on-field)",
   outline: "none",
   boxSizing: "border-box",
 };
@@ -28,7 +27,7 @@ const labelStyle: React.CSSProperties = {
   fontSize: "10px",
   letterSpacing: "2px",
   textTransform: "uppercase",
-  color: MUTED,
+  color: "var(--oraya-book-label)",
   display: "block",
   marginBottom: "6px",
 };
@@ -56,16 +55,8 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <main
-      className="min-h-screen flex items-center justify-center"
-      style={{ backgroundColor: MIDNIGHT, padding: "80px 24px" }}
-    >
+    <PublicTrustShell mainStyle={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{ width: "100%", maxWidth: "420px" }}>
-        {/* Logo */}
-        <a href="/" style={{ display: "block", width: "52px", margin: "0 auto 2.5rem", cursor: "pointer" }}>
-          <OrayaEmblem />
-        </a>
-
         {/* Heading */}
         <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
           <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "4px", textTransform: "uppercase", color: GOLD, marginBottom: "12px" }}>
@@ -82,13 +73,14 @@ export default function ForgotPasswordPage() {
         {submitted ? (
           /* Neutral confirmation — never reveals whether an account exists */
           <div style={{
-            border: "0.5px solid rgba(197,164,109,0.4)",
+            border: "0.5px solid var(--oraya-book-input-border)",
             padding: "16px 20px",
             fontFamily: LATO,
             fontSize: "13px",
             color: GOLD,
             textAlign: "center",
             lineHeight: 1.7,
+            backgroundColor: "var(--oraya-book-surface-gold-3)",
           }}>
             If an account exists for this email, a reset link has been sent.
           </div>
@@ -104,7 +96,7 @@ export default function ForgotPasswordPage() {
                 placeholder="you@example.com"
                 style={inputStyle}
                 onFocus={(e) => { e.currentTarget.style.borderColor = GOLD; }}
-                onBlur={(e)  => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+                onBlur={(e)  => { e.currentTarget.style.borderColor = "var(--oraya-book-input-border)"; }}
               />
             </div>
 
@@ -116,7 +108,7 @@ export default function ForgotPasswordPage() {
                 fontSize: "11px",
                 letterSpacing: "2.5px",
                 textTransform: "uppercase",
-                color: CHARCOAL,
+                color: GOLD_CTA,
                 backgroundColor: GOLD,
                 border: "none",
                 padding: "16px",
@@ -142,6 +134,6 @@ export default function ForgotPasswordPage() {
           </a>
         </p>
       </div>
-    </main>
+    </PublicTrustShell>
   );
 }

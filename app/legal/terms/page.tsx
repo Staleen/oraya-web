@@ -1,15 +1,15 @@
-const CHARCOAL = "#2E2E2E";
-const MUTED    = "#8a8070";
-const GOLD     = "#C5A46D";
+const INK      = "var(--oraya-ink)";
+const MUTED    = "var(--oraya-text-muted)";
+const GOLD     = "var(--oraya-gold)";
 const PLAYFAIR = "'Playfair Display', Georgia, serif";
 const LATO     = "'Lato', system-ui, sans-serif";
 
 const eyebrow: React.CSSProperties = { fontFamily: LATO, fontSize: "10px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 1rem" };
-const heading: React.CSSProperties = { fontFamily: PLAYFAIR, fontSize: "32px", color: CHARCOAL, fontWeight: 400, margin: "0 0 0.5rem", lineHeight: 1.2 };
-const subheading: React.CSSProperties = { fontFamily: PLAYFAIR, fontSize: "20px", color: CHARCOAL, fontWeight: 400, margin: "2.5rem 0 0.75rem" };
-const body: React.CSSProperties = { fontFamily: LATO, fontSize: "14px", color: CHARCOAL, lineHeight: 1.8, margin: "0 0 1rem", fontWeight: 300 };
+const heading: React.CSSProperties = { fontFamily: PLAYFAIR, fontSize: "32px", color: INK, fontWeight: 400, margin: "0 0 0.5rem", lineHeight: 1.2 };
+const subheading: React.CSSProperties = { fontFamily: PLAYFAIR, fontSize: "20px", color: INK, fontWeight: 400, margin: "2.5rem 0 0.75rem" };
+const body: React.CSSProperties = { fontFamily: LATO, fontSize: "14px", color: INK, lineHeight: 1.8, margin: "0 0 1rem", fontWeight: 300 };
 const meta: React.CSSProperties = { fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "0 0 2.5rem", letterSpacing: "0.5px" };
-const list: React.CSSProperties = { fontFamily: LATO, fontSize: "14px", color: CHARCOAL, lineHeight: 1.9, fontWeight: 300, paddingLeft: "1.25rem", margin: "0 0 1rem" };
+const list: React.CSSProperties = { fontFamily: LATO, fontSize: "14px", color: INK, lineHeight: 1.9, fontWeight: 300, paddingLeft: "1.25rem", margin: "0 0 1rem" };
 
 export const metadata = { title: "Terms & Conditions — Oraya" };
 

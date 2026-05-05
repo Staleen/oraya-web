@@ -2,9 +2,8 @@
 
 import { useState } from "react";
 
-const GOLD = "#C5A46D";
-const MUTED = "#8a8070";
-const MIDNIGHT = "#1F2B38";
+const GOLD = "var(--oraya-gold)";
+const GOLD_CTA = "var(--oraya-gold-cta-text)";
 const LATO = "'Lato', system-ui, sans-serif";
 
 export default function CopyValueButton({
@@ -38,9 +37,9 @@ export default function CopyValueButton({
         fontSize: "10px",
         letterSpacing: "1.6px",
         textTransform: "uppercase",
-        color: copied ? MIDNIGHT : GOLD,
+        color: copied ? GOLD_CTA : GOLD,
         backgroundColor: copied ? GOLD : "transparent",
-        border: `0.5px solid ${copied ? GOLD : "rgba(197,164,109,0.26)"}`,
+        border: `0.5px solid ${copied ? GOLD : "var(--oraya-border)"}`,
         borderRadius: "999px",
         padding: "7px 12px",
         cursor: "pointer",

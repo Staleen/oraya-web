@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 
-const GOLD = "#C5A46D";
-const CHARCOAL = "#2E2E2E";
+const GOLD = "var(--oraya-gold)";
+const GOLD_CTA = "var(--oraya-gold-cta-text)";
 const LATO = "'Lato', system-ui, sans-serif";
 
 /** Shown only when the signed-in user is the member who owns this booking. */
@@ -37,7 +37,7 @@ export function BookingViewMemberLink({ bookingMemberId }: { bookingMemberId: st
         fontSize: "11px",
         letterSpacing: "2.5px",
         textTransform: "uppercase",
-        color: CHARCOAL,
+        color: GOLD_CTA,
         backgroundColor: GOLD,
         padding: "15px 36px",
         textDecoration: "none",

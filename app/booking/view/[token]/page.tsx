@@ -1,5 +1,5 @@
 import Link from "next/link";
-import OrayaEmblem from "@/components/OrayaEmblem";
+import PublicTrustShell from "@/components/PublicTrustShell";
 import { AddonIcon } from "@/components/addon-icon";
 import CopyValueButton from "@/components/CopyValueButton";
 import { BookingViewMemberLink } from "@/components/BookingViewMemberLink";
@@ -9,11 +9,16 @@ import { formatPaymentMethodLabel } from "@/lib/payment-method-labels";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { verifyViewToken } from "@/lib/booking-action-token";
 
-const GOLD     = "#C5A46D";
-const WHITE    = "#FFFFFF";
-const MIDNIGHT = "#1F2B38";
-const CHARCOAL = "#2E2E2E";
-const MUTED    = "#8a8070";
+const GOLD        = "var(--oraya-gold)";
+const WHITE       = "var(--oraya-book-heading)";
+const GOLD_CTA    = "var(--oraya-gold-cta-text)";
+const MUTED       = "var(--oraya-book-muted)";
+const BOOK_P82    = "var(--oraya-book-p82)";
+const BOOK_SUBTLE = "var(--oraya-book-subtle-line)";
+const GLASS1      = "var(--oraya-book-surface-1)";
+const GLASS3      = "var(--oraya-book-surface-3)";
+const GLG3        = "var(--oraya-book-surface-gold-3)";
+const GLG4        = "var(--oraya-book-surface-gold-4)";
 const PLAYFAIR = "'Playfair Display', Georgia, serif";
 const LATO     = "'Lato', system-ui, sans-serif";
 
@@ -153,7 +158,7 @@ function paymentStatusTone(status: string | null | undefined) {
   if (status === "payment_requested") {
     return { color: GOLD, bg: "rgba(197,164,109,0.14)", border: "rgba(197,164,109,0.28)" };
   }
-  return { color: MUTED, bg: "rgba(255,255,255,0.04)", border: "rgba(255,255,255,0.08)" };
+  return { color: MUTED, bg: GLASS1, border: "var(--oraya-border)" };
 }
 
 function formatProposalIncludedService(service: ProposalIncludedService) {
@@ -230,20 +235,8 @@ async function getContactSettings(): Promise<{ whatsappNumber: string | null; wh
 
 function ErrorShell({ title, subtitle }: { title: string; subtitle: string }) {
   return (
-    <main
-      style={{
-        backgroundColor: MIDNIGHT,
-        minHeight:       "100vh",
-        padding:         "80px 24px",
-        display:         "flex",
-        alignItems:      "center",
-        justifyContent:  "center",
-      }}
-    >
+    <PublicTrustShell mainStyle={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{ width: "100%", maxWidth: "520px", textAlign: "center" }}>
-        <Link href="/" style={{ display: "block", width: "60px", margin: "0 auto 2.5rem" }}>
-          <OrayaEmblem />
-        </Link>
         <div style={{ width: "40px", height: "0.5px", backgroundColor: GOLD, margin: "0 auto 2rem", opacity: 0.6 }} />
         <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "4px", textTransform: "uppercase", color: GOLD, marginBottom: "1.25rem" }}>
           Booking Link
@@ -262,7 +255,7 @@ function ErrorShell({ title, subtitle }: { title: string; subtitle: string }) {
             fontSize:       "11px",
             letterSpacing:  "2.5px",
             textTransform:  "uppercase",
-            color:          CHARCOAL,
+            color:          GOLD_CTA,
             backgroundColor: GOLD,
             padding:        "15px 36px",
             textDecoration: "none",
@@ -271,7 +264,7 @@ function ErrorShell({ title, subtitle }: { title: string; subtitle: string }) {
           Back to home
         </Link>
       </div>
-    </main>
+    </PublicTrustShell>
   );
 }
 
@@ -402,22 +395,8 @@ export default async function BookingViewPage({
   ];
 
   return (
-    <main
-      style={{
-        backgroundColor: MIDNIGHT,
-        minHeight:       "100vh",
-        padding:         "80px 24px",
-        display:         "flex",
-        alignItems:      "center",
-        justifyContent:  "center",
-      }}
-    >
+    <PublicTrustShell mainStyle={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{ width: "100%", maxWidth: "520px", textAlign: "center" }}>
-        {/* Emblem */}
-        <Link href="/" style={{ display: "block", width: "60px", margin: "0 auto 2.5rem" }}>
-          <OrayaEmblem />
-        </Link>
-
         {/* Gold rule */}
         <div style={{ width: "40px", height: "0.5px", backgroundColor: GOLD, margin: "0 auto 2rem", opacity: 0.6 }} />
 
@@ -454,8 +433,8 @@ export default async function BookingViewPage({
         {/* Reference — prominent */}
         <div
           style={{
-            border: "0.5px solid rgba(197,164,109,0.28)",
-            backgroundColor: "rgba(197,164,109,0.06)",
+            border: "0.5px solid var(--oraya-book-input-border)",
+            backgroundColor: GLG4,
             padding: "1.25rem 1.5rem",
             marginBottom: "2rem",
             textAlign: "center",
@@ -486,13 +465,13 @@ export default async function BookingViewPage({
                   ? "0.5px solid rgba(111,207,138,0.28)"
                   : proposalState === "declined" || proposalState === "expired"
                     ? "0.5px solid rgba(224,112,112,0.28)"
-                    : "0.5px solid rgba(197,164,109,0.2)",
+                    : "0.5px solid var(--oraya-border)",
               backgroundColor:
                 proposalState === "accepted"
                   ? "rgba(111,207,138,0.08)"
                   : proposalState === "declined" || proposalState === "expired"
                     ? "rgba(224,112,112,0.08)"
-                    : "rgba(197,164,109,0.04)",
+                    : GLG3,
               padding: "14px 16px",
               marginBottom: "2rem",
               textAlign: "left",
@@ -511,7 +490,7 @@ export default async function BookingViewPage({
         )}
 
         {/* Details card */}
-        <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", padding: "2rem", marginBottom: "2rem", textAlign: "left" }}>
+        <div style={{ border: "0.5px solid var(--oraya-border)", padding: "2rem", marginBottom: "2rem", textAlign: "left" }}>
           <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, marginBottom: "1.25rem" }}>
             {isEventInquiry ? "Inquiry summary" : "Booking summary"}
           </p>
@@ -523,7 +502,7 @@ export default async function BookingViewPage({
                 justifyContent: "space-between",
                 alignItems:     "baseline",
                 padding:        "10px 0",
-                borderBottom:   "0.5px solid rgba(255,255,255,0.05)",
+                borderBottom: `0.5px solid ${BOOK_SUBTLE}`,
                 gap:            "16px",
               }}
             >
@@ -539,7 +518,7 @@ export default async function BookingViewPage({
 
         {/* Add-ons card — hide on event inquiries with no addons (event services live in the notes block) */}
         {!(isEventInquiry && addons.length === 0) && (
-        <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", padding: "1.75rem", marginBottom: "2rem", textAlign: "left", backgroundColor: "rgba(255,255,255,0.015)" }}>
+        <div style={{ border: "0.5px solid var(--oraya-border)", padding: "1.75rem", marginBottom: "2rem", textAlign: "left", backgroundColor: GLASS3 }}>
           <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, marginBottom: "1rem" }}>
             Add-ons
           </p>
@@ -562,11 +541,11 @@ export default async function BookingViewPage({
                       justifyContent: "space-between",
                       gap: "14px",
                       padding: "12px 0",
-                      borderBottom: index === addons.length - 1 ? "none" : "0.5px solid rgba(255,255,255,0.06)",
+                      borderBottom: index === addons.length - 1 ? "none" : `0.5px solid ${BOOK_SUBTLE}`,
                     }}
                   >
                     <div style={{ display: "flex", alignItems: "flex-start", gap: "10px", minWidth: 0 }}>
-                      <AddonIcon label={addon.label ?? "Add-on"} size={17} color="rgba(197,164,109,0.58)" />
+                      <AddonIcon label={addon.label ?? "Add-on"} size={17} color="var(--oraya-gold)" />
                       <div style={{ minWidth: 0 }}>
                         <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, margin: "0 0 4px", lineHeight: 1.4 }}>
                           {addon.label ?? "Add-on"}
@@ -608,7 +587,7 @@ export default async function BookingViewPage({
         {/* Phase 13I: pricing block — stay bookings see Payment summary; event inquiries see no pricing */}
         {isEventInquiry ? (
           showEventProposal || booking.proposal_status === "accepted" || booking.proposal_status === "declined" ? (
-            <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", padding: "1.75rem", marginBottom: "2rem", textAlign: "left", backgroundColor: "rgba(197,164,109,0.04)" }}>
+            <div style={{ border: "0.5px solid var(--oraya-border)", padding: "1.75rem", marginBottom: "2rem", textAlign: "left", backgroundColor: GLG3 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px", flexWrap: "wrap", marginBottom: "1rem" }}>
                 <div>
                   <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, marginBottom: "0.75rem" }}>
@@ -650,7 +629,7 @@ export default async function BookingViewPage({
                         ? "0.5px solid rgba(111,207,138,0.28)"
                         : booking.proposal_status === "declined" || proposalExpired
                           ? "0.5px solid rgba(224,112,112,0.28)"
-                          : "0.5px solid rgba(197,164,109,0.28)",
+                          : "0.5px solid var(--oraya-book-input-border)",
                     padding: "6px 12px",
                     whiteSpace: "nowrap",
                   }}
@@ -683,7 +662,7 @@ export default async function BookingViewPage({
                 )}
 
                 {proposalPricingRows.length > 0 && (
-                  <div style={{ borderTop: "0.5px solid rgba(255,255,255,0.06)", marginTop: "14px", paddingTop: "14px" }}>
+                  <div style={{ borderTop: `0.5px solid ${BOOK_SUBTLE}`, marginTop: "14px", paddingTop: "14px" }}>
                     <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: "0 0 10px" }}>
                       Pricing
                     </p>
@@ -694,7 +673,7 @@ export default async function BookingViewPage({
                           gridTemplateColumns: "1fr auto auto auto",
                           gap: "8px",
                           padding: "6px 0",
-                          borderBottom: "0.5px solid rgba(255,255,255,0.08)",
+                          borderBottom: `0.5px solid ${BOOK_SUBTLE}`,
                           fontFamily: LATO,
                           fontSize: "10px",
                           letterSpacing: "1.5px",
@@ -716,7 +695,7 @@ export default async function BookingViewPage({
                             gap: "8px",
                             padding: "10px 0",
                             borderBottom:
-                              idx === proposalPricingRows.length - 1 ? "none" : "0.5px solid rgba(255,255,255,0.05)",
+                              idx === proposalPricingRows.length - 1 ? "none" : `0.5px solid ${BOOK_SUBTLE}`,
                             fontFamily: LATO,
                             fontSize: "12px",
                             color: WHITE,
@@ -743,7 +722,7 @@ export default async function BookingViewPage({
                           gridTemplateColumns: "1fr auto",
                           gap: "8px",
                           padding: "12px 0 0",
-                          borderTop: "0.5px solid rgba(197,164,109,0.28)",
+                          borderTop: "0.5px solid var(--oraya-book-input-border)",
                           marginTop: "4px",
                           fontFamily: LATO,
                         }}
@@ -772,13 +751,13 @@ export default async function BookingViewPage({
               </div>
 
               {proposalIncludedServices.length > 0 && (
-                <div style={{ borderTop: "0.5px solid rgba(255,255,255,0.06)", marginTop: "14px", paddingTop: "14px", display: "grid", gap: "8px" }}>
+                <div style={{ borderTop: `0.5px solid ${BOOK_SUBTLE}`, marginTop: "14px", paddingTop: "14px", display: "grid", gap: "8px" }}>
                   <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
                     Included services
                   </p>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
                     {proposalIncludedServices.map((service, index) => (
-                      <span key={`${service.label}-${index}`} style={{ fontFamily: LATO, fontSize: "11px", color: WHITE, border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: "rgba(255,255,255,0.03)", padding: "7px 10px" }}>
+                      <span key={`${service.label}-${index}`} style={{ fontFamily: LATO, fontSize: "11px", color: WHITE, border: "0.5px solid var(--oraya-border)", backgroundColor: GLASS1, padding: "7px 10px" }}>
                         {formatProposalIncludedService(service)}
                       </span>
                     ))}
@@ -787,7 +766,7 @@ export default async function BookingViewPage({
               )}
 
               {booking.proposal_excluded_services?.trim() && (
-                <div style={{ borderTop: "0.5px solid rgba(255,255,255,0.06)", marginTop: "14px", paddingTop: "14px" }}>
+                <div style={{ borderTop: `0.5px solid ${BOOK_SUBTLE}`, marginTop: "14px", paddingTop: "14px" }}>
                   <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: "0 0 8px" }}>
                     Excluded services
                   </p>
@@ -798,7 +777,7 @@ export default async function BookingViewPage({
               )}
 
               {booking.proposal_optional_services?.trim() && (
-                <div style={{ borderTop: "0.5px solid rgba(255,255,255,0.06)", marginTop: "14px", paddingTop: "14px" }}>
+                <div style={{ borderTop: `0.5px solid ${BOOK_SUBTLE}`, marginTop: "14px", paddingTop: "14px" }}>
                   <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: "0 0 8px" }}>
                     Optional services
                   </p>
@@ -809,7 +788,7 @@ export default async function BookingViewPage({
               )}
 
               {booking.proposal_notes?.trim() && (
-                <div style={{ borderTop: "0.5px solid rgba(255,255,255,0.06)", marginTop: "14px", paddingTop: "14px" }}>
+                <div style={{ borderTop: `0.5px solid ${BOOK_SUBTLE}`, marginTop: "14px", paddingTop: "14px" }}>
                   <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: "0 0 8px" }}>
                     Proposal notes
                   </p>
@@ -820,7 +799,7 @@ export default async function BookingViewPage({
               )}
 
               {proposalPaymentMethods.length > 0 && (
-                <div style={{ borderTop: "0.5px solid rgba(255,255,255,0.06)", marginTop: "14px", paddingTop: "14px" }}>
+                <div style={{ borderTop: `0.5px solid ${BOOK_SUBTLE}`, marginTop: "14px", paddingTop: "14px" }}>
                   <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: "0 0 8px" }}>
                     Payment methods
                   </p>
@@ -830,7 +809,7 @@ export default async function BookingViewPage({
                 </div>
               )}
 
-              <div style={{ borderTop: "0.5px solid rgba(255,255,255,0.06)", marginTop: "14px", paddingTop: "14px" }}>
+              <div style={{ borderTop: `0.5px solid ${BOOK_SUBTLE}`, marginTop: "14px", paddingTop: "14px" }}>
                 {canRespondToProposal ? (
                   <div style={{ display: "grid", gap: "12px" }}>
                     <p style={{ fontFamily: LATO, fontSize: "12px", color: WHITE, lineHeight: 1.75, margin: 0 }}>
@@ -847,7 +826,7 @@ export default async function BookingViewPage({
                             fontSize: "10px",
                             letterSpacing: "2px",
                             textTransform: "uppercase",
-                            color: CHARCOAL,
+                            color: GOLD_CTA,
                             backgroundColor: GOLD,
                             border: "none",
                             padding: "13px 18px",
@@ -868,8 +847,8 @@ export default async function BookingViewPage({
                             letterSpacing: "2px",
                             textTransform: "uppercase",
                             color: WHITE,
-                            backgroundColor: "rgba(255,255,255,0.04)",
-                            border: "0.5px solid rgba(255,255,255,0.12)",
+                            backgroundColor: GLASS1,
+                            border: "0.5px solid var(--oraya-border)",
                             padding: "13px 18px",
                             cursor: "pointer",
                           }}
@@ -903,7 +882,7 @@ export default async function BookingViewPage({
               </div>
             </div>
           ) : (
-            <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", padding: "1.75rem", marginBottom: "2rem", textAlign: "left", backgroundColor: "rgba(197,164,109,0.04)" }}>
+            <div style={{ border: "0.5px solid var(--oraya-border)", padding: "1.75rem", marginBottom: "2rem", textAlign: "left", backgroundColor: GLG3 }}>
               <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, marginBottom: "0.75rem" }}>
                 Next steps
               </p>
@@ -916,7 +895,7 @@ export default async function BookingViewPage({
             </div>
           )
         ) : (
-          <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", padding: "1.75rem", marginBottom: "2rem", textAlign: "left", backgroundColor: "rgba(197,164,109,0.04)" }}>
+          <div style={{ border: "0.5px solid var(--oraya-border)", padding: "1.75rem", marginBottom: "2rem", textAlign: "left", backgroundColor: GLG3 }}>
             <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, marginBottom: "1rem" }}>
               Estimated booking total
             </p>
@@ -928,7 +907,7 @@ export default async function BookingViewPage({
                   justifyContent: "space-between",
                   gap: "16px",
                   padding: isTotal ? "12px 0 0" : "9px 0",
-                  borderTop: isTotal ? "0.5px solid rgba(197,164,109,0.25)" : "0.5px solid rgba(255,255,255,0.05)",
+                  borderTop: isTotal ? "0.5px solid var(--oraya-book-input-border)" : `0.5px solid ${BOOK_SUBTLE}`,
                 }}
               >
                 <span style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED }}>
@@ -945,11 +924,11 @@ export default async function BookingViewPage({
         {booking.status === "pending" && !isEventInquiry && (
           <div
             style={{
-              border: "0.5px solid rgba(197,164,109,0.22)",
+              border: "0.5px solid var(--oraya-border)",
               padding: "1.75rem",
               marginBottom: "2rem",
               textAlign: "left",
-              backgroundColor: "rgba(255,255,255,0.02)",
+              backgroundColor: GLASS1,
             }}
           >
             <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 12px" }}>
@@ -958,7 +937,7 @@ export default async function BookingViewPage({
             <p style={{ fontFamily: PLAYFAIR, fontSize: "1.05rem", color: WHITE, margin: "0 0 10px", lineHeight: 1.35 }}>
               Online payment portal (coming soon)
             </p>
-            <p style={{ fontFamily: LATO, fontSize: "13px", color: "rgba(255,255,255,0.82)", lineHeight: 1.7, margin: 0 }}>
+            <p style={{ fontFamily: LATO, fontSize: "13px", color: BOOK_P82, lineHeight: 1.7, margin: 0 }}>
               Payment is not processed yet. Oraya will confirm availability and review your request first; payment will be requested only after your stay is confirmed and coordinated with you.
             </p>
           </div>
@@ -967,11 +946,11 @@ export default async function BookingViewPage({
         {showConfirmedPaymentCard && (
           <div
             style={{
-              border: paymentOverdue ? "0.5px solid rgba(224,112,112,0.32)" : "0.5px solid rgba(197,164,109,0.2)",
+              border: paymentOverdue ? "0.5px solid rgba(224,112,112,0.32)" : "0.5px solid var(--oraya-border)",
               padding: "1.75rem",
               marginBottom: "2rem",
               textAlign: "left",
-              backgroundColor: paymentOverdue ? "rgba(224,112,112,0.05)" : "rgba(255,255,255,0.015)",
+              backgroundColor: paymentOverdue ? "rgba(224,112,112,0.05)" : GLASS3,
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px", flexWrap: "wrap", marginBottom: "1rem" }}>
@@ -1044,15 +1023,15 @@ export default async function BookingViewPage({
                     </p>
                   )}
                 </div>
-                <div style={{ border: "0.5px solid rgba(197,164,109,0.16)", backgroundColor: "rgba(197,164,109,0.04)", padding: "14px 16px" }}>
+                <div style={{ border: "0.5px solid var(--oraya-border)", backgroundColor: GLG3, padding: "14px 16px" }}>
                   <div style={{ display: "grid", gap: "8px", marginBottom: "12px" }}>
                     <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
                       Pay via Whish
                     </p>
                     <div
                       style={{
-                        border: "0.5px solid rgba(197,164,109,0.16)",
-                        backgroundColor: "rgba(255,255,255,0.03)",
+                        border: "0.5px solid var(--oraya-border)",
+                        backgroundColor: GLASS1,
                         padding: "12px 14px",
                         borderRadius: "8px",
                       }}
@@ -1069,8 +1048,8 @@ export default async function BookingViewPage({
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", flexWrap: "wrap" }}>
                       <div
                         style={{
-                          border: "0.5px solid rgba(197,164,109,0.16)",
-                          backgroundColor: "rgba(255,255,255,0.03)",
+                          border: "0.5px solid var(--oraya-border)",
+                          backgroundColor: GLASS1,
                           padding: "12px 14px",
                           borderRadius: "8px",
                           flex: "1 1 180px",
@@ -1117,8 +1096,8 @@ export default async function BookingViewPage({
                 {balanceDue !== null && (
                   <div
                     style={{
-                      border: "0.5px solid rgba(197,164,109,0.18)",
-                      backgroundColor: "rgba(197,164,109,0.06)",
+                      border: "0.5px solid var(--oraya-border)",
+                      backgroundColor: GLG4,
                       borderRadius: "8px",
                       padding: "12px 14px",
                     }}
@@ -1174,7 +1153,7 @@ export default async function BookingViewPage({
             )}
 
             {booking.refund_status && (
-              <div style={{ borderTop: "0.5px solid rgba(255,255,255,0.06)", marginTop: "14px", paddingTop: "14px", display: "grid", gap: "8px" }}>
+              <div style={{ borderTop: `0.5px solid ${BOOK_SUBTLE}`, marginTop: "14px", paddingTop: "14px", display: "grid", gap: "8px" }}>
                 <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
                   Refund
                 </p>
@@ -1194,7 +1173,7 @@ export default async function BookingViewPage({
 
         {/* Message card (if any) — event inquiries: guest text only (no structured estimate JSON). */}
         {((isEventInquiry && eventGuestNotes) || (!isEventInquiry && booking.message)) && (
-          <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", padding: "1.75rem", marginBottom: "2.5rem", textAlign: "left" }}>
+          <div style={{ border: "0.5px solid var(--oraya-border)", padding: "1.75rem", marginBottom: "2.5rem", textAlign: "left" }}>
             <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, marginBottom: "0.75rem" }}>
               Your note
             </p>
@@ -1215,7 +1194,7 @@ export default async function BookingViewPage({
               fontSize:       "11px",
               letterSpacing:  "2.5px",
               textTransform:  "uppercase",
-              color:          CHARCOAL,
+              color:          GOLD_CTA,
               backgroundColor: GOLD,
               padding:        "15px 36px",
               textDecoration: "none",
@@ -1232,8 +1211,8 @@ export default async function BookingViewPage({
               letterSpacing:  "2px",
               textTransform:  "uppercase",
               color:          WHITE,
-              backgroundColor: "rgba(255,255,255,0.06)",
-              border:         "0.5px solid rgba(197,164,109,0.35)",
+              backgroundColor: GLASS1,
+              border:         "0.5px solid var(--oraya-book-input-border)",
               padding:        "15px 36px",
               textDecoration: "none",
             }}
@@ -1267,10 +1246,10 @@ export default async function BookingViewPage({
           )}
         </div>
 
-        <p style={{ fontFamily: LATO, fontSize: "11px", color: "rgba(255,255,255,0.2)", marginTop: "2.5rem" }}>
+        <p style={{ fontFamily: LATO, fontSize: "11px", color: "var(--oraya-book-p20)", marginTop: "2.5rem" }}>
           This link is unique to your booking and expires at the end of your stay.
         </p>
       </div>
-    </main>
+    </PublicTrustShell>
   );
 }
