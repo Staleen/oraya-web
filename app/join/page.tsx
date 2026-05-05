@@ -2,24 +2,26 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import OrayaEmblem from "@/components/OrayaEmblem";
+import PublicThemeToggle from "@/components/PublicThemeToggle";
 import { supabase } from "@/lib/supabase";
 
-const GOLD      = "#C5A46D";
-const WHITE     = "#FFFFFF";
-const MIDNIGHT  = "#1F2B38";
-const CHARCOAL  = "#2E2E2E";
-const MUTED     = "#8a8070";
+const GOLD      = "var(--oraya-gold)";
+const GOLD_CTA  = "var(--oraya-gold-cta-text)";
+const PAGE_BG   = "var(--oraya-bg)";
+const CARD      = "var(--oraya-surface)";
+const INK       = "var(--oraya-ink)";
+const MUTED     = "var(--oraya-text-muted)";
 const PLAYFAIR  = "'Playfair Display', Georgia, serif";
 const LATO      = "'Lato', system-ui, sans-serif";
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
-  backgroundColor: "rgba(255,255,255,0.04)",
-  border: "0.5px solid rgba(197,164,109,0.25)",
+  backgroundColor: "var(--oraya-book-input-bg)",
+  border: "0.5px solid var(--oraya-book-input-border)",
   padding: "14px 16px",
   fontFamily: LATO,
   fontSize: "14px",
-  color: WHITE,
+  color: "var(--oraya-book-text-on-field)",
   outline: "none",
   boxSizing: "border-box",
 };
@@ -29,7 +31,7 @@ const labelStyle: React.CSSProperties = {
   fontSize: "10px",
   letterSpacing: "2px",
   textTransform: "uppercase",
-  color: MUTED,
+  color: "var(--oraya-book-label)",
   display: "block",
   marginBottom: "6px",
 };
@@ -151,6 +153,8 @@ const DIAL_CODES = [
   { flag: "🇾🇪", label: "Yemen",        code: "+967" },
 ];
 
+const optBg = "var(--oraya-book-option-bg)";
+
 export default function JoinPage() {
   const router = useRouter();
   const [form, setForm] = useState({
@@ -226,195 +230,212 @@ export default function JoinPage() {
     e.currentTarget.style.borderColor = GOLD;
   };
   const blurBorder = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) => {
-    e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)";
+    e.currentTarget.style.borderColor = "var(--oraya-book-input-border)";
   };
 
   return (
-    <main
-      className="min-h-screen flex items-center justify-center"
-      style={{ backgroundColor: MIDNIGHT, padding: "80px 24px" }}
-    >
-      <div style={{ width: "100%", maxWidth: "480px" }}>
-        {/* Logo */}
-        <a href="/" style={{ display: "block", width: "52px", margin: "0 auto 2.5rem", cursor: "pointer" }}>
+    <div style={{ minHeight: "100vh", backgroundColor: PAGE_BG, overflowX: "hidden" }}>
+      <nav
+        className="fixed top-0 left-0 right-0 z-[100] flex justify-between items-center gap-2 backdrop-blur-[8px] min-w-0"
+        style={{
+          padding: "1.1rem clamp(1rem, 4vw, 3rem)",
+          backgroundColor: "var(--oraya-nav-bg)",
+          borderBottom: "0.5px solid var(--oraya-nav-border)",
+        }}
+      >
+        <a href="/" className="w-11 h-11 shrink-0 block" style={{ cursor: "pointer" }}>
           <OrayaEmblem />
         </a>
+        <PublicThemeToggle variant="public" />
+      </nav>
 
-        {/* Heading */}
-        <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
-          <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "4px", textTransform: "uppercase", color: GOLD, marginBottom: "12px" }}>
-            Membership
-          </p>
-          <h1 style={{ fontFamily: PLAYFAIR, fontSize: "2rem", fontWeight: 400, color: WHITE, margin: 0 }}>
-            Join Oraya
-          </h1>
-          <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, marginTop: "10px", lineHeight: 1.7 }}>
-            Create your member profile for exclusive access and priority booking.
-          </p>
-        </div>
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-
-          <div>
-            <label style={labelStyle}>Full name</label>
-            <input
-              name="fullName" type="text" required
-              value={form.fullName} onChange={handleChange}
-              placeholder="Your full name"
-              style={inputStyle}
-              onFocus={focusBorder} onBlur={blurBorder}
-            />
+      <main
+        className="flex items-center justify-center"
+        style={{ padding: "96px 24px 80px", minHeight: "100vh", boxSizing: "border-box" }}
+      >
+        <div
+          style={{
+            width: "100%",
+            maxWidth: "480px",
+            backgroundColor: CARD,
+            border: "0.5px solid var(--oraya-border)",
+            padding: "clamp(1.5rem, 4vw, 2.5rem)",
+            boxSizing: "border-box",
+          }}
+        >
+          <div style={{ textAlign: "center", marginBottom: "2rem" }}>
+            <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "4px", textTransform: "uppercase", color: GOLD, marginBottom: "12px" }}>
+              Membership
+            </p>
+            <h1 style={{ fontFamily: PLAYFAIR, fontSize: "2rem", fontWeight: 400, color: INK, margin: 0 }}>
+              Join Oraya
+            </h1>
+            <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, marginTop: "10px", lineHeight: 1.7 }}>
+              Create your member profile for exclusive access and priority booking.
+            </p>
           </div>
 
-          <div>
-            <label style={labelStyle}>Email address</label>
-            <input
-              name="email" type="email" required
-              value={form.email} onChange={handleChange}
-              placeholder="you@example.com"
-              style={inputStyle}
-              onFocus={focusBorder} onBlur={blurBorder}
-            />
-          </div>
+          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
 
-          <div>
-            <label style={labelStyle}>Password</label>
-            <input
-              name="password" type="password" required minLength={8}
-              value={form.password} onChange={handleChange}
-              placeholder="Minimum 8 characters"
-              style={inputStyle}
-              onFocus={focusBorder} onBlur={blurBorder}
-            />
-          </div>
+            <div>
+              <label style={labelStyle}>Full name</label>
+              <input
+                name="fullName" type="text" required
+                value={form.fullName} onChange={handleChange}
+                placeholder="Your full name"
+                style={inputStyle}
+                onFocus={focusBorder} onBlur={blurBorder}
+              />
+            </div>
 
-          {/* Phone with dial code */}
-          <div>
-            <label style={labelStyle}>Phone number</label>
-            <div style={{ display: "flex", gap: "0" }}>
+            <div>
+              <label style={labelStyle}>Email address</label>
+              <input
+                name="email" type="email" required
+                value={form.email} onChange={handleChange}
+                placeholder="you@example.com"
+                style={inputStyle}
+                onFocus={focusBorder} onBlur={blurBorder}
+              />
+            </div>
+
+            <div>
+              <label style={labelStyle}>Password</label>
+              <input
+                name="password" type="password" required minLength={8}
+                value={form.password} onChange={handleChange}
+                placeholder="Minimum 8 characters"
+                style={inputStyle}
+                onFocus={focusBorder} onBlur={blurBorder}
+              />
+            </div>
+
+            <div>
+              <label style={labelStyle}>Phone number</label>
+              <div style={{ display: "flex", gap: "0" }}>
+                <select
+                  name="dialCode"
+                  value={form.dialCode}
+                  onChange={handleChange}
+                  onFocus={focusBorder}
+                  onBlur={blurBorder}
+                  style={{
+                    ...inputStyle,
+                    width: "auto",
+                    flexShrink: 0,
+                    paddingRight: "10px",
+                    borderRight: "none",
+                    cursor: "pointer",
+                    appearance: "none",
+                    minWidth: "120px",
+                  }}
+                >
+                  {DIAL_CODES.map((d, i) =>
+                    d.code === "" ? (
+                      <option key={`div-${i}`} disabled value="" style={{ backgroundColor: optBg, color: MUTED }}>
+                        {d.label}
+                      </option>
+                    ) : (
+                      <option key={`${d.code}-${d.label}`} value={d.code} style={{ backgroundColor: optBg }}>
+                        {d.flag} {d.code}
+                      </option>
+                    )
+                  )}
+                </select>
+                <input
+                  name="phoneNumber"
+                  type="tel"
+                  value={form.phoneNumber}
+                  onChange={handleChange}
+                  placeholder="70 000 000"
+                  style={{ ...inputStyle, flex: 1 }}
+                  onFocus={focusBorder}
+                  onBlur={blurBorder}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label style={labelStyle}>Country</label>
               <select
-                name="dialCode"
-                value={form.dialCode}
+                name="country"
+                value={form.country}
                 onChange={handleChange}
                 onFocus={focusBorder}
                 onBlur={blurBorder}
-                style={{
-                  ...inputStyle,
-                  width: "auto",
-                  flexShrink: 0,
-                  paddingRight: "10px",
-                  borderRight: "none",
-                  cursor: "pointer",
-                  appearance: "none",
-                  minWidth: "120px",
-                }}
+                style={{ ...inputStyle, cursor: "pointer", appearance: "none" }}
               >
-                {DIAL_CODES.map((d, i) =>
-                  d.code === "" ? (
-                    <option key={`div-${i}`} disabled value="" style={{ backgroundColor: MIDNIGHT, color: MUTED }}>
-                      {d.label}
+                {COUNTRIES.map((c, i) =>
+                  c.value === "" ? (
+                    <option key={`div-${i}`} disabled value="" style={{ backgroundColor: optBg, color: MUTED }}>
+                      {c.label}
                     </option>
                   ) : (
-                    <option key={`${d.code}-${d.label}`} value={d.code} style={{ backgroundColor: MIDNIGHT }}>
-                      {d.flag} {d.code}
+                    <option key={c.value} value={c.value} style={{ backgroundColor: optBg }}>
+                      {c.label}
                     </option>
                   )
                 )}
               </select>
+            </div>
+
+            <div>
+              <label style={labelStyle}>Address</label>
               <input
-                name="phoneNumber"
-                type="tel"
-                value={form.phoneNumber}
-                onChange={handleChange}
-                placeholder="70 000 000"
-                style={{ ...inputStyle, flex: 1 }}
-                onFocus={focusBorder}
-                onBlur={blurBorder}
+                name="address" type="text"
+                value={form.address} onChange={handleChange}
+                placeholder="City, region"
+                style={inputStyle}
+                onFocus={focusBorder} onBlur={blurBorder}
               />
             </div>
-          </div>
 
-          <div>
-            <label style={labelStyle}>Country</label>
-            <select
-              name="country"
-              value={form.country}
-              onChange={handleChange}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
-              style={{ ...inputStyle, cursor: "pointer", appearance: "none" }}
+            {error === "__already_registered__" ? (
+              <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070", textAlign: "center", lineHeight: 1.7 }}>
+                This email is already registered.{" "}
+                <a href="/login" style={{ color: GOLD, textDecoration: "underline" }}>Sign in instead</a>
+                {" "}— or contact us if you need help accessing your account.
+              </p>
+            ) : error ? (
+              <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070", textAlign: "center" }}>
+                {error}
+              </p>
+            ) : null}
+
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                fontFamily: LATO,
+                fontSize: "11px",
+                letterSpacing: "2.5px",
+                textTransform: "uppercase",
+                color: GOLD_CTA,
+                backgroundColor: GOLD,
+                border: "none",
+                padding: "16px",
+                cursor: loading ? "not-allowed" : "pointer",
+                opacity: loading ? 0.7 : 1,
+                marginTop: "4px",
+              }}
             >
-              {COUNTRIES.map((c, i) =>
-                c.value === "" ? (
-                  <option key={`div-${i}`} disabled value="" style={{ backgroundColor: MIDNIGHT, color: MUTED }}>
-                    {c.label}
-                  </option>
-                ) : (
-                  <option key={c.value} value={c.value} style={{ backgroundColor: MIDNIGHT }}>
-                    {c.label}
-                  </option>
-                )
-              )}
-            </select>
-          </div>
+              {loading ? "Creating account…" : "Create member account"}
+            </button>
+          </form>
 
-          <div>
-            <label style={labelStyle}>Address</label>
-            <input
-              name="address" type="text"
-              value={form.address} onChange={handleChange}
-              placeholder="City, region"
-              style={inputStyle}
-              onFocus={focusBorder} onBlur={blurBorder}
-            />
-          </div>
-
-          {error === "__already_registered__" ? (
-            <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070", textAlign: "center", lineHeight: 1.7 }}>
-              This email is already registered.{" "}
-              <a href="/login" style={{ color: GOLD, textDecoration: "underline" }}>Sign in instead</a>
-              {" "}— or contact us if you need help accessing your account.
-            </p>
-          ) : error ? (
-            <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070", textAlign: "center" }}>
-              {error}
-            </p>
-          ) : null}
-
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              fontFamily: LATO,
-              fontSize: "11px",
-              letterSpacing: "2.5px",
-              textTransform: "uppercase",
-              color: CHARCOAL,
-              backgroundColor: GOLD,
-              border: "none",
-              padding: "16px",
-              cursor: loading ? "not-allowed" : "pointer",
-              opacity: loading ? 0.7 : 1,
-              marginTop: "4px",
-            }}
-          >
-            {loading ? "Creating account…" : "Create member account"}
-          </button>
-        </form>
-
-        <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, textAlign: "center", marginTop: "2rem" }}>
-          Already a member?{" "}
-          <a
-            href="/login"
-            style={{ color: GOLD, textDecoration: "none" }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = "underline"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = "none"; }}
-          >
-            Sign in
-          </a>
-        </p>
-      </div>
-    </main>
+          <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, textAlign: "center", marginTop: "2rem" }}>
+            Already a member?{" "}
+            <a
+              href="/login"
+              style={{ color: GOLD, textDecoration: "none" }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = "underline"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = "none"; }}
+            >
+              Sign in
+            </a>
+          </p>
+        </div>
+      </main>
+    </div>
   );
 }

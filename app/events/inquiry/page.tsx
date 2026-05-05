@@ -5,6 +5,7 @@ import { DayPicker } from "react-day-picker";
 import type { DateRange, Matcher } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 import OrayaEmblem from "@/components/OrayaEmblem";
+import PublicThemeToggle from "@/components/PublicThemeToggle";
 import {
   ADDON_OPERATIONAL_SETTINGS_KEY,
   getAddonAppliesTo,
@@ -44,12 +45,29 @@ import {
   getRequiredEventServiceGroups,
 } from "@/lib/event-service-requirements";
 
-// ─── Brand constants ──────────────────────────────────────────────────────────
-const GOLD     = "#C5A46D";
-const WHITE    = "#FFFFFF";
-const MIDNIGHT = "#1F2B38";
-const CHARCOAL = "#2E2E2E";
-const MUTED    = "#8a8070";
+// ─── Brand constants (theme tokens from globals.css; matches /book) ───────────
+const GOLD       = "var(--oraya-gold)";
+const PAGE_BG    = "var(--oraya-book-bg)";
+const WHITE      = "var(--oraya-book-heading)";
+const CHARCOAL   = "var(--oraya-ink)";
+const GOLD_CTA   = "var(--oraya-gold-cta-text)";
+const MUTED      = "var(--oraya-book-muted)";
+const BOOK_SOFT  = "var(--oraya-book-text-soft)";
+const BOOK_SOFT2 = "var(--oraya-book-text-soft-2)";
+const BOOK_DIM   = "var(--oraya-book-text-dim)";
+const GLASS1     = "var(--oraya-book-surface-1)";
+const GLASS3     = "var(--oraya-book-surface-3)";
+const GLG1       = "var(--oraya-book-surface-gold)";
+const GLG3       = "var(--oraya-book-surface-gold-3)";
+const GLG4       = "var(--oraya-book-surface-gold-4)";
+const OPT_BG     = "var(--oraya-book-option-bg)";
+const BOOK_P82   = "var(--oraya-book-p82)";
+const BOOK_P78   = "var(--oraya-book-p78)";
+const BOOK_P76   = "var(--oraya-book-p76)";
+const BOOK_P72   = "var(--oraya-book-p72)";
+const BOOK_P68   = "var(--oraya-book-p68)";
+const BOOK_P60   = "var(--oraya-book-p60)";
+const BOOK_SUBTLE = "var(--oraya-book-subtle-line)";
 const PLAYFAIR = "'Playfair Display', Georgia, serif";
 const LATO     = "'Lato', system-ui, sans-serif";
 
@@ -171,12 +189,12 @@ const COUNTRIES = [
 // ─── Shared styles ────────────────────────────────────────────────────────────
 const inputStyle: React.CSSProperties = {
   width: "100%",
-  backgroundColor: "rgba(255,255,255,0.04)",
-  border: "0.5px solid rgba(197,164,109,0.25)",
+  backgroundColor: "var(--oraya-book-input-bg)",
+  border: "0.5px solid var(--oraya-book-input-border)",
   padding: "14px 16px",
   fontFamily: LATO,
   fontSize: "14px",
-  color: WHITE,
+  color: "var(--oraya-book-text-on-field)",
   outline: "none",
   boxSizing: "border-box",
   appearance: "none",
@@ -186,7 +204,7 @@ const labelStyle: React.CSSProperties = {
   fontFamily: LATO,
   fontSize: "14px",
   letterSpacing: "0.4px",
-  color: "rgba(255,255,255,0.82)",
+  color: "var(--oraya-book-label)",
   display: "block",
   marginBottom: "8px",
 };
@@ -344,58 +362,85 @@ function formatSelectedEventService(service: EventServiceOption, quantity: numbe
   return `${service.label} - requested`;
 }
 
-// ─── Calendar CSS (dark-theme overrides) ──────────────────────────────────────
+// ─── Calendar CSS (react-day-picker; html data-theme tokens — same as /book) ───
 const CALENDAR_CSS = `
   .oraya-cal { display: flex; justify-content: center; }
+
   .oraya-cal .rdp {
     --rdp-cell-size: 38px;
-    --rdp-accent-color: ${GOLD};
-    --rdp-background-color: rgba(197,164,109,0.15);
+    --rdp-accent-color: var(--oraya-gold);
+    --rdp-background-color: var(--oraya-rdp-bg);
     margin: 0;
     font-family: 'Lato', system-ui, sans-serif;
     font-size: 13px;
-    color: rgba(255,255,255,0.75);
+    color: var(--oraya-cal-day);
   }
+
   .oraya-cal .rdp-caption_label {
-    font-size: 11px; letter-spacing: 2.5px; text-transform: uppercase;
-    font-weight: 400; color: ${GOLD};
+    font-size: 11px;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    font-weight: 400;
+    color: var(--oraya-gold);
   }
+
   .oraya-cal .rdp-head_cell {
-    font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase;
-    font-weight: 400; color: ${MUTED};
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    font-weight: 400;
+    color: var(--oraya-book-muted);
   }
-  .oraya-cal .rdp-nav_button { color: ${GOLD}; }
-  .oraya-cal .rdp-nav_button:hover { background-color: rgba(197,164,109,0.12); }
-  .oraya-cal .rdp-day { color: rgba(255,255,255,0.75); border-radius: 2px; }
+
+  .oraya-cal .rdp-nav_button { color: var(--oraya-gold); }
+  .oraya-cal .rdp-nav_button:hover { background-color: var(--oraya-rdp-nav-hover); }
+
+  .oraya-cal .rdp-day { color: var(--oraya-cal-day); border-radius: 2px; }
   .oraya-cal .rdp-day:hover:not([disabled]):not(.rdp-day_selected):not(.rdp-day_range_middle) {
-    background-color: rgba(197,164,109,0.2); color: ${GOLD};
+    background-color: var(--oraya-rdp-hover);
+    color: var(--oraya-gold);
   }
-  .oraya-cal .rdp-day_range_start, .oraya-cal .rdp-day_range_end {
-    background-color: ${GOLD} !important; color: ${CHARCOAL} !important;
-    font-weight: 700; border-radius: 2px !important;
+
+  .oraya-cal .rdp-day_range_start,
+  .oraya-cal .rdp-day_range_end {
+    background-color: var(--oraya-gold) !important;
+    color: var(--oraya-gold-cta-text) !important;
+    font-weight: 700;
+    border-radius: 2px !important;
   }
+
   .oraya-cal .rdp-day_range_middle {
-    background-color: rgba(197,164,109,0.15);
-    color: rgba(255,255,255,0.8); border-radius: 0;
+    background-color: var(--oraya-rdp-range);
+    color: var(--oraya-cal-range-mid);
+    border-radius: 0;
   }
+
   .oraya-cal .rdp-day_disabled {
-    color: rgba(255,255,255,0.2) !important;
-    text-decoration: line-through; opacity: 0.5;
+    color: var(--oraya-cal-day-muted) !important;
+    text-decoration: line-through;
+    opacity: 0.5;
   }
+
   .oraya-cal .rdp-day_deadCheckIn:not(.rdp-day_selected):not(.rdp-day_range_middle):not(.rdp-day_range_start):not(.rdp-day_range_end) {
-    color: rgba(255,255,255,0.28);
+    color: var(--oraya-cal-dead);
     text-decoration: line-through;
     cursor: not-allowed;
   }
-  .oraya-cal .rdp-day_outside { color: rgba(255,255,255,0.15); }
+
+  .oraya-cal .rdp-day_outside { color: var(--oraya-cal-outside); }
+
   .oraya-cal .rdp-day_today:not(.rdp-day_selected):not(.rdp-day_range_middle):not(.rdp-day_range_start):not(.rdp-day_range_end) {
-    border: 1px solid rgba(197,164,109,0.4); color: ${GOLD};
+    border: 1px solid rgba(197,164,109,0.4);
+    color: var(--oraya-gold);
   }
+
   .oraya-cal .rdp-months { gap: 24px; }
+
   @media (max-width: 640px) {
     .oraya-cal .rdp-months { flex-direction: column; }
     .oraya-cal .rdp { --rdp-cell-size: 34px; }
   }
+
   @keyframes stepFadeIn {
     from { opacity: 0; transform: translateY(8px); }
     to   { opacity: 1; transform: translateY(0);   }
@@ -413,11 +458,11 @@ function StepIndicator({ step }: { step: number }) {
           <div key={s} style={{ display: "flex", alignItems: "center" }}>
             <div style={{
               width: "26px", height: "26px", borderRadius: "50%", flexShrink: 0,
-              border: `1px solid ${step >= s ? GOLD : "rgba(197,164,109,0.2)"}`,
+              border: `1px solid ${step >= s ? GOLD : "var(--oraya-border)"}`,
               backgroundColor: step === s ? GOLD : "transparent",
               display: "flex", alignItems: "center", justifyContent: "center",
               fontFamily: LATO, fontSize: "10px",
-              color: step === s ? CHARCOAL : step > s ? GOLD : "rgba(197,164,109,0.3)",
+              color: step === s ? CHARCOAL : step > s ? GOLD : "var(--oraya-step-inactive)",
               transition: "background-color 0.2s, border-color 0.2s",
             }}>
               {step > s ? "✓" : s}
@@ -425,7 +470,7 @@ function StepIndicator({ step }: { step: number }) {
             {i < 2 && (
               <div style={{
                 width: "40px", height: "0.5px",
-                backgroundColor: step > s ? GOLD : "rgba(197,164,109,0.15)",
+                backgroundColor: step > s ? GOLD : "var(--oraya-step-line)",
                 transition: "background-color 0.2s",
               }} />
             )}
@@ -433,8 +478,8 @@ function StepIndicator({ step }: { step: number }) {
         ))}
       </div>
       <p style={{
-        fontFamily: LATO, fontSize: "9px", letterSpacing: "2.5px",
-        textTransform: "uppercase", color: GOLD, marginTop: "10px", marginBottom: 0,
+        fontFamily: LATO, fontSize: "12px", letterSpacing: "2px", textTransform: "uppercase",
+        color: GOLD, marginTop: "12px", marginBottom: 0, fontWeight: 400,
       }}>
         {labels[step - 1]}
       </p>
@@ -461,8 +506,8 @@ function EventEstimatePanel({
   return (
     <div
       style={{
-        border: "0.5px solid rgba(197,164,109,0.22)",
-        backgroundColor: "rgba(255,255,255,0.025)",
+        border: "0.5px solid var(--oraya-border)",
+        backgroundColor: GLG1,
         padding: "16px 18px",
         display: "flex",
         flexDirection: "column",
@@ -475,11 +520,11 @@ function EventEstimatePanel({
       <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0 }}>Starting from</p>
       {showBreakdown ? (
         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-          <p style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.88)", margin: 0 }}>
+          <p style={{ fontFamily: LATO, fontSize: "12px", color: BOOK_SOFT2, margin: 0 }}>
             Recommended setup: {cur} {fmt(rec)}
           </p>
           {upg > 0 ? (
-            <p style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.88)", margin: 0 }}>
+            <p style={{ fontFamily: LATO, fontSize: "12px", color: BOOK_SOFT2, margin: 0 }}>
               Optional upgrades selected: {cur} {fmt(upg)}
             </p>
           ) : null}
@@ -504,6 +549,24 @@ function EventEstimatePanel({
         Final proposal will be confirmed by Oraya after review. This is an estimate only, not a final quote.
       </p>
     </div>
+  );
+}
+
+function EventsInquiryNav() {
+  return (
+    <nav
+      className="fixed top-0 left-0 right-0 z-[100] flex justify-between items-center gap-2 backdrop-blur-[8px] min-w-0"
+      style={{
+        padding: "1.1rem clamp(1rem, 4vw, 3rem)",
+        backgroundColor: "var(--oraya-nav-bg)",
+        borderBottom: "0.5px solid var(--oraya-nav-border)",
+      }}
+    >
+      <a href="/" className="w-11 h-11 shrink-0 block" style={{ cursor: "pointer" }}>
+        <OrayaEmblem />
+      </a>
+      <PublicThemeToggle variant="public" />
+    </nav>
   );
 }
 
@@ -962,7 +1025,7 @@ function EventInquiryPageInner() {
     e.currentTarget.style.borderColor = GOLD;
   }
   function blurGold(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
-    e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)";
+    e.currentTarget.style.borderColor = "var(--oraya-book-input-border)";
   }
 
   function handleDateSelect(nextRange: DateRange | undefined, selectedDay: Date) {
@@ -1221,27 +1284,27 @@ function EventInquiryPageInner() {
   // ── Auth loading ──────────────────────────────────────────────────────────
   if (authStatus === "loading") {
     return (
-      <main style={{ backgroundColor: MIDNIGHT, minHeight: "100vh", padding: "80px 24px" }}>
-        <div style={{ width: "100%", maxWidth: "720px", margin: "0 auto" }} aria-hidden="true">
-          <div style={{ width: "52px", margin: "0 auto 2.5rem", opacity: 0.45 }}><OrayaEmblem /></div>
-          <p style={{ textAlign: "center", color: MUTED, fontFamily: LATO, fontSize: "12px" }}>Loading…</p>
-        </div>
-      </main>
+      <div style={{ minHeight: "100vh", backgroundColor: PAGE_BG, overflowX: "hidden" }}>
+        <EventsInquiryNav />
+        <main style={{ minHeight: "100vh", padding: "96px 24px 80px", boxSizing: "border-box" }}>
+          <div style={{ width: "100%", maxWidth: "720px", margin: "0 auto" }} aria-hidden="true">
+            <div style={{ width: "52px", margin: "0 auto 2.5rem", opacity: 0.45 }}><OrayaEmblem /></div>
+            <p style={{ textAlign: "center", color: MUTED, fontFamily: LATO, fontSize: "12px" }}>Loading…</p>
+          </div>
+        </main>
+      </div>
     );
   }
 
   const containerWidth = step === 1 && form.villa ? "720px" : "560px";
 
   return (
-    <main style={{ backgroundColor: MIDNIGHT, minHeight: "100vh", padding: "80px 24px" }}>
+    <div style={{ minHeight: "100vh", backgroundColor: PAGE_BG, overflowX: "hidden" }}>
+      <EventsInquiryNav />
+      <main style={{ minHeight: "100vh", padding: "96px 24px 80px", boxSizing: "border-box" }}>
       <style>{CALENDAR_CSS}</style>
 
       <div style={{ width: "100%", maxWidth: containerWidth, margin: "0 auto", transition: "max-width 0.3s ease" }}>
-
-        {/* Logo */}
-        <a href="/" style={{ display: "block", width: "52px", margin: "0 auto 2.5rem", cursor: "pointer" }}>
-          <OrayaEmblem />
-        </a>
 
         {/* Page heading */}
         <div style={{ textAlign: "center", marginBottom: "2rem" }}>
@@ -1251,25 +1314,25 @@ function EventInquiryPageInner() {
           <h1 style={{ fontFamily: PLAYFAIR, fontSize: "2rem", fontWeight: 400, color: WHITE, margin: "0 0 10px" }}>
             Plan Your Event
           </h1>
-          <p style={{ fontFamily: LATO, fontSize: "15px", color: "rgba(255,255,255,0.82)", lineHeight: 1.75, margin: "0 0 12px" }}>
+          <p style={{ fontFamily: LATO, fontSize: "15px", color: BOOK_P82, lineHeight: 1.75, margin: "0 0 12px" }}>
             Tell us what you are planning. We will review availability, setup, and services, and respond with a tailored proposal (typically within one business day).
           </p>
-          <p style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.72)", lineHeight: 1.7, margin: 0 }}>
+          <p style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_P72, lineHeight: 1.7, margin: 0 }}>
             Every event is reviewed and prepared by the Oraya team before confirmation. Coordinated support continues through your date. Questions:{" "}
             <a href="mailto:hello@stayoraya.com" style={{ color: GOLD, textDecoration: "none" }}>hello@stayoraya.com</a>
           </p>
         </div>
 
         {/* Standing inquiry banner */}
-        <div style={{ border: "0.5px solid rgba(197,164,109,0.25)", backgroundColor: "rgba(197,164,109,0.06)", padding: "12px 16px", marginBottom: "1.5rem", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
-          <p style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.8)", margin: 0, lineHeight: 1.65, flex: 1, minWidth: "240px" }}>
+        <div style={{ border: "0.5px solid var(--oraya-book-input-border)", backgroundColor: GLG4, padding: "12px 16px", marginBottom: "1.5rem", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
+          <p style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_P78, margin: 0, lineHeight: 1.65, flex: 1, minWidth: "240px" }}>
             This is an inquiry, not an instant booking. Event inquiries are reviewed as a full venue request, including guest flow, setup areas, and operational requirements. Nothing is confirmed until Oraya responds and aligns details with you.
           </p>
           <a
             href="/book"
-            style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.6px", color: "rgba(255,255,255,0.82)", backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.3)", padding: "10px 16px", textDecoration: "none", whiteSpace: "nowrap" }}
+            style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.6px", color: BOOK_P82, backgroundColor: "transparent", border: "0.5px solid var(--oraya-book-input-border)", padding: "10px 16px", textDecoration: "none", whiteSpace: "nowrap" }}
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = GOLD; (e.currentTarget as HTMLElement).style.color = GOLD; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(197,164,109,0.3)"; (e.currentTarget as HTMLElement).style.color = MUTED; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "var(--oraya-book-input-border)"; (e.currentTarget as HTMLElement).style.color = MUTED; }}
           >
             Book a stay instead
           </a>
@@ -1277,8 +1340,8 @@ function EventInquiryPageInner() {
 
         {/* Auth identity banner */}
         {authStatus === "member" ? (
-          <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: "rgba(197,164,109,0.04)", padding: "0.875rem 1.25rem", marginBottom: "2rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <p style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.6)", margin: 0 }}>
+          <div style={{ border: "0.5px solid var(--oraya-border)", backgroundColor: GLG3, padding: "0.875rem 1.25rem", marginBottom: "2rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <p style={{ fontFamily: LATO, fontSize: "12px", color: BOOK_P60, margin: 0 }}>
               Inquiring as <span style={{ color: GOLD }}>{memberName || "member"}</span>
             </p>
             <a href="/login" style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED, textDecoration: "none" }}
@@ -1313,9 +1376,9 @@ function EventInquiryPageInner() {
                         style={{
                           fontFamily: LATO, fontSize: "12px",
                           padding: "12px 14px", textAlign: "left",
-                          border: `0.5px solid ${selected ? GOLD : "rgba(197,164,109,0.2)"}`,
-                          backgroundColor: selected ? "rgba(197,164,109,0.1)" : "rgba(255,255,255,0.02)",
-                          color: selected ? WHITE : "rgba(255,255,255,0.7)",
+                          border: `0.5px solid ${selected ? GOLD : "var(--oraya-border)"}`,
+                          backgroundColor: selected ? "rgba(197,164,109,0.1)" : GLASS1,
+                          color: selected ? WHITE : BOOK_DIM,
                           cursor: "pointer",
                           transition: "border-color 0.15s, background-color 0.15s",
                         }}
@@ -1341,22 +1404,22 @@ function EventInquiryPageInner() {
                         style={{
                           display: "flex", alignItems: "flex-start", gap: "12px",
                           padding: "14px 16px", textAlign: "left", width: "100%",
-                          border: `0.5px solid ${selected ? GOLD : "rgba(197,164,109,0.18)"}`,
-                          backgroundColor: selected ? "rgba(197,164,109,0.08)" : "rgba(255,255,255,0.02)",
+                          border: `0.5px solid ${selected ? GOLD : "var(--oraya-border)"}`,
+                          backgroundColor: selected ? "rgba(197,164,109,0.08)" : GLASS1,
                           cursor: "pointer",
                           transition: "border-color 0.15s, background-color 0.15s",
                         }}
                       >
                         <div style={{
                           width: "16px", height: "16px", flexShrink: 0, marginTop: "2px",
-                          border: `1px solid ${selected ? GOLD : "rgba(197,164,109,0.3)"}`,
+                          border: `1px solid ${selected ? GOLD : "var(--oraya-book-input-border)"}`,
                           backgroundColor: selected ? GOLD : "transparent",
                           display: "flex", alignItems: "center", justifyContent: "center",
                         }}>
                           {selected && <span style={{ color: CHARCOAL, fontSize: "10px", fontWeight: 700, lineHeight: 1 }}>✓</span>}
                         </div>
                         <div style={{ flex: 1 }}>
-                          <p style={{ fontFamily: LATO, fontSize: "13px", color: selected ? WHITE : "rgba(255,255,255,0.7)", margin: "0 0 4px", fontWeight: selected ? 400 : 300 }}>
+                          <p style={{ fontFamily: LATO, fontSize: "13px", color: selected ? WHITE : BOOK_DIM, margin: "0 0 4px", fontWeight: selected ? 400 : 300 }}>
                             {et.label}
                           </p>
                           <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
@@ -1368,12 +1431,12 @@ function EventInquiryPageInner() {
                   })}
                 </div>
                 {selectedEventRecommendation && (
-                  <div style={{ marginTop: "14px", border: "0.5px solid rgba(197,164,109,0.22)", backgroundColor: "rgba(197,164,109,0.05)", padding: "16px 18px", display: "flex", flexDirection: "column", gap: "10px" }}>
+                  <div style={{ marginTop: "14px", border: "0.5px solid var(--oraya-border)", backgroundColor: GLG1, padding: "16px 18px", display: "flex", flexDirection: "column", gap: "10px" }}>
                     <div>
                       <p style={{ fontFamily: PLAYFAIR, fontSize: "18px", fontWeight: 400, color: WHITE, margin: "0 0 6px" }}>
                         {form.eventType}
                       </p>
-                      <p style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.72)", margin: 0, lineHeight: 1.65 }}>
+                      <p style={{ fontFamily: LATO, fontSize: "12px", color: BOOK_P72, margin: 0, lineHeight: 1.65 }}>
                         {selectedEventRecommendation.guidance}
                       </p>
                     </div>
@@ -1388,9 +1451,9 @@ function EventInquiryPageInner() {
                             style={{
                               fontFamily: LATO,
                               fontSize: "11px",
-                              color: service.key in selectedServiceQuantities ? WHITE : "rgba(255,255,255,0.72)",
-                              border: `0.5px solid ${service.key in selectedServiceQuantities ? GOLD : "rgba(197,164,109,0.18)"}`,
-                              backgroundColor: service.key in selectedServiceQuantities ? "rgba(197,164,109,0.08)" : "rgba(255,255,255,0.02)",
+                              color: service.key in selectedServiceQuantities ? WHITE : BOOK_P72,
+                              border: `0.5px solid ${service.key in selectedServiceQuantities ? GOLD : "var(--oraya-border)"}`,
+                              backgroundColor: service.key in selectedServiceQuantities ? "rgba(197,164,109,0.08)" : GLASS1,
                               padding: "7px 10px",
                             }}
                           >
@@ -1403,7 +1466,7 @@ function EventInquiryPageInner() {
                       <button
                         type="button"
                         onClick={addRecommendedPack}
-                        style={{ alignSelf: "flex-start", fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: CHARCOAL, backgroundColor: GOLD, border: "none", padding: "11px 18px", cursor: "pointer" }}
+                        style={{ alignSelf: "flex-start", fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "11px 18px", cursor: "pointer" }}
                         onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
                         onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
                       >
@@ -1418,10 +1481,10 @@ function EventInquiryPageInner() {
               {form.villa ? (
                 <div>
                   <p style={{ ...labelStyle, marginBottom: "10px" }}>Preferred date(s)</p>
-                  <p style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.78)", margin: "0 0 14px", lineHeight: 1.65 }}>
+                  <p style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_P78, margin: "0 0 14px", lineHeight: 1.65 }}>
                     Choose your event start and end. Dates already held—including the setup day before your start—are blocked the same way as stay booking. Oraya will confirm the final window with you.
                   </p>
-                  <div style={{ border: "0.5px solid rgba(197,164,109,0.12)", backgroundColor: "rgba(255,255,255,0.01)", padding: "1.25rem" }}>
+                  <div style={{ border: "0.5px solid var(--oraya-border)", backgroundColor: GLASS3, padding: "1.25rem" }}>
                     <div className="oraya-cal">
                       <DayPicker
                         // Remount when the prefilled start month changes so DayPicker focuses August (or whatever the guest picked) instead of today.
@@ -1440,7 +1503,7 @@ function EventInquiryPageInner() {
                   </div>
 
                   {eventDeadDayHints && (eventDeadDayHints.suggestLateCheckout || eventDeadDayHints.suggestEarlyCheckin) && (
-                    <p style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.76)", margin: "12px 0 0", lineHeight: 1.7 }}>
+                    <p style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_P76, margin: "12px 0 0", lineHeight: 1.7 }}>
                       {eventDeadDayHints.suggestEarlyCheckin
                         ? "Your window sits next to a tight one-day gap between other reservations. Access and load-in timing may need extra coordination—we will confirm with the proposal."
                         : "Your event end sits next to a short gap before the next hold. Wrap or load-out timing may need coordination—we will confirm with the proposal."}
@@ -1448,19 +1511,19 @@ function EventInquiryPageInner() {
                   )}
 
                   {checkIn && (
-                    <div style={{ marginTop: "14px", padding: "14px 20px", border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: "rgba(197,164,109,0.04)", display: "flex", flexWrap: "wrap", gap: "28px" }}>
+                    <div style={{ marginTop: "14px", padding: "14px 20px", border: "0.5px solid var(--oraya-border)", backgroundColor: GLG3, display: "flex", flexWrap: "wrap", gap: "28px" }}>
                       <div>
-                        <p style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.6px", color: "rgba(255,255,255,0.76)", margin: "0 0 6px" }}>Start</p>
+                        <p style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.6px", color: BOOK_P76, margin: "0 0 6px" }}>Start</p>
                         <p style={{ fontFamily: LATO, fontSize: "14px", color: WHITE, margin: 0 }}>{fmtDate(checkIn)}</p>
                       </div>
                       {checkOut ? (
                         <>
                           <div>
-                            <p style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.6px", color: "rgba(255,255,255,0.76)", margin: "0 0 6px" }}>End</p>
+                            <p style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.6px", color: BOOK_P76, margin: "0 0 6px" }}>End</p>
                             <p style={{ fontFamily: LATO, fontSize: "14px", color: WHITE, margin: 0 }}>{fmtDate(checkOut)}</p>
                           </div>
                           <div>
-                            <p style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.6px", color: "rgba(255,255,255,0.76)", margin: "0 0 6px" }}>Window</p>
+                            <p style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.6px", color: BOOK_P76, margin: "0 0 6px" }}>Window</p>
                             <p style={{ fontFamily: LATO, fontSize: "14px", color: GOLD, margin: 0 }}>
                               {nights} {nights === 1 ? "night" : "nights"}
                             </p>
@@ -1468,14 +1531,14 @@ function EventInquiryPageInner() {
                         </>
                       ) : (
                         <div style={{ display: "flex", alignItems: "center" }}>
-                          <p style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.76)", margin: 0 }}>Now select an end date</p>
+                          <p style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_P76, margin: 0 }}>Now select an end date</p>
                         </div>
                       )}
                     </div>
                   )}
                 </div>
               ) : (
-                <div style={{ border: "0.5px dashed rgba(197,164,109,0.15)", padding: "2rem", textAlign: "center" }}>
+                <div style={{ border: "0.5px dashed var(--oraya-step-line)", padding: "2rem", textAlign: "center" }}>
                   <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0, letterSpacing: "0.5px" }}>
                     Select a villa preference to view dates
                   </p>
@@ -1498,7 +1561,7 @@ function EventInquiryPageInner() {
                   style={inputStyle}
                   placeholder="e.g. 24"
                 />
-                <p style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.76)", marginTop: "8px", lineHeight: 1.6 }}>
+                <p style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_P76, marginTop: "8px", lineHeight: 1.6 }}>
                   Private events at Oraya are limited to {MAX_EVENT_ATTENDEES} attendees. Final capacity is confirmed after review.
                 </p>
               </div>
@@ -1511,7 +1574,7 @@ function EventInquiryPageInner() {
 
               <button
                 onClick={goNext}
-                style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: CHARCOAL, backgroundColor: GOLD, border: "none", padding: "16px", cursor: "pointer" }}
+                style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "16px", cursor: "pointer" }}
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
               >
@@ -1530,11 +1593,11 @@ function EventInquiryPageInner() {
                 <p style={{ fontFamily: PLAYFAIR, fontSize: "20px", fontWeight: 400, color: WHITE, margin: "0 0 6px" }}>
                   Services &amp; Setup Requirements
                 </p>
-                <p style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.78)", margin: "0 0 18px", lineHeight: 1.65 }}>
+                <p style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_P78, margin: "0 0 18px", lineHeight: 1.65 }}>
                   Select the services you may need. Oraya will review and confirm the final setup.
                 </p>
                 {selectedEventRecommendation && selectedEventRecommendation.recommendedServices.length > 0 && (
-                  <p style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.72)", margin: "0 0 16px", lineHeight: 1.65 }}>
+                  <p style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_P72, margin: "0 0 16px", lineHeight: 1.65 }}>
                     Recommended for {form.eventType}: {selectedEventRecommendation.recommendedServices.map((service) => service.label).join(", ")}.
                   </p>
                 )}
@@ -1556,8 +1619,8 @@ function EventInquiryPageInner() {
                             <div
                               key={service.key}
                               style={{
-                                border: `0.5px solid ${selected ? GOLD : "rgba(197,164,109,0.18)"}`,
-                                backgroundColor: selected ? "rgba(197,164,109,0.08)" : "rgba(255,255,255,0.02)",
+                                border: `0.5px solid ${selected ? GOLD : "var(--oraya-border)"}`,
+                                backgroundColor: selected ? "rgba(197,164,109,0.08)" : GLASS1,
                                 padding: "12px 14px",
                                 display: "flex",
                                 flexDirection: "column",
@@ -1580,23 +1643,23 @@ function EventInquiryPageInner() {
                               >
                                 <div style={{
                                   width: "14px", height: "14px", flexShrink: 0,
-                                  border: `1px solid ${selected ? GOLD : "rgba(197,164,109,0.3)"}`,
+                                  border: `1px solid ${selected ? GOLD : "var(--oraya-book-input-border)"}`,
                                   backgroundColor: selected ? GOLD : "transparent",
                                   display: "flex", alignItems: "center", justifyContent: "center",
                                 }}>
                                   {selected && <span style={{ color: CHARCOAL, fontSize: "9px", fontWeight: 700, lineHeight: 1 }}>✓</span>}
                                 </div>
                                 <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                                  <span style={{ fontFamily: LATO, fontSize: "14px", color: selected ? WHITE : "rgba(255,255,255,0.8)" }}>
+                                  <span style={{ fontFamily: LATO, fontSize: "14px", color: selected ? WHITE : BOOK_P78 }}>
                                     {service.label}
                                   </span>
                                   {service.description?.trim() ? (
-                                    <span style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.72)", lineHeight: 1.6, fontWeight: 300 }}>
+                                    <span style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_P72, lineHeight: 1.6, fontWeight: 300 }}>
                                       {service.description.trim()}
                                     </span>
                                   ) : null}
                                   {service.quantity_enabled && (
-                                    <span style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.72)", lineHeight: 1.55 }}>
+                                    <span style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_P72, lineHeight: 1.55 }}>
                                       Quantity supported{unitLabel ? ` - ${unitLabel}` : ""}
                                     </span>
                                   )}
@@ -1618,7 +1681,7 @@ function EventInquiryPageInner() {
                                     onBlur={blurGold}
                                     style={{ ...inputStyle, padding: "12px 14px" }}
                                   />
-                                  <p style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.74)", margin: 0, lineHeight: 1.55 }}>
+                                  <p style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_SOFT, margin: 0, lineHeight: 1.55 }}>
                                     Requested quantity: {quantity} {unitLabel ?? "units"}
                                   </p>
                                 </div>
@@ -1629,7 +1692,7 @@ function EventInquiryPageInner() {
                       </div>
                     </div>
                   )) : (
-                    <div style={{ border: "0.5px solid rgba(197,164,109,0.18)", backgroundColor: "rgba(255,255,255,0.02)", padding: "16px 18px" }}>
+                    <div style={{ border: "0.5px solid var(--oraya-border)", backgroundColor: GLASS1, padding: "16px 18px" }}>
                       <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0, lineHeight: 1.6 }}>
                         No event services are configured for this event type yet. Oraya will still review your requirements manually.
                       </p>
@@ -1639,11 +1702,11 @@ function EventInquiryPageInner() {
               </div>
 
               {/* Inquiry-only copy */}
-              <div style={{ border: "0.5px solid rgba(197,164,109,0.18)", backgroundColor: "rgba(197,164,109,0.04)", padding: "12px 16px" }}>
-                <p style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.76)", margin: "0 0 10px", lineHeight: 1.65 }}>
+              <div style={{ border: "0.5px solid var(--oraya-border)", backgroundColor: GLG3, padding: "12px 16px" }}>
+                <p style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_P76, margin: "0 0 10px", lineHeight: 1.65 }}>
                   Oraya will review your event requirements and respond with availability, setup options, and a tailored proposal — typically within one business day.
                 </p>
-                <p style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.78)", margin: 0, lineHeight: 1.65 }}>
+                <p style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_P78, margin: 0, lineHeight: 1.65 }}>
                   Final event pricing is reviewed and quoted by Oraya.
                 </p>
               </div>
@@ -1669,7 +1732,7 @@ function EventInquiryPageInner() {
                     <p style={{ fontFamily: LATO, fontSize: "14px", color: "#f0bd67", margin: "0 0 8px", lineHeight: 1.65 }}>
                       To prepare this event properly, please include the required setup for {form.eventType}.
                     </p>
-                    <p style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.76)", margin: 0, lineHeight: 1.65 }}>
+                    <p style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_P76, margin: 0, lineHeight: 1.65 }}>
                       Required: {requiredLabels}. Missing: {missingLabels}.
                     </p>
                   </div>
@@ -1686,11 +1749,11 @@ function EventInquiryPageInner() {
 
               <div style={{ display: "flex", gap: "12px" }}>
                 <button onClick={goBack}
-                  style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: "rgba(255,255,255,0.8)", backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", padding: "16px 24px", cursor: "pointer" }}>
+                  style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: BOOK_P78, backgroundColor: "transparent", border: "0.5px solid var(--oraya-book-input-border)", padding: "16px 24px", cursor: "pointer" }}>
                   ← Back
                 </button>
                 <button onClick={goNext}
-                  style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: CHARCOAL, backgroundColor: GOLD, border: "none", padding: "16px", flex: 1, cursor: "pointer" }}>
+                  style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "16px", flex: 1, cursor: "pointer" }}>
                   Continue →
                 </button>
               </div>
@@ -1707,7 +1770,7 @@ function EventInquiryPageInner() {
                 <p style={{ fontFamily: PLAYFAIR, fontSize: "20px", fontWeight: 400, color: WHITE, margin: "0 0 6px" }}>
                   Host Details
                 </p>
-                <p style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.78)", margin: "0 0 8px", lineHeight: 1.65 }}>
+                <p style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_P78, margin: "0 0 8px", lineHeight: 1.65 }}>
                   Event packages include overnight stay for the hosts. Review the summary below, then submit your inquiry in one step.
                 </p>
               </div>
@@ -1727,14 +1790,14 @@ function EventInquiryPageInner() {
                   onBlur={blurGold}
                   style={inputStyle}
                 />
-                <p style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.76)", marginTop: "8px", lineHeight: 1.6 }}>
+                <p style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_P76, marginTop: "8px", lineHeight: 1.6 }}>
                   Event packages include overnight stay for the hosts. Oraya will review the full package before confirmation.
                 </p>
               </div>
 
               {/* Guest contact (when not member) */}
               {authStatus !== "member" && (
-                <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: "rgba(255,255,255,0.02)", padding: "1.5rem", display: "flex", flexDirection: "column", gap: "16px" }}>
+                <div style={{ border: "0.5px solid var(--oraya-border)", backgroundColor: GLASS1, padding: "1.5rem", display: "flex", flexDirection: "column", gap: "16px" }}>
                   <p style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "1px", color: GOLD, margin: 0 }}>
                     Your contact details
                   </p>
@@ -1749,7 +1812,7 @@ function EventInquiryPageInner() {
                     <label style={labelStyle}>Email address</label>
                     <input name="email" type="email" required value={guest.email} onChange={handleGuestChange}
                       placeholder="you@example.com"
-                      style={{ ...inputStyle, borderColor: guestEmailInvalid ? "#e07070" : "rgba(197,164,109,0.25)" }}
+                      style={{ ...inputStyle, borderColor: guestEmailInvalid ? "#e07070" : "var(--oraya-book-input-border)" }}
                       onFocus={focusGold} onBlur={blurGold} />
                     {guestEmailInvalid && (
                       <p style={{ fontFamily: LATO, fontSize: "14px", color: "#e07070", marginTop: "8px", lineHeight: 1.6 }}>
@@ -1761,14 +1824,14 @@ function EventInquiryPageInner() {
                   <div>
                     <label style={labelStyle}>
                       Phone number{" "}
-                      <span style={{ color: "rgba(138,128,112,0.5)", letterSpacing: 0 }}>(optional)</span>
+                      <span style={{ color: MUTED, opacity: 0.55, letterSpacing: 0 }}>(optional)</span>
                     </label>
                     <div style={{ display: "flex" }}>
                       <select name="dialCode" value={guest.dialCode} onChange={handleGuestChange}
                         onFocus={focusGold} onBlur={blurGold}
                         style={{ ...inputStyle, width: "auto", flexShrink: 0, paddingRight: "10px", borderRight: "none", cursor: "pointer", minWidth: "120px" }}>
                         {DIAL_CODES.map(d => (
-                          <option key={`${d.code}-${d.label}`} value={d.code} style={{ backgroundColor: MIDNIGHT }}>{d.flag} {d.code}</option>
+                          <option key={`${d.code}-${d.label}`} value={d.code} style={{ backgroundColor: OPT_BG }}>{d.flag} {d.code}</option>
                         ))}
                       </select>
                       <input name="phoneNumber" type="tel" value={guest.phoneNumber} onChange={handleGuestChange}
@@ -1781,7 +1844,7 @@ function EventInquiryPageInner() {
                     <select name="country" value={guest.country} onChange={handleGuestChange}
                       onFocus={focusGold} onBlur={blurGold} style={{ ...inputStyle, cursor: "pointer" }}>
                       {COUNTRIES.map(c => (
-                        <option key={c} value={c} style={{ backgroundColor: MIDNIGHT }}>{c}</option>
+                        <option key={c} value={c} style={{ backgroundColor: OPT_BG }}>{c}</option>
                       ))}
                     </select>
                   </div>
@@ -1792,7 +1855,7 @@ function EventInquiryPageInner() {
               <div>
                 <label style={labelStyle}>
                   Notes / special requests{" "}
-                  <span style={{ color: "rgba(138,128,112,0.5)", letterSpacing: 0 }}>(optional)</span>
+                  <span style={{ color: MUTED, opacity: 0.55, letterSpacing: 0 }}>(optional)</span>
                 </label>
                 <textarea name="message" value={form.message} onChange={handleFormChange}
                   onFocus={focusGold} onBlur={blurGold}
@@ -1806,7 +1869,7 @@ function EventInquiryPageInner() {
                   Event inquiry summary
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginBottom: "16px" }}>
-                  <div style={{ border: "0.5px solid rgba(197,164,109,0.18)", padding: "1.25rem", backgroundColor: "rgba(255,255,255,0.015)" }}>
+                  <div style={{ border: "0.5px solid var(--oraya-border)", padding: "1.25rem", backgroundColor: GLASS3 }}>
                     <p style={{ fontFamily: PLAYFAIR, fontSize: "18px", fontWeight: 400, color: WHITE, margin: "0 0 12px" }}>
                       Event overview
                     </p>
@@ -1822,8 +1885,8 @@ function EventInquiryPageInner() {
                     ).map(([label, value]) => {
                       const isHighlight = label === "Event type" || label === "Attendees" || label === "Hosts overnight stay";
                       return (
-                        <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: isHighlight ? "12px 0" : "9px 0", borderBottom: "0.5px solid rgba(255,255,255,0.05)", gap: "16px" }}>
-                          <span style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.6px", color: "rgba(255,255,255,0.76)", flexShrink: 0, paddingRight: "16px" }}>
+                        <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: isHighlight ? "12px 0" : "9px 0", borderBottom: `0.5px solid ${BOOK_SUBTLE}`, gap: "16px" }}>
+                          <span style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.6px", color: BOOK_P76, flexShrink: 0, paddingRight: "16px" }}>
                             {label}
                           </span>
                           <span style={{ fontFamily: LATO, fontSize: isHighlight ? "14px" : "13px", color: isHighlight ? GOLD : WHITE, fontWeight: isHighlight ? 400 : 300, textAlign: "right", lineHeight: 1.5, maxWidth: "60%" }}>
@@ -1834,20 +1897,20 @@ function EventInquiryPageInner() {
                     })}
                   </div>
 
-                  <div style={{ border: "0.5px solid rgba(197,164,109,0.18)", padding: "1.25rem", backgroundColor: "rgba(255,255,255,0.015)" }}>
+                  <div style={{ border: "0.5px solid var(--oraya-border)", padding: "1.25rem", backgroundColor: GLASS3 }}>
                     <p style={{ fontFamily: PLAYFAIR, fontSize: "18px", fontWeight: 400, color: WHITE, margin: "0 0 12px" }}>
                       Selected services
                     </p>
                     {selectedEventServiceSummaries.length > 0 ? (
                       <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
                         {selectedEventServiceSummaries.map((serviceSummary) => (
-                          <span key={serviceSummary} style={{ fontFamily: LATO, fontSize: "14px", color: WHITE, border: "0.5px solid rgba(197,164,109,0.22)", backgroundColor: "rgba(197,164,109,0.05)", padding: "8px 12px" }}>
+                          <span key={serviceSummary} style={{ fontFamily: LATO, fontSize: "14px", color: WHITE, border: "0.5px solid var(--oraya-border)", backgroundColor: GLG1, padding: "8px 12px" }}>
                             {serviceSummary}
                           </span>
                         ))}
                       </div>
                     ) : (
-                      <p style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.76)", margin: 0, lineHeight: 1.65 }}>
+                      <p style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_P76, margin: 0, lineHeight: 1.65 }}>
                         No services selected yet. Oraya can still recommend options after review.
                       </p>
                     )}
@@ -1857,8 +1920,8 @@ function EventInquiryPageInner() {
 
               {eventSetupEstimate && <EventEstimatePanel estimate={eventSetupEstimate} totalFontSize="24px" />}
 
-              <div style={{ border: "0.5px solid rgba(197,164,109,0.22)", backgroundColor: "rgba(197,164,109,0.04)", padding: "16px 20px" }}>
-                <p style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.8)", margin: 0, lineHeight: 1.65 }}>
+              <div style={{ border: "0.5px solid var(--oraya-border)", backgroundColor: GLG3, padding: "16px 20px" }}>
+                <p style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_P78, margin: 0, lineHeight: 1.65 }}>
                   This request will be reviewed as a full event setup and you will receive a tailored proposal.
                 </p>
               </div>
@@ -1869,17 +1932,17 @@ function EventInquiryPageInner() {
                 </p>
               )}
 
-              <p style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.68)", margin: "0 0 12px", lineHeight: 1.6, textAlign: "center", letterSpacing: "0.01em" }}>
+              <p style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_P68, margin: "0 0 12px", lineHeight: 1.6, textAlign: "center", letterSpacing: "0.01em" }}>
                 Each inquiry is manually reviewed to ensure availability and preparation quality.
               </p>
 
               <div style={{ display: "flex", gap: "12px" }}>
                 <button onClick={goBack} disabled={loading}
-                  style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: "rgba(255,255,255,0.8)", backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", padding: "16px 24px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.5 : 1 }}>
+                  style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: BOOK_P78, backgroundColor: "transparent", border: "0.5px solid var(--oraya-book-input-border)", padding: "16px 24px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.5 : 1 }}>
                   ← Back
                 </button>
                 <button onClick={handleSubmit} disabled={loading}
-                  style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: CHARCOAL, backgroundColor: GOLD, border: "none", padding: "16px", flex: 1, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1 }}>
+                  style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "16px", flex: 1, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1 }}>
                   {loading ? "Submitting…" : "Submit Event Inquiry"}
                 </button>
               </div>
@@ -1888,7 +1951,8 @@ function EventInquiryPageInner() {
 
         </div>
       </div>
-    </main>
+      </main>
+    </div>
   );
 }
 

@@ -8,12 +8,15 @@ import { usePublicPricing } from "@/lib/public-pricing";
 
 const HERO_GRADIENT = "linear-gradient(160deg, #1b3a2f 0%, #2b5040 35%, #1a2f24 65%, #0f1e17 100%)";
 
-const GOLD       = "#C5A46D";
-const WHITE      = "#FFFFFF";
-const BEIGELIGHT = "#F5F1EB";
-const CHARCOAL   = "#2E2E2E";
-const MIDNIGHT   = "#1F2B38";
-const MUTED      = "#8a8070";
+const GOLD       = "var(--oraya-gold)";
+const GOLD_CTA   = "var(--oraya-gold-cta-text)";
+const WHITE      = "var(--oraya-surface)";
+const BEIGELIGHT = "var(--oraya-bg)";
+const CHARCOAL   = "var(--oraya-ink)";
+const MIDNIGHT   = "var(--oraya-hero-canvas)";
+const MUTED      = "var(--oraya-text-muted)";
+const HERO_TEXT  = "var(--oraya-hero-text)";
+const HERO_TAG   = "var(--oraya-hero-tagline)";
 const PLAYFAIR   = "'Playfair Display', Georgia, serif";
 const LATO       = "'Lato', system-ui, sans-serif";
 
@@ -58,7 +61,7 @@ export default function VillaMechmechPage() {
   const fromPrice = formatVillaFromPrice("Villa Mechmech", pricing);
 
   return (
-    <>
+    <div style={{ overflowX: "hidden" }}>
       <SiteNav base="/" />
 
       {/* ── Hero ── */}
@@ -79,7 +82,7 @@ export default function VillaMechmechPage() {
           {!heroImg && (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "14px", opacity: 0.25 }}>
               <div style={{ width: "64px" }}><OrayaEmblem /></div>
-              <span style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: WHITE }}>
+              <span style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: HERO_TEXT }}>
                 Villa photography coming soon
               </span>
             </div>
@@ -103,16 +106,16 @@ export default function VillaMechmechPage() {
               <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "4px", textTransform: "uppercase", color: GOLD, marginBottom: "6px" }}>
                 Nature retreat · Mechmech, North Lebanon
               </p>
-              <h1 style={{ fontFamily: PLAYFAIR, fontSize: "clamp(1.8rem, 4vw, 3rem)", fontWeight: 400, color: WHITE, margin: 0, lineHeight: 1.15 }}>
+              <h1 style={{ fontFamily: PLAYFAIR, fontSize: "clamp(1.8rem, 4vw, 3rem)", fontWeight: 400, color: HERO_TEXT, margin: 0, lineHeight: 1.15 }}>
                 Villa Mechmech<br />
                 <span style={{ fontStyle: "italic", opacity: 0.7 }}>Modern Mountain Retreat</span>
               </h1>
               {fromPrice && (
                 <div style={{ marginTop: "14px" }}>
-                  <p style={{ fontFamily: PLAYFAIR, fontSize: "clamp(1.2rem, 2.8vw, 1.7rem)", color: WHITE, margin: "0 0 4px" }}>
+                  <p style={{ fontFamily: PLAYFAIR, fontSize: "clamp(1.2rem, 2.8vw, 1.7rem)", color: HERO_TEXT, margin: "0 0 4px" }}>
                     {fromPrice}
                   </p>
-                  <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1px", color: "rgba(255,255,255,0.7)", margin: 0 }}>
+                  <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1px", color: HERO_TAG, margin: 0 }}>
                     {VILLA_FROM_PRICE_MICROLABEL}
                   </p>
                 </div>
@@ -122,7 +125,7 @@ export default function VillaMechmechPage() {
               href="/book?villa=Villa+Mechmech"
               style={{
                 fontFamily: LATO, fontSize: "11px", letterSpacing: "2.5px",
-                textTransform: "uppercase", color: CHARCOAL,
+                textTransform: "uppercase", color: GOLD_CTA,
                 backgroundColor: GOLD, padding: "14px 36px",
                 textDecoration: "none", flexShrink: 0,
               }}
@@ -137,7 +140,7 @@ export default function VillaMechmechPage() {
 
       {/* ── Photo gallery strip (when 2+ images exist) ── */}
       {galleryMedia.length > 0 && (
-        <section style={{ backgroundColor: "#141f28", overflow: "hidden" }}>
+        <section style={{ backgroundColor: "var(--oraya-surface-muted)", overflow: "hidden" }}>
           <div style={{
             display: "flex",
             overflowX: "auto",
@@ -223,14 +226,14 @@ export default function VillaMechmechPage() {
           <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "4px", textTransform: "uppercase", color: GOLD, marginBottom: "1rem" }}>
             Why Mechmech
           </p>
-          <h2 style={{ fontFamily: PLAYFAIR, fontSize: "clamp(1.4rem, 2.5vw, 2rem)", fontWeight: 400, color: WHITE, marginBottom: "2.5rem" }}>
+          <h2 style={{ fontFamily: PLAYFAIR, fontSize: "clamp(1.4rem, 2.5vw, 2rem)", fontWeight: 400, color: HERO_TEXT, marginBottom: "2.5rem" }}>
             What makes it special
           </h2>
           <ul style={{ listStyle: "none", padding: 0, margin: "0 0 3rem", display: "flex", flexDirection: "column", gap: "16px" }}>
             {highlights.map((h) => (
               <li key={h} style={{ display: "flex", alignItems: "flex-start", gap: "14px" }}>
                 <span style={{ color: GOLD, fontSize: "10px", marginTop: "4px", flexShrink: 0 }}>◆</span>
-                <span style={{ fontFamily: LATO, fontSize: "15px", color: "rgba(255,255,255,0.65)", fontWeight: 300, lineHeight: 1.7 }}>{h}</span>
+                <span style={{ fontFamily: LATO, fontSize: "15px", color: HERO_TAG, fontWeight: 300, lineHeight: 1.7 }}>{h}</span>
               </li>
             ))}
           </ul>
@@ -239,7 +242,7 @@ export default function VillaMechmechPage() {
             style={{
               display: "inline-block",
               fontFamily: LATO, fontSize: "11px", letterSpacing: "2.5px",
-              textTransform: "uppercase", color: CHARCOAL,
+              textTransform: "uppercase", color: GOLD_CTA,
               backgroundColor: GOLD, padding: "15px 44px",
               textDecoration: "none",
             }}
@@ -252,6 +255,6 @@ export default function VillaMechmechPage() {
       </section>
 
       <SiteFooter />
-    </>
+    </div>
   );
 }

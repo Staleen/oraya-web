@@ -2,9 +2,9 @@
 import LegalEntityNotice from "@/components/LegalEntityNotice";
 import OrayaLogoFull from "@/components/OrayaLogoFull";
 
-const GOLD    = "#C5A46D";
-const CHARCOAL = "#2E2E2E";
-const MUTED   = "#8a8070";
+const GOLD    = "var(--oraya-gold)";
+const FOOTER_BG = "var(--oraya-footer-bg)";
+const MUTED   = "var(--oraya-text-muted)";
 const PLAYFAIR = "'Playfair Display', Georgia, serif";
 const LATO    = "'Lato', system-ui, sans-serif";
 
@@ -51,8 +51,8 @@ export default function SiteFooter() {
   return (
     <>
       {/* Social strip */}
-      <div style={{ backgroundColor: CHARCOAL, padding: "3rem", textAlign: "center" }}>
-        <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "3px", textTransform: "uppercase", color: "rgba(255,255,255,0.3)", marginBottom: "1.5rem" }}>
+      <div style={{ backgroundColor: FOOTER_BG, padding: "3rem", textAlign: "center" }}>
+        <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "3px", textTransform: "uppercase", color: "var(--oraya-footer-text)", marginBottom: "1.5rem" }}>
           Follow Oraya
         </p>
         <div style={{ display: "flex", justifyContent: "center", gap: "2.5rem" }}>
@@ -60,9 +60,9 @@ export default function SiteFooter() {
             <a
               key={s}
               href="#"
-              style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, textDecoration: "none", borderBottom: "0.5px solid rgba(197,164,109,0.25)", paddingBottom: "2px" }}
+              style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, textDecoration: "none", borderBottom: "0.5px solid var(--oraya-border)", paddingBottom: "2px" }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderBottomColor = GOLD; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderBottomColor = "rgba(197,164,109,0.25)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderBottomColor = "var(--oraya-border)"; }}
             >
               {s}
             </a>
@@ -71,13 +71,13 @@ export default function SiteFooter() {
       </div>
 
       {/* Footer */}
-      <footer style={{ backgroundColor: CHARCOAL, padding: "4.5rem 3rem 2rem", borderTop: "0.5px solid rgba(255,255,255,0.05)" }}>
+      <footer style={{ backgroundColor: FOOTER_BG, padding: "4.5rem 3rem 2rem", borderTop: "0.5px solid rgba(255,255,255,0.05)" }}>
         <div style={{ maxWidth: "1100px", margin: "0 auto", display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr", gap: "2.5rem", marginBottom: "3rem" }}>
           <div>
             <div style={{ width: "120px", marginBottom: "1.25rem" }}>
               <OrayaLogoFull />
             </div>
-            <p style={{ fontFamily: PLAYFAIR, fontStyle: "italic", fontSize: "13px", color: "rgba(255,255,255,0.3)", lineHeight: 1.8, marginTop: "0.5rem" }}>
+            <p style={{ fontFamily: PLAYFAIR, fontStyle: "italic", fontSize: "13px", color: "var(--oraya-footer-quote)", lineHeight: 1.8, marginTop: "0.5rem" }}>
               &ldquo;A boutique sanctuary<br />of luxury and tranquility.&rdquo;
             </p>
           </div>
@@ -91,9 +91,9 @@ export default function SiteFooter() {
                   <li key={label} style={{ marginBottom: "8px" }}>
                     <a
                       href={href}
-                      style={{ fontFamily: LATO, fontSize: "13px", fontWeight: 300, color: "rgba(255,255,255,0.35)", textDecoration: "none" }}
+                      style={{ fontFamily: LATO, fontSize: "13px", fontWeight: 300, color: "var(--oraya-footer-link)", textDecoration: "none" }}
                       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = GOLD; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.35)"; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--oraya-footer-link)"; }}
                     >
                       {label}
                     </a>
@@ -108,7 +108,7 @@ export default function SiteFooter() {
           <LegalEntityNotice variant="dark" />
         </div>
 
-        <div style={{ maxWidth: "1100px", margin: "0 auto", display: "flex", justifyContent: "space-between", borderTop: "0.5px solid rgba(255,255,255,0.07)", paddingTop: "1.5rem", fontFamily: LATO, fontSize: "11px", color: "rgba(255,255,255,0.18)" }}>
+        <div style={{ maxWidth: "1100px", margin: "0 auto", display: "flex", justifyContent: "space-between", borderTop: "0.5px solid rgba(255,255,255,0.07)", paddingTop: "1.5rem", fontFamily: LATO, fontSize: "11px", color: "var(--oraya-footer-text)" }}>
           <span>© 2026 Oraya. All rights reserved.</span>
           <span>Lebanon · Boutique Villas</span>
         </div>

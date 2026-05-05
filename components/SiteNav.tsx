@@ -1,12 +1,13 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import OrayaEmblem from "@/components/OrayaEmblem";
+import PublicThemeToggle from "@/components/PublicThemeToggle";
 import { supabase } from "@/lib/supabase";
 
-const GOLD     = "#C5A46D";
-const WHITE    = "#FFFFFF";
-const CHARCOAL = "#2E2E2E";
-const MUTED    = "#8a8070";
+const GOLD     = "var(--oraya-gold)";
+const WHITE    = "var(--oraya-surface)";
+const CHARCOAL = "var(--oraya-ink)";
+const MUTED    = "var(--oraya-text-muted)";
 const LATO     = "'Lato', system-ui, sans-serif";
 
 interface Props {
@@ -64,16 +65,18 @@ export default function SiteNav({ base = "" }: Props) {
       display: "flex",
       justifyContent: "space-between",
       alignItems: "center",
-      padding: "1.1rem 3rem",
-      backgroundColor: "rgba(255,255,255,0.97)",
-      borderBottom: "0.5px solid rgba(197,164,109,0.2)",
+      gap: "12px",
+      padding: "1.1rem clamp(1rem, 4vw, 3rem)",
+      backgroundColor: "var(--oraya-nav-bg)",
+      borderBottom: "0.5px solid var(--oraya-nav-border)",
       backdropFilter: "blur(8px)",
+      minWidth: 0,
     }}>
       <a href="/" style={{ width: "44px", height: "44px", flexShrink: 0, display: "block", cursor: "pointer" }}>
         <OrayaEmblem />
       </a>
 
-      <ul style={{ display: "flex", gap: "2.5rem", listStyle: "none", margin: 0, padding: 0 }}>
+      <ul className="hidden md:flex list-none gap-10 m-0 p-0">
         {navLinks.map(({ href, label }) => (
           <li key={label}>
             <a
@@ -88,6 +91,8 @@ export default function SiteNav({ base = "" }: Props) {
         ))}
       </ul>
 
+      <div className="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0 justify-end">
+        <PublicThemeToggle variant="public" />
       {/* Auth nav — hidden until session resolves to avoid flash */}
       {authReady && (
         isLoggedIn ? (
@@ -121,7 +126,7 @@ export default function SiteNav({ base = "" }: Props) {
               }}>
               <div style={{
                 backgroundColor: WHITE,
-                border: "0.5px solid rgba(197,164,109,0.25)",
+                border: "0.5px solid var(--oraya-border)",
                 boxShadow: "0 8px 32px rgba(0,0,0,0.1)",
               }}>
                 <a
@@ -130,7 +135,7 @@ export default function SiteNav({ base = "" }: Props) {
                     display: "block", padding: "13px 20px",
                     fontFamily: LATO, fontSize: "10px", letterSpacing: "2px",
                     textTransform: "uppercase", color: CHARCOAL, textDecoration: "none",
-                    borderBottom: "0.5px solid rgba(197,164,109,0.15)",
+                    borderBottom: "0.5px solid var(--oraya-border)",
                     transition: "background 0.15s",
                   }}
                   onMouseEnter={(e) => {
@@ -170,7 +175,7 @@ export default function SiteNav({ base = "" }: Props) {
           </div>
         ) : (
           /* ── Logged-out: Sign In + Reserve ── */
-          <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "20px", marginLeft: "8px" }}>
             <a
               href="/login"
               style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: CHARCOAL, textDecoration: "none" }}
@@ -184,12 +189,12 @@ export default function SiteNav({ base = "" }: Props) {
               style={{
                 fontFamily: LATO, fontSize: "11px", letterSpacing: "2px",
                 textTransform: "uppercase", color: GOLD,
-                border: "0.5px solid #C5A46D", padding: "10px 28px",
+                border: "0.5px solid var(--oraya-gold)", padding: "10px 28px",
                 backgroundColor: "transparent", textDecoration: "none",
               }}
               onMouseEnter={(e) => {
                 (e.currentTarget as HTMLElement).style.backgroundColor = GOLD;
-                (e.currentTarget as HTMLElement).style.color = WHITE;
+                (e.currentTarget as HTMLElement).style.color = "var(--oraya-on-gold-text)";
               }}
               onMouseLeave={(e) => {
                 (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
@@ -201,6 +206,7 @@ export default function SiteNav({ base = "" }: Props) {
           </div>
         )
       )}
+      </div>
     </nav>
   );
 }
