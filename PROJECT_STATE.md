@@ -699,9 +699,14 @@ Phase 15 remains active (documentation + future sub-phases only unless product r
 - Intro/disclaimer moved to bottom collapsible section
 - Identity banner moved out of top flow
 - Step 2 prioritizes bedroom selection and estimate
-- Submit booking now redirects correctly after success
+- Submit booking now receives a token-bearing `/api/bookings` success response and redirects to `/booking/view/[token]`
 - Loading state no longer stuck
 - No booking/pricing/backend logic changed
+
+**15I.3.4 Logo Consistency Fix [COMPLETE]**
+- homepage and booking flow now use same updated full logo asset
+- old inline full-logo rendering removed/replaced
+- no layout or booking logic changed
 
 ---
 

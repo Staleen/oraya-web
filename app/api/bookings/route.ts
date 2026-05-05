@@ -105,6 +105,10 @@ function addDaysDateOnly(value: string, days: number) {
   return formatDateOnlyFromSerial(serial + days);
 }
 
+function checkOutExpiryUnix(checkOut: string): number {
+  return Math.floor(new Date(`${checkOut}T23:59:59Z`).getTime() / 1000);
+}
+
 function detectDeadDayOfferSuggestion(
   checkIn: string,
   checkOut: string,
@@ -769,7 +773,11 @@ export async function POST(request: Request) {
       console.error("[api/bookings] guest pending email error:", pendingEmailErr);
     }
 
-    return NextResponse.json({ booking: data });
+    const { token: viewToken } = createActionToken(data.id, "view", {
+      expiresAt: checkOutExpiryUnix(data.check_out),
+    });
+
+    return NextResponse.json({ booking: data, token: viewToken });
   } catch (err) {
     console.error("[api/bookings] unexpected error:", err);
     return NextResponse.json({ error: "Server error." }, { status: 500 });

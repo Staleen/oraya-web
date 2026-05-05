@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { DayPicker } from "react-day-picker";
 import type { DateRange, Matcher } from "react-day-picker";
 import "react-day-picker/dist/style.css";
+import OrayaLogoFull from "@/components/OrayaLogoFull";
 import { getVillaBasePrice, getVillaPricing } from "@/lib/admin-pricing";
 import { ADDON_OPERATIONAL_SETTINGS_KEY, formatPreparationTime, getAddonAppliesTo, getAddonEnforcementMode, getAddonTimingType, mergeAddonsWithOperationalSettings, parseAddonOperationalSetting, type AddonCategory, type AddonCutoffType, type AddonEnforcementMode, type AddonPricingType } from "@/lib/addon-operations";
 import { usePublicPricing } from "@/lib/public-pricing";
@@ -33,12 +34,12 @@ const VILLAS   = ["Villa Mechmech", "Villa Byblos"];
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const VILLA_CARD_META: Record<string, { image: string; imagePosition: string; note: string }> = {
   "Villa Mechmech": {
-    image: "/screenshots/03-villas.png",
+    image: "/logos/ORAYA_logo_full.png",
     imagePosition: "left center",
     note: "A quiet mountain retreat with generous outdoor living.",
   },
   "Villa Byblos": {
-    image: "/screenshots/03-villas.png",
+    image: "/logos/ORAYA_logo_full.png",
     imagePosition: "right center",
     note: "An elegant private villa designed for relaxed gatherings.",
   },
@@ -627,12 +628,22 @@ function BookPageInner() {
     Promise.all([
       fetch("/api/media?villa=mechmech&limit=1").then((r) => r.json()),
       fetch("/api/media?villa=byblos&limit=1").then((r) => r.json()),
+      fetch("/api/media?villa=general&limit=1").then((r) => r.json()),
     ])
-      .then(([mechmech, byblos]) => {
-        const mechmechUrl = Array.isArray(mechmech.media) && mechmech.media[0]?.url ? mechmech.media[0].url : "";
-        const byblosUrl = Array.isArray(byblos.media) && byblos.media[0]?.url ? byblos.media[0].url : "";
-        setMechmechCover(mechmechUrl);
-        setByblosCover(byblosUrl);
+      .then(([mechmech, byblos, general]) => {
+        const firstUrl = (media: unknown): string => {
+          if (!Array.isArray(media)) return "";
+          const row = media.find((item) => {
+            if (!item || typeof item !== "object") return false;
+            const fileUrl = (item as { file_url?: unknown }).file_url;
+            return typeof fileUrl === "string" && fileUrl.trim().length > 0;
+          }) as { file_url?: string } | undefined;
+          return typeof row?.file_url === "string" ? row.file_url : "";
+        };
+
+        const generalCover = firstUrl(general?.media);
+        setMechmechCover(firstUrl(mechmech?.media) || generalCover);
+        setByblosCover(firstUrl(byblos?.media) || generalCover);
       })
       .catch(() => {
         setMechmechCover("");
@@ -1214,8 +1225,8 @@ function BookPageInner() {
         router.push(`/booking/view/${encodeURIComponent(bookingToken)}`);
         return;
       }
-      setSubmissionFallbackComplete(true);
-      setStep(4);
+      setSubmissionFallbackComplete(false);
+      setError("Booking was created but redirect token was missing. Please retry or contact support.");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Something went wrong. Please try again.";
       console.error("[book] submission error:", err);
@@ -1231,7 +1242,7 @@ function BookPageInner() {
       <main style={{ backgroundColor: MIDNIGHT, minHeight: "100vh", padding: "80px 24px" }}>
         <div style={{ width: "100%", maxWidth: "720px", margin: "0 auto" }} aria-hidden="true">
           <div style={{ width: "160px", margin: "0 auto 2.5rem", opacity: 0.45 }}>
-            <img src="/logos/ORAYA_logo_full.png" alt="Oraya" style={{ width: "100%", height: "auto", display: "block" }} />
+            <OrayaLogoFull />
           </div>
           <div style={{ textAlign: "center", marginBottom: "2rem", display: "grid", justifyItems: "center", gap: "12px" }}>
             <SkeletonText width="120px" height="10px" />
@@ -1316,7 +1327,7 @@ function BookPageInner() {
       <main style={{ backgroundColor: MIDNIGHT, minHeight: "100vh", padding: "80px 24px", display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{ width: "100%", maxWidth: "520px" }}>
           <a href="/" style={{ display: "block", width: "160px", margin: "0 auto 2.5rem", cursor: "pointer" }}>
-            <img src="/logos/ORAYA_logo_full.png" alt="Oraya" style={{ width: "100%", height: "auto", display: "block" }} />
+            <OrayaLogoFull />
           </a>
           <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
             <p style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "1.2px", color: GOLD, marginBottom: "12px" }}>
@@ -1375,9 +1386,8 @@ function BookPageInner() {
 
       <div style={{ width: "100%", maxWidth: containerWidth, margin: "0 auto", transition: "max-width 0.3s ease" }}>
 
-        {/* Logo */}
         <a href="/" style={{ display: "block", width: "160px", margin: "0 auto 2.5rem", cursor: "pointer" }}>
-          <img src="/logos/ORAYA_logo_full.png" alt="Oraya" style={{ width: "100%", height: "auto", display: "block" }} />
+          <OrayaLogoFull />
         </a>
 
         {step !== 1 && (
@@ -1431,12 +1441,32 @@ function BookPageInner() {
                         <div
                           style={{
                             height: "132px",
-                            backgroundImage: `linear-gradient(180deg, rgba(31,43,56,0.15), rgba(31,43,56,0.85)), url("${coverImage}")`,
-                            backgroundSize: "cover",
-                            backgroundPosition: meta.imagePosition,
+                            position: "relative",
+                            overflow: "hidden",
                             borderBottom: "0.5px solid rgba(197,164,109,0.12)",
                           }}
-                        />
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={coverImage}
+                            alt={villa}
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              objectFit: "cover",
+                              objectPosition: meta.imagePosition,
+                              display: "block",
+                            }}
+                          />
+                          <div
+                            style={{
+                              position: "absolute",
+                              inset: 0,
+                              background: "linear-gradient(180deg, rgba(31,43,56,0.12), rgba(31,43,56,0.45))",
+                              pointerEvents: "none",
+                            }}
+                          />
+                        </div>
                         <div style={{ padding: "16px" }}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
                             <h2 style={{ fontFamily: PLAYFAIR, fontSize: "20px", fontWeight: 400, color: WHITE, margin: 0 }}>
@@ -1572,7 +1602,7 @@ function BookPageInner() {
 
               {/* Guest contact fields (only when not a member) */}
               {guestMode && (
-                <div style={{ order: 4, border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: "rgba(255,255,255,0.02)", padding: "1.5rem", display: "flex", flexDirection: "column", gap: "16px" }}>
+                <div style={{ order: 6, border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: "rgba(255,255,255,0.02)", padding: "1.5rem", display: "flex", flexDirection: "column", gap: "16px" }}>
                   <p style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "1px", color: GOLD, margin: 0 }}>
                     Your details
                   </p>
@@ -1718,7 +1748,7 @@ function BookPageInner() {
               </div>
 
               {/* Premium stay-to-event upgrade CTA — routes to /events/inquiry */}
-              <div style={{ order: 4, border: "0.5px solid rgba(197,164,109,0.26)", backgroundColor: "rgba(255,255,255,0.03)", padding: "18px 20px", display: "flex", flexDirection: "column", gap: "10px", boxShadow: "inset 0 0 0 1px rgba(197,164,109,0.04)" }}>
+              <div style={{ order: 7, border: "0.5px solid rgba(197,164,109,0.26)", backgroundColor: "rgba(255,255,255,0.03)", padding: "18px 20px", display: "flex", flexDirection: "column", gap: "10px", boxShadow: "inset 0 0 0 1px rgba(197,164,109,0.04)" }}>
                 <p style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "1px", color: GOLD, margin: 0 }}>
                   Hosted Experiences
                 </p>
@@ -1768,6 +1798,10 @@ function BookPageInner() {
                 </button>
               </div>
 
+              <div style={{ order: 2 }}>
+                {estimatePanel}
+              </div>
+
               {/* Notes */}
               <div style={{ order: 3 }}>
                 <label style={labelStyle}>
@@ -1781,17 +1815,13 @@ function BookPageInner() {
                   style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6 }} />
               </div>
 
-              <div style={{ order: 2 }}>
-                {estimatePanel}
-              </div>
-
               {error && (
                 <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070", textAlign: "center", lineHeight: 1.6, margin: 0 }}>
                   {error}
                 </p>
               )}
 
-              <div style={{ display: "flex", gap: "12px" }}>
+              <div style={{ order: 4, display: "flex", gap: "12px" }}>
                 <button onClick={goBack}
                   style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: "rgba(255,255,255,0.8)", backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", padding: "16px 24px", cursor: "pointer" }}
                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = GOLD; (e.currentTarget as HTMLElement).style.color = GOLD; }}
@@ -1819,12 +1849,6 @@ function BookPageInner() {
                 <p style={{ fontFamily: PLAYFAIR, fontSize: "20px", fontWeight: 400, color: WHITE, margin: "0 0 6px" }}>
                   Enhance your stay
                 </p>
-                <details style={{ margin: "0 0 18px", border: "0.5px solid rgba(197,164,109,0.18)", backgroundColor: "rgba(197,164,109,0.04)", padding: "10px 12px" }}>
-                  <summary style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.82)", cursor: "pointer" }}>Add-on details</summary>
-                  <p style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.76)", margin: "10px 0 0", lineHeight: 1.6 }}>
-                    Optional services and upgrades. Some items may require approval or advance preparation.
-                  </p>
-                </details>
 
                 {addonsLoading ? (
                   <div style={{ display: "grid", gap: "8px" }} aria-hidden="true">
@@ -1905,22 +1929,22 @@ function BookPageInner() {
                           const disableSelection = !availability.selectable;
                           return (
                             <button
-                          key={addon.id}
-                          type="button"
-                          onClick={() => toggleAddon(addon.id)}
-                          disabled={disableSelection}
-                          style={{
-                            display: "flex", alignItems: "flex-start", justifyContent: "space-between",
-                            width: "100%", textAlign: "left",
-                            padding: "14px 18px",
-                            border: `0.5px solid ${selected ? "rgba(111,207,138,0.55)" : availability.mode === "soft" && !availability.available ? "rgba(226,171,90,0.42)" : disableSelection ? "rgba(255,255,255,0.12)" : "rgba(197,164,109,0.18)"}`,
-                            backgroundColor: selected ? "rgba(111,207,138,0.08)" : availability.mode === "soft" && !availability.available ? "rgba(226,171,90,0.08)" : disableSelection ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.02)",
-                            cursor: disableSelection ? "not-allowed" : "pointer",
-                            transition: "border-color 0.15s, background-color 0.15s",
-                            opacity: disableSelection ? 0.55 : 1,
-                            gap: "16px",
-                          }}
-                        >
+                              key={addon.id}
+                              type="button"
+                              onClick={() => toggleAddon(addon.id)}
+                              disabled={disableSelection}
+                              style={{
+                                display: "flex", alignItems: "flex-start", justifyContent: "space-between",
+                                width: "100%", textAlign: "left",
+                                padding: "14px 18px",
+                                border: `0.5px solid ${selected ? "rgba(111,207,138,0.55)" : availability.mode === "soft" && !availability.available ? "rgba(226,171,90,0.42)" : disableSelection ? "rgba(255,255,255,0.12)" : "rgba(197,164,109,0.18)"}`,
+                                backgroundColor: selected ? "rgba(111,207,138,0.08)" : availability.mode === "soft" && !availability.available ? "rgba(226,171,90,0.08)" : disableSelection ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.02)",
+                                cursor: disableSelection ? "not-allowed" : "pointer",
+                                transition: "border-color 0.15s, background-color 0.15s",
+                                opacity: disableSelection ? 0.55 : 1,
+                                gap: "16px",
+                              }}
+                            >
                           {/* Checkbox indicator + label */}
                           <div style={{ display: "flex", alignItems: "flex-start", gap: "12px", flex: 1, minWidth: 0 }}>
                             <div style={{
