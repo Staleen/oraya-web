@@ -8,6 +8,17 @@ import { extractEventInquiryGuestNotesLine, parseEventSetupEstimateFromMessage }
 import { formatPaymentMethodLabel } from "@/lib/payment-method-labels";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { verifyViewToken } from "@/lib/booking-action-token";
+import {
+  bookingWhatsAppChangePrefill,
+  bookingWhatsAppPrefill,
+  CANCELLATION_HINT,
+  CANCELLATION_PROMPT,
+  VIEW_CONFIRMED_LINES,
+  VIEW_PENDING_LINES,
+  viewStatusHeadline,
+  type BookingViewStatusNorm,
+  WHATSAPP_SUPPORT_LINE,
+} from "@/lib/booking-trust-messaging";
 
 const GOLD        = "var(--oraya-gold)";
 const WHITE       = "var(--oraya-book-heading)";
@@ -318,6 +329,13 @@ export default async function BookingViewPage({
     typeof booking.message === "string" &&
     booking.message.includes("[Event Inquiry]");
   const visual = statusVisual(booking.status, { isEventInquiry, proposalStatus: booking.proposal_status });
+  const statusNorm: BookingViewStatusNorm =
+    booking.status.toLowerCase() === "confirmed"
+      ? "confirmed"
+      : booking.status.toLowerCase() === "cancelled"
+        ? "cancelled"
+        : "pending";
+  const trustStatusHeadline = viewStatusHeadline(isEventInquiry, statusNorm);
   // Phase 13I: bedroom setup label (stay bookings only) from snapshot persisted in 13H.
   const bedroomsRaw = booking.pricing_snapshot?.bedrooms_to_be_used;
   const bedroomLabel =
@@ -429,6 +447,40 @@ export default async function BookingViewPage({
         >
           {visual.label}
         </div>
+
+        {trustStatusHeadline && (
+          <>
+            <p style={{ fontFamily: PLAYFAIR, fontSize: "1.35rem", fontWeight: 400, color: WHITE, margin: "0 0 14px", lineHeight: 1.35 }}>
+              {trustStatusHeadline}
+            </p>
+            <div
+              style={{
+                border: "0.5px solid rgba(197,164,109,0.22)",
+                backgroundColor: "rgba(197,164,109,0.05)",
+                padding: "14px 16px",
+                marginBottom: "1.25rem",
+                textAlign: "left",
+                display: "grid",
+                gap: "10px",
+              }}
+            >
+              {(statusNorm === "confirmed" ? VIEW_CONFIRMED_LINES : VIEW_PENDING_LINES).map((line) => (
+                <p key={line} style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65 }}>
+                  {line}
+                </p>
+              ))}
+              <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
+                {WHATSAPP_SUPPORT_LINE}
+              </p>
+            </div>
+          </>
+        )}
+
+        {statusNorm === "cancelled" && (
+          <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: "0 0 1.25rem", lineHeight: 1.65 }}>
+            This booking has been cancelled. Contact us if you need help.
+          </p>
+        )}
 
         {/* Reference — prominent */}
         <div
@@ -1183,6 +1235,54 @@ export default async function BookingViewPage({
           </div>
         )}
 
+        <div
+          style={{
+            border: "0.5px solid var(--oraya-border)",
+            padding: "1.25rem 1.5rem",
+            marginBottom: "2rem",
+            textAlign: "left",
+          }}
+        >
+          <p style={{ fontFamily: LATO, fontSize: "12px", color: WHITE, margin: "0 0 6px", lineHeight: 1.6 }}>
+            {CANCELLATION_PROMPT}
+          </p>
+          <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "0 0 12px", lineHeight: 1.65 }}>
+            {CANCELLATION_HINT}
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", alignItems: "center" }}>
+            <a
+              href={`mailto:hello@stayoraya.com?subject=${encodeURIComponent(`Booking ${ref} — change or cancellation`)}&body=${encodeURIComponent(`Hello Oraya,\n\nMy booking reference is ${ref}.\n\nI would like to cancel or change this booking.\n\n`)}`}
+              style={{
+                fontFamily: LATO,
+                fontSize: "11px",
+                letterSpacing: "1.5px",
+                textTransform: "uppercase",
+                color: GOLD,
+                textDecoration: "none",
+              }}
+            >
+              Email
+            </a>
+            {waLinkDigits && (
+              <a
+                href={`https://wa.me/${waLinkDigits}?text=${encodeURIComponent(bookingWhatsAppChangePrefill(ref))}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  fontFamily: LATO,
+                  fontSize: "11px",
+                  letterSpacing: "1.5px",
+                  textTransform: "uppercase",
+                  color: GOLD,
+                  textDecoration: "none",
+                }}
+              >
+                WhatsApp
+              </a>
+            )}
+          </div>
+        </div>
+
         {/* CTAs */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
           <BookingViewMemberLink bookingMemberId={booking.member_id} />
@@ -1221,7 +1321,7 @@ export default async function BookingViewPage({
           </a>
           {waLinkDigits && (
             <a
-              href={`https://wa.me/${waLinkDigits}?text=${encodeURIComponent(`Hello Oraya! I have a question about my booking. My reference is ${ref}.`)}`}
+              href={`https://wa.me/${waLinkDigits}?text=${encodeURIComponent(bookingWhatsAppPrefill(ref))}`}
               target="_blank"
               rel="noopener noreferrer"
               style={{

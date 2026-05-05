@@ -21,6 +21,15 @@ import {
   HEATED_POOL_CARRYOVER_GUEST_NOTE,
   isHeatedPoolAddon,
 } from "@/lib/heated-pool-carryover";
+import type { BookingTrustMode } from "@/lib/booking-trust-messaging";
+import {
+  CANCELLATION_HINT,
+  CANCELLATION_PROMPT,
+  digitsOnlyPhone,
+  STEP4_TRUST,
+  WHATSAPP_CANCEL_CHANGE_NO_REF,
+  WHATSAPP_SUPPORT_LINE,
+} from "@/lib/booking-trust-messaging";
 
 // ─── Brand constants (theme tokens from globals.css) ─
 const GOLD      = "var(--oraya-gold)";
@@ -689,6 +698,7 @@ function BookPageInner() {
   const [guestEstimateManuallyChanged, setGuestEstimateManuallyChanged] = useState(false);
   const [mechmechCover, setMechmechCover] = useState("");
   const [byblosCover, setByblosCover] = useState("");
+  const [whatsappDigits, setWhatsappDigits] = useState<string | null>(null);
 
   // Pre-select villa from ?villa= query param
   useEffect(() => {
@@ -735,6 +745,13 @@ function BookPageInner() {
         setMechmechCover("");
         setByblosCover("");
       });
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/settings?key=whatsapp_number")
+      .then((r) => r.json())
+      .then((d: { value?: string }) => setWhatsappDigits(digitsOnlyPhone(d.value ?? null)))
+      .catch(() => setWhatsappDigits(null));
   }, []);
 
   // Fetch enabled add-ons the first time the user reaches step 3
@@ -1094,6 +1111,19 @@ function BookPageInner() {
 
     return messages;
   }
+
+  /** Phase 15 — UI-only trust lane (instant vs review); mirrors add-on / conflict signals, does not alter submission. */
+  const bookingTrustMode: BookingTrustMode = (() => {
+    if (dateConflict) return "request";
+    for (const id of selectedAddons) {
+      const addon = stayApplicableAddons.find((a) => a.id === id);
+      if (!addon) continue;
+      if (addon.requires_approval) return "request";
+      const av = getAddonAvailability(addon);
+      if (!av.available && av.selectable) return "request";
+    }
+    return "instant";
+  })();
 
   /**
    * Phase 12E Batch 5: timing add-ons eligible for the dead-day discount offer.
@@ -2520,10 +2550,38 @@ function BookPageInner() {
 
               {estimatePanel}
 
+              <div style={{ border: "0.5px solid rgba(197,164,109,0.28)", backgroundColor: "rgba(197,164,109,0.06)", padding: "16px 18px", display: "grid", gap: "12px" }}>
+                <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+                  What happens next
+                </p>
+                <p style={{ fontFamily: PLAYFAIR, fontSize: "17px", fontWeight: 400, color: WHITE, margin: 0, lineHeight: 1.45 }}>
+                  {bookingTrustMode === "instant" ? STEP4_TRUST.instant.headline : STEP4_TRUST.request.headline}
+                </p>
+                {bookingTrustMode === "instant" ? (
+                  <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65 }}>
+                    {STEP4_TRUST.instant.payment}
+                  </p>
+                ) : (
+                  <>
+                    <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65 }}>
+                      {STEP4_TRUST.request.noPayment}
+                    </p>
+                    <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65 }}>
+                      {STEP4_TRUST.request.contact}
+                    </p>
+                  </>
+                )}
+                <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
+                  {WHATSAPP_SUPPORT_LINE}
+                </p>
+              </div>
+
               <div style={{ border: "0.5px solid rgba(197,164,109,0.24)", backgroundColor: "rgba(197,164,109,0.05)", padding: "16px 18px", display: "grid", gap: "10px" }}>
                 <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>Payment options</p>
                 <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.6 }}>
-                  No payment is taken on this page. Payment does not confirm the booking until Oraya reviews and approves your request; deposit or full payment links will be shared after confirmation when applicable.
+                  {bookingTrustMode === "instant"
+                    ? "Online checkout on this page is not active yet. When it is, completing payment here confirms your booking and unlocks access details; until then, our team may send you a secure payment link."
+                    : STEP4_TRUST.request.noPayment}
                 </p>
                 <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
                   <button type="button" disabled style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, border: "0.5px solid rgba(197,164,109,0.3)", backgroundColor: GLASS1, padding: "10px 14px", cursor: "not-allowed" }}>Pay deposit (coming soon)</button>
@@ -2543,11 +2601,16 @@ function BookPageInner() {
                   style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: "var(--oraya-book-text)", backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", padding: "14px 22px", minHeight: "50px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.5 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   ← Back
                 </button>
-                <button type="button" onClick={() => { void handleSubmit(); }} disabled={loading}
-                  className={loading ? undefined : "oraya-pressable oraya-cta-gold-hover"}
-                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 16px", flex: 1, minHeight: "50px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  {loading ? "Submitting…" : "Submit booking request"}
-                </button>
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "8px", alignItems: "stretch", minWidth: 0 }}>
+                  <button type="button" onClick={() => { void handleSubmit(); }} disabled={loading}
+                    className={loading ? undefined : "oraya-pressable oraya-cta-gold-hover"}
+                    style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 16px", width: "100%", minHeight: "50px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    {loading ? "Submitting…" : "Submit booking request"}
+                  </button>
+                  <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, textAlign: "center", margin: 0, lineHeight: 1.5 }}>
+                    {bookingTrustMode === "instant" ? STEP4_TRUST.instant.ctaSubline : STEP4_TRUST.request.ctaSubline}
+                  </p>
+                </div>
               </div>
             </div>
           )}
@@ -2559,15 +2622,44 @@ function BookPageInner() {
             Booking details
           </summary>
           <p style={{ fontFamily: LATO, fontSize: "14px", color: "var(--oraya-book-text-soft-2)", margin: "10px 0 0", lineHeight: 1.7 }}>
-            Direct booking here does not mean instant or unverified checkout. Oraya reviews each request against availability and operations before confirming your stay.
+            {bookingTrustMode === "instant" ? STEP4_TRUST.instant.headline : STEP4_TRUST.request.headline}
           </p>
           <p style={{ fontFamily: LATO, fontSize: "14px", color: "var(--oraya-book-p76)", margin: "0 0 10px", lineHeight: 1.7 }}>
-            Payment is requested only after we confirm and align the reservation — not when you press submit. Guests receive coordinated support before arrival and during their stay. Automated arrival instructions are used only after confirmation and operational review.
+            {bookingTrustMode === "instant"
+              ? STEP4_TRUST.instant.payment
+              : `${STEP4_TRUST.request.noPayment} ${STEP4_TRUST.request.contact}`}
           </p>
-          <p style={{ fontFamily: LATO, fontSize: "14px", color: "var(--oraya-book-p76)", margin: 0, lineHeight: 1.7 }}>
+          <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: "0 0 10px", lineHeight: 1.65 }}>
+            {WHATSAPP_SUPPORT_LINE}
+          </p>
+          <p style={{ fontFamily: LATO, fontSize: "14px", color: "var(--oraya-book-p76)", margin: "0 0 10px", lineHeight: 1.7 }}>
             Questions:{" "}
             <a href="mailto:hello@stayoraya.com" className="oraya-link-text" style={{ color: GOLD }}>hello@stayoraya.com</a>
           </p>
+          <div style={{ borderTop: "0.5px solid rgba(197,164,109,0.15)", marginTop: "10px", paddingTop: "12px" }}>
+            <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p82)", margin: "0 0 6px", lineHeight: 1.6 }}>
+              {CANCELLATION_PROMPT}
+            </p>
+            <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "0 0 10px", lineHeight: 1.65 }}>
+              {CANCELLATION_HINT}
+            </p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center" }}>
+              <a href="mailto:hello@stayoraya.com?subject=Booking%20change%20or%20cancellation" className="oraya-link-text" style={{ fontFamily: LATO, fontSize: "12px", color: GOLD }}>
+                Email us
+              </a>
+              {whatsappDigits && (
+                <a
+                  href={`https://wa.me/${whatsappDigits}?text=${encodeURIComponent(WHATSAPP_CANCEL_CHANGE_NO_REF)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="oraya-link-text"
+                  style={{ fontFamily: LATO, fontSize: "12px", color: GOLD }}
+                >
+                  WhatsApp
+                </a>
+              )}
+            </div>
+          </div>
           {authStatus === "member" ? (
             <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: "rgba(197,164,109,0.04)", padding: "0.875rem 1.25rem", marginTop: "12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <p style={{ fontFamily: LATO, fontSize: "12px", color: "var(--oraya-book-p60)", margin: 0 }}>
