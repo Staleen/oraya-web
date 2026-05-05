@@ -553,6 +553,53 @@ function StepIndicator({ step }: { step: number }) {
   );
 }
 
+function InfoPopover({ label, text }: { label: string; text: string }) {
+  return (
+    <details style={{ position: "relative", display: "inline-block" }}>
+      <summary
+        aria-label={label}
+        title={label}
+        style={{
+          listStyle: "none",
+          cursor: "pointer",
+          width: "18px",
+          height: "18px",
+          borderRadius: "50%",
+          border: "0.5px solid rgba(197,164,109,0.4)",
+          color: GOLD,
+          fontFamily: LATO,
+          fontSize: "11px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          userSelect: "none",
+        }}
+      >
+        i
+      </summary>
+      <div
+        role="note"
+        style={{
+          position: "absolute",
+          top: "24px",
+          right: 0,
+          zIndex: 5,
+          width: "min(300px, calc(100vw - 72px))",
+          padding: "10px 12px",
+          backgroundColor: "rgba(31,43,56,0.98)",
+          border: "0.5px solid rgba(197,164,109,0.25)",
+          color: "rgba(255,255,255,0.82)",
+          fontFamily: LATO,
+          fontSize: "12px",
+          lineHeight: 1.6,
+        }}
+      >
+        {text}
+      </div>
+    </details>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 function BookPageInner() {
   const router       = useRouter();
@@ -1271,9 +1318,15 @@ function BookPageInner() {
   // Phase 13C.2: simplified stay pricing panel — Estimated Booking Total prominent, then small detail lines.
   const estimatePanel = checkIn && checkOut && staySubtotal !== null ? (
     <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: "rgba(197,164,109,0.04)", padding: "1.25rem" }}>
-      <p style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "1px", color: GOLD, margin: "0 0 8px" }}>
-        Estimated booking total
-      </p>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", margin: "0 0 8px" }}>
+        <p style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "1px", color: GOLD, margin: 0 }}>
+          Estimated booking total
+        </p>
+        <InfoPopover
+          label="How estimate is calculated"
+          text="Based on selected dates, bedroom setup, and selected add-ons. Final confirmation is reviewed by Oraya."
+        />
+      </div>
       <p style={{ fontFamily: PLAYFAIR, fontSize: "26px", color: GOLD, margin: "0 0 14px", lineHeight: 1.2 }}>
         {formatUsd(estimatedTotal)}
       </p>
@@ -1291,12 +1344,6 @@ function BookPageInner() {
           </span>
         </div>
       </div>
-      <p style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.78)", margin: "14px 0 0", lineHeight: 1.65 }}>
-        This total is based on your selected dates, bedroom setup, and add-ons. Final confirmation is handled by Oraya.
-      </p>
-      <p style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.68)", margin: "10px 0 0", lineHeight: 1.6, letterSpacing: "0.01em" }}>
-        Each booking is manually reviewed to ensure availability and preparation quality.
-      </p>
       {selectedAddonQuoteCount > 0 && (
         <p style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.76)", margin: "10px 0 0", lineHeight: 1.65 }}>
           {selectedAddonQuoteCount} selected add-on{selectedAddonQuoteCount === 1 ? "" : "s"} with price on request are excluded from this estimate.
@@ -1670,10 +1717,13 @@ function BookPageInner() {
               {/* Bedroom-based stay setup */}
               <div style={{ order: 1, display: "flex", flexDirection: "column", gap: "16px" }}>
                 <div>
-                  <label style={labelStyle}>Bedrooms to be used</label>
-                  <p style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.78)", margin: "0 0 14px", lineHeight: 1.65 }}>
-                    Select how many bedrooms you would like prepared. Guests above bedroom capacity may require extra bedding or sofa setup.
-                  </p>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", marginBottom: "14px" }}>
+                    <label style={{ ...labelStyle, marginBottom: 0 }}>Bedrooms to be used</label>
+                    <InfoPopover
+                      label="Bedroom setup info"
+                      text="Choose how many bedrooms to prepare. If guest count exceeds bedroom capacity, extra bedding or sofa setup may be required."
+                    />
+                  </div>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "10px" }}>
                     {(["1", "2", "3"] as BedroomCount[]).map((bedroomCount) => {
                       const selected = form.bedroomCount === bedroomCount;
@@ -1713,20 +1763,20 @@ function BookPageInner() {
                       );
                     })}
                   </div>
-                  <p style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.76)", margin: "12px 0 0", lineHeight: 1.65 }}>
-                    Bedroom setup affects the stay estimate. Add-ons are calculated separately.
-                  </p>
                 </div>
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
                   <div>
-                    <label style={labelStyle}>Estimated number of guests</label>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", marginBottom: "8px" }}>
+                      <label style={{ ...labelStyle, marginBottom: 0 }}>Estimated number of guests</label>
+                      <InfoPopover
+                        label="Guest estimate info"
+                        text="Optional helper for preparation. Bedroom selection remains the primary setup preference."
+                      />
+                    </div>
                     <input name="sleepingGuests" type="number" required min={1} max={8}
                       value={form.sleepingGuests} onChange={handleFormChange}
                       onFocus={focusGold} onBlur={blurGold} style={inputStyle} />
-                    <p style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.76)", marginTop: "8px", lineHeight: 1.6 }}>
-                      Optional - this helps us prepare the stay, but bedroom usage is the primary setup preference.
-                    </p>
                     {bedroomCapacityWarning && (
                       <p style={{ fontFamily: LATO, fontSize: "14px", color: "#e2ab5a", marginTop: "8px", lineHeight: 1.6 }}>
                         {bedroomCapacityWarning}

@@ -147,7 +147,7 @@ export default function Home() {
       <nav
         className="fixed top-0 left-0 right-0 z-[100] flex justify-between items-center backdrop-blur-[8px]"
         style={{
-          padding: "1.1rem 3rem",
+          padding: "1.1rem clamp(1rem, 4vw, 3rem)",
           backgroundColor: "rgba(255,255,255,0.97)",
           borderBottom: "0.5px solid rgba(197,164,109,0.2)",
         }}
@@ -230,10 +230,10 @@ export default function Home() {
             </div>
           ) : (
             /* Logged-out: Sign In + Reserve */
-            <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", justifyContent: "flex-end" }}>
               <a
                 href="/login"
-                className="no-underline"
+                className="no-underline hidden sm:inline"
                 style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: CHARCOAL }}
                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = GOLD; }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = CHARCOAL; }}
@@ -792,7 +792,7 @@ export default function Home() {
                     <a
                       href={href}
                       className="no-underline"
-                      style={{ fontFamily: LATO, fontSize: "13px", fontWeight: 300, color: "rgba(255,255,255,0.35)" }}
+                      style={{ fontFamily: LATO, fontSize: "13px", fontWeight: 300, color: "rgba(255,255,255,0.35)", overflowWrap: "anywhere" }}
                       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = GOLD; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.35)"; }}
                     >
