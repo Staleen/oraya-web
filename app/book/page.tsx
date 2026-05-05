@@ -188,6 +188,7 @@ interface Addon {
   id:            string;
   label:         string;
   enabled:       boolean;
+  applies_to?:   "stay" | "event" | "both";
   currency:      string;
   price:         number | null;
   pricing_model: "flat_fee" | "per_night" | "per_person_per_day" | "per_unit";
@@ -816,8 +817,11 @@ function BookPageInner() {
     return addon.price;
   }
 
+  const stayApplicableAddons = addons.filter((addon) =>
+    ["stay", "both"].includes(getAddonAppliesTo(addon.applies_to)),
+  );
   const availableAddons = sortAddonsForDisplay(
-    addons.filter((addon) => isAddonApplicableToVilla(addon, form.villa))
+    stayApplicableAddons.filter((addon) => isAddonApplicableToVilla(addon, form.villa))
   );
   const selectedAddonDetails = availableAddons.filter((addon) => selectedAddons.includes(addon.id));
   const selectedAddonSubtotal = selectedAddonDetails.reduce((sum, addon) => {
@@ -971,7 +975,7 @@ function BookPageInner() {
 
   useEffect(() => {
     setSelectedAddons((prev) => prev.filter((id) => {
-      const addon = addons.find((item) => item.id === id);
+      const addon = stayApplicableAddons.find((item) => item.id === id);
       if (!addon) return false;
       if (!isAddonApplicableToVilla(addon, form.villa)) return false;
       const enforcementMode = getAddonEnforcementMode(addon.enforcement_mode);
@@ -988,7 +992,7 @@ function BookPageInner() {
       const hoursUntilCheckIn = (parseLocalISO(checkIn).getTime() - Date.now()) / 3_600_000;
       return hoursUntilCheckIn >= preparationHours;
     }));
-  }, [addons, checkIn, form.villa]);
+  }, [checkIn, form.villa, stayApplicableAddons]);
 
   // Clear applied discounts whenever dates change — the discount amount is date-dependent.
   useEffect(() => { setAppliedDiscounts([]); }, [dateRange]);
@@ -1863,7 +1867,7 @@ function BookPageInner() {
                       </div>
                     ))}
                   </div>
-                ) : addons.length === 0 ? (
+                ) : availableAddons.length === 0 ? (
                   <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED }}>
                     No add-ons are available for this booking.
                   </p>
