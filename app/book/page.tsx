@@ -16,13 +16,22 @@ import { supabase } from "@/lib/supabase";
 import { writeBookToEventHandoff } from "@/lib/event-inquiry-handoff";
 import { AddonIcon } from "@/components/addon-icon";
 import { SkeletonBlock, SkeletonText } from "@/components/LoadingSkeleton";
+import PublicThemeToggle from "@/components/PublicThemeToggle";
 
-// ─── Brand constants ──────────────────────────────────────────────────────────
-const GOLD     = "#C5A46D";
-const WHITE    = "#FFFFFF";
-const MIDNIGHT = "#1F2B38";
-const CHARCOAL = "#2E2E2E";
-const MUTED    = "#8a8070";
+// ─── Brand constants (theme tokens; dark mode matches prior production palette) ─
+const GOLD      = "var(--oraya-gold)";
+const PAGE_BG   = "var(--oraya-book-bg)";
+const WHITE     = "var(--oraya-book-heading)";
+const CHARCOAL  = "var(--oraya-ink)";
+const MUTED     = "var(--oraya-book-muted)";
+const BOOK_SOFT = "var(--oraya-book-text-soft)";
+const BOOK_SOFT2 = "var(--oraya-book-text-soft-2)";
+const BOOK_DIM  = "var(--oraya-book-text-dim)";
+const GLASS1    = "var(--oraya-book-surface-1)";
+const GLASS2    = "var(--oraya-book-surface-2)";
+const GLASS3    = "var(--oraya-book-surface-3)";
+const GLG1      = "var(--oraya-book-surface-gold)";
+const OPT_BG    = "var(--oraya-book-option-bg)";
 const SUCCESS  = "#6fcf8a";
 const PLAYFAIR = "'Playfair Display', Georgia, serif";
 const LATO     = "'Lato', system-ui, sans-serif";
@@ -159,12 +168,12 @@ const DIAL_CODES = [
 // ─── Shared styles ────────────────────────────────────────────────────────────
 const inputStyle: React.CSSProperties = {
   width: "100%",
-  backgroundColor: "rgba(255,255,255,0.04)",
-  border: "0.5px solid rgba(197,164,109,0.25)",
+  backgroundColor: "var(--oraya-book-input-bg)",
+  border: "0.5px solid var(--oraya-book-input-border)",
   padding: "12px 14px",
   fontFamily: LATO,
   fontSize: "13px",
-  color: WHITE,
+  color: "var(--oraya-book-text-on-field)",
   outline: "none",
   boxSizing: "border-box",
   appearance: "none",
@@ -176,7 +185,7 @@ const labelStyle: React.CSSProperties = {
   fontSize: "11px",
   letterSpacing: "2px",
   textTransform: "uppercase",
-  color: "rgba(255,255,255,0.7)",
+  color: "var(--oraya-book-label)",
   display: "block",
   marginBottom: "8px",
   fontWeight: 400,
@@ -439,104 +448,91 @@ function detectDeadDaySuggestion(
   return { suggestLateCheckout, suggestEarlyCheckin };
 }
 
-// ─── Calendar CSS (dark-theme overrides for react-day-picker) ─────────────────
+// ─── Calendar CSS (react-day-picker + popovers; uses html data-theme tokens) ───
 const CALENDAR_CSS = `
   .oraya-cal { display: flex; justify-content: center; }
 
   .oraya-cal .rdp {
     --rdp-cell-size: 38px;
-    --rdp-accent-color: ${GOLD};
-    --rdp-background-color: rgba(197,164,109,0.15);
+    --rdp-accent-color: var(--oraya-gold);
+    --rdp-background-color: var(--oraya-rdp-bg);
     margin: 0;
     font-family: 'Lato', system-ui, sans-serif;
     font-size: 13px;
-    color: rgba(255,255,255,0.75);
+    color: var(--oraya-cal-day);
   }
 
-  /* Caption (month/year) */
   .oraya-cal .rdp-caption_label {
     font-size: 11px;
     letter-spacing: 2.5px;
     text-transform: uppercase;
     font-weight: 400;
-    color: ${GOLD};
+    color: var(--oraya-gold);
   }
 
-  /* Day-of-week header row */
   .oraya-cal .rdp-head_cell {
     font-size: 9px;
     letter-spacing: 1.5px;
     text-transform: uppercase;
     font-weight: 400;
-    color: ${MUTED};
+    color: var(--oraya-book-muted);
   }
 
-  /* Nav arrows */
-  .oraya-cal .rdp-nav_button { color: ${GOLD}; }
-  .oraya-cal .rdp-nav_button:hover { background-color: rgba(197,164,109,0.12); }
+  .oraya-cal .rdp-nav_button { color: var(--oraya-gold); }
+  .oraya-cal .rdp-nav_button:hover { background-color: var(--oraya-rdp-nav-hover); }
 
-  /* Regular day */
-  .oraya-cal .rdp-day { color: rgba(255,255,255,0.75); border-radius: 2px; }
+  .oraya-cal .rdp-day { color: var(--oraya-cal-day); border-radius: 2px; }
   .oraya-cal .rdp-day:hover:not([disabled]):not(.rdp-day_selected):not(.rdp-day_range_middle) {
-    background-color: rgba(197,164,109,0.2);
-    color: ${GOLD};
+    background-color: var(--oraya-rdp-hover);
+    color: var(--oraya-gold);
   }
 
-  /* Range endpoints */
   .oraya-cal .rdp-day_range_start,
   .oraya-cal .rdp-day_range_end {
-    background-color: ${GOLD} !important;
-    color: ${CHARCOAL} !important;
+    background-color: var(--oraya-gold) !important;
+    color: var(--oraya-ink) !important;
     font-weight: 700;
     border-radius: 2px !important;
   }
 
-  /* Range middle */
   .oraya-cal .rdp-day_range_middle {
-    background-color: rgba(197,164,109,0.15);
-    color: rgba(255,255,255,0.8);
+    background-color: var(--oraya-rdp-range);
+    color: var(--oraya-cal-range-mid);
     border-radius: 0;
   }
 
-  /* Disabled (past + booked) */
   .oraya-cal .rdp-day_disabled {
-    color: rgba(255,255,255,0.2) !important;
+    color: var(--oraya-cal-day-muted) !important;
     text-decoration: line-through;
     opacity: 0.5;
   }
 
   .oraya-cal .rdp-day_deadCheckIn:not(.rdp-day_selected):not(.rdp-day_range_middle):not(.rdp-day_range_start):not(.rdp-day_range_end) {
-    color: rgba(255,255,255,0.28);
+    color: var(--oraya-cal-dead);
     text-decoration: line-through;
     cursor: not-allowed;
   }
 
-  /* Outside (adjacent-month days) */
-  .oraya-cal .rdp-day_outside { color: rgba(255,255,255,0.15); }
+  .oraya-cal .rdp-day_outside { color: var(--oraya-cal-outside); }
 
-  /* Today highlight */
   .oraya-cal .rdp-day_today:not(.rdp-day_selected):not(.rdp-day_range_middle):not(.rdp-day_range_start):not(.rdp-day_range_end) {
     border: 1px solid rgba(197,164,109,0.4);
-    color: ${GOLD};
+    color: var(--oraya-gold);
   }
 
-  /* Multi-month gap */
   .oraya-cal .rdp-months { gap: 24px; }
 
-  /* Mobile: stack months */
   @media (max-width: 640px) {
     .oraya-cal .rdp-months { flex-direction: column; }
     .oraya-cal .rdp { --rdp-cell-size: 34px; }
   }
 
-  /* Step transition */
   @keyframes stepFadeIn {
     from { opacity: 0; transform: translateY(8px); }
     to   { opacity: 1; transform: translateY(0);   }
   }
   .step-content { animation: stepFadeIn 0.25s ease forwards; }
 
-  /* Info popovers — compact trigger, floating panel (no layout shift) */
   .book-info-popover {
     position: relative;
     display: inline-flex;
@@ -553,13 +549,13 @@ const CALENDAR_CSS = `
     right: 0;
     width: min(280px, calc(100vw - 40px));
     padding: 10px 12px;
-    background-color: rgba(31,43,56,0.98);
-    border: 0.5px solid rgba(197,164,109,0.28);
-    box-shadow: 0 12px 36px rgba(0,0,0,0.4);
+    background-color: var(--oraya-popover-bg);
+    border: 0.5px solid var(--oraya-popover-border);
+    box-shadow: 0 12px 36px rgba(0,0,0,0.18);
     font-family: 'Lato', system-ui, sans-serif;
     font-size: 12px;
     line-height: 1.55;
-    color: rgba(255,255,255,0.86);
+    color: var(--oraya-popover-text);
   }
   @media (max-width: 480px) {
     .book-info-panel {
@@ -579,11 +575,11 @@ function StepIndicator({ step }: { step: number }) {
           <div key={s} style={{ display: "flex", alignItems: "center" }}>
             <div style={{
               width: "26px", height: "26px", borderRadius: "50%", flexShrink: 0,
-              border: `1px solid ${step >= s ? GOLD : "rgba(197,164,109,0.2)"}`,
+              border: `1px solid ${step >= s ? GOLD : "var(--oraya-border)"}`,
               backgroundColor: step === s ? GOLD : "transparent",
               display: "flex", alignItems: "center", justifyContent: "center",
               fontFamily: LATO, fontSize: "10px",
-              color: step === s ? CHARCOAL : step > s ? GOLD : "rgba(197,164,109,0.3)",
+              color: step === s ? CHARCOAL : step > s ? GOLD : "var(--oraya-step-inactive)",
               transition: "background-color 0.2s, border-color 0.2s",
             }}>
               {step > s ? "✓" : s}
@@ -591,7 +587,7 @@ function StepIndicator({ step }: { step: number }) {
             {i < 3 && (
               <div style={{
                 width: "52px", height: "0.5px",
-                backgroundColor: step > s ? GOLD : "rgba(197,164,109,0.15)",
+                backgroundColor: step > s ? GOLD : "var(--oraya-step-line)",
                 transition: "background-color 0.2s",
               }} />
             )}
@@ -1150,7 +1146,7 @@ function BookPageInner() {
     e.currentTarget.style.borderColor = GOLD;
   }
   function blurGold(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
-    e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)";
+    e.currentTarget.style.borderColor = getComputedStyle(document.documentElement).getPropertyValue("--oraya-book-input-border").trim() || "rgba(197,164,109,0.25)";
   }
 
   function handleDateSelect(nextRange: DateRange | undefined, selectedDay: Date) {
@@ -1340,7 +1336,10 @@ function BookPageInner() {
   // ── Auth loading spinner ──────────────────────────────────────────────────
   if (authStatus === "loading") {
     return (
-      <main style={{ backgroundColor: MIDNIGHT, minHeight: "100vh", padding: "80px 24px" }}>
+      <main style={{ backgroundColor: PAGE_BG, minHeight: "100vh", padding: "80px 24px", position: "relative" }}>
+        <div style={{ position: "absolute", top: "1rem", right: "1rem", zIndex: 20 }}>
+          <PublicThemeToggle variant="onDark" />
+        </div>
         <div style={{ width: "100%", maxWidth: "720px", margin: "0 auto" }} aria-hidden="true">
           <div style={{ width: "160px", margin: "0 auto 2.5rem", opacity: 0.45 }}>
             <OrayaLogoFull />
@@ -1352,7 +1351,7 @@ function BookPageInner() {
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: "14px", marginBottom: "24px" }}>
             {[0, 1].map((item) => (
-              <div key={item} style={{ border: "0.5px solid rgba(197,164,109,0.18)", backgroundColor: "rgba(255,255,255,0.02)" }}>
+              <div key={item} style={{ border: "0.5px solid rgba(197,164,109,0.18)", backgroundColor: GLASS1 }}>
                 <SkeletonBlock height="132px" />
                 <div style={{ padding: "16px" }}>
                   <SkeletonText width="68%" height="20px" style={{ marginBottom: "12px" }} />
@@ -1371,7 +1370,7 @@ function BookPageInner() {
   // ── Auth gate (not member, not yet chosen guest) ──────────────────────────
   // Phase 13C.2: simplified stay pricing panel — Estimated Booking Total prominent, then small detail lines.
   const estimatePanel = checkIn && checkOut && staySubtotal !== null ? (
-    <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: "rgba(197,164,109,0.045)", padding: "1rem 1.15rem" }}>
+    <div style={{ border: "0.5px solid var(--oraya-border)", backgroundColor: GLG1, padding: "1rem 1.15rem" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", margin: "0 0 6px" }}>
         <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
           Estimated booking total
@@ -1386,20 +1385,20 @@ function BookPageInner() {
       </p>
       <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: "16px" }}>
-          <span style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.72)" }}>Duration</span>
-          <span style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.88)", textAlign: "right" }}>
+          <span style={{ fontFamily: LATO, fontSize: "12px", color: BOOK_SOFT }}>Duration</span>
+          <span style={{ fontFamily: LATO, fontSize: "12px", color: BOOK_SOFT2, textAlign: "right" }}>
             {nights} {nights === 1 ? "night" : "nights"}
           </span>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", gap: "16px" }}>
-          <span style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.72)" }}>Selected add-ons</span>
-          <span style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.88)", textAlign: "right" }}>
+          <span style={{ fontFamily: LATO, fontSize: "12px", color: BOOK_SOFT }}>Selected add-ons</span>
+          <span style={{ fontFamily: LATO, fontSize: "12px", color: BOOK_SOFT2, textAlign: "right" }}>
             {formatUsd(selectedAddonSubtotal)}
           </span>
         </div>
       </div>
       {selectedAddonQuoteCount > 0 && (
-        <p style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.68)", margin: "10px 0 0", lineHeight: 1.55 }}>
+        <p style={{ fontFamily: LATO, fontSize: "12px", color: BOOK_DIM, margin: "10px 0 0", lineHeight: 1.55 }}>
           {selectedAddonQuoteCount} selected add-on{selectedAddonQuoteCount === 1 ? "" : "s"} with price on request are excluded from this estimate.
         </p>
       )}
@@ -1425,7 +1424,10 @@ function BookPageInner() {
 
   if (authStatus === "none" && !guestMode) {
     return (
-      <main style={{ backgroundColor: MIDNIGHT, minHeight: "100vh", padding: "80px 24px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <main style={{ backgroundColor: PAGE_BG, minHeight: "100vh", padding: "80px 24px", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
+        <div style={{ position: "absolute", top: "1rem", right: "1rem", zIndex: 20 }}>
+          <PublicThemeToggle variant="onDark" />
+        </div>
         <div style={{ width: "100%", maxWidth: "520px" }}>
           <a href="/" style={{ display: "block", width: "160px", margin: "0 auto 2.5rem", cursor: "pointer" }}>
             <OrayaLogoFull />
@@ -1437,10 +1439,10 @@ function BookPageInner() {
             <h1 style={{ fontFamily: PLAYFAIR, fontSize: "2rem", fontWeight: 400, color: WHITE, margin: "0 0 12px" }}>
               Request a booking
             </h1>
-            <p style={{ fontFamily: LATO, fontSize: "15px", color: "rgba(255,255,255,0.82)", lineHeight: 1.75, margin: "0 0 1rem" }}>
+            <p style={{ fontFamily: LATO, fontSize: "15px", color: "var(--oraya-book-p82)", lineHeight: 1.75, margin: "0 0 1rem" }}>
               Sign in for member benefits, or continue as guest.
             </p>
-            <p style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.72)", lineHeight: 1.7, margin: 0, maxWidth: "520px", marginLeft: "auto", marginRight: "auto" }}>
+            <p style={{ fontFamily: LATO, fontSize: "14px", color: "var(--oraya-book-p72)", lineHeight: 1.7, margin: 0, maxWidth: "520px", marginLeft: "auto", marginRight: "auto" }}>
               Booking on this site is direct with Oraya — not instant self-checkout. Every request is reviewed before confirmation; payment is requested only after that review. For help,{" "}
               <a href="mailto:hello@stayoraya.com" style={{ color: GOLD, textDecoration: "none" }}>hello@stayoraya.com</a>.
             </p>
@@ -1482,8 +1484,11 @@ function BookPageInner() {
   const containerWidth = step === 1 ? "720px" : "560px";
 
   return (
-    <main style={{ backgroundColor: MIDNIGHT, minHeight: "100vh", padding: "80px 24px" }}>
+    <main style={{ backgroundColor: PAGE_BG, minHeight: "100vh", padding: "80px 24px", position: "relative" }}>
       <style>{CALENDAR_CSS}</style>
+      <div style={{ position: "absolute", top: "1rem", right: "1rem", zIndex: 20 }}>
+        <PublicThemeToggle variant="onDark" />
+      </div>
 
       <div style={{ width: "100%", maxWidth: containerWidth, margin: "0 auto", transition: "max-width 0.3s ease" }}>
 
@@ -1534,7 +1539,7 @@ function BookPageInner() {
                           overflow: "hidden",
                           textAlign: "left",
                           border: `0.5px solid ${selected ? GOLD : "rgba(197,164,109,0.18)"}`,
-                          backgroundColor: selected ? "rgba(197,164,109,0.08)" : "rgba(255,255,255,0.02)",
+                          backgroundColor: selected ? "rgba(197,164,109,0.08)" : GLASS1,
                           cursor: "pointer",
                           transition: "border-color 0.15s, background-color 0.15s, transform 0.15s",
                         }}
@@ -1596,7 +1601,7 @@ function BookPageInner() {
                             {meta.note}
                           </p>
                           {startingPrice !== null && (
-                            <p style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.8)", margin: "8px 0 0", lineHeight: 1.5 }}>
+                            <p style={{ fontFamily: LATO, fontSize: "14px", color: "var(--oraya-book-text-soft-2)", margin: "8px 0 0", lineHeight: 1.5 }}>
                               Starting from {formatUsd(startingPrice)} / night · 1 bedroom
                             </p>
                           )}
@@ -1611,7 +1616,7 @@ function BookPageInner() {
               {form.villa ? (
                 <div>
                   <p style={{ ...labelStyle, marginBottom: "14px" }}>Select dates</p>
-                  <div style={{ border: "0.5px solid rgba(197,164,109,0.12)", backgroundColor: "rgba(255,255,255,0.01)", padding: "1.25rem" }}>
+                  <div style={{ border: "0.5px solid rgba(197,164,109,0.12)", backgroundColor: GLASS3, padding: "1.25rem" }}>
                     <div className="oraya-cal">
                       <DayPicker
                         mode="range"
@@ -1630,17 +1635,17 @@ function BookPageInner() {
                   {checkIn && (
                     <div style={{ marginTop: "14px", padding: "14px 20px", border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: "rgba(197,164,109,0.04)", display: "flex", flexWrap: "wrap", gap: "28px" }}>
                       <div>
-                        <p style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.6px", color: "rgba(255,255,255,0.76)", margin: "0 0 6px" }}>Check-in</p>
+                        <p style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.6px", color: "var(--oraya-book-p76)", margin: "0 0 6px" }}>Check-in</p>
                         <p style={{ fontFamily: LATO, fontSize: "14px", color: WHITE, margin: 0 }}>{fmtDate(checkIn)}</p>
                       </div>
                       {checkOut ? (
                         <>
                           <div>
-                            <p style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.6px", color: "rgba(255,255,255,0.76)", margin: "0 0 6px" }}>Check-out</p>
+                            <p style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.6px", color: "var(--oraya-book-p76)", margin: "0 0 6px" }}>Check-out</p>
                             <p style={{ fontFamily: LATO, fontSize: "14px", color: WHITE, margin: 0 }}>{fmtDate(checkOut)}</p>
                           </div>
                           <div>
-                            <p style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.6px", color: "rgba(255,255,255,0.76)", margin: "0 0 6px" }}>Duration</p>
+                            <p style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.6px", color: "var(--oraya-book-p76)", margin: "0 0 6px" }}>Duration</p>
                             <p style={{ fontFamily: LATO, fontSize: "14px", color: GOLD, margin: 0 }}>
                               {nights} {nights === 1 ? "night" : "nights"}
                             </p>
@@ -1648,7 +1653,7 @@ function BookPageInner() {
                         </>
                       ) : (
                         <div style={{ display: "flex", alignItems: "center" }}>
-                          <p style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.78)", margin: 0 }}>Now select a check-out date</p>
+                          <p style={{ fontFamily: LATO, fontSize: "14px", color: "var(--oraya-book-p78)", margin: 0 }}>Now select a check-out date</p>
                         </div>
                       )}
                     </div>
@@ -1657,7 +1662,7 @@ function BookPageInner() {
                   {estimatePanel && (
                     <div style={{ marginTop: "14px" }}>
                       {estimatePanel}
-                      <p style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.76)", margin: "10px 0 0", lineHeight: 1.65 }}>
+                      <p style={{ fontFamily: LATO, fontSize: "14px", color: "var(--oraya-book-p76)", margin: "10px 0 0", lineHeight: 1.65 }}>
                         Rates vary by selected dates, season, and bedroom setup.
                       </p>
                     </div>
@@ -1704,7 +1709,7 @@ function BookPageInner() {
 
               {/* Guest contact fields (only when not a member) */}
               {guestMode && (
-                <div style={{ order: 0, border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: "rgba(255,255,255,0.02)", padding: "1.5rem", display: "flex", flexDirection: "column", gap: "14px" }}>
+                <div style={{ order: 0, border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: GLASS1, padding: "1.5rem", display: "flex", flexDirection: "column", gap: "14px" }}>
                   <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
                     Your details
                   </p>
@@ -1742,9 +1747,9 @@ function BookPageInner() {
                         style={{ ...inputStyle, width: "auto", flexShrink: 0, paddingRight: "10px", borderRight: "none", cursor: "pointer", minWidth: "120px" }}>
                         {DIAL_CODES.map((d, i) =>
                           d.code === "" ? (
-                            <option key={`div-${i}`} disabled value="" style={{ backgroundColor: MIDNIGHT, color: MUTED }}>{d.label}</option>
+                            <option key={`div-${i}`} disabled value="" style={{ backgroundColor: OPT_BG, color: MUTED }}>{d.label}</option>
                           ) : (
-                            <option key={`${d.code}-${d.label}`} value={d.code} style={{ backgroundColor: MIDNIGHT }}>{d.flag} {d.code}</option>
+                            <option key={`${d.code}-${d.label}`} value={d.code} style={{ backgroundColor: OPT_BG }}>{d.flag} {d.code}</option>
                           )
                         )}
                       </select>
@@ -1759,9 +1764,9 @@ function BookPageInner() {
                       onFocus={focusGold} onBlur={blurGold} style={{ ...inputStyle, cursor: "pointer" }}>
                       {COUNTRIES.map((c, i) =>
                         c.value === "" ? (
-                          <option key={`div-${i}`} disabled value="" style={{ backgroundColor: MIDNIGHT, color: MUTED }}>{c.label}</option>
+                          <option key={`div-${i}`} disabled value="" style={{ backgroundColor: OPT_BG, color: MUTED }}>{c.label}</option>
                         ) : (
-                          <option key={c.value} value={c.value} style={{ backgroundColor: MIDNIGHT }}>{c.label}</option>
+                          <option key={c.value} value={c.value} style={{ backgroundColor: OPT_BG }}>{c.label}</option>
                         )
                       )}
                     </select>
@@ -1789,7 +1794,7 @@ function BookPageInner() {
                           onClick={() => handleBedroomSelect(bedroomCount)}
                           style={{
                             border: `0.5px solid ${selected ? GOLD : "rgba(197,164,109,0.2)"}`,
-                            backgroundColor: selected ? "rgba(197,164,109,0.08)" : "rgba(255,255,255,0.02)",
+                            backgroundColor: selected ? "rgba(197,164,109,0.08)" : GLASS1,
                             padding: "14px 12px",
                             minHeight: "104px",
                             display: "flex",
@@ -1809,14 +1814,14 @@ function BookPageInner() {
                           onMouseLeave={e => {
                             if (!selected) {
                               (e.currentTarget as HTMLElement).style.borderColor = "rgba(197,164,109,0.2)";
-                              (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.02)";
+                              (e.currentTarget as HTMLElement).style.backgroundColor = GLASS1;
                             }
                           }}
                         >
                           <span style={{ fontFamily: LATO, fontSize: "15px", fontWeight: 600, letterSpacing: "0.06em", color: selected ? GOLD : WHITE, display: "block", marginBottom: "6px" }}>
                             {formatBedroomLabel(bedroomCount)}
                           </span>
-                          <span style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.72)", lineHeight: 1.45 }}>
+                          <span style={{ fontFamily: LATO, fontSize: "12px", color: "var(--oraya-book-p72)", lineHeight: 1.45 }}>
                             {BEDROOM_CAPACITY_COPY[bedroomCount]}
                           </span>
                         </button>
@@ -1860,17 +1865,17 @@ function BookPageInner() {
               </div>
 
               {/* Premium stay-to-event upgrade CTA — routes to /events/inquiry */}
-              <div style={{ order: 2, border: "0.5px solid rgba(197,164,109,0.26)", backgroundColor: "rgba(255,255,255,0.03)", padding: "18px 20px", display: "flex", flexDirection: "column", gap: "10px", boxShadow: "inset 0 0 0 1px rgba(197,164,109,0.04)" }}>
+              <div style={{ order: 2, border: "0.5px solid rgba(197,164,109,0.26)", backgroundColor: GLASS2, padding: "18px 20px", display: "flex", flexDirection: "column", gap: "10px", boxShadow: "inset 0 0 0 1px rgba(197,164,109,0.04)" }}>
                 <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
                   Hosted Experiences
                 </p>
                 <p style={{ fontFamily: LATO, fontSize: "16px", fontWeight: 500, color: WHITE, margin: "0 0 4px", letterSpacing: "0.02em" }}>
                   Planning something more than a stay?
                 </p>
-                <p style={{ fontFamily: LATO, fontSize: "13px", color: "rgba(255,255,255,0.78)", margin: "0 0 12px", lineHeight: 1.6 }}>
+                <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: "0 0 12px", lineHeight: 1.6 }}>
                   Turn your villa booking into a fully hosted experience - celebrations, private gatherings, and curated event services.
                 </p>
-                <p style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.68)", margin: "0", lineHeight: 1.55 }}>
+                <p style={{ fontFamily: LATO, fontSize: "12px", color: "var(--oraya-book-p68)", margin: "0", lineHeight: 1.55 }}>
                   Event inquiries are reviewed separately and confirmed by Oraya.
                 </p>
                 <button
@@ -1937,7 +1942,7 @@ function BookPageInner() {
 
               <div style={{ order: 6, display: "flex", gap: "12px", alignItems: "stretch", marginTop: "4px" }}>
                 <button type="button" onClick={goBack}
-                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: "rgba(255,255,255,0.85)", backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", padding: "14px 22px", cursor: "pointer", minHeight: "50px", display: "flex", alignItems: "center", justifyContent: "center" }}
+                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: "var(--oraya-book-text)", backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", padding: "14px 22px", cursor: "pointer", minHeight: "50px", display: "flex", alignItems: "center", justifyContent: "center" }}
                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = GOLD; (e.currentTarget as HTMLElement).style.color = GOLD; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(197,164,109,0.25)"; (e.currentTarget as HTMLElement).style.color = MUTED; }}>
                   ← Back
@@ -1976,7 +1981,7 @@ function BookPageInner() {
                           gap: "16px",
                           padding: "14px 18px",
                           border: "0.5px solid rgba(197,164,109,0.14)",
-                          backgroundColor: "rgba(255,255,255,0.02)",
+                          backgroundColor: GLASS1,
                           minHeight: "82px",
                         }}
                       >
@@ -2051,8 +2056,8 @@ function BookPageInner() {
                                 display: "flex", alignItems: "flex-start", justifyContent: "space-between",
                                 width: "100%", textAlign: "left",
                                 padding: "14px 18px",
-                                border: `0.5px solid ${selected ? "rgba(111,207,138,0.55)" : availability.mode === "soft" && !availability.available ? "rgba(226,171,90,0.42)" : disableSelection ? "rgba(255,255,255,0.12)" : "rgba(197,164,109,0.18)"}`,
-                                backgroundColor: selected ? "rgba(111,207,138,0.08)" : availability.mode === "soft" && !availability.available ? "rgba(226,171,90,0.08)" : disableSelection ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.02)",
+                                border: `0.5px solid ${selected ? "rgba(111,207,138,0.55)" : availability.mode === "soft" && !availability.available ? "rgba(226,171,90,0.42)" : disableSelection ? "var(--oraya-book-p12)" : "rgba(197,164,109,0.18)"}`,
+                                backgroundColor: selected ? "rgba(111,207,138,0.08)" : availability.mode === "soft" && !availability.available ? "rgba(226,171,90,0.08)" : disableSelection ? GLASS2 : GLASS1,
                                 cursor: disableSelection ? "not-allowed" : "pointer",
                                 transition: "border-color 0.15s, background-color 0.15s",
                                 opacity: disableSelection ? 0.55 : 1,
@@ -2063,7 +2068,7 @@ function BookPageInner() {
                           <div style={{ display: "flex", alignItems: "flex-start", gap: "12px", flex: 1, minWidth: 0 }}>
                             <div style={{
                               width: "16px", height: "16px", flexShrink: 0, marginTop: "2px",
-                              border: `1px solid ${selected ? SUCCESS : availability.mode === "soft" && !availability.available ? "rgba(226,171,90,0.55)" : disableSelection ? "rgba(255,255,255,0.2)" : "rgba(197,164,109,0.3)"}`,
+                              border: `1px solid ${selected ? SUCCESS : availability.mode === "soft" && !availability.available ? "rgba(226,171,90,0.55)" : disableSelection ? "var(--oraya-book-p20)" : "rgba(197,164,109,0.3)"}`,
                               backgroundColor: selected ? SUCCESS : "transparent",
                               display: "flex", alignItems: "center", justifyContent: "center",
                               transition: "background-color 0.15s, border-color 0.15s",
@@ -2080,7 +2085,7 @@ function BookPageInner() {
                                   color={selected ? "rgba(111,207,138,0.82)" : disableSelection ? "rgba(197,164,109,0.25)" : "rgba(197,164,109,0.45)"}
                                 />
                                 <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0, flexWrap: "wrap" }}>
-                                  <span style={{ fontFamily: LATO, fontSize: "13px", color: selected ? WHITE : disableSelection ? "rgba(255,255,255,0.45)" : "rgba(255,255,255,0.7)", fontWeight: selected ? 400 : 300, lineHeight: 1.3 }}>
+                                  <span style={{ fontFamily: LATO, fontSize: "13px", color: selected ? WHITE : disableSelection ? "var(--oraya-book-p45)" : "var(--oraya-book-p72)", fontWeight: selected ? 400 : 300, lineHeight: 1.3 }}>
                                     {addon.label}
                                   </span>
                                   {addon.recommended && (
@@ -2178,7 +2183,7 @@ function BookPageInner() {
                                   style={{
                                     fontFamily: LATO,
                                     fontSize: "11px",
-                                    color: disableSelection ? "rgba(255,255,255,0.34)" : MUTED,
+                                    color: disableSelection ? "var(--oraya-book-p34)" : MUTED,
                                     display: "-webkit-box",
                                     marginTop: "4px",
                                     lineHeight: 1.55,
@@ -2231,7 +2236,7 @@ function BookPageInner() {
                                   gap: "4px",
                                   marginTop: "8px",
                                   paddingTop: "8px",
-                                  borderTop: "0.5px solid rgba(255,255,255,0.06)",
+                                  borderTop: "0.5px solid var(--oraya-book-subtle-line)",
                                 }}>
                                   {operationalFeedback.map((item) => (
                                     <span
@@ -2346,7 +2351,7 @@ function BookPageInner() {
                             flexWrap: "wrap",
                           }}>
                             <div>
-                              <p style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.8)", margin: "0 0 2px", lineHeight: 1.4 }}>
+                              <p style={{ fontFamily: LATO, fontSize: "12px", color: "var(--oraya-book-text-soft-2)", margin: "0 0 2px", lineHeight: 1.4 }}>
                                 {offerAddon.label}
                               </p>
                               <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.4 }}>
@@ -2406,16 +2411,16 @@ function BookPageInner() {
                     </p>
                     <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
                       {deadDaySuggestion.suggestLateCheckout && (
-                        <p style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.65)", margin: 0, lineHeight: 1.6 }}>
+                        <p style={{ fontFamily: LATO, fontSize: "12px", color: "var(--oraya-book-p65)", margin: 0, lineHeight: 1.6 }}>
                           · Late checkout may be available to extend your stay by a day
                         </p>
                       )}
                       {deadDaySuggestion.suggestEarlyCheckin && (
-                        <p style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.65)", margin: 0, lineHeight: 1.6 }}>
+                        <p style={{ fontFamily: LATO, fontSize: "12px", color: "var(--oraya-book-p65)", margin: 0, lineHeight: 1.6 }}>
                           · Early check-in may be available for the adjacent day
                         </p>
                       )}
-                      <p style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.65)", margin: 0, lineHeight: 1.6 }}>
+                      <p style={{ fontFamily: LATO, fontSize: "12px", color: "var(--oraya-book-p65)", margin: 0, lineHeight: 1.6 }}>
                         · A special offer may be available for adjacent days — contact Oraya for details
                       </p>
                     </div>
@@ -2433,9 +2438,9 @@ function BookPageInner() {
               )}
               <div style={{ display: "flex", gap: "12px", alignItems: "stretch" }}>
                 <button type="button" onClick={goBack}
-                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: "rgba(255,255,255,0.85)", backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", padding: "14px 22px", minHeight: "50px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: "var(--oraya-book-text)", backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", padding: "14px 22px", minHeight: "50px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = GOLD; (e.currentTarget as HTMLElement).style.color = GOLD; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(197,164,109,0.25)"; (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.8)"; }}>
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(197,164,109,0.25)"; (e.currentTarget as HTMLElement).style.color = "var(--oraya-book-text-soft-2)"; }}>
                   ← Back
                 </button>
                 <button type="button" onClick={goNext}
@@ -2454,7 +2459,7 @@ function BookPageInner() {
                 <p style={{ fontFamily: PLAYFAIR, fontSize: "20px", fontWeight: 400, color: WHITE, margin: "0 0 10px" }}>
                   Review your stay
                 </p>
-                <div style={{ border: "0.5px solid rgba(197,164,109,0.18)", padding: "1.25rem", backgroundColor: "rgba(255,255,255,0.015)" }}>
+                <div style={{ border: "0.5px solid rgba(197,164,109,0.18)", padding: "1.25rem", backgroundColor: GLASS3 }}>
                   {(
                     [
                       ["Villa", form.villa],
@@ -2467,8 +2472,8 @@ function BookPageInner() {
                       ...(selectedAddons.length > 0 ? [["Selected add-ons", selectedAddonDetails.map((addon) => addon.label).join(", ")]] : []),
                     ] as [string, string][]
                   ).map(([label, value]) => (
-                    <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "10px 0", borderBottom: "0.5px solid rgba(255,255,255,0.05)", gap: "16px" }}>
-                      <span style={{ fontFamily: LATO, fontSize: "12px", letterSpacing: "1px", textTransform: "uppercase", color: "rgba(255,255,255,0.62)", flexShrink: 0, paddingRight: "16px" }}>{label}</span>
+                    <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "10px 0", borderBottom: "0.5px solid var(--oraya-book-subtle-border)", gap: "16px" }}>
+                      <span style={{ fontFamily: LATO, fontSize: "12px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--oraya-book-p62)", flexShrink: 0, paddingRight: "16px" }}>{label}</span>
                       <span style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, textAlign: "right", lineHeight: 1.5, maxWidth: "60%" }}>{value}</span>
                     </div>
                   ))}
@@ -2479,12 +2484,12 @@ function BookPageInner() {
 
               <div style={{ border: "0.5px solid rgba(197,164,109,0.24)", backgroundColor: "rgba(197,164,109,0.05)", padding: "16px 18px", display: "grid", gap: "10px" }}>
                 <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>Payment options</p>
-                <p style={{ fontFamily: LATO, fontSize: "13px", color: "rgba(255,255,255,0.78)", margin: 0, lineHeight: 1.6 }}>
+                <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.6 }}>
                   No payment is taken on this page. Payment does not confirm the booking until Oraya reviews and approves your request; deposit or full payment links will be shared after confirmation when applicable.
                 </p>
                 <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                  <button type="button" disabled style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, border: "0.5px solid rgba(197,164,109,0.3)", backgroundColor: "rgba(255,255,255,0.02)", padding: "10px 14px", cursor: "not-allowed" }}>Pay deposit (coming soon)</button>
-                  <button type="button" disabled style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, border: "0.5px solid rgba(197,164,109,0.3)", backgroundColor: "rgba(255,255,255,0.02)", padding: "10px 14px", cursor: "not-allowed" }}>Pay full amount (coming soon)</button>
+                  <button type="button" disabled style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, border: "0.5px solid rgba(197,164,109,0.3)", backgroundColor: GLASS1, padding: "10px 14px", cursor: "not-allowed" }}>Pay deposit (coming soon)</button>
+                  <button type="button" disabled style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, border: "0.5px solid rgba(197,164,109,0.3)", backgroundColor: GLASS1, padding: "10px 14px", cursor: "not-allowed" }}>Pay full amount (coming soon)</button>
                 </div>
               </div>
 
@@ -2496,7 +2501,7 @@ function BookPageInner() {
 
               <div style={{ display: "flex", gap: "12px", alignItems: "stretch" }}>
                 <button type="button" onClick={goBack} disabled={loading}
-                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: "rgba(255,255,255,0.85)", backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", padding: "14px 22px", minHeight: "50px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.5 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: "var(--oraya-book-text)", backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", padding: "14px 22px", minHeight: "50px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.5 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   ← Back
                 </button>
                 <button type="button" onClick={() => { void handleSubmit(); }} disabled={loading}
@@ -2510,22 +2515,22 @@ function BookPageInner() {
         </div>
 
         <details style={{ border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: "rgba(197,164,109,0.04)", padding: "12px 14px", marginTop: "20px" }}>
-          <summary style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.82)", cursor: "pointer" }}>
+          <summary style={{ fontFamily: LATO, fontSize: "14px", color: "var(--oraya-book-p82)", cursor: "pointer" }}>
             Booking details
           </summary>
-          <p style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.8)", margin: "10px 0 0", lineHeight: 1.7 }}>
+          <p style={{ fontFamily: LATO, fontSize: "14px", color: "var(--oraya-book-text-soft-2)", margin: "10px 0 0", lineHeight: 1.7 }}>
             Direct booking here does not mean instant or unverified checkout. Oraya reviews each request against availability and operations before confirming your stay.
           </p>
-          <p style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.76)", margin: "0 0 10px", lineHeight: 1.7 }}>
+          <p style={{ fontFamily: LATO, fontSize: "14px", color: "var(--oraya-book-p76)", margin: "0 0 10px", lineHeight: 1.7 }}>
             Payment is requested only after we confirm and align the reservation — not when you press submit. Guests receive coordinated support before arrival and during their stay. Automated arrival instructions are used only after confirmation and operational review.
           </p>
-          <p style={{ fontFamily: LATO, fontSize: "14px", color: "rgba(255,255,255,0.76)", margin: 0, lineHeight: 1.7 }}>
+          <p style={{ fontFamily: LATO, fontSize: "14px", color: "var(--oraya-book-p76)", margin: 0, lineHeight: 1.7 }}>
             Questions:{" "}
             <a href="mailto:hello@stayoraya.com" style={{ color: GOLD, textDecoration: "none" }}>hello@stayoraya.com</a>
           </p>
           {authStatus === "member" ? (
             <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: "rgba(197,164,109,0.04)", padding: "0.875rem 1.25rem", marginTop: "12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <p style={{ fontFamily: LATO, fontSize: "12px", color: "rgba(255,255,255,0.6)", margin: 0 }}>
+              <p style={{ fontFamily: LATO, fontSize: "12px", color: "var(--oraya-book-p60)", margin: 0 }}>
                 Booking as <span style={{ color: GOLD }}>{memberName || "member"}</span>
               </p>
               <a href="/login" style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED, textDecoration: "none" }}>
@@ -2533,7 +2538,7 @@ function BookPageInner() {
               </a>
             </div>
           ) : (
-            <div style={{ border: "0.5px solid rgba(197,164,109,0.12)", backgroundColor: "rgba(255,255,255,0.02)", padding: "0.75rem 1.25rem", marginTop: "12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ border: "0.5px solid rgba(197,164,109,0.12)", backgroundColor: GLASS1, padding: "0.75rem 1.25rem", marginTop: "12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0 }}>Continuing as guest</p>
               <button
                 onClick={() => { setGuestMode(false); setStep(1); setError(""); }}

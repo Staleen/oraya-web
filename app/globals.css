@@ -2,6 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Legacy aliases — prefer --oraya-* tokens */
 :root {
   --color-gold: #C5A46D;
   --color-white: #FFFFFF;
@@ -10,6 +11,182 @@
   --color-charcoal: #2E2E2E;
   --color-midnight: #1F2B38;
   --color-muted: #8a8070;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+
+  --oraya-gold: #c5a46d;
+  --oraya-ink: #2e2e2e;
+  --oraya-text-muted: #8a8070;
+  --oraya-surface: #ffffff;
+  --oraya-surface-muted: #eae3d9;
+  --oraya-bg: #f5f1eb;
+  --oraya-border: rgba(197, 164, 109, 0.2);
+  --oraya-hero-overlay: rgba(15, 25, 35, 0.55);
+  /** Solid fallback behind hero imagery — stays deep navy in both themes for legibility */
+  --oraya-hero-canvas: #1f2b38;
+  --oraya-hero-text: #ffffff;
+  --oraya-hero-kicker: rgba(197, 164, 109, 0.65);
+  --oraya-hero-tagline: rgba(255, 255, 255, 0.45);
+  --oraya-hero-discover: rgba(255, 255, 255, 0.2);
+
+  --oraya-band-dark-bg: #1f2b38;
+  --oraya-band-text: #ffffff;
+  --oraya-band-muted: rgba(255, 255, 255, 0.45);
+  --oraya-band-muted-2: rgba(255, 255, 255, 0.4);
+  --oraya-band-card-border: rgba(197, 164, 109, 0.07);
+  --oraya-band-card-fill: #1f2b38;
+
+  --oraya-footer-bg: #2e2e2e;
+  --oraya-footer-text: rgba(255, 255, 255, 0.18);
+  --oraya-footer-muted: rgba(255, 255, 255, 0.3);
+  --oraya-footer-link: rgba(255, 255, 255, 0.35);
+  --oraya-footer-quote: rgba(255, 255, 255, 0.3);
+  --oraya-footer-legal: rgba(255, 255, 255, 0.42);
+  --oraya-footer-legal-muted: rgba(255, 255, 255, 0.32);
+
+  --oraya-nav-bg: rgba(255, 255, 255, 0.97);
+  --oraya-nav-text: #2e2e2e;
+  --oraya-nav-border: rgba(197, 164, 109, 0.2);
+
+  /* /book flow */
+  --oraya-book-bg: #1f2b38;
+  --oraya-book-surface-1: rgba(255, 255, 255, 0.02);
+  --oraya-book-surface-2: rgba(255, 255, 255, 0.03);
+  --oraya-book-surface-3: rgba(255, 255, 255, 0.015);
+  --oraya-book-surface-gold: rgba(197, 164, 109, 0.045);
+  --oraya-book-surface-gold-2: rgba(197, 164, 109, 0.05);
+  --oraya-book-surface-gold-3: rgba(197, 164, 109, 0.04);
+  --oraya-book-surface-gold-4: rgba(197, 164, 109, 0.06);
+  --oraya-book-text: rgba(255, 255, 255, 0.85);
+  --oraya-book-text-soft: rgba(255, 255, 255, 0.72);
+  --oraya-book-text-soft-2: rgba(255, 255, 255, 0.88);
+  --oraya-book-text-dim: rgba(255, 255, 255, 0.68);
+  --oraya-book-subtle-line: rgba(255, 255, 255, 0.06);
+  --oraya-book-subtle-border: rgba(255, 255, 255, 0.05);
+  --oraya-book-p82: rgba(255, 255, 255, 0.82);
+  --oraya-book-p78: rgba(255, 255, 255, 0.78);
+  --oraya-book-p76: rgba(255, 255, 255, 0.76);
+  --oraya-book-p72: rgba(255, 255, 255, 0.72);
+  --oraya-book-p68: rgba(255, 255, 255, 0.68);
+  --oraya-book-p65: rgba(255, 255, 255, 0.65);
+  --oraya-book-p62: rgba(255, 255, 255, 0.62);
+  --oraya-book-p60: rgba(255, 255, 255, 0.6);
+  --oraya-book-p45: rgba(255, 255, 255, 0.45);
+  --oraya-book-p34: rgba(255, 255, 255, 0.34);
+  --oraya-book-p12: rgba(255, 255, 255, 0.12);
+  --oraya-book-p20: rgba(255, 255, 255, 0.2);
+  --oraya-book-heading: #ffffff;
+  --oraya-book-label: rgba(255, 255, 255, 0.7);
+  --oraya-book-text-on-field: rgba(255, 255, 255, 0.92);
+  --oraya-book-input-bg: rgba(255, 255, 255, 0.04);
+  --oraya-book-input-border: rgba(197, 164, 109, 0.25);
+  --oraya-book-muted: #8a8070;
+  --oraya-book-option-bg: #1f2b38;
+  --oraya-popover-bg: rgba(31, 43, 56, 0.98);
+  --oraya-popover-text: rgba(255, 255, 255, 0.86);
+  --oraya-popover-border: rgba(197, 164, 109, 0.28);
+
+  --oraya-cal-day: rgba(255, 255, 255, 0.75);
+  --oraya-cal-day-muted: rgba(255, 255, 255, 0.2);
+  --oraya-cal-outside: rgba(255, 255, 255, 0.15);
+  --oraya-cal-dead: rgba(255, 255, 255, 0.28);
+  --oraya-cal-range-mid: rgba(255, 255, 255, 0.8);
+  --oraya-rdp-bg: rgba(197, 164, 109, 0.15);
+  --oraya-rdp-range: rgba(197, 164, 109, 0.15);
+  --oraya-rdp-hover: rgba(197, 164, 109, 0.2);
+  --oraya-rdp-nav-hover: rgba(197, 164, 109, 0.12);
+  --oraya-step-inactive: rgba(197, 164, 109, 0.3);
+  --oraya-step-line: rgba(197, 164, 109, 0.15);
+  --oraya-on-gold-text: #ffffff;
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
+
+  --oraya-gold: #c5a46d;
+  --oraya-ink: #1f2b38;
+  --oraya-text-muted: #5c564c;
+  --oraya-surface: #faf7f2;
+  --oraya-surface-muted: #e8e0d4;
+  --oraya-bg: #ede6dc;
+  --oraya-border: rgba(31, 43, 56, 0.12);
+  --oraya-hero-overlay: rgba(22, 32, 42, 0.52);
+  --oraya-hero-canvas: #1f2b38;
+  --oraya-hero-text: #fffef9;
+  --oraya-hero-kicker: rgba(197, 164, 109, 0.85);
+  --oraya-hero-tagline: rgba(255, 255, 255, 0.55);
+  --oraya-hero-discover: rgba(255, 255, 255, 0.38);
+
+  --oraya-band-dark-bg: #e5dfd4;
+  --oraya-band-text: #1f2b38;
+  --oraya-band-muted: rgba(31, 43, 56, 0.68);
+  --oraya-band-muted-2: rgba(31, 43, 56, 0.55);
+  --oraya-band-card-border: rgba(31, 43, 56, 0.1);
+  --oraya-band-card-fill: #f0ebe3;
+
+  --oraya-footer-bg: #252d38;
+  --oraya-footer-text: rgba(255, 255, 255, 0.22);
+  --oraya-footer-muted: rgba(255, 255, 255, 0.38);
+  --oraya-footer-link: rgba(255, 255, 255, 0.42);
+  --oraya-footer-quote: rgba(255, 255, 255, 0.34);
+  --oraya-footer-legal: rgba(255, 255, 255, 0.48);
+  --oraya-footer-legal-muted: rgba(255, 255, 255, 0.36);
+
+  --oraya-nav-bg: rgba(250, 247, 242, 0.97);
+  --oraya-nav-text: #1f2b38;
+  --oraya-nav-border: rgba(31, 43, 56, 0.1);
+
+  --oraya-book-bg: #ede6dc;
+  --oraya-book-surface-1: rgba(255, 255, 255, 0.82);
+  --oraya-book-surface-2: #faf7f2;
+  --oraya-book-surface-3: rgba(250, 247, 242, 0.95);
+  --oraya-book-surface-gold: rgba(197, 164, 109, 0.14);
+  --oraya-book-surface-gold-2: rgba(197, 164, 109, 0.12);
+  --oraya-book-surface-gold-3: rgba(197, 164, 109, 0.1);
+  --oraya-book-surface-gold-4: rgba(197, 164, 109, 0.12);
+  --oraya-book-text: #1f2b38;
+  --oraya-book-text-soft: rgba(31, 43, 56, 0.72);
+  --oraya-book-text-soft-2: rgba(31, 43, 56, 0.88);
+  --oraya-book-text-dim: rgba(31, 43, 56, 0.62);
+  --oraya-book-subtle-line: rgba(31, 43, 56, 0.08);
+  --oraya-book-subtle-border: rgba(31, 43, 56, 0.08);
+  --oraya-book-p82: rgba(31, 43, 56, 0.88);
+  --oraya-book-p78: rgba(31, 43, 56, 0.82);
+  --oraya-book-p76: rgba(31, 43, 56, 0.8);
+  --oraya-book-p72: rgba(31, 43, 56, 0.75);
+  --oraya-book-p68: rgba(31, 43, 56, 0.7);
+  --oraya-book-p65: rgba(31, 43, 56, 0.66);
+  --oraya-book-p62: rgba(31, 43, 56, 0.62);
+  --oraya-book-p60: rgba(31, 43, 56, 0.58);
+  --oraya-book-p45: rgba(31, 43, 56, 0.45);
+  --oraya-book-p34: rgba(31, 43, 56, 0.34);
+  --oraya-book-p12: rgba(31, 43, 56, 0.12);
+  --oraya-book-p20: rgba(31, 43, 56, 0.2);
+  --oraya-book-heading: #1f2b38;
+  --oraya-book-label: rgba(31, 43, 56, 0.58);
+  --oraya-book-text-on-field: #1f2b38;
+  --oraya-book-input-bg: #faf7f2;
+  --oraya-book-input-border: rgba(31, 43, 56, 0.18);
+  --oraya-book-muted: #5c564c;
+  --oraya-book-option-bg: #faf7f2;
+  --oraya-popover-bg: #fdfbf7;
+  --oraya-popover-text: rgba(31, 43, 56, 0.88);
+  --oraya-popover-border: rgba(31, 43, 56, 0.14);
+
+  --oraya-cal-day: rgba(31, 43, 56, 0.82);
+  --oraya-cal-day-muted: rgba(31, 43, 56, 0.28);
+  --oraya-cal-outside: rgba(31, 43, 56, 0.22);
+  --oraya-cal-dead: rgba(31, 43, 56, 0.35);
+  --oraya-cal-range-mid: rgba(31, 43, 56, 0.78);
+  --oraya-rdp-bg: rgba(197, 164, 109, 0.18);
+  --oraya-rdp-range: rgba(197, 164, 109, 0.22);
+  --oraya-rdp-hover: rgba(197, 164, 109, 0.28);
+  --oraya-rdp-nav-hover: rgba(197, 164, 109, 0.2);
+  --oraya-step-inactive: rgba(197, 164, 109, 0.45);
+  --oraya-step-line: rgba(197, 164, 109, 0.25);
+  --oraya-on-gold-text: #ffffff;
 }
 
 * {
@@ -21,20 +198,31 @@ html {
 }
 
 body {
-  color: var(--color-charcoal);
-  background: var(--color-white);
+  color: var(--oraya-ink);
+  background: var(--oraya-bg);
   font-family: var(--font-lato), system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
 @keyframes fadeUp {
-  from { opacity: 0; transform: translateY(28px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes pulseLine {
-  0%, 100% { opacity: 0.3; }
-  50%       { opacity: 1; }
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 .animate-fade-up {
@@ -43,4 +231,9 @@ body {
 
 .animate-pulse-line {
   animation: pulseLine 2s ease-in-out infinite;
+}
+
+/** Theme-aware muted copy on public pages */
+.oraya-text-muted {
+  color: var(--oraya-text-muted);
 }

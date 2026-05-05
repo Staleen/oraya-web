@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { Playfair_Display, Lato } from "next/font/google";
 import "./globals.css";
+
+const ORAYA_THEME_INIT = `(function(){try{var k='oraya-theme';var t=localStorage.getItem(k);if(t!=='light'&&t!=='dark'){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();`;
 
 const playfairDisplay = Playfair_Display({
   subsets: ["latin"],
@@ -64,8 +67,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${playfairDisplay.variable} ${lato.variable}`}>
-      <body>{children}</body>
+    <html lang="en" suppressHydrationWarning data-theme="dark" className={`${playfairDisplay.variable} ${lato.variable}`}>
+      <body>
+        <Script id="oraya-theme-init" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: ORAYA_THEME_INIT }} />
+        {children}
+      </body>
     </html>
   );
 }

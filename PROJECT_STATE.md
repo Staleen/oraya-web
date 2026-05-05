@@ -9,7 +9,7 @@ STOP and ask before proceeding.
 
 ## CURRENT PHASE
 
-Phase 13 -> COMPLETE | Phase 14 -> COMPLETE (14M closure) | Phase 15A -> COMPLETE (readiness audit) | Phase 15B -> COMPLETE (security hotfix) | Phase 15C -> COMPLETE (event inquiry calendar parity with stay picker) | Phase 15D -> COMPLETE (security cleanup + smoke test) | Phase 15E -> COMPLETE (local env parity + secret hygiene) | Phase 15F.1 -> COMPLETE (contact email consistency hotfix) | Phase 15F.2 -> COMPLETE (email identity hello standard) | Phase 15F.3 -> COMPLETE (privacy + legal communication alignment) | Phase 15F.4 -> COMPLETE (trust layer + legal entity + testimonial intake) | Phase 15F.5 -> COMPLETE (manual testimonial manager + feedback request tool) | Phase 15F.6 -> COMPLETE (completed reservations history + feedback follow-up) | Phase 15F.7 -> COMPLETE (manual feedback email trigger + tracking) | **Phase 15G -> COMPLETE** (event services consolidation: 15G.1 taxonomy + 15G.5–7 + 15G.10–13 as documented below) | **Phase 15H -> COMPLETE** (event quote line-item manager + **15H.1** admin proposal UI: included/excluded split, totals breakdown, `roundMoney`; no schema change) | **15I.1 -> COMPLETE** (payment foundation: booking ledger columns + admin overview + manual record; see Phase 15I.1 below) | **15I.2 -> COMPLETE** (admin booking expanded-card UX cleanup: collapsible secondary sections, revenue estimate block removed; no booking/payment/pricing/proposal logic change; see 15I.2 below)**
+Phase 13 -> COMPLETE | Phase 14 -> COMPLETE (14M closure) | Phase 15A -> COMPLETE (readiness audit) | Phase 15B -> COMPLETE (security hotfix) | Phase 15C -> COMPLETE (event inquiry calendar parity with stay picker) | Phase 15D -> COMPLETE (security cleanup + smoke test) | Phase 15E -> COMPLETE (local env parity + secret hygiene) | Phase 15F.1 -> COMPLETE (contact email consistency hotfix) | Phase 15F.2 -> COMPLETE (email identity hello standard) | Phase 15F.3 -> COMPLETE (privacy + legal communication alignment) | Phase 15F.4 -> COMPLETE (trust layer + legal entity + testimonial intake) | Phase 15F.5 -> COMPLETE (manual testimonial manager + feedback request tool) | Phase 15F.6 -> COMPLETE (completed reservations history + feedback follow-up) | Phase 15F.7 -> COMPLETE (manual feedback email trigger + tracking) | **Phase 15G -> COMPLETE** (event services consolidation: 15G.1 taxonomy + 15G.5–7 + 15G.10–13 as documented below) | **Phase 15H -> COMPLETE** (event quote line-item manager + **15H.1** admin proposal UI: included/excluded split, totals breakdown, `roundMoney`; no schema change) | **15I.1 -> COMPLETE** (payment foundation: booking ledger columns + admin overview + manual record; see Phase 15I.1 below) | **15I.2 -> COMPLETE** (admin booking expanded-card UX cleanup: collapsible secondary sections, revenue estimate block removed; no booking/payment/pricing/proposal logic change; see 15I.2 below) | **15I.3 -> COMPLETE** (booking flow UX restructure; see 15I.3 below) | **15I.3.1 -> COMPLETE** (booking flow fixes + token redirect) | **15I.3.4 -> COMPLETE** (logo consistency homepage + book) | **15I.4 -> COMPLETE** (public light/dark theme: `data-theme` + CSS variables on homepage + `/book`; localStorage + system preference; see 15I.4 below)**
 
 ---
 
@@ -707,6 +707,15 @@ Phase 15 remains active (documentation + future sub-phases only unless product r
 - homepage and booking flow now use same updated full logo asset
 - old inline full-logo rendering removed/replaced
 - no layout or booking logic changed
+
+**15I.4 Public Light / Dark Theme [COMPLETE]**
+- **Scope:** homepage (`app/page.tsx`), booking flow (`app/book/page.tsx`), shared `LegalEntityNotice`, global tokens (`app/globals.css`), root layout script (`app/layout.tsx`), `components/PublicThemeToggle.tsx`
+- **`data-theme="light"` | `data-theme="dark"`** on `<html>`; default SSR `dark`; `beforeInteractive` script reads `localStorage` key `oraya-theme`, else `prefers-color-scheme`
+- **Tokens** (non-exhaustive): `--oraya-bg`, `--oraya-surface`, `--oraya-surface-muted`, `--oraya-text` (via `--oraya-ink`), `--oraya-text-muted`, `--oraya-gold`, `--oraya-border`, `--oraya-hero-overlay`, `--oraya-book-*`, `--oraya-footer-*`, `--oraya-band-*`, calendar/popover variables
+- **Toggle:** top-right on homepage nav (with Reserve / account); top-right on `/book` (loading, auth gate, main flow); `aria-label` + `title`; compact on narrow widths
+- **Documented recent UI (no separate phase id):** homepage mobile polish, homepage footer 2-column mobile link grid, `/book` UI polish — already shipped before 15I.4
+- **Not in scope:** admin dashboard theming, booking/API/schema/pricing/payment logic, print/PDF
+- **Verify:** `next build` + Vercel deployment success on closing commit
 
 ---
 

@@ -3,6 +3,7 @@ import { Fragment, useState, useEffect } from "react";
 import OrayaEmblem from "@/components/OrayaEmblem";
 import OrayaLogoFull from "@/components/OrayaLogoFull";
 import LegalEntityNotice from "@/components/LegalEntityNotice";
+import PublicThemeToggle from "@/components/PublicThemeToggle";
 import { VILLA_FROM_PRICE_MICROLABEL, formatVillaFromPrice } from "@/lib/admin-pricing";
 import {
   GUEST_TESTIMONIALS_SETTINGS_KEY,
@@ -24,13 +25,17 @@ function villaBg(img: string, gradient: string): React.CSSProperties {
     : { backgroundImage: gradient };
 }
 
-const GOLD       = "#C5A46D";
-const WHITE      = "#FFFFFF";
-const BEIGE      = "#EAE3D9";
-const BEIGELIGHT = "#F5F1EB";
-const CHARCOAL   = "#2E2E2E";
-const MIDNIGHT   = "#1F2B38";
-const MUTED      = "#8a8070";
+const GOLD       = "var(--oraya-gold)";
+const WHITE      = "var(--oraya-surface)";
+const BEIGE      = "var(--oraya-surface-muted)";
+const BEIGELIGHT = "var(--oraya-bg)";
+const CHARCOAL   = "var(--oraya-ink)";
+const MIDNIGHT   = "var(--oraya-band-dark-bg)";
+const MUTED      = "var(--oraya-text-muted)";
+const BAND_TEXT  = "var(--oraya-band-text)";
+const BAND_MUTED = "var(--oraya-band-muted)";
+const BAND_MUTED2 = "var(--oraya-band-muted-2)";
+const ON_GOLD    = "var(--oraya-on-gold-text)";
 const PLAYFAIR   = "'Playfair Display', Georgia, serif";
 const LATO       = "'Lato', system-ui, sans-serif";
 
@@ -152,11 +157,11 @@ export default function Home() {
     <div style={{ overflowX: "hidden" }}>
       {/* ── Nav ── */}
       <nav
-        className="fixed top-0 left-0 right-0 z-[100] flex justify-between items-center backdrop-blur-[8px]"
+        className="fixed top-0 left-0 right-0 z-[100] flex justify-between items-center gap-2 backdrop-blur-[8px] min-w-0"
         style={{
           padding: "1.1rem clamp(1rem, 4vw, 3rem)",
-          backgroundColor: "rgba(255,255,255,0.97)",
-          borderBottom: "0.5px solid rgba(197,164,109,0.2)",
+          backgroundColor: "var(--oraya-nav-bg)",
+          borderBottom: "0.5px solid var(--oraya-nav-border)",
         }}
       >
         <a href="/" className="w-11 h-11 shrink-0 block" style={{ cursor: "pointer" }}>
@@ -179,8 +184,10 @@ export default function Home() {
           ))}
         </ul>
 
-        {/* Auth-aware nav CTA — hidden until auth resolves to avoid flash */}
-        {authReady && (
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0 max-w-[min(100%,calc(100vw-5rem))] justify-end">
+          <PublicThemeToggle variant="public" />
+          {/* Auth-aware nav CTA — hidden until auth resolves to avoid flash */}
+          {authReady && (
           isLoggedIn ? (
             /* Logged-in dropdown */
             <div
@@ -260,7 +267,7 @@ export default function Home() {
                 }}
                 onMouseEnter={(e) => {
                   (e.currentTarget as HTMLElement).style.backgroundColor = GOLD;
-                  (e.currentTarget as HTMLElement).style.color = WHITE;
+                  (e.currentTarget as HTMLElement).style.color = ON_GOLD;
                 }}
                 onMouseLeave={(e) => {
                   (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
@@ -271,14 +278,15 @@ export default function Home() {
               </a>
             </div>
           )
-        )}
+          )}
+        </div>
       </nav>
 
       {/* ── Hero ── */}
       <section
         className="min-h-screen flex items-center justify-center relative overflow-hidden"
         style={{
-          backgroundColor: MIDNIGHT,
+          backgroundColor: "var(--oraya-hero-canvas)",
           ...(heroImg
             ? { backgroundImage: `url(${heroImg})`, backgroundSize: "cover", backgroundPosition: "center" }
             : { backgroundImage: GRAD_HERO }),
@@ -287,7 +295,7 @@ export default function Home() {
         {/* Overlay to ensure text legibility over photo */}
         <div
           className="absolute inset-0"
-          style={{ backgroundColor: "rgba(15,25,35,0.55)" }}
+          style={{ backgroundColor: "var(--oraya-hero-overlay)" }}
         />
         {/* Subtle texture */}
         <div
@@ -298,7 +306,7 @@ export default function Home() {
         <div className="text-center p-6 pt-6 md:p-8 md:pt-8 relative z-[2] animate-fade-up flex flex-col items-center max-w-[100vw]">
           <p
             className="uppercase mb-4 md:mb-8 mt-2 md:mt-0"
-            style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "5px", color: "rgba(197,164,109,0.65)" }}
+            style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "5px", color: "var(--oraya-hero-kicker)" }}
           >
             Lebanon · Exclusive villas
           </p>
@@ -309,7 +317,7 @@ export default function Home() {
 
           <p
             className="uppercase mb-8 md:mb-12 italic max-w-[34ch] md:max-w-none"
-            style={{ fontFamily: PLAYFAIR, fontSize: "1.2rem", fontWeight: 400, letterSpacing: "3px", color: "rgba(255,255,255,0.45)" }}
+            style={{ fontFamily: PLAYFAIR, fontSize: "1.2rem", fontWeight: 400, letterSpacing: "3px", color: "var(--oraya-hero-tagline)" }}
           >
             A sanctuary of luxury and tranquility
           </p>
@@ -320,7 +328,7 @@ export default function Home() {
                 <a
                   href="/book"
                   className="no-underline inline-block max-md:shadow-[0_6px_24px_rgba(0,0,0,0.2)]"
-                  style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: WHITE, backgroundColor: GOLD, padding: "15px 44px" }}
+                  style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: ON_GOLD, backgroundColor: GOLD, padding: "15px 44px" }}
                   onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
                 >
@@ -347,7 +355,7 @@ export default function Home() {
                 <a
                   href="#villas"
                   className="no-underline inline-block max-md:shadow-[0_6px_24px_rgba(0,0,0,0.2)]"
-                  style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: WHITE, backgroundColor: GOLD, padding: "15px 44px" }}
+                  style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: ON_GOLD, backgroundColor: GOLD, padding: "15px 44px" }}
                   onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
                 >
@@ -375,7 +383,7 @@ export default function Home() {
 
         <div
           className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 uppercase"
-          style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2px", color: "rgba(255,255,255,0.2)" }}
+          style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2px", color: "var(--oraya-hero-discover)" }}
         >
           <div className="animate-pulse-line" style={{ width: "0.5px", height: "40px", background: "rgba(197,164,109,0.35)" }} />
           <span>Discover</span>
@@ -401,7 +409,7 @@ export default function Home() {
             </h2>
             <div style={{ width: "40px", height: "0.5px", background: GOLD, margin: "1.5rem 0" }} />
             <p
-              className="max-w-[34ch] md:max-w-none text-[#6e665b] md:text-[#8a8070]"
+              className="max-w-[34ch] md:max-w-none oraya-text-muted"
               style={{ fontFamily: LATO, fontSize: "15px", lineHeight: 1.85, fontWeight: 300 }}
             >
               Oraya was born from a belief that true luxury is not excess — it is intimacy, craft, and the feeling of belonging to a place. Our villas in Lebanon offer that feeling in entirely different ways.
@@ -417,7 +425,7 @@ export default function Home() {
               >
                 <p style={{ fontFamily: PLAYFAIR, fontSize: "15px", color: CHARCOAL, marginBottom: "4px" }}>{name}</p>
                 <p
-                  className="flex-1 text-[#6e665b] md:text-[#8a8070]"
+                  className="flex-1 oraya-text-muted"
                   style={{ fontFamily: LATO, fontSize: "12px", fontWeight: 300, lineHeight: 1.6 }}
                 >
                   {desc}
@@ -442,7 +450,7 @@ export default function Home() {
           </h2>
           <div style={{ width: "40px", height: "0.5px", background: GOLD, margin: "1.5rem auto" }} />
           <p
-            className="max-w-[34ch] md:max-w-[480px] mx-auto text-[#6e665b] md:text-[#8a8070]"
+            className="max-w-[34ch] md:max-w-[480px] mx-auto oraya-text-muted"
             style={{ fontFamily: LATO, fontSize: "15px", lineHeight: 1.85, fontWeight: 300, textAlign: "center" }}
           >
             Each property carries its own identity, its own landscape, its own rhythm.
@@ -518,16 +526,16 @@ export default function Home() {
                     <p className="text-lg md:text-[20px]" style={{ fontFamily: PLAYFAIR, fontWeight: 400, color: CHARCOAL, margin: "0 0 2px" }}>
                       {fromPrice}
                     </p>
-                    <p className="text-[#6e665b] md:text-[#8a8070]" style={{ fontFamily: LATO, fontSize: "10px", margin: 0 }}>
+                    <p className="oraya-text-muted" style={{ fontFamily: LATO, fontSize: "10px", margin: 0 }}>
                       {VILLA_FROM_PRICE_MICROLABEL}
                     </p>
                   </div>
                 )}
-                <p className="text-[11px] md:text-[12px] text-[#6e665b] md:text-[#8a8070]" style={{ fontFamily: LATO, fontWeight: 300, marginBottom: "10px", lineHeight: 1.5 }}>
+                <p className="text-[11px] md:text-[12px] oraya-text-muted" style={{ fontFamily: LATO, fontWeight: 300, marginBottom: "10px", lineHeight: 1.5 }}>
                   {loc}
                 </p>
                 <div
-                  className="text-[11px] text-[#6e665b] md:text-[#8a8070]"
+                  className="text-[11px] oraya-text-muted"
                   style={{ display: "flex", flexWrap: "wrap", fontFamily: LATO, gap: "10px", marginBottom: "4px" }}
                 >
                   {feats.map((f, i) => (
@@ -575,14 +583,14 @@ export default function Home() {
               The Oraya experience
             </p>
             <h2
-              style={{ fontFamily: PLAYFAIR, fontWeight: 400, color: WHITE, lineHeight: 1.2, fontSize: "clamp(1.8rem, 3.5vw, 3rem)" }}
+              style={{ fontFamily: PLAYFAIR, fontWeight: 400, color: BAND_TEXT, lineHeight: 1.2, fontSize: "clamp(1.8rem, 3.5vw, 3rem)" }}
             >
               Every detail,<br />considered
             </h2>
             <div style={{ width: "40px", height: "0.5px", background: GOLD, margin: "1.5rem 0" }} />
             <p
-              className="max-w-[34ch] md:max-w-none text-white/55 md:text-white/45"
-              style={{ fontFamily: LATO, fontSize: "15px", fontWeight: 300, lineHeight: 1.85, marginTop: "1rem" }}
+              className="max-w-[34ch] md:max-w-none"
+              style={{ fontFamily: LATO, fontSize: "15px", fontWeight: 300, lineHeight: 1.85, marginTop: "1rem", color: BAND_MUTED }}
             >
               From embroidered linens to curated welcome rituals, Oraya is designed to feel like a private world.
             </p>
@@ -593,7 +601,7 @@ export default function Home() {
               <div
                 key={num}
                 className="py-7 px-5 md:py-8 md:px-6"
-                style={{ backgroundColor: MIDNIGHT, border: "0.5px solid rgba(197,164,109,0.07)" }}
+                style={{ backgroundColor: "var(--oraya-band-card-fill)", border: "0.5px solid var(--oraya-band-card-border)" }}
               >
                 <p
                   className="uppercase"
@@ -601,8 +609,8 @@ export default function Home() {
                 >
                   {num}
                 </p>
-                <p style={{ fontFamily: PLAYFAIR, fontSize: "16px", color: WHITE, marginBottom: "6px" }}>{name}</p>
-                <p className="text-white/50 md:text-white/40" style={{ fontFamily: LATO, fontSize: "12px", fontWeight: 300, lineHeight: 1.7 }}>
+                <p style={{ fontFamily: PLAYFAIR, fontSize: "16px", color: BAND_TEXT, marginBottom: "6px" }}>{name}</p>
+                <p style={{ fontFamily: LATO, fontSize: "12px", fontWeight: 300, lineHeight: 1.7, color: BAND_MUTED2 }}>
                   {desc}
                 </p>
               </div>
@@ -622,7 +630,7 @@ export default function Home() {
           </h2>
           <div style={{ width: "40px", height: "0.5px", background: GOLD, margin: "1.5rem auto" }} />
           <p
-            className="max-w-[34ch] md:max-w-[520px] mx-auto mb-8 md:mb-10 text-[#6e665b] md:text-[#8a8070]"
+            className="max-w-[34ch] md:max-w-[520px] mx-auto mb-8 md:mb-10 oraya-text-muted"
             style={{ fontFamily: LATO, fontSize: "15px", lineHeight: 1.85, fontWeight: 300 }}
           >
             Weddings, baptisms, and private gatherings for small groups — hosted in complete privacy across our villas.
@@ -662,7 +670,7 @@ export default function Home() {
           </h2>
           <div style={{ width: "40px", height: "0.5px", background: GOLD, margin: "1.5rem auto" }} />
           <p
-            className="max-w-[34ch] md:max-w-[480px] mx-auto text-[#6e665b] md:text-[#8a8070]"
+            className="max-w-[34ch] md:max-w-[480px] mx-auto oraya-text-muted"
             style={{ fontFamily: LATO, fontSize: "15px", lineHeight: 1.85, fontWeight: 300, textAlign: "center" }}
           >
             Create your guest profile and access exclusive member rates, priority booking, and a more personal experience with every stay.
@@ -684,7 +692,7 @@ export default function Home() {
                 .map((perk) => (
                   <li
                     key={perk}
-                    className="flex items-start gap-3 md:gap-3 py-3 md:py-2.5 border-b border-[#EAE3D9] text-[#6e665b] md:text-[#8a8070]"
+                    className="flex items-start gap-3 md:gap-3 py-3 md:py-2.5 border-b border-[var(--oraya-border)] oraya-text-muted"
                     style={{ fontFamily: LATO, fontSize: "14px", fontWeight: 300, lineHeight: 1.55 }}
                   >
                     <span className="shrink-0 mt-2" style={{ display: "inline-block", width: "20px", height: "0.5px", background: GOLD }} />
@@ -698,7 +706,7 @@ export default function Home() {
               const parts = contactLine.split("hello@stayoraya.com");
               return (
                 <p
-                  className="mt-6 pt-5 border-t border-[rgba(197,164,109,0.35)] text-[#6e665b] md:text-[#8a8070]"
+                  className="mt-6 pt-5 border-t border-[rgba(197,164,109,0.35)] oraya-text-muted"
                   style={{ fontFamily: LATO, fontSize: "14px", fontWeight: 300, lineHeight: 1.65 }}
                 >
                   {parts[0]}
@@ -712,7 +720,7 @@ export default function Home() {
             <a
               href="/join"
               className="no-underline block text-center uppercase mt-8"
-              style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", color: WHITE, backgroundColor: GOLD, padding: "15px 44px" }}
+              style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", color: ON_GOLD, backgroundColor: GOLD, padding: "15px 44px" }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a"; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = GOLD; }}
             >
@@ -732,7 +740,7 @@ export default function Home() {
             Booked directly. Handled with care.
           </h2>
           <p
-            className="max-w-[34ch] md:max-w-[640px] mx-auto mb-8 md:mb-10 text-[#6e665b] md:text-[#8a8070]"
+            className="max-w-[34ch] md:max-w-[640px] mx-auto mb-8 md:mb-10 oraya-text-muted"
             style={{ fontFamily: LATO, fontSize: "13px", lineHeight: 1.75, fontWeight: 300 }}
           >
             Every stay is reviewed and prepared by the Oraya team before confirmation. Direct booking means your request is seen by us — not instant or unverified checkout. Guests receive coordinated support before arrival and during their stay.
@@ -748,7 +756,7 @@ export default function Home() {
                 <p style={{ fontFamily: PLAYFAIR, fontSize: "16px", color: CHARCOAL, margin: "0 0 8px", lineHeight: 1.4 }}>
                   {item.title}
                 </p>
-                <p className="text-[#6e665b] md:text-[#8a8070]" style={{ fontFamily: LATO, fontSize: "12px", margin: 0, lineHeight: 1.7, fontWeight: 300 }}>
+                <p className="oraya-text-muted" style={{ fontFamily: LATO, fontSize: "12px", margin: 0, lineHeight: 1.7, fontWeight: 300 }}>
                   {item.body}
                 </p>
               </div>
@@ -769,7 +777,7 @@ export default function Home() {
           {approvedTestimonials.length === 0 ? (
             <>
               <p
-                className="max-w-[34ch] md:max-w-[560px] mx-auto mb-8 md:mb-10 text-[#6e665b] md:text-[#8a8070]"
+                className="max-w-[34ch] md:max-w-[560px] mx-auto mb-8 md:mb-10 oraya-text-muted"
                 style={{ fontFamily: LATO, fontSize: "13px", lineHeight: 1.8 }}
               >
                 Verified guest reviews coming soon. We&apos;re collecting feedback from recent stays and will share their words here once guests have approved publication.
@@ -777,7 +785,7 @@ export default function Home() {
               <div className="grid gap-5 min-w-0 text-left" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))" }}>
                 {[1, 2, 3].map((i) => (
                   <div key={i} className="p-5 min-w-0 max-md:shadow-[0_2px_16px_rgba(46,46,46,0.05)] md:shadow-none" style={{ border: `0.5px dashed rgba(197,164,109,0.2)`, backgroundColor: BEIGELIGHT, minHeight: "140px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <p className="text-[#6e665b] md:text-[#8a8070]" style={{ fontFamily: LATO, fontSize: "11px", margin: 0, fontStyle: "italic", textAlign: "center", lineHeight: 1.6 }}>
+                    <p className="oraya-text-muted" style={{ fontFamily: LATO, fontSize: "11px", margin: 0, fontStyle: "italic", textAlign: "center", lineHeight: 1.6 }}>
                       Guest testimonial placeholder
                     </p>
                   </div>
@@ -791,7 +799,7 @@ export default function Home() {
                   <p style={{ fontFamily: PLAYFAIR, fontSize: "15px", color: CHARCOAL, margin: "0 0 12px", lineHeight: 1.55, fontStyle: "italic", fontWeight: 400 }}>
                     &ldquo;{t.quote}&rdquo;
                   </p>
-                  <p className="text-[#6e665b] md:text-[#8a8070]" style={{ fontFamily: LATO, fontSize: "11px", margin: 0, letterSpacing: "1px", textTransform: "uppercase" }}>
+                  <p className="oraya-text-muted" style={{ fontFamily: LATO, fontSize: "11px", margin: 0, letterSpacing: "1px", textTransform: "uppercase" }}>
                     {t.guest_label}
                     {t.villa ? ` · ${t.villa}` : ""}
                   </p>
@@ -808,10 +816,10 @@ export default function Home() {
       </section>
 
       {/* ── Social Strip ── */}
-      <div className="text-center" style={{ backgroundColor: CHARCOAL, padding: "3rem" }}>
+      <div className="text-center" style={{ backgroundColor: "var(--oraya-footer-bg)", padding: "3rem" }}>
         <p
           className="uppercase mb-6"
-          style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "3px", color: "rgba(255,255,255,0.3)" }}
+          style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "3px", color: "var(--oraya-footer-muted)" }}
         >
           Follow Oraya
         </p>
@@ -832,7 +840,7 @@ export default function Home() {
       </div>
 
       {/* ── Footer ── */}
-      <footer style={{ backgroundColor: CHARCOAL, padding: "4.5rem clamp(1rem, 4vw, 3rem) 2rem", borderTop: "0.5px solid rgba(255,255,255,0.05)" }}>
+      <footer style={{ backgroundColor: "var(--oraya-footer-bg)", padding: "4.5rem clamp(1rem, 4vw, 3rem) 2rem", borderTop: "0.5px solid rgba(255,255,255,0.05)" }}>
         <div
           className="max-w-[1100px] mx-auto grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_1fr_1fr] gap-6 min-w-0 md:gap-[2.5rem]"
           style={{ marginBottom: "3rem" }}
@@ -841,7 +849,7 @@ export default function Home() {
             <div style={{ width: "120px", marginBottom: "1.25rem" }}>
               <OrayaLogoFull />
             </div>
-            <p style={{ fontFamily: PLAYFAIR, fontStyle: "italic", fontSize: "13px", color: "rgba(255,255,255,0.3)", lineHeight: 1.8, marginTop: "0.5rem" }}>
+            <p style={{ fontFamily: PLAYFAIR, fontStyle: "italic", fontSize: "13px", color: "var(--oraya-footer-quote)", lineHeight: 1.8, marginTop: "0.5rem" }}>
               &ldquo;A boutique sanctuary<br />of luxury and tranquility.&rdquo;
             </p>
           </div>
@@ -866,9 +874,9 @@ export default function Home() {
                       <a
                         href={href}
                         className="no-underline block min-w-0"
-                        style={{ fontFamily: LATO, fontSize: "13px", fontWeight: 300, color: "rgba(255,255,255,0.35)", overflowWrap: "anywhere", wordBreak: "break-word" }}
+                        style={{ fontFamily: LATO, fontSize: "13px", fontWeight: 300, color: "var(--oraya-footer-link)", overflowWrap: "anywhere", wordBreak: "break-word" }}
                         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = GOLD; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.35)"; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--oraya-footer-link)"; }}
                       >
                         {label}
                       </a>
@@ -886,7 +894,7 @@ export default function Home() {
 
         <div
           className="max-w-[1100px] mx-auto flex justify-between flex-wrap"
-          style={{ borderTop: "0.5px solid rgba(255,255,255,0.07)", paddingTop: "1.5rem", fontFamily: LATO, fontSize: "11px", color: "rgba(255,255,255,0.18)" }}
+          style={{ borderTop: "0.5px solid rgba(255,255,255,0.07)", paddingTop: "1.5rem", fontFamily: LATO, fontSize: "11px", color: "var(--oraya-footer-text)" }}
         >
           <span>© 2026 Oraya. All rights reserved.</span>
           <span>Lebanon · Boutique Villas</span>
