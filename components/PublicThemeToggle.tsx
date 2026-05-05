@@ -6,15 +6,16 @@ export const ORAYA_THEME_STORAGE_KEY = "oraya-theme";
 
 export type OrayaTheme = "light" | "dark";
 
-export function readStoredOrSystemTheme(): OrayaTheme {
-  if (typeof window === "undefined") return "dark";
+/** Reads persisted theme only; first visit / invalid key → light (no system preference). */
+export function readStoredTheme(): OrayaTheme {
+  if (typeof window === "undefined") return "light";
   try {
     const t = localStorage.getItem(ORAYA_THEME_STORAGE_KEY);
     if (t === "light" || t === "dark") return t;
   } catch {
     /* ignore */
   }
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  return "light";
 }
 
 export function applyOrayaTheme(theme: OrayaTheme) {
@@ -28,6 +29,7 @@ export function applyOrayaTheme(theme: OrayaTheme) {
 
 /**
  * Public site theme control (homepage, /book). Persists to localStorage; initial paint uses layout inline script.
+ * Icon = action: light → moon (go dark); dark → sun (go light).
  */
 export default function PublicThemeToggle({
   variant = "public",
@@ -43,20 +45,27 @@ export default function PublicThemeToggle({
       setTheme(a);
       return;
     }
-    const t = readStoredOrSystemTheme();
+    const t = readStoredTheme();
     applyOrayaTheme(t);
     setTheme(t);
   }, []);
 
   function toggle() {
     setTheme((prev) => {
-      const next = prev === "light" ? "dark" : "light";
+      let current: OrayaTheme;
+      if (prev === "light" || prev === "dark") {
+        current = prev;
+      } else {
+        const a = document.documentElement.getAttribute("data-theme");
+        current = a === "dark" ? "dark" : "light";
+      }
+      const next = current === "light" ? "dark" : "light";
       applyOrayaTheme(next);
       return next;
     });
   }
 
-  const isDark = theme !== "light";
+  const isDark = theme === "dark";
   const publicStyle =
     variant === "public"
       ? {
@@ -75,7 +84,7 @@ export default function PublicThemeToggle({
       type="button"
       onClick={toggle}
       aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}
-      title={isDark ? "Light mode" : "Dark mode"}
+      title={isDark ? "Switch to light mode" : "Switch to dark mode"}
       className="shrink-0 max-w-[100%]"
       style={{
         fontFamily: "var(--font-lato), system-ui, sans-serif",
