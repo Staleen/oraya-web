@@ -100,3 +100,12 @@ npm run dev
 - SVG logos are inlined as React components (`OrayaEmblem.tsx`, `OrayaLogoFull.tsx`) — do not use `<img>` or `next/image` for SVGs.
 - `page.tsx` must stay `"use client"` (uses mouse event handlers).
 - Config file is `next.config.mjs` (not `.ts` — unsupported in Next.js 14).
+
+## Cursor Cloud specific instructions
+
+- **Dev server**: Run `npm run dev` (starts Next.js on port 3000). No PATH export needed in Cloud environments.
+- **Lint**: `npm run lint` — one expected warning about `<img>` in `OrayaLogoFull.tsx` (by design).
+- **Build**: `npm run build` — compiles and type-checks. No local database or external services needed for build.
+- **Supabase dependency**: The app uses hosted Supabase (no local DB). Without `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` in `.env.local`, the frontend pages render fine but API routes that hit Supabase will error. Copy `.env.example` to `.env.local` and fill in credentials to enable full functionality.
+- **No automated test suite**: The project has no unit/integration tests. Validation is done via lint, build, and manual testing.
+- **`.env.local` is gitignored**: Never commit it. Use `.env.example` as the template.
