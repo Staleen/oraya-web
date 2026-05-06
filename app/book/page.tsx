@@ -1,12 +1,12 @@
 "use client";
-import { Suspense, useState, useEffect } from "react";
+import { Suspense, useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { DayPicker } from "react-day-picker";
 import type { DateRange, Matcher } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 import InstantBookingIcon from "@/components/icons/InstantBookingIcon";
 import OrayaLogoFull from "@/components/OrayaLogoFull";
-import { getVillaBasePrice, getVillaPricing } from "@/lib/admin-pricing";
+import { getVillaBasePrice, getVillaEntryPrice, getVillaPricing } from "@/lib/admin-pricing";
 import { ADDON_OPERATIONAL_SETTINGS_KEY, formatPreparationTime, getAddonAppliesTo, getAddonEnforcementMode, getAddonTimingType, mergeAddonsWithOperationalSettings, parseAddonOperationalSetting, type AddonCategory, type AddonCutoffType, type AddonEnforcementMode, type AddonPricingType } from "@/lib/addon-operations";
 import { usePublicPricing } from "@/lib/public-pricing";
 import { calculateStayPricing } from "@/lib/pricing/engine";
@@ -626,11 +626,11 @@ function StepIndicator({ step, bookingPath }: { step: number; bookingPath: Booki
     );
   }
 
-  const labels = ["Villa & Dates", "Stay Setup", "Add-ons", "Review & Submit"];
+  const labels = ["Villa & Dates", "Stay Setup", "Review & Submit"];
   return (
     <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-        {([1, 2, 3, 4] as const).map((s, i) => (
+        {([1, 2, 3] as const).map((s, i) => (
           <div key={s} style={{ display: "flex", alignItems: "center" }}>
             <div style={{
               width: "26px", height: "26px", borderRadius: "50%", flexShrink: 0,
@@ -643,7 +643,7 @@ function StepIndicator({ step, bookingPath }: { step: number; bookingPath: Booki
             }}>
               {step > s ? "✓" : s}
             </div>
-            {i < 3 && (
+            {i < 2 && (
               <div style={{
                 width: "52px", height: "0.5px",
                 backgroundColor: step > s ? GOLD : "var(--oraya-step-line)",
@@ -707,6 +707,8 @@ function BookPageInner() {
   const [step, setStep] = useState(1);
   /** Phase 15I.9 — instant vs reserve UX paths (UI only; no alternate booking creation). */
   const [bookingPath, setBookingPath] = useState<BookingPath>(null);
+  /** When not instant-eligible, one-shot auto navigation to merged reserve step (ref resets on back or date change). */
+  const reserveAutoNavigatedRef = useRef(false);
 
   // Form (persisted across steps)
   const [form, setForm] = useState({
@@ -811,9 +813,9 @@ function BookPageInner() {
       .catch(() => {});
   }, []);
 
-  // Fetch enabled add-ons the first time the user reaches step 3
+  // Fetch enabled add-ons when the user reaches merged stay setup (request step 2)
   useEffect(() => {
-    if (step !== 3 || addons.length > 0) return;
+    if (step !== 2 || bookingPath !== "request" || addons.length > 0) return;
     setAddonsLoading(true);
     Promise.all([
       fetch("/api/addons").then(r => r.json()),
@@ -832,7 +834,7 @@ function BookPageInner() {
       })
       .catch(() => setAddons([]))
       .finally(() => setAddonsLoading(false));
-  }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [step, bookingPath]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Clear stay dates when villa changes; availability is fetched after check-in is derived (see below).
   useEffect(() => {
@@ -1224,6 +1226,22 @@ function BookPageInner() {
   });
 
   useEffect(() => {
+    reserveAutoNavigatedRef.current = false;
+  }, [form.villa, checkIn, checkOut, dateConflict]);
+
+  /** Default reserve path: skip decision screen when instant booking is not offered for this stay. */
+  useEffect(() => {
+    if (step !== 1 || instantEligible) return;
+    if (!form.villa || !checkIn || !checkOut || checkOut <= checkIn || dateConflict) return;
+    if (reserveAutoNavigatedRef.current) return;
+    reserveAutoNavigatedRef.current = true;
+    setError("");
+    setBookingPath("request");
+    setStep(2);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [step, instantEligible, form.villa, checkIn, checkOut, dateConflict]);
+
+  useEffect(() => {
     setSelectedAddons((prev) => prev.filter((id) => {
       const addon = stayApplicableAddons.find((item) => item.id === id);
       if (!addon) return false;
@@ -1347,12 +1365,13 @@ function BookPageInner() {
   function switchInstantFlowToAddons() {
     setError("");
     setBookingPath("request");
-    setStep(3);
+    setStep(2);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function goNext() {
     setError("");
+    if (step === 3 && bookingPath === "request") return;
     if (step === 2 && bookingPath === "instant") return;
     if (step === 2) {
       if (bookingPath !== "request") return;
@@ -1395,13 +1414,16 @@ function BookPageInner() {
       setBookingPath(null);
       setStep(1);
     } else {
+      if (step === 2 && bookingPath === "request") {
+        reserveAutoNavigatedRef.current = false;
+      }
       setStep(s => s - 1);
     }
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   async function handleSubmit() {
-    if (step !== 4 || bookingPath !== "request") return;
+    if (step !== 3 || bookingPath !== "request") return;
     setError("");
     setLoading(true);
     try {
@@ -1705,7 +1727,7 @@ function BookPageInner() {
                       villa === "Villa Mechmech"
                         ? (mechmechCover || meta.image)
                         : (byblosCover || meta.image);
-                    const startingPrice = getVillaBasePrice(villa, pricing);
+                    const startingPrice = getVillaEntryPrice(villa, pricing);
                     return (
                       <button
                         key={villa}
@@ -1918,14 +1940,14 @@ function BookPageInner() {
 
               {instantEligible && checkOut ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                  <p style={{ fontFamily: PLAYFAIR, fontSize: "22px", fontWeight: 400, color: WHITE, margin: 0, textAlign: "center", lineHeight: 1.3 }}>
-                    Choose how you want to book
+                  <p style={{ fontFamily: PLAYFAIR, fontSize: "20px", fontWeight: 400, color: WHITE, margin: 0, textAlign: "center", lineHeight: 1.3 }}>
+                    Continue your booking
                   </p>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "14px" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "14px", alignItems: "stretch" }}>
                     <div
                       style={{
-                        border: "0.5px solid rgba(197,164,109,0.42)",
-                        backgroundColor: "rgba(197,164,109,0.07)",
+                        border: "0.5px solid rgba(197,164,109,0.45)",
+                        backgroundColor: "rgba(197,164,109,0.09)",
                         padding: "18px 18px 16px",
                         display: "flex",
                         flexDirection: "column",
@@ -1933,20 +1955,19 @@ function BookPageInner() {
                         textAlign: "left",
                       }}
                     >
-                      <div className="instant-badge instant-badge--active" style={{ alignSelf: "flex-start", backgroundColor: "rgba(197,164,109,0.08)" }}>
-                        <InstantBookingIcon size={16} />
-                        <span>Instant Book</span>
-                      </div>
-                      <p style={{ fontFamily: PLAYFAIR, fontSize: "18px", fontWeight: 400, color: WHITE, margin: 0, lineHeight: 1.35 }}>
-                        Instant Book
+                      <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+                        Full Oraya experience
+                      </p>
+                      <p style={{ fontFamily: PLAYFAIR, fontSize: "20px", fontWeight: 400, color: WHITE, margin: 0, lineHeight: 1.35 }}>
+                        Reserve Your Stay
                       </p>
                       <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65, fontWeight: 300, whiteSpace: "pre-line" }}>
-                        No add-ons. No preparation required.{"\n"}Pay online and receive access immediately.
+                        Enhance your stay with services, add-ons, and special requests.{"\n"}Perfect for a fully prepared Oraya experience.
                       </p>
                       <button
                         type="button"
                         className="oraya-pressable oraya-cta-gold-hover"
-                        onClick={proceedFromStep1ToInstant}
+                        onClick={proceedFromStep1ToReserve}
                         style={{
                           fontFamily: LATO,
                           fontSize: "12px",
@@ -1960,12 +1981,12 @@ function BookPageInner() {
                           textAlign: "center",
                         }}
                       >
-                        Book Instantly
+                        Reserve Your Stay
                       </button>
                     </div>
                     <div
                       style={{
-                        border: "0.5px solid rgba(197,164,109,0.18)",
+                        border: "0.5px solid rgba(197,164,109,0.2)",
                         backgroundColor: GLASS1,
                         padding: "18px 18px 16px",
                         display: "flex",
@@ -1974,16 +1995,19 @@ function BookPageInner() {
                         textAlign: "left",
                       }}
                     >
+                      <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, margin: 0 }}>
+                        Fast path
+                      </p>
                       <p style={{ fontFamily: PLAYFAIR, fontSize: "18px", fontWeight: 400, color: WHITE, margin: 0, lineHeight: 1.35 }}>
-                        Customize Your Stay
+                        Instant Book
                       </p>
                       <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65, fontWeight: 300, whiteSpace: "pre-line" }}>
-                        Add services or special requests.{"\n"}Requires manual confirmation.
+                        Best for simple, self-service stays with no add-ons or preparation required.
                       </p>
                       <button
                         type="button"
                         className="oraya-pressable oraya-cta-book-back"
-                        onClick={proceedFromStep1ToReserve}
+                        onClick={proceedFromStep1ToInstant}
                         style={{
                           fontFamily: LATO,
                           fontSize: "12px",
@@ -1997,20 +2021,22 @@ function BookPageInner() {
                           textAlign: "center",
                         }}
                       >
-                        Request Your Stay
+                        Book Instantly
                       </button>
                     </div>
                   </div>
                 </div>
               ) : (
-                <button
-                  type="button"
-                  className="oraya-pressable oraya-cta-gold-hover"
-                  onClick={proceedFromStep1ToReserve}
-                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 16px", minHeight: "50px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
-                >
-                  Request Your Stay
-                </button>
+                (!form.villa || !checkIn || !checkOut || checkOut <= checkIn || dateConflict) ? (
+                  <button
+                    type="button"
+                    className="oraya-pressable oraya-cta-gold-hover"
+                    onClick={proceedFromStep1ToReserve}
+                    style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 16px", minHeight: "50px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", width: "100%" }}
+                  >
+                    Reserve Your Stay
+                  </button>
+                ) : null
               )}
             </div>
           )}
@@ -2280,101 +2306,7 @@ function BookPageInner() {
                 </div>
               </div>
 
-              {/* Premium stay-to-event upgrade CTA — routes to /events/inquiry */}
-              <div style={{ order: 2, border: "0.5px solid rgba(197,164,109,0.26)", backgroundColor: GLASS2, padding: "18px 20px", display: "flex", flexDirection: "column", gap: "10px", boxShadow: "inset 0 0 0 1px rgba(197,164,109,0.04)" }}>
-                <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
-                  Hosted Experiences
-                </p>
-                <p style={{ fontFamily: LATO, fontSize: "16px", fontWeight: 500, color: WHITE, margin: "0 0 4px", letterSpacing: "0.02em" }}>
-                  Planning something more than a stay?
-                </p>
-                <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: "0 0 12px", lineHeight: 1.6 }}>
-                  Turn your villa booking into a fully hosted experience - celebrations, private gatherings, and curated event services.
-                </p>
-                <p style={{ fontFamily: LATO, fontSize: "12px", color: "var(--oraya-book-p68)", margin: "0", lineHeight: 1.55 }}>
-                  Event inquiries are reviewed separately and confirmed by Oraya.
-                </p>
-                <button
-                  type="button"
-                  className="oraya-pressable oraya-cta-gold-hover"
-                  onClick={() => {
-                    if (form.villa && checkIn && checkOut) {
-                      const lock = writeBookToEventHandoff({
-                        villa: form.villa,
-                        check_in: checkIn,
-                        check_out: checkOut,
-                        sleeping_guests: form.sleepingGuests,
-                        day_visitors: form.dayVisitors,
-                        ...(guestMode
-                          ? {
-                              guest: {
-                                fullName: guest.fullName,
-                                email: guest.email,
-                                dialCode: guest.dialCode,
-                                phoneNumber: guest.phoneNumber,
-                                country: guest.country,
-                              },
-                            }
-                          : {}),
-                      });
-                      if (lock) {
-                        router.push(`/events/inquiry?prefill=book&hl=${encodeURIComponent(lock)}`);
-                        return;
-                      }
-                    }
-                    router.push("/events/inquiry");
-                  }}
-                  style={{ alignSelf: "flex-start", fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "12px 24px", cursor: "pointer" }}
-                >
-                  Plan your event
-                </button>
-              </div>
-
-              <div style={{ order: 3 }}>
-                {estimatePanel}
-              </div>
-
-              {/* Notes */}
-              <div style={{ order: 4 }}>
-                <label style={labelStyle}>
-                  Special requests{" "}
-                  <span style={{ color: "rgba(138,128,112,0.55)", letterSpacing: "0.4px", textTransform: "none", fontSize: "10px" }}>(optional)</span>
-                </label>
-                <textarea name="message" value={form.message} onChange={handleFormChange}
-                  onFocus={focusGold} onBlur={blurGold}
-                  rows={4}
-                  placeholder="Any special requirements, dietary needs, or occasion details…"
-                  style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6 }} />
-              </div>
-
-              {error && (
-                <div style={{ order: 5, width: "100%" }}>
-                  <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070", textAlign: "center", lineHeight: 1.6, margin: 0 }}>
-                    {error}
-                  </p>
-                </div>
-              )}
-
-              <div style={{ order: 6, display: "flex", gap: "12px", alignItems: "stretch", marginTop: "4px" }}>
-                <button type="button" onClick={goBack}
-                  className="oraya-pressable oraya-cta-book-back"
-                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: "var(--oraya-book-text)", backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", padding: "14px 22px", cursor: "pointer", minHeight: "50px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  ← Back
-                </button>
-                <button type="button" onClick={goNext}
-                  className="oraya-pressable oraya-cta-gold-hover"
-                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 16px", flex: 1, cursor: "pointer", minHeight: "50px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  Continue to add-ons
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* ════════════════════════════════════════════════════════════════
-              STEP 3 — Add-ons & Review
-          ════════════════════════════════════════════════════════════════ */}
-          {step === 3 && bookingPath === "request" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+              <div style={{ order: 2, display: "flex", flexDirection: "column", gap: "24px", width: "100%" }}>
 
               {/* ── Add-ons ─────────────────────────────────────────────── */}
               <div>
@@ -2847,28 +2779,99 @@ function BookPageInner() {
                   </div>
                 )
               )}
+              </div>
+
+              {/* Premium stay-to-event upgrade CTA — routes to /events/inquiry */}
+              <div style={{ order: 3, border: "0.5px solid rgba(197,164,109,0.26)", backgroundColor: GLASS2, padding: "18px 20px", display: "flex", flexDirection: "column", gap: "10px", boxShadow: "inset 0 0 0 1px rgba(197,164,109,0.04)" }}>
+                <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+                  Hosted Experiences
+                </p>
+                <p style={{ fontFamily: LATO, fontSize: "16px", fontWeight: 500, color: WHITE, margin: "0 0 4px", letterSpacing: "0.02em" }}>
+                  Planning something more than a stay?
+                </p>
+                <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: "0 0 12px", lineHeight: 1.6 }}>
+                  Turn your villa booking into a fully hosted experience - celebrations, private gatherings, and curated event services.
+                </p>
+                <p style={{ fontFamily: LATO, fontSize: "12px", color: "var(--oraya-book-p68)", margin: "0", lineHeight: 1.55 }}>
+                  Event inquiries are reviewed separately and confirmed by Oraya.
+                </p>
+                <button
+                  type="button"
+                  className="oraya-pressable oraya-cta-gold-hover"
+                  onClick={() => {
+                    if (form.villa && checkIn && checkOut) {
+                      const lock = writeBookToEventHandoff({
+                        villa: form.villa,
+                        check_in: checkIn,
+                        check_out: checkOut,
+                        sleeping_guests: form.sleepingGuests,
+                        day_visitors: form.dayVisitors,
+                        ...(guestMode
+                          ? {
+                              guest: {
+                                fullName: guest.fullName,
+                                email: guest.email,
+                                dialCode: guest.dialCode,
+                                phoneNumber: guest.phoneNumber,
+                                country: guest.country,
+                              },
+                            }
+                          : {}),
+                      });
+                      if (lock) {
+                        router.push(`/events/inquiry?prefill=book&hl=${encodeURIComponent(lock)}`);
+                        return;
+                      }
+                    }
+                    router.push("/events/inquiry");
+                  }}
+                  style={{ alignSelf: "flex-start", fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "12px 24px", cursor: "pointer" }}
+                >
+                  Plan your event
+                </button>
+              </div>
+
+              <div style={{ order: 4 }}>
+                {estimatePanel}
+              </div>
+
+              {/* Notes */}
+              <div style={{ order: 5 }}>
+                <label style={labelStyle}>
+                  Special requests{" "}
+                  <span style={{ color: "rgba(138,128,112,0.55)", letterSpacing: "0.4px", textTransform: "none", fontSize: "10px" }}>(optional)</span>
+                </label>
+                <textarea name="message" value={form.message} onChange={handleFormChange}
+                  onFocus={focusGold} onBlur={blurGold}
+                  rows={4}
+                  placeholder="Any special requirements, dietary needs, or occasion details…"
+                  style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6 }} />
+              </div>
 
               {error && (
-                <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070", textAlign: "center", lineHeight: 1.6, margin: 0 }}>
-                  {error}
-                </p>
+                <div style={{ order: 6, width: "100%" }}>
+                  <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070", textAlign: "center", lineHeight: 1.6, margin: 0 }}>
+                    {error}
+                  </p>
+                </div>
               )}
-              <div style={{ display: "flex", gap: "12px", alignItems: "stretch" }}>
+
+              <div style={{ order: 7, display: "flex", gap: "12px", alignItems: "stretch", marginTop: "4px" }}>
                 <button type="button" onClick={goBack}
                   className="oraya-pressable oraya-cta-book-back"
-                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: "var(--oraya-book-text)", backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", padding: "14px 22px", minHeight: "50px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: "var(--oraya-book-text)", backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", padding: "14px 22px", cursor: "pointer", minHeight: "50px", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   ← Back
                 </button>
                 <button type="button" onClick={goNext}
                   className="oraya-pressable oraya-cta-gold-hover"
-                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 16px", flex: 1, minHeight: "50px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 16px", flex: 1, cursor: "pointer", minHeight: "50px", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   Continue to review
                 </button>
               </div>
             </div>
           )}
 
-          {step === 4 && bookingPath === "request" && (
+          {step === 3 && bookingPath === "request" && (
             <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
               <div>
                 <p style={{ fontFamily: PLAYFAIR, fontSize: "20px", fontWeight: 400, color: WHITE, margin: "0 0 10px" }}>

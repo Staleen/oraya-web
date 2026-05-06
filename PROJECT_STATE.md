@@ -24,6 +24,8 @@ Phase 13 -> COMPLETE | Phase 14 -> COMPLETE (14M closure) | Phase 15A -> COMPLET
 - **Cancellation/refund visibility:** Guest **`/book`** Step 4 (review), **`/booking/view/[token]`**, and **`/booking-confirmed`** link to **`/legal/refund`** with careful copy (no automatic refund implied). No cancellation/refund backend in Phase 15.
 - **Admin live data:** After password auth, **`AdminDataProvider`** refetches **`/api/admin/data`** on a **45s** interval (silent, state-only) and subscribes to **`postgres_changes`** on **`public.bookings`** when Realtime is enabled; row-level visibility still follows Supabase RLS for the subscribing role — polling remains the reliable path if Realtime does not fire. Toasts notify inserts/status changes without resetting UI chrome.
 
+**Phase 15 refinement (guest `/book` UX):** Default flow is **Reserve Your Stay** (premium positioning); **Instant Book** is secondary when eligible. **Bedrooms, guests, add-ons, and special requests** share one **Stay Setup** step; **Review & Submit** is a single follow-on step. Villa card **starting prices** use **`getVillaEntryPrice`** (same 1-bedroom entry logic as homepage `formatVillaFromPrice`). When a stay is **not** instant-eligible, the UI **auto-advances** to Stay Setup after dates (no forced decision screen).
+
 Sub-phases **15A–15H** and **15I.1–15I.11** above record incremental work; they are not repeated here.
 
 ### Phase 15I.9 — Adaptive booking flow (Instant vs Reserve UX)
