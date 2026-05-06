@@ -10,29 +10,32 @@ export const INSTANT_BOOKING_SETTING_KEYS = {
 
 export type InstantBookingFlags = Record<keyof typeof INSTANT_BOOKING_SETTING_KEYS, boolean>;
 
-/** When unset or unknown → enabled (backward compatible). Explicit false/0/off disables. */
+/** Explicit true-ish values enable; missing/unknown values stay conservative. */
 export function parseInstantBookingSetting(value: unknown): boolean {
-  if (value == null || String(value).trim() === "") return true;
+  if (value == null || String(value).trim() === "") return false;
   const v = String(value).trim().toLowerCase();
   if (["false", "0", "no", "off"].includes(v)) return false;
-  return true;
+  return ["true", "1", "yes", "on"].includes(v);
 }
 
 export function instantBookingEnabledForVilla(villa: string, flags: InstantBookingFlags): boolean {
   if (villa === "Villa Mechmech") return flags["Villa Mechmech"];
   if (villa === "Villa Byblos") return flags["Villa Byblos"];
-  return true;
+  return false;
 }
 
 /** Public guest pages — same keys as `/book` (no auth). */
 export async function fetchInstantBookingFlagsPublic(): Promise<InstantBookingFlags> {
+  async function loadFlag(key: string): Promise<boolean> {
+    const response = await fetch(`/api/settings?key=${encodeURIComponent(key)}`);
+    if (!response.ok) return false;
+    const data = (await response.json().catch(() => ({}))) as { value?: unknown };
+    return parseInstantBookingSetting(data.value);
+  }
+
   const [mech, byl] = await Promise.all([
-    fetch(`/api/settings?key=${encodeURIComponent(INSTANT_BOOKING_SETTING_KEYS["Villa Mechmech"])}`)
-      .then((r) => r.json())
-      .then((d: { value?: unknown }) => parseInstantBookingSetting(d.value)),
-    fetch(`/api/settings?key=${encodeURIComponent(INSTANT_BOOKING_SETTING_KEYS["Villa Byblos"])}`)
-      .then((r) => r.json())
-      .then((d: { value?: unknown }) => parseInstantBookingSetting(d.value)),
+    loadFlag(INSTANT_BOOKING_SETTING_KEYS["Villa Mechmech"]),
+    loadFlag(INSTANT_BOOKING_SETTING_KEYS["Villa Byblos"]),
   ]);
   return { "Villa Mechmech": mech, "Villa Byblos": byl };
 }
