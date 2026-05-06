@@ -80,6 +80,30 @@ export const CANCELLATION_HINT =
 /** Guest legal page — cancellation & refund (no automatic refund implied here). */
 export const REFUND_POLICY_HREF = "/legal/refund";
 
+/** Event inquiry (/events/inquiry) Step 3 — before submit; inquiry ≠ confirmed booking */
+export const EVENT_INQUIRY_WHAT_NEXT = {
+  title: "What happens next",
+  bullets: [
+    "Oraya reviews your event setup, guest count, services, and timing.",
+    "We contact you by WhatsApp or email to confirm feasibility and next steps.",
+    "No payment is required until the event details are reviewed.",
+  ],
+} as const;
+
+/** Pre-filled WhatsApp body for guests on the event inquiry flow (human support, not a bot). */
+export const EVENT_INQUIRY_WHATSAPP_PREFILL =
+  "Hello Oraya — I have a question about my event inquiry.";
+
+export const EVENT_INQUIRY_SUBMIT_SUBLINE =
+  "No payment required now. We will contact you by WhatsApp or email.";
+
+export const EVENT_INQUIRY_NOT_CONFIRMED_LINE =
+  "Submitting only sends your inquiry — nothing is confirmed until Oraya agrees the details with you.";
+
+export const EVENT_INQUIRY_CHANGE_LATER_PROMPT = "Need to change or cancel later?";
+export const EVENT_INQUIRY_CHANGE_LATER_HINT =
+  "Cancellation and changes follow Oraya's policy — we are happy to help by WhatsApp or email.";
+
 /** Step 4 review — visible before submit */
 export const STEP4_REFUND_TRUST = {
   title: "Cancellation & Refund",

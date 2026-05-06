@@ -46,6 +46,18 @@ import {
   getRequiredEventServiceGroups,
   type EventServiceGroup,
 } from "@/lib/event-service-requirements";
+import {
+  digitsOnlyPhone,
+  EVENT_INQUIRY_CHANGE_LATER_HINT,
+  EVENT_INQUIRY_CHANGE_LATER_PROMPT,
+  EVENT_INQUIRY_NOT_CONFIRMED_LINE,
+  EVENT_INQUIRY_SUBMIT_SUBLINE,
+  EVENT_INQUIRY_WHATSAPP_PREFILL,
+  EVENT_INQUIRY_WHAT_NEXT,
+  REFUND_POLICY_HREF,
+  STEP4_REFUND_TRUST,
+  WHATSAPP_SUPPORT_LINE,
+} from "@/lib/booking-trust-messaging";
 
 // ─── Brand constants (theme tokens from globals.css; matches /book) ───────────
 const GOLD       = "var(--oraya-gold)";
@@ -729,6 +741,7 @@ function EventInquiryPageInner() {
   const [loading,         setLoading]         = useState(false);
   /** Step 3 — optional notes hidden until expanded (value stays in form.message). */
   const [specialRequestsExpanded, setSpecialRequestsExpanded] = useState(false);
+  const [whatsappDigits, setWhatsappDigits] = useState<string | null>(null);
 
   const effectiveAttendees = useMemo(
     () => clampEventAttendees(parseInt(form.dayVisitors, 10) || 1),
@@ -777,6 +790,13 @@ function EventInquiryPageInner() {
         setAuthStatus("none");
       }
     });
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/settings?key=whatsapp_number")
+      .then((r) => r.json())
+      .then((d: { value?: string }) => setWhatsappDigits(digitsOnlyPhone(d.value ?? null)))
+      .catch(() => setWhatsappDigits(null));
   }, []);
 
   useEffect(() => {
@@ -2000,9 +2020,9 @@ function EventInquiryPageInner() {
                     Response typically within one business day. Final pricing is quoted after review.
                   </p>
                   <InfoPopover
-                    label="Proposal and pricing"
+                    label="Proposal and pricing detail"
                     text={
-                      "Oraya will review your event requirements and respond with availability, setup options, and a tailored proposal — typically within one business day.\n\nFinal event pricing is reviewed and quoted by Oraya."
+                      "We usually respond within one business day with availability and setup options. Final event pricing is quoted by Oraya after your requirements are clear — not on this form."
                     }
                   />
                 </div>
@@ -2236,6 +2256,89 @@ function EventInquiryPageInner() {
                 </div>
               </div>
 
+              <div
+                style={{
+                  border: "0.5px solid rgba(197,164,109,0.28)",
+                  backgroundColor: "rgba(197,164,109,0.06)",
+                  padding: "16px 18px",
+                  display: "grid",
+                  gap: "12px",
+                }}
+              >
+                <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+                  {EVENT_INQUIRY_WHAT_NEXT.title}
+                </p>
+                <p style={{ fontFamily: LATO, fontSize: "13px", color: BOOK_P78, margin: 0, lineHeight: 1.65 }}>
+                  This is an inquiry, not a confirmed booking or instant hold.
+                </p>
+                <ul
+                  style={{
+                    margin: 0,
+                    paddingLeft: "1.25rem",
+                    display: "grid",
+                    gap: "8px",
+                    fontFamily: LATO,
+                    fontSize: "13px",
+                    color: BOOK_P82,
+                    lineHeight: 1.65,
+                  }}
+                >
+                  {EVENT_INQUIRY_WHAT_NEXT.bullets.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+                <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
+                  {WHATSAPP_SUPPORT_LINE}
+                </p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center" }}>
+                  <a href="mailto:hello@stayoraya.com" className="oraya-link-text" style={{ fontFamily: LATO, fontSize: "12px", color: GOLD }}>
+                    hello@stayoraya.com
+                  </a>
+                  {whatsappDigits ? (
+                    <a
+                      href={`https://wa.me/${whatsappDigits}?text=${encodeURIComponent(EVENT_INQUIRY_WHATSAPP_PREFILL)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="oraya-link-text"
+                      style={{ fontFamily: LATO, fontSize: "12px", color: GOLD }}
+                    >
+                      WhatsApp
+                    </a>
+                  ) : null}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  border: "0.5px solid rgba(197,164,109,0.22)",
+                  backgroundColor: "rgba(197,164,109,0.04)",
+                  padding: "14px 16px",
+                  display: "grid",
+                  gap: "8px",
+                }}
+              >
+                <p style={{ fontFamily: LATO, fontSize: "12px", color: BOOK_P78, margin: 0, lineHeight: 1.6 }}>
+                  {EVENT_INQUIRY_CHANGE_LATER_PROMPT}
+                </p>
+                <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
+                  {EVENT_INQUIRY_CHANGE_LATER_HINT}
+                </p>
+                <a
+                  href={REFUND_POLICY_HREF}
+                  className="oraya-link-text"
+                  style={{
+                    fontFamily: LATO,
+                    fontSize: "12px",
+                    color: GOLD,
+                    textDecoration: "underline",
+                    textUnderlineOffset: "3px",
+                    justifySelf: "start",
+                  }}
+                >
+                  {STEP4_REFUND_TRUST.linkLabel}
+                </a>
+              </div>
+
               {eventSetupEstimate && <EventEstimatePanel estimate={eventSetupEstimate} totalFontSize="24px" />}
 
               {error && (
@@ -2244,33 +2347,27 @@ function EventInquiryPageInner() {
                 </p>
               )}
 
-              <div style={{ display: "flex", gap: "12px" }}>
+              <div style={{ display: "flex", gap: "12px", alignItems: "stretch" }}>
                 <button type="button" onClick={goBack} disabled={loading}
                   className={loading ? undefined : "oraya-pressable oraya-cta-book-back"}
-                  style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: BOOK_P78, backgroundColor: "transparent", border: "0.5px solid var(--oraya-book-input-border)", padding: "16px 24px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.5 : 1 }}>
+                  style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: BOOK_P78, backgroundColor: "transparent", border: "0.5px solid var(--oraya-book-input-border)", padding: "16px 24px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.5 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   ← Back
                 </button>
-                <button type="button" onClick={handleSubmit} disabled={loading}
-                  className={loading ? undefined : "oraya-pressable oraya-cta-gold-hover"}
-                  style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "16px", flex: 1, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1 }}>
-                  {loading ? "Submitting…" : "Submit Event Inquiry"}
-                </button>
-              </div>
-
-              <div style={{ border: "0.5px solid var(--oraya-border)", backgroundColor: GLG3, padding: "14px 16px" }}>
-                <div style={{ display: "flex", alignItems: "flex-start", gap: "10px", flexWrap: "wrap" }}>
-                  <p style={{ fontFamily: LATO, fontSize: "13px", color: BOOK_P78, margin: 0, lineHeight: 1.55, flex: "1 1 220px" }}>
-                    Proposal after Oraya reviews your full event setup. Each inquiry is checked for availability and quality.
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "8px", alignItems: "stretch", minWidth: 0 }}>
+                  <button type="button" onClick={handleSubmit} disabled={loading}
+                    className={loading ? undefined : "oraya-pressable oraya-cta-gold-hover"}
+                    style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "16px", flex: 1, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1 }}>
+                    {loading ? "Submitting…" : "Submit Event Inquiry"}
+                  </button>
+                  <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, textAlign: "center", margin: 0, lineHeight: 1.5 }}>
+                    {EVENT_INQUIRY_SUBMIT_SUBLINE}
                   </p>
-                  <InfoPopover
-                    label="Trust and review details"
-                    text={
-                      "This request will be reviewed as a full event setup and you will receive a tailored proposal.\n\n" +
-                      "Each inquiry is manually reviewed to ensure availability and preparation quality."
-                    }
-                  />
                 </div>
               </div>
+
+              <p style={{ fontFamily: LATO, fontSize: "12px", color: BOOK_P76, margin: 0, lineHeight: 1.6, textAlign: "center" }}>
+                {EVENT_INQUIRY_NOT_CONFIRMED_LINE}
+              </p>
             </div>
           )}
 
