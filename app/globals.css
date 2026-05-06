@@ -171,9 +171,10 @@ html[data-theme="light"] {
   --oraya-nav-border: rgba(31, 43, 56, 0.1);
 
   --oraya-book-bg: #ede6dc;
-  --oraya-book-surface-1: rgba(255, 255, 255, 0.82);
-  --oraya-book-surface-2: #faf7f2;
-  --oraya-book-surface-3: rgba(250, 247, 242, 0.95);
+  /* Warm ivory panels — softer vs page wash so Stay Setup fields feel less stark than sheet-white */
+  --oraya-book-surface-1: #ebe4da;
+  --oraya-book-surface-2: #e8e1d7;
+  --oraya-book-surface-3: rgba(234, 228, 218, 0.94);
   --oraya-book-surface-gold: rgba(197, 164, 109, 0.14);
   --oraya-book-surface-gold-2: rgba(197, 164, 109, 0.12);
   --oraya-book-surface-gold-3: rgba(197, 164, 109, 0.1);
@@ -199,11 +200,11 @@ html[data-theme="light"] {
   --oraya-book-heading: #1f2b38;
   --oraya-book-label: rgba(31, 43, 56, 0.58);
   --oraya-book-text-on-field: #1f2b38;
-  --oraya-book-input-bg: #faf7f2;
+  --oraya-book-input-bg: #eae3da;
   --oraya-book-input-border: rgba(31, 43, 56, 0.18);
   --oraya-book-muted: #5c564c;
-  --oraya-book-option-bg: #faf7f2;
-  --oraya-popover-bg: #fdfbf7;
+  --oraya-book-option-bg: #eae3da;
+  --oraya-popover-bg: #f3ece4;
   --oraya-popover-text: rgba(31, 43, 56, 0.88);
   --oraya-popover-border: rgba(31, 43, 56, 0.14);
 

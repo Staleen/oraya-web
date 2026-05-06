@@ -38,6 +38,8 @@ Phase 13 -> COMPLETE | Phase 14 -> COMPLETE (14M closure) | Phase 15A -> COMPLET
 - **Special requests** collapsed behind a **+** row (expand for textarea; preview when collapsed if text exists).
 - **Hosted Experiences** moved **below** Back / Continue so the CTA is not blocked.
 
+**Phase 15 live QA fixes (`/book`):** **Info popovers** (estimated total + Book Instantly) use **viewport-safe width** (`max-width: calc(100vw - 32px)`); at ≤640px the panel switches to **in-flow / relative** positioning so it stays inside the column without horizontal spill. **Light theme** booking `--oraya-book-surface-*`, inputs, and popover tokens are **warmer ivory/sand** (no dark-theme token edits). **Plan your event** uses **`window.location.assign`** so navigation to **`/events/inquiry`** (with optional **`prefill=book` + `hl`** handoff when dates/villa exist) is reliable on mobile WebKit.
+
 Sub-phases **15A–15H** and **15I.1–15I.11** above record incremental work; they are not repeated here.
 
 ### Phase 15I.9 — Adaptive booking flow (Instant vs Reserve UX)

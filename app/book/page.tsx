@@ -1,6 +1,6 @@
 "use client";
 import { Suspense, useState, useEffect, useRef } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { DayPicker } from "react-day-picker";
 import type { DateRange, Matcher } from "react-day-picker";
 import "react-day-picker/dist/style.css";
@@ -558,7 +558,7 @@ const CALENDAR_CSS = `
   .book-info-popover {
     position: relative;
     display: inline-flex;
-    align-items: center;
+    align-items: flex-start;
     flex-shrink: 0;
     vertical-align: middle;
   }
@@ -569,8 +569,10 @@ const CALENDAR_CSS = `
     z-index: 50;
     top: calc(100% + 6px);
     right: 0;
-    width: min(280px, calc(100vw - 40px));
+    width: min(280px, calc(100vw - 32px));
+    max-width: calc(100vw - 32px);
     padding: 10px 12px;
+    box-sizing: border-box;
     background-color: var(--oraya-popover-bg);
     border: 0.5px solid var(--oraya-popover-border);
     box-shadow: 0 12px 36px rgba(0,0,0,0.18);
@@ -579,10 +581,46 @@ const CALENDAR_CSS = `
     line-height: 1.55;
     color: var(--oraya-popover-text);
   }
-  @media (max-width: 480px) {
+
+  /* Mobile: flow panel in-column so it cannot escape the viewport (tap targets unchanged). */
+  @media (max-width: 640px) {
+    .book-popover-heading-row {
+      flex-wrap: wrap;
+      align-items: flex-start;
+      row-gap: 8px;
+    }
+    .book-popover-heading-row > p:first-child {
+      flex: 1 1 auto;
+      min-width: 0;
+      padding-right: 8px;
+    }
+    .book-popover-heading-row .book-info-popover[open] {
+      flex: 1 1 100%;
+      width: 100%;
+      max-width: calc(100vw - 32px);
+    }
+    .book-instant-secondary-row {
+      flex-direction: column;
+      align-items: stretch !important;
+      width: 100%;
+      max-width: 100%;
+      padding-left: 0;
+      padding-right: 0;
+      box-sizing: border-box;
+    }
+    .book-instant-secondary-row .book-info-popover[open] {
+      width: 100%;
+      max-width: calc(100vw - 32px);
+      align-self: center;
+    }
     .book-info-panel {
-      left: 0;
-      right: auto;
+      position: relative;
+      left: auto !important;
+      right: auto !important;
+      top: auto;
+      margin-top: 8px;
+      width: 100%;
+      max-width: calc(100vw - 32px);
     }
   }
 
@@ -746,7 +784,6 @@ function InfoPopover({ label, text }: { label: string; text: string }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 function BookPageInner() {
-  const router       = useRouter();
   const searchParams = useSearchParams();
   const pricing = usePublicPricing();
 
@@ -1681,7 +1718,7 @@ function BookPageInner() {
 
   const estimateHeaderTotal = showEstimate ? (
     <>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", margin: "0 0 6px" }}>
+      <div className="book-popover-heading-row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", margin: "0 0 6px" }}>
         <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
           Estimated booking total
         </p>
@@ -1815,6 +1852,7 @@ function BookPageInner() {
 
       {/* Secondary — compact instant action + info popover */}
       <div
+        className="book-instant-secondary-row"
         style={{
           display: "flex",
           alignItems: "center",
@@ -3128,6 +3166,7 @@ function BookPageInner() {
                   type="button"
                   className="oraya-pressable oraya-cta-gold-hover"
                   onClick={() => {
+                    const destBase = "/events/inquiry";
                     if (form.villa && checkIn && checkOut) {
                       const lock = writeBookToEventHandoff({
                         villa: form.villa,
@@ -3148,11 +3187,11 @@ function BookPageInner() {
                           : {}),
                       });
                       if (lock) {
-                        router.push(`/events/inquiry?prefill=book&hl=${encodeURIComponent(lock)}`);
+                        window.location.assign(`${destBase}?prefill=book&hl=${encodeURIComponent(lock)}`);
                         return;
                       }
                     }
-                    router.push("/events/inquiry");
+                    window.location.assign(destBase);
                   }}
                   style={{ alignSelf: "flex-start", fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "12px 24px", cursor: "pointer" }}
                 >
