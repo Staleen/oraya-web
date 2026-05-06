@@ -56,7 +56,7 @@ function LoginPageInner() {
     setError("");
     setLoading(true);
     try {
-      const { error: signInError } = await supabase.auth.signInWithPassword({
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
         email: form.email,
         password: form.password,
       });
@@ -64,17 +64,15 @@ function LoginPageInner() {
 
       // Silently backfill members row using auth metadata in case it was never created.
       // ignoreDuplicates: true in the API means existing rows are never overwritten.
-      const [{ data: { user } }, { data: { session } }] = await Promise.all([
-        supabase.auth.getUser(),
-        supabase.auth.getSession(),
-      ]);
-      if (user && session?.access_token) {
+      const user = signInData.user;
+      const accessToken = signInData.session?.access_token;
+      if (user && accessToken) {
         const meta = user.user_metadata ?? {};
         fetch("/api/members", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
+            Authorization: `Bearer ${accessToken}`,
           },
           body: JSON.stringify({
             id:        user.id,

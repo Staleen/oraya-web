@@ -2,10 +2,9 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 function getBearerToken(request: Request): string | null {
-  const header = request.headers.get("Authorization") ?? "";
-  const [scheme, token] = header.split(" ");
-  if (scheme !== "Bearer" || !token) return null;
-  return token;
+  const authorization = request.headers.get("authorization") ?? "";
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() || null;
 }
 
 export async function POST(request: Request) {
@@ -23,7 +22,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { id, full_name, phone, country, address } = body;
 
-    if (!id) {
+    if (typeof id !== "string" || !id) {
       return NextResponse.json({ error: "User ID is required." }, { status: 400 });
     }
     if (id !== user.id) {
