@@ -41,8 +41,10 @@ import {
 } from "@/lib/event-service-exclusivity";
 import {
   EVENT_SERVICE_GROUP_LABELS,
+  getEventServiceGroupForCatalogRow,
   getMissingRequiredEventServiceGroups,
   getRequiredEventServiceGroups,
+  type EventServiceGroup,
 } from "@/lib/event-service-requirements";
 
 // ─── Brand constants (theme tokens from globals.css; matches /book) ───────────
@@ -446,6 +448,15 @@ const CALENDAR_CSS = `
     to   { opacity: 1; transform: translateY(0);   }
   }
   .step-content { animation: stepFadeIn 0.25s ease forwards; }
+
+  /* Same as /book: prevent iOS input zoom (16px minimum on narrow viewports only). */
+  @media (max-width: 640px) {
+    .oraya-book-input-zoom-fix input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]),
+    .oraya-book-input-zoom-fix select,
+    .oraya-book-input-zoom-fix textarea {
+      font-size: 16px !important;
+    }
+  }
 `;
 
 // ─── Step indicator ───────────────────────────────────────────────────────────
@@ -576,6 +587,20 @@ function EventInquiryPageInner() {
   const searchParams = useSearchParams();
   const quantityManuallyAdjustedRef = useRef<Set<string>>(new Set());
   const prevVillaRef = useRef<string>("");
+  const step1VillaSectionRef = useRef<HTMLDivElement>(null);
+  const villaFirstBtnRef = useRef<HTMLButtonElement>(null);
+  const step1EventTypeSectionRef = useRef<HTMLDivElement>(null);
+  const eventTypeFirstBtnRef = useRef<HTMLButtonElement>(null);
+  const step1CalendarSectionRef = useRef<HTMLDivElement>(null);
+  const step1AttendeesSectionRef = useRef<HTMLDivElement>(null);
+  const step1AttendeesInputRef = useRef<HTMLInputElement>(null);
+  const step2ServicesSectionRef = useRef<HTMLDivElement>(null);
+  const step3HostSectionRef = useRef<HTMLDivElement>(null);
+  const sleepingGuestsInputRef = useRef<HTMLInputElement>(null);
+  const guestDetailsSectionRef = useRef<HTMLDivElement>(null);
+  const guestFullNameInputRef = useRef<HTMLInputElement>(null);
+  const guestPhoneInputRef = useRef<HTMLInputElement>(null);
+  const guestEmailInputRef = useRef<HTMLInputElement>(null);
 
   const [authStatus, setAuthStatus] = useState<AuthStatus>("loading");
   const [memberName, setMemberName] = useState("");
@@ -1059,6 +1084,26 @@ function EventInquiryPageInner() {
     setDateRange(nextRange);
   }
 
+  function focusFieldAfterScroll(scrollEl: HTMLElement | null, field: HTMLElement | null) {
+    scrollEl?.scrollIntoView({ behavior: "smooth", block: "center" });
+    window.setTimeout(() => field?.focus(), 380);
+  }
+
+  function focusGuestFieldAfterScroll(field: HTMLInputElement | null) {
+    guestDetailsSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    window.setTimeout(() => field?.focus(), 380);
+  }
+
+  function focusStep2MissingService(missing: EventServiceGroup[]) {
+    step2ServicesSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    window.setTimeout(() => {
+      const first = missing[0];
+      const el = document.querySelector<HTMLElement>(`[data-event-focus-group="${first}"]`);
+      const btn = el?.querySelector<HTMLButtonElement>("button[type='button']");
+      btn?.focus();
+    }, 380);
+  }
+
   function toggleService(service: EventServiceOption) {
     setSelectedServiceQuantities((previous) => {
       if (service.key in previous) {
@@ -1099,6 +1144,7 @@ function EventInquiryPageInner() {
   function addRecommendedPack() {
     if (!form.eventType) {
       setError("Please choose an event type before adding a recommended setup.");
+      focusFieldAfterScroll(step1EventTypeSectionRef.current, eventTypeFirstBtnRef.current);
       return;
     }
     const normalized = normalizeEventType(form.eventType);
@@ -1128,11 +1174,31 @@ function EventInquiryPageInner() {
   function goNext() {
     setError("");
     if (step === 1) {
-      if (!form.villa)               { setError("Please select a villa preference before continuing."); return; }
-      if (!form.eventType)           { setError("Please choose an event type before continuing."); return; }
-      if (!checkIn)                  { setError("Please select your preferred date(s) to continue."); return; }
-      if (!checkOut)                 { setError("Please select an end date for your event window."); return; }
-      if (checkOut <= checkIn)       { setError("Your event end date must be after the start date."); return; }
+      if (!form.villa) {
+        setError("Please select a villa preference before continuing.");
+        focusFieldAfterScroll(step1VillaSectionRef.current, villaFirstBtnRef.current);
+        return;
+      }
+      if (!form.eventType) {
+        setError("Please choose an event type before continuing.");
+        focusFieldAfterScroll(step1EventTypeSectionRef.current, eventTypeFirstBtnRef.current);
+        return;
+      }
+      if (!checkIn) {
+        setError("Please select your preferred date(s) to continue.");
+        focusFieldAfterScroll(step1CalendarSectionRef.current, step1CalendarSectionRef.current);
+        return;
+      }
+      if (!checkOut) {
+        setError("Please select an end date for your event window.");
+        focusFieldAfterScroll(step1CalendarSectionRef.current, step1CalendarSectionRef.current);
+        return;
+      }
+      if (checkOut <= checkIn) {
+        setError("Your event end date must be after the start date.");
+        focusFieldAfterScroll(step1CalendarSectionRef.current, step1CalendarSectionRef.current);
+        return;
+      }
       if (
         dateRange?.from &&
         dateRange.to &&
@@ -1142,14 +1208,18 @@ function EventInquiryPageInner() {
         setError(
           "Those dates conflict with an existing reservation or the venue setup window. Please adjust your event dates.",
         );
+        focusFieldAfterScroll(step1CalendarSectionRef.current, step1CalendarSectionRef.current);
         return;
       }
       const attendees = parseInt(form.dayVisitors, 10);
       if (!Number.isFinite(attendees) || attendees < 1) {
-        setError("Please enter the expected number of attendees."); return;
+        setError("Please enter the expected number of attendees.");
+        focusFieldAfterScroll(step1AttendeesSectionRef.current, step1AttendeesInputRef.current);
+        return;
       }
       if (attendees > MAX_EVENT_ATTENDEES) {
         setError(EVENT_ATTENDEE_CAP_ERROR);
+        focusFieldAfterScroll(step1AttendeesSectionRef.current, step1AttendeesInputRef.current);
         return;
       }
     }
@@ -1163,6 +1233,7 @@ function EventInquiryPageInner() {
         setError(
           `To prepare this event properly, please include the required setup for your selected event type. Missing: ${missingLabels}.`,
         );
+        focusStep2MissingService(missingGroups);
         return;
       }
     }
@@ -1188,7 +1259,10 @@ function EventInquiryPageInner() {
       if (!Number.isFinite(attendees) || attendees < 1) throw new Error("Please enter the expected number of attendees.");
       if (attendees > MAX_EVENT_ATTENDEES) throw new Error(EVENT_ATTENDEE_CAP_ERROR);
       const sleeping = parseInt(form.sleepingGuests, 10);
-      if (!sleeping || sleeping < 1) throw new Error("Please enter the host overnight stay count (at least 1).");
+      if (!sleeping || sleeping < 1) {
+        focusFieldAfterScroll(step3HostSectionRef.current, sleepingGuestsInputRef.current);
+        throw new Error("Please enter the host overnight stay count (at least 1).");
+      }
       const missingGroups = getMissingRequiredEventServiceGroups(
         form.eventType,
         selectedEventServices.map(({ service }) => ({ id: service.id, label: service.label })),
@@ -1200,9 +1274,21 @@ function EventInquiryPageInner() {
         );
       }
       if (authStatus !== "member") {
-        if (!guest.fullName.trim()) throw new Error("Please enter your full name so we know who to contact.");
-        if (!guestEmail) throw new Error("Please enter your email address so we can reach you about your event.");
-        if (!EMAIL_RE.test(guestEmail)) throw new Error("Please enter a valid email address.");
+        const name = guest.fullName.trim();
+        const emailT = guest.email.trim();
+        const phoneT = guest.phoneNumber.trim();
+        if (!name) {
+          focusGuestFieldAfterScroll(guestFullNameInputRef.current);
+          throw new Error("Please enter your name so we know who the booking is for.");
+        }
+        if (!phoneT && !emailT) {
+          focusGuestFieldAfterScroll(guestPhoneInputRef.current);
+          throw new Error("Please enter a WhatsApp number or email so Oraya can contact you about your event.");
+        }
+        if (emailT && !EMAIL_RE.test(emailT)) {
+          focusGuestFieldAfterScroll(guestEmailInputRef.current);
+          throw new Error("Please enter a valid email address.");
+        }
       }
       const { data: { user }, error: authErr } = await supabase.auth.getUser();
       if (authErr) console.error("[events] auth.getUser error:", authErr);
@@ -1246,9 +1332,10 @@ function EventInquiryPageInner() {
       if (user) {
         body.member_id = user.id;
       } else {
+        const phoneT = guest.phoneNumber.trim();
         body.guest_name    = guest.fullName.trim();
-        body.guest_email   = guest.email.trim();
-        body.guest_phone   = guest.phoneNumber ? `${guest.dialCode}${guest.phoneNumber}` : null;
+        body.guest_email   = guest.email.trim() || null;
+        body.guest_phone   = phoneT ? `${guest.dialCode}${phoneT}` : null;
         body.guest_country = guest.country || null;
       }
 
@@ -1286,7 +1373,7 @@ function EventInquiryPageInner() {
     return (
       <div style={{ minHeight: "100vh", backgroundColor: PAGE_BG, overflowX: "hidden" }}>
         <EventsInquiryNav />
-        <main style={{ minHeight: "100vh", padding: "96px 24px 80px", boxSizing: "border-box" }}>
+        <main className="oraya-book-input-zoom-fix" style={{ minHeight: "100vh", padding: "96px 24px 80px", boxSizing: "border-box" }}>
           <div style={{ width: "100%", maxWidth: "720px", margin: "0 auto" }} aria-hidden="true">
             <div style={{ width: "52px", margin: "0 auto 2.5rem", opacity: 0.45 }}><OrayaEmblem /></div>
             <p style={{ textAlign: "center", color: MUTED, fontFamily: LATO, fontSize: "12px" }}>Loading…</p>
@@ -1301,7 +1388,7 @@ function EventInquiryPageInner() {
   return (
     <div style={{ minHeight: "100vh", backgroundColor: PAGE_BG, overflowX: "hidden" }}>
       <EventsInquiryNav />
-      <main style={{ minHeight: "100vh", padding: "96px 24px 80px", boxSizing: "border-box" }}>
+      <main className="oraya-book-input-zoom-fix" style={{ minHeight: "100vh", padding: "96px 24px 80px", boxSizing: "border-box" }}>
       <style>{CALENDAR_CSS}</style>
 
       <div style={{ width: "100%", maxWidth: containerWidth, margin: "0 auto", transition: "max-width 0.3s ease" }}>
@@ -1360,14 +1447,15 @@ function EventInquiryPageInner() {
             <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
 
               {/* Villa preference */}
-              <div>
+              <div ref={step1VillaSectionRef}>
                 <p style={{ ...labelStyle, marginBottom: "10px" }}>Villa preference</p>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "8px" }}>
-                  {VILLAS.map(villa => {
+                  {VILLAS.map((villa, vi) => {
                     const selected = form.villa === villa;
                     return (
                       <button
                         key={villa}
+                        ref={vi === 0 ? villaFirstBtnRef : undefined}
                         type="button"
                         className="oraya-pressable"
                         onClick={() => { setForm(f => ({ ...f, villa })); setError(""); }}
@@ -1389,14 +1477,15 @@ function EventInquiryPageInner() {
               </div>
 
               {/* Event type */}
-              <div>
+              <div ref={step1EventTypeSectionRef}>
                 <p style={{ ...labelStyle, marginBottom: "12px" }}>Event Type</p>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "8px" }}>
-                  {EVENT_TYPES.map(et => {
+                  {EVENT_TYPES.map((et, eti) => {
                     const selected = form.eventType === et.value;
                     return (
                       <button
                         key={et.value}
+                        ref={eti === 0 ? eventTypeFirstBtnRef : undefined}
                         type="button"
                         className="oraya-pressable"
                         onClick={() => setForm(f => ({ ...f, eventType: selected ? "" : et.value }))}
@@ -1477,7 +1566,11 @@ function EventInquiryPageInner() {
 
               {/* Calendar — only after villa selected */}
               {form.villa ? (
-                <div>
+                <div
+                  ref={step1CalendarSectionRef}
+                  tabIndex={-1}
+                  style={{ outline: "none" }}
+                >
                   <p style={{ ...labelStyle, marginBottom: "10px" }}>Preferred date(s)</p>
                   <p style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_P78, margin: "0 0 14px", lineHeight: 1.65 }}>
                     Choose your event start and end. Dates already held—including the setup day before your start—are blocked the same way as stay booking. Oraya will confirm the final window with you.
@@ -1544,9 +1637,10 @@ function EventInquiryPageInner() {
               )}
 
               {/* Expected attendees */}
-              <div>
+              <div ref={step1AttendeesSectionRef}>
                 <label style={labelStyle}>Expected number of attendees</label>
                 <input
+                  ref={step1AttendeesInputRef}
                   name="dayVisitors"
                   type="number"
                   required
@@ -1585,7 +1679,7 @@ function EventInquiryPageInner() {
               STEP 2 — Services & Setup Requirements
           ════════════════════════════════════════════════════════════════ */}
           {step === 2 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+            <div ref={step2ServicesSectionRef} style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
 
               <div>
                 <p style={{ fontFamily: PLAYFAIR, fontSize: "20px", fontWeight: 400, color: WHITE, margin: "0 0 6px" }}>
@@ -1612,10 +1706,12 @@ function EventInquiryPageInner() {
                           const unitLabel = getEventServiceUnitLabel(service);
                           const minQuantity = getEventServiceMinQuantity(service);
                           const maxQuantity = getEventServiceMaxQuantity(service);
+                          const svcGroup = getEventServiceGroupForCatalogRow({ id: service.id, label: service.label });
 
                           return (
                             <div
                               key={service.key}
+                              {...(svcGroup ? { "data-event-focus-group": svcGroup } : {})}
                               style={{
                                 border: `0.5px solid ${selected ? GOLD : "var(--oraya-border)"}`,
                                 backgroundColor: selected ? "rgba(197,164,109,0.08)" : GLASS1,
@@ -1777,9 +1873,10 @@ function EventInquiryPageInner() {
               </div>
 
               {/* Overnight hosts */}
-              <div>
+              <div ref={step3HostSectionRef}>
                 <label style={labelStyle}>Host overnight stay</label>
                 <input
+                  ref={sleepingGuestsInputRef}
                   name="sleepingGuests"
                   type="number"
                   required
@@ -1798,35 +1895,22 @@ function EventInquiryPageInner() {
 
               {/* Guest contact (when not member) */}
               {authStatus !== "member" && (
-                <div style={{ border: "0.5px solid var(--oraya-border)", backgroundColor: GLASS1, padding: "1.5rem", display: "flex", flexDirection: "column", gap: "16px" }}>
+                <div ref={guestDetailsSectionRef} style={{ border: "0.5px solid var(--oraya-border)", backgroundColor: GLASS1, padding: "1.5rem", display: "flex", flexDirection: "column", gap: "16px" }}>
                   <p style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "1px", color: GOLD, margin: 0 }}>
                     Your contact details
+                  </p>
+                  <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
+                    WhatsApp is preferred. If you do not use WhatsApp, please enter your email.
                   </p>
 
                   <div>
                     <label style={labelStyle}>Full name</label>
-                    <input name="fullName" type="text" required value={guest.fullName} onChange={handleGuestChange}
+                    <input ref={guestFullNameInputRef} name="fullName" type="text" required value={guest.fullName} onChange={handleGuestChange}
                       placeholder="Your full name" style={inputStyle} onFocus={focusGold} onBlur={blurGold} />
                   </div>
 
                   <div>
-                    <label style={labelStyle}>Email address</label>
-                    <input name="email" type="email" required value={guest.email} onChange={handleGuestChange}
-                      placeholder="you@example.com"
-                      style={{ ...inputStyle, borderColor: guestEmailInvalid ? "#e07070" : "var(--oraya-book-input-border)" }}
-                      onFocus={focusGold} onBlur={blurGold} />
-                    {guestEmailInvalid && (
-                      <p style={{ fontFamily: LATO, fontSize: "14px", color: "#e07070", marginTop: "8px", lineHeight: 1.6 }}>
-                        Please enter a valid email address.
-                      </p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label style={labelStyle}>
-                      Phone number{" "}
-                      <span style={{ color: MUTED, opacity: 0.55, letterSpacing: 0 }}>(optional)</span>
-                    </label>
+                    <label style={labelStyle}>WhatsApp / phone number</label>
                     <div style={{ display: "flex" }}>
                       <select name="dialCode" value={guest.dialCode} onChange={handleGuestChange}
                         onFocus={focusGold} onBlur={blurGold}
@@ -1835,9 +1919,22 @@ function EventInquiryPageInner() {
                           <option key={`${d.code}-${d.label}`} value={d.code} style={{ backgroundColor: OPT_BG }}>{d.flag} {d.code}</option>
                         ))}
                       </select>
-                      <input name="phoneNumber" type="tel" value={guest.phoneNumber} onChange={handleGuestChange}
+                      <input ref={guestPhoneInputRef} name="phoneNumber" type="tel" value={guest.phoneNumber} onChange={handleGuestChange}
                         placeholder="70 000 000" style={{ ...inputStyle, flex: 1 }} onFocus={focusGold} onBlur={blurGold} />
                     </div>
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>Email address</label>
+                    <input ref={guestEmailInputRef} name="email" type="email" autoComplete="email" value={guest.email} onChange={handleGuestChange}
+                      placeholder="you@example.com"
+                      style={{ ...inputStyle, borderColor: guestEmailInvalid ? "#e07070" : "var(--oraya-book-input-border)" }}
+                      onFocus={focusGold} onBlur={blurGold} />
+                    {guestEmailInvalid && (
+                      <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070", marginTop: "8px", lineHeight: 1.55 }}>
+                        Please enter a valid email address.
+                      </p>
+                    )}
                   </div>
 
                   <div>

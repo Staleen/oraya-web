@@ -77,3 +77,8 @@ export function getMissingRequiredEventServiceGroups(
   }
   return required.filter((group) => !covered.has(group));
 }
+
+/** Maps a catalog row to its required-setup group (UI focus targeting only). */
+export function getEventServiceGroupForCatalogRow(row: { id: string; label: string }): EventServiceGroup | null {
+  return resolveGroupForRow(row);
+}
