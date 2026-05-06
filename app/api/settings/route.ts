@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { ADDON_OPERATIONAL_SETTINGS_KEY } from "@/lib/addon-operations";
-import { GUEST_TESTIMONIALS_SETTINGS_KEY } from "@/lib/guest-testimonials";
+import {
+  getApprovedPublicTestimonials,
+  GUEST_TESTIMONIALS_SETTINGS_KEY,
+  parseGuestTestimonialsJson,
+} from "@/lib/guest-testimonials";
 import { INSTANT_BOOKING_SETTING_KEYS } from "@/lib/instant-booking-settings";
 
 const PUBLIC_SETTINGS_KEYS = new Set([
@@ -27,5 +31,11 @@ export async function GET(request: NextRequest) {
     .single();
 
   if (error) return NextResponse.json({ value: null });
-  return NextResponse.json({ value: data?.value ?? null });
+  const value = data?.value ?? null;
+  if (key === GUEST_TESTIMONIALS_SETTINGS_KEY) {
+    return NextResponse.json({
+      value: JSON.stringify(getApprovedPublicTestimonials(parseGuestTestimonialsJson(value))),
+    });
+  }
+  return NextResponse.json({ value });
 }

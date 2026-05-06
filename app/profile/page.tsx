@@ -285,13 +285,12 @@ export default function ProfilePage() {
 
       if (bookingData) setBookings(bookingData);
 
-      // Fetch WhatsApp number from settings
-      const { data: waSetting } = await supabase
-        .from("settings")
-        .select("value")
-        .eq("key", "whatsapp_number")
-        .single();
-      if (waSetting?.value) setWhatsappNumber(waSetting.value);
+      // Fetch public-safe settings through the allowlisted server endpoint.
+      const waResponse = await fetch("/api/settings?key=whatsapp_number", { cache: "no-store" });
+      if (waResponse.ok) {
+        const waSetting = (await waResponse.json().catch(() => ({}))) as { value?: string | null };
+        if (waSetting.value) setWhatsappNumber(waSetting.value);
+      }
 
       setPageLoading(false);
     });
