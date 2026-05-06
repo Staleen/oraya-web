@@ -100,3 +100,22 @@ npm run dev
 - SVG logos are inlined as React components (`OrayaEmblem.tsx`, `OrayaLogoFull.tsx`) — do not use `<img>` or `next/image` for SVGs.
 - `page.tsx` must stay `"use client"` (uses mouse event handlers).
 - Config file is `next.config.mjs` (not `.ts` — unsupported in Next.js 14).
+
+---
+
+## Multi-agent workflow (Phase 16 readiness)
+
+### Agent roles
+- ChatGPT = orchestration / architecture / prompt control
+- Cursor Editor Chat = main implementation / long-context work
+- Cursor Cloud Agents = audits, PR bugs, regression/security fixes
+- Claude / Claude Code = deep implementation or refactor support when instructed
+- Codex = isolated parallel coding tasks when instructed
+
+### Coordination rules
+- Do not run overlapping implementation agents on the same files.
+- Use audit-only agents before major new phases.
+- Do not redesign without explicit instruction.
+- Always read `PROJECT_STATE.md` first.
+- Treat Phase 15 as locked.
+- Phase 16 must begin with architecture/audit, not direct implementation.
