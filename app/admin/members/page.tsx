@@ -11,14 +11,25 @@ export default function AdminMembersPage() {
 
   async function deleteMember(id: string, name: string) {
     if (!confirm(`Delete member "${name}"? This will permanently remove their account and they will not be able to sign in again.`)) return;
+    setError("");
     setDeletingId(id);
-    const res = await fetch(`/api/admin/members/${id}`, { ...adminApiFetchInit, method: "DELETE" });
-    setDeletingId(null);
-    if (res.ok) {
+    try {
+      const res = await fetch(`/api/admin/members/${id}`, { ...adminApiFetchInit, method: "DELETE" });
+      let data: { error?: string } = {};
+      try {
+        data = (await res.json()) as { error?: string };
+      } catch {
+        data = {};
+      }
+      if (!res.ok) {
+        setError(data.error ?? "Failed to delete member.");
+        return;
+      }
       setMembers((prev) => prev.filter((m) => m.id !== id));
-    } else {
-      const d = await res.json();
-      setError(d.error ?? "Failed to delete member.");
+    } catch {
+      setError("Failed to delete member.");
+    } finally {
+      setDeletingId(null);
     }
   }
 

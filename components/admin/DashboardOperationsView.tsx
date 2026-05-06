@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { formatBeirutRelative } from "@/lib/format-date";
-import type { Booking, CalendarSource, Member } from "@/components/admin/types";
+import type { Booking, BookingAddonSnapshot, CalendarSource, Member } from "@/components/admin/types";
 import { BORDER, GOLD, LATO, MUTED, PLAYFAIR, SURFACE, WHITE, fmt } from "@/components/admin/theme";
 import { KNOWN_VILLAS } from "@/lib/calendar/villas";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
@@ -308,7 +308,7 @@ export default function DashboardOperationsView({
   loading: boolean;
   externalBlocks?: ExternalCalendarBlock[];
 }) {
-  const { setBookings } = useAdminData();
+  const { setBookings, setError } = useAdminData();
   const [isMobile, setIsMobile] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [approvingAddonId, setApprovingAddonId] = useState<string | null>(null);
@@ -323,21 +323,23 @@ export default function DashboardOperationsView({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ addon_id: addonId, decision }),
       });
-      const d = await res.json();
+      const d = (await res.json().catch(() => ({}))) as { error?: string; addons_snapshot?: unknown };
       if (res.ok && Array.isArray(d.addons_snapshot)) {
+        const addonsSnapshot = d.addons_snapshot as BookingAddonSnapshot[];
         // Update booking in global context so list views reflect persisted state.
         setBookings((prev) =>
-          prev.map((b) => b.id === bookingId ? { ...b, addons_snapshot: d.addons_snapshot } : b)
+          prev.map((b) => b.id === bookingId ? { ...b, addons_snapshot: addonsSnapshot } : b)
         );
         // Also update the open modal's local booking reference.
         setSelectedBooking((prev) =>
-          prev?.id === bookingId ? { ...prev, addons_snapshot: d.addons_snapshot } : prev
+          prev?.id === bookingId ? { ...prev, addons_snapshot: addonsSnapshot } : prev
         );
       } else {
-        console.error("[admin] resolve-addon failed:", d.error ?? "unknown error");
+        setError(typeof d.error === "string" ? d.error : "Failed to update add-on state.");
       }
     } catch (err) {
       console.error("[admin] resolve-addon network error:", err);
+      setError(err instanceof Error ? err.message : "Failed to update add-on state.");
     } finally {
       setApprovingAddonId(null);
     }

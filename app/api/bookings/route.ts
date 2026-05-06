@@ -638,9 +638,11 @@ export async function POST(request: Request) {
         }
       }
     } catch (addonAuditError) {
-      if (process.env.NODE_ENV !== "production") {
-        console.debug("[api/bookings] addon audit skipped", addonAuditError);
-      }
+      console.error("[api/bookings] addon audit failed:", addonAuditError);
+      return NextResponse.json(
+        { error: "Unable to validate selected add-ons. Please try again or contact us." },
+        { status: 500 }
+      );
     }
 
     if (addonsSnapshotData) {

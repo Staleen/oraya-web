@@ -796,8 +796,10 @@ function BookPageInner() {
   const [step, setStep] = useState(1);
   /** Phase 15I.9 — instant vs reserve UX paths (UI only; no alternate booking creation). */
   const [bookingPath, setBookingPath] = useState<BookingPath>(null);
-  /** When not instant-eligible, one-shot auto navigation to merged reserve step (ref resets on back or date change). */
+  /** When not instant-eligible, one-shot auto navigation to merged reserve step (ref resets on date changes). */
   const reserveAutoNavigatedRef = useRef(false);
+  /** Suppresses auto-navigation after an explicit Back action until the stay selection changes. */
+  const reserveAutoAdvanceSuppressedRef = useRef(false);
 
   // Form (persisted across steps)
   const [form, setForm] = useState({
@@ -838,8 +840,8 @@ function BookPageInner() {
   const [byblosCover, setByblosCover] = useState("");
   const [whatsappDigits, setWhatsappDigits] = useState<string | null>(null);
   const [instantBookingFlags, setInstantBookingFlags] = useState<InstantBookingFlags>({
-    "Villa Mechmech": true,
-    "Villa Byblos": true,
+    "Villa Mechmech": false,
+    "Villa Byblos": false,
   });
 
   /** Stay Setup — special requests textarea hidden until expanded (content preserved in form.message). */
@@ -1348,6 +1350,7 @@ function BookPageInner() {
     !hasOperationalWarningSelection &&
     bookingTrustMode === "instant" &&
     instantBookingEnabledForVilla(form.villa, instantBookingFlags);
+  const trustCopyMode: BookingTrustMode = bookingPath === "instant" ? "instant" : "request";
 
   /**
    * Phase 12E Batch 5: timing add-ons eligible for the dead-day discount offer.
@@ -1371,14 +1374,18 @@ function BookPageInner() {
     return [{ addon, basePrice, discountedPrice, savings }];
   });
 
+  const reserveAutoAdvanceSignature = `${form.villa}|${checkIn}|${checkOut}|${dateConflict ?? ""}`;
+
   useEffect(() => {
     reserveAutoNavigatedRef.current = false;
-  }, [form.villa, checkIn, checkOut, dateConflict]);
+    reserveAutoAdvanceSuppressedRef.current = false;
+  }, [reserveAutoAdvanceSignature]);
 
   /** Default reserve path: skip decision screen when instant booking is not offered for this stay. */
   useEffect(() => {
     if (step !== 1 || instantEligible) return;
     if (!form.villa || !checkIn || !checkOut || checkOut <= checkIn || dateConflict) return;
+    if (reserveAutoAdvanceSuppressedRef.current) return;
     if (reserveAutoNavigatedRef.current) return;
     reserveAutoNavigatedRef.current = true;
     setError("");
@@ -1588,7 +1595,7 @@ function BookPageInner() {
       setStep(1);
     } else {
       if (step === 2 && bookingPath === "request") {
-        reserveAutoNavigatedRef.current = false;
+        reserveAutoAdvanceSuppressedRef.current = true;
       }
       setStep(s => s - 1);
     }
@@ -3273,9 +3280,9 @@ function BookPageInner() {
                   What happens next
                 </p>
                 <p style={{ fontFamily: PLAYFAIR, fontSize: "17px", fontWeight: 400, color: WHITE, margin: 0, lineHeight: 1.45 }}>
-                  {bookingTrustMode === "instant" ? STEP4_TRUST.instant.headline : STEP4_TRUST.request.headline}
+                  {trustCopyMode === "instant" ? STEP4_TRUST.instant.headline : STEP4_TRUST.request.headline}
                 </p>
-                {bookingTrustMode === "instant" ? (
+                {trustCopyMode === "instant" ? (
                   STEP4_TRUST.instant.payment ? (
                     <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65 }}>
                       {STEP4_TRUST.instant.payment}
@@ -3299,7 +3306,7 @@ function BookPageInner() {
               <div style={{ border: "0.5px solid rgba(197,164,109,0.24)", backgroundColor: "rgba(197,164,109,0.05)", padding: "16px 18px", display: "grid", gap: "10px" }}>
                 <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>Payment options</p>
                 <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.6 }}>
-                  {bookingTrustMode === "instant" ? STEP4_TRUST.instant.headline : STEP4_TRUST.request.noPayment}
+                  {trustCopyMode === "instant" ? STEP4_TRUST.instant.headline : STEP4_TRUST.request.noPayment}
                 </p>
                 <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
                   <button type="button" disabled style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, border: "0.5px solid rgba(197,164,109,0.3)", backgroundColor: GLASS1, padding: "10px 14px", cursor: "not-allowed" }}>Pay deposit (coming soon)</button>
@@ -3342,7 +3349,7 @@ function BookPageInner() {
                     {loading ? "Submitting…" : "Submit booking request"}
                   </button>
                   <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, textAlign: "center", margin: 0, lineHeight: 1.5 }}>
-                    {bookingTrustMode === "instant" ? STEP4_TRUST.instant.ctaSubline : STEP4_TRUST.request.ctaSubline}
+                    {trustCopyMode === "instant" ? STEP4_TRUST.instant.ctaSubline : STEP4_TRUST.request.ctaSubline}
                   </p>
                 </div>
               </div>
@@ -3356,9 +3363,9 @@ function BookPageInner() {
             Booking details
           </summary>
           <p style={{ fontFamily: LATO, fontSize: "14px", color: "var(--oraya-book-text-soft-2)", margin: "10px 0 0", lineHeight: 1.7 }}>
-            {bookingTrustMode === "instant" ? STEP4_TRUST.instant.headline : STEP4_TRUST.request.headline}
+            {trustCopyMode === "instant" ? STEP4_TRUST.instant.headline : STEP4_TRUST.request.headline}
           </p>
-          {bookingTrustMode === "instant" ? (
+          {trustCopyMode === "instant" ? (
             STEP4_TRUST.instant.payment ? (
               <p style={{ fontFamily: LATO, fontSize: "14px", color: "var(--oraya-book-p76)", margin: "0 0 10px", lineHeight: 1.7 }}>
                 {STEP4_TRUST.instant.payment}
