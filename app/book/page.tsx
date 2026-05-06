@@ -605,6 +605,15 @@ const CALENDAR_CSS = `
   .book-details-accordion[open] > summary::after {
     content: " ▾";
   }
+
+  /* Phase 15 final: prevent iOS input zoom (16px minimum on narrow viewports only). */
+  @media (max-width: 640px) {
+    .oraya-book-input-zoom-fix input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]),
+    .oraya-book-input-zoom-fix select,
+    .oraya-book-input-zoom-fix textarea {
+      font-size: 16px !important;
+    }
+  }
 `;
 
 type BookingPath = null | "instant" | "request";
@@ -795,6 +804,9 @@ function BookPageInner() {
     "Villa Mechmech": true,
     "Villa Byblos": true,
   });
+
+  /** Stay Setup — special requests textarea hidden until expanded (content preserved in form.message). */
+  const [specialRequestsExpanded, setSpecialRequestsExpanded] = useState(false);
 
   /** Preselected from villa pages: compact summary; full cards after "Change villa". */
   const [showFullVillaCards, setShowFullVillaCards] = useState(true);
@@ -1360,7 +1372,6 @@ function BookPageInner() {
   // Clear applied discounts whenever dates change — the discount amount is date-dependent.
   useEffect(() => { setAppliedDiscounts([]); }, [dateRange]);
 
-
   // Phase 13C.4 correction: auto-select Extra Bedding when sleeping guests exceeds 6.
   // Idempotent — prev.includes guard prevents re-renders. Respects existing strict/availability blocks.
   useEffect(() => {
@@ -1753,91 +1764,91 @@ function BookPageInner() {
     ) : null;
 
   const step1DecisionBlock = instantEligible && checkOut ? (
-    <div style={{ display: "flex", flexDirection: "column", gap: narrowStep1 ? "10px" : "16px" }}>
-      <p style={{ fontFamily: PLAYFAIR, fontSize: narrowStep1 ? "18px" : "20px", fontWeight: 400, color: WHITE, margin: 0, textAlign: "center", lineHeight: 1.3 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: narrowStep1 ? "14px" : "20px", alignItems: "stretch", width: "100%" }}>
+      <p style={{ fontFamily: PLAYFAIR, fontSize: narrowStep1 ? "18px" : "22px", fontWeight: 400, color: WHITE, margin: 0, textAlign: "center", lineHeight: 1.3 }}>
         Continue your booking
       </p>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "14px", alignItems: "stretch" }}>
-        <div
+
+      {/* Primary path — Reserve dominates */}
+      <div
+        style={{
+          border: "0.5px solid rgba(197,164,109,0.5)",
+          backgroundColor: "rgba(197,164,109,0.11)",
+          padding: narrowStep1 ? "18px 16px 16px" : "24px 22px 20px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "14px",
+          textAlign: "left",
+          boxShadow: "inset 0 0 0 1px rgba(197,164,109,0.06)",
+        }}
+      >
+        <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+          Full Oraya experience
+        </p>
+        <p style={{ fontFamily: PLAYFAIR, fontSize: narrowStep1 ? "22px" : "26px", fontWeight: 400, color: WHITE, margin: 0, lineHeight: 1.3 }}>
+          Reserve Your Stay
+        </p>
+        <p style={{ fontFamily: LATO, fontSize: narrowStep1 ? "13px" : "14px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65, fontWeight: 300, whiteSpace: "pre-line" }}>
+          Enhance your stay with services, add-ons, and special requests.{"\n"}Perfect for a fully prepared Oraya experience.
+        </p>
+        <button
+          type="button"
+          className="oraya-pressable oraya-cta-gold-hover"
+          onClick={proceedFromStep1ToReserve}
           style={{
-            border: "0.5px solid rgba(197,164,109,0.45)",
-            backgroundColor: "rgba(197,164,109,0.09)",
-            padding: narrowStep1 ? "14px 14px 12px" : "18px 18px 16px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "12px",
-            textAlign: "left",
+            fontFamily: LATO,
+            fontSize: "13px",
+            letterSpacing: "0.9px",
+            color: GOLD_CTA,
+            backgroundColor: GOLD,
+            border: "none",
+            padding: "15px 18px",
+            marginTop: "4px",
+            cursor: "pointer",
+            textAlign: "center",
+            width: "100%",
           }}
         >
-          <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
-            Full Oraya experience
-          </p>
-          <p style={{ fontFamily: PLAYFAIR, fontSize: "20px", fontWeight: 400, color: WHITE, margin: 0, lineHeight: 1.35 }}>
-            Reserve Your Stay
-          </p>
-          <p style={{ fontFamily: LATO, fontSize: narrowStep1 ? "12px" : "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65, fontWeight: 300, whiteSpace: "pre-line" }}>
-            Enhance your stay with services, add-ons, and special requests.{"\n"}Perfect for a fully prepared Oraya experience.
-          </p>
-          <button
-            type="button"
-            className="oraya-pressable oraya-cta-gold-hover"
-            onClick={proceedFromStep1ToReserve}
-            style={{
-              fontFamily: LATO,
-              fontSize: "12px",
-              letterSpacing: "0.8px",
-              color: GOLD_CTA,
-              backgroundColor: GOLD,
-              border: "none",
-              padding: "13px 14px",
-              marginTop: "4px",
-              cursor: "pointer",
-              textAlign: "center",
-            }}
-          >
-            Reserve Your Stay
-          </button>
-        </div>
-        <div
+          Reserve Your Stay
+        </button>
+      </div>
+
+      {/* Secondary — compact instant action + info popover */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "12px",
+          flexWrap: "wrap",
+        }}
+      >
+        <button
+          type="button"
+          className="oraya-pressable oraya-cta-book-back"
+          onClick={proceedFromStep1ToInstant}
           style={{
-            border: "0.5px solid rgba(197,164,109,0.2)",
-            backgroundColor: GLASS1,
-            padding: narrowStep1 ? "14px 14px 12px" : "18px 18px 16px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "12px",
-            textAlign: "left",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "8px",
+            fontFamily: LATO,
+            fontSize: "12px",
+            letterSpacing: "0.5px",
+            color: GOLD,
+            backgroundColor: "transparent",
+            border: "0.5px solid rgba(197,164,109,0.42)",
+            padding: "10px 18px",
+            cursor: "pointer",
           }}
         >
-          <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, margin: 0 }}>
-            Fast path
-          </p>
-          <p style={{ fontFamily: PLAYFAIR, fontSize: "18px", fontWeight: 400, color: WHITE, margin: 0, lineHeight: 1.35 }}>
-            Instant Book
-          </p>
-          <p style={{ fontFamily: LATO, fontSize: narrowStep1 ? "12px" : "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65, fontWeight: 300, whiteSpace: "pre-line" }}>
-            Best for simple, self-service stays with no add-ons or preparation required.
-          </p>
-          <button
-            type="button"
-            className="oraya-pressable oraya-cta-book-back"
-            onClick={proceedFromStep1ToInstant}
-            style={{
-              fontFamily: LATO,
-              fontSize: "12px",
-              letterSpacing: "0.8px",
-              color: GOLD,
-              backgroundColor: "transparent",
-              border: "0.5px solid rgba(197,164,109,0.35)",
-              padding: "13px 14px",
-              marginTop: "4px",
-              cursor: "pointer",
-              textAlign: "center",
-            }}
-          >
-            Book Instantly
-          </button>
-        </div>
+          <InstantBookingIcon size={14} />
+          Book Instantly
+        </button>
+        <InfoPopover
+          label="About instant booking"
+          text="Best for simple self-service stays with no add-ons, services, or special requests."
+        />
       </div>
     </div>
   ) : (!form.villa || !checkIn || !checkOut || checkOut <= checkIn || dateConflict) ? (
@@ -1910,7 +1921,7 @@ function BookPageInner() {
   const containerWidth = step === 1 ? "720px" : "560px";
 
   return (
-    <main style={{ backgroundColor: PAGE_BG, minHeight: "100vh", padding: "80px 24px", position: "relative" }}>
+    <main className="oraya-book-input-zoom-fix" style={{ backgroundColor: PAGE_BG, minHeight: "100vh", padding: "80px 24px", position: "relative" }}>
       <style>{CALENDAR_CSS}</style>
       <div style={{ position: "absolute", top: "1rem", right: "1rem", zIndex: 20 }}>
         <PublicThemeToggle variant="onDark" />
@@ -2381,75 +2392,8 @@ function BookPageInner() {
           {step === 2 && bookingPath === "request" && (
             <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
 
-              {/* Guest contact fields (only when not a member) */}
-              {guestMode && (
-                <div style={{ order: 0, border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: GLASS1, padding: "1.5rem", display: "flex", flexDirection: "column", gap: "14px" }}>
-                  <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
-                    Your details
-                  </p>
-
-                  <div>
-                    <label style={labelStyle}>Full name</label>
-                    <input name="fullName" type="text" required value={guest.fullName} onChange={handleGuestChange}
-                      placeholder="Your full name" style={inputStyle} onFocus={focusGold} onBlur={blurGold} />
-                  </div>
-
-                  <div>
-                    <label style={labelStyle}>Email address</label>
-                    <input name="email" type="email" required value={guest.email} onChange={handleGuestChange}
-                      placeholder="you@example.com"
-                      style={{
-                        ...inputStyle,
-                        borderColor: guestEmailInvalid ? "#e07070" : "rgba(197,164,109,0.25)",
-                      }}
-                      onFocus={focusGold} onBlur={blurGold} />
-                    {guestEmailInvalid && (
-                    <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070", marginTop: "8px", lineHeight: 1.55 }}>
-                        Please enter a valid email address so we can contact you about your booking.
-                      </p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label style={labelStyle}>
-                      Phone number{" "}
-                      <span style={{ color: "rgba(138,128,112,0.55)", letterSpacing: "0.4px", textTransform: "none", fontSize: "10px" }}>(optional)</span>
-                    </label>
-                    <div style={{ display: "flex" }}>
-                      <select name="dialCode" value={guest.dialCode} onChange={handleGuestChange}
-                        onFocus={focusGold} onBlur={blurGold}
-                        style={{ ...inputStyle, width: "auto", flexShrink: 0, paddingRight: "10px", borderRight: "none", cursor: "pointer", minWidth: "120px" }}>
-                        {DIAL_CODES.map((d, i) =>
-                          d.code === "" ? (
-                            <option key={`div-${i}`} disabled value="" style={{ backgroundColor: OPT_BG, color: MUTED }}>{d.label}</option>
-                          ) : (
-                            <option key={`${d.code}-${d.label}`} value={d.code} style={{ backgroundColor: OPT_BG }}>{d.flag} {d.code}</option>
-                          )
-                        )}
-                      </select>
-                      <input name="phoneNumber" type="tel" value={guest.phoneNumber} onChange={handleGuestChange}
-                        placeholder="70 000 000" style={{ ...inputStyle, flex: 1 }} onFocus={focusGold} onBlur={blurGold} />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label style={labelStyle}>Country</label>
-                    <select name="country" value={guest.country} onChange={handleGuestChange}
-                      onFocus={focusGold} onBlur={blurGold} style={{ ...inputStyle, cursor: "pointer" }}>
-                      {COUNTRIES.map((c, i) =>
-                        c.value === "" ? (
-                          <option key={`div-${i}`} disabled value="" style={{ backgroundColor: OPT_BG, color: MUTED }}>{c.label}</option>
-                        ) : (
-                          <option key={c.value} value={c.value} style={{ backgroundColor: OPT_BG }}>{c.label}</option>
-                        )
-                      )}
-                    </select>
-                  </div>
-                </div>
-              )}
-
               {/* Bedroom-based stay setup */}
-              <div style={{ order: 1, display: "flex", flexDirection: "column", gap: "16px" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                 <div>
                   <div style={{ ...labelRowStyle, marginBottom: "12px" }}>
                     <span style={labelRowTextStyle}>Bedrooms to be used</span>
@@ -2539,7 +2483,74 @@ function BookPageInner() {
                 </div>
               </div>
 
-              <div style={{ order: 2, display: "flex", flexDirection: "column", gap: "24px", width: "100%" }}>
+              {/* Guest contact (priority order: name → WhatsApp/phone → email → country) */}
+              {guestMode && (
+                <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: GLASS1, padding: "1.5rem", display: "flex", flexDirection: "column", gap: "14px" }}>
+                  <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+                    Your details
+                  </p>
+
+                  <div>
+                    <label style={labelStyle}>Full name</label>
+                    <input name="fullName" type="text" required value={guest.fullName} onChange={handleGuestChange}
+                      placeholder="Your full name" style={inputStyle} onFocus={focusGold} onBlur={blurGold} />
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>
+                      WhatsApp / phone number{" "}
+                      <span style={{ color: "rgba(138,128,112,0.55)", letterSpacing: "0.4px", textTransform: "none", fontSize: "10px" }}>(optional)</span>
+                    </label>
+                    <div style={{ display: "flex" }}>
+                      <select name="dialCode" value={guest.dialCode} onChange={handleGuestChange}
+                        onFocus={focusGold} onBlur={blurGold}
+                        style={{ ...inputStyle, width: "auto", flexShrink: 0, paddingRight: "10px", borderRight: "none", cursor: "pointer", minWidth: "120px" }}>
+                        {DIAL_CODES.map((d, i) =>
+                          d.code === "" ? (
+                            <option key={`div-${i}`} disabled value="" style={{ backgroundColor: OPT_BG, color: MUTED }}>{d.label}</option>
+                          ) : (
+                            <option key={`${d.code}-${d.label}`} value={d.code} style={{ backgroundColor: OPT_BG }}>{d.flag} {d.code}</option>
+                          )
+                        )}
+                      </select>
+                      <input name="phoneNumber" type="tel" value={guest.phoneNumber} onChange={handleGuestChange}
+                        placeholder="70 000 000" style={{ ...inputStyle, flex: 1 }} onFocus={focusGold} onBlur={blurGold} />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>Email address</label>
+                    <input name="email" type="email" required value={guest.email} onChange={handleGuestChange}
+                      placeholder="you@example.com"
+                      style={{
+                        ...inputStyle,
+                        borderColor: guestEmailInvalid ? "#e07070" : "rgba(197,164,109,0.25)",
+                      }}
+                      onFocus={focusGold} onBlur={blurGold} />
+                    {guestEmailInvalid && (
+                      <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070", marginTop: "8px", lineHeight: 1.55 }}>
+                        Please enter a valid email address so we can contact you about your booking.
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>Country</label>
+                    <select name="country" value={guest.country} onChange={handleGuestChange}
+                      onFocus={focusGold} onBlur={blurGold} style={{ ...inputStyle, cursor: "pointer" }}>
+                      {COUNTRIES.map((c, i) =>
+                        c.value === "" ? (
+                          <option key={`div-${i}`} disabled value="" style={{ backgroundColor: OPT_BG, color: MUTED }}>{c.label}</option>
+                        ) : (
+                          <option key={c.value} value={c.value} style={{ backgroundColor: OPT_BG }}>{c.label}</option>
+                        )
+                      )}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "24px", width: "100%" }}>
 
               {/* ── Add-ons ─────────────────────────────────────────────── */}
               <div>
@@ -3014,8 +3025,93 @@ function BookPageInner() {
               )}
               </div>
 
-              {/* Premium stay-to-event upgrade CTA — routes to /events/inquiry */}
-              <div style={{ order: 3, border: "0.5px solid rgba(197,164,109,0.26)", backgroundColor: GLASS2, padding: "18px 20px", display: "flex", flexDirection: "column", gap: "10px", boxShadow: "inset 0 0 0 1px rgba(197,164,109,0.04)" }}>
+              <div>
+                {estimatePanel}
+              </div>
+
+              {/* Special requests — collapsed row; expand for textarea (value stays in form.message) */}
+              <div>
+                <button
+                  type="button"
+                  className="oraya-pressable"
+                  id="book-special-requests-toggle"
+                  aria-expanded={specialRequestsExpanded}
+                  aria-controls="book-special-requests-field"
+                  onClick={() => setSpecialRequestsExpanded((v) => !v)}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "12px",
+                    padding: "14px 16px",
+                    border: "0.5px solid rgba(197,164,109,0.22)",
+                    backgroundColor: GLASS1,
+                    cursor: "pointer",
+                    textAlign: "left",
+                  }}
+                >
+                  <span style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, letterSpacing: "0.02em" }}>
+                    Special requests{" "}
+                    <span style={{ color: MUTED, fontSize: "11px", letterSpacing: "0.5px", textTransform: "none" }}>(optional)</span>
+                  </span>
+                  <span aria-hidden style={{ fontFamily: LATO, fontSize: "22px", fontWeight: 300, color: GOLD, lineHeight: 1, flexShrink: 0 }}>
+                    {specialRequestsExpanded ? "−" : "+"}
+                  </span>
+                </button>
+                {!specialRequestsExpanded && (() => {
+                  const t = (form.message ?? "").replace(/\s+/g, " ").trim();
+                  if (!t) return null;
+                  const s = t.length > 88 ? `${t.slice(0, 88)}…` : t;
+                  return (
+                    <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "10px 4px 0", lineHeight: 1.55 }}>
+                      {s}
+                    </p>
+                  );
+                })()}
+                {specialRequestsExpanded && (
+                  <div style={{ marginTop: "12px" }}>
+                    <label htmlFor="book-special-requests-field" style={{ ...labelStyle, position: "absolute", width: "1px", height: "1px", padding: 0, margin: "-1px", overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap", border: 0 }}>
+                      Special requests (optional)
+                    </label>
+                    <textarea
+                      id="book-special-requests-field"
+                      name="message"
+                      value={form.message}
+                      onChange={handleFormChange}
+                      onFocus={focusGold}
+                      onBlur={blurGold}
+                      rows={4}
+                      placeholder="Any special requirements, dietary needs, or occasion details…"
+                      style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6, width: "100%" }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {error && (
+                <div style={{ width: "100%" }}>
+                  <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070", textAlign: "center", lineHeight: 1.6, margin: 0 }}>
+                    {error}
+                  </p>
+                </div>
+              )}
+
+              <div style={{ display: "flex", gap: "12px", alignItems: "stretch", marginTop: "4px" }}>
+                <button type="button" onClick={goBack}
+                  className="oraya-pressable oraya-cta-book-back"
+                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: "var(--oraya-book-text)", backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", padding: "14px 22px", cursor: "pointer", minHeight: "50px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  ← Back
+                </button>
+                <button type="button" onClick={goNext}
+                  className="oraya-pressable oraya-cta-gold-hover"
+                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 16px", flex: 1, cursor: "pointer", minHeight: "50px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  Continue to review
+                </button>
+              </div>
+
+              {/* Hosted Experiences — below primary navigation so Continue stays fast on mobile */}
+              <div style={{ border: "0.5px solid rgba(197,164,109,0.26)", backgroundColor: GLASS2, padding: "18px 20px", display: "flex", flexDirection: "column", gap: "10px", boxShadow: "inset 0 0 0 1px rgba(197,164,109,0.04)" }}>
                 <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
                   Hosted Experiences
                 </p>
@@ -3061,44 +3157,6 @@ function BookPageInner() {
                   style={{ alignSelf: "flex-start", fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "12px 24px", cursor: "pointer" }}
                 >
                   Plan your event
-                </button>
-              </div>
-
-              <div style={{ order: 4 }}>
-                {estimatePanel}
-              </div>
-
-              {/* Notes */}
-              <div style={{ order: 5 }}>
-                <label style={labelStyle}>
-                  Special requests{" "}
-                  <span style={{ color: "rgba(138,128,112,0.55)", letterSpacing: "0.4px", textTransform: "none", fontSize: "10px" }}>(optional)</span>
-                </label>
-                <textarea name="message" value={form.message} onChange={handleFormChange}
-                  onFocus={focusGold} onBlur={blurGold}
-                  rows={4}
-                  placeholder="Any special requirements, dietary needs, or occasion details…"
-                  style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6 }} />
-              </div>
-
-              {error && (
-                <div style={{ order: 6, width: "100%" }}>
-                  <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070", textAlign: "center", lineHeight: 1.6, margin: 0 }}>
-                    {error}
-                  </p>
-                </div>
-              )}
-
-              <div style={{ order: 7, display: "flex", gap: "12px", alignItems: "stretch", marginTop: "4px" }}>
-                <button type="button" onClick={goBack}
-                  className="oraya-pressable oraya-cta-book-back"
-                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: "var(--oraya-book-text)", backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", padding: "14px 22px", cursor: "pointer", minHeight: "50px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  ← Back
-                </button>
-                <button type="button" onClick={goNext}
-                  className="oraya-pressable oraya-cta-gold-hover"
-                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 16px", flex: 1, cursor: "pointer", minHeight: "50px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  Continue to review
                 </button>
               </div>
             </div>

@@ -28,6 +28,16 @@ Phase 13 -> COMPLETE | Phase 14 -> COMPLETE (14M closure) | Phase 15A -> COMPLET
 
 **Phase 15 fix (preselected villa + mobile Step 1 density):** Visiting `/book?villa=…` from a villa page **normalizes** the query (`+` / encoding), **collapses** full villa cards into a compact “{villa} selected” row with **Change villa**, and **scrolls** to the date section after auth when the villa stays collapsed (viewport-aware, no forced jump when already visible). On **narrow screens**, Step 1 keeps **dates + estimated total + eligibility headline** prominent; **detail lines**, **rates note**, and **eligibility subcopy** move under a **Booking details** accordion so **Reserve / Instant** cards sit higher after dates are chosen.
 
+**Phase 15 final polish (`/book`):**
+
+- Instant Book converted to **secondary** action (compact outline + icon + popover).
+- **Reserve** remains the **primary** flow (dominant card).
+- **Mobile input zoom** fixed (16px minimum on form fields at ≤640px via `.oraya-book-input-zoom-fix`).
+- **Guest contact** priority improved (**name → WhatsApp/phone → email → country**).
+- **Stay Setup** layout optimized: bedrooms / guest counts → guest details when applicable → add-ons → estimated total → special requests → navigation → **Hosted Experiences last**.
+- **Special requests** collapsed behind a **+** row (expand for textarea; preview when collapsed if text exists).
+- **Hosted Experiences** moved **below** Back / Continue so the CTA is not blocked.
+
 Sub-phases **15A–15H** and **15I.1–15I.11** above record incremental work; they are not repeated here.
 
 ### Phase 15I.9 — Adaptive booking flow (Instant vs Reserve UX)
