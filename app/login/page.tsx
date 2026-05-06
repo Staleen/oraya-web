@@ -64,12 +64,18 @@ function LoginPageInner() {
 
       // Silently backfill members row using auth metadata in case it was never created.
       // ignoreDuplicates: true in the API means existing rows are never overwritten.
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
+      const [{ data: { user } }, { data: { session } }] = await Promise.all([
+        supabase.auth.getUser(),
+        supabase.auth.getSession(),
+      ]);
+      if (user && session?.access_token) {
         const meta = user.user_metadata ?? {};
         fetch("/api/members", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
           body: JSON.stringify({
             id:        user.id,
             full_name: meta.full_name  ?? "",

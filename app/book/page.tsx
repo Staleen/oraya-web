@@ -796,8 +796,10 @@ function BookPageInner() {
   const [step, setStep] = useState(1);
   /** Phase 15I.9 — instant vs reserve UX paths (UI only; no alternate booking creation). */
   const [bookingPath, setBookingPath] = useState<BookingPath>(null);
-  /** When not instant-eligible, one-shot auto navigation to merged reserve step (ref resets on back or date change). */
+  /** When not instant-eligible, one-shot auto navigation to merged reserve step (ref resets on date changes). */
   const reserveAutoNavigatedRef = useRef(false);
+  /** Suppresses auto-navigation after an explicit Back action until the stay selection changes. */
+  const reserveAutoAdvanceSuppressedRef = useRef(false);
 
   // Form (persisted across steps)
   const [form, setForm] = useState({
@@ -1371,14 +1373,18 @@ function BookPageInner() {
     return [{ addon, basePrice, discountedPrice, savings }];
   });
 
+  const reserveAutoAdvanceSignature = `${form.villa}|${checkIn}|${checkOut}|${dateConflict ?? ""}`;
+
   useEffect(() => {
     reserveAutoNavigatedRef.current = false;
-  }, [form.villa, checkIn, checkOut, dateConflict]);
+    reserveAutoAdvanceSuppressedRef.current = false;
+  }, [reserveAutoAdvanceSignature]);
 
   /** Default reserve path: skip decision screen when instant booking is not offered for this stay. */
   useEffect(() => {
     if (step !== 1 || instantEligible) return;
     if (!form.villa || !checkIn || !checkOut || checkOut <= checkIn || dateConflict) return;
+    if (reserveAutoAdvanceSuppressedRef.current) return;
     if (reserveAutoNavigatedRef.current) return;
     reserveAutoNavigatedRef.current = true;
     setError("");
@@ -1588,7 +1594,7 @@ function BookPageInner() {
       setStep(1);
     } else {
       if (step === 2 && bookingPath === "request") {
-        reserveAutoNavigatedRef.current = false;
+        reserveAutoAdvanceSuppressedRef.current = true;
       }
       setStep(s => s - 1);
     }
