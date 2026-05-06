@@ -11,7 +11,7 @@ Guest-facing visual and UX conventions are summarized in **`DESIGN_SYSTEM.md`** 
 
 ## CURRENT PHASE
 
-Phase 13 -> COMPLETE | Phase 14 -> COMPLETE (14M closure) | Phase 15A -> COMPLETE (readiness audit) | Phase 15B -> COMPLETE (security hotfix) | Phase 15C -> COMPLETE (event inquiry calendar parity with stay picker) | Phase 15D -> COMPLETE (security cleanup + smoke test) | Phase 15E -> COMPLETE (local env parity + secret hygiene) | Phase 15F.1 -> COMPLETE (contact email consistency hotfix) | Phase 15F.2 -> COMPLETE (email identity hello standard) | Phase 15F.3 -> COMPLETE (privacy + legal communication alignment) | Phase 15F.4 -> COMPLETE (trust layer + legal entity + testimonial intake) | Phase 15F.5 -> COMPLETE (manual testimonial manager + feedback request tool) | Phase 15F.6 -> COMPLETE (completed reservations history + feedback follow-up) | Phase 15F.7 -> COMPLETE (manual feedback email trigger + tracking) | **Phase 15G -> COMPLETE** (event services consolidation: 15G.1 taxonomy + 15G.5–7 + 15G.10–13 as documented below) | **Phase 15H -> COMPLETE** (event quote line-item manager + **15H.1** admin proposal UI: included/excluded split, totals breakdown, `roundMoney`; no schema change) | **15I.1 -> COMPLETE** (payment foundation: booking ledger columns + admin overview + manual record; see Phase 15I.1 below) | **15I.2 -> COMPLETE** (admin booking expanded-card UX cleanup: collapsible secondary sections, revenue estimate block removed; no booking/payment/pricing/proposal logic change; see 15I.2 below) | **15I.3 -> COMPLETE** (booking flow UX restructure; see 15I.3 below) | **15I.3.1 -> COMPLETE** (booking flow fixes + token redirect) | **15I.3.4 -> COMPLETE** (logo consistency homepage + book) | **15I.4 -> COMPLETE** (public light/dark theme: `data-theme` + CSS variables on homepage + `/book`; default light, localStorage persistence, explicit dark only; see 15I.4 below) | **15I.5 -> COMPLETE** (heated pool strict-notice override when prior confirmed stay had heated pool within 24h; see 15I.5 below) | **15I.6 -> COMPLETE** (public theme extension: homepage + `/book` tokens to remaining public routes; see 15I.6 below) | **15I.7 -> COMPLETE** (trust + legal public theme: booking view, confirmation, auth recovery, legal hub; see 15I.7 below) | **15I.8 -> COMPLETE** (public micro-polish: scrims, press states, cards, links, section tone, reduced motion; see 15I.8 below) | **15I.9 -> COMPLETE** (Adaptive booking flow — Instant vs Reserve guest UX; payment execution **Phase 16**) | **15I.10 -> COMPLETE** (Instant booking admin control — villa toggles in `settings`) | **15I.11 -> COMPLETE** (cancellation & refund **policy visibility** on booking trust surfaces → `/legal/refund`) | **Phase 15 -> COMPLETE** (umbrella: public trust layer + theme + route coverage; see **Phase 15 closure** below)**
+Phase 13 -> COMPLETE | Phase 14 -> COMPLETE (14M closure) | Phase 15A -> COMPLETE (readiness audit) | Phase 15B -> COMPLETE (security hotfix) | Phase 15C -> COMPLETE (event inquiry calendar parity with stay picker) | Phase 15D -> COMPLETE (security cleanup + smoke test) | Phase 15E -> COMPLETE (local env parity + secret hygiene) | Phase 15F.1 -> COMPLETE (contact email consistency hotfix) | Phase 15F.2 -> COMPLETE (email identity hello standard) | Phase 15F.3 -> COMPLETE (privacy + legal communication alignment) | Phase 15F.4 -> COMPLETE (trust layer + legal entity + testimonial intake) | Phase 15F.5 -> COMPLETE (manual testimonial manager + feedback request tool) | Phase 15F.6 -> COMPLETE (completed reservations history + feedback follow-up) | Phase 15F.7 -> COMPLETE (manual feedback email trigger + tracking) | **Phase 15G -> COMPLETE** (event services consolidation: 15G.1 taxonomy + 15G.5–7 + 15G.10–13 as documented below) | **Phase 15H -> COMPLETE** (event quote line-item manager + **15H.1** admin proposal UI: included/excluded split, totals breakdown, `roundMoney`; no schema change) | **15I.1 -> COMPLETE** (payment foundation: booking ledger columns + admin overview + manual record; see Phase 15I.1 below) | **15I.2 -> COMPLETE** (admin booking expanded-card UX cleanup: collapsible secondary sections, revenue estimate block removed; no booking/payment/pricing/proposal logic change; see 15I.2 below) | **15I.3 -> COMPLETE** (booking flow UX restructure; see 15I.3 below) | **15I.3.1 -> COMPLETE** (booking flow fixes + token redirect) | **15I.3.4 -> COMPLETE** (logo consistency homepage + book) | **15I.4 -> COMPLETE** (public light/dark theme: `data-theme` + CSS variables on homepage + `/book`; default light, localStorage persistence, explicit dark only; see 15I.4 below) | **15I.5 -> COMPLETE** (heated pool strict-notice override when prior confirmed stay had heated pool within 24h; see 15I.5 below) | **15I.6 -> COMPLETE** (public theme extension: homepage + `/book` tokens to remaining public routes; see 15I.6 below) | **15I.7 -> COMPLETE** (trust + legal public theme: booking view, confirmation, auth recovery, legal hub; see 15I.7 below) | **15I.8 -> COMPLETE** (public micro-polish: scrims, press states, cards, links, section tone, reduced motion; see 15I.8 below) | **15I.9 -> COMPLETE** (Adaptive booking flow — Instant vs Reserve guest UX; payment execution **Phase 16**) | **15I.10 -> COMPLETE** (Instant booking admin control — villa toggles in `settings`) | **15I.11 -> COMPLETE** (cancellation & refund **policy visibility** on booking trust surfaces → `/legal/refund`) | **Phase 15 -> CLOSED / COMPLETE** (umbrella: public trust layer + theme + route coverage; see **Phase 15 closure** below) | **Phase 16 -> PLANNING CONTEXT READY** (architecture/audit first; implementation not started)
 
 ### Phase 15 closure
 
@@ -721,7 +721,74 @@ Phase 15H — Event Quote Line-Item Manager [COMPLETE]
   - Totals breakdown panel: Subtotal (included), Final total, Deposit required (manual), Remaining balance = final − deposit
   - No booking/payment API/email/guest proposal logic changed in this step
 
-Phase 15 remains active (documentation + future sub-phases only unless product reopens scope).
+### Phase 15 final closure status
+
+Phase 15 is now officially closed and complete for production scope.
+
+- booking UX complete
+- event inquiry UX aligned
+- instant/reserve flow complete
+- admin live updates complete
+- critical + medium regressions fixed
+- settings RLS security lockdown applied manually in Supabase
+- public settings allowlist implemented
+- member API bearer auth implemented
+- add-on audit fail-closed implemented
+- mobile UX hardened
+- production deployment verified
+
+### Phase 15 closure - production validation and deferred polish
+
+- **Final production validation status:** Build and deployment behavior validated for the complete Phase 15 trust/booking/event UX envelope. No remaining production blockers in the closed scope.
+- **Safe-to-defer polish (non-blocking):**
+  - minor copy tightening where message tone can be further unified
+  - additional micro-spacing adjustments on edge mobile widths
+  - optional admin readability cleanups that do not alter workflows
+  - optional analytics/reporting visibility enhancements
+
+**Do not reopen Phase 15 unless there is a production blocker.**
+
+### Phase 16 roadmap (planning context only - no implementation yet)
+
+#### 16A — WhatsApp AI Butler
+
+- WhatsApp concierge / butler
+- booking support
+- event inquiry support
+- guest support
+- booking token delivery
+- future payment and lock coordination
+- human escalation
+
+#### 16B — Payment processing + refunds
+
+- instant booking checkout
+- reserve payment after confirmation
+- refund request/processing flow
+- payment status lifecycle
+- webhook safety
+
+#### 16C — Guest manual
+
+- villa-specific manuals
+- pre-arrival guide
+- during-stay guide
+- house rules
+- troubleshooting
+
+#### 16D — Smart lock integration
+
+- PIN generation
+- check-in/check-out validity windows
+- guest access delivery
+- cancellation/access revocation
+
+#### 16E — Membership points and rewards
+
+- member benefits
+- points earning
+- redemption logic
+- admin control
 
 **15I.1 Payment Foundation [COMPLETE]**
 - SQL: `sql/phase-15i1-payment-foundation.sql` — adds `payment_stage` (default `none`), `amount_total`, `amount_due`, `payment_last_at` (`payment_status`, `amount_paid`, `deposit_amount`, `payment_method` unchanged)
