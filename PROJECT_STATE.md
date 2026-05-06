@@ -26,6 +26,8 @@ Phase 13 -> COMPLETE | Phase 14 -> COMPLETE (14M closure) | Phase 15A -> COMPLET
 
 **Phase 15 refinement (guest `/book` UX):** Default flow is **Reserve Your Stay** (premium positioning); **Instant Book** is secondary when eligible. **Bedrooms, guests, add-ons, and special requests** share one **Stay Setup** step; **Review & Submit** is a single follow-on step. Villa card **starting prices** use **`getVillaEntryPrice`** (same 1-bedroom entry logic as homepage `formatVillaFromPrice`). When a stay is **not** instant-eligible, the UI **auto-advances** to Stay Setup after dates (no forced decision screen).
 
+**Phase 15 fix (preselected villa + mobile Step 1 density):** Visiting `/book?villa=…` from a villa page **normalizes** the query (`+` / encoding), **collapses** full villa cards into a compact “{villa} selected” row with **Change villa**, and **scrolls** to the date section after auth when the villa stays collapsed (viewport-aware, no forced jump when already visible). On **narrow screens**, Step 1 keeps **dates + estimated total + eligibility headline** prominent; **detail lines**, **rates note**, and **eligibility subcopy** move under a **Booking details** accordion so **Reserve / Instant** cards sit higher after dates are chosen.
+
 Sub-phases **15A–15H** and **15I.1–15I.11** above record incremental work; they are not repeated here.
 
 ### Phase 15I.9 — Adaptive booking flow (Instant vs Reserve UX)
