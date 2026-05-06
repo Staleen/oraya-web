@@ -459,7 +459,7 @@ const CALENDAR_CSS = `
     from { opacity: 0; transform: translateY(8px); }
     to   { opacity: 1; transform: translateY(0);   }
   }
-  .step-content { animation: stepFadeIn 0.25s ease forwards; }
+  .step-content { animation: stepFadeIn 0.2s ease forwards; }
 
   /* Info popovers — same mobile-safe pattern as /book */
   .book-info-popover {
@@ -532,6 +532,22 @@ const CALENDAR_CSS = `
       font-size: 16px !important;
     }
   }
+
+  @keyframes events-spin {
+    to { transform: rotate(360deg); }
+  }
+  .events-inline-spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(31, 43, 56, 0.22);
+    border-top-color: var(--oraya-gold-cta-text);
+    border-radius: 50%;
+    animation: events-spin 0.65s linear infinite;
+    margin-right: 10px;
+    vertical-align: middle;
+    flex-shrink: 0;
+  }
 `;
 
 function InfoPopover({ label, text }: { label: string; text: string }) {
@@ -569,6 +585,8 @@ function InfoPopover({ label, text }: { label: string; text: string }) {
 // ─── Step indicator ───────────────────────────────────────────────────────────
 function StepIndicator({ step }: { step: number }) {
   const labels = ["Event Basics", "Services", "Review & submit"];
+  const nextHint =
+    step === 1 ? "Next: services and setup." : step === 2 ? "Next: review and submit." : "Submit your inquiry when ready.";
   return (
     <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -581,7 +599,7 @@ function StepIndicator({ step }: { step: number }) {
               display: "flex", alignItems: "center", justifyContent: "center",
               fontFamily: LATO, fontSize: "10px",
               color: step === s ? CHARCOAL : step > s ? GOLD : "var(--oraya-step-inactive)",
-              transition: "background-color 0.2s, border-color 0.2s",
+              transition: "background-color 0.18s ease, border-color 0.18s ease",
             }}>
               {step > s ? "✓" : s}
             </div>
@@ -589,7 +607,7 @@ function StepIndicator({ step }: { step: number }) {
               <div style={{
                 width: "40px", height: "0.5px",
                 backgroundColor: step > s ? GOLD : "var(--oraya-step-line)",
-                transition: "background-color 0.2s",
+                transition: "background-color 0.18s ease",
               }} />
             )}
           </div>
@@ -600,6 +618,24 @@ function StepIndicator({ step }: { step: number }) {
         color: GOLD, marginTop: "12px", marginBottom: 0, fontWeight: 400,
       }}>
         {labels[step - 1]}
+      </p>
+      <p
+        aria-live="polite"
+        style={{
+          fontFamily: LATO,
+          fontSize: "11px",
+          color: MUTED,
+          margin: "10px 0 0",
+          letterSpacing: "0.35px",
+          lineHeight: 1.55,
+          maxWidth: "340px",
+          marginLeft: "auto",
+          marginRight: "auto",
+        }}
+      >
+        <span style={{ color: BOOK_P76 }}>Step {step} of 3</span>
+        <span aria-hidden="true"> · </span>
+        {nextHint}
       </p>
     </div>
   );
@@ -1133,6 +1169,72 @@ function EventInquiryPageInner() {
   const guestEmail = guest.email.trim();
   const guestEmailInvalid = authStatus !== "member" && guestEmail.length > 0 && !EMAIL_RE.test(guestEmail);
 
+  const step1CanContinue = useMemo(
+    () => {
+      if (!form.villa || !form.eventType || !checkIn || !checkOut || checkOut <= checkIn) return false;
+      if (
+        dateRange?.from &&
+        dateRange.to &&
+        (!isValidEventCheckoutFrom(dateRange.from, dateRange.to) ||
+          incomingOperationalOverlapsConfirmed(dateRange.from, dateRange.to))
+      ) {
+        return false;
+      }
+      const attendees = parseInt(form.dayVisitors, 10);
+      if (!Number.isFinite(attendees) || attendees < 1 || attendees > MAX_EVENT_ATTENDEES) return false;
+      return true;
+    },
+    // Calendar helpers close over the same state as `confirmedRanges`; their identities are not stable deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [form.villa, form.eventType, form.dayVisitors, checkIn, checkOut, dateRange, confirmedRanges],
+  );
+
+  const step2CanContinue = useMemo(
+    () =>
+      getMissingRequiredEventServiceGroups(
+        form.eventType,
+        selectedEventServices.map(({ service }) => ({ id: service.id, label: service.label })),
+      ).length === 0,
+    [form.eventType, selectedEventServices],
+  );
+
+  const step3CanSubmit = useMemo(() => {
+    if (!form.villa || !form.eventType || !checkIn || !checkOut || checkOut <= checkIn) return false;
+    const attendees = parseInt(form.dayVisitors, 10);
+    if (!Number.isFinite(attendees) || attendees < 1 || attendees > MAX_EVENT_ATTENDEES) return false;
+    if (
+      getMissingRequiredEventServiceGroups(
+        form.eventType,
+        selectedEventServices.map(({ service }) => ({ id: service.id, label: service.label })),
+      ).length > 0
+    ) {
+      return false;
+    }
+    const sleeping = parseInt(form.sleepingGuests, 10);
+    if (!Number.isFinite(sleeping) || sleeping < 1) return false;
+    if (authStatus === "member") return true;
+    const name = guest.fullName.trim();
+    const emailT = guest.email.trim();
+    const phoneT = guest.phoneNumber.trim();
+    if (!name) return false;
+    if (!phoneT && !emailT) return false;
+    if (guestEmailInvalid) return false;
+    return true;
+  }, [
+    form.villa,
+    form.eventType,
+    checkIn,
+    checkOut,
+    form.dayVisitors,
+    form.sleepingGuests,
+    selectedEventServices,
+    authStatus,
+    guest.fullName,
+    guest.email,
+    guest.phoneNumber,
+    guestEmailInvalid,
+  ]);
+
   useEffect(() => {
     const visibleKeys = new Set(filteredEventServices.map((service) => service.key));
     setSelectedServiceQuantities((previous) => {
@@ -1346,10 +1448,6 @@ function EventInquiryPageInner() {
         selectedEventServices.map(({ service }) => ({ id: service.id, label: service.label })),
       );
       if (missingGroups.length > 0) {
-        const missingLabels = missingGroups.map((g) => EVENT_SERVICE_GROUP_LABELS[g]).join(", ");
-        setError(
-          `To prepare this event properly, please include the required setup for your selected event type. Missing: ${missingLabels}.`,
-        );
         focusStep2MissingService(missingGroups);
         return;
       }
@@ -1365,6 +1463,8 @@ function EventInquiryPageInner() {
   }
 
   async function handleSubmit() {
+    if (loading) return;
+    if (!step3CanSubmit) return;
     setError("");
     setLoading(true);
     try {
@@ -1490,7 +1590,7 @@ function EventInquiryPageInner() {
     return (
       <div style={{ minHeight: "100vh", backgroundColor: PAGE_BG, overflowX: "hidden" }}>
         <EventsInquiryNav />
-        <main className="oraya-book-input-zoom-fix" style={{ minHeight: "100vh", padding: "96px 24px 80px", boxSizing: "border-box" }}>
+        <main className="oraya-book-input-zoom-fix" style={{ minHeight: "100vh", padding: "96px 24px calc(80px + env(safe-area-inset-bottom, 0px))", boxSizing: "border-box" }}>
           <div style={{ width: "100%", maxWidth: "720px", margin: "0 auto" }} aria-hidden="true">
             <div style={{ width: "52px", margin: "0 auto 2.5rem", opacity: 0.45 }}><OrayaEmblem /></div>
             <p style={{ textAlign: "center", color: MUTED, fontFamily: LATO, fontSize: "12px" }}>Loading…</p>
@@ -1505,7 +1605,7 @@ function EventInquiryPageInner() {
   return (
     <div style={{ minHeight: "100vh", backgroundColor: PAGE_BG, overflowX: "hidden" }}>
       <EventsInquiryNav />
-      <main className="oraya-book-input-zoom-fix" style={{ minHeight: "100vh", padding: "96px 24px 80px", boxSizing: "border-box" }}>
+      <main className="oraya-book-input-zoom-fix" style={{ minHeight: "100vh", padding: "96px 24px calc(80px + env(safe-area-inset-bottom, 0px))", boxSizing: "border-box" }}>
       <style>{CALENDAR_CSS}</style>
 
       <div style={{ width: "100%", maxWidth: containerWidth, margin: "0 auto", transition: "max-width 0.3s ease" }}>
@@ -1820,14 +1920,42 @@ function EventInquiryPageInner() {
                 </p>
               )}
 
-              <button
-                type="button"
-                className="oraya-pressable oraya-cta-gold-hover"
-                onClick={goNext}
-                style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "16px", cursor: "pointer" }}
-              >
-                Continue →
-              </button>
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px", width: "100%" }}>
+                <button
+                  type="button"
+                  disabled={!step1CanContinue}
+                  aria-describedby={!step1CanContinue ? "events-step1-continue-hint" : undefined}
+                  className={step1CanContinue ? "oraya-pressable oraya-cta-gold-hover" : undefined}
+                  onClick={goNext}
+                  style={{
+                    fontFamily: LATO,
+                    fontSize: "14px",
+                    letterSpacing: "0.8px",
+                    color: GOLD_CTA,
+                    backgroundColor: GOLD,
+                    border: "none",
+                    padding: "14px 16px",
+                    minHeight: "50px",
+                    cursor: step1CanContinue ? "pointer" : "not-allowed",
+                    opacity: step1CanContinue ? 1 : 0.48,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: "100%",
+                    transition: "opacity 0.18s ease, transform 0.18s ease",
+                  }}
+                >
+                  Continue →
+                </button>
+                {!step1CanContinue ? (
+                  <p
+                    id="events-step1-continue-hint"
+                    style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, textAlign: "center", lineHeight: 1.5 }}
+                  >
+                    Complete villa, event type, dates, and attendees to continue.
+                  </p>
+                ) : null}
+              </div>
             </div>
           )}
 
@@ -1847,9 +1975,18 @@ function EventInquiryPageInner() {
                     text="Select the services you may need. Oraya will review and confirm the final setup."
                   />
                 </div>
-                <p style={{ fontFamily: LATO, fontSize: "13px", color: BOOK_P78, margin: "0 0 14px", lineHeight: 1.55 }}>
-                  Tap services to include them. Required groups must be covered before continuing.
-                </p>
+                {(() => {
+                  const missingIntro = getMissingRequiredEventServiceGroups(
+                    form.eventType,
+                    selectedEventServices.map(({ service }) => ({ id: service.id, label: service.label })),
+                  );
+                  if (missingIntro.length > 0) return null;
+                  return (
+                    <p style={{ fontFamily: LATO, fontSize: "13px", color: BOOK_P78, margin: "0 0 14px", lineHeight: 1.55 }}>
+                      Toggle services to include them, then continue.
+                    </p>
+                  );
+                })()}
                 {selectedEventRecommendation && selectedEventRecommendation.recommendedServices.length > 0 && (
                   <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", margin: "0 0 14px" }}>
                     <p style={{ fontFamily: LATO, fontSize: "13px", color: BOOK_P72, margin: 0, lineHeight: 1.5 }}>
@@ -1902,6 +2039,7 @@ function EventInquiryPageInner() {
                                   border: "none",
                                   padding: 0,
                                   cursor: "pointer",
+                                  transition: "opacity 0.18s ease",
                                 }}
                               >
                                 <div style={{
@@ -1982,11 +2120,8 @@ function EventInquiryPageInner() {
                 const requiredLabels = required.map((g) => EVENT_SERVICE_GROUP_LABELS[g]).join(", ");
                 return (
                   <div style={{ border: "0.5px solid rgba(240,189,103,0.32)", backgroundColor: "rgba(240,189,103,0.06)", padding: "12px 16px" }}>
-                    <p style={{ fontFamily: LATO, fontSize: "14px", color: "#f0bd67", margin: "0 0 8px", lineHeight: 1.65 }}>
-                      To prepare this event properly, please include the required setup for {form.eventType}.
-                    </p>
-                    <p style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_P76, margin: 0, lineHeight: 1.65 }}>
-                      Required: {requiredLabels}. Missing: {missingLabels}.
+                    <p style={{ fontFamily: LATO, fontSize: "13px", color: "#f0bd67", margin: 0, lineHeight: 1.65 }}>
+                      Add services for: {missingLabels}. ({form.eventType} requires {requiredLabels}.)
                     </p>
                   </div>
                 );
@@ -1998,17 +2133,65 @@ function EventInquiryPageInner() {
                 </p>
               )}
 
-              <div style={{ display: "flex", gap: "12px" }}>
-                <button type="button" onClick={goBack}
+              <div style={{ display: "flex", gap: "12px", alignItems: "stretch" }}>
+                <button
+                  type="button"
+                  onClick={goBack}
                   className="oraya-pressable oraya-cta-book-back"
-                  style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: BOOK_P78, backgroundColor: "transparent", border: "0.5px solid var(--oraya-book-input-border)", padding: "16px 24px", cursor: "pointer" }}>
+                  style={{
+                    fontFamily: LATO,
+                    fontSize: "14px",
+                    letterSpacing: "0.8px",
+                    color: BOOK_P78,
+                    backgroundColor: "transparent",
+                    border: "0.5px solid var(--oraya-book-input-border)",
+                    padding: "14px 22px",
+                    minHeight: "50px",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    transition: "opacity 0.18s ease, transform 0.18s ease",
+                  }}
+                >
                   ← Back
                 </button>
-                <button type="button" onClick={goNext}
-                  className="oraya-pressable oraya-cta-gold-hover"
-                  style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "16px", flex: 1, cursor: "pointer" }}>
-                  Continue →
-                </button>
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "8px", minWidth: 0 }}>
+                  <button
+                    type="button"
+                    disabled={!step2CanContinue}
+                    aria-describedby={!step2CanContinue ? "events-step2-continue-hint" : undefined}
+                    className={step2CanContinue ? "oraya-pressable oraya-cta-gold-hover" : undefined}
+                    onClick={goNext}
+                    style={{
+                      fontFamily: LATO,
+                      fontSize: "14px",
+                      letterSpacing: "0.8px",
+                      color: GOLD_CTA,
+                      backgroundColor: GOLD,
+                      border: "none",
+                      padding: "14px 16px",
+                      flex: 1,
+                      minHeight: "50px",
+                      cursor: step2CanContinue ? "pointer" : "not-allowed",
+                      opacity: step2CanContinue ? 1 : 0.48,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      transition: "opacity 0.18s ease, transform 0.18s ease",
+                    }}
+                  >
+                    Continue →
+                  </button>
+                  {!step2CanContinue ? (
+                    <p
+                      id="events-step2-continue-hint"
+                      style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, textAlign: "center", lineHeight: 1.5 }}
+                    >
+                      Add the required services above to continue.
+                    </p>
+                  ) : null}
+                </div>
               </div>
 
               {eventSetupEstimate && <EventEstimatePanel estimate={eventSetupEstimate} />}
@@ -2047,9 +2230,6 @@ function EventInquiryPageInner() {
                   }
                 />
               </div>
-              <p style={{ fontFamily: LATO, fontSize: "13px", color: BOOK_P78, margin: 0, lineHeight: 1.55 }}>
-                Host overnight count, then contact if needed. Check the summary, then submit.
-              </p>
 
               {/* Overnight hosts */}
               <div ref={step3HostSectionRef}>
@@ -2073,7 +2253,7 @@ function EventInquiryPageInner() {
                   </p>
                   <InfoPopover
                     label="Host overnight stay details"
-                    text="Event packages include overnight stay for the hosts. Oraya will review the full package before confirmation."
+                    text="We confirm the exact count with your proposal."
                   />
                 </div>
               </div>
@@ -2348,17 +2528,76 @@ function EventInquiryPageInner() {
               )}
 
               <div style={{ display: "flex", gap: "12px", alignItems: "stretch" }}>
-                <button type="button" onClick={goBack} disabled={loading}
+                <button
+                  type="button"
+                  onClick={goBack}
+                  disabled={loading}
                   className={loading ? undefined : "oraya-pressable oraya-cta-book-back"}
-                  style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: BOOK_P78, backgroundColor: "transparent", border: "0.5px solid var(--oraya-book-input-border)", padding: "16px 24px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.5 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  style={{
+                    fontFamily: LATO,
+                    fontSize: "14px",
+                    letterSpacing: "0.8px",
+                    color: BOOK_P78,
+                    backgroundColor: "transparent",
+                    border: "0.5px solid var(--oraya-book-input-border)",
+                    padding: "14px 22px",
+                    minHeight: "50px",
+                    cursor: loading ? "not-allowed" : "pointer",
+                    opacity: loading ? 0.5 : 1,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    transition: "opacity 0.18s ease, transform 0.18s ease",
+                  }}
+                >
                   ← Back
                 </button>
                 <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "8px", alignItems: "stretch", minWidth: 0 }}>
-                  <button type="button" onClick={handleSubmit} disabled={loading}
-                    className={loading ? undefined : "oraya-pressable oraya-cta-gold-hover"}
-                    style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "16px", flex: 1, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1 }}>
-                    {loading ? "Submitting…" : "Submit Event Inquiry"}
+                  <button
+                    type="button"
+                    onClick={handleSubmit}
+                    disabled={loading || !step3CanSubmit}
+                    aria-busy={loading}
+                    aria-describedby={!step3CanSubmit && !loading ? "events-step3-submit-hint" : undefined}
+                    className={loading || !step3CanSubmit ? undefined : "oraya-pressable oraya-cta-gold-hover"}
+                    style={{
+                      fontFamily: LATO,
+                      fontSize: "14px",
+                      letterSpacing: "0.8px",
+                      color: GOLD_CTA,
+                      backgroundColor: GOLD,
+                      border: "none",
+                      padding: "14px 16px",
+                      flex: 1,
+                      minHeight: "50px",
+                      cursor: loading || !step3CanSubmit ? "not-allowed" : "pointer",
+                      opacity: loading ? 0.72 : !step3CanSubmit ? 0.48 : 1,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "0",
+                      transition: "opacity 0.18s ease, transform 0.18s ease",
+                    }}
+                  >
+                    {loading ? (
+                      <>
+                        <span className="events-inline-spinner" aria-hidden />
+                        Submitting…
+                      </>
+                    ) : (
+                      "Submit Event Inquiry"
+                    )}
                   </button>
+                  {!step3CanSubmit && !loading ? (
+                    <p
+                      id="events-step3-submit-hint"
+                      style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, textAlign: "center", lineHeight: 1.5 }}
+                    >
+                      {authStatus === "member"
+                        ? "Enter the host overnight stay count above to submit."
+                        : "Complete host stay and contact details above to submit."}
+                    </p>
+                  ) : null}
                   <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, textAlign: "center", margin: 0, lineHeight: 1.5 }}>
                     {EVENT_INQUIRY_SUBMIT_SUBLINE}
                   </p>
