@@ -10,13 +10,13 @@ export const WHATSAPP_SUPPORT_LINE = "24/7 WhatsApp support available.";
 /** Step 4 (/book) — trust panel */
 export const STEP4_TRUST = {
   instant: {
-    headline: "This booking will be confirmed instantly.",
-    payment: "You will be charged now and receive access details after payment.",
-    ctaSubline: "Secure your stay now",
+    headline: "Pay securely and receive access immediately after confirmation.",
+    payment: "",
+    ctaSubline: "Book instantly when checkout is live",
   },
   request: {
     headline: "This booking requires review.",
-    noPayment: "No payment is required at this stage.",
+    noPayment: "No payment required until booking is confirmed.",
     contact: "We will contact you via WhatsApp or email.",
     ctaSubline: "No payment required now",
   },

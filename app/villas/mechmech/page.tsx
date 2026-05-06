@@ -5,6 +5,12 @@ import SiteFooter from "@/components/SiteFooter";
 import OrayaEmblem from "@/components/OrayaEmblem";
 import { VILLA_FROM_PRICE_MICROLABEL, formatVillaFromPrice } from "@/lib/admin-pricing";
 import { usePublicPricing } from "@/lib/public-pricing";
+import InstantBookingIcon from "@/components/icons/InstantBookingIcon";
+import {
+  fetchInstantBookingFlagsPublic,
+  instantBookingEnabledForVilla,
+  type InstantBookingFlags,
+} from "@/lib/instant-booking-settings";
 
 const HERO_GRADIENT = "linear-gradient(160deg, #1b3a2f 0%, #2b5040 35%, #1a2f24 65%, #0f1e17 100%)";
 
@@ -48,6 +54,16 @@ interface VillaMedia {
 export default function VillaMechmechPage() {
   const pricing = usePublicPricing();
   const [villaMedia, setVillaMedia] = useState<VillaMedia[]>([]);
+  const [instantBookingFlags, setInstantBookingFlags] = useState<InstantBookingFlags>({
+    "Villa Mechmech": true,
+    "Villa Byblos": true,
+  });
+
+  useEffect(() => {
+    fetchInstantBookingFlagsPublic()
+      .then(setInstantBookingFlags)
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetch("/api/media?villa=mechmech")
@@ -59,6 +75,7 @@ export default function VillaMechmechPage() {
   const heroImg = villaMedia[0]?.file_url ?? "";
   const galleryMedia = villaMedia.slice(1);
   const fromPrice = formatVillaFromPrice("Villa Mechmech", pricing);
+  const instantHeroBadge = instantBookingEnabledForVilla("Villa Mechmech", instantBookingFlags);
 
   return (
     <div style={{ overflowX: "hidden" }}>
@@ -78,6 +95,15 @@ export default function VillaMechmechPage() {
             ? { backgroundImage: `url(${heroImg})`, backgroundSize: "cover", backgroundPosition: "center" }
             : { backgroundImage: HERO_GRADIENT }),
         }}>
+          {instantHeroBadge && (
+            <span
+              className="instant-badge instant-badge--on-photo pointer-events-none"
+              style={{ position: "absolute", top: "16px", right: "16px", zIndex: 4 }}
+            >
+              <InstantBookingIcon size={16} />
+              <span>Instant booking available</span>
+            </span>
+          )}
           {/* Placeholder — hidden once real image loads */}
           {!heroImg && (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "14px", opacity: 0.25 }}>

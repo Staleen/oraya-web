@@ -12,7 +12,13 @@ import {
   type GuestTestimonialRecord,
 } from "@/lib/guest-testimonials";
 import { usePublicPricing } from "@/lib/public-pricing";
+import {
+  fetchInstantBookingFlagsPublic,
+  instantBookingEnabledForVilla,
+  type InstantBookingFlags,
+} from "@/lib/instant-booking-settings";
 import { supabase } from "@/lib/supabase";
+import InstantBookingIcon from "@/components/icons/InstantBookingIcon";
 
 // Branded gradient fallbacks
 const GRAD_HERO     = "linear-gradient(145deg, #1a2a38 0%, #243444 45%, #1c2e3e 75%, #111e2a 100%)";
@@ -104,6 +110,10 @@ export default function Home() {
   const [mechmechImg,  setMechmechImg]  = useState("");
   const [byblosImg,    setByblosImg]    = useState("");
   const [approvedTestimonials, setApprovedTestimonials] = useState<GuestTestimonialRecord[]>([]);
+  const [instantBookingFlags, setInstantBookingFlags] = useState<InstantBookingFlags>({
+    "Villa Mechmech": true,
+    "Villa Byblos": true,
+  });
 
   useEffect(() => {
     fetch(`/api/settings?key=${encodeURIComponent(GUEST_TESTIMONIALS_SETTINGS_KEY)}`, { cache: "no-store" })
@@ -139,6 +149,12 @@ export default function Home() {
       if (mech.media?.[0]?.file_url)  setMechmechImg(mech.media[0].file_url);
       if (byb.media?.[0]?.file_url)   setByblosImg(byb.media[0].file_url);
     }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetchInstantBookingFlagsPublic()
+      .then(setInstantBookingFlags)
+      .catch(() => {});
   }, []);
 
   async function signOut() {
@@ -433,6 +449,8 @@ export default function Home() {
           {villaMeta.map(({ key, tag, name, loc, feats, href, gradient, label }) => {
             const img = key === "mechmech" ? mechmechImg : byblosImg;
             const fromPrice = formatVillaFromPrice(name, pricing);
+            const villaFullName = key === "mechmech" ? "Villa Mechmech" : "Villa Byblos";
+            const instantBadgeOn = instantBookingEnabledForVilla(villaFullName, instantBookingFlags);
             return (
             <a
               key={name}
@@ -456,6 +474,15 @@ export default function Home() {
                   ...villaBg(img, gradient),
                 }}
               >
+                {instantBadgeOn && (
+                  <span
+                    className="instant-badge instant-badge--on-photo pointer-events-none"
+                    style={{ position: "absolute", top: "12px", right: "12px", zIndex: 3 }}
+                  >
+                    <InstantBookingIcon size={14} />
+                    <span>Instant booking available</span>
+                  </span>
+                )}
                 {/* Placeholder overlay — hidden once real photo is set */}
                 {!img && (
                   <>

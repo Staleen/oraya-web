@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { DayPicker } from "react-day-picker";
 import type { DateRange, Matcher } from "react-day-picker";
 import "react-day-picker/dist/style.css";
+import InstantBookingIcon from "@/components/icons/InstantBookingIcon";
 import OrayaLogoFull from "@/components/OrayaLogoFull";
 import { getVillaBasePrice, getVillaPricing } from "@/lib/admin-pricing";
 import { ADDON_OPERATIONAL_SETTINGS_KEY, formatPreparationTime, getAddonAppliesTo, getAddonEnforcementMode, getAddonTimingType, mergeAddonsWithOperationalSettings, parseAddonOperationalSetting, type AddonCategory, type AddonCutoffType, type AddonEnforcementMode, type AddonPricingType } from "@/lib/addon-operations";
@@ -33,9 +34,8 @@ import {
   WHATSAPP_SUPPORT_LINE,
 } from "@/lib/booking-trust-messaging";
 import {
-  INSTANT_BOOKING_SETTING_KEYS,
+  fetchInstantBookingFlagsPublic,
   instantBookingEnabledForVilla,
-  parseInstantBookingSetting,
   type InstantBookingFlags,
 } from "@/lib/instant-booking-settings";
 
@@ -806,20 +806,8 @@ function BookPageInner() {
   }, []);
 
   useEffect(() => {
-    Promise.all([
-      fetch(`/api/settings?key=${encodeURIComponent(INSTANT_BOOKING_SETTING_KEYS["Villa Mechmech"])}`)
-        .then((r) => r.json())
-        .then((d: { value?: string }) => parseInstantBookingSetting(d.value)),
-      fetch(`/api/settings?key=${encodeURIComponent(INSTANT_BOOKING_SETTING_KEYS["Villa Byblos"])}`)
-        .then((r) => r.json())
-        .then((d: { value?: string }) => parseInstantBookingSetting(d.value)),
-    ])
-      .then(([mech, byl]) => {
-        setInstantBookingFlags({
-          "Villa Mechmech": mech,
-          "Villa Byblos": byl,
-        });
-      })
+    fetchInstantBookingFlagsPublic()
+      .then(setInstantBookingFlags)
       .catch(() => {});
   }, []);
 
@@ -1763,6 +1751,15 @@ function BookPageInner() {
                               pointerEvents: "none",
                             }}
                           />
+                          {instantBookingEnabledForVilla(villa, instantBookingFlags) && (
+                            <span
+                              className="instant-badge instant-badge--on-photo pointer-events-none"
+                              style={{ position: "absolute", top: "8px", right: "8px", zIndex: 2 }}
+                            >
+                              <InstantBookingIcon size={14} />
+                              <span>Instant booking available</span>
+                            </span>
+                          )}
                         </div>
                         <div style={{ padding: "16px" }}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
@@ -1865,6 +1862,34 @@ function BookPageInner() {
                       ⚠ {dateConflict}
                     </p>
                   )}
+
+                  {form.villa && checkIn && checkOut && checkOut > checkIn && !dateConflict && (
+                    <div
+                      style={{
+                        marginTop: "14px",
+                        padding: "12px 16px",
+                        border: "0.5px solid rgba(197,164,109,0.22)",
+                        backgroundColor: "rgba(197,164,109,0.05)",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "10px",
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      {instantEligible ? (
+                        <>
+                          <InstantBookingIcon size={22} />
+                          <span style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, lineHeight: 1.55 }}>
+                            This stay is eligible for instant booking
+                          </span>
+                        </>
+                      ) : (
+                        <span style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", lineHeight: 1.55 }}>
+                          This stay requires review
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div style={{ border: "0.5px dashed rgba(197,164,109,0.15)", padding: "3rem", textAlign: "center" }}>
@@ -1897,26 +1922,15 @@ function BookPageInner() {
                         textAlign: "left",
                       }}
                     >
-                      <span
-                        style={{
-                          alignSelf: "flex-start",
-                          fontFamily: LATO,
-                          fontSize: "9px",
-                          letterSpacing: "2px",
-                          textTransform: "uppercase",
-                          color: GOLD,
-                          border: "0.5px solid rgba(197,164,109,0.35)",
-                          backgroundColor: "rgba(197,164,109,0.06)",
-                          padding: "5px 10px",
-                        }}
-                      >
-                        Instant booking eligible
-                      </span>
+                      <div className="instant-badge instant-badge--active" style={{ alignSelf: "flex-start", backgroundColor: "rgba(197,164,109,0.08)" }}>
+                        <InstantBookingIcon size={16} />
+                        <span>Instant Book</span>
+                      </div>
                       <p style={{ fontFamily: PLAYFAIR, fontSize: "18px", fontWeight: 400, color: WHITE, margin: 0, lineHeight: 1.35 }}>
                         Instant Book
                       </p>
                       <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65, fontWeight: 300 }}>
-                        Pay online and confirm immediately
+                        No add-ons. No preparation required. Pay online and receive access immediately.
                       </p>
                       <button
                         type="button"
@@ -1935,7 +1949,7 @@ function BookPageInner() {
                           textAlign: "center",
                         }}
                       >
-                        Continue to payment
+                        Book Instantly
                       </button>
                     </div>
                     <div
@@ -1950,14 +1964,14 @@ function BookPageInner() {
                       }}
                     >
                       <p style={{ fontFamily: PLAYFAIR, fontSize: "18px", fontWeight: 400, color: WHITE, margin: 0, lineHeight: 1.35 }}>
-                        Reserve Your Stay
+                        Customize & Request
                       </p>
                       <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65, fontWeight: 300 }}>
-                        Submit a request and Oraya will confirm your stay
+                        Add services, special requests, or changes. Requires manual confirmation.
                       </p>
                       <button
                         type="button"
-                        className="oraya-pressable"
+                        className="oraya-pressable oraya-cta-book-back"
                         onClick={proceedFromStep1ToReserve}
                         style={{
                           fontFamily: LATO,
@@ -1972,7 +1986,7 @@ function BookPageInner() {
                           textAlign: "center",
                         }}
                       >
-                        Continue to reservation
+                        Request Your Stay
                       </button>
                     </div>
                   </div>
@@ -1996,19 +2010,9 @@ function BookPageInner() {
           {step === 2 && bookingPath === "instant" && (
             <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
               <div style={{ display: "flex", justifyContent: "center" }}>
-                <span
-                  style={{
-                    fontFamily: LATO,
-                    fontSize: "9px",
-                    letterSpacing: "2.2px",
-                    textTransform: "uppercase",
-                    color: GOLD,
-                    border: "0.5px solid rgba(197,164,109,0.45)",
-                    backgroundColor: "rgba(197,164,109,0.08)",
-                    padding: "6px 14px",
-                  }}
-                >
-                  Instant booking eligible
+                <span className="instant-badge instant-badge--active" style={{ backgroundColor: "rgba(197,164,109,0.08)" }}>
+                  <InstantBookingIcon size={16} />
+                  <span>Instant booking</span>
                 </span>
               </div>
               <div>
@@ -2038,13 +2042,10 @@ function BookPageInner() {
 
               <div style={{ border: "0.5px solid rgba(197,164,109,0.24)", backgroundColor: "rgba(197,164,109,0.05)", padding: "16px 18px", display: "grid", gap: "10px" }}>
                 <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65 }}>
-                  This stay is eligible for instant booking.
+                  {STEP4_TRUST.instant.headline}
                 </p>
-                <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65 }}>
-                  Online payment will be enabled in the next phase.
-                </p>
-                <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65 }}>
-                  You will receive access automatically after payment.
+                <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0, lineHeight: 1.6 }}>
+                  Online checkout will connect in a later release. No booking is created and no charge is made from this screen.
                 </p>
               </div>
 
@@ -2052,16 +2053,14 @@ function BookPageInner() {
                 <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: "0 0 10px" }}>
                   Payment
                 </p>
-                <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "0 0 14px", lineHeight: 1.6 }}>
-                  Placeholder — checkout connects in Phase 16. No charge is made from this screen.
-                </p>
                 <button
                   type="button"
                   disabled
                   style={{
                     fontFamily: LATO,
-                    fontSize: "13px",
-                    letterSpacing: "0.6px",
+                    fontSize: "12px",
+                    letterSpacing: "1.5px",
+                    textTransform: "uppercase",
                     color: MUTED,
                     backgroundColor: "rgba(197,164,109,0.08)",
                     border: "0.5px solid rgba(197,164,109,0.22)",
@@ -2069,9 +2068,10 @@ function BookPageInner() {
                     cursor: "not-allowed",
                     width: "100%",
                     maxWidth: "340px",
+                    opacity: 0.72,
                   }}
                 >
-                  Continue to payment (coming soon)
+                  Book Instantly (coming soon)
                 </button>
               </div>
 
@@ -2894,9 +2894,11 @@ function BookPageInner() {
                   {bookingTrustMode === "instant" ? STEP4_TRUST.instant.headline : STEP4_TRUST.request.headline}
                 </p>
                 {bookingTrustMode === "instant" ? (
-                  <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65 }}>
-                    {STEP4_TRUST.instant.payment}
-                  </p>
+                  STEP4_TRUST.instant.payment ? (
+                    <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65 }}>
+                      {STEP4_TRUST.instant.payment}
+                    </p>
+                  ) : null
                 ) : (
                   <>
                     <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65 }}>
@@ -2915,9 +2917,7 @@ function BookPageInner() {
               <div style={{ border: "0.5px solid rgba(197,164,109,0.24)", backgroundColor: "rgba(197,164,109,0.05)", padding: "16px 18px", display: "grid", gap: "10px" }}>
                 <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>Payment options</p>
                 <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.6 }}>
-                  {bookingTrustMode === "instant"
-                    ? "Online checkout on this page is not active yet. When it is, completing payment here confirms your booking and unlocks access details; until then, our team may send you a secure payment link."
-                    : STEP4_TRUST.request.noPayment}
+                  {bookingTrustMode === "instant" ? STEP4_TRUST.instant.headline : STEP4_TRUST.request.noPayment}
                 </p>
                 <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
                   <button type="button" disabled style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, border: "0.5px solid rgba(197,164,109,0.3)", backgroundColor: GLASS1, padding: "10px 14px", cursor: "not-allowed" }}>Pay deposit (coming soon)</button>
@@ -2976,11 +2976,17 @@ function BookPageInner() {
           <p style={{ fontFamily: LATO, fontSize: "14px", color: "var(--oraya-book-text-soft-2)", margin: "10px 0 0", lineHeight: 1.7 }}>
             {bookingTrustMode === "instant" ? STEP4_TRUST.instant.headline : STEP4_TRUST.request.headline}
           </p>
-          <p style={{ fontFamily: LATO, fontSize: "14px", color: "var(--oraya-book-p76)", margin: "0 0 10px", lineHeight: 1.7 }}>
-            {bookingTrustMode === "instant"
-              ? STEP4_TRUST.instant.payment
-              : `${STEP4_TRUST.request.noPayment} ${STEP4_TRUST.request.contact}`}
-          </p>
+          {bookingTrustMode === "instant" ? (
+            STEP4_TRUST.instant.payment ? (
+              <p style={{ fontFamily: LATO, fontSize: "14px", color: "var(--oraya-book-p76)", margin: "0 0 10px", lineHeight: 1.7 }}>
+                {STEP4_TRUST.instant.payment}
+              </p>
+            ) : null
+          ) : (
+            <p style={{ fontFamily: LATO, fontSize: "14px", color: "var(--oraya-book-p76)", margin: "0 0 10px", lineHeight: 1.7 }}>
+              {`${STEP4_TRUST.request.noPayment} ${STEP4_TRUST.request.contact}`}
+            </p>
+          )}
           <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: "0 0 10px", lineHeight: 1.65 }}>
             {WHATSAPP_SUPPORT_LINE}
           </p>

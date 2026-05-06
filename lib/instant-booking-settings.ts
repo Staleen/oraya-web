@@ -23,3 +23,16 @@ export function instantBookingEnabledForVilla(villa: string, flags: InstantBooki
   if (villa === "Villa Byblos") return flags["Villa Byblos"];
   return true;
 }
+
+/** Public guest pages — same keys as `/book` (no auth). */
+export async function fetchInstantBookingFlagsPublic(): Promise<InstantBookingFlags> {
+  const [mech, byl] = await Promise.all([
+    fetch(`/api/settings?key=${encodeURIComponent(INSTANT_BOOKING_SETTING_KEYS["Villa Mechmech"])}`)
+      .then((r) => r.json())
+      .then((d: { value?: unknown }) => parseInstantBookingSetting(d.value)),
+    fetch(`/api/settings?key=${encodeURIComponent(INSTANT_BOOKING_SETTING_KEYS["Villa Byblos"])}`)
+      .then((r) => r.json())
+      .then((d: { value?: unknown }) => parseInstantBookingSetting(d.value)),
+  ]);
+  return { "Villa Mechmech": mech, "Villa Byblos": byl };
+}

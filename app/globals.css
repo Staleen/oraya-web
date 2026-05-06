@@ -298,6 +298,36 @@ body {
   color: var(--oraya-text-muted);
 }
 
+/* ── Instant booking badge (Phase 15 — trust layer; tokens only) ── */
+.instant-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: var(--font-lato), "Lato", system-ui, sans-serif;
+  line-height: 1.2;
+}
+
+.instant-badge--active {
+  background: var(--oraya-surface);
+  border: 1px solid var(--oraya-border);
+  color: var(--oraya-ink);
+}
+
+.instant-badge--disabled {
+  opacity: 0.6;
+}
+
+/** On photography / dark scrims — readable without new palette */
+.instant-badge--on-photo {
+  background: color-mix(in srgb, var(--oraya-hero-canvas) 72%, transparent);
+  border: 1px solid rgba(197, 164, 109, 0.35);
+  color: var(--oraya-hero-text);
+}
+
 /* ── Phase 15I.8: public micro-polish (press, cards, links, section tone) ── */
 
 .oraya-pressable {
