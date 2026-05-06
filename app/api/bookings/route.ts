@@ -217,7 +217,24 @@ export async function POST(request: Request) {
       }
     }
 
-    if (guest_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(guest_email))) {
+    const normGuestName = typeof guest_name === "string" ? guest_name.trim() : "";
+    const normGuestEmail = typeof guest_email === "string" ? guest_email.trim() : "";
+    const normGuestPhone =
+      guest_phone != null && String(guest_phone).trim() !== "" ? String(guest_phone).trim() : "";
+
+    if (!member_id) {
+      if (!normGuestName) {
+        return NextResponse.json({ error: "Guest name is required." }, { status: 400 });
+      }
+      if (!normGuestEmail && !normGuestPhone) {
+        return NextResponse.json(
+          { error: "Please provide an email or phone number so we can contact you." },
+          { status: 400 },
+        );
+      }
+    }
+
+    if (normGuestEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normGuestEmail)) {
       return NextResponse.json({ error: "Invalid email address." }, { status: 400 });
     }
 
@@ -255,9 +272,9 @@ export async function POST(request: Request) {
       addons:          Array.isArray(addons) ? addons : [],
       status:          "pending",
       member_id:       member_id || null,
-      guest_name:      guest_name || null,
-      guest_email:     guest_email || null,
-      guest_phone:     guest_phone || null,
+      guest_name:      member_id ? (guest_name || null) : (normGuestName || null),
+      guest_email:     member_id ? (guest_email || null) : (normGuestEmail || null),
+      guest_phone:     member_id ? (guest_phone || null) : (normGuestPhone || null),
       guest_country:   guest_country || null,
       pricing_subtotal: null,
       pricing_nights: null,

@@ -849,6 +849,10 @@ function BookPageInner() {
   const [showFullVillaCards, setShowFullVillaCards] = useState(true);
   const dateSectionRef = useRef<HTMLDivElement>(null);
   const collapsedDateScrollKeyRef = useRef<string | null>(null);
+  const guestDetailsSectionRef = useRef<HTMLDivElement>(null);
+  const guestFullNameInputRef = useRef<HTMLInputElement>(null);
+  const guestPhoneInputRef = useRef<HTMLInputElement>(null);
+  const guestEmailInputRef = useRef<HTMLInputElement>(null);
   const narrowStep1 = useMatchMediaMaxWidth(640);
 
   // Pre-select villa from ?villa= query param (+ / %20 normalization)
@@ -1511,6 +1515,35 @@ function BookPageInner() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  function focusGuestFieldAfterScroll(field: HTMLInputElement | null) {
+    guestDetailsSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    window.setTimeout(() => field?.focus(), 380);
+  }
+
+  /** Guest bookings: name required; at least one of WhatsApp/phone or email; validate email only if provided. */
+  function enforceGuestContactForStep2(): boolean {
+    if (!guestMode) return true;
+    const name = guest.fullName.trim();
+    const emailT = guest.email.trim();
+    const phoneT = guest.phoneNumber.trim();
+    if (!name) {
+      setError("Please enter your name so we know who the booking is for.");
+      focusGuestFieldAfterScroll(guestFullNameInputRef.current);
+      return false;
+    }
+    if (!phoneT && !emailT) {
+      setError("Please enter a WhatsApp number or email so Oraya can contact you about your stay.");
+      focusGuestFieldAfterScroll(guestPhoneInputRef.current);
+      return false;
+    }
+    if (emailT && !EMAIL_RE.test(emailT)) {
+      setError("Please enter a valid email address.");
+      focusGuestFieldAfterScroll(guestEmailInputRef.current);
+      return false;
+    }
+    return true;
+  }
+
   function goNext() {
     setError("");
     if (step === 3 && bookingPath === "request") return;
@@ -1518,9 +1551,7 @@ function BookPageInner() {
     if (step === 2) {
       if (bookingPath !== "request") return;
       if (!form.bedroomCount)                  { setError("Please select how many bedrooms you would like prepared."); return; }
-      if (guestMode && !guest.fullName.trim()) { setError("Please enter your name so we know who the booking is for."); return; }
-      if (guestMode && !guestEmail)            { setError("Please enter your email so we can contact you about your booking."); return; }
-      if (guestMode && !EMAIL_RE.test(guestEmail)) { setError("Please enter a valid email address so we can contact you about your booking."); return; }
+      if (!enforceGuestContactForStep2()) return;
       const sleeping = parseInt(form.sleepingGuests, 10);
       if (!sleeping || sleeping < 1)           { setError("Please enter at least 1 estimated guest before continuing."); return; }
     }
@@ -1570,14 +1601,20 @@ function BookPageInner() {
     setLoading(true);
     try {
       if (guestMode) {
-        if (!guest.fullName.trim()) {
+        const name = guest.fullName.trim();
+        const emailT = guest.email.trim();
+        const phoneT = guest.phoneNumber.trim();
+        if (!name) {
+          focusGuestFieldAfterScroll(guestFullNameInputRef.current);
           throw new Error("Please enter your name so we know who the booking is for.");
         }
-        if (!guestEmail) {
-          throw new Error("Please enter your email so we can contact you about your booking.");
+        if (!phoneT && !emailT) {
+          focusGuestFieldAfterScroll(guestPhoneInputRef.current);
+          throw new Error("Please enter a WhatsApp number or email so Oraya can contact you about your stay.");
         }
-        if (!EMAIL_RE.test(guestEmail)) {
-          throw new Error("Invalid email address.");
+        if (emailT && !EMAIL_RE.test(emailT)) {
+          focusGuestFieldAfterScroll(guestEmailInputRef.current);
+          throw new Error("Please enter a valid email address.");
         }
       }
 
@@ -1634,9 +1671,10 @@ function BookPageInner() {
       if (user) {
         body.member_id = user.id;
       } else {
+        const phoneT = guest.phoneNumber.trim();
         body.guest_name    = guest.fullName.trim();
-        body.guest_email   = guest.email.trim();
-        body.guest_phone   = guest.phoneNumber ? `${guest.dialCode}${guest.phoneNumber}` : null;
+        body.guest_email   = guest.email.trim() || null;
+        body.guest_phone   = phoneT ? `${guest.dialCode}${phoneT}` : null;
         body.guest_country = guest.country || null;
       }
 
@@ -2523,22 +2561,22 @@ function BookPageInner() {
 
               {/* Guest contact (priority order: name → WhatsApp/phone → email → country) */}
               {guestMode && (
-                <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: GLASS1, padding: "1.5rem", display: "flex", flexDirection: "column", gap: "14px" }}>
+                <div ref={guestDetailsSectionRef} style={{ border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: GLASS1, padding: "1.5rem", display: "flex", flexDirection: "column", gap: "14px" }}>
                   <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
                     Your details
+                  </p>
+                  <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
+                    WhatsApp is preferred. If you do not use WhatsApp, please enter your email.
                   </p>
 
                   <div>
                     <label style={labelStyle}>Full name</label>
-                    <input name="fullName" type="text" required value={guest.fullName} onChange={handleGuestChange}
+                    <input ref={guestFullNameInputRef} name="fullName" type="text" required value={guest.fullName} onChange={handleGuestChange}
                       placeholder="Your full name" style={inputStyle} onFocus={focusGold} onBlur={blurGold} />
                   </div>
 
                   <div>
-                    <label style={labelStyle}>
-                      WhatsApp / phone number{" "}
-                      <span style={{ color: "rgba(138,128,112,0.55)", letterSpacing: "0.4px", textTransform: "none", fontSize: "10px" }}>(optional)</span>
-                    </label>
+                    <label style={labelStyle}>WhatsApp / phone number</label>
                     <div style={{ display: "flex" }}>
                       <select name="dialCode" value={guest.dialCode} onChange={handleGuestChange}
                         onFocus={focusGold} onBlur={blurGold}
@@ -2551,14 +2589,14 @@ function BookPageInner() {
                           )
                         )}
                       </select>
-                      <input name="phoneNumber" type="tel" value={guest.phoneNumber} onChange={handleGuestChange}
+                      <input ref={guestPhoneInputRef} name="phoneNumber" type="tel" value={guest.phoneNumber} onChange={handleGuestChange}
                         placeholder="70 000 000" style={{ ...inputStyle, flex: 1 }} onFocus={focusGold} onBlur={blurGold} />
                     </div>
                   </div>
 
                   <div>
                     <label style={labelStyle}>Email address</label>
-                    <input name="email" type="email" required value={guest.email} onChange={handleGuestChange}
+                    <input ref={guestEmailInputRef} name="email" type="email" autoComplete="email" value={guest.email} onChange={handleGuestChange}
                       placeholder="you@example.com"
                       style={{
                         ...inputStyle,
@@ -2567,7 +2605,7 @@ function BookPageInner() {
                       onFocus={focusGold} onBlur={blurGold} />
                     {guestEmailInvalid && (
                       <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070", marginTop: "8px", lineHeight: 1.55 }}>
-                        Please enter a valid email address so we can contact you about your booking.
+                        Please enter a valid email address.
                       </p>
                     )}
                   </div>
