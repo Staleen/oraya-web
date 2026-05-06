@@ -449,6 +449,69 @@ const CALENDAR_CSS = `
   }
   .step-content { animation: stepFadeIn 0.25s ease forwards; }
 
+  /* Info popovers — same mobile-safe pattern as /book */
+  .book-info-popover {
+    position: relative;
+    display: inline-flex;
+    align-items: flex-start;
+    flex-shrink: 0;
+    vertical-align: middle;
+  }
+  .book-info-popover > summary::-webkit-details-marker { display: none; }
+  .book-info-popover > summary { list-style: none; }
+  .book-info-panel {
+    position: absolute;
+    z-index: 50;
+    top: calc(100% + 6px);
+    right: 0;
+    width: min(280px, calc(100vw - 32px));
+    max-width: calc(100vw - 32px);
+    padding: 10px 12px;
+    box-sizing: border-box;
+    background-color: var(--oraya-popover-bg);
+    border: 0.5px solid var(--oraya-popover-border);
+    box-shadow: 0 12px 36px rgba(0,0,0,0.18);
+    font-family: 'Lato', system-ui, sans-serif;
+    font-size: 12px;
+    line-height: 1.55;
+    color: var(--oraya-popover-text);
+    white-space: pre-line;
+  }
+  .events-popover-heading-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  @media (max-width: 640px) {
+    .events-popover-heading-row {
+      flex-wrap: wrap;
+      align-items: flex-start;
+      row-gap: 8px;
+    }
+    .events-popover-heading-row > p:first-child,
+    .events-popover-heading-row > h1:first-child {
+      flex: 1 1 auto;
+      min-width: 0;
+      padding-right: 8px;
+    }
+    .events-popover-heading-row .book-info-popover[open] {
+      flex: 1 1 100%;
+      width: 100%;
+      max-width: calc(100vw - 32px);
+    }
+    .book-info-panel {
+      position: relative;
+      left: auto !important;
+      right: auto !important;
+      top: auto;
+      margin-top: 8px;
+      width: 100%;
+      max-width: calc(100vw - 32px);
+    }
+  }
+
   /* Same as /book: prevent iOS input zoom (16px minimum on narrow viewports only). */
   @media (max-width: 640px) {
     .oraya-book-input-zoom-fix input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]),
@@ -458,6 +521,38 @@ const CALENDAR_CSS = `
     }
   }
 `;
+
+function InfoPopover({ label, text }: { label: string; text: string }) {
+  return (
+    <details className="book-info-popover">
+      <summary
+        aria-label={label}
+        title={label}
+        style={{
+          cursor: "pointer",
+          width: "16px",
+          height: "16px",
+          borderRadius: "50%",
+          border: "0.5px solid rgba(197,164,109,0.45)",
+          color: GOLD,
+          fontFamily: LATO,
+          fontSize: "10px",
+          fontWeight: 700,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          userSelect: "none",
+          lineHeight: 1,
+        }}
+      >
+        i
+      </summary>
+      <div className="book-info-panel" role="note">
+        {text}
+      </div>
+    </details>
+  );
+}
 
 // ─── Step indicator ───────────────────────────────────────────────────────────
 function StepIndicator({ step }: { step: number }) {
@@ -632,6 +727,8 @@ function EventInquiryPageInner() {
   const [confirmedRanges, setConfirmedRanges] = useState<ConfirmedRange[]>([]);
   const [error,           setError]           = useState("");
   const [loading,         setLoading]         = useState(false);
+  /** Step 3 — optional notes hidden until expanded (value stays in form.message). */
+  const [specialRequestsExpanded, setSpecialRequestsExpanded] = useState(false);
 
   const effectiveAttendees = useMemo(
     () => clampEventAttendees(parseInt(form.dayVisitors, 10) || 1),
@@ -1394,27 +1491,41 @@ function EventInquiryPageInner() {
       <div style={{ width: "100%", maxWidth: containerWidth, margin: "0 auto", transition: "max-width 0.3s ease" }}>
 
         {/* Page heading */}
-        <div style={{ textAlign: "center", marginBottom: "2rem" }}>
+        <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
           <p style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "1.2px", color: GOLD, marginBottom: "12px" }}>
             Event Inquiry
           </p>
-          <h1 style={{ fontFamily: PLAYFAIR, fontSize: "2rem", fontWeight: 400, color: WHITE, margin: "0 0 10px" }}>
-            Plan Your Event
-          </h1>
-          <p style={{ fontFamily: LATO, fontSize: "15px", color: BOOK_P82, lineHeight: 1.75, margin: "0 0 12px" }}>
-            Tell us what you are planning. We will review availability, setup, and services, and respond with a tailored proposal (typically within one business day).
-          </p>
-          <p style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_P72, lineHeight: 1.7, margin: 0 }}>
-            Every event is reviewed and prepared by the Oraya team before confirmation. Coordinated support continues through your date. Questions:{" "}
+          <div className="events-popover-heading-row" style={{ justifyContent: "center", alignItems: "center", margin: "0 0 10px" }}>
+            <h1 style={{ fontFamily: PLAYFAIR, fontSize: "2rem", fontWeight: 400, color: WHITE, margin: 0 }}>
+              Plan Your Event
+            </h1>
+            <InfoPopover
+              label="More about the event inquiry process"
+              text={
+                "Tell us what you are planning. We will review availability, setup, and services, and respond with a tailored proposal (typically within one business day).\n\n" +
+                "Every event is reviewed and prepared by the Oraya team before confirmation. Coordinated support continues through your date."
+              }
+            />
+          </div>
+          <p style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_P72, lineHeight: 1.65, margin: 0 }}>
+            Proposal after review — typically within one business day. Questions:{" "}
             <a href="mailto:hello@stayoraya.com" className="oraya-link-text" style={{ color: GOLD }}>hello@stayoraya.com</a>
           </p>
         </div>
 
         {/* Standing inquiry banner */}
-        <div style={{ border: "0.5px solid var(--oraya-book-input-border)", backgroundColor: GLG4, padding: "12px 16px", marginBottom: "1.5rem", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
-          <p style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_P78, margin: 0, lineHeight: 1.65, flex: 1, minWidth: "240px" }}>
-            This is an inquiry, not an instant booking. Event inquiries are reviewed as a full venue request, including guest flow, setup areas, and operational requirements. Nothing is confirmed until Oraya responds and aligns details with you.
-          </p>
+        <div style={{ border: "0.5px solid var(--oraya-book-input-border)", backgroundColor: GLG4, padding: "12px 16px", marginBottom: "1.25rem", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: 1, minWidth: "200px" }}>
+            <p style={{ fontFamily: LATO, fontSize: "13px", color: BOOK_P78, margin: 0, lineHeight: 1.55 }}>
+              Inquiry only — not confirmed until Oraya responds.
+            </p>
+            <InfoPopover
+              label="What inquiry means"
+              text={
+                "This is an inquiry, not an instant booking. Event inquiries are reviewed as a full venue request, including guest flow, setup areas, and operational requirements. Nothing is confirmed until Oraya responds and aligns details with you."
+              }
+            />
+          </div>
           <a
             href="/book"
             className="oraya-pressable oraya-cta-book-back"
@@ -1506,13 +1617,13 @@ function EventInquiryPageInner() {
                         }}>
                           {selected && <span style={{ color: CHARCOAL, fontSize: "10px", fontWeight: 700, lineHeight: 1 }}>✓</span>}
                         </div>
-                        <div style={{ flex: 1 }}>
-                          <p style={{ fontFamily: LATO, fontSize: "13px", color: selected ? WHITE : BOOK_DIM, margin: "0 0 4px", fontWeight: selected ? 400 : 300 }}>
+                        <div style={{ flex: 1, display: "flex", alignItems: "flex-start", gap: "8px", minWidth: 0 }}>
+                          <p style={{ fontFamily: LATO, fontSize: "13px", color: selected ? WHITE : BOOK_DIM, margin: 0, fontWeight: selected ? 400 : 300, flex: 1 }}>
                             {et.label}
                           </p>
-                          <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
-                            {et.description}
-                          </p>
+                          {et.description?.trim() ? (
+                            <InfoPopover label={`About ${et.label}`} text={et.description.trim()} />
+                          ) : null}
                         </div>
                       </button>
                     );
@@ -1520,13 +1631,14 @@ function EventInquiryPageInner() {
                 </div>
                 {selectedEventRecommendation && (
                   <div style={{ marginTop: "14px", border: "0.5px solid var(--oraya-border)", backgroundColor: GLG1, padding: "16px 18px", display: "flex", flexDirection: "column", gap: "10px" }}>
-                    <div>
-                      <p style={{ fontFamily: PLAYFAIR, fontSize: "18px", fontWeight: 400, color: WHITE, margin: "0 0 6px" }}>
+                    <div className="events-popover-heading-row" style={{ margin: 0 }}>
+                      <p style={{ fontFamily: PLAYFAIR, fontSize: "18px", fontWeight: 400, color: WHITE, margin: 0 }}>
                         {form.eventType}
                       </p>
-                      <p style={{ fontFamily: LATO, fontSize: "12px", color: BOOK_P72, margin: 0, lineHeight: 1.65 }}>
-                        {selectedEventRecommendation.guidance}
-                      </p>
+                      <InfoPopover
+                        label={`Typical setup for ${form.eventType}`}
+                        text={selectedEventRecommendation.guidance}
+                      />
                     </div>
                     <div>
                       <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "2.5px", textTransform: "uppercase", color: GOLD, margin: "0 0 8px" }}>
@@ -1571,9 +1683,17 @@ function EventInquiryPageInner() {
                   tabIndex={-1}
                   style={{ outline: "none" }}
                 >
-                  <p style={{ ...labelStyle, marginBottom: "10px" }}>Preferred date(s)</p>
-                  <p style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_P78, margin: "0 0 14px", lineHeight: 1.65 }}>
-                    Choose your event start and end. Dates already held—including the setup day before your start—are blocked the same way as stay booking. Oraya will confirm the final window with you.
+                  <div className="events-popover-heading-row" style={{ marginBottom: "10px" }}>
+                    <p style={{ ...labelStyle, margin: 0 }}>Preferred date(s)</p>
+                    <InfoPopover
+                      label="How event dates work"
+                      text={
+                        "Choose your event start and end. Dates already held—including the setup day before your start—are blocked the same way as stay booking. Oraya will confirm the final window with you."
+                      }
+                    />
+                  </div>
+                  <p style={{ fontFamily: LATO, fontSize: "13px", color: BOOK_P78, margin: "0 0 12px", lineHeight: 1.55 }}>
+                    Select start and end on the calendar.
                   </p>
                   <div style={{ border: "0.5px solid var(--oraya-border)", backgroundColor: GLASS3, padding: "1.25rem" }}>
                     <div className="oraya-cal">
@@ -1594,11 +1714,21 @@ function EventInquiryPageInner() {
                   </div>
 
                   {eventDeadDayHints && (eventDeadDayHints.suggestLateCheckout || eventDeadDayHints.suggestEarlyCheckin) && (
-                    <p style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_P76, margin: "12px 0 0", lineHeight: 1.7 }}>
-                      {eventDeadDayHints.suggestEarlyCheckin
-                        ? "Your window sits next to a tight one-day gap between other reservations. Access and load-in timing may need extra coordination—we will confirm with the proposal."
-                        : "Your event end sits next to a short gap before the next hold. Wrap or load-out timing may need coordination—we will confirm with the proposal."}
-                    </p>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: "10px", marginTop: "12px", flexWrap: "wrap" }}>
+                      <p style={{ fontFamily: LATO, fontSize: "13px", color: BOOK_P76, margin: 0, lineHeight: 1.55, flex: "1 1 200px" }}>
+                        {eventDeadDayHints.suggestEarlyCheckin
+                          ? "Timing note: your dates sit next to a tight gap — coordination may be needed."
+                          : "Timing note: your end date sits next to a short gap — load-out may need coordination."}
+                      </p>
+                      <InfoPopover
+                        label="Timing detail"
+                        text={
+                          eventDeadDayHints.suggestEarlyCheckin
+                            ? "Your window sits next to a tight one-day gap between other reservations. Access and load-in timing may need extra coordination—we will confirm with the proposal."
+                            : "Your event end sits next to a short gap before the next hold. Wrap or load-out timing may need coordination—we will confirm with the proposal."
+                        }
+                      />
+                    </div>
                   )}
 
                   {checkIn && (
@@ -1638,7 +1768,13 @@ function EventInquiryPageInner() {
 
               {/* Expected attendees */}
               <div ref={step1AttendeesSectionRef}>
-                <label style={labelStyle}>Expected number of attendees</label>
+                <div className="events-popover-heading-row" style={{ marginBottom: "8px" }}>
+                  <label style={{ ...labelStyle, margin: 0 }}>Expected number of attendees</label>
+                  <InfoPopover
+                    label="Attendee capacity"
+                    text={`Private events at Oraya are limited to ${MAX_EVENT_ATTENDEES} attendees. Final capacity is confirmed after review.`}
+                  />
+                </div>
                 <input
                   ref={step1AttendeesInputRef}
                   name="dayVisitors"
@@ -1653,8 +1789,8 @@ function EventInquiryPageInner() {
                   style={inputStyle}
                   placeholder="e.g. 24"
                 />
-                <p style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_P76, marginTop: "8px", lineHeight: 1.6 }}>
-                  Private events at Oraya are limited to {MAX_EVENT_ATTENDEES} attendees. Final capacity is confirmed after review.
+                <p style={{ fontFamily: LATO, fontSize: "12px", color: BOOK_P76, marginTop: "8px", lineHeight: 1.5 }}>
+                  Max {MAX_EVENT_ATTENDEES} guests (final count after review).
                 </p>
               </div>
 
@@ -1682,16 +1818,28 @@ function EventInquiryPageInner() {
             <div ref={step2ServicesSectionRef} style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
 
               <div>
-                <p style={{ fontFamily: PLAYFAIR, fontSize: "20px", fontWeight: 400, color: WHITE, margin: "0 0 6px" }}>
-                  Services &amp; Setup Requirements
-                </p>
-                <p style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_P78, margin: "0 0 18px", lineHeight: 1.65 }}>
-                  Select the services you may need. Oraya will review and confirm the final setup.
+                <div className="events-popover-heading-row" style={{ margin: "0 0 8px" }}>
+                  <p style={{ fontFamily: PLAYFAIR, fontSize: "20px", fontWeight: 400, color: WHITE, margin: 0 }}>
+                    Services &amp; Setup Requirements
+                  </p>
+                  <InfoPopover
+                    label="How services work"
+                    text="Select the services you may need. Oraya will review and confirm the final setup."
+                  />
+                </div>
+                <p style={{ fontFamily: LATO, fontSize: "13px", color: BOOK_P78, margin: "0 0 14px", lineHeight: 1.55 }}>
+                  Tap services to include them. Required groups must be covered before continuing.
                 </p>
                 {selectedEventRecommendation && selectedEventRecommendation.recommendedServices.length > 0 && (
-                  <p style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_P72, margin: "0 0 16px", lineHeight: 1.65 }}>
-                    Recommended for {form.eventType}: {selectedEventRecommendation.recommendedServices.map((service) => service.label).join(", ")}.
-                  </p>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", margin: "0 0 14px" }}>
+                    <p style={{ fontFamily: LATO, fontSize: "13px", color: BOOK_P72, margin: 0, lineHeight: 1.5 }}>
+                      Suggested for {form.eventType} — see details.
+                    </p>
+                    <InfoPopover
+                      label={`Suggested services for ${form.eventType}`}
+                      text={selectedEventRecommendation.recommendedServices.map((service) => `• ${service.label}`).join("\n")}
+                    />
+                  </div>
                 )}
                 <div style={{ display: "flex", flexDirection: "column", gap: "18px", marginBottom: "16px" }}>
                   {groupedEventServices.length > 0 ? groupedEventServices.map((group) => (
@@ -1744,18 +1892,18 @@ function EventInquiryPageInner() {
                                 }}>
                                   {selected && <span style={{ color: CHARCOAL, fontSize: "9px", fontWeight: 700, lineHeight: 1 }}>✓</span>}
                                 </div>
-                                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                                  <span style={{ fontFamily: LATO, fontSize: "14px", color: selected ? WHITE : BOOK_P78 }}>
-                                    {service.label}
-                                  </span>
-                                  {service.description?.trim() ? (
-                                    <span style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_P72, lineHeight: 1.6, fontWeight: 300 }}>
-                                      {service.description.trim()}
+                                <div style={{ display: "flex", flexDirection: "column", gap: "4px", flex: 1, minWidth: 0 }}>
+                                  <span style={{ display: "inline-flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                                    <span style={{ fontFamily: LATO, fontSize: "14px", color: selected ? WHITE : BOOK_P78 }}>
+                                      {service.label}
                                     </span>
-                                  ) : null}
+                                    {service.description?.trim() ? (
+                                      <InfoPopover label={`About ${service.label}`} text={service.description.trim()} />
+                                    ) : null}
+                                  </span>
                                   {service.quantity_enabled && (
-                                    <span style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_P72, lineHeight: 1.55 }}>
-                                      Quantity supported{unitLabel ? ` - ${unitLabel}` : ""}
+                                    <span style={{ fontFamily: LATO, fontSize: "12px", color: BOOK_P72, lineHeight: 1.55 }}>
+                                      Quantity{unitLabel ? ` (${unitLabel})` : ""}
                                     </span>
                                   )}
                                 </div>
@@ -1796,16 +1944,6 @@ function EventInquiryPageInner() {
                 </div>
               </div>
 
-              {/* Inquiry-only copy */}
-              <div style={{ border: "0.5px solid var(--oraya-border)", backgroundColor: GLG3, padding: "12px 16px" }}>
-                <p style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_P76, margin: "0 0 10px", lineHeight: 1.65 }}>
-                  Oraya will review your event requirements and respond with availability, setup options, and a tailored proposal — typically within one business day.
-                </p>
-                <p style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_P78, margin: 0, lineHeight: 1.65 }}>
-                  Final event pricing is reviewed and quoted by Oraya.
-                </p>
-              </div>
-
               {(() => {
                 const required = getRequiredEventServiceGroups(form.eventType);
                 if (required.length === 0) return null;
@@ -1834,8 +1972,6 @@ function EventInquiryPageInner() {
                 );
               })()}
 
-              {eventSetupEstimate && <EventEstimatePanel estimate={eventSetupEstimate} />}
-
               {error && (
                 <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070", textAlign: "center", lineHeight: 1.6, margin: 0 }}>
                   {error}
@@ -1854,6 +1990,23 @@ function EventInquiryPageInner() {
                   Continue →
                 </button>
               </div>
+
+              {eventSetupEstimate && <EventEstimatePanel estimate={eventSetupEstimate} />}
+
+              {/* Inquiry timing & pricing — below primary actions */}
+              <div style={{ border: "0.5px solid var(--oraya-border)", backgroundColor: GLG3, padding: "12px 16px" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: "10px", flexWrap: "wrap" }}>
+                  <p style={{ fontFamily: LATO, fontSize: "13px", color: BOOK_P76, margin: 0, lineHeight: 1.55, flex: "1 1 220px" }}>
+                    Response typically within one business day. Final pricing is quoted after review.
+                  </p>
+                  <InfoPopover
+                    label="Proposal and pricing"
+                    text={
+                      "Oraya will review your event requirements and respond with availability, setup options, and a tailored proposal — typically within one business day.\n\nFinal event pricing is reviewed and quoted by Oraya."
+                    }
+                  />
+                </div>
+              </div>
             </div>
           )}
 
@@ -1863,14 +2016,20 @@ function EventInquiryPageInner() {
           {step === 3 && (
             <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
 
-              <div>
-                <p style={{ fontFamily: PLAYFAIR, fontSize: "20px", fontWeight: 400, color: WHITE, margin: "0 0 6px" }}>
+              <div className="events-popover-heading-row" style={{ margin: 0, alignItems: "center" }}>
+                <p style={{ fontFamily: PLAYFAIR, fontSize: "20px", fontWeight: 400, color: WHITE, margin: 0 }}>
                   Host Details
                 </p>
-                <p style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_P78, margin: "0 0 8px", lineHeight: 1.65 }}>
-                  Event packages include overnight stay for the hosts. Review the summary below, then submit your inquiry in one step.
-                </p>
+                <InfoPopover
+                  label="Host stay and submission"
+                  text={
+                    "Event packages include overnight stay for the hosts. Review the summary below, then submit your inquiry in one step. Oraya will review the full package before confirmation."
+                  }
+                />
               </div>
+              <p style={{ fontFamily: LATO, fontSize: "13px", color: BOOK_P78, margin: 0, lineHeight: 1.55 }}>
+                Host overnight count, then contact if needed. Check the summary, then submit.
+              </p>
 
               {/* Overnight hosts */}
               <div ref={step3HostSectionRef}>
@@ -1888,20 +2047,29 @@ function EventInquiryPageInner() {
                   onBlur={blurGold}
                   style={inputStyle}
                 />
-                <p style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_P76, marginTop: "8px", lineHeight: 1.6 }}>
-                  Event packages include overnight stay for the hosts. Oraya will review the full package before confirmation.
-                </p>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginTop: "8px" }}>
+                  <p style={{ fontFamily: LATO, fontSize: "12px", color: BOOK_P76, margin: 0, lineHeight: 1.5 }}>
+                    Included for hosts as part of the event package.
+                  </p>
+                  <InfoPopover
+                    label="Host overnight stay details"
+                    text="Event packages include overnight stay for the hosts. Oraya will review the full package before confirmation."
+                  />
+                </div>
               </div>
 
               {/* Guest contact (when not member) */}
               {authStatus !== "member" && (
                 <div ref={guestDetailsSectionRef} style={{ border: "0.5px solid var(--oraya-border)", backgroundColor: GLASS1, padding: "1.5rem", display: "flex", flexDirection: "column", gap: "16px" }}>
-                  <p style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "1px", color: GOLD, margin: 0 }}>
-                    Your contact details
-                  </p>
-                  <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
-                    WhatsApp is preferred. If you do not use WhatsApp, please enter your email.
-                  </p>
+                  <div className="events-popover-heading-row" style={{ margin: 0 }}>
+                    <p style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "1px", color: GOLD, margin: 0 }}>
+                      Your contact details
+                    </p>
+                    <InfoPopover
+                      label="How to reach you"
+                      text="WhatsApp is preferred. If you do not use WhatsApp, please enter your email."
+                    />
+                  </div>
 
                   <div>
                     <label style={labelStyle}>Full name</label>
@@ -1949,23 +2117,75 @@ function EventInquiryPageInner() {
                 </div>
               )}
 
-              {/* Notes */}
+              {/* Special requests — collapsed row; expand for textarea (value stays in form.message) */}
               <div>
-                <label style={labelStyle}>
-                  Notes / special requests{" "}
-                  <span style={{ color: MUTED, opacity: 0.55, letterSpacing: 0 }}>(optional)</span>
-                </label>
-                <textarea name="message" value={form.message} onChange={handleFormChange}
-                  onFocus={focusGold} onBlur={blurGold}
-                  rows={4}
-                  placeholder="Tell us more about your event — theme, timing, dietary needs, or anything else we should know…"
-                  style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6 }} />
+                <button
+                  type="button"
+                  className="oraya-pressable"
+                  aria-expanded={specialRequestsExpanded}
+                  aria-controls="events-special-requests-field"
+                  onClick={() => setSpecialRequestsExpanded((v) => !v)}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "12px",
+                    padding: "14px 16px",
+                    border: "0.5px solid rgba(197,164,109,0.22)",
+                    backgroundColor: GLASS1,
+                    cursor: "pointer",
+                    textAlign: "left",
+                  }}
+                >
+                  <span style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, letterSpacing: "0.02em" }}>
+                    Special requests{" "}
+                    <span style={{ color: MUTED, fontSize: "11px", letterSpacing: "0.5px", textTransform: "none" }}>(optional)</span>
+                  </span>
+                  <span aria-hidden style={{ fontFamily: LATO, fontSize: "22px", fontWeight: 300, color: GOLD, lineHeight: 1, flexShrink: 0 }}>
+                    {specialRequestsExpanded ? "−" : "+"}
+                  </span>
+                </button>
+                {!specialRequestsExpanded && (() => {
+                  const t = (form.message ?? "").replace(/\s+/g, " ").trim();
+                  if (!t) return null;
+                  const s = t.length > 88 ? `${t.slice(0, 88)}…` : t;
+                  return (
+                    <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "10px 4px 0", lineHeight: 1.55 }}>
+                      {s}
+                    </p>
+                  );
+                })()}
+                {specialRequestsExpanded && (
+                  <div style={{ marginTop: "12px" }}>
+                    <label htmlFor="events-special-requests-field" style={{ ...labelStyle, position: "absolute", width: "1px", height: "1px", padding: 0, margin: "-1px", overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap", border: 0 }}>
+                      Notes / special requests (optional)
+                    </label>
+                    <textarea
+                      id="events-special-requests-field"
+                      name="message"
+                      value={form.message}
+                      onChange={handleFormChange}
+                      onFocus={focusGold}
+                      onBlur={blurGold}
+                      rows={4}
+                      placeholder="Tell us more about your event — theme, timing, dietary needs, or anything else we should know…"
+                      style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6, width: "100%" }}
+                    />
+                  </div>
+                )}
               </div>
 
               <div>
-                <p style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "1px", color: GOLD, margin: "0 0 14px" }}>
-                  Event inquiry summary
-                </p>
+                <div className="events-popover-heading-row" style={{ margin: "0 0 10px" }}>
+                  <p style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "1px", color: GOLD, margin: 0 }}>
+                    Event inquiry summary
+                  </p>
+                  <InfoPopover
+                    label="About this summary"
+                    text="This is what we will review with your inquiry. You can go back to earlier steps to adjust villa, dates, services, or notes before submitting."
+                  />
+                </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginBottom: "16px" }}>
                   <div style={{ border: "0.5px solid var(--oraya-border)", padding: "1.25rem", backgroundColor: GLASS3 }}>
                     <p style={{ fontFamily: PLAYFAIR, fontSize: "18px", fontWeight: 400, color: WHITE, margin: "0 0 12px" }}>
@@ -2018,21 +2238,11 @@ function EventInquiryPageInner() {
 
               {eventSetupEstimate && <EventEstimatePanel estimate={eventSetupEstimate} totalFontSize="24px" />}
 
-              <div style={{ border: "0.5px solid var(--oraya-border)", backgroundColor: GLG3, padding: "16px 20px" }}>
-                <p style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_P78, margin: 0, lineHeight: 1.65 }}>
-                  This request will be reviewed as a full event setup and you will receive a tailored proposal.
-                </p>
-              </div>
-
               {error && (
                 <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070", textAlign: "center", lineHeight: 1.6, margin: 0 }}>
                   {error}
                 </p>
               )}
-
-              <p style={{ fontFamily: LATO, fontSize: "14px", color: BOOK_P68, margin: "0 0 12px", lineHeight: 1.6, textAlign: "center", letterSpacing: "0.01em" }}>
-                Each inquiry is manually reviewed to ensure availability and preparation quality.
-              </p>
 
               <div style={{ display: "flex", gap: "12px" }}>
                 <button type="button" onClick={goBack} disabled={loading}
@@ -2045,6 +2255,21 @@ function EventInquiryPageInner() {
                   style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "16px", flex: 1, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1 }}>
                   {loading ? "Submitting…" : "Submit Event Inquiry"}
                 </button>
+              </div>
+
+              <div style={{ border: "0.5px solid var(--oraya-border)", backgroundColor: GLG3, padding: "14px 16px" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: "10px", flexWrap: "wrap" }}>
+                  <p style={{ fontFamily: LATO, fontSize: "13px", color: BOOK_P78, margin: 0, lineHeight: 1.55, flex: "1 1 220px" }}>
+                    Proposal after Oraya reviews your full event setup. Each inquiry is checked for availability and quality.
+                  </p>
+                  <InfoPopover
+                    label="Trust and review details"
+                    text={
+                      "This request will be reviewed as a full event setup and you will receive a tailored proposal.\n\n" +
+                      "Each inquiry is manually reviewed to ensure availability and preparation quality."
+                    }
+                  />
+                </div>
               </div>
             </div>
           )}
