@@ -30,19 +30,19 @@ export default function AdminBookingsPage() {
     setError("");
     setUpdatingId(id);
 
-    const res = await fetch(`/api/admin/bookings/${id}`, {
-      ...adminApiFetchInit,
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
-    });
+    try {
+      const res = await fetch(`/api/admin/bookings/${id}`, {
+        ...adminApiFetchInit,
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
 
-    const d = await res.json();
-    setUpdatingId(null);
-
-    if (!res.ok) {
-      setError(d.error ?? "Failed to update status.");
-    } else {
+      const d = (await res.json().catch(() => ({}))) as { error?: string; email_sent?: boolean; booking?: Record<string, unknown> };
+      if (!res.ok) {
+        setError(d.error ?? "Failed to update status.");
+        return;
+      }
       setEmailWarnings((prev) => {
         const next = { ...prev };
         if (d.email_sent === false) next[id] = "Booking updated but email was not sent";
@@ -53,6 +53,10 @@ export default function AdminBookingsPage() {
         setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, ...d.booking } : b)));
       }
       loadData(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update status.");
+    } finally {
+      setUpdatingId(null);
     }
   }
 

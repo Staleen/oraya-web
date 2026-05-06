@@ -1560,7 +1560,12 @@ function EventInquiryPageInner() {
       if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
 
       const res  = await fetch("/api/bookings", { method: "POST", headers, body: JSON.stringify(body) });
-      const json = await res.json();
+      let json: { error?: string; booking?: { id?: string } } = {};
+      try {
+        json = (await res.json()) as { error?: string; booking?: { id?: string } };
+      } catch {
+        json = {};
+      }
       if (!res.ok) throw new Error(json.error ?? "Failed to submit your event inquiry.");
 
       const booking     = json.booking;

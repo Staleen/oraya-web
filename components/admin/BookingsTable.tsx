@@ -1038,15 +1038,21 @@ export default function BookingsTable({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ addon_id: addonId, decision }),
     });
-    const data = await res.json();
+    let data: { error?: string; addons_snapshot?: unknown } = {};
+    try {
+      data = (await res.json()) as { error?: string; addons_snapshot?: unknown };
+    } catch {
+      data = {};
+    }
 
     if (res.ok && Array.isArray(data.addons_snapshot)) {
+      const addonsSnapshot = data.addons_snapshot as BookingAddonSnapshot[];
       setBookings((prev) =>
         prev.map((booking) =>
-          booking.id === bookingId ? { ...booking, addons_snapshot: data.addons_snapshot } : booking,
+          booking.id === bookingId ? { ...booking, addons_snapshot: addonsSnapshot } : booking,
         ),
       );
-      return data.addons_snapshot as BookingAddonSnapshot[];
+      return addonsSnapshot;
     }
 
     throw new Error(data.error ?? "Failed to update add-on state.");
@@ -1091,6 +1097,7 @@ export default function BookingsTable({
       await patchAddonResolution(bookingId, addonId, decision);
     } catch (error) {
       console.error("[admin] resolve-addon network error:", error);
+      setError(error instanceof Error ? error.message : "Failed to update add-on state.");
     } finally {
       setApprovingAddonId(null);
     }
@@ -1115,6 +1122,7 @@ export default function BookingsTable({
       await updateStatus(booking.id, "confirmed");
     } catch (error) {
       console.error("[admin] approve-all-and-confirm failed:", error);
+      setError(error instanceof Error ? error.message : "Failed to approve add-ons and confirm booking.");
     } finally {
       setBulkActionBookingId(null);
     }
