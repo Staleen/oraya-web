@@ -477,6 +477,7 @@ export default function Home() {
                 {instantBadgeOn && (
                   <span
                     className="instant-badge instant-badge--on-photo pointer-events-none"
+                    title="Villa may allow instant booking for eligible stays. Availability and final terms depend on your dates and selections."
                     style={{ position: "absolute", top: "12px", right: "12px", zIndex: 3 }}
                   >
                     <InstantBookingIcon size={14} />

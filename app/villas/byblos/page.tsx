@@ -99,6 +99,7 @@ export default function VillaByblosPage() {
           {instantHeroBadge && (
             <span
               className="instant-badge instant-badge--on-photo pointer-events-none"
+              title="Villa may allow instant booking for eligible stays. Availability and final terms depend on your dates and selections."
               style={{ position: "absolute", top: "16px", right: "16px", zIndex: 4 }}
             >
               <InstantBookingIcon size={16} />

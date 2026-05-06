@@ -3,8 +3,10 @@
  * Gold ring + emerald check; stroke weights stay light for premium minimal look.
  */
 
+export type InstantBookingIconSize = 14 | 16 | 18 | 20 | 24;
+
 type Props = {
-  size?: number;
+  size?: InstantBookingIconSize;
   className?: string;
 };
 

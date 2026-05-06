@@ -15,13 +15,14 @@ Phase 13 -> COMPLETE | Phase 14 -> COMPLETE (14M closure) | Phase 15A -> COMPLET
 
 ### Phase 15 closure
 
-**Phase 15** (umbrella) is **COMPLETE** as the **public trust layer** — theme, guest-facing booking/legal consistency, micro-polish, adaptive `/book` UX (UI-only instant path), admin instant toggles, and **cancellation/refund policy visibility** on key booking surfaces. **Payment execution** for instant checkout remains **Phase 16**.
+**Phase 15** (umbrella) is **COMPLETE** as the **public trust layer** — theme, guest-facing booking/legal consistency, micro-polish, adaptive `/book` UX (UI-only instant path), admin instant toggles, **instant booking visual system** (icon + badges + early eligibility messaging), **instant vs request copy clarity**, **live admin booking/dashboard refresh without full page reload** (silent polling + Supabase Realtime best-effort + in-page toasts; preserves tabs/filters/scroll), and **cancellation/refund policy visibility** on key booking surfaces. **Payment execution** for instant checkout remains **Phase 16**.
 
 - **Theme system:** `data-theme="light"` / `"dark"` on `<html>` with shared **`--oraya-*`** tokens; default light; dark is an explicit user choice (`oraya-theme` in `localStorage`).
 - **Route coverage:** Homepage, `/book`, villa pages, join/login, events inquiry, and trust/legal surfaces use the same token vocabulary and nav/footer patterns where applicable.
 - **Micro-polish:** Global utilities (press, cards, CTAs, links, section background easing) in **`app/globals.css`**; reduced-motion behavior; keyboard **focus-visible** on homepage villa cards.
 - **Design system:** **`DESIGN_SYSTEM.md`** documents **micro-interaction utilities** and remains the guest-facing reference alongside this file.
 - **Cancellation/refund visibility:** Guest **`/book`** Step 4 (review), **`/booking/view/[token]`**, and **`/booking-confirmed`** link to **`/legal/refund`** with careful copy (no automatic refund implied). No cancellation/refund backend in Phase 15.
+- **Admin live data:** After password auth, **`AdminDataProvider`** refetches **`/api/admin/data`** on a **45s** interval (silent, state-only) and subscribes to **`postgres_changes`** on **`public.bookings`** when Realtime is enabled; row-level visibility still follows Supabase RLS for the subscribing role — polling remains the reliable path if Realtime does not fire. Toasts notify inserts/status changes without resetting UI chrome.
 
 Sub-phases **15A–15H** and **15I.1–15I.11** above record incremental work; they are not repeated here.
 

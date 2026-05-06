@@ -16,7 +16,7 @@ export const STEP4_TRUST = {
   },
   request: {
     headline: "This booking requires review.",
-    noPayment: "No payment required until booking is confirmed.",
+    noPayment: "No payment required until your booking is confirmed.",
     contact: "We will contact you via WhatsApp or email.",
     ctaSubline: "No payment required now",
   },

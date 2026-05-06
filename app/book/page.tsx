@@ -1871,22 +1871,33 @@ function BookPageInner() {
                         border: "0.5px solid rgba(197,164,109,0.22)",
                         backgroundColor: "rgba(197,164,109,0.05)",
                         display: "flex",
-                        alignItems: "center",
-                        gap: "10px",
-                        flexWrap: "wrap",
+                        flexDirection: "column",
+                        alignItems: "flex-start",
+                        gap: "8px",
                       }}
                     >
-                      {instantEligible ? (
-                        <>
-                          <InstantBookingIcon size={22} />
-                          <span style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, lineHeight: 1.55 }}>
-                            This stay is eligible for instant booking
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                        {instantEligible ? (
+                          <>
+                            <InstantBookingIcon size={20} />
+                            <span style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, lineHeight: 1.55 }}>
+                              This stay is eligible for instant booking
+                            </span>
+                          </>
+                        ) : (
+                          <span style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", lineHeight: 1.55 }}>
+                            This stay requires review
                           </span>
-                        </>
+                        )}
+                      </div>
+                      {instantEligible ? (
+                        <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0, lineHeight: 1.55, paddingLeft: "30px" }}>
+                          Self-service stay only. No add-ons or special requests.
+                        </p>
                       ) : (
-                        <span style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", lineHeight: 1.55 }}>
-                          This stay requires review
-                        </span>
+                        <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
+                          Oraya will confirm availability based on timing or services.
+                        </p>
                       )}
                     </div>
                   )}
@@ -1929,8 +1940,8 @@ function BookPageInner() {
                       <p style={{ fontFamily: PLAYFAIR, fontSize: "18px", fontWeight: 400, color: WHITE, margin: 0, lineHeight: 1.35 }}>
                         Instant Book
                       </p>
-                      <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65, fontWeight: 300 }}>
-                        No add-ons. No preparation required. Pay online and receive access immediately.
+                      <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65, fontWeight: 300, whiteSpace: "pre-line" }}>
+                        No add-ons. No preparation required.{"\n"}Pay online and receive access immediately.
                       </p>
                       <button
                         type="button"
@@ -1964,10 +1975,10 @@ function BookPageInner() {
                       }}
                     >
                       <p style={{ fontFamily: PLAYFAIR, fontSize: "18px", fontWeight: 400, color: WHITE, margin: 0, lineHeight: 1.35 }}>
-                        Customize & Request
+                        Customize Your Stay
                       </p>
-                      <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65, fontWeight: 300 }}>
-                        Add services, special requests, or changes. Requires manual confirmation.
+                      <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65, fontWeight: 300, whiteSpace: "pre-line" }}>
+                        Add services or special requests.{"\n"}Requires manual confirmation.
                       </p>
                       <button
                         type="button"
@@ -1998,7 +2009,7 @@ function BookPageInner() {
                   onClick={proceedFromStep1ToReserve}
                   style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 16px", minHeight: "50px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
                 >
-                  Reserve Your Stay
+                  Request Your Stay
                 </button>
               )}
             </div>
