@@ -190,12 +190,16 @@ export default function JoinPage() {
       if (signUpError) throw signUpError;
 
       const user = data.user;
-      if (user) {
-        // Insert via server-side API so service role bypasses RLS
-        // (anon client can't insert when email confirmation is pending)
+      const accessToken = data.session?.access_token;
+      if (user && accessToken) {
+        // Insert via server-side API when Supabase issues a session immediately.
+        // Email-confirmation signups are backfilled after the first login.
         const res = await fetch("/api/members", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
           body: JSON.stringify({
             id:        user.id,
             full_name: form.fullName,
