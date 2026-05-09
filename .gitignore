@@ -10,8 +10,15 @@ node_modules/
 # production
 /build
 
-# env files
+# env files — never commit real secrets. Only `.env.example` (placeholders) is tracked.
 .env
+.env.local
+.env.development
+.env.development.local
+.env.production
+.env.production.local
+.env.test
+.env.test.local
 .env*.local
 
 # vercel
@@ -30,6 +37,3 @@ Thumbs.db
 
 # Claude Code
 .claude/
-
-.vercel
-.env*.local
