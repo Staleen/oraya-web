@@ -29,12 +29,11 @@ Living list of bugs, gaps, and operational pitfalls that are **known** but **not
 
 - **Severity:** 🟡 Medium
 - **Area:** Email / configuration hygiene
-- **Description:** `RESEND_FROM_EMAIL` exists in [/.env.example](../../.env.example) and is referenced in [/README.md](../../README.md), but no code reads it. Every `lib/send-*-email.ts` defines a hardcoded constant `FROM_EMAIL = "Oraya Reservations <bookings@stayoraya.com>"` and uses that in the Resend `from:` field. Setting the env var today does nothing — silently. Future operators may set it expecting an override and get confused.
-- **Status:** open
-- **Recommended fix path:** pick one and document the choice in [DECISIONS_LOG.md](DECISIONS_LOG.md):
-  - **Option A (wire it):** in each of the 8 `lib/send-*-email.ts` files, replace the literal with `process.env.RESEND_FROM_EMAIL?.trim() || "Oraya Reservations <bookings@stayoraya.com>"`. Verified domain on Resend must include the chosen sender. No schema change.
-  - **Option B (drop it):** remove `RESEND_FROM_EMAIL` from [/.env.example](../../.env.example) and the README mention. Note in [DECISIONS_LOG.md](DECISIONS_LOG.md) that the from-address is intentionally hardcoded.
+- **Description:** `RESEND_FROM_EMAIL` previously appeared in [/.env.example](../../.env.example) and is referenced in [/README.md](../../README.md), but no code read it. Every `lib/send-*-email.ts` defines a hardcoded constant `FROM_EMAIL = "Oraya Reservations <bookings@stayoraya.com>"` and uses that in the Resend `from:` field. Setting the env var did nothing — silently. Future operators could have set it expecting an override and gotten confused.
+- **Status:** **closed (resolved 2026-05-09)** — Option B taken. `RESEND_FROM_EMAIL` removed from [/.env.example](../../.env.example) and from the [ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md) inventory. From-address remains hardcoded in `lib/send-*-email.ts`. See [DECISIONS_LOG.md](DECISIONS_LOG.md) — 2026-05-09 entry "`RESEND_FROM_EMAIL` removed from env contract; from-address stays hardcoded". Future configurability is a separate approved implementation task. The remaining mention in [/README.md](../../README.md) is informational ("currently hardcoded… unless you later wire `RESEND_FROM_EMAIL`") and accurate; can be tightened in a future README pass.
+- **Recommended fix path:** n/a — resolved.
 - **Discovered:** 2026-05-09 ([ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md) audit)
+- **Resolved:** 2026-05-09
 
 ---
 
