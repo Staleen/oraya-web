@@ -16,7 +16,6 @@
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | public | yes | yes | yes | yes |
 | `SUPABASE_SERVICE_ROLE_KEY` | server-only | yes (full flow) | yes | yes | yes |
 | `RESEND_API_KEY` | server-only | optional (email becomes a no-op) | yes | yes | yes |
-| `RESEND_FROM_EMAIL` | server-only (reserved) | no | no | no | optional |
 | `NEXT_PUBLIC_SITE_URL` | public | optional (falls back) | recommended | recommended | yes |
 | `BOOKING_ACTION_SECRET` | server-only | yes | yes | yes | yes |
 | `CRON_SECRET` | server-only | optional (cron only fires in Vercel) | yes (Vercel auto-injects for Cron) | yes (Vercel auto-injects for Cron) | yes |
@@ -87,14 +86,12 @@ Public vs server-only:
 - **Risk if missing:** every transactional email becomes a silent no-op. Bookings still write to the DB, but the guest never receives confirmation, the admin loses notification, and event proposals/responses are not delivered. No user-facing error — this is a stealth failure.
 - **Rotation:** keys are revocable in the Resend dashboard. Multiple keys can coexist during rollover.
 
-### `RESEND_FROM_EMAIL`
+### `RESEND_FROM_EMAIL` — removed by decision (2026-05-09)
 
-- **Scope:** server-only — **reserved, not currently consumed by any code path.**
-- **Used in:** none. The `from` address is hardcoded as `Oraya Reservations <bookings@stayoraya.com>` in each `lib/send-*-email.ts` file (see the `FROM_EMAIL` constant in [lib/send-booking-email.ts:9](lib/send-booking-email.ts:9) and siblings).
-- **Required:** never (today). Listed in `.env.example` as a forward-looking placeholder so a future migration to a configurable sender does not require an env contract change.
-- **Where to get it:** if/when wired up — Resend → Domains → verified sender on the `stayoraya.com` domain.
-- **Configure in Vercel:** optional. Setting it today has **no effect**; do not assume it overrides the hardcoded constant.
-- **Risk if missing:** none.
+- **Status:** **not an env var of this project.** Removed from `.env.example` on 2026-05-09 to avoid false expectations. Future operators should not set it in Vercel — it has no consumer.
+- **Current behavior:** the Resend `from` address is hardcoded as `Oraya Reservations <bookings@stayoraya.com>` in each `lib/send-*-email.ts` (`FROM_EMAIL` constant). This is intentional for now.
+- **If you need a configurable sender:** that is a separate, approved implementation task (wire `process.env.RESEND_FROM_EMAIL` into each `lib/send-*-email.ts` and re-add the variable here and in `.env.example`). Do not introduce it ad-hoc.
+- **Reference:** [DECISIONS_LOG.md](DECISIONS_LOG.md) — 2026-05-09 entry "`RESEND_FROM_EMAIL` removed from env contract; from-address stays hardcoded".
 
 ### `NEXT_PUBLIC_SITE_URL`
 
@@ -163,7 +160,7 @@ For each non-`NODE_ENV` variable above, confirm in **Vercel → Project → Sett
 
 1. The variable exists.
 2. It is enabled for the right environments (Production / Preview / Development).
-3. Sensitive variables (everything except `NEXT_PUBLIC_*` and `RESEND_FROM_EMAIL`) are marked **Sensitive** so the value is masked after creation.
+3. Sensitive variables (everything except `NEXT_PUBLIC_*`) are marked **Sensitive** so the value is masked after creation.
 4. Variable names match exactly — Vercel is case-sensitive and treats trailing whitespace as part of the value.
 
 A redeploy is required after adding or editing any variable; existing deployments keep their build-time snapshot.
@@ -183,10 +180,8 @@ A redeploy is required after adding or editing any variable; existing deployment
 ## Audit hygiene
 
 - Re-run `grep -rn "process\.env\." app lib components scripts` whenever a new server route, lib helper, or background job is added — confirm any new variable is documented here and added to `.env.example`.
-- `RESEND_FROM_EMAIL` is an **expected gap**: documented but unused. Do not remove without grepping for future consumers.
 - The `.env.example` file in repo root and this map must list the same set of variables. Diff them as part of release review.
 
 ## Known gaps / follow-ups
 
-- `RESEND_FROM_EMAIL` is reserved but not wired — either implement (replace the hardcoded `FROM_EMAIL` constant in each `lib/send-*-email.ts`) or drop from `.env.example` to remove cognitive overhead.
 - No env var currently controls the WhatsApp support number — it is read at runtime from the Supabase `settings` table (`whatsapp_number` row) via [app/book/page.tsx:952](app/book/page.tsx:952). If/when that becomes an env var, add it here.

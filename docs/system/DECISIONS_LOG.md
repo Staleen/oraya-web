@@ -16,6 +16,28 @@ Durable architectural and operational decisions. Append-only — never edit a pa
 
 ---
 
+## 2026-05-09 — `RESEND_FROM_EMAIL` removed from env contract; from-address stays hardcoded
+
+**Decision:** `RESEND_FROM_EMAIL` is no longer part of the Oraya env contract. It has been removed from [/.env.example](../../.env.example) and removed from the active inventory in [ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md). The Resend `from:` value remains hardcoded as `Oraya Reservations <bookings@stayoraya.com>` (the `FROM_EMAIL` constant in each `lib/send-*-email.ts`) for the foreseeable future.
+
+**Reason:** the variable was reserved but consumed by zero code paths (KNOWN_BUGS.md #1). Leaving it in `.env.example` and the audit doc created false expectations: an operator setting it in Vercel would see no effect, silently, with no log line to indicate the setting was inert. Removing the variable from the contract makes the current behavior — a hardcoded sender — the documented behavior, and removes a footgun. A configurable sender is fine to add later, but only as an explicit, approved implementation task that wires `process.env.RESEND_FROM_EMAIL` into each `lib/send-*-email.ts` and reintroduces the variable in `.env.example` and the env map at the same time. This commit performs none of that wiring.
+
+**Impact:**
+
+- [/.env.example](../../.env.example) — `RESEND_FROM_EMAIL=…` line plus its two preceding comment lines removed; replaced with a short comment that points readers at this decision entry.
+- [ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md) — row removed from the at-a-glance inventory table; per-variable section replaced with a "removed by decision" notice; Vercel checklist note about non-sensitive variables updated; "expected gap" and "known gap" follow-up bullets removed.
+- [KNOWN_BUGS.md](KNOWN_BUGS.md) — entry #1 flipped to `closed (resolved 2026-05-09)` with a pointer to this entry. Numbering preserved so the other open bugs keep their IDs.
+- [CURRENT_PHASE.md](CURRENT_PHASE.md) — open-issues bullet removed, "Just completed" bullet added, "Next recommended steps" item renumbered.
+- **No code changed.** No `lib/send-*-email.ts` file was modified in this commit. Email send behavior is identical before and after.
+- The historical reference in the 2026-05-09 "Environment audit baseline" entry below ("including `RESEND_FROM_EMAIL` reserved-but-unused") is preserved as-is per the append-only rule of this log — it accurately describes what the audit found at that moment.
+- A stale informational mention remains in [/README.md](../../README.md) ("currently hardcoded… unless you later wire `RESEND_FROM_EMAIL`"). It is still factually accurate (current state: hardcoded; future state: would require wiring) and was outside the explicit scope of the cleanup task. It can be tightened in a future README pass.
+
+**Reversible?:** yes — easy. To reintroduce, perform the wiring work in `lib/send-*-email.ts` and re-add the variable to `.env.example` and `ENVIRONMENT_MAP.md` in the same PR. Do not re-add the variable without the wiring; that would re-create the original footgun.
+
+**Supersedes:** does not supersede a prior decision; resolves [KNOWN_BUGS.md](KNOWN_BUGS.md) entry #1.
+
+---
+
 ## 2026-05-09 — `/docs/system/` is the AI source of truth
 
 **Decision:** all AI-facing project documentation lives in [`/docs/system/`](.) as version-controlled Markdown. ChatGPT chat memory and side-channel notes are no longer authoritative. New AI sessions read this directory first.
