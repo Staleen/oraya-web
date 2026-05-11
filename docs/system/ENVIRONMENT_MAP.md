@@ -20,6 +20,7 @@
 | `BOOKING_ACTION_SECRET` | server-only | yes | yes | yes | yes |
 | `CRON_SECRET` | server-only | optional (cron only fires in Vercel) | yes (Vercel auto-injects for Cron) | yes (Vercel auto-injects for Cron) | yes |
 | `ADMIN_SECRET` | server-only | yes (admin login + admin APIs) | yes | yes | yes |
+| `BUTLER_WEBHOOK_SECRET` | server-only | optional (no consumer yet) | not yet required | not yet required | not yet — wire in Phase 16A.1 |
 | `NODE_ENV` | system | auto | auto | auto | n/a (Next.js / Vercel sets) |
 
 Public vs server-only:
@@ -142,6 +143,18 @@ Public vs server-only:
 - **Configure in Vercel:** yes — Production + Preview + Development. Mark as Sensitive.
 - **Risk if missing:** every admin route returns `503 Server misconfiguration: ADMIN_SECRET is not set.` (see [lib/admin-auth.ts:73-77](lib/admin-auth.ts:73)). Admin password verification cannot mint cookies. The whole `/admin` surface area is locked out.
 - **Rotation:** rotating immediately invalidates all live admin sessions (every signed cookie's HMAC fails verification). Force a re-login.
+
+### `BUTLER_WEBHOOK_SECRET`
+
+- **Scope:** server-only. **Never expose in a `"use client"` component or any `NEXT_PUBLIC_*` variable.**
+- **Status:** **reserved by decision (2026-05-12), not yet consumed.** No `process.env.BUTLER_WEBHOOK_SECRET` read exists in the repo as of this commit. Wiring lands in Phase 16A.1 as the shared-secret guard on the read-only `/api/butler/*` endpoints (health, event-types, addons, availability).
+- **Used in:** none yet — see status above. Phase 16A.1 will introduce a `lib/butler/auth.ts` helper that compares an inbound `X-Butler-Auth` header against this value, used by every `/api/butler/*` route.
+- **Required:** local optional (only needed to test Butler endpoints against a synthetic caller) · preview not yet required (becomes required once 16A.1 ships) · production not yet required (becomes required once 16A.1 ships).
+- **Where to get it:** generate (`openssl rand -base64 32`). Distinct from `BOOKING_ACTION_SECRET`, `CRON_SECRET`, `ADMIN_SECRET` — do not reuse.
+- **Configure in Vercel:** not yet — defer until the Phase 16A.1 PR that wires the first consumer. Once wired: Production + Preview, marked Sensitive. Different value per environment recommended (so a leaked preview secret cannot authorize production Butler calls).
+- **Risk if missing (after 16A.1):** every `/api/butler/*` endpoint returns 401, blocking the WhatsApp AI Butler from reading add-ons / event types / availability through the supported channel. The locked production endpoints (`/api/bookings*`, `/api/admin/*`, etc.) are unaffected — they have their own guards.
+- **Rotation:** rotating immediately invalidates the WhatChimp outbound webhook header; rotate the WhatChimp side in the same change window. A short overlap window via a future `BUTLER_WEBHOOK_SECRET_PREVIOUS` accepter is out of scope until proven necessary.
+- **Reference:** [DECISIONS_LOG.md](DECISIONS_LOG.md) — 2026-05-12 entry "Phase 16A Butler architecture freeze — `/api/butler/*` namespace + `BUTLER_WEBHOOK_SECRET`".
 
 ### `NODE_ENV`
 
