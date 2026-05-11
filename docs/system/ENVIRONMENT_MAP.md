@@ -20,7 +20,7 @@
 | `BOOKING_ACTION_SECRET` | server-only | yes | yes | yes | yes |
 | `CRON_SECRET` | server-only | optional (cron only fires in Vercel) | yes (Vercel auto-injects for Cron) | yes (Vercel auto-injects for Cron) | yes |
 | `ADMIN_SECRET` | server-only | yes (admin login + admin APIs) | yes | yes | yes |
-| `BUTLER_WEBHOOK_SECRET` | server-only | optional (no consumer yet) | not yet required | not yet required | not yet — wire in Phase 16A.1 |
+| `BUTLER_WEBHOOK_SECRET` | server-only | optional (only for Butler endpoint testing) | yes (once WhatChimp is wired) | yes (once WhatChimp is wired) | yes — Sensitive |
 | `NODE_ENV` | system | auto | auto | auto | n/a (Next.js / Vercel sets) |
 
 Public vs server-only:
@@ -147,12 +147,16 @@ Public vs server-only:
 ### `BUTLER_WEBHOOK_SECRET`
 
 - **Scope:** server-only. **Never expose in a `"use client"` component or any `NEXT_PUBLIC_*` variable.**
-- **Status:** **reserved by decision (2026-05-12), not yet consumed.** No `process.env.BUTLER_WEBHOOK_SECRET` read exists in the repo as of this commit. Wiring lands in Phase 16A.1 as the shared-secret guard on the read-only `/api/butler/*` endpoints (health, event-types, addons, availability).
-- **Used in:** none yet — see status above. Phase 16A.1 will introduce a `lib/butler/auth.ts` helper that compares an inbound `X-Butler-Auth` header against this value, used by every `/api/butler/*` route.
-- **Required:** local optional (only needed to test Butler endpoints against a synthetic caller) · preview not yet required (becomes required once 16A.1 ships) · production not yet required (becomes required once 16A.1 ships).
+- **Status:** **live as of Phase 16A.1.** Consumed by [lib/butler/auth.ts](lib/butler/auth.ts) `requireButlerAuth`, which guards every `/api/butler/*` route.
+- **Used in:**
+  - [lib/butler/auth.ts](lib/butler/auth.ts) — sole reader. Compares the inbound `X-Butler-Secret` header against this value using `crypto.timingSafeEqual`.
+  - Transitive guard on [app/api/butler/health/route.ts](app/api/butler/health/route.ts), [app/api/butler/event-types/route.ts](app/api/butler/event-types/route.ts), [app/api/butler/addons/route.ts](app/api/butler/addons/route.ts), [app/api/butler/availability/route.ts](app/api/butler/availability/route.ts).
+- **Required:** local optional (only needed when you want to curl Butler endpoints against `npm run dev`) · preview yes (once WhatChimp is wired against the preview environment) · production yes (once WhatChimp is wired against production).
 - **Where to get it:** generate (`openssl rand -base64 32`). Distinct from `BOOKING_ACTION_SECRET`, `CRON_SECRET`, `ADMIN_SECRET` — do not reuse.
-- **Configure in Vercel:** not yet — defer until the Phase 16A.1 PR that wires the first consumer. Once wired: Production + Preview, marked Sensitive. Different value per environment recommended (so a leaked preview secret cannot authorize production Butler calls).
-- **Risk if missing (after 16A.1):** every `/api/butler/*` endpoint returns 401, blocking the WhatsApp AI Butler from reading add-ons / event types / availability through the supported channel. The locked production endpoints (`/api/bookings*`, `/api/admin/*`, etc.) are unaffected — they have their own guards.
+- **Configure in Vercel:** yes — Production + Preview, marked Sensitive. Different value per environment strongly recommended (so a leaked preview secret cannot authorize production Butler calls).
+- **Header name:** inbound `X-Butler-Secret`. (The 2026-05-12 DECISIONS_LOG entry illustrated this with `X-Butler-Auth`; the implemented name in 16A.1 is `X-Butler-Secret`. Architecturally identical — shared secret in header — only the canonical header label differs.)
+- **Risk if missing:** every `/api/butler/*` endpoint returns 503 ("Server misconfiguration: BUTLER_WEBHOOK_SECRET is not set."). The Butler is dark; the locked production endpoints (`/api/bookings*`, `/api/admin/*`, etc.) are unaffected — they have their own guards.
+- **Risk if header missing or wrong:** 401 Unauthorized.
 - **Rotation:** rotating immediately invalidates the WhatChimp outbound webhook header; rotate the WhatChimp side in the same change window. A short overlap window via a future `BUTLER_WEBHOOK_SECRET_PREVIOUS` accepter is out of scope until proven necessary.
 - **Reference:** [DECISIONS_LOG.md](DECISIONS_LOG.md) — 2026-05-12 entry "Phase 16A Butler architecture freeze — `/api/butler/*` namespace + `BUTLER_WEBHOOK_SECRET`".
 

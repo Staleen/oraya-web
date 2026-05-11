@@ -103,6 +103,12 @@ All routes verified against the current repo. Locked APIs are marked **🔒** �
 | `/api/pricing` | GET | Public pricing query | open |
 | `/api/profile` | GET/PATCH | Member profile | open |
 | `/api/settings` | GET | Public allowlisted settings (`whatsapp_number` only) | open |
+| `/api/butler/health` | GET | Phase 16A.1 read-only — Butler liveness + secret check | secret-guarded |
+| `/api/butler/event-types` | GET | Phase 16A.1 read-only — canonical event types for Butler intake | secret-guarded |
+| `/api/butler/addons` | GET | Phase 16A.1 read-only — villa+context filtered add-ons (no prices) | secret-guarded |
+| `/api/butler/availability` | GET | Phase 16A.1 read-only — wraps `lib/calendar/availability` + heated-pool carryover | secret-guarded |
+
+`secret-guarded` rows require an `X-Butler-Secret` header matching `BUTLER_WEBHOOK_SECRET`. They are **read-only** — no booking creation, no payment, no smart-lock, no member linking exists in `/api/butler/*` as of Phase 16A.1. See "Butler flow" below and [DECISIONS_LOG.md](DECISIONS_LOG.md) (2026-05-12 entry).
 
 ## Booking flow
 
@@ -134,6 +140,18 @@ All routes verified against the current repo. Locked APIs are marked **🔒** �
 2. On success, signed `oraya_admin` HMAC cookie issued via [lib/admin-auth.ts](../../lib/admin-auth.ts), 7-day TTL, `secure` in production.
 3. Every `/api/admin/*` route guards via `requireAdminAuth` (cookie or `Authorization: Bearer ${ADMIN_SECRET}`).
 4. `AdminDataProvider` (client) polls `/api/admin/data` every 45s + best-effort Supabase Realtime subscription on `public.bookings`.
+
+## Butler flow (Phase 16A.1 — read-only)
+
+The WhatsApp AI Butler (WhatChimp today; vendor-agnostic by design) talks to Oraya through a thin, secret-guarded read-only surface under `/api/butler/*`. Oraya owns pricing, availability, add-ons, booking status, access codes, and policy text — WhatChimp / WhatsApp Flows / AI Training do not. See [DECISIONS_LOG.md](DECISIONS_LOG.md) (2026-05-12 entry "Phase 16A Butler architecture freeze").
+
+- **Auth.** Every `/api/butler/*` route is guarded by [lib/butler/auth.ts](../../lib/butler/auth.ts) `requireButlerAuth`, which validates an `X-Butler-Secret` header against `BUTLER_WEBHOOK_SECRET` using a constant-time compare. 503 if the env is unset; 401 if the header is missing or wrong. HMAC + timestamp is a 16A.1.x follow-on once WhatChimp's outbound-signing posture is confirmed.
+- **Read endpoints (16A.1, shipped).**
+  - `/api/butler/health` — liveness + secret check. Returns `{ ok: true, service: "oraya-butler", mode: "read-only" }`.
+  - `/api/butler/event-types` — canonical event types from [lib/event-types.ts](../../lib/event-types.ts). The Butler must never invent or paraphrase event types.
+  - `/api/butler/addons` — villa+context filtered add-ons. Required: `villa=mechmech|byblos`, `context=stay|event`. Optional: `event_type` (canonical). Returns `id`, `label`, `recommended`, `requires_approval`, `pricing_model`. **Prices and currency are intentionally omitted** in this phase; operational internals (cutoff/enforcement/applicable_villas/applicable_event_types/…) are used for filtering but never echoed.
+  - `/api/butler/availability` — thin wrapper around [lib/calendar/availability.ts](../../lib/calendar/availability.ts) `getMergedAvailabilityRanges` + [lib/heated-pool-carryover.ts](../../lib/heated-pool-carryover.ts). The locked `/api/bookings/availability` route is **not** modified or proxied — both share the same lib code.
+- **No writes in 16A.1.** Booking creation via WhatsApp is Phase 16A.2 (`POST /api/butler/flow-submit`) — not yet implemented. Payment is 16B. Smart-lock is 16D. Member ↔ phone linkage is a later phase. The locked `/api/bookings*`, `/api/admin/*`, `/api/calendar/*`, `/api/cron/*` surfaces are untouched by 16A.1.
 
 ## Email system
 
