@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireButlerAuth } from "@/lib/butler/auth";
+import { resolveButlerVilla } from "@/lib/butler/villa";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import {
   ADDON_OPERATIONAL_SETTINGS_KEY,
@@ -34,11 +35,6 @@ import { CANONICAL_EVENT_TYPE_VALUES, normalizeEventType } from "@/lib/event-typ
 export const dynamic    = "force-dynamic";
 export const fetchCache = "force-no-store";
 
-const VILLA_SLUG_MAP: Record<string, string> = {
-  mechmech: "Villa Mechmech",
-  byblos:   "Villa Byblos",
-};
-
 function parseContext(raw: string | null): AddonAppliesTo | null {
   if (!raw) return null;
   const v = raw.trim().toLowerCase();
@@ -50,12 +46,12 @@ export async function GET(request: Request) {
   const authFail = requireButlerAuth(request);
   if (authFail) return authFail;
 
-  const url = new URL(request.url);
-  const villaSlug    = (url.searchParams.get("villa")    ?? "").trim().toLowerCase();
+  const url          = new URL(request.url);
+  const villa        = resolveButlerVilla(url.searchParams.get("villa"));
   const contextParam = parseContext(url.searchParams.get("context"));
   const eventTypeRaw = url.searchParams.get("event_type");
 
-  if (!villaSlug || !(villaSlug in VILLA_SLUG_MAP)) {
+  if (!villa) {
     return NextResponse.json(
       { error: "villa must be 'mechmech' or 'byblos'." },
       { status: 400 },
@@ -67,7 +63,6 @@ export async function GET(request: Request) {
       { status: 400 },
     );
   }
-  const villa = VILLA_SLUG_MAP[villaSlug];
 
   let eventType: string | null = null;
   if (eventTypeRaw && eventTypeRaw.trim().length > 0) {

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireButlerAuth } from "@/lib/butler/auth";
+import { resolveButlerVilla } from "@/lib/butler/villa";
 import { getMergedAvailabilityRanges } from "@/lib/calendar/availability";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { heatedPoolCarryoverFromPriorBooking } from "@/lib/heated-pool-carryover";
@@ -28,26 +29,20 @@ export const dynamic = "force-dynamic";
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-const VILLA_SLUG_MAP: Record<string, string> = {
-  mechmech: "Villa Mechmech",
-  byblos:   "Villa Byblos",
-};
-
 export async function GET(request: Request) {
   const authFail = requireButlerAuth(request);
   if (authFail) return authFail;
 
-  const url       = new URL(request.url);
-  const villaSlug = (url.searchParams.get("villa") ?? "").trim().toLowerCase();
-  const checkIn   = url.searchParams.get("check_in");
+  const url     = new URL(request.url);
+  const villa   = resolveButlerVilla(url.searchParams.get("villa"));
+  const checkIn = url.searchParams.get("check_in");
 
-  if (!villaSlug || !(villaSlug in VILLA_SLUG_MAP)) {
+  if (!villa) {
     return NextResponse.json(
       { error: "villa must be 'mechmech' or 'byblos'." },
       { status: 400 },
     );
   }
-  const villa = VILLA_SLUG_MAP[villaSlug];
 
   try {
     const ranges = await getMergedAvailabilityRanges(villa);

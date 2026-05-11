@@ -143,7 +143,7 @@ All routes verified against the current repo. Locked APIs are marked **🔒** �
 
 ## Butler flow (Phase 16A.1 — read-only)
 
-The WhatsApp AI Butler (WhatChimp today; vendor-agnostic by design) talks to Oraya through a thin, secret-guarded read-only surface under `/api/butler/*`. Oraya owns pricing, availability, add-ons, booking status, access codes, and policy text — WhatChimp / WhatsApp Flows / AI Training do not. See [DECISIONS_LOG.md](DECISIONS_LOG.md) (2026-05-12 entry "Phase 16A Butler architecture freeze").
+The WhatsApp AI Butler (WhatChimp today; vendor-agnostic by design) talks to Oraya through a thin, secret-guarded read-only surface under `/api/butler/*`. Oraya owns pricing, availability, add-ons, booking status, access codes, and policy text — WhatChimp / WhatsApp Flows / AI Training do not. See [DECISIONS_LOG.md](DECISIONS_LOG.md) (2026-05-12 entry "Phase 16A Butler architecture freeze"). **Operational rules** for the AI Butler — tone, conversation behavior, knowledge boundary, forbidden behaviors — live in [BUTLER_PLAYBOOK.md](BUTLER_PLAYBOOK.md). This section covers the data plane only.
 
 - **Auth.** Every `/api/butler/*` route is guarded by [lib/butler/auth.ts](../../lib/butler/auth.ts) `requireButlerAuth`, which validates an `X-Butler-Secret` header against `BUTLER_WEBHOOK_SECRET` using a constant-time compare. 503 if the env is unset; 401 if the header is missing or wrong. HMAC + timestamp is a 16A.1.x follow-on once WhatChimp's outbound-signing posture is confirmed.
 - **Read endpoints (16A.1, shipped).**
