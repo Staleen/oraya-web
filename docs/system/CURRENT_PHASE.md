@@ -1,7 +1,7 @@
-# Current Phase — AI Project Bootstrap
+# Current Phase — Phase 16A.1 (planned) — Read-only Butler API foundation
 
-**Updated:** 2026-05-09
-**Status:** in progress
+**Updated:** 2026-05-12
+**Status:** 16A.0 (architecture freeze) closing in this commit; 16A.1 planned, not yet implemented.
 
 This file is rewritten at every phase transition. Treat it as a snapshot, not a log.
 
@@ -9,53 +9,54 @@ This file is rewritten at every phase transition. Treat it as a snapshot, not a 
 
 ## Active phase
 
-**AI Project Bootstrap / persistent memory setup.**
+**Phase 16A.1 — Read-only Butler API foundation.**
 
-Establishing `/docs/system/` as the durable, repo-tracked source of truth so future ChatGPT, Claude Code, Codex, and Cursor sessions can self-orient without depending on long chat threads or fragile chat memory.
+Stand up the four read-only endpoints that the WhatsApp AI Butler (WhatChimp) and any future routing layer will rely on to render menus, event-type pickers, add-on options, and a soft availability check. No writes. No booking creation. No payment. No smart-lock. No member linking.
 
-This phase does **not** ship product features. It is documentation infrastructure that unlocks safe Phase 16 execution.
+This phase is the first code commit of Phase 16A. The architecture is frozen — see [DECISIONS_LOG.md](DECISIONS_LOG.md) (2026-05-12 entry) — and the secret name `BUTLER_WEBHOOK_SECRET` is reserved in [/.env.example](../../.env.example) and [ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md) but not yet consumed.
 
 ## Active objective
 
-Stand up the full `/docs/system/` doc set so that any new AI session can:
+Ship the four read-only endpoints under `/api/butler/*`, each guarded by a single shared-secret helper:
 
-1. Read 6–8 short files and have an accurate picture of where Oraya is.
-2. Know which systems are locked, which are open, and what the current task is.
-3. Receive handoffs in a consistent format.
-4. Be challenged with evidence before its "done" reports are accepted.
+1. **`GET /api/butler/health`** — liveness + secret check. Returns `{ ok: true }` when the header matches; `401` otherwise. No domain data.
+2. **`GET /api/butler/event-types`** — returns `CANONICAL_EVENT_TYPE_VALUES` from [lib/event-types.ts](../../lib/event-types.ts) with descriptions. Static; safe to cache.
+3. **`GET /api/butler/addons`** — returns add-ons filtered by `?villa=…&context=stay|event[&event_type=…]`. Hydrated from the existing `addons` table and `addon_operational_settings`. **Never** returns price; returns id, label, applies-to, recommended flag, description.
+4. **`GET /api/butler/availability`** — thin wrapper over the locked `/api/bookings/availability`. Same response shape, added cache headers, and (in a later step) per-IP rate limit.
+
+Shared helper: `lib/butler/auth.ts` (server-only) that validates `X-Butler-Auth` against `BUTLER_WEBHOOK_SECRET`. HMAC + timestamp is a 16A.1.x follow-on once WhatChimp's outbound signing posture is confirmed.
 
 ## Just completed
 
-- **Environment variable audit** — every `process.env.*` read mapped, scoped, and risk-rated.
-  - **New:** [ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md) — per-variable audit (scope, files, required-by-environment, source, Vercel placement, risk if missing, rotation notes).
-  - **Updated:** [/.env.example](../../.env.example) — switched empty values to explicit `replace_with_*` placeholders, added "where to get it" source notes, cross-linked to the audit doc.
-  - **Updated:** [/.gitignore](../../.gitignore) — explicit entries for `.env`, `.env.local`, `.env.development`, `.env.production`, `.env.test`, plus `*.local` variants. Closed a real gap where `.env.production` was previously not protected by the `.env*.local` pattern.
-- **Doc-set scaffolding (this phase)** — created PROJECT_STATE.md, CURRENT_PHASE.md (this file), AGENT_RULES.md, ARCHITECTURE.md, DECISIONS_LOG.md, KNOWN_BUGS.md, AGENT_HANDOFF_TEMPLATE.md, CHATGPT_PROJECT_INSTRUCTIONS.md inside `/docs/system/`.
-- **Persistent AI memory milestone achieved** — `/docs/system/` is established as the durable, version-controlled AI memory layer for all coding agents. ChatGPT, Claude Code, Codex, and Cursor sessions can now self-orient from a fixed reading list instead of long chat histories.
-- **ChatGPT Project continuity validated successfully** — the ChatGPT Project orchestrator pattern (instructions field driven by [CHATGPT_PROJECT_INSTRUCTIONS.md](CHATGPT_PROJECT_INSTRUCTIONS.md), handoffs driven by [AGENT_HANDOFF_TEMPLATE.md](AGENT_HANDOFF_TEMPLATE.md)) preserves project state across new chats without depending on chat memory.
-- **Historical knowledge layer created** — `/docs/phases/`, `/docs/archive/`, `/docs/lessons/` stand up as the durable archive of past phases, recurring AI-session lessons, the real ChatGPT → human → coding-agent → PR workflow, the legacy root-doc map, and the structured catalog of observed agent failure patterns. Files: [/docs/phases/PHASE_INDEX.md](../phases/PHASE_INDEX.md), [/docs/archive/SESSION_LESSONS.md](../archive/SESSION_LESSONS.md), [/docs/archive/AI_WORKFLOW.md](../archive/AI_WORKFLOW.md), [/docs/archive/LEGACY_DOC_MAP.md](../archive/LEGACY_DOC_MAP.md), [/docs/lessons/KNOWN_AGENT_FAILURE_PATTERNS.md](../lessons/KNOWN_AGENT_FAILURE_PATTERNS.md).
-- **First small validation task executed end-to-end** — [KNOWN_BUGS.md](KNOWN_BUGS.md) #1 resolved (Option B: `RESEND_FROM_EMAIL` removed from `.env.example` and from the active [ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md) inventory; from-address remains hardcoded in `lib/send-*-email.ts`). Recorded in [DECISIONS_LOG.md](DECISIONS_LOG.md) under "2026-05-09 — `RESEND_FROM_EMAIL` removed from env contract; from-address stays hardcoded". This exercised the doc-set, the [AGENT_HANDOFF_TEMPLATE.md](AGENT_HANDOFF_TEMPLATE.md), and the worktree → PR workflow without touching locked systems.
+- **Phase 16A audit (2026-05-11)** — read-only architecture audit of the booking, event-inquiry, add-on, pricing, and settings surface against the WhatsApp / WhatChimp / WhatsApp Flows integration shape. Delivered in chat; the conclusions are recorded durably in this phase's plan and in the 2026-05-12 [DECISIONS_LOG.md](DECISIONS_LOG.md) entry.
+- **Phase 16A.0 architecture freeze (this commit)** — locked the Butler namespace (`/api/butler/*`), secret name (`BUTLER_WEBHOOK_SECRET`), auth model (shared secret, future HMAC + timestamp), and the source-of-truth boundary (Oraya backend owns pricing / availability / add-ons / booking status / access codes / policies; WhatChimp / WhatsApp / AI Training do not). Documented in [DECISIONS_LOG.md](DECISIONS_LOG.md) (2026-05-12), [ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md), and [/.env.example](../../.env.example). No code, no schema, no API routes touched.
+- **AI Project Bootstrap (prior phase)** — `/docs/system/` is the durable AI source of truth; ChatGPT Project orchestrator pattern validated; first small validation task (`RESEND_FROM_EMAIL` cleanup) shipped via the worktree → PR workflow.
 
 ## Open issues to be aware of right now
 
-Not blockers for this phase — but every agent working in the next session should know:
+Not blockers for 16A.1, but every agent working in the next session should know:
 
-- **Missing `RESEND_API_KEY` is a stealth failure.** Bookings still write but emails silently no-op (only a log). No user-facing alarm exists. See [KNOWN_BUGS.md](KNOWN_BUGS.md).
-- **Missing `NEXT_PUBLIC_SITE_URL` on preview links to production.** Email CTA links from preview deployments would point at `https://stayoraya.com` (the `lib/brand.ts` fallback). See [KNOWN_BUGS.md](KNOWN_BUGS.md).
-- **Vercel env vars are not yet manually set.** `.env.example` and `ENVIRONMENT_MAP.md` are accurate, but the human still needs to populate Vercel's env panel using the recommended-next-steps section of [ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md).
+- **Missing `RESEND_API_KEY` is a stealth failure.** Bookings still write but emails silently no-op. The Butler is about to start telling guests "you'll get an email confirmation" — this gap becomes more visible. Pre-emptive fix belongs to Phase 16A.2 hardening, not 16A.1. See [KNOWN_BUGS.md](KNOWN_BUGS.md) #2.
+- **Missing `NEXT_PUBLIC_SITE_URL` on preview links to production.** When the Butler echoes a booking view URL, preview-environment Butler messages would point at live data. Set `NEXT_PUBLIC_SITE_URL` on Vercel Preview before 16A.2 launches. See [KNOWN_BUGS.md](KNOWN_BUGS.md) #3.
+- **Vercel env vars not yet manually populated.** `BUTLER_WEBHOOK_SECRET` will need to be set on Vercel Production and Preview (Sensitive) as part of the 16A.1 ship, not before. See [KNOWN_BUGS.md](KNOWN_BUGS.md) #4.
 
-## Out of scope this phase
+## Out of scope this phase (16A.1)
 
-- No code/product changes.
-- No schema changes.
-- No `master` edits (worktree → PR only).
-- No Phase 16 implementation. Phase 16 is **planning context only** (see [/PHASE_16_PLAN.md](../../PHASE_16_PLAN.md)).
+- ❌ **No booking creation via WhatsApp.** That is Phase 16A.2 (`POST /api/butler/flow-submit`), which maps a WhatsApp Flow payload into the locked `/api/bookings` body. Not in 16A.1.
+- ❌ **No payment / refund flow over WhatsApp.** Phase 16B.
+- ❌ **No smart-lock PIN issuance or access-code delivery.** Phase 16D.
+- ❌ **No member ↔ phone linkage.** Every Butler interaction is the guest path until a later phase ships a verified linkage flow.
+- ❌ **No AI prompt engineering in this repo.** AI Training, Bot Reply, Labels, and Custom Fields live in WhatChimp; this repo ships only the data plane.
+- ❌ **No schema changes.** No new tables. No new columns. Advisory enrichment in existing `jsonb` snapshot fields is the only allowed persistence under [AGENT_RULES.md](AGENT_RULES.md) rule 4 — and 16A.1 is read-only, so it shouldn't need any.
+- ❌ **No locked-API touches.** `/api/bookings`, `/api/bookings/availability`, `/api/admin/*`, `/api/calendar/*`, `/api/cron/*`, the email senders, the auth / token systems, and the existing schema are off-limits. The Butler endpoints are additive.
+- ❌ **No widening of `/api/settings` allowlist.** New Butler reads belong under `/api/butler/*`, not in the existing settings endpoint.
+- ❌ **No `NEXT_PUBLIC_BUTLER_*` env vars.** Server-only.
 
 ## Next recommended steps
 
 In order:
 
-1. **Human action:** populate Vercel + Supabase + Resend values per the recommended-next-steps section of [ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md). Then redeploy to confirm no env-related runtime errors in production logs.
-2. **Human action:** paste [CHATGPT_PROJECT_INSTRUCTIONS.md](CHATGPT_PROJECT_INSTRUCTIONS.md) into the ChatGPT Project's Instructions field.
-3. **First small validation task** — completed (see "Just completed" above). The [AGENT_HANDOFF_TEMPLATE.md](AGENT_HANDOFF_TEMPLATE.md) workflow is validated end-to-end.
-4. **Begin Phase 16A architecture audit** (WhatsApp AI Butler readiness) per [/PHASE_16_PLAN.md](../../PHASE_16_PLAN.md). Architecture/audit only — no implementation.
+1. **Human action:** confirm WhatChimp's outbound-webhook signing capability so 16A.1 can ship HMAC at the same time as the bare-secret path (or punt HMAC to 16A.1.x). Confirm Meta business verification status — does not block 16A.1, but blocks 16A.2 publication.
+2. **16A.1 implementation (next coding session):** create `app/api/butler/health/route.ts`, `app/api/butler/event-types/route.ts`, `app/api/butler/addons/route.ts`, `app/api/butler/availability/route.ts`, and `lib/butler/auth.ts`. Add `BUTLER_WEBHOOK_SECRET` to Vercel Production + Preview (Sensitive) in the same PR. Update [ARCHITECTURE.md](ARCHITECTURE.md) API surface table to list the new open-but-secret-guarded routes.
+3. **16A.2:** `POST /api/butler/flow-submit` — adapter that maps a WhatsApp Flow payload into the locked `/api/bookings` body, idempotent on `flow_token`. Requires either a small new `butler_submissions` dedup table or `jsonb` advisory enrichment (decide before ship).
+4. **Health gates (16A.2 hardening):** make `RESEND_API_KEY` absence a loud failure on Butler submissions, not silent. Resolves [KNOWN_BUGS.md](KNOWN_BUGS.md) #2 for this surface.
