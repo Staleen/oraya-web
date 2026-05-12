@@ -1,7 +1,7 @@
-# Current Phase — Phase 16A.1 (planned) — Read-only Butler API foundation
+# Current Phase — Phase 16A.2 (planned) — Butler Flow-submit adapter
 
 **Updated:** 2026-05-12
-**Status:** 16A.0 (architecture freeze) closing in this commit; 16A.1 planned, not yet implemented.
+**Status:** 16A.1 (read-only Butler API foundation) shipped in this commit; 16A.2 planned, not yet implemented.
 
 This file is rewritten at every phase transition. Treat it as a snapshot, not a log.
 
@@ -9,54 +9,63 @@ This file is rewritten at every phase transition. Treat it as a snapshot, not a 
 
 ## Active phase
 
-**Phase 16A.1 — Read-only Butler API foundation.**
+**Phase 16A.2 — Flow submission adapter (planned).**
 
-Stand up the four read-only endpoints that the WhatsApp AI Butler (WhatChimp) and any future routing layer will rely on to render menus, event-type pickers, add-on options, and a soft availability check. No writes. No booking creation. No payment. No smart-lock. No member linking.
+Wire `POST /api/butler/flow-submit` so a WhatsApp Flow submission becomes a real Oraya booking row through the **existing** locked `/api/bookings` POST contract. No schema changes. No locked-API behavior changes. Idempotency keyed on the Flow's submission token so retries do not create duplicates.
 
-This phase is the first code commit of Phase 16A. The architecture is frozen — see [DECISIONS_LOG.md](DECISIONS_LOG.md) (2026-05-12 entry) — and the secret name `BUTLER_WEBHOOK_SECRET` is reserved in [/.env.example](../../.env.example) and [ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md) but not yet consumed.
+16A.2 is the first **write-capable** Butler endpoint. The read-only foundation it depends on (`/api/butler/health|event-types|addons|availability` + the `lib/butler/auth.ts` helper) is now in place.
 
 ## Active objective
 
-Ship the four read-only endpoints under `/api/butler/*`, each guarded by a single shared-secret helper:
+Design and ship the Flow submission adapter:
 
-1. **`GET /api/butler/health`** — liveness + secret check. Returns `{ ok: true }` when the header matches; `401` otherwise. No domain data.
-2. **`GET /api/butler/event-types`** — returns `CANONICAL_EVENT_TYPE_VALUES` from [lib/event-types.ts](../../lib/event-types.ts) with descriptions. Static; safe to cache.
-3. **`GET /api/butler/addons`** — returns add-ons filtered by `?villa=…&context=stay|event[&event_type=…]`. Hydrated from the existing `addons` table and `addon_operational_settings`. **Never** returns price; returns id, label, applies-to, recommended flag, description.
-4. **`GET /api/butler/availability`** — thin wrapper over the locked `/api/bookings/availability`. Same response shape, added cache headers, and (in a later step) per-IP rate limit.
-
-Shared helper: `lib/butler/auth.ts` (server-only) that validates `X-Butler-Auth` against `BUTLER_WEBHOOK_SECRET`. HMAC + timestamp is a 16A.1.x follow-on once WhatChimp's outbound signing posture is confirmed.
+1. **`POST /api/butler/flow-submit`** — accepts a WhatsApp Flow payload, validates it, maps it into the existing `/api/bookings` POST body shape, and forwards into the locked code path. Never bypasses the existing overlap / pricing / addon-audit pipeline.
+2. **Idempotency.** Dedup on a Flow-supplied `flow_token`. Decision pending in 16A.2 kickoff: small new `butler_submissions` table vs advisory enrichment inside the existing `addons_snapshot` jsonb. Either is consistent with [AGENT_RULES.md](AGENT_RULES.md) rule 4 (the table option is additive; the jsonb option is non-blocking enrichment).
+3. **Structured response.** `{ ok, status, booking_id?, view_url?, user_message }`. The `user_message` is the **only** sentence the AI Butler is allowed to repeat to the guest about outcome.
+4. **Health gates.** Refuse Flow submissions when `RESEND_API_KEY` is unset in production — turns [KNOWN_BUGS.md](KNOWN_BUGS.md) #2 from a stealth failure into an explicit one for this surface.
 
 ## Just completed
 
-- **Phase 16A audit (2026-05-11)** — read-only architecture audit of the booking, event-inquiry, add-on, pricing, and settings surface against the WhatsApp / WhatChimp / WhatsApp Flows integration shape. Delivered in chat; the conclusions are recorded durably in this phase's plan and in the 2026-05-12 [DECISIONS_LOG.md](DECISIONS_LOG.md) entry.
-- **Phase 16A.0 architecture freeze (this commit)** — locked the Butler namespace (`/api/butler/*`), secret name (`BUTLER_WEBHOOK_SECRET`), auth model (shared secret, future HMAC + timestamp), and the source-of-truth boundary (Oraya backend owns pricing / availability / add-ons / booking status / access codes / policies; WhatChimp / WhatsApp / AI Training do not). Documented in [DECISIONS_LOG.md](DECISIONS_LOG.md) (2026-05-12), [ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md), and [/.env.example](../../.env.example). No code, no schema, no API routes touched.
-- **AI Project Bootstrap (prior phase)** — `/docs/system/` is the durable AI source of truth; ChatGPT Project orchestrator pattern validated; first small validation task (`RESEND_FROM_EMAIL` cleanup) shipped via the worktree → PR workflow.
+- **Phase 16A.1.x — Butler Playbook + minor hardening (this commit).** Established [BUTLER_PLAYBOOK.md](BUTLER_PLAYBOOK.md) as the operational source-of-truth for the AI Butler (identity, conversation behavior, availability/pricing/add-on philosophy, knowledge boundary, event vs stay separation, deferred future-phase systems, forbidden AI behaviors, cross-references). Extracted the duplicated villa-slug map from the addons + availability routes into a shared [lib/butler/villa.ts](../../lib/butler/villa.ts) helper (`resolveButlerVilla` + `KNOWN_BUTLER_VILLAS`). [ARCHITECTURE.md](ARCHITECTURE.md) Butler flow section cross-references the playbook. See [DECISIONS_LOG.md](DECISIONS_LOG.md) — 2026-05-12 "Butler Playbook established as operational source-of-truth". No code behavior change beyond the surgical helper extraction; same 503/401/200 contract on every `/api/butler/*` route.
+- **Phase 16A.1 — Read-only Butler API foundation (prior commit).** Shipped:
+  - [lib/butler/auth.ts](../../lib/butler/auth.ts) — `requireButlerAuth` helper. Validates `X-Butler-Secret` against `BUTLER_WEBHOOK_SECRET` using `crypto.timingSafeEqual`. 503 on missing/empty env; 401 on missing/wrong header.
+  - [app/api/butler/health/route.ts](../../app/api/butler/health/route.ts) — liveness + secret check; returns `{ ok: true, service: "oraya-butler", mode: "read-only" }`.
+  - [app/api/butler/event-types/route.ts](../../app/api/butler/event-types/route.ts) — projects `CANONICAL_EVENT_TYPES` from [lib/event-types.ts](../../lib/event-types.ts) into `{ value, label, description }`.
+  - [app/api/butler/addons/route.ts](../../app/api/butler/addons/route.ts) — villa+context filtered add-ons with `event_type` optional. Prices and currency intentionally omitted; operational internals never echoed.
+  - [app/api/butler/availability/route.ts](../../app/api/butler/availability/route.ts) — thin wrapper over `getMergedAvailabilityRanges` + heated-pool carryover. Does not modify or call the locked `/api/bookings/availability` route.
+  - [ARCHITECTURE.md](ARCHITECTURE.md) — API surface table updated; new "Butler flow (Phase 16A.1 — read-only)" section added.
+  - [ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md) — `BUTLER_WEBHOOK_SECRET` flipped from "reserved/not consumed" to "consumed by /api/butler/* (live)".
+  - No locked-API touches. No schema changes. No new dependencies. `npx tsc --noEmit` clean. `npm run build` clean.
+- **Phase 16A.0 — Architecture freeze ([apps#10](https://github.com/Staleen/oraya-web/pull/10)).** Locked namespace `/api/butler/*`, secret name `BUTLER_WEBHOOK_SECRET`, source-of-truth boundary, implementation order. Documented in [DECISIONS_LOG.md](DECISIONS_LOG.md) (2026-05-12).
+- **Phase 16A audit (2026-05-11).** Read-only architecture audit; conclusions recorded in the 2026-05-12 DECISIONS_LOG entry.
+- **AI Project Bootstrap (prior phase).** `/docs/system/` is the durable AI source of truth.
 
 ## Open issues to be aware of right now
 
-Not blockers for 16A.1, but every agent working in the next session should know:
+Pre-existing gaps that become more visible when 16A.2 ships:
 
-- **Missing `RESEND_API_KEY` is a stealth failure.** Bookings still write but emails silently no-op. The Butler is about to start telling guests "you'll get an email confirmation" — this gap becomes more visible. Pre-emptive fix belongs to Phase 16A.2 hardening, not 16A.1. See [KNOWN_BUGS.md](KNOWN_BUGS.md) #2.
-- **Missing `NEXT_PUBLIC_SITE_URL` on preview links to production.** When the Butler echoes a booking view URL, preview-environment Butler messages would point at live data. Set `NEXT_PUBLIC_SITE_URL` on Vercel Preview before 16A.2 launches. See [KNOWN_BUGS.md](KNOWN_BUGS.md) #3.
-- **Vercel env vars not yet manually populated.** `BUTLER_WEBHOOK_SECRET` will need to be set on Vercel Production and Preview (Sensitive) as part of the 16A.1 ship, not before. See [KNOWN_BUGS.md](KNOWN_BUGS.md) #4.
+- **Missing `RESEND_API_KEY` is a stealth failure.** The Butler tells guests "you'll get an email confirmation"; without Resend wired, no email goes out and no error surfaces. 16A.2 should refuse submissions when the key is unset in production. See [KNOWN_BUGS.md](KNOWN_BUGS.md) #2.
+- **Missing `NEXT_PUBLIC_SITE_URL` on preview links to production.** When 16A.2 echoes a booking view URL, preview-environment Butler messages would point at live data. Set `NEXT_PUBLIC_SITE_URL` on Vercel Preview before 16A.2 ships. See [KNOWN_BUGS.md](KNOWN_BUGS.md) #3.
+- **`BUTLER_WEBHOOK_SECRET` not yet in Vercel.** This PR wires the consumer but does not populate the Vercel env panel. Production and Preview need the value set (Sensitive) before WhatChimp can call any `/api/butler/*` route in those environments. See [KNOWN_BUGS.md](KNOWN_BUGS.md) #4.
+- **DECISIONS_LOG header-name example drift.** The 2026-05-12 DECISIONS_LOG entry used `X-Butler-Auth` as an illustrative header name; the actual implementation in 16A.1 uses `X-Butler-Secret` per the 16A.1 task spec. Architecturally identical ("shared secret in header"); only the header name differs. Not worth a superseding DECISIONS_LOG entry — flagged here for future agents reading old context.
 
-## Out of scope this phase (16A.1)
+## Out of scope this phase (16A.2)
 
-- ❌ **No booking creation via WhatsApp.** That is Phase 16A.2 (`POST /api/butler/flow-submit`), which maps a WhatsApp Flow payload into the locked `/api/bookings` body. Not in 16A.1.
+- ❌ **No schema changes** without explicit approval in the task prompt — even for the idempotency table. If a new `butler_submissions` table is chosen over the jsonb-enrichment path, that decision goes through a separate approval gate.
 - ❌ **No payment / refund flow over WhatsApp.** Phase 16B.
 - ❌ **No smart-lock PIN issuance or access-code delivery.** Phase 16D.
-- ❌ **No member ↔ phone linkage.** Every Butler interaction is the guest path until a later phase ships a verified linkage flow.
-- ❌ **No AI prompt engineering in this repo.** AI Training, Bot Reply, Labels, and Custom Fields live in WhatChimp; this repo ships only the data plane.
-- ❌ **No schema changes.** No new tables. No new columns. Advisory enrichment in existing `jsonb` snapshot fields is the only allowed persistence under [AGENT_RULES.md](AGENT_RULES.md) rule 4 — and 16A.1 is read-only, so it shouldn't need any.
-- ❌ **No locked-API touches.** `/api/bookings`, `/api/bookings/availability`, `/api/admin/*`, `/api/calendar/*`, `/api/cron/*`, the email senders, the auth / token systems, and the existing schema are off-limits. The Butler endpoints are additive.
-- ❌ **No widening of `/api/settings` allowlist.** New Butler reads belong under `/api/butler/*`, not in the existing settings endpoint.
+- ❌ **No member ↔ phone linkage.** Every Butler-originated booking is the guest path. A future phase ships the verification flow.
+- ❌ **No AI prompt engineering in this repo.** AI Training, Bot Reply, Labels, and Custom Fields live in WhatChimp.
+- ❌ **No `/api/bookings` POST behavior change.** The adapter normalizes the Flow payload into the existing body shape — pricing/overlap/addon audit remain the locked source of truth.
+- ❌ **No locked-API touches.** `/api/bookings*`, `/api/admin/*`, `/api/calendar/*`, `/api/cron/*`, the email senders, the auth/token systems, and existing schema remain off-limits.
+- ❌ **No widening of `/api/settings` allowlist** to satisfy WhatChimp. Butler reads belong under `/api/butler/*`.
 - ❌ **No `NEXT_PUBLIC_BUTLER_*` env vars.** Server-only.
 
 ## Next recommended steps
 
 In order:
 
-1. **Human action:** confirm WhatChimp's outbound-webhook signing capability so 16A.1 can ship HMAC at the same time as the bare-secret path (or punt HMAC to 16A.1.x). Confirm Meta business verification status — does not block 16A.1, but blocks 16A.2 publication.
-2. **16A.1 implementation (next coding session):** create `app/api/butler/health/route.ts`, `app/api/butler/event-types/route.ts`, `app/api/butler/addons/route.ts`, `app/api/butler/availability/route.ts`, and `lib/butler/auth.ts`. Add `BUTLER_WEBHOOK_SECRET` to Vercel Production + Preview (Sensitive) in the same PR. Update [ARCHITECTURE.md](ARCHITECTURE.md) API surface table to list the new open-but-secret-guarded routes.
-3. **16A.2:** `POST /api/butler/flow-submit` — adapter that maps a WhatsApp Flow payload into the locked `/api/bookings` body, idempotent on `flow_token`. Requires either a small new `butler_submissions` dedup table or `jsonb` advisory enrichment (decide before ship).
-4. **Health gates (16A.2 hardening):** make `RESEND_API_KEY` absence a loud failure on Butler submissions, not silent. Resolves [KNOWN_BUGS.md](KNOWN_BUGS.md) #2 for this surface.
+1. **Human action:** set `BUTLER_WEBHOOK_SECRET` in Vercel (Production + Preview, Sensitive; different value per environment recommended). Generate with `openssl rand -base64 32`. Confirm WhatChimp's outbound webhook is configured to send the resulting secret in the `X-Butler-Secret` header.
+2. **Human action:** confirm WhatChimp's outbound-signing capability. If supported, 16A.1.x adds HMAC + timestamp; if not, the bare shared secret remains the floor.
+3. **16A.2 implementation (next coding session):** design and ship `POST /api/butler/flow-submit` per "Active objective" above. Decide the idempotency persistence shape (new `butler_submissions` table vs `addons_snapshot` enrichment) in the kickoff and surface that decision in DECISIONS_LOG before writing code.
+4. **16A.2 hardening:** make `RESEND_API_KEY` absence a loud failure on `/api/butler/flow-submit` in production. Resolves [KNOWN_BUGS.md](KNOWN_BUGS.md) #2 for the Butler surface.

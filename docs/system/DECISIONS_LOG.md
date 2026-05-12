@@ -16,6 +16,25 @@ Durable architectural and operational decisions. Append-only — never edit a pa
 
 ---
 
+## 2026-05-12 — Butler Playbook established as operational source-of-truth
+
+**Decision:** [/docs/system/BUTLER_PLAYBOOK.md](BUTLER_PLAYBOOK.md) is the operational source-of-truth for the WhatsApp AI Butler's identity, conversation behavior, knowledge boundary, and forbidden behaviors. Every WhatChimp configuration, AI prompt, and future agent extending the Butler surface reads it before extending or modifying Butler-facing behavior.
+
+**Reason:** the 2026-05-12 architecture freeze (entry below) locked the **data plane** — namespace, secret, source-of-truth boundary, implementation order. It did **not** lock the **operational plane** — tone, when to escalate, when to upsell, what the AI must never invent. Without a durable, version-controlled rulebook, those rules would live only in chat memory and the WhatChimp admin UI: both ephemeral and untraceable. The playbook closes that gap.
+
+**Impact:**
+
+- Created [/docs/system/BUTLER_PLAYBOOK.md](BUTLER_PLAYBOOK.md) with sections on identity, conversation behavior, availability philosophy, pricing philosophy, VIP handling, add-on philosophy, knowledge source-of-truth, event vs stay separation, deferred future-phase systems, and forbidden AI behavior. Plus a cross-reference index back to the data-plane docs.
+- [CURRENT_PHASE.md](CURRENT_PHASE.md) — "Just completed" updated with the playbook + the minor 16A.1.x villa-slug helper extraction.
+- [ARCHITECTURE.md](ARCHITECTURE.md) — Butler flow section cross-references the playbook.
+- **No code paths consume the playbook directly.** It is read by humans configuring WhatChimp, by AI prompt authors, and by future repo agents extending the Butler surface. No runtime dependency; no risk to production systems.
+
+**Reversible?:** yes — the playbook is documentation. To reverse: delete the file and add a superseding entry here. Not recommended; operational rules would scatter again.
+
+**Supersedes:** does not supersede a prior decision. Complements the 2026-05-12 architecture freeze (entry directly below) by adding the operational layer the freeze did not cover.
+
+---
+
 ## 2026-05-12 — Phase 16A Butler architecture freeze — `/api/butler/*` namespace + `BUTLER_WEBHOOK_SECRET`
 
 **Decision:** the Phase 16A WhatsApp AI Butler integration is locked to the following architecture before any code lands:
