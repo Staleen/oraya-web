@@ -10,6 +10,7 @@ import { adminBookingRequiresAction } from "@/lib/admin-booking-action";
 const NAV_ITEMS = [
   { href: "/admin/dashboard", label: "Dashboard" },
   { href: "/admin/bookings", label: "Bookings" },
+  { href: "/admin/leads", label: "Leads" },
   { href: "/admin/calendar", label: "Calendar" },
   { href: "/admin/rates", label: "Rates" },
   { href: "/admin/media", label: "Media" },
