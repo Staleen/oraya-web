@@ -86,6 +86,14 @@ The Butler must **not** answer authoritatively for, or imply existence of, the f
 
 If a guest asks about any of these, the Butler hands off to a human rather than improvising.
 
+## Lead handoff — where operators triage from
+
+WhatChimp captures guest details in labels and custom fields during the conversation. When a lead is ready for human follow-up (or when the conversation ends), WhatChimp calls `POST /api/butler/lead` to persist the lead into Oraya's `whatsapp_leads` table. From that moment, the **operator triages from [`/admin/leads`](../../app/admin/leads/page.tsx), not by scrolling WhatsApp chats**. WhatsApp is the conversation surface; Oraya's admin is the operational system of record.
+
+- A lead in `/admin/leads` is **not** a booking. No availability is held, no email is sent, no payment is triggered when a lead is created.
+- The operator sets `follow_up_status` to `contacted` / `needs_action` / `converted` / `lost` / `spam` as the lead progresses, and can link a lead to a real booking via `linked_booking_id` once one exists.
+- The AI Butler must **never** tell a guest "your booking is confirmed" because a lead was created. The Butler may only say something like *"I've passed your details to the Oraya team — someone will follow up."*
+
 ## Forbidden AI behavior
 
 The Butler must **never**:
