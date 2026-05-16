@@ -287,7 +287,7 @@ export default function AdminLeadsPage() {
     setLeads((prev) => prev.map((l) => (l.id === nextLead.id ? nextLead : l)));
     setSelectedLeadId(nextLead.id);
     setConversionLead(null);
-    setSuccessMessage("Booking request created and linked. It is still pending review. Pending review.");
+    setSuccessMessage("Booking request created and linked. Pending review.");
   }
 
   function handleStatusChange(id: string, next: FollowUpStatus) {
