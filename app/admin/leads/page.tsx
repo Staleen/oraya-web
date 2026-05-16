@@ -11,7 +11,11 @@ import LeadDetail from "@/components/admin/leads/LeadDetail";
 import {
   INITIAL_FILTER_STATE,
   applyClientFilters,
+  applyStatusWithScopeRelax,
   computeKpiCounts,
+  hasAnyFiltersActive,
+  hasNonScopeFiltersActive,
+  isPlainOpenView,
   uniqueVillas,
   type LeadFilterState,
 } from "@/components/admin/leads/leadHelpers";
@@ -183,18 +187,21 @@ export default function AdminLeadsPage() {
   }, [filters]);
 
   function applyKpiShortcut(key: KpiKey) {
-    // Each KPI maps to ONE filter slot. Clicking the active KPI clears that slot.
+    // Each KPI maps to ONE filter slot. Clicking the active KPI clears that
+    // slot. Status-targeting KPIs route through applyStatusWithScopeRelax so a
+    // shortcut like "Converted" relaxes the Open scope to All instead of
+    // producing zero results.
     const isActive = activeKpiKey === key;
     if (key === "new") {
-      setFilters((f) => ({ ...f, status: isActive ? "all" : "new" }));
+      setFilters((f) => applyStatusWithScopeRelax(f, isActive ? "all" : "new"));
       return;
     }
     if (key === "needsAction") {
-      setFilters((f) => ({ ...f, status: isActive ? "all" : "needs_action" }));
+      setFilters((f) => applyStatusWithScopeRelax(f, isActive ? "all" : "needs_action"));
       return;
     }
     if (key === "converted") {
-      setFilters((f) => ({ ...f, status: isActive ? "all" : "converted" }));
+      setFilters((f) => applyStatusWithScopeRelax(f, isActive ? "all" : "converted"));
       return;
     }
     if (key === "events") {
@@ -207,15 +214,25 @@ export default function AdminLeadsPage() {
     }
   }
 
-  const hasFiltersActive = useMemo(() => {
-    return (
-      filters.status !== "all" ||
-      filters.type !== "all" ||
-      filters.priority !== "all" ||
-      filters.villa !== "all" ||
-      filters.search.trim() !== ""
-    );
-  }, [filters]);
+  const hasFiltersActive = useMemo(() => hasAnyFiltersActive(filters), [filters]);
+  const hasSubFiltersActive = useMemo(() => hasNonScopeFiltersActive(filters), [filters]);
+  const isOpenInbox = useMemo(() => isPlainOpenView(filters), [filters]);
+
+  // Contextual count text for the filter row.
+  //   open + no other filters → "Showing N open leads"
+  //   closed + no other filters → "Showing N closed leads"
+  //   any other state → "Showing N of M leads"
+  const countText = useMemo(() => {
+    const n = filtered.length;
+    const m = leads.length;
+    if (isOpenInbox) {
+      return n === 0 ? "No open leads" : `Showing ${n} open lead${n === 1 ? "" : "s"}`;
+    }
+    if (filters.scope === "closed" && !hasSubFiltersActive) {
+      return n === 0 ? "No closed leads" : `Showing ${n} closed lead${n === 1 ? "" : "s"}`;
+    }
+    return `Showing ${n} of ${m} lead${m === 1 ? "" : "s"}`;
+  }, [filtered.length, leads.length, isOpenInbox, filters.scope, hasSubFiltersActive]);
 
   async function patchLead(id: string, patch: Record<string, unknown>) {
     setSavingId(id);
@@ -254,6 +271,12 @@ export default function AdminLeadsPage() {
 
   function clearAllFilters() {
     setFilters(INITIAL_FILTER_STATE);
+  }
+
+  // "Show all leads" from the empty Open inbox — flips scope to "all" while
+  // leaving the (already-default) sub-filters alone.
+  function showAllLeads() {
+    setFilters((f) => ({ ...f, scope: "all" }));
   }
 
   const showList = !isMobile || !selectedLead;
@@ -340,6 +363,7 @@ export default function AdminLeadsPage() {
           villaOptions={villaOptions}
           totalLoaded={leads.length}
           totalShown={filtered.length}
+          countText={countText}
         />
       </div>
 
@@ -363,6 +387,8 @@ export default function AdminLeadsPage() {
               totalLoaded={leads.length}
               hasFiltersActive={hasFiltersActive}
               onClearFilters={clearAllFilters}
+              isOpenInbox={isOpenInbox}
+              onShowAllLeads={showAllLeads}
             />
           </div>
         ) : null}
