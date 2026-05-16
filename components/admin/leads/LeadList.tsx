@@ -7,6 +7,9 @@ import LeadCard from "./LeadCard";
 
 /**
  * Phase 16A.2.f — left-pane list of lead cards.
+ * Phase 16A.2.g — empty states split between "Open inbox empty" (shows the
+ *   "Show all leads" affordance) and "filters return zero" (shows "Clear
+ *   filters"). True empty (no leads in the database at all) is unchanged.
  *
  * Scrolls vertically on desktop (parent gives it a fixed height). On mobile
  * it grows naturally; selection on mobile is handled by the page, which hides
@@ -21,6 +24,9 @@ export interface LeadListProps {
   totalLoaded: number;
   hasFiltersActive: boolean;
   onClearFilters: () => void;
+  // 16A.2.g: empty-state branching for the Open inbox.
+  isOpenInbox: boolean;
+  onShowAllLeads: () => void;
 }
 
 const EMPTY_WRAPPER: CSSProperties = {
@@ -87,6 +93,8 @@ export default function LeadList({
   totalLoaded,
   hasFiltersActive,
   onClearFilters,
+  isOpenInbox,
+  onShowAllLeads,
 }: LeadListProps) {
   if (loading && totalLoaded === 0) {
     return (
@@ -105,12 +113,30 @@ export default function LeadList({
 
   if (leads.length === 0) {
     if (totalLoaded === 0) {
+      // True empty — no leads exist in the DB yet.
       return (
         <div style={EMPTY_WRAPPER}>
           <p style={EMPTY_TITLE}>No WhatsApp leads yet</p>
           <p style={EMPTY_TEXT}>
             Leads captured by the AI Butler will appear here.
           </p>
+        </div>
+      );
+    }
+    if (isOpenInbox) {
+      // Open inbox with nothing actionable — closed/spam/converted leads still
+      // exist in the DB and are reachable via "Show all leads", the Closed
+      // scope chip, or a direct status filter.
+      return (
+        <div style={EMPTY_WRAPPER}>
+          <p style={EMPTY_TITLE}>No open leads right now</p>
+          <p style={EMPTY_TEXT}>
+            All caught up. Closed, converted, and spam leads are still
+            available through the Closed scope.
+          </p>
+          <button type="button" onClick={onShowAllLeads} style={CLEAR_BUTTON}>
+            Show all leads
+          </button>
         </div>
       );
     }

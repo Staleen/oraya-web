@@ -202,7 +202,32 @@ export function buildGuestSummary(lead: WhatsappLeadAdminRow): string {
   return main;
 }
 
+// Inbox scope groups statuses into the operator's daily workflow.
+//  - "open"   → leads that still need work (new / contacted / needs_action)
+//  - "closed" → leads that are done or noise (converted / lost / spam)
+//  - "all"    → no scope filter
+export type ScopeFilter = "open" | "all" | "closed";
+
+export const OPEN_STATUSES: ReadonlyArray<FollowUpStatus> = [
+  "new",
+  "contacted",
+  "needs_action",
+];
+
+export const CLOSED_STATUSES: ReadonlyArray<FollowUpStatus> = [
+  "converted",
+  "lost",
+  "spam",
+];
+
+export function statusInScope(status: FollowUpStatus, scope: ScopeFilter): boolean {
+  if (scope === "all") return true;
+  if (scope === "open") return (OPEN_STATUSES as readonly string[]).includes(status);
+  return (CLOSED_STATUSES as readonly string[]).includes(status);
+}
+
 export interface LeadFilterState {
+  scope: ScopeFilter;
   status: FollowUpStatus | "all";
   type: "all" | "stay" | "event";
   priority: "all" | "vip_or_human";
@@ -210,7 +235,11 @@ export interface LeadFilterState {
   search: string;
 }
 
+// Default inbox view: only leads that still need operator attention.
+// Closed/spam/test leads are still reachable via the Closed or All scope and
+// via the direct status chips — nothing is hidden permanently.
 export const INITIAL_FILTER_STATE: LeadFilterState = {
+  scope: "open",
   status: "all",
   type: "all",
   priority: "all",
@@ -218,11 +247,70 @@ export const INITIAL_FILTER_STATE: LeadFilterState = {
   search: "",
 };
 
+// True when the operator has not touched anything other than the default
+// "open" scope. Used by the empty-state copy and the count text to switch
+// between "No open leads right now" vs "No leads match these filters".
+export function isPlainOpenView(filters: LeadFilterState): boolean {
+  return (
+    filters.scope === "open" &&
+    !hasNonScopeFiltersActive(filters)
+  );
+}
+
+export function isPlainClosedView(filters: LeadFilterState): boolean {
+  return (
+    filters.scope === "closed" &&
+    !hasNonScopeFiltersActive(filters)
+  );
+}
+
+export function hasNonScopeFiltersActive(filters: LeadFilterState): boolean {
+  return (
+    filters.status !== "all" ||
+    filters.type !== "all" ||
+    filters.priority !== "all" ||
+    filters.villa !== "all" ||
+    filters.search.trim() !== ""
+  );
+}
+
+export function hasAnyFiltersActive(filters: LeadFilterState): boolean {
+  return filters.scope !== "open" || hasNonScopeFiltersActive(filters);
+}
+
+/**
+ * When the operator selects a specific status that is not in the current
+ * scope, relax the scope to "all" so the result is non-empty and the chip
+ * state visibly reflects what is being shown. If the status is "all" or
+ * already matches the scope, the scope is left untouched.
+ */
+export function applyStatusWithScopeRelax(
+  prev: LeadFilterState,
+  nextStatus: FollowUpStatus | "all",
+): LeadFilterState {
+  if (nextStatus === "all" || prev.scope === "all") {
+    return { ...prev, status: nextStatus };
+  }
+  if (statusInScope(nextStatus, prev.scope)) {
+    return { ...prev, status: nextStatus };
+  }
+  return { ...prev, status: nextStatus, scope: "all" };
+}
+
 export function applyClientFilters(
   leads: WhatsappLeadAdminRow[],
   filters: LeadFilterState,
 ): WhatsappLeadAdminRow[] {
   let out = leads;
+  // Scope is the broad inbox group. It applies whenever status is "all"; when
+  // a specific status is selected it is honored above, so the explicit chip
+  // wins. (See applyStatusWithScopeRelax — it normalises scope on selection
+  // to avoid a status that doesn't fit the scope rendering as zero results.)
+  if (filters.scope !== "all" && filters.status === "all") {
+    const allowed: ReadonlyArray<FollowUpStatus> =
+      filters.scope === "open" ? OPEN_STATUSES : CLOSED_STATUSES;
+    out = out.filter((l) => (allowed as readonly string[]).includes(l.follow_up_status));
+  }
   if (filters.status !== "all") {
     out = out.filter((l) => l.follow_up_status === filters.status);
   }
