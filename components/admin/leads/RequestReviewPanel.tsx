@@ -20,6 +20,7 @@ import { computeNights, nonEmpty, requestKind } from "./leadHelpers";
 
 export interface RequestReviewPanelProps {
   lead: WhatsappLeadAdminRow;
+  onPrepareBookingRequest?: (lead: WhatsappLeadAdminRow) => void;
 }
 
 const WRAPPER: CSSProperties = {
@@ -148,6 +149,15 @@ const CONVERT_BUTTON: CSSProperties = {
   textAlign: "left" as CSSProperties["textAlign"],
 };
 
+const ACTIVE_CONVERT_BUTTON: CSSProperties = {
+  ...CONVERT_BUTTON,
+  color: "#1F2B38",
+  backgroundColor: GOLD,
+  border: `1px solid ${GOLD}`,
+  cursor: "pointer",
+  fontWeight: 600,
+};
+
 const DISABLED_BADGE: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
@@ -236,14 +246,35 @@ function OtherFields({ lead }: { lead: WhatsappLeadAdminRow }) {
   );
 }
 
-export default function RequestReviewPanel({ lead }: RequestReviewPanelProps) {
+export default function RequestReviewPanel({
+  lead,
+  onPrepareBookingRequest,
+}: RequestReviewPanelProps) {
   const kind = requestKind(lead);
+  const linked = !!lead.linked_booking_id;
+  const canPrepareStay = kind === "stay" && !linked && !!onPrepareBookingRequest;
+  const title = linked ? "Linked booking request exists." : "No booking has been created.";
+  const helpText = linked
+    ? "This lead is already linked to a booking request."
+    : kind === "event"
+      ? "Event conversion will be handled in a later phase."
+      : kind === "stay"
+        ? "Review the captured stay details, then prepare a pending booking request through the existing Oraya booking pipeline."
+        : "This lead does not have a stay request type, so conversion is not available in this phase.";
+  const badgeText = canPrepareStay ? "Stay only" : "Disabled";
+  const buttonText = canPrepareStay
+    ? "Prepare booking request"
+    : kind === "event"
+      ? "Event conversion unavailable in this phase"
+      : linked
+        ? "Already linked to a booking request"
+        : "Convert to booking request unavailable";
 
   return (
     <section aria-label="Pre-filled request summary" style={WRAPPER}>
       <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
         <p style={KICKER}>Pre-filled request summary</p>
-        <p style={TITLE}>No booking has been created.</p>
+        <p style={TITLE}>{title}</p>
         <p style={NOTICE}>
           Operational review only. No availability is held, no dates are
           reserved, no payment is taken.
@@ -257,23 +288,22 @@ export default function RequestReviewPanel({ lead }: RequestReviewPanelProps) {
       <div style={CONVERT_CONTAINER}>
         <div style={CONVERT_LABEL_ROW}>
           <p style={CONVERT_KICKER}>Future booking conversion</p>
-          <span style={FUTURE_BADGE}>Later phase</span>
+          <span style={FUTURE_BADGE}>{canPrepareStay ? "Phase 16A.2.i.1" : "Later phase"}</span>
         </div>
         <button
           type="button"
-          disabled
-          aria-disabled="true"
-          tabIndex={-1}
-          title="Available in a later phase — not active yet"
-          style={CONVERT_BUTTON}
+          disabled={!canPrepareStay}
+          aria-disabled={!canPrepareStay}
+          tabIndex={canPrepareStay ? 0 : -1}
+          title={canPrepareStay ? "Prepare a pending booking request" : helpText}
+          onClick={() => canPrepareStay && onPrepareBookingRequest?.(lead)}
+          style={canPrepareStay ? ACTIVE_CONVERT_BUTTON : CONVERT_BUTTON}
         >
-          <span style={DISABLED_BADGE}>Disabled</span>
-          <span>Convert to booking request — available in a later phase</span>
+          <span style={DISABLED_BADGE}>{badgeText}</span>
+          <span>{buttonText}</span>
         </button>
         <p style={CONVERT_HELP}>
-          This lead is only a request summary. Booking conversion will be added
-          in a later controlled phase. For now, contact the guest on WhatsApp
-          to confirm intent.
+          {helpText}
         </p>
       </div>
     </section>
