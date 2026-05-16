@@ -8,6 +8,7 @@ import LeadKpis, { type KpiKey } from "@/components/admin/leads/LeadKpis";
 import LeadFilters from "@/components/admin/leads/LeadFilters";
 import LeadList from "@/components/admin/leads/LeadList";
 import LeadDetail from "@/components/admin/leads/LeadDetail";
+import LeadConversionModal from "@/components/admin/leads/LeadConversionModal";
 import {
   INITIAL_FILTER_STATE,
   applyClientFilters,
@@ -87,6 +88,16 @@ const RETRY_BUTTON: CSSProperties = {
   cursor: "pointer",
 };
 
+const SUCCESS_BANNER: CSSProperties = {
+  fontFamily: LATO,
+  fontSize: "12px",
+  color: "#7fc99a",
+  backgroundColor: "rgba(127,201,154,0.08)",
+  border: "0.5px solid rgba(127,201,154,0.35)",
+  padding: "10px 14px",
+  lineHeight: 1.5,
+};
+
 const PAGE_WRAPPER_STYLE: CSSProperties = {
   display: "flex",
   flexDirection: "column",
@@ -133,6 +144,8 @@ export default function AdminLeadsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteErrorId, setDeleteErrorId] = useState<string | null>(null);
+  const [conversionLead, setConversionLead] = useState<WhatsappLeadAdminRow | null>(null);
+  const [successMessage, setSuccessMessage] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -270,6 +283,13 @@ export default function AdminLeadsPage() {
     }
   }
 
+  function handleLeadConverted(nextLead: WhatsappLeadAdminRow) {
+    setLeads((prev) => prev.map((l) => (l.id === nextLead.id ? nextLead : l)));
+    setSelectedLeadId(nextLead.id);
+    setConversionLead(null);
+    setSuccessMessage("Booking request created and linked. Pending review.");
+  }
+
   function handleStatusChange(id: string, next: FollowUpStatus) {
     void patchLead(id, { follow_up_status: next });
   }
@@ -333,12 +353,14 @@ export default function AdminLeadsPage() {
   }, [selectedLeadId]);
 
   function clearAllFilters() {
+    setSuccessMessage("");
     setFilters(INITIAL_FILTER_STATE);
   }
 
   // "Show all leads" from the empty Open inbox — flips scope to "all" while
   // leaving the (already-default) sub-filters alone.
   function showAllLeads() {
+    setSuccessMessage("");
     setFilters((f) => ({ ...f, scope: "all" }));
   }
 
@@ -439,6 +461,12 @@ export default function AdminLeadsPage() {
         </div>
       ) : null}
 
+      {successMessage ? (
+        <div style={SUCCESS_BANNER} role="status">
+          {successMessage}
+        </div>
+      ) : null}
+
       <div style={twoPaneStyle}>
         {showList ? (
           <div style={listPaneStyle}>
@@ -482,6 +510,10 @@ export default function AdminLeadsPage() {
                 onStatusChange={handleStatusChange}
                 onSaveNote={handleSaveNote}
                 onDeleteLead={(id) => void deleteLead(id)}
+                onPrepareBookingRequest={(lead) => {
+                  setSuccessMessage("");
+                  setConversionLead(lead);
+                }}
                 onBack={isMobile ? () => setSelectedLeadId(null) : undefined}
                 hiddenByFilter={hiddenByFilter}
               />
@@ -489,6 +521,14 @@ export default function AdminLeadsPage() {
           </div>
         ) : null}
       </div>
+
+      {conversionLead ? (
+        <LeadConversionModal
+          lead={conversionLead}
+          onClose={() => setConversionLead(null)}
+          onConverted={handleLeadConverted}
+        />
+      ) : null}
     </div>
   );
 }

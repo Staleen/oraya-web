@@ -24,6 +24,7 @@ export interface LeadDetailProps {
   onStatusChange: (id: string, next: FollowUpStatus) => void;
   onSaveNote: (id: string, next: string | null) => void;
   onDeleteLead: (id: string) => void;
+  onPrepareBookingRequest: (lead: WhatsappLeadAdminRow) => void;
   onBack?: () => void;
   hiddenByFilter?: boolean;
 }
@@ -86,6 +87,7 @@ export default function LeadDetail({
   onStatusChange,
   onSaveNote,
   onDeleteLead,
+  onPrepareBookingRequest,
   onBack,
   hiddenByFilter,
 }: LeadDetailProps) {
@@ -120,7 +122,7 @@ export default function LeadDetail({
       ) : null}
 
       <LeadGuestSummary lead={lead} />
-      <RequestReviewPanel lead={lead} />
+      <RequestReviewPanel lead={lead} onPrepareBookingRequest={onPrepareBookingRequest} />
       <LeadOperatorWorkspace
         lead={lead}
         saving={saving}
