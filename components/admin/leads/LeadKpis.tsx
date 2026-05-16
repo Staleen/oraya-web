@@ -22,9 +22,9 @@ export interface LeadKpisProps {
 }
 
 const CARD_BASE: CSSProperties = {
-  flex: "1 1 140px",
-  minWidth: "140px",
-  padding: "14px 16px",
+  width: "100%",
+  minWidth: 0,
+  padding: "12px 14px",
   textAlign: "left",
   backgroundColor: SURFACE,
   border: `0.5px solid ${BORDER}`,
@@ -33,6 +33,7 @@ const CARD_BASE: CSSProperties = {
   flexDirection: "column",
   gap: "6px",
   fontFamily: LATO,
+  boxSizing: "border-box",
 };
 
 function cardStyle(active: boolean): CSSProperties {
@@ -54,7 +55,7 @@ const LABEL_STYLE: CSSProperties = {
 
 const NUMBER_STYLE: CSSProperties = {
   fontFamily: PLAYFAIR,
-  fontSize: "28px",
+  fontSize: "26px",
   color: WHITE,
   margin: 0,
   lineHeight: 1,
@@ -65,6 +66,9 @@ const HINT_STYLE: CSSProperties = {
   fontSize: "10px",
   color: MUTED,
   margin: 0,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
 };
 
 const ENTRIES: Array<{ key: KpiKey; label: string; hint: string }> = [
@@ -76,19 +80,29 @@ const ENTRIES: Array<{ key: KpiKey; label: string; hint: string }> = [
 ];
 
 export default function LeadKpis({ counts, activeKey, onSelect, compact }: LeadKpisProps) {
-  return (
-    <div
-      role="group"
-      aria-label="Lead KPI shortcuts"
-      style={{
-        display: "flex",
-        flexWrap: compact ? "nowrap" : "wrap",
+  // Grid handles wrap natively — no horizontal scroll on any viewport.
+  // Mobile/compact: 2 columns. Desktop: auto-fit min(140px, fit) so 5 cards
+  // collapse cleanly when there isn't room for a single row.
+  const gridStyle: CSSProperties = compact
+    ? {
+        display: "grid",
+        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
         gap: "10px",
-        overflowX: compact ? "auto" : "visible",
-        WebkitOverflowScrolling: "touch",
-        paddingBottom: compact ? "4px" : 0,
-      }}
-    >
+        width: "100%",
+        maxWidth: "100%",
+        minWidth: 0,
+      }
+    : {
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+        gap: "10px",
+        width: "100%",
+        maxWidth: "100%",
+        minWidth: 0,
+      };
+
+  return (
+    <div role="group" aria-label="Lead KPI shortcuts" style={gridStyle}>
       {ENTRIES.map((entry) => {
         const value = counts[entry.key];
         const active = activeKey === entry.key;

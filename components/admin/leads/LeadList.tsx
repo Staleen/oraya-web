@@ -131,10 +131,18 @@ export default function LeadList({
     <div
       role="list"
       aria-label="WhatsApp leads"
-      style={{ display: "flex", flexDirection: "column", gap: "8px" }}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "8px",
+        width: "100%",
+        maxWidth: "100%",
+        minWidth: 0,
+        boxSizing: "border-box",
+      }}
     >
       {leads.map((lead) => (
-        <div key={lead.id} role="listitem">
+        <div key={lead.id} role="listitem" style={{ minWidth: 0 }}>
           <LeadCard
             lead={lead}
             selected={selectedLeadId === lead.id}

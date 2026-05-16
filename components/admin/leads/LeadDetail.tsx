@@ -93,7 +93,17 @@ export default function LeadDetail({
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "16px",
+        width: "100%",
+        maxWidth: "100%",
+        minWidth: 0,
+        boxSizing: "border-box",
+      }}
+    >
       <LeadHeader lead={lead} onBack={onBack} />
 
       {hiddenByFilter ? (
@@ -113,23 +123,23 @@ export default function LeadDetail({
       />
 
       <div style={META_FOOTER}>
-        <div>
+        <div style={{ minWidth: 0 }}>
           <p style={META_LABEL}>Lead id</p>
           <p style={{ margin: 0, wordBreak: "break-all", color: "rgba(255,255,255,0.6)" }}>
             {lead.id}
           </p>
         </div>
-        <div>
+        <div style={{ minWidth: 0 }}>
           <p style={META_LABEL}>Source</p>
           <p style={{ margin: 0, color: "rgba(255,255,255,0.6)" }}>{lead.source || "—"}</p>
         </div>
-        <div>
+        <div style={{ minWidth: 0 }}>
           <p style={META_LABEL}>Received</p>
           <p style={{ margin: 0, color: "rgba(255,255,255,0.6)" }}>
             {formatDateTime(lead.created_at)}
           </p>
         </div>
-        <div>
+        <div style={{ minWidth: 0 }}>
           <p style={META_LABEL}>Last updated</p>
           <p style={{ margin: 0, color: "rgba(255,255,255,0.6)" }}>
             {formatDateTime(lead.updated_at)}

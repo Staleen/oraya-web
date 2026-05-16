@@ -23,6 +23,11 @@ const WRAPPER: CSSProperties = {
   display: "flex",
   flexDirection: "column",
   gap: "8px",
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+  overflowWrap: "anywhere",
 };
 
 const KICKER: CSSProperties = {

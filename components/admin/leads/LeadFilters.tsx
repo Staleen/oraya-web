@@ -49,11 +49,13 @@ const ROW_STYLE: CSSProperties = {
   flexWrap: "wrap",
   alignItems: "center",
   gap: "6px",
+  minWidth: 0,
+  maxWidth: "100%",
 };
 
 const SEARCH_INPUT_STYLE: CSSProperties = {
-  flex: "1 1 220px",
-  minWidth: "180px",
+  width: "100%",
+  minWidth: 0,
   backgroundColor: "rgba(255,255,255,0.04)",
   border: `0.5px solid ${BORDER}`,
   padding: "8px 10px",
@@ -65,13 +67,17 @@ const SEARCH_INPUT_STYLE: CSSProperties = {
 };
 
 const VILLA_SELECT_STYLE: CSSProperties = {
-  ...SEARCH_INPUT_STYLE,
-  flex: "0 0 auto",
-  minWidth: "140px",
-  width: "auto",
+  width: "100%",
+  minWidth: 0,
+  maxWidth: "100%",
   backgroundColor: "#1F2B38", // MIDNIGHT — explicit per PR #16 dropdown contrast fix
   color: WHITE,
-  borderColor: "rgba(197,164,109,0.32)",
+  border: `0.5px solid rgba(197,164,109,0.32)`,
+  padding: "8px 10px",
+  fontFamily: LATO,
+  fontSize: "12px",
+  outline: "none",
+  boxSizing: "border-box",
   colorScheme: "dark",
 };
 
@@ -111,8 +117,17 @@ export default function LeadFilters({
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-      <div>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "12px",
+        width: "100%",
+        maxWidth: "100%",
+        minWidth: 0,
+      }}
+    >
+      <div style={{ minWidth: 0 }}>
         <p style={LABEL_STYLE}>Status</p>
         <div style={ROW_STYLE}>
           {STATUS_OPTIONS.map((opt) => {
@@ -132,8 +147,8 @@ export default function LeadFilters({
         </div>
       </div>
 
-      <div style={{ ...ROW_STYLE, gap: "12px" }}>
-        <div style={{ display: "flex", flexDirection: "column" }}>
+      <div style={{ ...ROW_STYLE, gap: "16px", alignItems: "flex-start" }}>
+        <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
           <p style={LABEL_STYLE}>Type</p>
           <div style={ROW_STYLE}>
             {TYPE_OPTIONS.map((opt) => {
@@ -153,7 +168,7 @@ export default function LeadFilters({
           </div>
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column" }}>
+        <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
           <p style={LABEL_STYLE}>Priority</p>
           <div style={ROW_STYLE}>
             <button
@@ -170,10 +185,18 @@ export default function LeadFilters({
         </div>
       </div>
 
-      <div style={{ ...ROW_STYLE, gap: "10px" }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "minmax(0, 1fr)",
+          gap: "8px",
+          width: "100%",
+          minWidth: 0,
+        }}
+      >
         <label
           aria-label="Search leads by name, phone, villa, or label"
-          style={{ flex: "1 1 220px", minWidth: "180px", display: "flex" }}
+          style={{ display: "block", width: "100%", minWidth: 0 }}
         >
           <input
             type="search"
@@ -183,28 +206,38 @@ export default function LeadFilters({
             style={SEARCH_INPUT_STYLE}
           />
         </label>
-        <label
-          aria-label="Filter by villa"
-          style={{ display: "inline-flex" }}
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: "10px",
+            minWidth: 0,
+          }}
         >
-          <select
-            value={filters.villa}
-            onChange={(e) => set("villa", e.target.value)}
-            style={VILLA_SELECT_STYLE}
+          <label
+            aria-label="Filter by villa"
+            style={{ display: "block", flex: "1 1 160px", minWidth: 0 }}
           >
-            <option value="all" style={OPTION_STYLE}>
-              All villas
-            </option>
-            {villaOptions.map((v) => (
-              <option key={v} value={v} style={OPTION_STYLE}>
-                {v}
+            <select
+              value={filters.villa}
+              onChange={(e) => set("villa", e.target.value)}
+              style={VILLA_SELECT_STYLE}
+            >
+              <option value="all" style={OPTION_STYLE}>
+                All villas
               </option>
-            ))}
-          </select>
-        </label>
-        <span style={COUNT_STYLE}>
-          {totalShown} of {totalLoaded}
-        </span>
+              {villaOptions.map((v) => (
+                <option key={v} value={v} style={OPTION_STYLE}>
+                  {v}
+                </option>
+              ))}
+            </select>
+          </label>
+          <span style={COUNT_STYLE}>
+            {totalShown} of {totalLoaded}
+          </span>
+        </div>
       </div>
     </div>
   );

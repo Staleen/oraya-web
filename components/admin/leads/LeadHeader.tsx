@@ -136,7 +136,17 @@ export default function LeadHeader({ lead, onBack }: LeadHeaderProps) {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "12px",
+        width: "100%",
+        maxWidth: "100%",
+        minWidth: 0,
+        boxSizing: "border-box",
+      }}
+    >
       {onBack ? (
         <button type="button" onClick={onBack} style={BACK_BUTTON_STYLE}>
           ← Back to list
@@ -150,11 +160,29 @@ export default function LeadHeader({ lead, onBack }: LeadHeaderProps) {
           justifyContent: "space-between",
           gap: "16px",
           flexWrap: "wrap",
+          minWidth: 0,
         }}
       >
-        <div style={{ display: "flex", flexDirection: "column", gap: "6px", minWidth: 0 }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "6px",
+            minWidth: 0,
+            flex: "1 1 220px",
+            wordBreak: "break-word",
+          }}
+        >
           <h2 style={NAME_STYLE}>{displayName(lead)}</h2>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              flexWrap: "wrap",
+              minWidth: 0,
+            }}
+          >
             {waHref ? (
               <a
                 href={waHref}

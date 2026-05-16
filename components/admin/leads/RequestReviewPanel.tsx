@@ -29,6 +29,10 @@ const WRAPPER: CSSProperties = {
   display: "flex",
   flexDirection: "column",
   gap: "14px",
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
 };
 
 const KICKER: CSSProperties = {
@@ -81,18 +85,89 @@ const FIELD_VALUE: CSSProperties = {
   whiteSpace: "pre-wrap",
 };
 
-const CONVERT_BUTTON: CSSProperties = {
+const CONVERT_CONTAINER: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "10px",
+  padding: "14px 16px",
+  border: `1px dashed rgba(197,164,109,0.45)`,
+  backgroundColor: "rgba(197,164,109,0.04)",
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+};
+
+const CONVERT_LABEL_ROW: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "10px",
+  flexWrap: "wrap",
+};
+
+const CONVERT_KICKER: CSSProperties = {
   fontFamily: LATO,
-  fontSize: "10px",
-  letterSpacing: "2px",
+  fontSize: "9px",
+  letterSpacing: "2.5px",
   textTransform: "uppercase",
-  color: MUTED,
+  color: GOLD,
+  margin: 0,
+};
+
+const FUTURE_BADGE: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "2px 8px",
+  fontFamily: LATO,
+  fontSize: "9px",
+  letterSpacing: "1.5px",
+  textTransform: "uppercase",
+  color: "#1F2B38", // MIDNIGHT — solid background calls out the future-phase state
+  backgroundColor: GOLD,
+  borderRadius: "2px",
+  whiteSpace: "nowrap",
+};
+
+const CONVERT_BUTTON: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "10px",
+  fontFamily: LATO,
+  fontSize: "11px",
+  letterSpacing: "1.5px",
+  textTransform: "uppercase",
+  color: WHITE,
   backgroundColor: "transparent",
-  border: `1px dashed ${BORDER}`,
+  border: `1px dashed ${MUTED}`,
   padding: "12px 16px",
   cursor: "not-allowed",
-  opacity: 0.55,
+  opacity: 0.95, // clearly visible — the dashed border + DISABLED badge carry the "inert" signal
   alignSelf: "flex-start",
+  maxWidth: "100%",
+  flexWrap: "wrap" as CSSProperties["flexWrap"],
+  textAlign: "left" as CSSProperties["textAlign"],
+};
+
+const DISABLED_BADGE: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "2px 6px",
+  fontFamily: LATO,
+  fontSize: "9px",
+  letterSpacing: "1.5px",
+  textTransform: "uppercase",
+  color: MUTED,
+  border: `0.5px solid ${MUTED}`,
+  borderRadius: "2px",
+  whiteSpace: "nowrap",
+};
+
+const CONVERT_HELP: CSSProperties = {
+  fontFamily: LATO,
+  fontSize: "11px",
+  lineHeight: 1.5,
+  color: MUTED,
+  margin: 0,
 };
 
 function Field({ label, value }: { label: string; value: ReactNode }) {
@@ -179,20 +254,26 @@ export default function RequestReviewPanel({ lead }: RequestReviewPanelProps) {
       {kind === "event" ? <EventFields lead={lead} /> : null}
       {kind === "other" ? <OtherFields lead={lead} /> : null}
 
-      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+      <div style={CONVERT_CONTAINER}>
+        <div style={CONVERT_LABEL_ROW}>
+          <p style={CONVERT_KICKER}>Future booking conversion</p>
+          <span style={FUTURE_BADGE}>Later phase</span>
+        </div>
         <button
           type="button"
           disabled
           aria-disabled="true"
           tabIndex={-1}
-          title="Available in a later phase"
+          title="Available in a later phase — not active yet"
           style={CONVERT_BUTTON}
         >
-          Convert to booking request — available in a later phase
+          <span style={DISABLED_BADGE}>Disabled</span>
+          <span>Convert to booking request — available in a later phase</span>
         </button>
-        <p style={{ ...NOTICE, fontSize: "10px" }}>
-          A future phase will wire this to the audited booking pipeline. For
-          now, contact the guest on WhatsApp to confirm intent.
+        <p style={CONVERT_HELP}>
+          This lead is only a request summary. Booking conversion will be added
+          in a later controlled phase. For now, contact the guest on WhatsApp
+          to confirm intent.
         </p>
       </div>
     </section>

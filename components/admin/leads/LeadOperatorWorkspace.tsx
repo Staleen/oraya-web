@@ -30,6 +30,10 @@ const SECTION_STYLE: CSSProperties = {
   display: "flex",
   flexDirection: "column",
   gap: "16px",
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
 };
 
 const KICKER: CSSProperties = {

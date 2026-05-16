@@ -83,26 +83,31 @@ const RETRY_BUTTON: CSSProperties = {
   cursor: "pointer",
 };
 
+const PAGE_WRAPPER_STYLE: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "16px",
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  overflowX: "hidden",
+  boxSizing: "border-box",
+};
+
 const FILTERS_WRAPPER: CSSProperties = {
   border: `0.5px solid ${BORDER}`,
   backgroundColor: SURFACE,
   padding: "14px 16px",
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+  overflowX: "hidden",
 };
 
-const LIST_PANE_STYLE_DESKTOP: CSSProperties = {
-  flex: "0 0 400px",
-  maxWidth: "400px",
-  minWidth: 0,
-  overflowY: "auto",
-  paddingRight: "4px",
-};
-
-const DETAIL_PANE_STYLE_DESKTOP: CSSProperties = {
-  flex: 1,
-  minWidth: 0,
-  overflowY: "auto",
-  paddingRight: "4px",
-};
+// Detail content is capped so it stays comfortable on huge monitors — the
+// flex parent can be 1400px wide, but the reading column inside stays sane.
+const DETAIL_CONTENT_MAX_WIDTH = 820;
 
 export default function AdminLeadsPage() {
   const viewportWidth = useViewportWidth();
@@ -254,26 +259,69 @@ export default function AdminLeadsPage() {
   const showList = !isMobile || !selectedLead;
   const showDetail = !isMobile || !!selectedLead;
 
+  // Sticky list on desktop so it remains visible while the detail scrolls.
+  // No fixed two-pane height — the page itself scrolls naturally, which
+  // avoids brittle vh math that produced layout overflow on some viewports.
   const listPaneStyle: CSSProperties = isMobile
-    ? { width: "100%", minWidth: 0 }
-    : { ...LIST_PANE_STYLE_DESKTOP, flex: isNarrowDesktop ? "0 0 340px" : "0 0 400px", maxWidth: isNarrowDesktop ? "340px" : "400px" };
+    ? {
+        width: "100%",
+        maxWidth: "100%",
+        minWidth: 0,
+        boxSizing: "border-box",
+      }
+    : {
+        flex: isNarrowDesktop ? "0 0 320px" : "0 0 360px",
+        width: isNarrowDesktop ? "320px" : "360px",
+        maxWidth: "100%",
+        minWidth: 0,
+        boxSizing: "border-box",
+        position: "sticky",
+        top: "16px",
+        alignSelf: "flex-start",
+        maxHeight: "calc(100vh - 180px)",
+        overflowY: "auto",
+        overflowX: "hidden",
+        paddingRight: "4px",
+      };
 
   const detailPaneStyle: CSSProperties = isMobile
-    ? { width: "100%", minWidth: 0 }
-    : DETAIL_PANE_STYLE_DESKTOP;
+    ? {
+        width: "100%",
+        maxWidth: "100%",
+        minWidth: 0,
+        boxSizing: "border-box",
+      }
+    : {
+        flex: 1,
+        minWidth: 0,
+        maxWidth: "100%",
+        boxSizing: "border-box",
+        overflowX: "hidden",
+      };
 
   const twoPaneStyle: CSSProperties = isMobile
-    ? { display: "flex", flexDirection: "column", gap: "16px" }
+    ? {
+        display: "flex",
+        flexDirection: "column",
+        gap: "16px",
+        width: "100%",
+        maxWidth: "100%",
+        minWidth: 0,
+        boxSizing: "border-box",
+      }
     : {
         display: "flex",
         gap: "20px",
-        height: "calc(100vh - 320px)",
-        minHeight: "560px",
+        alignItems: "flex-start",
+        width: "100%",
+        maxWidth: "100%",
+        minWidth: 0,
+        boxSizing: "border-box",
       };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "16px", minWidth: 0 }}>
-      <header>
+    <div style={PAGE_WRAPPER_STYLE}>
+      <header style={{ minWidth: 0 }}>
         <h1 style={H1_STYLE}>WhatsApp leads</h1>
         <p style={SUBTITLE_STYLE}>WhatsApp leads — not bookings.</p>
       </header>
@@ -321,14 +369,23 @@ export default function AdminLeadsPage() {
 
         {showDetail ? (
           <div style={detailPaneStyle}>
-            <LeadDetail
-              lead={selectedLead}
-              saving={!!selectedLead && savingId === selectedLead.id}
-              onStatusChange={handleStatusChange}
-              onSaveNote={handleSaveNote}
-              onBack={isMobile ? () => setSelectedLeadId(null) : undefined}
-              hiddenByFilter={hiddenByFilter}
-            />
+            <div
+              style={{
+                width: "100%",
+                maxWidth: `${DETAIL_CONTENT_MAX_WIDTH}px`,
+                minWidth: 0,
+                boxSizing: "border-box",
+              }}
+            >
+              <LeadDetail
+                lead={selectedLead}
+                saving={!!selectedLead && savingId === selectedLead.id}
+                onStatusChange={handleStatusChange}
+                onSaveNote={handleSaveNote}
+                onBack={isMobile ? () => setSelectedLeadId(null) : undefined}
+                hiddenByFilter={hiddenByFilter}
+              />
+            </div>
           </div>
         ) : null}
       </div>
