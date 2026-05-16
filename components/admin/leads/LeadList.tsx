@@ -27,6 +27,14 @@ export interface LeadListProps {
   // 16A.2.g: empty-state branching for the Open inbox.
   isOpenInbox: boolean;
   onShowAllLeads: () => void;
+  // 16A.2.h: card-level quick delete. `deleteError` is only shown on the
+  // card whose id matches `deleteErrorId` so a failure does not leak onto
+  // unrelated rows. All three props are optional so the list still renders
+  // if a future caller doesn't wire delete (defensive default).
+  deletingId?: string | null;
+  deleteError?: string | null;
+  deleteErrorId?: string | null;
+  onDeleteLead?: (id: string) => void;
 }
 
 const EMPTY_WRAPPER: CSSProperties = {
@@ -95,6 +103,10 @@ export default function LeadList({
   onClearFilters,
   isOpenInbox,
   onShowAllLeads,
+  deletingId,
+  deleteError,
+  deleteErrorId,
+  onDeleteLead,
 }: LeadListProps) {
   if (loading && totalLoaded === 0) {
     return (
@@ -173,6 +185,9 @@ export default function LeadList({
             lead={lead}
             selected={selectedLeadId === lead.id}
             onSelect={onSelect}
+            deleting={deletingId === lead.id}
+            deleteError={deleteErrorId === lead.id ? deleteError ?? null : null}
+            onDeleteLead={onDeleteLead}
           />
         </div>
       ))}

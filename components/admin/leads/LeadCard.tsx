@@ -1,7 +1,7 @@
 "use client";
 
-import type { CSSProperties } from "react";
-import { BORDER, GOLD, LATO, MUTED, SURFACE, WHITE } from "@/components/admin/theme";
+import { useEffect, useState, type CSSProperties, type KeyboardEvent, type MouseEvent } from "react";
+import { BORDER, GOLD, LATO, MIDNIGHT, MUTED, SURFACE, WHITE } from "@/components/admin/theme";
 import type { WhatsappLeadAdminRow } from "@/lib/butler/leads";
 import {
   STATUS_COLOR,
@@ -17,16 +17,28 @@ import {
 
 /**
  * Phase 16A.2.f — single lead card in the left list.
+ * Phase 16A.2.h — adds a compact quick-delete affordance with a two-step
+ *   inline confirm. The card is rendered as a div with role="button" (rather
+ *   than a real <button>) so the inline Delete / Confirm / Cancel controls
+ *   can be real nested <button> elements without producing invalid HTML.
+ *   Keyboard nav (Enter/Space) on the card is preserved manually. Quick
+ *   delete is omitted entirely when the lead has a `linked_booking_id` so
+ *   the operator can't bypass the server-side guard from the list view.
  *
- * Renders as a real <button> for keyboard nav. Selected state is a clear
- * gold left rail + tinted background; priority labels get a colored left rail
- * (red for needs_human, gold for VIP).
+ * Selected state is a clear gold left rail + tinted background; priority
+ * labels get a colored left rail (red for needs_human, gold for VIP).
  */
 
 export interface LeadCardProps {
   lead: WhatsappLeadAdminRow;
   selected: boolean;
   onSelect: (id: string) => void;
+  // 16A.2.h: optional quick-delete wiring. When `onDeleteLead` is omitted
+  // (e.g. a future caller hasn't wired delete yet) the card falls back to
+  // its pre-16A.2.h shape with no danger affordance.
+  deleting?: boolean;
+  deleteError?: string | null;
+  onDeleteLead?: (id: string) => void;
 }
 
 function railColor(lead: WhatsappLeadAdminRow, selected: boolean): string {
@@ -55,7 +67,96 @@ function cardStyle(selected: boolean, lead: WhatsappLeadAdminRow): CSSProperties
     gap: "8px",
     boxSizing: "border-box",
     minWidth: 0,
+    // 16A.2.h: outline only on keyboard focus so the div-as-button stays
+    // visually quiet during mouse use but is still discoverable for a11y.
+    outline: "none",
   };
+}
+
+// 16A.2.h — danger styles. Red mirrors the existing right-pane Danger Zone
+// in LeadOperatorWorkspace.tsx (#e07070) so the visual language is shared.
+const DANGER_RED = "#e07070";
+
+const DELETE_ACTION_ROW: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  alignItems: "center",
+  justifyContent: "flex-end",
+  gap: "8px",
+  minWidth: 0,
+};
+
+const QUICK_DELETE_BUTTON: CSSProperties = {
+  fontFamily: LATO,
+  fontSize: "9px",
+  letterSpacing: "1.5px",
+  textTransform: "uppercase",
+  color: DANGER_RED,
+  backgroundColor: "transparent",
+  border: `0.5px solid rgba(224,112,112,0.55)`,
+  padding: "4px 10px",
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+
+const QUICK_DELETE_CONFIRM_PROMPT: CSSProperties = {
+  fontFamily: LATO,
+  fontSize: "10px",
+  color: DANGER_RED,
+  letterSpacing: "0.2px",
+  margin: 0,
+  marginRight: "auto",
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  minWidth: 0,
+};
+
+const QUICK_CONFIRM_BUTTON: CSSProperties = {
+  ...QUICK_DELETE_BUTTON,
+  color: MIDNIGHT,
+  backgroundColor: DANGER_RED,
+  border: `0.5px solid ${DANGER_RED}`,
+  fontWeight: 600,
+};
+
+const QUICK_CANCEL_BUTTON: CSSProperties = {
+  fontFamily: LATO,
+  fontSize: "9px",
+  letterSpacing: "1.5px",
+  textTransform: "uppercase",
+  color: MUTED,
+  backgroundColor: "transparent",
+  border: `0.5px solid ${BORDER}`,
+  padding: "4px 10px",
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+
+const QUICK_DELETE_ERROR_STYLE: CSSProperties = {
+  fontFamily: LATO,
+  fontSize: "10px",
+  color: DANGER_RED,
+  backgroundColor: "rgba(224,112,112,0.08)",
+  border: `0.5px solid rgba(224,112,112,0.35)`,
+  padding: "6px 8px",
+  margin: 0,
+  width: "100%",
+  boxSizing: "border-box",
+};
+
+function quickDeleteErrorMessage(code: string | null | undefined): string | null {
+  if (!code) return null;
+  if (code === "linked_booking_exists") {
+    return "Linked to a booking — clear the link before deleting.";
+  }
+  if (code === "not_found") {
+    return "Lead no longer exists. Refresh the list.";
+  }
+  if (code === "invalid_request") {
+    return "Invalid lead id. Refresh and try again.";
+  }
+  return "Couldn't delete this lead. Please try again.";
 }
 
 const ROW_STYLE: CSSProperties = {
@@ -166,7 +267,14 @@ const AVATAR_STYLE: CSSProperties = {
   fontWeight: 500,
 };
 
-export default function LeadCard({ lead, selected, onSelect }: LeadCardProps) {
+export default function LeadCard({
+  lead,
+  selected,
+  onSelect,
+  deleting,
+  deleteError,
+  onDeleteLead,
+}: LeadCardProps) {
   const flags = priorityFlagsFor(lead);
   const kind = requestKind(lead);
   const nights = computeNights(lead.normalized_check_in, lead.normalized_check_out);
@@ -184,10 +292,74 @@ export default function LeadCard({ lead, selected, onSelect }: LeadCardProps) {
   const kindLabel = kind === "stay" ? "Stay" : kind === "event" ? "Event" : "Inquiry";
   const guests = lead.guest_count?.trim();
 
+  // 16A.2.h: quick-delete is omitted entirely for leads with a linked
+  // booking — the server refuses these anyway, and a disabled chip on every
+  // converted card would be noisy in the list view. The right-pane Danger
+  // Zone still explains the linked-booking situation when one of these
+  // leads is opened.
+  const hasLinkedBooking = !!lead.linked_booking_id;
+  const canQuickDelete = !!onDeleteLead && !hasLinkedBooking;
+
+  const [confirming, setConfirming] = useState(false);
+
+  // Drop any half-confirmed delete if the row is swapped underneath us
+  // (e.g. the selected lead changes id or a fresh fetch replaces the row).
+  useEffect(() => {
+    setConfirming(false);
+  }, [lead.id]);
+
+  // When a delete attempt fails the page sets deleteError for this card —
+  // bounce the card back to its idle state so the operator sees the error
+  // banner instead of a sticky "Confirm delete" button.
+  useEffect(() => {
+    if (deleteError) setConfirming(false);
+  }, [deleteError]);
+
+  const quickDeleteErrorText = quickDeleteErrorMessage(deleteError);
+
+  function handleCardClick() {
+    onSelect(lead.id);
+  }
+
+  function handleCardKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    // Standard role="button" keyboard support. Ignore when the event was
+    // raised by a nested control (e.g. the Delete button) so focusing the
+    // delete affordance and hitting Space doesn't also select the card.
+    if (e.target !== e.currentTarget) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onSelect(lead.id);
+    }
+  }
+
+  function stop(e: MouseEvent | KeyboardEvent) {
+    e.stopPropagation();
+  }
+
+  function handleDeleteClick(e: MouseEvent<HTMLButtonElement>) {
+    stop(e);
+    if (!canQuickDelete || deleting) return;
+    setConfirming(true);
+  }
+
+  function handleConfirmClick(e: MouseEvent<HTMLButtonElement>) {
+    stop(e);
+    if (!canQuickDelete || deleting) return;
+    onDeleteLead?.(lead.id);
+  }
+
+  function handleCancelClick(e: MouseEvent<HTMLButtonElement>) {
+    stop(e);
+    if (deleting) return;
+    setConfirming(false);
+  }
+
   return (
-    <button
-      type="button"
-      onClick={() => onSelect(lead.id)}
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={handleCardClick}
+      onKeyDown={handleCardKeyDown}
       aria-pressed={selected}
       aria-label={`Lead from ${displayName(lead)} — ${kindLabel} — status ${STATUS_LABEL[lead.follow_up_status]}`}
       style={cardStyle(selected, lead)}
@@ -223,6 +395,60 @@ export default function LeadCard({ lead, selected, onSelect }: LeadCardProps) {
         {flags.pendingFollowup ? <span style={chipStyle("pending")}>Pending follow-up</span> : null}
         {nightsLabel ? <span style={chipStyle("pending")}>{nightsLabel}</span> : null}
       </div>
-    </button>
+
+      {canQuickDelete ? (
+        <div style={DELETE_ACTION_ROW}>
+          {!confirming ? (
+            <button
+              type="button"
+              onClick={handleDeleteClick}
+              disabled={!!deleting}
+              aria-label={`Delete lead from ${displayName(lead)}`}
+              style={{
+                ...QUICK_DELETE_BUTTON,
+                opacity: deleting ? 0.5 : 1,
+                cursor: deleting ? "not-allowed" : "pointer",
+              }}
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </button>
+          ) : (
+            <>
+              <span style={QUICK_DELETE_CONFIRM_PROMPT}>Delete permanently?</span>
+              <button
+                type="button"
+                onClick={handleConfirmClick}
+                disabled={!!deleting}
+                aria-label={`Confirm permanent delete of lead from ${displayName(lead)}`}
+                style={{
+                  ...QUICK_CONFIRM_BUTTON,
+                  opacity: deleting ? 0.7 : 1,
+                  cursor: deleting ? "wait" : "pointer",
+                }}
+              >
+                {deleting ? "Deleting…" : "Confirm delete"}
+              </button>
+              <button
+                type="button"
+                onClick={handleCancelClick}
+                disabled={!!deleting}
+                style={{
+                  ...QUICK_CANCEL_BUTTON,
+                  opacity: deleting ? 0.5 : 1,
+                  cursor: deleting ? "not-allowed" : "pointer",
+                }}
+              >
+                Cancel
+              </button>
+            </>
+          )}
+          {quickDeleteErrorText ? (
+            <p role="alert" style={QUICK_DELETE_ERROR_STYLE}>
+              {quickDeleteErrorText}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
   );
 }

@@ -5,6 +5,11 @@ import { readLeadAdminPatch, type WhatsappLeadAdminRow } from "@/lib/butler/lead
 
 /**
  * Phase 16A.2.e — admin update endpoint for a single WhatsApp lead.
+ * Phase 16A.2.h — adds DELETE for permanent removal of a single
+ *   `whatsapp_leads` row. Guarded by `linked_booking_id`: a lead that has
+ *   been linked to a real booking cannot be deleted from this endpoint.
+ *   No other table is touched — bookings, members, settings, addons,
+ *   booking_action_tokens, calendar data are all out of scope.
  *
  * PATCH /api/admin/leads/[id]
  *   Mutable fields (v1):
@@ -25,6 +30,18 @@ import { readLeadAdminPatch, type WhatsappLeadAdminRow } from "@/lib/butler/lead
  *     404 not_found if the row does not exist
  *     401 / 503 from requireAdminAuth on auth/env failure
  *     500 server_error on Supabase failure
+ *
+ * DELETE /api/admin/leads/[id]
+ *   Permanently removes a single `whatsapp_leads` row by id. Bookings and
+ *   every other table are untouched.
+ *
+ *   Returns:
+ *     200 { ok: true }
+ *     400 { ok: false, error: "invalid_request" }      — bad uuid
+ *     401 / 503 from requireAdminAuth on auth/env failure
+ *     404 { ok: false, error: "not_found" }            — no row matched
+ *     409 { ok: false, error: "linked_booking_exists" } — lead has linked_booking_id set
+ *     500 { ok: false, error: "server_error" }         — Supabase failure
  */
 
 export const dynamic = "force-dynamic";
@@ -101,6 +118,86 @@ export async function PATCH(
     );
   } catch (error) {
     console.error("[api/admin/leads/:id] unexpected error:", error);
+    return serverError();
+  }
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: { id: string } },
+) {
+  const denied = requireAdminAuth(request);
+  if (denied) return denied;
+
+  const id = params?.id?.trim() ?? "";
+  if (!id || !UUID_RE.test(id)) return invalid();
+
+  try {
+    // Pre-flight: confirm the lead exists and is unlinked. A linked lead is
+    // operationally significant — refuse to delete it from this endpoint and
+    // require the operator to clear linked_booking_id via PATCH first.
+    const { data: existing, error: lookupError } = await supabaseAdmin
+      .from("whatsapp_leads")
+      .select("id, linked_booking_id")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (lookupError) {
+      console.error("[api/admin/leads/:id] delete lookup error:", lookupError);
+      return serverError();
+    }
+    if (!existing) {
+      return NextResponse.json(
+        { ok: false, error: "not_found" },
+        { status: 404, headers: NO_STORE_HEADERS },
+      );
+    }
+    if (existing.linked_booking_id) {
+      return NextResponse.json(
+        { ok: false, error: "linked_booking_exists" },
+        { status: 409, headers: NO_STORE_HEADERS },
+      );
+    }
+
+    // Defense-in-depth: re-assert the linked_booking_id-is-null condition on
+    // the DELETE itself so a concurrent PATCH cannot slip a link in between
+    // the lookup and the delete.
+    const { data: deleted, error: deleteError } = await supabaseAdmin
+      .from("whatsapp_leads")
+      .delete()
+      .eq("id", id)
+      .is("linked_booking_id", null)
+      .select("id")
+      .maybeSingle();
+
+    if (deleteError) {
+      console.error("[api/admin/leads/:id] delete error:", deleteError);
+      return serverError();
+    }
+    if (!deleted) {
+      // Either the row vanished between the two queries, or a concurrent
+      // PATCH set linked_booking_id. Surface the second case explicitly so
+      // the operator sees the correct reason.
+      const { data: recheck } = await supabaseAdmin
+        .from("whatsapp_leads")
+        .select("id, linked_booking_id")
+        .eq("id", id)
+        .maybeSingle();
+      if (recheck?.linked_booking_id) {
+        return NextResponse.json(
+          { ok: false, error: "linked_booking_exists" },
+          { status: 409, headers: NO_STORE_HEADERS },
+        );
+      }
+      return NextResponse.json(
+        { ok: false, error: "not_found" },
+        { status: 404, headers: NO_STORE_HEADERS },
+      );
+    }
+
+    return NextResponse.json({ ok: true }, { headers: NO_STORE_HEADERS });
+  } catch (error) {
+    console.error("[api/admin/leads/:id] unexpected delete error:", error);
     return serverError();
   }
 }
