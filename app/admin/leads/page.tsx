@@ -124,6 +124,12 @@ export default function AdminLeadsPage() {
   const [filters, setFilters] = useState<LeadFilterState>(INITIAL_FILTER_STATE);
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
+  // 16A.2.h — deletion state. deletingId is the lead currently being
+  // DELETEd; deleteError is the most recent failure code scoped to the
+  // selected lead. The error clears automatically when the operator
+  // switches leads (see effect below).
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -269,6 +275,53 @@ export default function AdminLeadsPage() {
     void patchLead(id, { admin_notes: next });
   }
 
+  // 16A.2.h — permanent delete of a single whatsapp_leads row. On success
+  // the lead is removed from local state and we auto-select the next visible
+  // lead so the operator can keep triaging without a click. The API guards
+  // linked_booking_id; the UI surfaces that as an inline error rather than a
+  // generic failure.
+  async function deleteLead(id: string) {
+    setDeletingId(id);
+    setDeleteError(null);
+    try {
+      const res = await fetch(`/api/admin/leads/${id}`, {
+        ...adminApiFetchInit,
+        method: "DELETE",
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+      };
+      if (!res.ok || !data.ok) {
+        setDeleteError(data.error ?? "server_error");
+        return;
+      }
+
+      // Pick the next lead to auto-select before mutating `leads` so the
+      // ordering matches what the operator saw on screen.
+      const visible = filtered;
+      const idx = visible.findIndex((l) => l.id === id);
+      let nextSelectedId: string | null = null;
+      if (idx !== -1) {
+        const next = visible[idx + 1] ?? visible[idx - 1] ?? null;
+        nextSelectedId = next ? next.id : null;
+      }
+
+      setLeads((prev) => prev.filter((l) => l.id !== id));
+      setSelectedLeadId(nextSelectedId);
+    } catch {
+      setDeleteError("server_error");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  // Reset the inline delete error whenever the operator switches leads so
+  // an old failure doesn't haunt a different lead's detail pane.
+  useEffect(() => {
+    setDeleteError(null);
+  }, [selectedLeadId]);
+
   function clearAllFilters() {
     setFilters(INITIAL_FILTER_STATE);
   }
@@ -406,8 +459,11 @@ export default function AdminLeadsPage() {
               <LeadDetail
                 lead={selectedLead}
                 saving={!!selectedLead && savingId === selectedLead.id}
+                deleting={!!selectedLead && deletingId === selectedLead.id}
+                deleteError={deleteError}
                 onStatusChange={handleStatusChange}
                 onSaveNote={handleSaveNote}
+                onDeleteLead={(id) => void deleteLead(id)}
                 onBack={isMobile ? () => setSelectedLeadId(null) : undefined}
                 hiddenByFilter={hiddenByFilter}
               />

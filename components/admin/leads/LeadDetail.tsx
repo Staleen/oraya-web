@@ -19,8 +19,11 @@ import { formatDateTime } from "./leadHelpers";
 export interface LeadDetailProps {
   lead: WhatsappLeadAdminRow | null;
   saving: boolean;
+  deleting: boolean;
+  deleteError: string | null;
   onStatusChange: (id: string, next: FollowUpStatus) => void;
   onSaveNote: (id: string, next: string | null) => void;
+  onDeleteLead: (id: string) => void;
   onBack?: () => void;
   hiddenByFilter?: boolean;
 }
@@ -78,8 +81,11 @@ const HIDDEN_BANNER: CSSProperties = {
 export default function LeadDetail({
   lead,
   saving,
+  deleting,
+  deleteError,
   onStatusChange,
   onSaveNote,
+  onDeleteLead,
   onBack,
   hiddenByFilter,
 }: LeadDetailProps) {
@@ -118,8 +124,11 @@ export default function LeadDetail({
       <LeadOperatorWorkspace
         lead={lead}
         saving={saving}
+        deleting={deleting}
+        deleteError={deleteError}
         onStatusChange={(next) => onStatusChange(lead.id, next)}
         onSaveNote={(next) => onSaveNote(lead.id, next)}
+        onDeleteLead={() => onDeleteLead(lead.id)}
       />
 
       <div style={META_FOOTER}>
