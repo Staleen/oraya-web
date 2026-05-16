@@ -5,6 +5,7 @@ import {
   BORDER,
   GOLD,
   LATO,
+  MIDNIGHT,
   MUTED,
   PLAYFAIR,
   SURFACE,
@@ -59,6 +60,22 @@ function statusBadgeStyle(status: FollowUpStatus): React.CSSProperties {
     whiteSpace: "nowrap",
   };
 }
+
+const statusSelectStyle: React.CSSProperties = {
+  ...fieldStyle,
+  padding: "6px 8px",
+  fontSize: "11px",
+  width: "auto",
+  backgroundColor: MIDNIGHT,
+  color: WHITE,
+  borderColor: "rgba(197,164,109,0.32)",
+  colorScheme: "dark",
+};
+
+const statusOptionStyle: React.CSSProperties = {
+  backgroundColor: MIDNIGHT,
+  color: WHITE,
+};
 
 function digitsOnly(value: string | null): string {
   if (!value) return "";
@@ -257,15 +274,10 @@ export default function AdminLeadsPage() {
                           disabled={isSaving}
                           value={lead.follow_up_status}
                           onChange={(e) => onStatusChange(lead.id, e.target.value as FollowUpStatus)}
-                          style={{
-                            ...fieldStyle,
-                            padding: "6px 8px",
-                            fontSize: "11px",
-                            width: "auto",
-                          }}
+                          style={statusSelectStyle}
                         >
                           {FOLLOW_UP_STATUSES.map((s) => (
-                            <option key={s} value={s}>
+                            <option key={s} value={s} style={statusOptionStyle}>
                               {STATUS_LABEL[s]}
                             </option>
                           ))}
