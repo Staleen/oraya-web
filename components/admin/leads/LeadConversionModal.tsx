@@ -173,9 +173,21 @@ const SECONDARY_BUTTON_STYLE: CSSProperties = {
 };
 
 function normalizeCanonicalVilla(value: string | null): string {
-  const raw = (value ?? "").trim().toLowerCase();
-  if (raw === "villa mechmech" || raw === "mechmech") return "Villa Mechmech";
-  if (raw === "villa byblos" || raw === "byblos") return "Villa Byblos";
+  const raw = (value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/\s*\/\s*/g, "/");
+  const villaLookup: Record<string, (typeof ALLOWED_VILLAS)[number]> = {
+    "villa mechmech": "Villa Mechmech",
+    mechmech: "Villa Mechmech",
+    mishmish: "Villa Mechmech",
+    "villa byblos": "Villa Byblos",
+    byblos: "Villa Byblos",
+    jbeil: "Villa Byblos",
+    "byblos/jbeil": "Villa Byblos",
+  };
+  if (raw in villaLookup) return villaLookup[raw];
   return "";
 }
 
@@ -211,13 +223,38 @@ function isValidDateOnly(value: string): boolean {
   );
 }
 
+function strictDateOrBlank(value: string | null): string {
+  const trimmed = value?.trim() ?? "";
+  return isValidDateOnly(trimmed) ? trimmed : "";
+}
+
+function hasSourceDateText(lead: WhatsappLeadAdminRow): boolean {
+  return Boolean(lead.check_in_text?.trim() || lead.check_out_text?.trim());
+}
+
+function sourceRangeLooksUnsafe(lead: WhatsappLeadAdminRow): boolean {
+  const checkIn = lead.check_in_text?.trim() ?? "";
+  const checkOut = lead.check_out_text?.trim() ?? "";
+  if (!checkIn || !checkOut) return false;
+  if (strictDateOrBlank(lead.normalized_check_in) && strictDateOrBlank(lead.normalized_check_out)) {
+    return lead.normalized_check_out! <= lead.normalized_check_in!;
+  }
+  const inDay = checkIn.match(/\b([0-3]?\d)\b/);
+  const outDay = checkOut.match(/\b([0-3]?\d)\b/);
+  if (!inDay || !outDay) return false;
+  const inNumber = Number(inDay[1]);
+  const outNumber = Number(outDay[1]);
+  if (!Number.isFinite(inNumber) || !Number.isFinite(outNumber)) return false;
+  return outNumber <= inNumber;
+}
+
 function initialDraftForLead(lead: WhatsappLeadAdminRow): ConversionDraft {
   const guests = parsePositiveIntegerText(lead.guest_count);
   const guestText = guests !== null ? String(guests) : "";
   return {
     villa: normalizeCanonicalVilla(lead.villa),
-    checkIn: lead.normalized_check_in ?? "",
-    checkOut: lead.normalized_check_out ?? "",
+    checkIn: strictDateOrBlank(lead.normalized_check_in),
+    checkOut: strictDateOrBlank(lead.normalized_check_out),
     guestName: lead.name?.trim() ?? "",
     guestPhone: lead.phone?.trim() ?? "",
     guestEmail: "",
@@ -309,6 +346,13 @@ export default function LeadConversionModal({
     const checkOut = lead.check_out_text?.trim() || "not captured";
     return `${checkIn} -> ${checkOut}`;
   }, [lead.check_in_text, lead.check_out_text]);
+  const dateHelperText = useMemo(() => {
+    const hasNormalizedDates =
+      strictDateOrBlank(lead.normalized_check_in) && strictDateOrBlank(lead.normalized_check_out);
+    if (hasNormalizedDates || !hasSourceDateText(lead)) return "";
+    if (sourceRangeLooksUnsafe(lead)) return "Captured dates need admin correction before conversion.";
+    return "Source date text was captured from WhatsApp. Please enter exact dates in YYYY-MM-DD before creating the request.";
+  }, [lead]);
 
   function set<K extends keyof ConversionDraft>(key: K, value: ConversionDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -434,6 +478,7 @@ export default function LeadConversionModal({
               disabled={submitting}
             />
             <span style={SOURCE_TEXT_STYLE}>Source: {sourceDateText}</span>
+            {dateHelperText ? <span style={SOURCE_TEXT_STYLE}>{dateHelperText}</span> : null}
           </label>
 
           <label style={LABEL_STYLE}>
