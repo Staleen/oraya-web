@@ -21,6 +21,7 @@
 | `CRON_SECRET` | server-only | optional (cron only fires in Vercel) | yes (Vercel auto-injects for Cron) | yes (Vercel auto-injects for Cron) | yes |
 | `ADMIN_SECRET` | server-only | yes (admin login + admin APIs) | yes | yes | yes |
 | `BUTLER_WEBHOOK_SECRET` | server-only | optional (only for Butler endpoint testing) | yes (once WhatChimp is wired) | yes (once WhatChimp is wired) | yes — Sensitive |
+| `BUTLER_PREFILL_SECRET` | server-only | optional (only for Butler prefill testing) | yes (once WhatsApp prefill links are wired) | yes (once WhatsApp prefill links are wired) | yes — Sensitive |
 | `NODE_ENV` | system | auto | auto | auto | n/a (Next.js / Vercel sets) |
 
 Public vs server-only:
@@ -159,6 +160,20 @@ Public vs server-only:
 - **Risk if header missing or wrong:** 401 Unauthorized.
 - **Rotation:** rotating immediately invalidates the WhatChimp outbound webhook header; rotate the WhatChimp side in the same change window. A short overlap window via a future `BUTLER_WEBHOOK_SECRET_PREVIOUS` accepter is out of scope until proven necessary.
 - **Reference:** [DECISIONS_LOG.md](DECISIONS_LOG.md) — 2026-05-12 entry "Phase 16A Butler architecture freeze — `/api/butler/*` namespace + `BUTLER_WEBHOOK_SECRET`".
+
+### `BUTLER_PREFILL_SECRET`
+
+- **Scope:** server-only. **Never expose in a `"use client"` component or any `NEXT_PUBLIC_*` variable.**
+- **Status:** live as of Phase 16A WhatsApp → website prefilled booking handoff.
+- **Used in:**
+  - [lib/butler/prefill-token.ts](lib/butler/prefill-token.ts) — HMAC-SHA256 signing and verification for short-lived opaque `/book?h=...` prefill tokens.
+  - [app/api/butler/lead/route.ts](app/api/butler/lead/route.ts) — creates the additive `prefill_url` returned after lead insert.
+  - [app/api/butler/prefill/route.ts](app/api/butler/prefill/route.ts) — verifies the token before reading the allow-listed lead fields.
+- **Required:** local optional (only needed when you want to curl the prefill flow against `npm run dev`) · preview yes (once WhatsApp prefill links are wired) · production yes (once WhatsApp prefill links are wired).
+- **Where to get it:** generate (`openssl rand -base64 32`). Distinct from `BUTLER_WEBHOOK_SECRET`, `BOOKING_ACTION_SECRET`, `CRON_SECRET`, and `ADMIN_SECRET` — do not reuse.
+- **Configure in Vercel:** yes — Production + Preview, marked Sensitive. Different value per environment strongly recommended.
+- **Risk if missing:** `POST /api/butler/lead` can still insert the lead only until token creation is attempted, then returns a safe 500; `/api/butler/prefill?h=...` returns a safe 500 because tokens cannot be verified. The locked production endpoints (`/api/bookings*`, `/api/admin/*`, etc.) are unaffected.
+- **Rotation:** rotating immediately invalidates every outstanding WhatsApp prefill link. Links are short-lived (2 hours), so rotation has a small blast radius.
 
 ### `NODE_ENV`
 

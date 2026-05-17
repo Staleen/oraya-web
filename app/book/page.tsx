@@ -656,6 +656,15 @@ const CALENDAR_CSS = `
 
 type BookingPath = null | "instant" | "request";
 
+type ButlerPrefillResponse = {
+  villa?: unknown;
+  check_in?: unknown;
+  check_out?: unknown;
+  sleeping_guests?: unknown;
+  full_name?: unknown;
+  source?: unknown;
+};
+
 /** Normalize `?villa=` (handles + and encoded spaces) for comparison with `VILLAS`. */
 function normalizeVillaFromSearchParam(raw: string | null): string | null {
   if (raw == null || raw === "") return null;
@@ -664,6 +673,19 @@ function normalizeVillaFromSearchParam(raw: string | null): string | null {
   } catch {
     return raw.replace(/\+/g, " ").trim();
   }
+}
+
+function readPrefillString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function parsePrefillDateOnly(value: unknown): Date | null {
+  const raw = readPrefillString(value);
+  if (!raw || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+  const parsed = parseLocalISO(raw);
+  return toISO(parsed) === raw ? parsed : null;
 }
 
 function useMatchMediaMaxWidth(maxPx: number) {
@@ -800,6 +822,9 @@ function BookPageInner() {
   const reserveAutoNavigatedRef = useRef(false);
   /** Suppresses auto-navigation after an explicit Back action until the stay selection changes. */
   const reserveAutoAdvanceSuppressedRef = useRef(false);
+  const hydratedPrefillTokenRef = useRef<string | null>(null);
+  const skipNextVillaDateResetRef = useRef(false);
+  const guestEstimateManuallyChangedRef = useRef(false);
 
   // Form (persisted across steps)
   const [form, setForm] = useState({
@@ -809,6 +834,7 @@ function BookPageInner() {
     dayVisitors:    "0",
     message:        "",
   });
+  const formRef = useRef(form);
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
   // Guest contact (shown on step 2 when guestMode)
@@ -857,6 +883,10 @@ function BookPageInner() {
   const guestEmailInputRef = useRef<HTMLInputElement>(null);
   const narrowStep1 = useMatchMediaMaxWidth(640);
 
+  useEffect(() => {
+    formRef.current = form;
+  }, [form]);
+
   // Pre-select villa from ?villa= query param (+ / %20 normalization)
   useEffect(() => {
     const normalized = normalizeVillaFromSearchParam(searchParams.get("villa"));
@@ -864,6 +894,85 @@ function BookPageInner() {
       setForm((f) => (f.villa === normalized ? f : { ...f, villa: normalized }));
       setShowFullVillaCards(false);
     }
+  }, [searchParams]);
+
+  useEffect(() => {
+    const token = searchParams.get("h");
+    if (!token || hydratedPrefillTokenRef.current === token) return;
+
+    hydratedPrefillTokenRef.current = token;
+    const villaFromQuery = normalizeVillaFromSearchParam(searchParams.get("villa"));
+    const stripTokenFromUrl = () => {
+      const nextParams = new URLSearchParams(window.location.search);
+      nextParams.delete("h");
+      const qs = nextParams.toString();
+      window.history.replaceState(
+        window.history.state,
+        "",
+        `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash}`,
+      );
+    };
+
+    fetch(`/api/butler/prefill?h=${encodeURIComponent(token)}`, { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return (await response.json()) as ButlerPrefillResponse;
+      })
+      .then((prefill) => {
+        if (!prefill) return;
+
+        const prefillVilla = normalizeVillaFromSearchParam(readPrefillString(prefill.villa));
+        const checkInDate = parsePrefillDateOnly(prefill.check_in);
+        const checkOutDate = parsePrefillDateOnly(prefill.check_out);
+        const sleepingGuests = readPrefillString(prefill.sleeping_guests);
+        const fullName = readPrefillString(prefill.full_name);
+        const prefillVillaIsValid = Boolean(prefillVilla && VILLAS.includes(prefillVilla));
+        const currentVilla = formRef.current.villa;
+        const canApplyPrefillVilla = Boolean(
+          prefillVillaIsValid &&
+          prefillVilla &&
+          (!currentVilla || currentVilla === villaFromQuery || currentVilla === prefillVilla),
+        );
+
+        if (checkInDate && checkOutDate && checkOutDate > checkInDate) {
+          setDateRange((current) => {
+            if (current?.from || current?.to) return current;
+            if (prefillVillaIsValid && !canApplyPrefillVilla) return current;
+            return { from: checkInDate, to: checkOutDate };
+          });
+        }
+
+        setForm((current) => {
+          const next = { ...current };
+          if (
+            prefillVilla &&
+            prefillVillaIsValid &&
+            (!current.villa || current.villa === villaFromQuery || current.villa === prefillVilla)
+          ) {
+            if (current.villa !== prefillVilla && checkInDate && checkOutDate && checkOutDate > checkInDate) {
+              skipNextVillaDateResetRef.current = true;
+            }
+            next.villa = prefillVilla;
+          }
+          if (
+            sleepingGuests &&
+            (/^\d+$/.test(sleepingGuests)) &&
+            (!current.sleepingGuests ||
+              (current.sleepingGuests === "2" && !guestEstimateManuallyChangedRef.current))
+          ) {
+            next.sleepingGuests = sleepingGuests;
+          }
+          return next;
+        });
+
+        if (fullName) {
+          setGuest((current) => (
+            current.fullName.trim() ? current : { ...current, fullName }
+          ));
+        }
+      })
+      .catch(() => {})
+      .finally(stripTokenFromUrl);
   }, [searchParams]);
 
   useEffect(() => {
@@ -986,6 +1095,10 @@ function BookPageInner() {
 
   // Clear stay dates when villa changes; availability is fetched after check-in is derived (see below).
   useEffect(() => {
+    if (skipNextVillaDateResetRef.current) {
+      skipNextVillaDateResetRef.current = false;
+      return;
+    }
     setDateRange(undefined);
   }, [form.villa]);
 
@@ -1438,7 +1551,10 @@ function BookPageInner() {
   ) {
     const { name, value } = e.target;
     setForm(f => ({ ...f, [name]: value }));
-    if (name === "sleepingGuests") setGuestEstimateManuallyChanged(true);
+    if (name === "sleepingGuests") {
+      guestEstimateManuallyChangedRef.current = true;
+      setGuestEstimateManuallyChanged(true);
+    }
   }
 
   function handleGuestChange(

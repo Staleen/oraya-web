@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireButlerAuth } from "@/lib/butler/auth";
 import { normalizeLeadInput } from "@/lib/butler/leads";
+import { createPrefillToken } from "@/lib/butler/prefill-token";
+import { SITE_URL } from "@/lib/brand";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 /**
@@ -23,7 +25,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
  *   - 401 if X-Butler-Secret is missing or invalid.
  *
  * Response contract:
- *   - 200 { ok: true, lead_id, message }       — row inserted
+ *   - 200 { ok: true, lead_id, message, prefill_url } — row inserted
  *   - 400 { ok: false, error: "invalid_request" } — bad JSON or unusable body
  *   - 500 { ok: false, error: "server_error" }    — Supabase failed
  * Raw Supabase / driver errors are logged server-side only, never echoed.
@@ -73,11 +75,16 @@ export async function POST(request: Request) {
       return serverError();
     }
 
+    const token = createPrefillToken(data.id);
+    const base = process.env.NEXT_PUBLIC_SITE_URL || SITE_URL;
+    const prefillUrl = `${base.replace(/\/$/, "")}/book?h=${encodeURIComponent(token)}`;
+
     return NextResponse.json(
       {
         ok: true,
         lead_id: data.id,
         message: "Lead received. The Oraya team will review it.",
+        prefill_url: prefillUrl,
       },
       { headers: NO_STORE_HEADERS },
     );
