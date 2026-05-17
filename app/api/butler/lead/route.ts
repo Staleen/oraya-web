@@ -49,9 +49,18 @@ function serverError() {
   );
 }
 
+function hasPrefillSecret(): boolean {
+  return Boolean(process.env.BUTLER_PREFILL_SECRET?.trim());
+}
+
 export async function POST(request: Request) {
   const authFail = requireButlerAuth(request);
   if (authFail) return authFail;
+
+  if (!hasPrefillSecret()) {
+    console.error("[api/butler/lead] BUTLER_PREFILL_SECRET is not set.");
+    return serverError();
+  }
 
   let raw: unknown;
   try {

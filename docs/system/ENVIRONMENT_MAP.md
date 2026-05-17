@@ -172,7 +172,7 @@ Public vs server-only:
 - **Required:** local optional (only needed when you want to curl the prefill flow against `npm run dev`) · preview yes (once WhatsApp prefill links are wired) · production yes (once WhatsApp prefill links are wired).
 - **Where to get it:** generate (`openssl rand -base64 32`). Distinct from `BUTLER_WEBHOOK_SECRET`, `BOOKING_ACTION_SECRET`, `CRON_SECRET`, and `ADMIN_SECRET` — do not reuse.
 - **Configure in Vercel:** yes — Production + Preview, marked Sensitive. Different value per environment strongly recommended.
-- **Risk if missing:** `POST /api/butler/lead` can still insert the lead only until token creation is attempted, then returns a safe 500; `/api/butler/prefill?h=...` returns a safe 500 because tokens cannot be verified. The locked production endpoints (`/api/bookings*`, `/api/admin/*`, etc.) are unaffected.
+- **Risk if missing:** `POST /api/butler/lead` returns a safe 500 before inserting a lead because prefill URLs cannot be minted; `/api/butler/prefill?h=...` returns a safe 500 because tokens cannot be verified. The locked production endpoints (`/api/bookings*`, `/api/admin/*`, etc.) are unaffected.
 - **Rotation:** rotating immediately invalidates every outstanding WhatsApp prefill link. Links are short-lived (2 hours), so rotation has a small blast radius.
 
 ### `NODE_ENV`
