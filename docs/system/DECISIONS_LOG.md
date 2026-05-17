@@ -16,6 +16,18 @@ Durable architectural and operational decisions. Append-only — never edit a pa
 
 ---
 
+## 2026-05-17 — WhatsApp leads hand off to `/book` through short-lived prefill tokens
+
+**Decision:** Existing `whatsapp_leads` rows are the source of truth for WhatsApp → website booking handoff. `POST /api/butler/lead` returns an additive `prefill_url` using `/book?h=<token>`. The token is opaque to the browser, expires after 2 hours, is signed with HMAC-SHA256, and uses the new server-only `BUTLER_PREFILL_SECRET` rather than `BUTLER_WEBHOOK_SECRET`. The public `GET /api/butler/prefill?h=<token>` endpoint verifies the token and returns only allow-listed booking prefill fields.
+
+**Reason:** WhatsApp links should be convenient without exposing raw booking data or PII in the URL. Keeping the existing lead row as the source of truth avoids schema changes and keeps the booking pipeline locked.
+
+**Impact:** New [lib/butler/prefill-token.ts](../../lib/butler/prefill-token.ts), new [app/api/butler/prefill/route.ts](../../app/api/butler/prefill/route.ts), additive `prefill_url` in [app/api/butler/lead/route.ts](../../app/api/butler/lead/route.ts), additive hydration in [app/book/page.tsx](../../app/book/page.tsx), and new env var `BUTLER_PREFILL_SECRET` in [/.env.example](../../.env.example) and [ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md). No schema changes, no booking creation, no locked API changes.
+
+**Reversible?:** yes. Remove the prefill route/helper/env var, drop `prefill_url` from the lead response, and remove `/book?h=...` hydration. Existing leads remain intact.
+
+---
+
 ## 2026-05-15 — WhatsApp leads are persisted in `whatsapp_leads` before booking creation
 
 **Decision:** WhatsApp / WhatChimp lead intake is persisted in a new operational Supabase table `whatsapp_leads` and surfaced through a new admin dashboard at `/admin/leads`. A new `POST /api/butler/lead` is the only writer; new `GET /api/admin/leads` and `PATCH /api/admin/leads/[id]` are the only readers/mutators. The lead is **not** a booking, and writing a lead does **not** create a booking row, hold dates, check availability, send email, issue a token, or trigger payment.
