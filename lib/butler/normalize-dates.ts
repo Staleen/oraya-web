@@ -12,9 +12,10 @@
  *     JS Date parser. We tokenize explicitly and build dates from numeric
  *     year/month/day via `Date.UTC(...)`.
  *
- * Output is always advisory: even when both dates parse cleanly we return
- * `status: "needs_confirmation"` so the Butler asks the guest to confirm
- * before any availability check happens.
+ * Output is advisory by intent — the `safe_message` always asks the guest
+ * to confirm before any availability check happens. The `status` is `"clear"`
+ * when both dates parse, `"unclear"` otherwise; the Butler must still echo
+ * the parsed dates back for explicit confirmation.
  */
 
 const ISO_DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -68,7 +69,7 @@ const WEEKDAY_LABELS = [
 
 /** Public response shape — matches /docs/system/CURRENT_PHASE.md spec. */
 export interface NormalizedDateResult {
-  status: "needs_confirmation" | "unclear" | "error";
+  status: "clear" | "unclear" | "error";
   check_in: string | null;
   check_out: string | null;
   nights: number | null;
@@ -173,12 +174,22 @@ function resolveReferenceDate(raw: string | null | undefined): string {
 
 function cleanInput(raw: string | null | undefined): string {
   if (typeof raw !== "string") return "";
-  return raw
+  const lowered = raw
     .replace(/[,;.!?]/g, " ")
     .replace(/[“”"']/g, "")
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
+  // Compact day+month tokens like "24may" or "may24" — split when the alpha
+  // half matches a known month name. Anything else (e.g. "2nights") is left
+  // intact so the duration parser keeps working.
+  return lowered
+    .replace(/(\d{1,2})([a-z]+)/g, (match, num: string, alpha: string) =>
+      MONTH_NAMES[alpha] !== undefined ? `${num} ${alpha}` : match,
+    )
+    .replace(/([a-z]+)(\d{1,2})/g, (match, alpha: string, num: string) =>
+      MONTH_NAMES[alpha] !== undefined ? `${alpha} ${num}` : match,
+    );
 }
 
 function readSmallNumber(token: string): number | null {
@@ -501,7 +512,7 @@ export function normalizeStayDates(input: NormalizeStayDatesInput): NormalizedDa
   const humanReadable = formatHumanReadable(checkInIso, parsedCheckOut.iso, parsedCheckOut.nights);
 
   return {
-    status: "needs_confirmation",
+    status: "clear",
     check_in: checkInIso,
     check_out: parsedCheckOut.iso,
     nights: parsedCheckOut.nights,
