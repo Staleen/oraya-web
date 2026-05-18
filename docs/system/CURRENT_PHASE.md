@@ -1,7 +1,7 @@
-# Current Phase — Phase 16A.2 (planned) — Butler Flow-submit adapter
+# Current Phase — Phase 16A closeout · Phase 16B provisioning
 
-**Updated:** 2026-05-12
-**Status:** 16A.1 (read-only Butler API foundation) shipped in this commit; 16A.2 planned, not yet implemented.
+**Updated:** 2026-05-18
+**Status:** Phase 16A WhatsApp / WhatChimp / Butler lead capture + secure website handoff + identity continuity shipped. Phase 16A.2 `flow-submit` write-capable booking adapter remains outstanding. Phase 16B (payment + refunds) provisioned as planning context only — no implementation.
 
 This file is rewritten at every phase transition. Treat it as a snapshot, not a log.
 
@@ -9,11 +9,18 @@ This file is rewritten at every phase transition. Treat it as a snapshot, not a 
 
 ## Active phase
 
-**Phase 16A.2 — Flow submission adapter (planned).**
+**Phase 16A closeout + Phase 16B (payment / refunds) provisioning.**
 
-Wire `POST /api/butler/flow-submit` so a WhatsApp Flow submission becomes a real Oraya booking row through the **existing** locked `/api/bookings` POST contract. No schema changes. No locked-API behavior changes. Idempotency keyed on the Flow's submission token so retries do not create duplicates.
+Phase 16A is functionally complete for the lead-intake half of the WhatsApp Butler journey:
 
-16A.2 is the first **write-capable** Butler endpoint. The read-only foundation it depends on (`/api/butler/health|event-types|addons|availability` + the `lib/butler/auth.ts` helper) is now in place.
+- `/api/butler/health|event-types|addons|availability|normalize-dates|lead|prefill` are live and guarded by `BUTLER_WEBHOOK_SECRET` (or `BUTLER_PREFILL_SECRET` for the public prefill route).
+- `whatsapp_leads` is the operational source of truth for WhatsApp-originated booking intent.
+- `/book` accepts a short-lived opaque handoff token (`?h=…`) and continues the conversation on the website without retyping.
+- A successful booking now best-effort links `whatsapp_leads.linked_booking_id` to the new booking row via `butler_prefill_token` in the booking POST body. This closes the lead → booking provenance loop without changing locked-pipeline behavior on failure.
+
+The remaining Phase 16A scope is `POST /api/butler/flow-submit` — the write-capable booking adapter that turns a WhatsApp Flow submission directly into an Oraya booking row through the locked `/api/bookings` POST contract. No schema changes. No locked-API behavior changes. Idempotency keyed on a Flow-supplied submission token so retries do not create duplicates.
+
+Phase 16B (payment processing + refunds) is **planning context only** during this phase. See [/docs/phases/PHASE_16B_PLAN.md](../phases/PHASE_16B_PLAN.md) for the architecture plan, schema decision, WhatsApp payment-reply branching by booking status, admin workflow, guest workflow, refund workflow, and PR-safe implementation roadmap (16B.1 → 16B.6). No payment code lands until that plan is approved.
 
 ## Active objective
 
@@ -26,7 +33,13 @@ Design and ship the Flow submission adapter:
 
 ## Just completed
 
-- **Phase 16A.2.j ??? WhatsApp -> website prefill handoff (this commit).** Added [lib/butler/prefill-token.ts](../../lib/butler/prefill-token.ts) and [app/api/butler/prefill/route.ts](../../app/api/butler/prefill/route.ts) for a short-lived opaque handoff token signed with BUTLER_PREFILL_SECRET. POST /api/butler/lead now attempts to return an additive prefill_url after successful lead insert, but lead capture remains business-critical and **does not fail** if BUTLER_PREFILL_SECRET is missing ??? the URL is omitted instead. [app/book/page.tsx](../../app/book/page.tsx) now hydrates safe fields from /api/butler/prefill?h=... and strips h from the URL after success or failure. No schema changes. No locked-API touches. No raw booking data in the public URL. Normalized lead dates remain the only dates eligible for website prefill; raw WhatsApp text is never used for /book hydration.
+- **Phase 16A — WhatsApp → website identity continuity (2026-05-18 merge, PR #27).** `/api/bookings` POST now accepts an optional `butler_prefill_token` in the request body. After a successful insert, the locked route best-effort verifies the token (`lib/butler/prefill-token.ts`) and updates `whatsapp_leads.linked_booking_id` with a `.is("linked_booking_id", null)` race guard so an existing linkage is never overwritten. Verification failure, expired token, missing lead, conflicting linkage, and Supabase errors all log a server-side warning and return early — they **never** block booking creation. `/book` reads the token from sessionStorage at submit time, sends it in the booking POST body, and clears the token on success. Closes the lead → booking provenance loop without changing locked-pipeline behavior on failure. See [DECISIONS_LOG.md](DECISIONS_LOG.md) — 2026-05-18 entry "WhatsApp lead → booking provenance linkage in `/api/bookings` POST".
+
+- **Phase 16A — Butler prefill villa alias normalization (2026-05-18 merge, PR #26).** [app/book/page.tsx](../../app/book/page.tsx) `normalizeVillaFromSearchParam` now folds the operator-facing aliases `Byblos`, `Byblos/Jbeil`, `Jbeil` → `Villa Byblos` and `Mechmech`, `Mechmech/Annaya`, `Annaya` → `Villa Mechmech` when normalizing both `?villa=` and Butler-prefilled villa values. Aliases are case-insensitive. Unknown villa labels pass through unchanged so the canonical villa selection check still rejects them.
+
+- **Phase 16A — Butler continuation auto-advance readiness gate (2026-05-18 merge, PR #25).** The non-instant auto-advance from step 1 → 2 on `/book` is now gated on (a) `butlerPrefillReady` (the `?h=…` handoff hydration has settled, success or failure) and (b) `availabilityReadyForSelection` (the availability fetch for the prefilled villa+check-in has settled and is not loading). Prevents auto-advance from firing before prefill or availability resolves and causing a flash-of-mismatched-step on slower connections.
+
+- **Phase 16A.2.j — WhatsApp → website prefill handoff (prior commit).** Added [lib/butler/prefill-token.ts](../../lib/butler/prefill-token.ts) and [app/api/butler/prefill/route.ts](../../app/api/butler/prefill/route.ts) for a short-lived opaque handoff token signed with `BUTLER_PREFILL_SECRET`. POST `/api/butler/lead` now attempts to return an additive `prefill_url` after successful lead insert, but lead capture remains business-critical and **does not fail** if `BUTLER_PREFILL_SECRET` is missing — the URL is omitted instead. [app/book/page.tsx](../../app/book/page.tsx) now hydrates safe fields from `/api/butler/prefill?h=...` and strips `h` from the URL after success or failure. No schema changes. No locked-API touches. No raw booking data in the public URL. Normalized lead dates remain the only dates eligible for website prefill; raw WhatsApp text is never used for `/book` hydration.
 
 
 - **Phase 16A.2.e — WhatsApp lead persistence + admin lead dashboard (this commit).** Added a new `whatsapp_leads` Supabase table (schema in [/sql/phase-16a2e-whatsapp-leads.sql](../../sql/phase-16a2e-whatsapp-leads.sql)) and the surfaces that read and write it:
@@ -56,7 +69,9 @@ Design and ship the Flow submission adapter:
 
 Pre-existing gaps that become more visible when 16A.2 ships:
 
-- **BUTLER_PREFILL_SECRET must be set in Vercel for website handoff.** Without it, POST /api/butler/lead still succeeds but omits prefill_url, and /api/butler/prefill cannot verify tokens. This is an intentional business-continuity trade-off for lead capture, but production needs the env set before the handoff can be relied on.
+- **Booking reference is a public support code, not an access PIN.** The 8-character uppercased prefix of `bookings.id` that appears on `/booking/view/[token]` and in emails is intentionally a guest-facing support reference only. There is **no access PIN, smart-lock PIN, or gate code** in Phase 16A or Phase 16B. Access credential issuance is Phase 16D (smart lock). The Butler must never present the booking reference as an access PIN or imply it grants entry.
+
+- **BUTLER_PREFILL_SECRET must be set in Vercel for website handoff.** Without it, POST /api/butler/lead still succeeds but omits prefill_url, and /api/butler/prefill cannot verify tokens. This is an intentional business-continuity trade-off for lead capture, but production needs the env set before the handoff can be relied on. The same secret is now consumed by `/api/bookings` POST to verify `butler_prefill_token` for identity-continuity linkage — failure to verify is non-blocking; the booking still goes through.
 
 - **Missing `RESEND_API_KEY` is a stealth failure.** The Butler tells guests "you'll get an email confirmation"; without Resend wired, no email goes out and no error surfaces. 16A.2 should refuse submissions when the key is unset in production. See [KNOWN_BUGS.md](KNOWN_BUGS.md) #2.
 - **Missing `NEXT_PUBLIC_SITE_URL` on preview links to production.** When 16A.2 echoes a booking view URL, preview-environment Butler messages would point at live data. Set `NEXT_PUBLIC_SITE_URL` on Vercel Preview before 16A.2 ships. See [KNOWN_BUGS.md](KNOWN_BUGS.md) #3.
