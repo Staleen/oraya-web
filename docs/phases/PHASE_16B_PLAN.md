@@ -10,6 +10,18 @@
 
 ---
 
+## Starting condition (gating rule)
+
+Phase 16B begins **only after a booking row exists in `bookings`**. A booking is created exclusively by the website's `/api/bookings` POST submission — never by WhatsApp / WhatChimp / the Butler (`POST /api/butler/flow-submit` is deferred indefinitely per the 2026-05-18 product decision). Until a booking row exists for a given guest:
+
+- The Butler must not discuss payment, quote totals, or share a payment link.
+- Admin payment controls have nothing to operate on.
+- The WhatsApp payment-reply branching in §4 returns the "no booking yet" path (or escalates to a human).
+
+Every Phase 16B sub-phase below assumes this gate has already passed.
+
+---
+
 ## 0. Scope and non-goals
 
 **In scope:**

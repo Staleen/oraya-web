@@ -16,19 +16,21 @@ Shipped:
 - WhatChimp response mapping: `prefill_url` → `oraya_prefill_url` (documented in [/docs/system/BUTLER_PLAYBOOK.md](docs/system/BUTLER_PLAYBOOK.md)).
 
 Outstanding:
-- `POST /api/butler/flow-submit` — write-capable booking adapter (WhatsApp Flow → locked `/api/bookings` POST).
 - Human-escalation routing.
-- AI prompt tuning.
+- AI prompt tuning (lives in WhatChimp, not this repo).
+- Vercel env wiring (`BUTLER_WEBHOOK_SECRET`, `BUTLER_PREFILL_SECRET`, `NEXT_PUBLIC_SITE_URL` on Preview).
 
 Explicitly **not** Phase 16A:
+- **`POST /api/butler/flow-submit` (write-capable booking adapter) — deferred indefinitely** per the 2026-05-18 product decision. WhatsApp is an intake + website continuation channel; final booking submission stays on the website (`/api/bookings` POST). Re-opening this would need a new product decision recorded in [/docs/system/DECISIONS_LOG.md](docs/system/DECISIONS_LOG.md).
 - Access PIN / gate code issuance — Phase 16D.
 - Payment via WhatsApp — Phase 16B (the payment lookup response template is provisioned in [/docs/phases/PHASE_16B_PLAN.md](docs/phases/PHASE_16B_PLAN.md)).
 
 ### 16B — Payment processing + refunds — ⏳ provisioned, no implementation
 
 - Architecture plan: [/docs/phases/PHASE_16B_PLAN.md](docs/phases/PHASE_16B_PLAN.md).
+- **Starting condition:** a booking row exists in `bookings` (created by the website's `/api/bookings` POST). Phase 16B never runs ahead of an authoritative booking request.
 - Instant booking checkout, post-confirmation pay link, refund request/processing flow, payment status lifecycle, webhook safety.
-- WhatsApp payment-reply branching by booking status is part of this phase, not Phase 16A.
+- WhatsApp payment-reply branching by booking status is part of this phase, not Phase 16A. The Butler must not discuss payment until the `whatsapp_leads.linked_booking_id` provenance link has resolved.
 
 ### 16C — Guest manual
 - villa-specific manuals

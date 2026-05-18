@@ -16,6 +16,55 @@ Durable architectural and operational decisions. Append-only — never edit a pa
 
 ---
 
+## 2026-05-18 — WhatsApp is intake + website continuation; `POST /api/butler/flow-submit` deferred indefinitely
+
+**Decision:** WhatsApp / WhatChimp / the AI Butler is an **intake and website-continuation channel only**. WhatsApp does **not** become a booking submission channel. The authoritative booking request is created exclusively by the website's `/api/bookings` POST. The previously planned write-capable Butler adapter `POST /api/butler/flow-submit` is **deferred indefinitely** and is **not** required to close Phase 16A. Re-opening this path requires a new explicitly-approved product decision recorded as a superseding entry in this log.
+
+**What the Butler may do on WhatsApp (unchanged from prior 16A entries):**
+
+- Collect dates, villa, guest count, name.
+- Create or update a `whatsapp_leads` row via `POST /api/butler/lead`.
+- Hand the guest a secure prefill link (`prefill_url` in the lead response → outbound `oraya_prefill_url` in WhatChimp).
+
+**What the Butler must not do (clarified by this decision):**
+
+- Submit a booking on the guest's behalf.
+- Promise a booking reference, booking ID, or confirmation number before the website submission has happened.
+- Quote a final total, payment instructions, or payment link before a `bookings` row exists.
+- Offer a "submit on WhatsApp" alternative to the website link.
+
+**Reason:** prior 16A planning entries (notably 2026-05-12 architecture freeze and 2026-05-15 lead persistence) flagged `POST /api/butler/flow-submit` as the eventual end-state of 16A.2. Operational experience with the prefill handoff (2026-05-18) and the identity-continuity writer (2026-05-18, PR #27) made clear that:
+
+- The website is already the right authoritative submission surface — it owns pricing, overlap, addon audit, transactional emails, and signed view tokens.
+- The prefill handoff already removes the typing friction the Flow adapter was supposed to remove.
+- A Butler-side write adapter would create a second submission pipeline to maintain, double the surface for booking-creation bugs, and complicate the source-of-truth boundary the 2026-05-12 freeze established.
+- Phase 16B (payment) only needs to operate on a `bookings` row that already exists — no Phase 16B feature depends on the Butler creating bookings.
+
+Keeping the Butler at intake + continuation:
+
+- Preserves a single, locked booking submission pipeline.
+- Keeps the booking reference (the 8-character `bookings.id` prefix) deterministically tied to website submission.
+- Lets Phase 16B's payment flow assume the same starting condition (a `bookings` row exists) regardless of whether the lead originated on WhatsApp or directly on the website.
+
+**Impact:**
+
+- [/docs/system/CURRENT_PHASE.md](CURRENT_PHASE.md) — status / active phase / active objective / out-of-scope / next-steps sections rewritten to remove `flow-submit` as a required goal. The "Active objective" is now "close out 16A as an intake + website continuation channel".
+- [/docs/system/PROJECT_STATE.md](PROJECT_STATE.md) — Phase 16A summary now states "intake + website continuation channel" and explicitly notes `flow-submit` is deferred indefinitely.
+- [/docs/system/ARCHITECTURE.md](ARCHITECTURE.md) — Butler flow section's old "Booking creation via WhatsApp (`POST /api/butler/flow-submit`) is still outstanding" line replaced with a "WhatsApp does not create bookings" rule and a pointer to this entry.
+- [/docs/system/BUTLER_PLAYBOOK.md](BUTLER_PLAYBOOK.md) — new top-level rule "Source-of-truth rule: WhatsApp is intake + continuation, not submission" added with what the Butler may and may not do, and an explicit hand-off contract: when final submission is needed, the **only** correct path is the secure `prefill_url`.
+- [/docs/phases/PHASE_INDEX.md](../phases/PHASE_INDEX.md) — Phase 16A row no longer lists `flow-submit` as outstanding; lists only operational work (escalation routing, AI prompt tuning, env wiring).
+- [/docs/phases/PHASE_16B_PLAN.md](../phases/PHASE_16B_PLAN.md) — new "Starting condition" section above §0 makes explicit that Phase 16B begins only after a `bookings` row exists. The WhatsApp payment-reply branching in §4 (status `pending`) is the "no booking yet" path.
+- [/PHASE_16_PLAN.md](../../PHASE_16_PLAN.md) — `POST /api/butler/flow-submit` removed from outstanding 16A scope; moved into "Explicitly **not** Phase 16A" with a deferral note.
+- **No code changes.** No schema. No API behavior change. No env-var change. This is a product decision recorded so future agents do not re-introduce the write-capable adapter.
+
+**Historical record preserved:** prior entries in this log (2026-05-12 architecture freeze, 2026-05-14 normalize-dates, 2026-05-15 lead persistence, 2026-05-18 prefill handoff, 2026-05-18 provenance writer) describe what was true on their dates and continue to reference `flow-submit` as future work. Per the append-only rule, those entries are not edited. This entry supersedes the intent: `flow-submit` is no longer the planned end-state of 16A.
+
+**Reversible?:** yes — by adding a superseding entry here that explicitly approves reopening `flow-submit`. Such an entry must include a fresh product decision and revised PHASE_16A scope. Until then, agents should treat `flow-submit` as out-of-scope.
+
+**Supersedes:** the implicit "16A.2 will ship `flow-submit`" intent across the 2026-05-12 architecture freeze, 2026-05-14, 2026-05-15, and prior 2026-05-18 entries. Does not invalidate those entries' other decisions (namespace, secrets, lead persistence, prefill handoff, provenance writer) — only the eventual `flow-submit` end-state.
+
+---
+
 ## 2026-05-18 — WhatsApp lead → booking provenance linkage in `/api/bookings` POST
 
 **Decision:** the locked `/api/bookings` POST handler now accepts an optional `butler_prefill_token` in the request body. After a successful booking insert, the handler best-effort verifies the token with `verifyPrefillToken` from [lib/butler/prefill-token.ts](../../lib/butler/prefill-token.ts) and, on success, updates `whatsapp_leads.linked_booking_id` with the new booking's id. The update uses an `.is("linked_booking_id", null)` race guard so an existing linkage is never overwritten. Every failure mode — missing/empty token, signature mismatch, expired token, missing lead, conflicting prior linkage, Supabase error — logs a server-side warning and returns early; **none of them block booking creation**.

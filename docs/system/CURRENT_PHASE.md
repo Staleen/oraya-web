@@ -1,7 +1,7 @@
 # Current Phase — Phase 16A closeout · Phase 16B provisioning
 
 **Updated:** 2026-05-18
-**Status:** Phase 16A WhatsApp / WhatChimp / Butler lead capture + secure website handoff + identity continuity shipped. Phase 16A.2 `flow-submit` write-capable booking adapter remains outstanding. Phase 16B (payment + refunds) provisioned as planning context only — no implementation.
+**Status:** Phase 16A WhatsApp / WhatChimp / Butler lead capture + secure website handoff + identity continuity shipped. **Product decision (2026-05-18):** WhatsApp is an intake + website continuation channel, not a booking submission channel — the authoritative booking request is created on the website (`/api/bookings` POST). `POST /api/butler/flow-submit` is therefore **deferred indefinitely** and is not required for Phase 16A closure. Phase 16B (payment + refunds) provisioned as planning context only — no implementation, and Phase 16B starts only after a booking row exists.
 
 This file is rewritten at every phase transition. Treat it as a snapshot, not a log.
 
@@ -11,25 +11,29 @@ This file is rewritten at every phase transition. Treat it as a snapshot, not a 
 
 **Phase 16A closeout + Phase 16B (payment / refunds) provisioning.**
 
-Phase 16A is functionally complete for the lead-intake half of the WhatsApp Butler journey:
+Phase 16A is functionally complete as an **intake + website continuation channel**:
 
 - `/api/butler/health|event-types|addons|availability|normalize-dates|lead|prefill` are live and guarded by `BUTLER_WEBHOOK_SECRET` (or `BUTLER_PREFILL_SECRET` for the public prefill route).
-- `whatsapp_leads` is the operational source of truth for WhatsApp-originated booking intent.
+- `whatsapp_leads` is the operational source of truth for WhatsApp-originated **booking intent** (a lead is intent, not a booking).
 - `/book` accepts a short-lived opaque handoff token (`?h=…`) and continues the conversation on the website without retyping.
-- A successful booking now best-effort links `whatsapp_leads.linked_booking_id` to the new booking row via `butler_prefill_token` in the booking POST body. This closes the lead → booking provenance loop without changing locked-pipeline behavior on failure.
+- The guest completes the **authoritative booking request on the website** via the existing `/api/bookings` POST. The booking reference (the 8-character `bookings.id` prefix) is only issued after that website submission succeeds.
+- A successful website booking now best-effort links `whatsapp_leads.linked_booking_id` back to the new booking row via `butler_prefill_token` in the booking POST body. This closes the lead → booking provenance loop without changing locked-pipeline behavior on failure.
 
-The remaining Phase 16A scope is `POST /api/butler/flow-submit` — the write-capable booking adapter that turns a WhatsApp Flow submission directly into an Oraya booking row through the locked `/api/bookings` POST contract. No schema changes. No locked-API behavior changes. Idempotency keyed on a Flow-supplied submission token so retries do not create duplicates.
+**Product decision (2026-05-18):** WhatsApp does **not** create bookings. `POST /api/butler/flow-submit` is **deferred indefinitely** and is not required for Phase 16A closure. The WhatsApp Butler may collect dates, villa, guest count, and name, may create or update a `whatsapp_leads` row, and may hand the guest a secure `prefill_url`. The guest then completes final submission on `/book`. See [DECISIONS_LOG.md](DECISIONS_LOG.md) — 2026-05-18 entry "WhatsApp is intake + website continuation; `POST /api/butler/flow-submit` deferred indefinitely".
 
-Phase 16B (payment processing + refunds) is **planning context only** during this phase. See [/docs/phases/PHASE_16B_PLAN.md](../phases/PHASE_16B_PLAN.md) for the architecture plan, schema decision, WhatsApp payment-reply branching by booking status, admin workflow, guest workflow, refund workflow, and PR-safe implementation roadmap (16B.1 → 16B.6). No payment code lands until that plan is approved.
+Phase 16B (payment processing + refunds) is **planning context only** during this phase. See [/docs/phases/PHASE_16B_PLAN.md](../phases/PHASE_16B_PLAN.md) for the architecture plan, schema decision, WhatsApp payment-reply branching by booking status, admin workflow, guest workflow, refund workflow, and PR-safe implementation roadmap (16B.1 → 16B.6). **Phase 16B starts only after a `bookings` row exists** (i.e. after a website booking submission). No payment code lands until that plan is approved.
 
 ## Active objective
 
-Design and ship the Flow submission adapter:
+Close out Phase 16A as an intake + website continuation channel:
 
-1. **`POST /api/butler/flow-submit`** — accepts a WhatsApp Flow payload, validates it, maps it into the existing `/api/bookings` POST body shape, and forwards into the locked code path. Never bypasses the existing overlap / pricing / addon-audit pipeline.
-2. **Idempotency.** Dedup on a Flow-supplied `flow_token`. Decision pending in 16A.2 kickoff: small new `butler_submissions` table vs advisory enrichment inside the existing `addons_snapshot` jsonb. Either is consistent with [AGENT_RULES.md](AGENT_RULES.md) rule 4 (the table option is additive; the jsonb option is non-blocking enrichment).
-3. **Structured response.** `{ ok, status, booking_id?, view_url?, user_message }`. The `user_message` is the **only** sentence the AI Butler is allowed to repeat to the guest about outcome.
-4. **Health gates.** Refuse Flow submissions when `RESEND_API_KEY` is unset in production — turns [KNOWN_BUGS.md](KNOWN_BUGS.md) #2 from a stealth failure into an explicit one for this surface.
+1. **Maintain the locked source-of-truth boundary.** WhatsApp / WhatChimp must not become the booking authority. Every booking request flows through the website's `/api/bookings` POST. The booking reference is only minted after that submission.
+2. **Maintain the secure handoff.** `prefill_url` carries an opaque short-lived token. The guest's "Continue on WhatsApp" path must always guide them to the secure website link when final submission is needed.
+3. **Outstanding 16A operational work** (not booking-submission work):
+   - Human-escalation routing (when the Butler should hand off to a human operator).
+   - AI prompt tuning (lives in WhatChimp, not this repo).
+   - Vercel env: `BUTLER_WEBHOOK_SECRET`, `BUTLER_PREFILL_SECRET`, `NEXT_PUBLIC_SITE_URL` (Preview).
+4. **Phase 16B kickoff condition.** A booking row exists in `bookings`. Until that condition is met for a given guest, the Butler does **not** discuss payment or quote totals.
 
 ## Just completed
 
@@ -78,14 +82,15 @@ Pre-existing gaps that become more visible when 16A.2 ships:
 - **`BUTLER_WEBHOOK_SECRET` not yet in Vercel.** This PR wires the consumer but does not populate the Vercel env panel. Production and Preview need the value set (Sensitive) before WhatChimp can call any `/api/butler/*` route in those environments. See [KNOWN_BUGS.md](KNOWN_BUGS.md) #4.
 - **DECISIONS_LOG header-name example drift.** The 2026-05-12 DECISIONS_LOG entry used `X-Butler-Auth` as an illustrative header name; the actual implementation in 16A.1 uses `X-Butler-Secret` per the 16A.1 task spec. Architecturally identical ("shared secret in header"); only the header name differs. Not worth a superseding DECISIONS_LOG entry — flagged here for future agents reading old context.
 
-## Out of scope this phase (16A.2)
+## Out of scope this phase (16A closeout)
 
-- ❌ **No schema changes** without explicit approval in the task prompt — even for the idempotency table. If a new `butler_submissions` table is chosen over the jsonb-enrichment path, that decision goes through a separate approval gate.
-- ❌ **No payment / refund flow over WhatsApp.** Phase 16B.
-- ❌ **No smart-lock PIN issuance or access-code delivery.** Phase 16D.
-- ❌ **No member ↔ phone linkage.** Every Butler-originated booking is the guest path. A future phase ships the verification flow.
+- ❌ **`POST /api/butler/flow-submit` — deferred indefinitely.** WhatsApp does not create bookings. Final booking submission stays on the website. Re-opening this would require a fresh product decision recorded in `DECISIONS_LOG.md`.
+- ❌ **No schema changes.**
+- ❌ **No payment / refund flow over WhatsApp.** Phase 16B (and Phase 16B is gated on a `bookings` row already existing).
+- ❌ **No smart-lock PIN issuance or access-code delivery.** Phase 16D. The 8-character booking reference shown on `/booking/view/[token]` is a public support code, not an access PIN.
+- ❌ **No member ↔ phone linkage.** Every Butler-originated booking continues to flow through the guest path. A future phase ships the verification flow.
 - ❌ **No AI prompt engineering in this repo.** AI Training, Bot Reply, Labels, and Custom Fields live in WhatChimp.
-- ❌ **No `/api/bookings` POST behavior change.** The adapter normalizes the Flow payload into the existing body shape — pricing/overlap/addon audit remain the locked source of truth.
+- ❌ **No `/api/bookings` POST behavior change** beyond the additive `butler_prefill_token` provenance writer already shipped (2026-05-18, PR #27).
 - ❌ **No locked-API touches.** `/api/bookings*`, `/api/admin/*`, `/api/calendar/*`, `/api/cron/*`, the email senders, the auth/token systems, and existing schema remain off-limits.
 - ❌ **No widening of `/api/settings` allowlist** to satisfy WhatChimp. Butler reads belong under `/api/butler/*`.
 - ❌ **No `NEXT_PUBLIC_BUTLER_*` env vars.** Server-only.
@@ -95,6 +100,8 @@ Pre-existing gaps that become more visible when 16A.2 ships:
 In order:
 
 1. **Human action:** set `BUTLER_WEBHOOK_SECRET` in Vercel (Production + Preview, Sensitive; different value per environment recommended). Generate with `openssl rand -base64 32`. Confirm WhatChimp's outbound webhook is configured to send the resulting secret in the `X-Butler-Secret` header.
-2. **Human action:** confirm WhatChimp's outbound-signing capability. If supported, 16A.1.x adds HMAC + timestamp; if not, the bare shared secret remains the floor.
-3. **16A.2 implementation (next coding session):** design and ship `POST /api/butler/flow-submit` per "Active objective" above. Decide the idempotency persistence shape (new `butler_submissions` table vs `addons_snapshot` enrichment) in the kickoff and surface that decision in DECISIONS_LOG before writing code.
+2. **Human action:** set `BUTLER_PREFILL_SECRET` in Vercel (Production + Preview, Sensitive). Without it, lead capture still works but the `prefill_url` is omitted and the identity-continuity link cannot be verified at booking submit time.
+3. **Human action:** confirm WhatChimp's outbound-signing capability. If supported, a future 16A hardening adds HMAC + timestamp; if not, the bare shared secret remains the floor.
+4. **Human action:** confirm WhatChimp flow templates render `prefill_url` → `oraya_prefill_url` correctly and that the "Continue on website" message is the only path to final booking submission (no parallel "Submit booking on WhatsApp" CTA).
+5. **Phase 16B kickoff:** approve [/docs/phases/PHASE_16B_PLAN.md](../phases/PHASE_16B_PLAN.md) §1.3 schema decision and §0 starting condition. Implementation begins with 16B.1 (architecture / decision / docs); no code lands before that approval.
 4. **16A.2 hardening:** make `RESEND_API_KEY` absence a loud failure on `/api/butler/flow-submit` in production. Resolves [KNOWN_BUGS.md](KNOWN_BUGS.md) #2 for the Butler surface.
