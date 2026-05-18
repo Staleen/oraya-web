@@ -337,12 +337,15 @@ Rules:
 
 Each sub-phase is a **PR-safe**, independently mergeable unit. Every PR must comply with [/docs/system/AGENT_RULES.md](../system/AGENT_RULES.md) (minimal diff, locked-system protection, no fake completion reports).
 
-### 16B.1 — Architecture / decision / docs
+### 16B.1 — Architecture / decision / docs — ✅ shipped (2026-05-18)
 
-- Approval gate. No code.
-- Confirm the schema decision (§1.3). If a `payment_links` history table is preferred over additive columns, **revise this plan first**, then proceed.
-- Confirm provider list for v1 — recommended floor: `manual` + `whish`. Stripe stays optional / 16B.5.
-- Add a `DECISIONS_LOG.md` entry recording the chosen schema shape, provider list, and the WhatsApp branching contract from §4.
+- Schema decision (§1.3) confirmed: additive nullable columns on `bookings`. No `payment_links` history table in v1.
+- Provider allow-list locked: `manual` + `whish` for the v1 floor, `stripe` reserved for 16B.5+. Enforced by a `check` constraint that permits `null`.
+- WhatsApp payment-reply branching (§4) locked as the deterministic source of strings the Butler is allowed to echo. Implementation lands in 16B.5.
+- Scaffold artifacts (NOT applied / NOT wired):
+  - [/sql/phase-16b1-payment-link-foundation.sql](../../sql/phase-16b1-payment-link-foundation.sql) — additive migration, idempotent, human-gated. **Not applied to Supabase yet.** Phase 16B.2 kickoff applies it.
+  - [/lib/payments/provider.ts](../../lib/payments/provider.ts) — type-only. Exports `PaymentProvider`, `PaymentProviderEvent`, `PaymentBookingDelta`, plus `PAYMENT_LINK_STATUSES` / `PAYMENT_LINK_PROVIDERS` / `PAYMENT_CURRENCIES` / `PAYMENT_LINK_PURPOSES` const arrays + matching types + type guards. No runtime behavior; not imported by any route yet.
+- Decision recorded: [/docs/system/DECISIONS_LOG.md](../system/DECISIONS_LOG.md) — 2026-05-18 entry "Phase 16B.1 architecture freeze: payment link columns + provider abstraction".
 
 ### 16B.2 — Payment state model (schema + admin route)
 

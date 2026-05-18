@@ -16,6 +16,40 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-05-18 - Phase 16B.1 architecture freeze: payment link columns + provider abstraction
+
+**Decision:** Phase 16B.1 is closed as the **architecture / scaffold step**. The following choices are locked before any Phase 16B.2+ implementation code lands:
+
+1. **Schema shape.** One live payment link per booking, modeled as **additive nullable columns** on `bookings`, **not** a separate `payment_links` history table. The columns are: `payment_link_url`, `payment_link_provider`, `payment_link_expires_at`, `payment_link_issued_at`, `payment_link_status`, `payment_provider_session_id`. The SQL is recorded in [/sql/phase-16b1-payment-link-foundation.sql](../../sql/phase-16b1-payment-link-foundation.sql) and is **NOT applied in this commit** - it is human-gated and runs in the Supabase SQL editor at the start of Phase 16B.2.
+2. **Status allow-list (locked v1):** `null` / `none` / `active` / `paid` / `expired` / `cancelled` / `failed`. Enforced by a `check` constraint that permits `null` so the locked `/api/bookings` POST insert path keeps writing booking rows with no payment-link columns set.
+3. **Provider allow-list (locked v1 floor):** `manual` / `whish` / `stripe`. Enforced by a `check` constraint that permits `null`. `manual` and `whish` are the v1 floor (admin-driven, no external API today). `stripe` is reserved for the Phase 16B.5+ programmatic path; reserving the value now avoids a constraint migration when Stripe lands.
+4. **Provider interface.** [lib/payments/provider.ts](../../lib/payments/provider.ts) declares the `PaymentProvider` interface plus the `PaymentLinkStatus` / `PaymentLinkProvider` / `PaymentCurrency` / `PaymentLinkPurpose` allow-lists, type guards, and `PaymentProviderEvent` / `PaymentBookingDelta` shapes. The file is **type-only** - no runtime, no Supabase imports, no SDK dependencies - so it can be safely added now without committing to any vendor. Concrete adapters (`manual.ts`, `whish.ts`, `stripe.ts`) land in 16B.3+.
+5. **WhatsApp payment-reply branching contract.** [PHASE_16B_PLAN.md](../phases/PHASE_16B_PLAN.md) section 4 is the deterministic mapping from `(bookings.status, payment_link_status, payment_status, refund_status)` to a single response string. The Butler is allowed to echo **only** those strings. The implementation lands in 16B.5 (`lib/payments/whatsapp-reply.ts` + `POST /api/butler/payment-status`).
+6. **Currency discipline.** Every provider-interface method that touches money requires explicit currency (`USD` or `LBP`). No implicit currency. The Lebanese-market USD/LBP split makes this a correctness requirement, not just a hygiene preference.
+7. **Idempotency anchor.** `payment_provider_session_id` is the single key the webhook handler uses to locate the booking and decide whether a delivered event is a duplicate. Every PATCH triggered by a webhook MUST be guarded by `eq("payment_provider_session_id", session_id)` plus an early-return when the resulting delta would be a no-op.
+8. **Locked `/api/bookings` POST stays untouched.** Payment columns default to null on insert. There is **no** booking-creation behavior change in Phase 16B. The booking pipeline (overlap, pricing, addon-audit, email triggers, view-token issuance) remains the authoritative source of truth for stay state.
+
+**Reason:** the schema-vs-table choice, the provider list, and the WhatsApp branching contract are the three architecture questions [PHASE_16B_PLAN.md](../phases/PHASE_16B_PLAN.md) section 8.16B.1 marked as the approval gate before any payment code lands. Locking them now means 16B.2 (apply the migration + extend admin route allow-lists) and 16B.3 (admin payment UI + manual + Whish adapters) can each be a minimal, mechanical PR with no architectural debate. Picking `manual + whish` as the v1 provider floor (with `stripe` reserved but unimplemented) avoids both extremes: we are not locked into a single vendor, and we are not paying the cost of a full Stripe integration up front for a market that today settles primarily on Whish + cash + bank transfer.
+
+Additive columns over a `payment_links` history table is justified because:
+
+- One live link per booking is sufficient for the Whish "admin pastes a link" workflow and for the Stripe "session per booking" workflow.
+- The admin diff helpers ([lib/admin-booking-diff.ts](../../lib/admin-booking-diff.ts)) and the admin data fetch ([app/api/admin/data/route.ts](../../app/api/admin/data/route.ts)) already enumerate `bookings.payment_*` columns one-by-one; continuing the convention keeps those surfaces ergonomic and avoids a per-booking join.
+- Historical link-issuance audit (if ever needed) can be reconstructed from the existing webhook event logs or added in 16B.6 as a separate `payment_event_log` table without touching the per-booking shape.
+
+**Impact:**
+
+- New file: [/sql/phase-16b1-payment-link-foundation.sql](../../sql/phase-16b1-payment-link-foundation.sql). Additive `add column if not exists`, idempotent constraint drop-and-recreate, partial index on `(payment_link_expires_at) where payment_link_status = 'active'`, column comments. **NOT applied in this commit.** Phase 16B.2 kickoff applies it.
+- New file: [/lib/payments/provider.ts](../../lib/payments/provider.ts). Type-only. No runtime behavior, no imports beyond TypeScript's standard library, no Supabase, no SDK. Exports `PAYMENT_LINK_STATUSES`, `PAYMENT_LINK_PROVIDERS`, `PAYMENT_CURRENCIES`, `PAYMENT_LINK_PURPOSES` const arrays plus matching types + type guards, the `CreatePaymentLinkInput` / `CreatePaymentLinkResult` shapes, the `PaymentProviderEvent` / `PaymentBookingDelta` shapes, and the `PaymentProvider` interface.
+- [/docs/phases/PHASE_16B_PLAN.md](../phases/PHASE_16B_PLAN.md) - section 8.16B.1 marked complete; scaffold file paths added.
+- **No existing file modified beyond the doc.** No locked route touched. No schema applied. No env var consumed. `npx tsc --noEmit` clean. `npm run build` clean.
+
+**Reversible?:** yes - trivially. To reverse this scaffold: delete both new files, revert the section 8.16B.1 status update in PHASE_16B_PLAN.md, and add a superseding entry here. No data has been migrated; no runtime path imports the provider types yet.
+
+**Supersedes:** does not supersede a prior decision. Builds on the 2026-05-18 prefill-handoff and provenance-linkage decisions below by adding the payment-state layer Phase 16B needs. Locks the schema-vs-table, provider-list, and WhatsApp-branching choices PHASE_16B_PLAN.md section 8.16B.1 deferred.
+
+---
+
 ## 2026-05-18 - Phase 16A Butler ops closeout keeps WhatsApp as lead capture + website continuation, not booking submission
 
 **Decision:** operational documentation for Phase 16A is aligned to the shipped architecture: WhatChimp / WhatsApp captures lead intent, calls `POST /api/butler/lead`, uses the returned `prefill_url` when present, and continues the guest into Oraya's existing `/book` flow. WhatsApp is **not** the authoritative booking submission surface in the current approved model, and Butler messaging must not imply payment collection, refund handling, or access/PIN delivery.
