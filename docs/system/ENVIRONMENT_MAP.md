@@ -175,6 +175,29 @@ Public vs server-only:
 - **Risk if missing:** `POST /api/butler/lead` still succeeds, but it omits `prefill_url`. `GET /api/butler/prefill` treats tokens as invalid because verification cannot run.
 - **Security contract:** token payload is opaque HMAC-signed data only; raw booking intent and PII are not placed in the public URL. The public prefill route returns a strict allow-list only.
 
+### Butler secret rotation checklist
+
+Use this checklist whenever rotating either `BUTLER_WEBHOOK_SECRET` or `BUTLER_PREFILL_SECRET`:
+
+1. Pick the target environment first: Preview or Production. Do not rotate both casually in the same untested step.
+2. Generate a fresh value with `openssl rand -base64 32`.
+3. Update the Vercel environment variable for the target environment.
+4. If rotating `BUTLER_WEBHOOK_SECRET`, update the matching WhatChimp outbound header value in the same change window.
+5. Redeploy the affected environment so the new runtime value is loaded.
+6. Validate after deploy:
+   - `POST /api/butler/lead` still succeeds
+   - `prefill_url` is returned when `BUTLER_PREFILL_SECRET` is set
+   - `GET /api/butler/prefill?h=...` still returns 200 for a fresh token
+7. Expect impact:
+   - rotating `BUTLER_WEBHOOK_SECRET` invalidates old WhatChimp calls immediately
+   - rotating `BUTLER_PREFILL_SECRET` invalidates previously minted handoff tokens immediately
+8. If Production rotation fails, restore the prior value first, then debug. Do not leave WhatChimp and Vercel on mismatched secrets.
+
+Operational note:
+
+- `BUTLER_WEBHOOK_SECRET` and `BUTLER_PREFILL_SECRET` are separate on purpose. Do not reuse one for the other.
+- Rotate them independently unless there is a specific incident reason to rotate both.
+
 ### `NODE_ENV`
 
 - **Scope:** system; managed by Next.js and Vercel — **do not set manually**.
