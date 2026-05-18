@@ -700,14 +700,36 @@ const CALENDAR_CSS = `
 
 type BookingPath = null | "instant" | "request";
 
-/** Normalize `?villa=` (handles + and encoded spaces) for comparison with `VILLAS`. */
+/** Normalize `?villa=` and Butler-prefilled villa values into the canonical `VILLAS` labels. */
 function normalizeVillaFromSearchParam(raw: string | null): string | null {
   if (raw == null || raw === "") return null;
-  try {
-    return decodeURIComponent(raw.replace(/\+/g, " ")).trim();
-  } catch {
-    return raw.replace(/\+/g, " ").trim();
+  const decoded = (() => {
+    try {
+      return decodeURIComponent(raw.replace(/\+/g, " ")).trim();
+    } catch {
+      return raw.replace(/\+/g, " ").trim();
+    }
+  })();
+
+  const normalized = decoded.toLowerCase();
+  if (
+    normalized === "villa byblos" ||
+    normalized === "byblos" ||
+    normalized === "byblos/jbeil" ||
+    normalized === "jbeil"
+  ) {
+    return "Villa Byblos";
   }
+  if (
+    normalized === "villa mechmech" ||
+    normalized === "mechmech" ||
+    normalized === "mechmech/annaya" ||
+    normalized === "annaya"
+  ) {
+    return "Villa Mechmech";
+  }
+
+  return decoded;
 }
 
 function useMatchMediaMaxWidth(maxPx: number) {
