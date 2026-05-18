@@ -26,6 +26,9 @@ Design and ship the Flow submission adapter:
 
 ## Just completed
 
+- **Phase 16A.2.j ??? WhatsApp -> website prefill handoff (this commit).** Added [lib/butler/prefill-token.ts](../../lib/butler/prefill-token.ts) and [app/api/butler/prefill/route.ts](../../app/api/butler/prefill/route.ts) for a short-lived opaque handoff token signed with BUTLER_PREFILL_SECRET. POST /api/butler/lead now attempts to return an additive prefill_url after successful lead insert, but lead capture remains business-critical and **does not fail** if BUTLER_PREFILL_SECRET is missing ??? the URL is omitted instead. [app/book/page.tsx](../../app/book/page.tsx) now hydrates safe fields from /api/butler/prefill?h=... and strips h from the URL after success or failure. No schema changes. No locked-API touches. No raw booking data in the public URL. Normalized lead dates remain the only dates eligible for website prefill; raw WhatsApp text is never used for /book hydration.
+
+
 - **Phase 16A.2.e — WhatsApp lead persistence + admin lead dashboard (this commit).** Added a new `whatsapp_leads` Supabase table (schema in [/sql/phase-16a2e-whatsapp-leads.sql](../../sql/phase-16a2e-whatsapp-leads.sql)) and the surfaces that read and write it:
   - `POST /api/butler/lead` ([app/api/butler/lead/route.ts](../../app/api/butler/lead/route.ts)) — first Butler write endpoint. Accepts the flexible WhatChimp payload (canonical `oraya_*` keys + short aliases), normalizes it via [lib/butler/leads.ts](../../lib/butler/leads.ts) `normalizeLeadInput`, inserts one row, returns `{ ok: true, lead_id, message }`. Reuses the existing 2026-05-12 Butler auth contract via `requireButlerAuth` (503 if env unset, 401 if header missing/wrong). Raw Supabase / driver errors collapse to a safe `{ ok: false, error: "server_error" }` 500 — never echoed.
   - `GET /api/admin/leads` ([app/api/admin/leads/route.ts](../../app/api/admin/leads/route.ts)) — admin list with optional `follow_up_status` / `request_type` / `villa` filters. `raw_payload` intentionally not returned in the list shape.
@@ -52,6 +55,8 @@ Design and ship the Flow submission adapter:
 ## Open issues to be aware of right now
 
 Pre-existing gaps that become more visible when 16A.2 ships:
+
+- **BUTLER_PREFILL_SECRET must be set in Vercel for website handoff.** Without it, POST /api/butler/lead still succeeds but omits prefill_url, and /api/butler/prefill cannot verify tokens. This is an intentional business-continuity trade-off for lead capture, but production needs the env set before the handoff can be relied on.
 
 - **Missing `RESEND_API_KEY` is a stealth failure.** The Butler tells guests "you'll get an email confirmation"; without Resend wired, no email goes out and no error surfaces. 16A.2 should refuse submissions when the key is unset in production. See [KNOWN_BUGS.md](KNOWN_BUGS.md) #2.
 - **Missing `NEXT_PUBLIC_SITE_URL` on preview links to production.** When 16A.2 echoes a booking view URL, preview-environment Butler messages would point at live data. Set `NEXT_PUBLIC_SITE_URL` on Vercel Preview before 16A.2 ships. See [KNOWN_BUGS.md](KNOWN_BUGS.md) #3.

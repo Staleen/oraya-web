@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireButlerAuth } from "@/lib/butler/auth";
 import { normalizeLeadInput } from "@/lib/butler/leads";
+import { SITE_URL } from "@/lib/brand";
+import { canIssuePrefillToken, createPrefillToken } from "@/lib/butler/prefill-token";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 /**
@@ -47,6 +49,14 @@ function serverError() {
   );
 }
 
+function buildPrefillUrl(leadId: string): string | null {
+  if (!canIssuePrefillToken()) return null;
+
+  const token = createPrefillToken(leadId);
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim() || SITE_URL;
+  return `${siteUrl.replace(/\/+$/, "")}/book?h=${encodeURIComponent(token)}`;
+}
+
 export async function POST(request: Request) {
   const authFail = requireButlerAuth(request);
   if (authFail) return authFail;
@@ -73,11 +83,19 @@ export async function POST(request: Request) {
       return serverError();
     }
 
+    let prefillUrl: string | null = null;
+    try {
+      prefillUrl = buildPrefillUrl(data.id);
+    } catch (error) {
+      console.warn("[api/butler/lead] prefill token generation skipped:", error);
+    }
+
     return NextResponse.json(
       {
         ok: true,
         lead_id: data.id,
         message: "Lead received. The Oraya team will review it.",
+        prefill_url: prefillUrl,
       },
       { headers: NO_STORE_HEADERS },
     );
