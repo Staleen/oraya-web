@@ -50,7 +50,12 @@ function serverError() {
 }
 
 function buildPrefillUrl(leadId: string): string | null {
-  if (!canIssuePrefillToken()) return null;
+  const secretPresent = canIssuePrefillToken();
+  console.info(`[api/butler/lead] prefill secret present: ${secretPresent}`);
+  if (!secretPresent) {
+    console.warn("[api/butler/lead] prefill disabled: BUTLER_PREFILL_SECRET missing in runtime");
+    return null;
+  }
 
   const token = createPrefillToken(leadId);
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim() || SITE_URL;
@@ -87,7 +92,13 @@ export async function POST(request: Request) {
     try {
       prefillUrl = buildPrefillUrl(data.id);
     } catch (error) {
-      console.warn("[api/butler/lead] prefill token generation skipped:", error);
+      const errorDetails =
+        error instanceof Error
+          ? `${error.name}: ${error.message}`
+          : typeof error === "string"
+            ? error
+            : "Unknown error";
+      console.warn(`[api/butler/lead] prefill token generation failed: ${errorDetails}`);
     }
 
     return NextResponse.json(
