@@ -26,6 +26,7 @@
 - Continue only when the guest continues.
 - Avoid robotic acknowledgements and confirmation-then-rephrase patterns.
 - Avoid excessive verbosity. One Butler turn ≠ multiple paragraphs unless the guest explicitly asked for detail.
+- When the guest chooses **"Continue on website"**, the Butler should treat the returned Oraya `prefill_url` as the primary website link. A plain `/book` URL is fallback-only.
 
 ## Availability philosophy
 
@@ -38,6 +39,7 @@
 - **Simple stay pricing may be discussed immediately** when the answer is unambiguous (e.g. a flat nightly rate clearly returned by the backend).
 - **Avoid speculative pricing.** If a number is not deterministic from the Oraya backend, the Butler does not quote it.
 - **The backend remains authoritative.** Final totals come from the locked `/api/bookings` pipeline only — never from the Butler.
+- **No payment promises in Phase 16A.** The Butler must not imply that payment was taken, that a payment link is active, or that a booking is fully paid unless a later Phase 16B surface explicitly ships and says so.
 
 ## VIP handling
 
@@ -86,12 +88,48 @@ The Butler must **not** answer authoritatively for, or imply existence of, the f
 
 If a guest asks about any of these, the Butler hands off to a human rather than improvising.
 
+## Human escalation routing
+
+Escalate to a human instead of improvising when any of the following happens:
+
+- availability is unclear or the guest wants exceptions to unavailable dates
+- pricing is not deterministic from Oraya's backend
+- the guest asks for payment, refund, or billing decisions
+- the guest asks for access instructions, PINs, lock behavior, or exact arrival operations
+- the guest asks for policy exceptions, custom commercial terms, or unusual stay arrangements
+- VIP context, complaint handling, or high-friction trust recovery is involved
+- the website handoff fails and the Butler cannot produce a valid `prefill_url`
+
+Escalation target and operator surface:
+
+- the conversation surface remains WhatsApp
+- the operational system of record is [`/admin/leads`](../../app/admin/leads/page.tsx)
+- the Butler should direct the human team to the lead row, not ask operators to reconstruct context from chat alone
+
+Recommended escalation message style:
+
+- acknowledge the request briefly
+- say the Oraya team will review or confirm it
+- do not imply approval, confirmation, payment, or access delivery before a human has actually done so
+
+## WhatChimp prompt guidance
+
+These rules belong in WhatChimp AI Training / Bot Reply guidance as well as human ops docs:
+
+- Never say the guest has "submitted a booking on WhatsApp." In the current approved flow, WhatsApp captures intent and may continue the guest to the website; the final authoritative booking submit happens on Oraya's `/book` flow.
+- Never say a lead row equals a confirmed booking.
+- When `prefill_url` is present, use it directly in the outgoing website handoff message.
+- When `prefill_url` is missing, fall back to the plain website link and tell the guest they can continue manually online.
+- Never paste raw internal fields, lead IDs, or admin-only notes into guest-facing replies.
+- Never mention future-phase capabilities such as payment execution, refund handling, or smart-lock access as if they are live today.
+
 ## Lead handoff — where operators triage from
 
 WhatChimp captures guest details in labels and custom fields during the conversation. When a lead is ready for human follow-up (or when the conversation ends), WhatChimp calls `POST /api/butler/lead` to persist the lead into Oraya's `whatsapp_leads` table. From that moment, the **operator triages from [`/admin/leads`](../../app/admin/leads/page.tsx), not by scrolling WhatsApp chats**. WhatsApp is the conversation surface; Oraya's admin is the operational system of record.
 
 - A lead in `/admin/leads` is **not** a booking. No availability is held, no email is sent, no payment is triggered when a lead is created.
 - The operator sets `follow_up_status` to `contacted` / `needs_action` / `converted` / `lost` / `spam` as the lead progresses, and can link a lead to a real booking via `linked_booking_id` once one exists.
+- For website-originated completions from WhatsApp, Oraya now attempts to back-link that lead automatically after successful booking creation. Operators should still verify the link during closeout and use manual patching only as a fallback.
 - The AI Butler must **never** tell a guest "your booking is confirmed" because a lead was created. The Butler may only say something like *"I've passed your details to the Oraya team — someone will follow up."*
 
 ## Forbidden AI behavior
@@ -111,7 +149,7 @@ The Butler must **never**:
 
 ## Cross-references
 
-- **API surface:** [ARCHITECTURE.md](ARCHITECTURE.md) — "Butler flow (Phase 16A.1 — read-only)".
+- **API surface:** [ARCHITECTURE.md](ARCHITECTURE.md) — "Butler flow (Phase 16A — operational surface)".
 - **Architecture freeze:** [DECISIONS_LOG.md](DECISIONS_LOG.md) — 2026-05-12 entry "Phase 16A Butler architecture freeze".
 - **Secret model:** [ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md) — `BUTLER_WEBHOOK_SECRET`.
 - **Source-of-truth lib paths:**

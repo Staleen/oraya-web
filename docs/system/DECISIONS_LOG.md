@@ -16,6 +16,28 @@ Durable architectural and operational decisions. Append-only — never edit a pa
 
 ---
 
+## 2026-05-18 — Phase 16A Butler ops closeout keeps WhatsApp as lead capture + website continuation, not booking submission
+
+**Decision:** operational documentation for Phase 16A is aligned to the shipped architecture: WhatChimp / WhatsApp captures lead intent, calls `POST /api/butler/lead`, uses the returned `prefill_url` when present, and continues the guest into Oraya's existing `/book` flow. WhatsApp is **not** the authoritative booking submission surface in the current approved model, and Butler messaging must not imply payment collection, refund handling, or access/PIN delivery.
+
+**Reason:** the shipped code now supports secure website continuation, guest/member gate persistence, continuation readiness, and best-effort `whatsapp_leads.linked_booking_id` back-linking after booking creation. Several docs still framed 16A around a planned `/api/butler/flow-submit` adapter or implied broader Butler capabilities than production actually has. That drift creates operational risk: humans may misconfigure WhatChimp, promise payment behavior that belongs to 16B, or rotate Butler secrets without coordinating Vercel and WhatChimp.
+
+**Impact:**
+
+- [CURRENT_PHASE.md](CURRENT_PHASE.md) now reflects the shipped Phase 16A state and frames the remaining work as ops closeout instead of planned direct WhatsApp booking submission.
+- [PROJECT_STATE.md](PROJECT_STATE.md) and [ARCHITECTURE.md](ARCHITECTURE.md) now describe the live Butler/WhatChimp continuation flow more explicitly.
+- [BUTLER_PLAYBOOK.md](BUTLER_PLAYBOOK.md) now hardens:
+  - human escalation routing
+  - WhatChimp prompt guidance for `prefill_url`
+  - explicit "no payment promises in 16A" language
+- [ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md) now includes a Butler secret rotation checklist covering Vercel + WhatChimp coordination and token invalidation expectations.
+
+**Reversible?:** yes. The docs can be revised again when a future approved architecture changes the WhatsApp booking boundary.
+
+**Supersedes:** refines the operational interpretation of the 2026-05-12 Butler architecture freeze and the 2026-05-18 prefill-handoff decision without changing the underlying code contracts.
+
+---
+
 ## 2026-05-18 — WhatsApp lead capture may mint an additive opaque `/book` prefill handoff
 
 **Decision:** keep `whatsapp_leads` as the source of truth for WhatsApp-originated booking intent and add a short-lived opaque prefill handoff on top of it. `POST /api/butler/lead` may now return an additive `prefill_url` that points at `/book?h=<opaque-token>`, where `h` is signed only with `BUTLER_PREFILL_SECRET`. A new public `GET /api/butler/prefill?h=...` verifies the token, loads the lead row, and returns a strict safe-field allow-list only: `villa`, normalized `check_in`, normalized `check_out`, `sleeping_guests`, `full_name`, `source`.

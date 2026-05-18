@@ -16,7 +16,7 @@ The site supports stay bookings (Reserve and Instant Book paths), event inquirie
 
 - **Live in production** on Vercel, domain `https://stayoraya.com`.
 - **Phase 15 — CLOSED / COMPLETE** (public trust layer, theme system, adaptive `/book` UX, instant booking control plane, cancellation/refund visibility). Instant booking exists as UI only — **payment execution is Phase 16 work and not yet implemented**.
-- **Phase 16 — PLANNING CONTEXT READY**, no implementation. Roadmap in [/PHASE_16_PLAN.md](../../PHASE_16_PLAN.md).
+- **Phase 16A — LIVE / IN OPERATIONAL CLOSEOUT.** WhatsApp lead capture, secure website prefill handoff, `/book?h=...` hydration, continuation readiness, and lead-to-booking provenance linkage are shipped. **Phase 16B payment execution is not implemented yet.** Roadmap remains in [/PHASE_16_PLAN.md](../../PHASE_16_PLAN.md).
 - **AI Project Bootstrap (this layer)** — in progress. Establishes `/docs/system/` as the durable AI memory.
 
 For the full per-phase history (15A through 15I.11 and earlier), see the legacy detail log at [/PROJECT_STATE.md](../../PROJECT_STATE.md). That file is **not** the day-to-day authority — this one is — but it remains the historical record.
@@ -42,6 +42,7 @@ Full per-route, per-helper, and per-secret detail is in [ARCHITECTURE.md](ARCHIT
 - **Add-ons** — Supabase `addons` table is source of truth; per-villa applicability; commercial layer (percent pricing, recommended flag, descriptions); strict operational enforcement; snapshots on the booking row.
 - **Calendar sync** — daily Vercel Cron (`0 0 * * *`) calls `/api/cron/calendar-sync`; iCal export per villa at `/api/calendar/[villa].ics` with UTC + exclusive `DTEND` semantics.
 - **Email system** — Resend-backed transactional emails (booking confirmed/pending/payment, event proposal/response/confirmation, feedback request, booking request to admin). Signed HMAC tokens for confirm/cancel/view links.
+- **WhatsApp / Butler handoff** — WhatChimp calls `/api/butler/lead`, Oraya persists `whatsapp_leads`, may mint a short-lived opaque `prefill_url`, `/book?h=...` hydrates safe fields only, and successful website-originated bookings best-effort back-link the originating `whatsapp_leads.linked_booking_id`.
 - **Trust + legal layer** — `/legal/terms`, `/legal/payment`, `/legal/refund`, `/legal/privacy`; cancellation/refund visibility on booking surfaces.
 - **Theme system** — `data-theme="light" | "dark"` on `<html>`; shared `--oraya-*` CSS tokens; default light, explicit dark via `oraya-theme` localStorage key.
 
