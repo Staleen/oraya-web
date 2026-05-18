@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireButlerAuth } from "@/lib/butler/auth";
 import { normalizeLeadInput } from "@/lib/butler/leads";
+import { SITE_URL } from "@/lib/brand";
+import { canIssuePrefillToken, createPrefillToken } from "@/lib/butler/prefill-token";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 /**
@@ -47,6 +49,19 @@ function serverError() {
   );
 }
 
+function buildPrefillUrl(leadId: string): string | null {
+  const secretPresent = canIssuePrefillToken();
+  console.info(`[api/butler/lead] prefill secret present: ${secretPresent}`);
+  if (!secretPresent) {
+    console.warn("[api/butler/lead] prefill disabled: BUTLER_PREFILL_SECRET missing in runtime");
+    return null;
+  }
+
+  const token = createPrefillToken(leadId);
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim() || SITE_URL;
+  return `${siteUrl.replace(/\/+$/, "")}/book?h=${encodeURIComponent(token)}`;
+}
+
 export async function POST(request: Request) {
   const authFail = requireButlerAuth(request);
   if (authFail) return authFail;
@@ -73,11 +88,25 @@ export async function POST(request: Request) {
       return serverError();
     }
 
+    let prefillUrl: string | null = null;
+    try {
+      prefillUrl = buildPrefillUrl(data.id);
+    } catch (error) {
+      const errorDetails =
+        error instanceof Error
+          ? `${error.name}: ${error.message}`
+          : typeof error === "string"
+            ? error
+            : "Unknown error";
+      console.warn(`[api/butler/lead] prefill token generation failed: ${errorDetails}`);
+    }
+
     return NextResponse.json(
       {
         ok: true,
         lead_id: data.id,
         message: "Lead received. The Oraya team will review it.",
+        prefill_url: prefillUrl,
       },
       { headers: NO_STORE_HEADERS },
     );

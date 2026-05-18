@@ -21,6 +21,7 @@
 | `CRON_SECRET` | server-only | optional (cron only fires in Vercel) | yes (Vercel auto-injects for Cron) | yes (Vercel auto-injects for Cron) | yes |
 | `ADMIN_SECRET` | server-only | yes (admin login + admin APIs) | yes | yes | yes |
 | `BUTLER_WEBHOOK_SECRET` | server-only | optional (only for Butler endpoint testing) | yes (once WhatChimp is wired) | yes (once WhatChimp is wired) | yes — Sensitive |
+| `BUTLER_PREFILL_SECRET` | server-only | optional (only for WhatsApp -> /book prefill testing) | yes (once the handoff is wired) | yes (once the handoff is wired) | yes â€” Sensitive |
 | `NODE_ENV` | system | auto | auto | auto | n/a (Next.js / Vercel sets) |
 
 Public vs server-only:
@@ -159,6 +160,20 @@ Public vs server-only:
 - **Risk if header missing or wrong:** 401 Unauthorized.
 - **Rotation:** rotating immediately invalidates the WhatChimp outbound webhook header; rotate the WhatChimp side in the same change window. A short overlap window via a future `BUTLER_WEBHOOK_SECRET_PREVIOUS` accepter is out of scope until proven necessary.
 - **Reference:** [DECISIONS_LOG.md](DECISIONS_LOG.md) — 2026-05-12 entry "Phase 16A Butler architecture freeze — `/api/butler/*` namespace + `BUTLER_WEBHOOK_SECRET`".
+
+### `BUTLER_PREFILL_SECRET`
+
+- **Scope:** server-only. **Never expose in a `"use client"` component or any `NEXT_PUBLIC_*` variable.**
+- **Status:** live for the WhatsApp -> website prefill handoff.
+- **Used in:**
+  - [lib/butler/prefill-token.ts](lib/butler/prefill-token.ts) â€” HMAC signing and verification for short-lived opaque prefill tokens.
+  - [app/api/butler/prefill/route.ts](app/api/butler/prefill/route.ts) â€” public token-auth prefill endpoint.
+  - [app/api/butler/lead/route.ts](app/api/butler/lead/route.ts) â€” additive `prefill_url` issuance after successful lead insert.
+- **Required:** local optional (lead capture still succeeds without it; prefill URL is omitted) Â· preview yes once the handoff is tested there Â· production yes once the handoff is live.
+- **Where to get it:** generate (`openssl rand -base64 32`). Distinct from `BUTLER_WEBHOOK_SECRET`, `BOOKING_ACTION_SECRET`, `CRON_SECRET`, and `ADMIN_SECRET` â€” do not reuse.
+- **Configure in Vercel:** yes â€” Production + Preview, marked Sensitive. Different value per environment strongly recommended.
+- **Risk if missing:** `POST /api/butler/lead` still succeeds, but it omits `prefill_url`. `GET /api/butler/prefill` treats tokens as invalid because verification cannot run.
+- **Security contract:** token payload is opaque HMAC-signed data only; raw booking intent and PII are not placed in the public URL. The public prefill route returns a strict allow-list only.
 
 ### `NODE_ENV`
 

@@ -144,6 +144,16 @@ function readOptionalIsoDate(value: unknown): string | null {
   return trimmed;
 }
 
+function sanitizeNormalizedDateRange(
+  checkIn: string | null,
+  checkOut: string | null,
+): { checkIn: string | null; checkOut: string | null } {
+  if (checkIn && checkOut && checkOut <= checkIn) {
+    return { checkIn: null, checkOut: null };
+  }
+  return { checkIn, checkOut };
+}
+
 function readOptionalUuid(value: unknown): string | null {
   if (value === undefined || value === null) return null;
   if (typeof value !== "string") return null;
@@ -202,8 +212,10 @@ export function normalizeLeadInput(body: unknown): NormalizedLeadInput | null {
   const addonsInterest   = pickFirstString(body, ["oraya_addons_interest", "addons_interest"], MAX_LONG_FIELD_LEN);
   const specialRequests  = pickFirstString(body, ["oraya_special_requests", "special_requests"], MAX_LONG_FIELD_LEN);
 
-  const normalizedCheckIn  = readOptionalIsoDate(body.normalized_check_in);
-  const normalizedCheckOut = readOptionalIsoDate(body.normalized_check_out);
+  const normalizedDates = sanitizeNormalizedDateRange(
+    readOptionalIsoDate(body.normalized_check_in) ?? readOptionalIsoDate(body.oraya_check_in),
+    readOptionalIsoDate(body.normalized_check_out) ?? readOptionalIsoDate(body.oraya_check_out),
+  );
 
   const labels = readLabels(body.labels);
 
@@ -222,8 +234,8 @@ export function normalizeLeadInput(body: unknown): NormalizedLeadInput | null {
     villa,
     check_in_text: checkInText,
     check_out_text: checkOutText,
-    normalized_check_in: normalizedCheckIn,
-    normalized_check_out: normalizedCheckOut,
+    normalized_check_in: normalizedDates.checkIn,
+    normalized_check_out: normalizedDates.checkOut,
     guest_count: guestCount,
     addons_interest: addonsInterest,
     special_requests: specialRequests,

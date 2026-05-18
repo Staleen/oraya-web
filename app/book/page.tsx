@@ -233,6 +233,16 @@ const labelRowTextStyle: React.CSSProperties = {
 // ─── Types ────────────────────────────────────────────────────────────────────
 type AuthStatus = "loading" | "member" | "none";
 interface ConfirmedRange { check_in: string; check_out: string; }
+interface ButlerPrefillPayload {
+  villa: string | null;
+  check_in: string | null;
+  check_out: string | null;
+  sleeping_guests: string | null;
+  full_name: string | null;
+  source: string | null;
+}
+
+const BUTLER_PREFILL_STORAGE_KEY = "oraya-book-butler-prefill";
 
 interface Addon {
   id:            string;
@@ -277,6 +287,40 @@ function toISO(d: Date): string {
 function parseLocalISO(s: string): Date {
   const [y, m, d] = s.split("-").map(Number);
   return new Date(y, m - 1, d);
+}
+
+function parseSafeLocalISO(s: string): Date | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const parsed = parseLocalISO(s);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return toISO(parsed) === s ? parsed : null;
+}
+
+function readStoredButlerPrefill(): ButlerPrefillPayload | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(BUTLER_PREFILL_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<ButlerPrefillPayload> | null;
+    if (!parsed || typeof parsed !== "object") return null;
+    return {
+      villa: typeof parsed.villa === "string" ? parsed.villa : null,
+      check_in: typeof parsed.check_in === "string" ? parsed.check_in : null,
+      check_out: typeof parsed.check_out === "string" ? parsed.check_out : null,
+      sleeping_guests: typeof parsed.sleeping_guests === "string" ? parsed.sleeping_guests : null,
+      full_name: typeof parsed.full_name === "string" ? parsed.full_name : null,
+      source: typeof parsed.source === "string" ? parsed.source : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function storeButlerPrefill(prefill: ButlerPrefillPayload) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(BUTLER_PREFILL_STORAGE_KEY, JSON.stringify(prefill));
+  } catch {}
 }
 
 function fmtDate(iso: string): string {
@@ -786,6 +830,8 @@ function InfoPopover({ label, text }: { label: string; text: string }) {
 function BookPageInner() {
   const searchParams = useSearchParams();
   const pricing = usePublicPricing();
+  const prefillHandledRef = useRef(false);
+  const skipNextVillaDateResetRef = useRef(false);
 
   // Auth
   const [authStatus, setAuthStatus] = useState<AuthStatus>("loading");
@@ -864,6 +910,88 @@ function BookPageInner() {
       setForm((f) => (f.villa === normalized ? f : { ...f, villa: normalized }));
       setShowFullVillaCards(false);
     }
+  }, [searchParams]);
+
+  const applyButlerPrefill = (prefill: ButlerPrefillPayload, queryVilla: string | null) => {
+    const normalizedVilla = normalizeVillaFromSearchParam(prefill.villa);
+    if (normalizedVilla && VILLAS.includes(normalizedVilla)) {
+      skipNextVillaDateResetRef.current = true;
+      setForm((current) => {
+        const canOverrideVilla =
+          !current.villa || (queryVilla !== null && current.villa === queryVilla);
+        if (!canOverrideVilla || current.villa === normalizedVilla) return current;
+        return { ...current, villa: normalizedVilla };
+      });
+      setShowFullVillaCards(false);
+    }
+
+    if (prefill.sleeping_guests) {
+      setForm((current) => {
+        if (current.sleepingGuests !== "2" && current.sleepingGuests.trim() !== "") return current;
+        return { ...current, sleepingGuests: prefill.sleeping_guests ?? current.sleepingGuests };
+      });
+    }
+
+    if (prefill.full_name) {
+      setGuest((current) => {
+        if (current.fullName.trim()) return current;
+        return { ...current, fullName: prefill.full_name ?? current.fullName };
+      });
+    }
+
+    if (prefill.check_in && prefill.check_out) {
+      const from = parseSafeLocalISO(prefill.check_in);
+      const to = parseSafeLocalISO(prefill.check_out);
+      if (from && to && to > from) {
+        setDateRange((current) => {
+          if (current?.from || current?.to) return current;
+          return { from, to };
+        });
+      }
+    }
+  };
+
+  useEffect(() => {
+    const storedPrefill = readStoredButlerPrefill();
+    if (!storedPrefill) return;
+    applyButlerPrefill(storedPrefill, normalizeVillaFromSearchParam(searchParams.get("villa")));
+  }, [searchParams]);
+
+  useEffect(() => {
+    const handoffToken = searchParams.get("h");
+    if (!handoffToken || prefillHandledRef.current) return;
+    prefillHandledRef.current = true;
+
+    const clearTokenFromUrl = () => {
+      const url = new URL(window.location.href);
+      if (!url.searchParams.has("h")) return;
+      url.searchParams.delete("h");
+      window.history.replaceState(window.history.state, "", url.toString());
+    };
+
+    const queryVilla = normalizeVillaFromSearchParam(searchParams.get("villa"));
+
+    fetch(`/api/butler/prefill?h=${encodeURIComponent(handoffToken)}`, {
+      cache: "no-store",
+    })
+      .then(async (response) => {
+        let json: unknown = null;
+        try {
+          json = await response.json();
+        } catch {
+          return null;
+        }
+        if (!response.ok || !json || typeof json !== "object") return null;
+        const payload = json as { prefill?: ButlerPrefillPayload };
+        return payload.prefill ?? null;
+      })
+      .then((prefill) => {
+        if (!prefill) return;
+        storeButlerPrefill(prefill);
+        applyButlerPrefill(prefill, queryVilla);
+      })
+      .catch(() => {})
+      .finally(clearTokenFromUrl);
   }, [searchParams]);
 
   useEffect(() => {
@@ -986,6 +1114,10 @@ function BookPageInner() {
 
   // Clear stay dates when villa changes; availability is fetched after check-in is derived (see below).
   useEffect(() => {
+    if (skipNextVillaDateResetRef.current) {
+      skipNextVillaDateResetRef.current = false;
+      return;
+    }
     setDateRange(undefined);
   }, [form.villa]);
 
