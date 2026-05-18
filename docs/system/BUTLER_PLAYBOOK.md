@@ -8,7 +8,7 @@
 
 **Scope:** operational and behavioral rules for the Butler. The **data plane** (auth, endpoints, secrets, source-of-truth lib paths) lives in [ARCHITECTURE.md](ARCHITECTURE.md) ("Butler flow"), [ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md) (`BUTLER_WEBHOOK_SECRET`), and [DECISIONS_LOG.md](DECISIONS_LOG.md) (2026-05-12 Butler architecture freeze). This file does **not** duplicate those.
 
-**Updated:** 2026-05-12.
+**Updated:** 2026-05-18.
 
 ---
 
@@ -85,6 +85,22 @@ The Butler must **not** answer authoritatively for, or imply existence of, the f
 - **Automated operational messaging** (post-arrival, mid-stay, departure follow-ups).
 
 If a guest asks about any of these, the Butler hands off to a human rather than improvising.
+
+## Booking reference vs access PIN
+
+- The 8-character uppercased booking reference shown on `/booking/view/[token]` (e.g. `A1B2C3D4`) is a **public guest-facing support code** — it lets the operator find the booking quickly when the guest mentions it.
+- It is **not** an access PIN, gate code, smart-lock PIN, or door code. Phase 16A and Phase 16B do not issue access credentials of any kind.
+- Smart-lock PIN / access-code delivery is **Phase 16D**. Until 16D ships, the Butler must never claim the booking reference will "open the gate" or "unlock the villa", and must never quote a PIN.
+
+## WhatChimp prefill response mapping
+
+When `POST /api/butler/lead` succeeds with `BUTLER_PREFILL_SECRET` set, the response includes `prefill_url`. WhatChimp must:
+
+- Map response field `prefill_url` → outbound message variable `oraya_prefill_url`.
+- Insert `oraya_prefill_url` into the WhatsApp message that asks the guest to continue on the website (e.g. "Tap here to confirm your stay: {{oraya_prefill_url}}").
+- Treat `prefill_url: null` as "handoff unavailable — keep the conversation on WhatsApp, do not send a broken link".
+
+The `oraya_prefill_url` value is a short-lived opaque token (2-hour TTL). It is single-purpose: it hydrates the `/book` form with the lead's normalized dates / villa / guest count / name. It is **not** an authentication credential and does not bypass any locked check (member auth, availability, pricing).
 
 ## Lead handoff — where operators triage from
 

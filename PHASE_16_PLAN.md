@@ -1,28 +1,34 @@
-# Phase 16 Plan (Planning Context Only)
+# Phase 16 Plan (Planning Context)
 
-This document is planning context for future agent execution.
-
-Phase 16 is not implemented in this document.
+This document is the forward-looking roadmap. For per-sub-phase implementation detail, see [/docs/phases/PHASE_INDEX.md](docs/phases/PHASE_INDEX.md) and the per-phase plan documents linked below.
 
 ---
 
 ## Roadmap
 
-### 16A — WhatsApp AI Butler
-- WhatsApp concierge / butler
-- booking support
-- event inquiry support
-- guest support
-- booking token delivery
-- future payment and lock coordination
-- human escalation
+### 16A — WhatsApp AI Butler — 🟡 in progress
 
-### 16B — Payment processing + refunds
-- instant booking checkout
-- reserve payment after confirmation
-- refund request/processing flow
-- payment status lifecycle
-- webhook safety
+Shipped:
+- Read-only Butler API foundation (`/api/butler/health|event-types|addons|availability|normalize-dates`).
+- Lead intake (`POST /api/butler/lead` → `whatsapp_leads` table → `/admin/leads` operator console).
+- Secure WhatsApp → website prefill handoff (`/api/butler/prefill` + opaque `?h=…` token on `/book`).
+- Lead → booking identity continuity (best-effort `whatsapp_leads.linked_booking_id` writer in `/api/bookings` POST, non-blocking).
+- WhatChimp response mapping: `prefill_url` → `oraya_prefill_url` (documented in [/docs/system/BUTLER_PLAYBOOK.md](docs/system/BUTLER_PLAYBOOK.md)).
+
+Outstanding:
+- `POST /api/butler/flow-submit` — write-capable booking adapter (WhatsApp Flow → locked `/api/bookings` POST).
+- Human-escalation routing.
+- AI prompt tuning.
+
+Explicitly **not** Phase 16A:
+- Access PIN / gate code issuance — Phase 16D.
+- Payment via WhatsApp — Phase 16B (the payment lookup response template is provisioned in [/docs/phases/PHASE_16B_PLAN.md](docs/phases/PHASE_16B_PLAN.md)).
+
+### 16B — Payment processing + refunds — ⏳ provisioned, no implementation
+
+- Architecture plan: [/docs/phases/PHASE_16B_PLAN.md](docs/phases/PHASE_16B_PLAN.md).
+- Instant booking checkout, post-confirmation pay link, refund request/processing flow, payment status lifecycle, webhook safety.
+- WhatsApp payment-reply branching by booking status is part of this phase, not Phase 16A.
 
 ### 16C — Guest manual
 - villa-specific manuals

@@ -2,7 +2,7 @@
 
 **This file is the highest authority for AI sessions** (ChatGPT, Claude Code, Codex, Cursor). If anything in chat memory, side-channel notes, or older root-level docs disagrees with this file, **this file wins**. When in doubt, stop and ask.
 
-**Last updated:** 2026-05-09
+**Last updated:** 2026-05-18
 
 ---
 
@@ -15,8 +15,9 @@ The site supports stay bookings (Reserve and Instant Book paths), event inquirie
 ## Current production status
 
 - **Live in production** on Vercel, domain `https://stayoraya.com`.
-- **Phase 15 — CLOSED / COMPLETE** (public trust layer, theme system, adaptive `/book` UX, instant booking control plane, cancellation/refund visibility). Instant booking exists as UI only — **payment execution is Phase 16 work and not yet implemented**.
-- **Phase 16 — PLANNING CONTEXT READY**, no implementation. Roadmap in [/PHASE_16_PLAN.md](../../PHASE_16_PLAN.md).
+- **Phase 15 — CLOSED / COMPLETE** (public trust layer, theme system, adaptive `/book` UX, instant booking control plane, cancellation/refund visibility). Instant booking exists as UI only — **payment execution is Phase 16B work and not yet implemented**.
+- **Phase 16A — IN PROGRESS.** WhatsApp AI Butler read-only foundation (`/api/butler/health|event-types|addons|availability|normalize-dates`), lead intake (`/api/butler/lead` + `whatsapp_leads` + `/admin/leads`), secure website handoff (`/api/butler/prefill` + `?h=…` on `/book`), and lead → booking identity continuity (best-effort `whatsapp_leads.linked_booking_id` writer in `/api/bookings` POST) all shipped. Outstanding 16A scope: `POST /api/butler/flow-submit` (write-capable booking adapter), human-escalation routing, AI prompt tuning. The 8-character booking reference on `/booking/view/[token]` is a **public support code, not an access PIN** — access credentials remain Phase 16D.
+- **Phase 16B — PROVISIONED, no implementation.** Payment + refunds architecture / schema decision / WhatsApp payment branching / admin workflow / guest workflow / refund workflow / PR-safe roadmap in [/docs/phases/PHASE_16B_PLAN.md](../phases/PHASE_16B_PLAN.md). Roadmap in [/PHASE_16_PLAN.md](../../PHASE_16_PLAN.md).
 - **AI Project Bootstrap (this layer)** — in progress. Establishes `/docs/system/` as the durable AI memory.
 
 For the full per-phase history (15A through 15I.11 and earlier), see the legacy detail log at [/PROJECT_STATE.md](../../PROJECT_STATE.md). That file is **not** the day-to-day authority — this one is — but it remains the historical record.
