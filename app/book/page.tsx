@@ -837,6 +837,7 @@ function BookPageInner() {
   const [authStatus, setAuthStatus] = useState<AuthStatus>("loading");
   const [memberName, setMemberName] = useState("");
   const [guestMode, setGuestMode]   = useState(false);
+  const [butlerPrefillReady, setButlerPrefillReady] = useState(!searchParams.get("h"));
 
   // Step
   const [step, setStep] = useState(1);
@@ -870,6 +871,8 @@ function BookPageInner() {
   const [confirmedRanges, setConfirmedRanges] = useState<ConfirmedRange[]>([]);
   /** Phase 15I.5 — server-aligned hint for heated pool prep carry-over (advisory; API enforces). */
   const [heatedPoolCarryover, setHeatedPoolCarryover] = useState(false);
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
+  const [availabilitySettledKey, setAvailabilitySettledKey] = useState<string | null>(null);
 
   // Add-ons
   const [addons,         setAddons]         = useState<Addon[]>([]);
@@ -961,6 +964,7 @@ function BookPageInner() {
     const handoffToken = searchParams.get("h");
     if (!handoffToken || prefillHandledRef.current) return;
     prefillHandledRef.current = true;
+    setButlerPrefillReady(false);
 
     const clearTokenFromUrl = () => {
       const url = new URL(window.location.href);
@@ -991,7 +995,10 @@ function BookPageInner() {
         applyButlerPrefill(prefill, queryVilla);
       })
       .catch(() => {})
-      .finally(clearTokenFromUrl);
+      .finally(() => {
+        setButlerPrefillReady(true);
+        clearTokenFromUrl();
+      });
   }, [searchParams]);
 
   useEffect(() => {
@@ -1224,20 +1231,34 @@ function BookPageInner() {
     if (!form.villa) {
       setConfirmedRanges([]);
       setHeatedPoolCarryover(false);
+      setAvailabilityLoading(false);
+      setAvailabilitySettledKey(null);
       return;
     }
+    const availabilityKey = `${form.villa}|${checkIn}`;
     const qs = new URLSearchParams({ villa: form.villa });
     if (checkIn) qs.set("check_in", checkIn);
+    let cancelled = false;
+    setAvailabilityLoading(true);
+    setAvailabilitySettledKey(null);
     fetch(`/api/bookings/availability?${qs}`)
       .then((r) => r.json())
       .then((d: { ranges?: unknown; heated_pool_carryover?: unknown }) => {
+        if (cancelled) return;
         setConfirmedRanges(Array.isArray(d.ranges) ? d.ranges : []);
         setHeatedPoolCarryover(d.heated_pool_carryover === true);
+        setAvailabilitySettledKey(availabilityKey);
+        setAvailabilityLoading(false);
       })
       .catch(() => {
+        if (cancelled) return;
         setConfirmedRanges([]);
         setHeatedPoolCarryover(false);
+        setAvailabilityLoading(false);
       });
+    return () => {
+      cancelled = true;
+    };
   }, [form.villa, checkIn]);
   const sleepingGuestsCount = parseInt(form.sleepingGuests, 10) || 0;
   const selectedBedroomsCount = parseInt(form.bedroomCount, 10) || 3;
@@ -1507,6 +1528,10 @@ function BookPageInner() {
   });
 
   const reserveAutoAdvanceSignature = `${form.villa}|${checkIn}|${checkOut}|${dateConflict ?? ""}`;
+  const availabilityReadyForSelection =
+    Boolean(form.villa) &&
+    availabilitySettledKey === `${form.villa}|${checkIn}` &&
+    !availabilityLoading;
 
   useEffect(() => {
     reserveAutoNavigatedRef.current = false;
@@ -1515,6 +1540,8 @@ function BookPageInner() {
 
   /** Default reserve path: skip decision screen when instant booking is not offered for this stay. */
   useEffect(() => {
+    if (!butlerPrefillReady) return;
+    if (!availabilityReadyForSelection) return;
     if (step !== 1 || instantEligible) return;
     if (!form.villa || !checkIn || !checkOut || checkOut <= checkIn || dateConflict) return;
     if (reserveAutoAdvanceSuppressedRef.current) return;
@@ -1524,7 +1551,7 @@ function BookPageInner() {
     setBookingPath("request");
     setStep(2);
     window.scrollTo({ top: 0, behavior: "smooth" });
-  }, [step, instantEligible, form.villa, checkIn, checkOut, dateConflict]);
+  }, [step, instantEligible, form.villa, checkIn, checkOut, dateConflict, butlerPrefillReady, availabilityReadyForSelection]);
 
   useEffect(() => {
     setSelectedAddons((prev) => prev.filter((id) => {
