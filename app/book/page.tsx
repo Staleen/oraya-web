@@ -243,6 +243,7 @@ interface ButlerPrefillPayload {
 }
 
 const BUTLER_PREFILL_STORAGE_KEY = "oraya-book-butler-prefill";
+const BUTLER_PREFILL_TOKEN_STORAGE_KEY = "oraya-book-butler-prefill-token";
 
 interface Addon {
   id:            string;
@@ -320,6 +321,34 @@ function storeButlerPrefill(prefill: ButlerPrefillPayload) {
   if (typeof window === "undefined") return;
   try {
     window.sessionStorage.setItem(BUTLER_PREFILL_STORAGE_KEY, JSON.stringify(prefill));
+  } catch {}
+}
+
+function readStoredButlerPrefillToken(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(BUTLER_PREFILL_TOKEN_STORAGE_KEY);
+    if (!raw) return null;
+    const trimmed = raw.trim();
+    return trimmed || null;
+  } catch {
+    return null;
+  }
+}
+
+function storeButlerPrefillToken(token: string) {
+  if (typeof window === "undefined") return;
+  try {
+    const trimmed = token.trim();
+    if (!trimmed) return;
+    window.sessionStorage.setItem(BUTLER_PREFILL_TOKEN_STORAGE_KEY, trimmed);
+  } catch {}
+}
+
+function clearStoredButlerPrefillToken() {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.removeItem(BUTLER_PREFILL_TOKEN_STORAGE_KEY);
   } catch {}
 }
 
@@ -1013,6 +1042,7 @@ function BookPageInner() {
       })
       .then((prefill) => {
         if (!prefill) return;
+        storeButlerPrefillToken(handoffToken);
         storeButlerPrefill(prefill);
         applyButlerPrefill(prefill, queryVilla);
       })
@@ -1865,6 +1895,10 @@ function BookPageInner() {
         body.guest_phone   = phoneT ? `${guest.dialCode}${phoneT}` : null;
         body.guest_country = guest.country || null;
       }
+      const butlerPrefillToken = readStoredButlerPrefillToken();
+      if (butlerPrefillToken) {
+        body.butler_prefill_token = butlerPrefillToken;
+      }
 
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
@@ -1890,6 +1924,7 @@ function BookPageInner() {
         (typeof bookingObj?.view_token === "string" && String(bookingObj.view_token).trim()) ||
         "";
       if (bookingToken) {
+        clearStoredButlerPrefillToken();
         // Full navigation is reliable across App Router edge cases; token is base64url + single dot (path-safe).
         window.location.assign(`/booking/view/${bookingToken}`);
         return;

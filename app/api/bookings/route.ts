@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { sendBookingRequestEmail } from "@/lib/send-booking-request-email";
 import { sendBookingPendingEmail } from "@/lib/send-booking-pending-email";
 import { createActionToken } from "@/lib/booking-action-token";
+import { verifyPrefillToken } from "@/lib/butler/prefill-token";
 import { SITE_URL } from "@/lib/brand";
 import { findAvailabilityConflict } from "@/lib/calendar/availability";
 import { getVillaPricing, parseVillaPricingSetting, VILLA_BASE_PRICING_KEY } from "@/lib/admin-pricing";
@@ -23,6 +24,66 @@ const ALLOWED_VILLAS = ["Villa Mechmech", "Villa Byblos"];
 const ISO_DATE_RE    = /^\d{4}-\d{2}-\d{2}$/;
 /** Phase 12E Batch 6: mirrors the UI constant — used for server-side fallback recompute. */
 const DEAD_DAY_DISCOUNT_PCT = 0.30;
+
+type ButlerLeadLinkRow = {
+  linked_booking_id: string | null;
+};
+
+async function linkBookingToButlerLead(prefillToken: unknown, bookingId: string) {
+  if (typeof prefillToken !== "string" || !prefillToken.trim()) return;
+
+  const verification = verifyPrefillToken(prefillToken);
+  if (!verification.ok) {
+    console.warn("[api/bookings] butler provenance link skipped:", verification.reason);
+    return;
+  }
+
+  const leadId = verification.claims.lead_id;
+
+  const { data: leadRow, error: leadLookupError } = await supabaseAdmin
+    .from("whatsapp_leads")
+    .select("linked_booking_id")
+    .eq("id", leadId)
+    .maybeSingle<ButlerLeadLinkRow>();
+
+  if (leadLookupError) {
+    console.warn("[api/bookings] butler lead lookup failed:", leadLookupError.message);
+    return;
+  }
+
+  if (!leadRow) {
+    console.warn("[api/bookings] butler lead missing for provenance link:", leadId);
+    return;
+  }
+
+  if (leadRow.linked_booking_id === bookingId) return;
+
+  if (leadRow.linked_booking_id) {
+    console.warn("[api/bookings] butler lead already linked to another booking:", {
+      leadId,
+      linked_booking_id: leadRow.linked_booking_id,
+      attempted_booking_id: bookingId,
+    });
+    return;
+  }
+
+  const { data: updatedLead, error: updateError } = await supabaseAdmin
+    .from("whatsapp_leads")
+    .update({ linked_booking_id: bookingId })
+    .eq("id", leadId)
+    .is("linked_booking_id", null)
+    .select("linked_booking_id")
+    .maybeSingle<ButlerLeadLinkRow>();
+
+  if (updateError) {
+    console.warn("[api/bookings] butler lead link update failed:", updateError.message);
+    return;
+  }
+
+  if (!updatedLead || updatedLead.linked_booking_id !== bookingId) {
+    console.warn("[api/bookings] butler lead link not applied:", { leadId, bookingId });
+  }
+}
 
 const PRICING_ERROR_MESSAGES = {
   invalid_date_range: "Invalid booking dates.",
@@ -162,6 +223,7 @@ export async function POST(request: Request) {
       guest_phone,
       guest_country,
       pricing_subtotal: clientPricingSubtotal,
+      butler_prefill_token,
     } = body;
 
     if (!villa || !check_in || !check_out) {
@@ -700,6 +762,12 @@ export async function POST(request: Request) {
     if (error) {
       console.error("[api/bookings] insert error:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    try {
+      await linkBookingToButlerLead(butler_prefill_token, data.id);
+    } catch (linkError) {
+      console.warn("[api/bookings] butler provenance link error:", linkError);
     }
 
     try {
