@@ -39,7 +39,7 @@ function BookingConfirmedPageInner() {
   const [whatsappDigits, setWhatsappDigits] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/settings?key=whatsapp_number")
+    fetch("/api/settings?key=whatsapp_number", { cache: "no-store" })
       .then((r) => r.json())
       .then((d: { value?: string }) => setWhatsappDigits(digitsOnlyPhone(d.value ?? null)))
       .catch(() => setWhatsappDigits(null));
