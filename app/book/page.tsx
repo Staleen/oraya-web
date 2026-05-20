@@ -1065,10 +1065,7 @@ function BookPageInner() {
     if (authStatus === "loading") return;
     if (authStatus === "none" && !guestMode) return;
 
-    if (step !== 1 || !form.villa || showFullVillaCards) {
-      collapsedDateScrollKeyRef.current = null;
-      return;
-    }
+    if (step !== 1 || !form.villa || showFullVillaCards) return;
 
     const scrollKey = `${form.villa}|${guestMode}|${authStatus}`;
     if (collapsedDateScrollKeyRef.current === scrollKey) return;
