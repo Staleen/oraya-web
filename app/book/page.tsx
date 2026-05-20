@@ -1711,7 +1711,15 @@ function BookPageInner() {
     if (!validateStep1Basics()) return;
     setBookingPath("request");
     setStep(2);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    // Defer scroll until after React commits the step transition so the
+    // smooth scroll animates against the new (step 2) layout, not the
+    // soon-to-be-removed step 1 layout. Clicking at max scrollY in step 1
+    // (tall 2-month calendar) otherwise lets the browser clamp the in-flight
+    // animation against the shrinking layout, which reads as "page scrolled
+    // up but did not advance".
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
   }
 
   function proceedFromStep1ToInstant() {
