@@ -12,6 +12,14 @@ import { parseEventSetupEstimateFromMessage } from "@/lib/event-inquiry-message"
 import { buildProposalEmailLineItems } from "@/lib/event-proposal-line-items";
 import { sendEventProposalEmail } from "@/lib/send-event-proposal-email";
 import { appendPaymentReminderNote } from "@/lib/payment-reminders";
+import {
+  BOOKING_PAYMENT_LIFECYCLE_STATUSES,
+  REFUND_LIFECYCLE_STATUSES,
+} from "@/lib/payments/domain";
+import {
+  isPaymentLinkProvider,
+  isPaymentLinkStatus,
+} from "@/lib/payments/provider";
 import { findAvailabilityConflict } from "@/lib/calendar/availability";
 
 function makeAdminClient() {
@@ -86,6 +94,12 @@ export async function PATCH(
     "payment_received_at",
     "payment_due_at",
     "payment_marked_by",
+    "payment_link_url",
+    "payment_link_provider",
+    "payment_link_expires_at",
+    "payment_link_issued_at",
+    "payment_link_status",
+    "payment_provider_session_id",
     "refund_status",
     "refund_amount",
     "refunded_at",
@@ -116,7 +130,7 @@ export async function PATCH(
 
   const { data: existingBooking, error: existingBookingError } = await db
     .from("bookings")
-    .select("id, villa, check_in, check_out, status, sleeping_guests, day_visitors, event_type, message, addons, addons_snapshot, pricing_subtotal, pricing_snapshot, member_id, guest_name, guest_email, payment_status, payment_stage, payment_method, deposit_amount, amount_paid, amount_total, amount_due, payment_last_at, payment_reference, payment_due_at, payment_requested_at, payment_received_at, payment_notes, refund_status, refund_amount, refunded_at, proposal_status, proposal_total_amount, proposal_deposit_amount, proposal_included_services, proposal_excluded_services, proposal_optional_services, proposal_notes, proposal_valid_until, proposal_payment_methods, proposal_sent_at, proposal_responded_at")
+    .select("id, villa, check_in, check_out, status, sleeping_guests, day_visitors, event_type, message, addons, addons_snapshot, pricing_subtotal, pricing_snapshot, member_id, guest_name, guest_email, payment_status, payment_stage, payment_method, deposit_amount, amount_paid, amount_total, amount_due, payment_last_at, payment_reference, payment_due_at, payment_requested_at, payment_received_at, payment_notes, payment_link_url, payment_link_provider, payment_link_expires_at, payment_link_issued_at, payment_link_status, payment_provider_session_id, refund_status, refund_amount, refunded_at, proposal_status, proposal_total_amount, proposal_deposit_amount, proposal_included_services, proposal_excluded_services, proposal_optional_services, proposal_notes, proposal_valid_until, proposal_payment_methods, proposal_sent_at, proposal_responded_at")
     .eq("id", bookingId)
     .single();
 
@@ -175,10 +189,10 @@ export async function PATCH(
     return NextResponse.json({ error: "Wait for guest acceptance before confirming this event." }, { status: 400 });
   }
 
-  const allowedPaymentStatuses = ["unpaid", "payment_requested", "deposit_paid", "paid_in_full"];
+  const allowedPaymentStatuses = BOOKING_PAYMENT_LIFECYCLE_STATUSES;
   const allowedPaymentStages = ["none", "unpaid", "partially_paid", "fully_paid"];
   const allowedPaymentMethods = ["whish", "cash", "bank_transfer", "card_manual", "other"];
-  const allowedRefundStatuses = ["refund_pending", "partial_refund", "refunded"];
+  const allowedRefundStatuses = REFUND_LIFECYCLE_STATUSES;
   const allowedProposalStatuses = ["draft", "sent", "accepted", "declined", "expired"];
   const updatePayload: Record<string, unknown> = {};
 
@@ -269,7 +283,10 @@ export async function PATCH(
       const paymentStatus = payload.payment_status;
       if (paymentStatus === null || paymentStatus === "") {
         updatePayload.payment_status = null;
-      } else if (typeof paymentStatus === "string" && allowedPaymentStatuses.includes(paymentStatus)) {
+      } else if (
+        typeof paymentStatus === "string" &&
+        (allowedPaymentStatuses as readonly string[]).includes(paymentStatus)
+      ) {
         updatePayload.payment_status = paymentStatus;
       } else {
         return NextResponse.json({ error: "Invalid payment_status value." }, { status: 400 });
@@ -298,11 +315,36 @@ export async function PATCH(
       }
     }
 
+    if (Object.prototype.hasOwnProperty.call(payload, "payment_link_provider")) {
+      const paymentLinkProvider = payload.payment_link_provider;
+      if (paymentLinkProvider === null || paymentLinkProvider === "") {
+        updatePayload.payment_link_provider = null;
+      } else if (isPaymentLinkProvider(paymentLinkProvider)) {
+        updatePayload.payment_link_provider = paymentLinkProvider;
+      } else {
+        return NextResponse.json({ error: "Invalid payment_link_provider value." }, { status: 400 });
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(payload, "payment_link_status")) {
+      const paymentLinkStatus = payload.payment_link_status;
+      if (paymentLinkStatus === null || paymentLinkStatus === "") {
+        updatePayload.payment_link_status = null;
+      } else if (isPaymentLinkStatus(paymentLinkStatus)) {
+        updatePayload.payment_link_status = paymentLinkStatus;
+      } else {
+        return NextResponse.json({ error: "Invalid payment_link_status value." }, { status: 400 });
+      }
+    }
+
     if (Object.prototype.hasOwnProperty.call(payload, "refund_status")) {
       const refundStatus = payload.refund_status;
       if (refundStatus === null || refundStatus === "") {
         updatePayload.refund_status = null;
-      } else if (typeof refundStatus === "string" && allowedRefundStatuses.includes(refundStatus)) {
+      } else if (
+        typeof refundStatus === "string" &&
+        (allowedRefundStatuses as readonly string[]).includes(refundStatus)
+      ) {
         updatePayload.refund_status = refundStatus;
       } else {
         return NextResponse.json({ error: "Invalid refund_status value." }, { status: 400 });
@@ -317,10 +359,14 @@ export async function PATCH(
     readOptionalText("payment_reference");
     readOptionalText("payment_notes");
     readOptionalText("payment_marked_by");
+    readOptionalText("payment_link_url");
+    readOptionalText("payment_provider_session_id");
     readOptionalTimestamp("payment_requested_at");
     readOptionalTimestamp("payment_received_at");
     readOptionalTimestamp("payment_last_at");
     readOptionalTimestamp("payment_due_at");
+    readOptionalTimestamp("payment_link_expires_at");
+    readOptionalTimestamp("payment_link_issued_at");
     readOptionalTimestamp("refunded_at");
 
     if (Object.prototype.hasOwnProperty.call(payload, "proposal_status")) {
