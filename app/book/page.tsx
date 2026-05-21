@@ -887,12 +887,14 @@ function BookPageInner() {
   const pricing = usePublicPricing();
   const prefillHandledRef = useRef(false);
   const skipNextVillaDateResetRef = useRef(false);
+  const pendingButlerDateRangeRef = useRef<DateRange | null>(null);
 
   // Auth
   const [authStatus, setAuthStatus] = useState<AuthStatus>("loading");
   const [memberName, setMemberName] = useState("");
   const [guestMode, setGuestMode]   = useState(false);
   const [butlerPrefillReady, setButlerPrefillReady] = useState(!searchParams.get("h"));
+  const [butlerDateHydrationNonce, setButlerDateHydrationNonce] = useState(0);
 
   // Step
   const [step, setStep] = useState(1);
@@ -1001,10 +1003,8 @@ function BookPageInner() {
       const from = parseSafeLocalISO(prefill.check_in);
       const to = parseSafeLocalISO(prefill.check_out);
       if (from && to && to > from) {
-        setDateRange((current) => {
-          if (current?.from || current?.to) return current;
-          return { from, to };
-        });
+        pendingButlerDateRangeRef.current = { from, to };
+        setButlerDateHydrationNonce((current) => current + 1);
       }
     }
   };
@@ -1014,6 +1014,14 @@ function BookPageInner() {
     if (!storedPrefill) return;
     applyButlerPrefill(storedPrefill, normalizeVillaFromSearchParam(searchParams.get("villa")));
   }, [searchParams]);
+
+  useEffect(() => {
+    if (authStatus === "loading") return;
+    if (authStatus === "none" && !guestMode) return;
+    const storedPrefill = readStoredButlerPrefill();
+    if (!storedPrefill) return;
+    applyButlerPrefill(storedPrefill, normalizeVillaFromSearchParam(searchParams.get("villa")));
+  }, [authStatus, guestMode, searchParams]);
 
   useEffect(() => {
     const handoffToken = searchParams.get("h");
@@ -1183,6 +1191,16 @@ function BookPageInner() {
     }
     setDateRange(undefined);
   }, [form.villa]);
+
+  useEffect(() => {
+    const pending = pendingButlerDateRangeRef.current;
+    if (!pending) return;
+    setDateRange((current) => {
+      pendingButlerDateRangeRef.current = null;
+      if (current?.from || current?.to) return current;
+      return pending;
+    });
+  }, [form.villa, butlerDateHydrationNonce]);
 
   // ── Derived values ────────────────────────────────────────────────────────
   const today = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; })();
