@@ -297,6 +297,10 @@ function parseSafeLocalISO(s: string): Date | null {
   return toISO(parsed) === s ? parsed : null;
 }
 
+function startOfLocalMonth(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
 function readStoredButlerPrefill(): ButlerPrefillPayload | null {
   if (typeof window === "undefined") return null;
   try {
@@ -1016,6 +1020,7 @@ function BookPageInner() {
       const to = parseSafeLocalISO(prefill.check_out);
       if (from && to && to > from) {
         pendingButlerDateRangeRef.current = { from, to };
+        syncCalendarMonthToSelection(from);
         setButlerDateHydrationNonce((current) => current + 1);
       }
     }
@@ -1203,7 +1208,8 @@ function BookPageInner() {
 
   useEffect(() => {
     const pending = pendingButlerDateRangeRef.current;
-    if (!pending) return;
+    if (!pending?.from) return;
+    syncCalendarMonthToSelection(pending.from);
     setDateRange((current) => {
       pendingButlerDateRangeRef.current = null;
       if (current?.from || current?.to) return current;
@@ -1213,6 +1219,28 @@ function BookPageInner() {
 
   // ── Derived values ────────────────────────────────────────────────────────
   const today = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; })();
+  const [calendarMonth, setCalendarMonth] = useState<Date>(() => startOfLocalMonth(today));
+  const [calendarMonthUserNavigated, setCalendarMonthUserNavigated] = useState(false);
+
+  function syncCalendarMonthToSelection(day: Date) {
+    setCalendarMonth(startOfLocalMonth(day));
+    setCalendarMonthUserNavigated(false);
+  }
+
+  function handleCalendarMonthChange(month: Date) {
+    setCalendarMonth(startOfLocalMonth(month));
+    setCalendarMonthUserNavigated(true);
+  }
+
+  useEffect(() => {
+    if (!dateRange?.from) return;
+    syncCalendarMonthToSelection(dateRange.from);
+  }, [dateRange?.from]);
+
+  const displayedCalendarMonth =
+    !calendarMonthUserNavigated && dateRange?.from
+      ? startOfLocalMonth(dateRange.from)
+      : calendarMonth;
 
   /**
    * Blocked day ranges for the calendar.
@@ -1728,6 +1756,9 @@ function BookPageInner() {
     }
 
     setError("");
+    if (nextRange?.from) {
+      syncCalendarMonthToSelection(nextRange.from);
+    }
     setDateRange(nextRange);
   }
 
@@ -2447,6 +2478,8 @@ function BookPageInner() {
                           onSelect={handleDateSelect}
                           disabled={disabledDays}
                           modifiers={{ deadCheckIn: isChoosingCheckout ? () => false : isDeadCheckInDate }}
+                          month={displayedCalendarMonth}
+                          onMonthChange={handleCalendarMonthChange}
                           numberOfMonths={2}
                           fromDate={today}
                           showOutsideDays
