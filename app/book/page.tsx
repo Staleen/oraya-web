@@ -953,6 +953,18 @@ function BookPageInner() {
   /** Stay Setup — special requests textarea hidden until expanded (content preserved in form.message). */
   const [specialRequestsExpanded, setSpecialRequestsExpanded] = useState(false);
 
+  /**
+   * Page-footer "Booking details" disclosure. Previously a native <details>+<summary>;
+   * <summary> is a block element whose click hitbox spans the full container width.
+   * On step 1 (tall 2-month calendar) when scrolled to max scrollY, clicking the
+   * empty horizontal strip next to the "Booking details" text toggled the disclosure,
+   * which closed the panel, shrunk page height, and forced the browser to clamp
+   * scrollY to the new (smaller) max — visible as "the page scrolled up". Reserve
+   * clicks landed in the same strip too. Controlling state in React and toggling
+   * via a width-fit button confines the hitbox to the text + chevron only.
+   */
+  const [bookingDetailsOpen, setBookingDetailsOpen] = useState(false);
+
   /** Preselected from villa pages: compact summary; full cards after "Change villa". */
   const [showFullVillaCards, setShowFullVillaCards] = useState(true);
   const dateSectionRef = useRef<HTMLDivElement>(null);
@@ -3593,77 +3605,105 @@ function BookPageInner() {
 
         </div>
 
-        <details style={{ border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: "rgba(197,164,109,0.04)", padding: "12px 14px", marginTop: "20px" }}>
-          <summary style={{ fontFamily: LATO, fontSize: "14px", color: "var(--oraya-book-p82)", cursor: "pointer" }}>
-            Booking details
-          </summary>
-          <p style={{ fontFamily: LATO, fontSize: "14px", color: "var(--oraya-book-text-soft-2)", margin: "10px 0 0", lineHeight: 1.7 }}>
-            {trustCopyMode === "instant" ? STEP4_TRUST.instant.headline : STEP4_TRUST.request.headline}
-          </p>
-          {trustCopyMode === "instant" ? (
-            STEP4_TRUST.instant.payment ? (
-              <p style={{ fontFamily: LATO, fontSize: "14px", color: "var(--oraya-book-p76)", margin: "0 0 10px", lineHeight: 1.7 }}>
-                {STEP4_TRUST.instant.payment}
+        <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: "rgba(197,164,109,0.04)", padding: "12px 14px", marginTop: "20px" }}>
+          <button
+            type="button"
+            onClick={() => setBookingDetailsOpen((open) => !open)}
+            aria-expanded={bookingDetailsOpen}
+            aria-controls="book-bottom-details-panel"
+            style={{
+              fontFamily: LATO,
+              fontSize: "14px",
+              color: "var(--oraya-book-p82)",
+              cursor: "pointer",
+              background: "transparent",
+              border: "none",
+              padding: 0,
+              margin: 0,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              textAlign: "left",
+              width: "fit-content",
+              maxWidth: "100%",
+            }}
+          >
+            <span>Booking details</span>
+            <span aria-hidden="true" style={{ fontSize: "10px", opacity: 0.75 }}>
+              {bookingDetailsOpen ? "▾" : "▸"}
+            </span>
+          </button>
+          {bookingDetailsOpen && (
+            <div id="book-bottom-details-panel">
+              <p style={{ fontFamily: LATO, fontSize: "14px", color: "var(--oraya-book-text-soft-2)", margin: "10px 0 0", lineHeight: 1.7 }}>
+                {trustCopyMode === "instant" ? STEP4_TRUST.instant.headline : STEP4_TRUST.request.headline}
               </p>
-            ) : null
-          ) : (
-            <p style={{ fontFamily: LATO, fontSize: "14px", color: "var(--oraya-book-p76)", margin: "0 0 10px", lineHeight: 1.7 }}>
-              {`${STEP4_TRUST.request.noPayment} ${STEP4_TRUST.request.contact}`}
-            </p>
-          )}
-          <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: "0 0 10px", lineHeight: 1.65 }}>
-            {WHATSAPP_SUPPORT_LINE}
-          </p>
-          <p style={{ fontFamily: LATO, fontSize: "14px", color: "var(--oraya-book-p76)", margin: "0 0 10px", lineHeight: 1.7 }}>
-            Questions:{" "}
-            <a href="mailto:hello@stayoraya.com" className="oraya-link-text" style={{ color: GOLD }}>hello@stayoraya.com</a>
-          </p>
-          <div style={{ borderTop: "0.5px solid rgba(197,164,109,0.15)", marginTop: "10px", paddingTop: "12px" }}>
-            <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p82)", margin: "0 0 6px", lineHeight: 1.6 }}>
-              {CANCELLATION_PROMPT}
-            </p>
-            <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "0 0 10px", lineHeight: 1.65 }}>
-              {CANCELLATION_HINT}
-            </p>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center" }}>
-              <a href="mailto:hello@stayoraya.com?subject=Booking%20change%20or%20cancellation" className="oraya-link-text" style={{ fontFamily: LATO, fontSize: "12px", color: GOLD }}>
-                Email us
-              </a>
-              {whatsappDigits && (
-                <a
-                  href={`https://wa.me/${whatsappDigits}?text=${encodeURIComponent(WHATSAPP_CANCEL_CHANGE_NO_REF)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="oraya-link-text"
-                  style={{ fontFamily: LATO, fontSize: "12px", color: GOLD }}
-                >
-                  WhatsApp
-                </a>
+              {trustCopyMode === "instant" ? (
+                STEP4_TRUST.instant.payment ? (
+                  <p style={{ fontFamily: LATO, fontSize: "14px", color: "var(--oraya-book-p76)", margin: "0 0 10px", lineHeight: 1.7 }}>
+                    {STEP4_TRUST.instant.payment}
+                  </p>
+                ) : null
+              ) : (
+                <p style={{ fontFamily: LATO, fontSize: "14px", color: "var(--oraya-book-p76)", margin: "0 0 10px", lineHeight: 1.7 }}>
+                  {`${STEP4_TRUST.request.noPayment} ${STEP4_TRUST.request.contact}`}
+                </p>
+              )}
+              <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: "0 0 10px", lineHeight: 1.65 }}>
+                {WHATSAPP_SUPPORT_LINE}
+              </p>
+              <p style={{ fontFamily: LATO, fontSize: "14px", color: "var(--oraya-book-p76)", margin: "0 0 10px", lineHeight: 1.7 }}>
+                Questions:{" "}
+                <a href="mailto:hello@stayoraya.com" className="oraya-link-text" style={{ color: GOLD }}>hello@stayoraya.com</a>
+              </p>
+              <div style={{ borderTop: "0.5px solid rgba(197,164,109,0.15)", marginTop: "10px", paddingTop: "12px" }}>
+                <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p82)", margin: "0 0 6px", lineHeight: 1.6 }}>
+                  {CANCELLATION_PROMPT}
+                </p>
+                <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "0 0 10px", lineHeight: 1.65 }}>
+                  {CANCELLATION_HINT}
+                </p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center" }}>
+                  <a href="mailto:hello@stayoraya.com?subject=Booking%20change%20or%20cancellation" className="oraya-link-text" style={{ fontFamily: LATO, fontSize: "12px", color: GOLD }}>
+                    Email us
+                  </a>
+                  {whatsappDigits && (
+                    <a
+                      href={`https://wa.me/${whatsappDigits}?text=${encodeURIComponent(WHATSAPP_CANCEL_CHANGE_NO_REF)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="oraya-link-text"
+                      style={{ fontFamily: LATO, fontSize: "12px", color: GOLD }}
+                    >
+                      WhatsApp
+                    </a>
+                  )}
+                </div>
+              </div>
+              {authStatus === "member" ? (
+                <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: "rgba(197,164,109,0.04)", padding: "0.875rem 1.25rem", marginTop: "12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <p style={{ fontFamily: LATO, fontSize: "12px", color: "var(--oraya-book-p60)", margin: 0 }}>
+                    Booking as <span style={{ color: GOLD }}>{memberName || "member"}</span>
+                  </p>
+                  <a href="/login" className="oraya-link-text" style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED }}>
+                    Not you?
+                  </a>
+                </div>
+              ) : (
+                <div style={{ border: "0.5px solid rgba(197,164,109,0.12)", backgroundColor: GLASS1, padding: "0.75rem 1.25rem", marginTop: "12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0 }}>Continuing as guest</p>
+                  <button
+                    type="button"
+                    className="oraya-pressable"
+                    onClick={() => { setGuestMode(false); setBookingPath(null); setStep(1); setError(""); }}
+                    style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, backgroundColor: "transparent", border: "none", cursor: "pointer", letterSpacing: "1px" }}>
+                    Sign in instead
+                  </button>
+                </div>
               )}
             </div>
-          </div>
-          {authStatus === "member" ? (
-            <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: "rgba(197,164,109,0.04)", padding: "0.875rem 1.25rem", marginTop: "12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <p style={{ fontFamily: LATO, fontSize: "12px", color: "var(--oraya-book-p60)", margin: 0 }}>
-                Booking as <span style={{ color: GOLD }}>{memberName || "member"}</span>
-              </p>
-              <a href="/login" className="oraya-link-text" style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED }}>
-                Not you?
-              </a>
-            </div>
-          ) : (
-            <div style={{ border: "0.5px solid rgba(197,164,109,0.12)", backgroundColor: GLASS1, padding: "0.75rem 1.25rem", marginTop: "12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0 }}>Continuing as guest</p>
-              <button
-                type="button"
-                className="oraya-pressable"
-                onClick={() => { setGuestMode(false); setBookingPath(null); setStep(1); setError(""); }}
-                style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, backgroundColor: "transparent", border: "none", cursor: "pointer", letterSpacing: "1px" }}>
-                Sign in instead
-              </button>
-            </div>
           )}
-        </details>
+        </div>
       </div>
     </main>
   );
