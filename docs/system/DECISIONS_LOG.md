@@ -16,6 +16,30 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-05-22 - Phase 16B.3 Reserve-path payment execution uses booking-first + hosted Stripe checkout
+
+**Decision:** the first real payment execution path for Oraya stays **booking-first**. The website Reserve flow creates the booking through the locked `/api/bookings` POST first, then starts hosted Stripe checkout through a separate `POST /api/payments/checkout` route. Stripe success redirects are informational only; `POST /api/payments/webhook/stripe` is the authority that marks payment received, updates `amount_paid` / `amount_due`, and flips `payment_link_status`.
+
+**Reason:** this keeps the existing booking pipeline authoritative for overlap protection, pricing, add-on enforcement, email triggers, and signed booking-view tokens while still delivering real hosted payment. It also keeps Oraya out of card-data collection scope on the website itself and avoids trusting a client redirect for payment success. The payment-link columns introduced in 16B.1 / 16B.2 now have a concrete runtime role: store the active hosted checkout URL, expiry, provider, and provider session id needed for verified webhook reconciliation.
+
+**Impact:**
+
+- New payment execution routes:
+  - [app/api/payments/checkout/route.ts](../../app/api/payments/checkout/route.ts) - validates `deposit|full` payment selection server-side, creates Stripe Checkout, persists `payment_link_url`, `payment_link_provider`, `payment_link_status`, `payment_link_issued_at`, `payment_link_expires_at`, and `payment_provider_session_id`, then returns the hosted checkout URL.
+  - [app/api/payments/webhook/stripe/route.ts](../../app/api/payments/webhook/stripe/route.ts) - verifies Stripe signatures, treats duplicate webhook deliveries idempotently, looks up the booking by `payment_provider_session_id`, and updates `payment_status`, `payment_stage`, `amount_paid`, `amount_due`, `payment_reference`, and `payment_link_status`.
+- New runtime helper files:
+  - [lib/payments/checkout-amount.ts](../../lib/payments/checkout-amount.ts) - shared 40% minimum-deposit validation used by both the client Step 3 UX and the checkout route.
+  - [lib/payments/stripe.ts](../../lib/payments/stripe.ts) - concrete Stripe adapter implementing the existing `PaymentProvider` interface without changing the locked booking route.
+- [app/book/page.tsx](../../app/book/page.tsx) Step 3 is now a hosted payment-selection experience for the Reserve path, with full-payment and custom-deposit modes, total / due-now / remaining-balance display, and redirect to Stripe only after booking creation succeeds.
+- [app/booking/view/[token]/page.tsx](../../app/booking/view/%5Btoken%5D/page.tsx) now recognizes `?payment=success|cancelled|setup_failed` return states, but those banners remain informational. Stored booking state is still the authority.
+- New environment contract: `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` are now required for preview/production hosted payment; `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` is reserved for future client-side Stripe surfaces.
+
+**Reversible?:** hard. The execution model can be changed later, but only with a superseding decision that preserves the locked booking authority and webhook-first payment truth.
+
+**Supersedes:** refines the 2026-05-18 "Phase 16B.1 architecture freeze" entry by choosing the first live provider path (`stripe`) for website Reserve payments while keeping the locked `/api/bookings` POST untouched.
+
+---
+
 ## 2026-05-18 - Phase 16B.1 architecture freeze: payment link columns + provider abstraction
 
 **Decision:** Phase 16B.1 is closed as the **architecture / scaffold step**. The following choices are locked before any Phase 16B.2+ implementation code lands:

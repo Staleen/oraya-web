@@ -6,6 +6,12 @@ import type {
   AddonEventPricingUnit,
   AddonPricingType,
 } from "@/lib/addon-operations";
+import type {
+  BookingPaymentLifecycleStatus,
+  HostedSessionLifecycleStatus,
+  RefundLifecycleStatus,
+} from "@/lib/payments/domain";
+import type { PaymentLinkProvider } from "@/lib/payments/provider";
 
 export interface BookingAddon {
   id:    string;
@@ -106,7 +112,7 @@ export interface Booking {
   guest_email: string | null;
   guest_phone: string | null;
   guest_country: string | null;
-  payment_status?: string | null;
+  payment_status?: BookingPaymentLifecycleStatus | null;
   /** Phase 15I.1 — ledger balance tier (none | unpaid | partially_paid | fully_paid); guest workflow still uses `payment_status`. */
   payment_stage?: string | null;
   amount_total?: number | null;
@@ -121,7 +127,13 @@ export interface Booking {
   payment_received_at?: string | null;
   payment_due_at?: string | null;
   payment_marked_by?: string | null;
-  refund_status?: string | null;
+  payment_link_url?: string | null;
+  payment_link_provider?: PaymentLinkProvider | null;
+  payment_link_expires_at?: string | null;
+  payment_link_issued_at?: string | null;
+  payment_link_status?: HostedSessionLifecycleStatus | null;
+  payment_provider_session_id?: string | null;
+  refund_status?: RefundLifecycleStatus | null;
   refund_amount?: number | null;
   refunded_at?: string | null;
   proposal_status?: "draft" | "sent" | "accepted" | "declined" | "expired" | null;

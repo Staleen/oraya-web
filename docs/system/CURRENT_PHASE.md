@@ -1,7 +1,7 @@
-# Current Phase - Phase 16A closeout / Phase 16B provisioning
+# Current Phase - Phase 16A closeout / Phase 16B Stripe execution
 
-**Updated:** 2026-05-18
-**Status:** Phase 16A WhatsApp / WhatChimp / Butler lead capture + secure website handoff + identity continuity shipped. Phase 16A.2 `flow-submit` write-capable booking adapter remains outstanding. Phase 16B (payment + refunds) is provisioned as planning context only - no implementation.
+**Updated:** 2026-05-22
+**Status:** Phase 16A WhatsApp / WhatChimp / Butler lead capture + secure website handoff + identity continuity remain shipped. Phase 16A.2 `flow-submit` write-capable booking adapter remains outstanding. Phase 16B is now live through 16B.3 on the Reserve path: payment-link schema, runtime plumbing, premium Step 3 payment selection, Stripe Checkout session creation, and verified Stripe webhook reconciliation.
 
 This file is rewritten at every phase transition. Treat it as a snapshot, not a log.
 
@@ -9,7 +9,7 @@ This file is rewritten at every phase transition. Treat it as a snapshot, not a 
 
 ## Active phase
 
-**Phase 16A closeout + Phase 16B (payment / refunds) provisioning.**
+**Phase 16A closeout + Phase 16B Stripe execution.**
 
 Phase 16A is functionally complete for the lead-intake half of the WhatsApp Butler journey:
 
@@ -20,7 +20,15 @@ Phase 16A is functionally complete for the lead-intake half of the WhatsApp Butl
 
 The remaining Phase 16A scope is `POST /api/butler/flow-submit` - the write-capable booking adapter that turns a WhatsApp Flow submission directly into an Oraya booking row through the locked `/api/bookings` POST contract. No schema changes. No locked-API behavior changes. Idempotency keyed on a Flow-supplied submission token so retries do not create duplicates.
 
-Phase 16B (payment processing + refunds) is **planning context only** during this phase. See [/docs/phases/PHASE_16B_PLAN.md](../phases/PHASE_16B_PLAN.md) for the architecture plan, schema decision, WhatsApp payment-reply branching by booking status, admin workflow, guest workflow, refund workflow, and PR-safe implementation roadmap (16B.1 -> 16B.6). No payment code lands until that plan is approved.
+Phase 16B is now active on the website Reserve path:
+
+- payment-link columns exist on `bookings`
+- admin + guest runtime surfaces understand `payment_link_*`
+- `/book` Step 3 is now a hosted-payment selection experience for the Reserve path
+- `POST /api/payments/checkout` creates a Stripe Checkout session only after the locked `/api/bookings` POST successfully creates the booking row
+- `POST /api/payments/webhook/stripe` is the authority for payment receipt updates; success redirects are informational only
+
+Phase 16B is still incomplete. Admin payment controls, WhatsApp payment replies, refunds automation, and Instant Book execution are not part of the shipped path yet. See [/docs/phases/PHASE_16B_PLAN.md](../phases/PHASE_16B_PLAN.md) for the broader roadmap.
 
 The current closeout work around those shipped Phase 16A surfaces is operational:
 
@@ -31,16 +39,17 @@ The current closeout work around those shipped Phase 16A surfaces is operational
 
 ## Active objective
 
-Design and ship the Flow submission adapter:
+Keep the new Stripe Reserve flow stable while Phase 16A closeout continues:
 
-1. **`POST /api/butler/flow-submit`** - accepts a WhatsApp Flow payload, validates it, maps it into the existing `/api/bookings` POST body shape, and forwards into the locked code path. Never bypasses the existing overlap / pricing / addon-audit pipeline.
-2. **Idempotency.** Dedup on a Flow-supplied `flow_token`. Decision pending in 16A.2 kickoff: small new `butler_submissions` table vs advisory enrichment inside the existing `addons_snapshot` jsonb. Either is consistent with [AGENT_RULES.md](AGENT_RULES.md) rule 4 (the table option is additive; the jsonb option is non-blocking enrichment).
-3. **Structured response.** `{ ok, status, booking_id?, view_url?, user_message }`. The `user_message` is the only sentence the AI Butler is allowed to repeat to the guest about outcome.
-4. **Health gates.** Refuse Flow submissions when `RESEND_API_KEY` is unset in production - turns [KNOWN_BUGS.md](KNOWN_BUGS.md) #2 from a stealth failure into an explicit one for this surface.
+1. **Stripe execution hardening.** Ensure `POST /api/payments/checkout` and `POST /api/payments/webhook/stripe` remain the only payment execution authority for Reserve bookings after the booking row exists.
+2. **Webhook-first truth.** Guest return URLs on `/booking/view/[token]` stay informational; payment state comes from verified webhook updates only.
+3. **Phase 16A closeout.** `POST /api/butler/flow-submit` is still the remaining WhatsApp booking-adapter scope, but it must not bypass the locked `/api/bookings` POST or promise any payment automation beyond the shipped website Stripe flow.
+4. **Operational readiness.** Preview + production must carry `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_SITE_URL`, and the Phase 16A Butler secrets correctly before the new payment flow is considered stable.
 
 ## Just completed
 
 - **Phase 16A - Butler website handoff date/auth persistence hardening (this commit).** `normalizeLeadInput` now accepts plain `check_in` / `check_out` aliases in addition to the normalized WhatChimp fields when persisting `whatsapp_leads`, and also falls back to the nested `raw_payload` object WhatChimp sends when the ISO stay dates are not duplicated at the top level. This closes the production gap where villa/name/guest count were mapped from top-level fields but `oraya_check_in` / `oraya_check_out` existed only inside `raw_payload`, leaving `normalized_check_in` / `normalized_check_out` null and causing `/api/butler/prefill` to return null dates. On the `/book` client, Butler date hydration is queued into the exact `dateRange` state the calendar uses and is re-applied after the auth gate resolves, so late villa resets or the guest/member gate cannot drop the decoded stay dates, and the visible calendar month now follows the hydrated `dateRange` so a December handoff opens on December rather than staying anchored to the current month. The `/book` auth gate also preserves the full current booking URL in its member sign-in redirect, so the signed handoff token survives the login round-trip instead of depending on session timing. No schema changes. No locked API behavior changes.
+- **Phase 16B.3 - Stripe Checkout execution on the Reserve path (this commit).** `/book` Step 3 now presents a premium hosted-payment chooser with full-payment and custom-deposit modes, a 40% minimum deposit rule, remaining-balance visibility, and secure hosted-checkout messaging. The booking is still created only by the locked `/api/bookings` POST. After that succeeds, `POST /api/payments/checkout` validates the requested amount server-side, creates a Stripe Checkout session, persists `payment_link_url`, `payment_link_provider`, `payment_link_status`, `payment_link_issued_at`, `payment_link_expires_at`, and `payment_provider_session_id`, then redirects the guest to Stripe. `POST /api/payments/webhook/stripe` verifies Stripe signatures, treats webhook delivery as the authority for payment success/expiry, updates `payment_status`, `amount_paid`, `amount_due`, `payment_reference`, and `payment_link_status`, and keeps the booking-view return page informational only.
 
 - **Phase 16A - WhatsApp -> website identity continuity (2026-05-18 merge, PR #27).** `/api/bookings` POST now accepts an optional `butler_prefill_token` in the request body. After a successful insert, the locked route best-effort verifies the token (`lib/butler/prefill-token.ts`) and updates `whatsapp_leads.linked_booking_id` with a `.is("linked_booking_id", null)` race guard so an existing linkage is never overwritten. Verification failure, expired token, missing lead, conflicting linkage, and Supabase errors all log a server-side warning and return early - they **never** block booking creation. `/book` reads the token from sessionStorage at submit time, sends it in the booking POST body, and clears the token on success. Closes the lead -> booking provenance loop without changing locked-pipeline behavior on failure. See [DECISIONS_LOG.md](DECISIONS_LOG.md) - 2026-05-18 entry "WhatsApp lead -> booking provenance linkage in `/api/bookings` POST".
 
@@ -93,11 +102,13 @@ Pre-existing gaps that become more visible when 16A.2 ships:
 - **`BUTLER_WEBHOOK_SECRET` not yet in Vercel.** This PR wires the consumer but does not populate the Vercel env panel. Production and Preview need the value set (Sensitive) before WhatChimp can call any `/api/butler/*` route in those environments. See [KNOWN_BUGS.md](KNOWN_BUGS.md) #4.
 - **DECISIONS_LOG header-name example drift.** The 2026-05-12 DECISIONS_LOG entry used `X-Butler-Auth` as an illustrative header name; the actual implementation in 16A.1 uses `X-Butler-Secret` per the 16A.1 task spec. Architecturally identical ("shared secret in header"); only the header name differs. Not worth a superseding DECISIONS_LOG entry - flagged here for future agents reading old context.
 - **Payment remains Phase 16B.** Instant-book UI exists, but WhatsApp and the website continuation path must not imply payment completion, payment collection, refund handling, or any final paid confirmation state.
+- **Stripe envs are now required for the hosted Reserve payment path.** Missing `STRIPE_SECRET_KEY` or `STRIPE_WEBHOOK_SECRET` no longer means "feature unavailable only on paper" - it means Step 3 can create a booking row but fail to start hosted checkout, leaving the guest on `/booking/view/[token]?payment=setup_failed` until Oraya follows up manually.
 
 ## Out of scope this phase (16A.2)
 
 - No schema changes without explicit approval in the task prompt - even for the idempotency table. If a new `butler_submissions` table is chosen over the jsonb-enrichment path, that decision goes through a separate approval gate.
 - No payment / refund flow over WhatsApp. Phase 16B.
+- No refunds automation or manual-transfer rails in this Stripe execution step. Those remain later 16B work.
 - No smart-lock PIN issuance or access-code delivery. Phase 16D.
 - No member -> phone linkage. Every Butler-originated booking is the guest path. A future phase ships the verification flow.
 - No AI prompt engineering in this repo. AI Training, Bot Reply, Labels, and Custom Fields live in WhatChimp.
@@ -110,7 +121,7 @@ Pre-existing gaps that become more visible when 16A.2 ships:
 
 In order:
 
-1. **Human action:** set `BUTLER_WEBHOOK_SECRET` in Vercel (Production + Preview, Sensitive; different value per environment recommended). Generate with `openssl rand -base64 32`. Confirm WhatChimp's outbound webhook is configured to send the resulting secret in the `X-Butler-Secret` header.
-2. **Human action:** confirm WhatChimp's outbound-signing capability. If supported, 16A.1.x adds HMAC + timestamp; if not, the bare shared secret remains the floor.
-3. **16A.2 implementation (next coding session):** design and ship `POST /api/butler/flow-submit` per "Active objective" above. Decide the idempotency persistence shape (new `butler_submissions` table vs `addons_snapshot` enrichment) in the kickoff and surface that decision in DECISIONS_LOG before writing code.
-4. **16A.2 hardening:** make `RESEND_API_KEY` absence a loud failure on `/api/butler/flow-submit` in production. Resolves [KNOWN_BUGS.md](KNOWN_BUGS.md) #2 for the Butler surface.
+1. **Human action:** add `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` in Vercel Preview + Production, then register the Stripe webhook endpoint for each environment.
+2. **Human action:** confirm `NEXT_PUBLIC_SITE_URL` is set correctly in Preview + Production so Stripe success/cancel returns land on the right booking-view host.
+3. **16A.2 implementation (next coding session):** design and ship `POST /api/butler/flow-submit` per "Active objective" above without bypassing the locked `/api/bookings` authority.
+4. **Next 16B increment:** admin payment controls / link reissue / payment refresh and the separate refund workflow, then WhatsApp payment-status replies only after identity-safe continuity remains stable.

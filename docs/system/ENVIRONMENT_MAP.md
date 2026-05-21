@@ -22,6 +22,9 @@
 | `ADMIN_SECRET` | server-only | yes (admin login + admin APIs) | yes | yes | yes |
 | `BUTLER_WEBHOOK_SECRET` | server-only | optional (only for Butler endpoint testing) | yes (once WhatChimp is wired) | yes (once WhatChimp is wired) | yes — Sensitive |
 | `BUTLER_PREFILL_SECRET` | server-only | optional (only for WhatsApp -> /book prefill testing) | yes (once the handoff is wired) | yes (once the handoff is wired) | yes â€” Sensitive |
+| `STRIPE_SECRET_KEY` | server-only | optional (hosted payment testing only) | yes | yes | yes |
+| `STRIPE_WEBHOOK_SECRET` | server-only | optional (Stripe webhook testing only) | yes | yes | yes |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | public | optional | optional | optional | yes |
 | `NODE_ENV` | system | auto | auto | auto | n/a (Next.js / Vercel sets) |
 
 Public vs server-only:
@@ -174,6 +177,39 @@ Public vs server-only:
 - **Configure in Vercel:** yes â€” Production + Preview, marked Sensitive. Different value per environment strongly recommended.
 - **Risk if missing:** `POST /api/butler/lead` still succeeds, but it omits `prefill_url`. `GET /api/butler/prefill` treats tokens as invalid because verification cannot run.
 - **Security contract:** token payload is opaque HMAC-signed data only; raw booking intent and PII are not placed in the public URL. The public prefill route returns a strict allow-list only.
+
+### `STRIPE_SECRET_KEY`
+
+- **Scope:** server-only.
+- **Used in:**
+  - [lib/payments/stripe.ts](../../lib/payments/stripe.ts) - authorizes Stripe Checkout session creation against Stripe's server API.
+  - [app/api/payments/checkout/route.ts](../../app/api/payments/checkout/route.ts) - Reserve-path hosted payment session creation.
+- **Required:** local optional (only if you want real Stripe test-mode checkout locally) Â· preview yes Â· production yes.
+- **Where to get it:** Stripe Dashboard â†’ Developers â†’ API keys â†’ **Secret key** for the correct mode (test vs live).
+- **Configure in Vercel:** yes â€” Production + Preview, marked Sensitive.
+- **Risk if missing:** Step 3 on `/book` can still create the booking row via the locked `/api/bookings` route, but hosted checkout setup fails immediately afterward and the guest falls back to `/booking/view/[token]?payment=setup_failed`.
+- **Operational note:** use Stripe test keys in preview/development and live keys only in production.
+
+### `STRIPE_WEBHOOK_SECRET`
+
+- **Scope:** server-only.
+- **Used in:**
+  - [lib/payments/stripe.ts](../../lib/payments/stripe.ts) - verifies Stripe `Stripe-Signature` headers.
+  - [app/api/payments/webhook/stripe/route.ts](../../app/api/payments/webhook/stripe/route.ts) - rejects unsigned/invalid webhook deliveries.
+- **Required:** local optional (only if you are forwarding Stripe webhooks locally) Â· preview yes Â· production yes.
+- **Where to get it:** Stripe Dashboard â†’ Developers â†’ Webhooks â†’ select the endpoint â†’ **Signing secret**.
+- **Configure in Vercel:** yes â€” Production + Preview, marked Sensitive.
+- **Risk if missing:** hosted checkout sessions may still be created, but Oraya cannot safely trust payment success. `/booking/view/[token]?payment=success` remains informational only; `payment_status` does not update without a verified webhook.
+- **Operational note:** each Stripe webhook endpoint has its own signing secret. Preview and production should not share one casually.
+
+### `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
+
+- **Scope:** public.
+- **Used in:** no runtime consumer in the current Phase 16B.3 hosted-checkout flow. Reserved now so future Stripe client surfaces use a stable env name.
+- **Required:** optional in local / preview / production for the current implementation.
+- **Where to get it:** Stripe Dashboard â†’ Developers â†’ API keys â†’ **Publishable key**.
+- **Configure in Vercel:** optional for now.
+- **Risk if missing:** none today. A future client-side Stripe integration would require it.
 
 ### Butler secret rotation checklist
 

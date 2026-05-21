@@ -2,7 +2,7 @@
 
 **This file is the highest authority for AI sessions** (ChatGPT, Claude Code, Codex, Cursor). If anything in chat memory, side-channel notes, or older root-level docs disagrees with this file, **this file wins**. When in doubt, stop and ask.
 
-**Last updated:** 2026-05-18
+**Last updated:** 2026-05-22
 
 ---
 
@@ -15,9 +15,9 @@ The site supports stay bookings (Reserve and Instant Book paths), event inquirie
 ## Current production status
 
 - **Live in production** on Vercel, domain `https://stayoraya.com`.
-- **Phase 15 - CLOSED / COMPLETE** (public trust layer, theme system, adaptive `/book` UX, instant booking control plane, cancellation/refund visibility). Instant booking exists as UI only - **payment execution is Phase 16B work and not yet implemented**.
+- **Phase 15 - CLOSED / COMPLETE** (public trust layer, theme system, adaptive `/book` UX, instant booking control plane, cancellation/refund visibility). Instant booking remains UI-only; Reserve-path hosted payment execution now starts in Phase 16B.
 - **Phase 16A - IN PROGRESS.** WhatsApp AI Butler read-only foundation (`/api/butler/health|event-types|addons|availability|normalize-dates`), lead intake (`/api/butler/lead` + `whatsapp_leads` + `/admin/leads`), secure website handoff (`/api/butler/prefill` + `?h=...` on `/book`), and lead -> booking identity continuity (best-effort `whatsapp_leads.linked_booking_id` writer in `/api/bookings` POST) all shipped. Outstanding 16A scope: `POST /api/butler/flow-submit` (write-capable booking adapter), human-escalation routing, AI prompt tuning. The 8-character booking reference on `/booking/view/[token]` is a **public support code, not an access PIN** - access credentials remain Phase 16D.
-- **Phase 16B - PROVISIONED, no implementation.** Payment + refunds architecture / schema decision / WhatsApp payment branching / admin workflow / guest workflow / refund workflow / PR-safe roadmap in [/docs/phases/PHASE_16B_PLAN.md](../phases/PHASE_16B_PLAN.md). Roadmap in [/PHASE_16_PLAN.md](../../PHASE_16_PLAN.md).
+- **Phase 16B - IN PROGRESS.** Phase 16B.1 payment-link schema/domain scaffolding and 16B.2 runtime plumbing are complete. Phase 16B.3 now creates real Stripe Checkout sessions from the Reserve path on `/book`, persists booking-side payment-link state, redirects the guest to hosted checkout, and reconciles verified success through `POST /api/payments/webhook/stripe`. Refunds, WhatsApp payment replies, admin payment controls, and Instant Book execution remain later 16B work. See [/docs/phases/PHASE_16B_PLAN.md](../phases/PHASE_16B_PLAN.md) and [/PHASE_16_PLAN.md](../../PHASE_16_PLAN.md).
 - **AI Project Bootstrap (this layer)** - in progress. Establishes `/docs/system/` as the durable AI memory.
 
 For the full per-phase history (15A through 15I.11 and earlier), see the legacy detail log at [/PROJECT_STATE.md](../../PROJECT_STATE.md). That file is **not** the day-to-day authority - this one is - but it remains the historical record.
@@ -36,7 +36,7 @@ Full per-route, per-helper, and per-secret detail is in [ARCHITECTURE.md](ARCHIT
 
 ## Main completed systems
 
-- **Booking flow** - public stay booking via [app/book/page.tsx](../../app/book/page.tsx); Reserve (request -> admin confirm) and Instant Book (UI only today). Server-side overlap protection in [app/api/bookings/route.ts](../../app/api/bookings/route.ts).
+- **Booking flow** - public stay booking via [app/book/page.tsx](../../app/book/page.tsx); Reserve (request -> hosted Stripe checkout -> webhook-driven payment state) and Instant Book (UI only today). Server-side overlap protection and booking creation authority remain in [app/api/bookings/route.ts](../../app/api/bookings/route.ts).
 - **Event inquiry flow** - public event request via [app/events/inquiry/page.tsx](../../app/events/inquiry/page.tsx); admin proposal management with line-item totals.
 - **Admin console** - password-gated, signed `oraya_admin` session cookie. Surfaces under `/admin/*`: dashboard, bookings, calendar, rates, media, members, settings.
 - **Pricing engine** - base / weekday / weekend / seasonal; per-night breakdown; server-side enforced for booking creation; snapshots persisted on the booking row.
@@ -44,6 +44,7 @@ Full per-route, per-helper, and per-secret detail is in [ARCHITECTURE.md](ARCHIT
 - **Calendar sync** - daily Vercel Cron (`0 0 * * *`) calls `/api/cron/calendar-sync`; iCal export per villa at `/api/calendar/[villa].ics` with UTC + exclusive `DTEND` semantics.
 - **Email system** - Resend-backed transactional emails (booking confirmed/pending/payment, event proposal/response/confirmation, feedback request, booking request to admin). Signed HMAC tokens for confirm/cancel/view links.
 - **WhatsApp / Butler handoff** - WhatChimp calls `/api/butler/lead`, Oraya persists `whatsapp_leads`, may mint a short-lived opaque `prefill_url`, `/book?h=...` hydrates safe fields only, and successful website-originated bookings best-effort back-link the originating `whatsapp_leads.linked_booking_id`.
+- **Hosted payment execution** - `POST /api/payments/checkout` creates Stripe Checkout sessions after the booking row exists, persists `payment_link_*` state on the booking, and `POST /api/payments/webhook/stripe` is the authority for marking Stripe-hosted payments received.
 - **Trust + legal layer** - `/legal/terms`, `/legal/payment`, `/legal/refund`, `/legal/privacy`; cancellation/refund visibility on booking surfaces.
 - **Theme system** - `data-theme="light" | "dark"` on `<html>`; shared `--oraya-*` CSS tokens; default light, explicit dark via `oraya-theme` localStorage key.
 
