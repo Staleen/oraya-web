@@ -16,6 +16,43 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-05-22 - Hosted payment execution is provider-agnostic; Credit Libanais / MPGS is the production target
+
+**Decision:** Oraya's hosted-payment architecture remains booking-first and webhook-first, but production is no longer assumed to be Stripe. `POST /api/payments/checkout` now resolves a provider-agnostic hosted-checkout adapter selected by `PAYMENT_PROVIDER`, and `POST /api/payments/webhook/[provider]` is the generic callback surface. Credit Libanais / MPGS is the production target provider for settlement into a Fresh USD account in Lebanon. In production, provider selection must be explicit: if `PAYMENT_PROVIDER` is missing, checkout fails closed with a configuration error. Outside production, the runtime may default to Stripe so local/dev can still exercise the hosted checkout flow intentionally.
+
+**Reason:** the operating setup is Lebanese bank settlement, not Stripe as merchant of record. The website still must never collect card data directly, and the booking pipeline still must stay authoritative for overlap protection, pricing, add-on rules, email triggers, and signed booking-view links. A provider-agnostic adapter boundary lets Oraya preserve the premium hosted checkout UX and lifecycle fields without baking Stripe into the architecture or pretending the bank contract is already known.
+
+**Impact:**
+
+- [app/api/payments/checkout/route.ts](../../app/api/payments/checkout/route.ts) now resolves the configured hosted-checkout adapter instead of importing Stripe directly. Booking validation, signed booking-token verification, and server-side deposit/full amount validation remain unchanged.
+- [lib/payments/provider.ts](../../lib/payments/provider.ts) now distinguishes runtime provider keys from the persisted `payment_link_provider` allow-list, and exports the generic hosted-checkout adapter contract:
+  - `createCheckoutSession`
+  - `verifyWebhook`
+  - `mapProviderEventToBookingUpdate`
+- New runtime helpers:
+  - [lib/payments/runtime.ts](../../lib/payments/runtime.ts) - provider registry keyed by `PAYMENT_PROVIDER`
+  - [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) - explicit non-faking placeholder adapter that lists the bank details still required
+  - [lib/payments/webhook-handler.ts](../../lib/payments/webhook-handler.ts) - generic callback application logic
+- New callback route:
+  - [app/api/payments/webhook/[provider]/route.ts](../../app/api/payments/webhook/%5Bprovider%5D/route.ts) - generic hosted-payment callback surface
+  - [app/api/payments/webhook/stripe/route.ts](../../app/api/payments/webhook/stripe/route.ts) - compatibility shim for the optional Stripe adapter
+- [app/book/page.tsx](../../app/book/page.tsx) no longer hardcodes Stripe in Step 3 copy; guest messaging stays provider-neutral and hosted-checkout-only.
+- Environment contract changes:
+  - `PAYMENT_PROVIDER=credit_libanais` is the intended production cutover once the bank adapter is implemented
+  - production no longer silently falls back to Stripe when `PAYMENT_PROVIDER` is unset
+  - `CREDIT_LIBANAIS_MERCHANT_ID`
+  - `CREDIT_LIBANAIS_SECRET`
+  - `CREDIT_LIBANAIS_GATEWAY_URL`
+  - `CREDIT_LIBANAIS_WEBHOOK_SECRET`
+  - Stripe envs remain optional for dev/test only
+- Important schema compatibility note: the current `bookings.payment_link_provider` allow-list is still the older `manual | whish | stripe` floor. The Credit Libanais adapter therefore remains a placeholder and must not write fake provider state until a later explicit schema-compatibility step is approved.
+
+**Reversible?:** yes, but only with a superseding entry that preserves the locked `/api/bookings` authority, server-side amount validation, and verified callback truth.
+
+**Supersedes:** refines the 2026-05-22 "Phase 16B.3 Reserve-path payment execution uses booking-first + hosted Stripe checkout" entry by removing Stripe as the production assumption while preserving the same hosted-checkout execution model.
+
+---
+
 ## 2026-05-22 - Phase 16B.3 Reserve-path payment execution uses booking-first + hosted Stripe checkout
 
 **Decision:** the first real payment execution path for Oraya stays **booking-first**. The website Reserve flow creates the booking through the locked `/api/bookings` POST first, then starts hosted Stripe checkout through a separate `POST /api/payments/checkout` route. Stripe success redirects are informational only; `POST /api/payments/webhook/stripe` is the authority that marks payment received, updates `amount_paid` / `amount_due`, and flips `payment_link_status`.
