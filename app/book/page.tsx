@@ -3697,7 +3697,7 @@ function BookPageInner() {
                     Choose how you would like to pay
                   </p>
                   <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.7 }}>
-                    We’ll create your booking request first, then continue on Stripe&apos;s secure hosted checkout. Your stay still remains subject to Oraya&apos;s final review and confirmation.
+                    We&apos;ll create your booking request first, then continue on Oraya&apos;s secure hosted payment page. Your stay still remains subject to Oraya&apos;s final review and confirmation.
                   </p>
                 </div>
                 <div style={{ display: "grid", gap: "12px" }}>

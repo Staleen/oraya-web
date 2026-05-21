@@ -113,8 +113,9 @@ All routes verified against the current repo. Locked APIs are marked **locked** 
 | `/api/butler/normalize-dates` | POST | Natural date normalization for Butler/WhatChimp intake | secret-guarded |
 | `/api/butler/lead` | POST | WhatsApp/WhatChimp lead persistence into `whatsapp_leads` | secret-guarded |
 | `/api/butler/prefill` | GET | Public short-lived token-auth prefill hydration for `/book?h=...` | token-auth |
-| `/api/payments/checkout` | POST | Create Stripe Checkout session for an existing booking | payment |
-| `/api/payments/webhook/stripe` | POST | Verified Stripe webhook reconciliation | payment |
+| `/api/payments/checkout` | POST | Create a hosted checkout session for an existing booking via the selected provider adapter | payment |
+| `/api/payments/webhook/[provider]` | POST | Verified hosted-payment callback reconciliation for the selected provider | payment |
+| `/api/payments/webhook/stripe` | POST | Stripe compatibility shim onto the generic hosted-payment callback handler | payment |
 
 `secret-guarded` rows require an `X-Butler-Secret` header matching `BUTLER_WEBHOOK_SECRET`. `/api/butler/lead` is the first Butler write, but it writes only to `whatsapp_leads` and does not touch `bookings` or any locked surface.
 
@@ -133,9 +134,9 @@ All routes verified against the current repo. Locked APIs are marked **locked** 
    - Server validates overlap, pricing snapshot, and addon operational rules.
    - On success, persists a `bookings` row including `pricing_snapshot` and `addons`.
    - Triggers transactional emails and generates signed view + admin-action tokens.
-6. After booking creation succeeds, `POST /api/payments/checkout` creates a Stripe Checkout session, persists `payment_link_*` state on the booking row, and returns the hosted checkout URL.
-7. Guest is redirected to Stripe-hosted checkout. Success/cancel returns land on `/booking/view/[token]?payment=success|cancelled`.
-8. `POST /api/payments/webhook/stripe` is the authority for payment receipt / expiry updates. Success redirects are informational only and never mark payment received by themselves.
+6. After booking creation succeeds, `POST /api/payments/checkout` resolves the configured hosted-checkout adapter, creates a provider session when the adapter is fully implemented, persists `payment_link_*` state on the booking row, and returns the hosted checkout URL.
+7. Guest is redirected to the provider-hosted payment page. Success/cancel returns land on `/booking/view/[token]?payment=success|cancelled`.
+8. `POST /api/payments/webhook/[provider]` is the authority for payment receipt / expiry updates. Success redirects are informational only and never mark payment received by themselves.
 9. Admin receives email with signed confirm/cancel links -> `/api/booking-action` mutates status.
 10. Guest can revisit booking via `/booking/view/[token]`.
 
@@ -178,7 +179,7 @@ The WhatsApp AI Butler (WhatChimp today; vendor-agnostic by design) talks to Ora
 - **Provenance writer on the locked booking route.** `/api/bookings` POST accepts an optional `butler_prefill_token`. After successful booking insert, the locked route verifies the token and best-effort updates `whatsapp_leads.linked_booking_id`. None of those failure paths block booking creation.
 - **Booking reference vs access PIN.** The 8-character uppercased prefix of `bookings.id` shown on `/booking/view/[token]` and in emails is intentionally a public support reference code, not an access PIN. Access credential issuance is Phase 16D.
 - **No payment or smart-lock behavior in Butler.** Payment remains Phase 16B. Smart-lock remains 16D. Member -> phone linkage is a later phase. The current approved architecture is lead capture plus secure website continuation into the existing locked `/api/bookings` pipeline, not direct WhatsApp-side booking submission.
-- **Hosted payment lives after booking creation, not inside Butler.** The website Reserve path creates the booking through the locked `/api/bookings` POST first, then starts Stripe-hosted payment via `/api/payments/checkout`. Butler still does not create payment links or mark payments received.
+- **Hosted payment lives after booking creation, not inside Butler.** The website Reserve path creates the booking through the locked `/api/bookings` POST first, then starts provider-hosted payment via `/api/payments/checkout`. Butler still does not create payment links or mark payments received.
 - **No payment, smart-lock, member-linking, or booking-creation writes** beyond the provenance enrichment above. Booking creation via WhatsApp (`POST /api/butler/flow-submit`) is still outstanding. The locked `/api/bookings*`, `/api/admin/bookings*`, `/api/calendar/*`, `/api/cron/*` surfaces remain otherwise untouched.
 
 ## Email system

@@ -1,10 +1,10 @@
 import crypto from "crypto";
 import { roundMoney } from "@/lib/money";
 import type {
-  CreatePaymentLinkInput,
-  CreatePaymentLinkResult,
+  CreateCheckoutSessionInput,
+  CreateCheckoutSessionResult,
+  HostedCheckoutProvider,
   PaymentBookingDelta,
-  PaymentProvider,
   PaymentProviderEvent,
 } from "@/lib/payments/provider";
 
@@ -46,13 +46,13 @@ function getStripeWebhookSecret() {
   return value;
 }
 
-function buildCheckoutLineItemName(input: CreatePaymentLinkInput) {
+function buildCheckoutLineItemName(input: CreateCheckoutSessionInput) {
   return input.purpose === "full"
     ? "Oraya booking payment"
     : "Oraya booking deposit";
 }
 
-function buildCheckoutRequestBody(input: CreatePaymentLinkInput) {
+function buildCheckoutRequestBody(input: CreateCheckoutSessionInput) {
   const params = new URLSearchParams();
   params.set("mode", "payment");
   params.set("success_url", input.return_url);
@@ -151,10 +151,12 @@ function toProviderEvent(event: StripeEventEnvelope): PaymentProviderEvent | nul
   return null;
 }
 
-export const stripePaymentProvider: PaymentProvider = {
-  id: "stripe",
+export const stripePaymentProvider: HostedCheckoutProvider = {
+  key: "stripe",
+  display_name: "Stripe",
+  persisted_link_provider: "stripe",
 
-  async createPaymentLink(input: CreatePaymentLinkInput): Promise<CreatePaymentLinkResult> {
+  async createCheckoutSession(input: CreateCheckoutSessionInput): Promise<CreateCheckoutSessionResult> {
     const secretKey = getStripeSecretKey();
     const response = await fetch(`${STRIPE_API_BASE}/checkout/sessions`, {
       method: "POST",
@@ -205,14 +207,14 @@ export const stripePaymentProvider: PaymentProvider = {
     return { ok: true, event: providerEvent } as const;
   },
 
-  toBookingDelta(event: PaymentProviderEvent): PaymentBookingDelta {
+  mapProviderEventToBookingUpdate(event: PaymentProviderEvent): PaymentBookingDelta {
     switch (event.kind) {
       case "session.completed":
         return {
           kind: "set_paid",
-          payment_status: "deposit_paid",
           amount_paid: event.amount_paid,
           payment_received_at: event.paid_at,
+          payment_reference: event.provider_session_id,
         };
       case "session.expired":
         return { kind: "set_expired" };

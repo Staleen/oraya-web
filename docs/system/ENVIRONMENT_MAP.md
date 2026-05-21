@@ -22,8 +22,13 @@
 | `ADMIN_SECRET` | server-only | yes (admin login + admin APIs) | yes | yes | yes |
 | `BUTLER_WEBHOOK_SECRET` | server-only | optional (only for Butler endpoint testing) | yes (once WhatChimp is wired) | yes (once WhatChimp is wired) | yes — Sensitive |
 | `BUTLER_PREFILL_SECRET` | server-only | optional (only for WhatsApp -> /book prefill testing) | yes (once the handoff is wired) | yes (once the handoff is wired) | yes â€” Sensitive |
-| `STRIPE_SECRET_KEY` | server-only | optional (hosted payment testing only) | yes | yes | yes |
-| `STRIPE_WEBHOOK_SECRET` | server-only | optional (Stripe webhook testing only) | yes | yes | yes |
+| `PAYMENT_PROVIDER` | server-only | optional (defaults to `stripe` only outside production) | yes | yes | yes |
+| `CREDIT_LIBANAIS_MERCHANT_ID` | server-only | optional (until the bank contract is implemented) | yes (when Credit Libanais is enabled) | yes (when Credit Libanais is enabled) | yes |
+| `CREDIT_LIBANAIS_SECRET` | server-only | optional (until the bank contract is implemented) | yes (when Credit Libanais is enabled) | yes (when Credit Libanais is enabled) | yes |
+| `CREDIT_LIBANAIS_GATEWAY_URL` | server-only | optional (until the bank contract is implemented) | yes (when Credit Libanais is enabled) | yes (when Credit Libanais is enabled) | yes |
+| `CREDIT_LIBANAIS_WEBHOOK_SECRET` | server-only | optional (until the bank callback contract is implemented) | yes (when Credit Libanais is enabled) | yes (when Credit Libanais is enabled) | yes |
+| `STRIPE_SECRET_KEY` | server-only | optional (Stripe dev/test only) | optional | optional | yes |
+| `STRIPE_WEBHOOK_SECRET` | server-only | optional (Stripe dev/test webhook only) | optional | optional | yes |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | public | optional | optional | optional | yes |
 | `NODE_ENV` | system | auto | auto | auto | n/a (Next.js / Vercel sets) |
 
@@ -178,12 +183,60 @@ Public vs server-only:
 - **Risk if missing:** `POST /api/butler/lead` still succeeds, but it omits `prefill_url`. `GET /api/butler/prefill` treats tokens as invalid because verification cannot run.
 - **Security contract:** token payload is opaque HMAC-signed data only; raw booking intent and PII are not placed in the public URL. The public prefill route returns a strict allow-list only.
 
-### `STRIPE_SECRET_KEY`
+### `PAYMENT_PROVIDER`
 
 - **Scope:** server-only.
 - **Used in:**
+  - [lib/payments/runtime.ts](../../lib/payments/runtime.ts) - selects the hosted-checkout adapter used by [app/api/payments/checkout/route.ts](../../app/api/payments/checkout/route.ts).
+- **Required:** local optional (defaults to `stripe` only outside production) · preview yes · production yes.
+- **Allowed values today:** `credit_libanais`, `stripe`.
+- **Configure in Vercel:** yes — Production + Preview, plus Development if you want local parity.
+- **Risk if missing:** in `NODE_ENV=production`, checkout fails closed with a configuration error and no provider is selected. Outside production, runtime defaults to Stripe so local/dev can still exercise the hosted checkout flow intentionally.
+- **Operational note:** Credit Libanais / MPGS is the target production provider. Stripe remains an optional dev/test provider, or an explicit override only if the business intentionally chooses it.
+
+### `CREDIT_LIBANAIS_MERCHANT_ID`
+
+- **Scope:** server-only.
+- **Used in:** reserved for the future Credit Libanais / MPGS adapter in [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts).
+- **Required:** local optional until the bank contract is implemented · preview yes when Credit Libanais is enabled · production yes when Credit Libanais is enabled.
+- **Where to get it:** Credit Libanais / MPGS merchant onboarding package.
+- **Configure in Vercel:** yes — Production + Preview, marked Sensitive.
+- **Risk if missing:** the Credit Libanais adapter cannot move beyond placeholder status.
+
+### `CREDIT_LIBANAIS_SECRET`
+
+- **Scope:** server-only.
+- **Used in:** reserved for the future Credit Libanais / MPGS adapter in [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts).
+- **Required:** local optional until the bank contract is implemented · preview yes when Credit Libanais is enabled · production yes when Credit Libanais is enabled.
+- **Where to get it:** exact value type still depends on the bank contract. It may be an API key, shared secret, certificate reference, or signature secret.
+- **Configure in Vercel:** yes — Production + Preview, marked Sensitive.
+- **Risk if missing:** Oraya cannot safely authenticate hosted-checkout creation or verify callbacks with the bank gateway.
+
+### `CREDIT_LIBANAIS_GATEWAY_URL`
+
+- **Scope:** server-only.
+- **Used in:** reserved for the future Credit Libanais / MPGS adapter in [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts).
+- **Required:** local optional until the bank contract is implemented · preview yes when Credit Libanais is enabled · production yes when Credit Libanais is enabled.
+- **Where to get it:** exact bank gateway base URL or MPGS endpoint supplied by Credit Libanais.
+- **Configure in Vercel:** yes — Production + Preview.
+- **Risk if missing:** the adapter cannot know where to create hosted sessions or verify gateway responses.
+
+### `CREDIT_LIBANAIS_WEBHOOK_SECRET`
+
+- **Scope:** server-only.
+- **Used in:** reserved for the future Credit Libanais / MPGS callback verification path in [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) and [app/api/payments/webhook/[provider]/route.ts](../../app/api/payments/webhook/%5Bprovider%5D/route.ts).
+- **Required:** local optional until the bank callback contract is implemented · preview yes when Credit Libanais is enabled · production yes when Credit Libanais is enabled.
+- **Where to get it:** exact callback verification secret or signature material supplied by the bank.
+- **Configure in Vercel:** yes — Production + Preview, marked Sensitive.
+- **Risk if missing:** Oraya cannot safely trust any Credit Libanais payment callback.
+
+### `STRIPE_SECRET_KEY`
+
+- **Scope:** server-only.
+- **Status:** optional dev/test adapter only. No longer the assumed production provider.
+- **Used in:**
   - [lib/payments/stripe.ts](../../lib/payments/stripe.ts) - authorizes Stripe Checkout session creation against Stripe's server API.
-  - [app/api/payments/checkout/route.ts](../../app/api/payments/checkout/route.ts) - Reserve-path hosted payment session creation.
+  - [app/api/payments/checkout/route.ts](../../app/api/payments/checkout/route.ts) - Reserve-path hosted payment session creation when `PAYMENT_PROVIDER=stripe`.
 - **Required:** local optional (only if you want real Stripe test-mode checkout locally) Â· preview yes Â· production yes.
 - **Where to get it:** Stripe Dashboard â†’ Developers â†’ API keys â†’ **Secret key** for the correct mode (test vs live).
 - **Configure in Vercel:** yes â€” Production + Preview, marked Sensitive.
@@ -193,6 +246,7 @@ Public vs server-only:
 ### `STRIPE_WEBHOOK_SECRET`
 
 - **Scope:** server-only.
+- **Status:** optional dev/test adapter only. No longer the assumed production provider.
 - **Used in:**
   - [lib/payments/stripe.ts](../../lib/payments/stripe.ts) - verifies Stripe `Stripe-Signature` headers.
   - [app/api/payments/webhook/stripe/route.ts](../../app/api/payments/webhook/stripe/route.ts) - rejects unsigned/invalid webhook deliveries.
