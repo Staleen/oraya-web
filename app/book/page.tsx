@@ -1,5 +1,5 @@
 "use client";
-import { Suspense, useState, useEffect, useRef } from "react";
+import { Suspense, useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { DayPicker } from "react-day-picker";
 import type { DateRange, Matcher } from "react-day-picker";
@@ -908,6 +908,7 @@ function BookPageInner() {
   const reserveAutoNavigatedRef = useRef(false);
   /** Suppresses auto-navigation after an explicit Back action until the stay selection changes. */
   const reserveAutoAdvanceSuppressedRef = useRef(false);
+  const pendingStep1TopScrollRef = useRef<null | { step: number; bookingPath: BookingPath }>(null);
 
   // Form (persisted across steps)
   const [form, setForm] = useState({
@@ -1640,6 +1641,30 @@ function BookPageInner() {
     reserveAutoAdvanceSuppressedRef.current = false;
   }, [reserveAutoAdvanceSignature]);
 
+  const blurActiveCalendarDayIfSelectedRangeComplete = useCallback(() => {
+    if (!dateRange?.from || !dateRange?.to) return;
+    if (typeof document === "undefined") return;
+    const activeElement = document.activeElement;
+    if (!(activeElement instanceof HTMLButtonElement)) return;
+    if (activeElement.getAttribute("name") !== "day") return;
+    activeElement.blur();
+  }, [dateRange?.from, dateRange?.to]);
+
+  const transitionStep1To = useCallback((nextBookingPath: BookingPath) => {
+    blurActiveCalendarDayIfSelectedRangeComplete();
+    pendingStep1TopScrollRef.current = { step: 2, bookingPath: nextBookingPath };
+    setBookingPath(nextBookingPath);
+    setStep(2);
+  }, [blurActiveCalendarDayIfSelectedRangeComplete]);
+
+  useLayoutEffect(() => {
+    const pending = pendingStep1TopScrollRef.current;
+    if (!pending) return;
+    if (step !== pending.step || bookingPath !== pending.bookingPath) return;
+    window.scrollTo({ top: 0, behavior: "auto" });
+    pendingStep1TopScrollRef.current = null;
+  }, [step, bookingPath]);
+
   /** Default reserve path: skip decision screen when instant booking is not offered for this stay. */
   useEffect(() => {
     if (!butlerPrefillReady) return;
@@ -1650,10 +1675,8 @@ function BookPageInner() {
     if (reserveAutoNavigatedRef.current) return;
     reserveAutoNavigatedRef.current = true;
     setError("");
-    setBookingPath("request");
-    setStep(2);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }, [step, instantEligible, form.villa, checkIn, checkOut, dateConflict, butlerPrefillReady, availabilityReadyForSelection]);
+    transitionStep1To("request");
+  }, [step, instantEligible, form.villa, checkIn, checkOut, dateConflict, butlerPrefillReady, availabilityReadyForSelection, transitionStep1To]);
 
   useEffect(() => {
     setSelectedAddons((prev) => prev.filter((id) => {
@@ -1765,17 +1788,13 @@ function BookPageInner() {
   function proceedFromStep1ToReserve() {
     setError("");
     if (!validateStep1Basics()) return;
-    setBookingPath("request");
-    setStep(2);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    transitionStep1To("request");
   }
 
   function proceedFromStep1ToInstant() {
     setError("");
     if (!validateStep1Basics()) return;
-    setBookingPath("instant");
-    setStep(2);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    transitionStep1To("instant");
   }
 
   /** From instant Step 2 — jump into full request flow at add-ons (stay setup still required before submit). */
