@@ -880,6 +880,10 @@ function InfoPopover({ label, text }: { label: string; text: string }) {
 // ─── Main component ───────────────────────────────────────────────────────────
 function BookPageInner() {
   const searchParams = useSearchParams();
+  const loginRedirectTarget = (() => {
+    const raw = searchParams.toString();
+    return raw ? `/book?${raw}` : "/book";
+  })();
   const pricing = usePublicPricing();
   const prefillHandledRef = useRef(false);
   const skipNextVillaDateResetRef = useRef(false);
@@ -2184,7 +2188,7 @@ function BookPageInner() {
           </div>
           <div style={{ border: "0.5px solid rgba(197,164,109,0.3)", backgroundColor: "rgba(197,164,109,0.05)", padding: "2rem", display: "flex", gap: "10px", justifyContent: "center", flexWrap: "wrap", marginBottom: "1.25rem" }}>
             <a
-              href="/login?redirect=/book"
+              href={`/login?redirect=${encodeURIComponent(loginRedirectTarget)}`}
               className="oraya-pressable oraya-cta-gold-hover"
               style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, padding: "14px 34px", textDecoration: "none", display: "inline-block" }}
             >
@@ -2201,7 +2205,7 @@ function BookPageInner() {
           </div>
           <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, textAlign: "center", margin: "0 0 1rem" }}>
             Already a member?{" "}
-            <a href="/login?redirect=/book" className="oraya-link-text" style={{ color: GOLD }}>
+            <a href={`/login?redirect=${encodeURIComponent(loginRedirectTarget)}`} className="oraya-link-text" style={{ color: GOLD }}>
               Sign in
             </a>
             {" "}for member benefits.

@@ -213,8 +213,12 @@ export function normalizeLeadInput(body: unknown): NormalizedLeadInput | null {
   const specialRequests  = pickFirstString(body, ["oraya_special_requests", "special_requests"], MAX_LONG_FIELD_LEN);
 
   const normalizedDates = sanitizeNormalizedDateRange(
-    readOptionalIsoDate(body.normalized_check_in) ?? readOptionalIsoDate(body.oraya_check_in),
-    readOptionalIsoDate(body.normalized_check_out) ?? readOptionalIsoDate(body.oraya_check_out),
+    readOptionalIsoDate(body.normalized_check_in) ??
+      readOptionalIsoDate(body.oraya_check_in) ??
+      readOptionalIsoDate(body.check_in),
+    readOptionalIsoDate(body.normalized_check_out) ??
+      readOptionalIsoDate(body.oraya_check_out) ??
+      readOptionalIsoDate(body.check_out),
   );
 
   const labels = readLabels(body.labels);
