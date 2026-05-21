@@ -297,6 +297,10 @@ function parseSafeLocalISO(s: string): Date | null {
   return toISO(parsed) === s ? parsed : null;
 }
 
+function startOfLocalMonth(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
 function readStoredButlerPrefill(): ButlerPrefillPayload | null {
   if (typeof window === "undefined") return null;
   try {
@@ -1204,6 +1208,12 @@ function BookPageInner() {
 
   // ── Derived values ────────────────────────────────────────────────────────
   const today = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; })();
+  const [calendarMonth, setCalendarMonth] = useState<Date>(() => startOfLocalMonth(today));
+
+  useEffect(() => {
+    if (!dateRange?.from) return;
+    setCalendarMonth(startOfLocalMonth(dateRange.from));
+  }, [dateRange?.from]);
 
   /**
    * Blocked day ranges for the calendar.
@@ -2438,6 +2448,8 @@ function BookPageInner() {
                           onSelect={handleDateSelect}
                           disabled={disabledDays}
                           modifiers={{ deadCheckIn: isChoosingCheckout ? () => false : isDeadCheckInDate }}
+                          month={calendarMonth}
+                          onMonthChange={setCalendarMonth}
                           numberOfMonths={2}
                           fromDate={today}
                           showOutsideDays
