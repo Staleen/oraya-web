@@ -1008,6 +1008,7 @@ function BookPageInner() {
       const to = parseSafeLocalISO(prefill.check_out);
       if (from && to && to > from) {
         pendingButlerDateRangeRef.current = { from, to };
+        setCalendarMonth(startOfLocalMonth(from));
         setButlerDateHydrationNonce((current) => current + 1);
       }
     }
@@ -1198,7 +1199,8 @@ function BookPageInner() {
 
   useEffect(() => {
     const pending = pendingButlerDateRangeRef.current;
-    if (!pending) return;
+    if (!pending?.from) return;
+    setCalendarMonth(startOfLocalMonth(pending.from));
     setDateRange((current) => {
       pendingButlerDateRangeRef.current = null;
       if (current?.from || current?.to) return current;
@@ -1729,6 +1731,9 @@ function BookPageInner() {
     }
 
     setError("");
+    if (nextRange?.from) {
+      setCalendarMonth(startOfLocalMonth(nextRange.from));
+    }
     setDateRange(nextRange);
   }
 
