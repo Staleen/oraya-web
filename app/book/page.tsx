@@ -954,14 +954,12 @@ function BookPageInner() {
   const [specialRequestsExpanded, setSpecialRequestsExpanded] = useState(false);
 
   /**
-   * Page-footer "Booking details" disclosure. Previously a native <details>+<summary>;
-   * <summary> is a block element whose click hitbox spans the full container width.
-   * On step 1 (tall 2-month calendar) when scrolled to max scrollY, clicking the
-   * empty horizontal strip next to the "Booking details" text toggled the disclosure,
-   * which closed the panel, shrunk page height, and forced the browser to clamp
-   * scrollY to the new (smaller) max — visible as "the page scrolled up". Reserve
-   * clicks landed in the same strip too. Controlling state in React and toggling
-   * via a width-fit button confines the hitbox to the text + chevron only.
+   * Page-footer "Booking details" disclosure. The hitbox is confined to a
+   * width-fit button so passive clicks on the wrapper strip cannot toggle
+   * the panel. Combined with `behavior: "instant"` on step-advance scrolls
+   * (see proceedFromStep1ToReserve below), this prevents the perceived
+   * "page scrolls up at the bottom" when the user clicks the bottom-area
+   * Reserve button at max scrollY.
    */
   const [bookingDetailsOpen, setBookingDetailsOpen] = useState(false);
 
@@ -1633,7 +1631,7 @@ function BookPageInner() {
     setError("");
     setBookingPath("request");
     setStep(2);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({ top: 0, behavior: "instant" });
   }, [step, instantEligible, form.villa, checkIn, checkOut, dateConflict, butlerPrefillReady, availabilityReadyForSelection]);
 
   useEffect(() => {
@@ -1745,7 +1743,7 @@ function BookPageInner() {
     if (!validateStep1Basics()) return;
     setBookingPath("request");
     setStep(2);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({ top: 0, behavior: "instant" });
   }
 
   function proceedFromStep1ToInstant() {
@@ -1753,7 +1751,7 @@ function BookPageInner() {
     if (!validateStep1Basics()) return;
     setBookingPath("instant");
     setStep(2);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({ top: 0, behavior: "instant" });
   }
 
   /** From instant Step 2 — jump into full request flow at add-ons (stay setup still required before submit). */
@@ -1761,7 +1759,7 @@ function BookPageInner() {
     setError("");
     setBookingPath("request");
     setStep(2);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({ top: 0, behavior: "instant" });
   }
 
   function focusGuestFieldAfterScroll(field: HTMLInputElement | null) {
@@ -1805,7 +1803,7 @@ function BookPageInner() {
       if (!sleeping || sleeping < 1)           { setError("Please enter at least 1 estimated guest before continuing."); return; }
     }
     setStep(s => s + 1);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({ top: 0, behavior: "instant" });
   }
 
   function toggleAddon(id: string) {
@@ -1841,7 +1839,7 @@ function BookPageInner() {
       }
       setStep(s => s - 1);
     }
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({ top: 0, behavior: "instant" });
   }
 
   async function handleSubmit() {
