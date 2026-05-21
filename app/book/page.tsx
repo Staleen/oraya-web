@@ -1,5 +1,5 @@
 "use client";
-import { Suspense, useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
+import { Suspense, useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { DayPicker } from "react-day-picker";
 import type { DateRange, Matcher } from "react-day-picker";
@@ -909,6 +909,8 @@ function BookPageInner() {
   /** Suppresses auto-navigation after an explicit Back action until the stay selection changes. */
   const reserveAutoAdvanceSuppressedRef = useRef(false);
   const pendingStep1TopScrollRef = useRef<null | { step: number; bookingPath: BookingPath }>(null);
+  const pendingStep1TopScrollFrameRef = useRef<number | null>(null);
+  const pendingStep1TopScrollFrameInnerRef = useRef<number | null>(null);
 
   // Form (persisted across steps)
   const [form, setForm] = useState({
@@ -1657,12 +1659,28 @@ function BookPageInner() {
     setStep(2);
   }, [blurActiveCalendarDayIfSelectedRangeComplete]);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     const pending = pendingStep1TopScrollRef.current;
     if (!pending) return;
     if (step !== pending.step || bookingPath !== pending.bookingPath) return;
-    window.scrollTo({ top: 0, behavior: "auto" });
-    pendingStep1TopScrollRef.current = null;
+    pendingStep1TopScrollFrameRef.current = window.requestAnimationFrame(() => {
+      pendingStep1TopScrollFrameInnerRef.current = window.requestAnimationFrame(() => {
+        window.scrollTo({ top: 0, behavior: "auto" });
+        pendingStep1TopScrollRef.current = null;
+        pendingStep1TopScrollFrameRef.current = null;
+        pendingStep1TopScrollFrameInnerRef.current = null;
+      });
+    });
+    return () => {
+      if (pendingStep1TopScrollFrameRef.current !== null) {
+        window.cancelAnimationFrame(pendingStep1TopScrollFrameRef.current);
+        pendingStep1TopScrollFrameRef.current = null;
+      }
+      if (pendingStep1TopScrollFrameInnerRef.current !== null) {
+        window.cancelAnimationFrame(pendingStep1TopScrollFrameInnerRef.current);
+        pendingStep1TopScrollFrameInnerRef.current = null;
+      }
+    };
   }, [step, bookingPath]);
 
   /** Default reserve path: skip decision screen when instant booking is not offered for this stay. */
