@@ -880,15 +880,21 @@ function InfoPopover({ label, text }: { label: string; text: string }) {
 // ─── Main component ───────────────────────────────────────────────────────────
 function BookPageInner() {
   const searchParams = useSearchParams();
+  const loginRedirectTarget = (() => {
+    const raw = searchParams.toString();
+    return raw ? `/book?${raw}` : "/book";
+  })();
   const pricing = usePublicPricing();
   const prefillHandledRef = useRef(false);
   const skipNextVillaDateResetRef = useRef(false);
+  const pendingButlerDateRangeRef = useRef<DateRange | null>(null);
 
   // Auth
   const [authStatus, setAuthStatus] = useState<AuthStatus>("loading");
   const [memberName, setMemberName] = useState("");
   const [guestMode, setGuestMode]   = useState(false);
   const [butlerPrefillReady, setButlerPrefillReady] = useState(!searchParams.get("h"));
+  const [butlerDateHydrationNonce, setButlerDateHydrationNonce] = useState(0);
 
   // Step
   const [step, setStep] = useState(1);
@@ -997,10 +1003,8 @@ function BookPageInner() {
       const from = parseSafeLocalISO(prefill.check_in);
       const to = parseSafeLocalISO(prefill.check_out);
       if (from && to && to > from) {
-        setDateRange((current) => {
-          if (current?.from || current?.to) return current;
-          return { from, to };
-        });
+        pendingButlerDateRangeRef.current = { from, to };
+        setButlerDateHydrationNonce((current) => current + 1);
       }
     }
   };
@@ -1010,6 +1014,14 @@ function BookPageInner() {
     if (!storedPrefill) return;
     applyButlerPrefill(storedPrefill, normalizeVillaFromSearchParam(searchParams.get("villa")));
   }, [searchParams]);
+
+  useEffect(() => {
+    if (authStatus === "loading") return;
+    if (authStatus === "none" && !guestMode) return;
+    const storedPrefill = readStoredButlerPrefill();
+    if (!storedPrefill) return;
+    applyButlerPrefill(storedPrefill, normalizeVillaFromSearchParam(searchParams.get("villa")));
+  }, [authStatus, guestMode, searchParams]);
 
   useEffect(() => {
     const handoffToken = searchParams.get("h");
@@ -1176,6 +1188,16 @@ function BookPageInner() {
     }
     setDateRange(undefined);
   }, [form.villa]);
+
+  useEffect(() => {
+    const pending = pendingButlerDateRangeRef.current;
+    if (!pending) return;
+    setDateRange((current) => {
+      pendingButlerDateRangeRef.current = null;
+      if (current?.from || current?.to) return current;
+      return pending;
+    });
+  }, [form.villa, butlerDateHydrationNonce]);
 
   // ── Derived values ────────────────────────────────────────────────────────
   const today = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; })();
@@ -2181,7 +2203,7 @@ function BookPageInner() {
           </div>
           <div style={{ border: "0.5px solid rgba(197,164,109,0.3)", backgroundColor: "rgba(197,164,109,0.05)", padding: "2rem", display: "flex", gap: "10px", justifyContent: "center", flexWrap: "wrap", marginBottom: "1.25rem" }}>
             <a
-              href="/login?redirect=/book"
+              href={`/login?redirect=${encodeURIComponent(loginRedirectTarget)}`}
               className="oraya-pressable oraya-cta-gold-hover"
               style={{ fontFamily: LATO, fontSize: "14px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, padding: "14px 34px", textDecoration: "none", display: "inline-block" }}
             >
@@ -2198,7 +2220,7 @@ function BookPageInner() {
           </div>
           <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, textAlign: "center", margin: "0 0 1rem" }}>
             Already a member?{" "}
-            <a href="/login?redirect=/book" className="oraya-link-text" style={{ color: GOLD }}>
+            <a href={`/login?redirect=${encodeURIComponent(loginRedirectTarget)}`} className="oraya-link-text" style={{ color: GOLD }}>
               Sign in
             </a>
             {" "}for member benefits.

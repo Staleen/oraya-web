@@ -199,6 +199,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  */
 export function normalizeLeadInput(body: unknown): NormalizedLeadInput | null {
   if (!isPlainObject(body)) return null;
+  const nestedRawPayload = isPlainObject(body.raw_payload) ? body.raw_payload : null;
 
   const source = readOptionalString(body.source) ?? "whatchimp";
 
@@ -213,8 +214,18 @@ export function normalizeLeadInput(body: unknown): NormalizedLeadInput | null {
   const specialRequests  = pickFirstString(body, ["oraya_special_requests", "special_requests"], MAX_LONG_FIELD_LEN);
 
   const normalizedDates = sanitizeNormalizedDateRange(
-    readOptionalIsoDate(body.normalized_check_in) ?? readOptionalIsoDate(body.oraya_check_in),
-    readOptionalIsoDate(body.normalized_check_out) ?? readOptionalIsoDate(body.oraya_check_out),
+    readOptionalIsoDate(body.normalized_check_in) ??
+      readOptionalIsoDate(body.oraya_check_in) ??
+      readOptionalIsoDate(body.check_in) ??
+      readOptionalIsoDate(nestedRawPayload?.normalized_check_in) ??
+      readOptionalIsoDate(nestedRawPayload?.oraya_check_in) ??
+      readOptionalIsoDate(nestedRawPayload?.check_in),
+    readOptionalIsoDate(body.normalized_check_out) ??
+      readOptionalIsoDate(body.oraya_check_out) ??
+      readOptionalIsoDate(body.check_out) ??
+      readOptionalIsoDate(nestedRawPayload?.normalized_check_out) ??
+      readOptionalIsoDate(nestedRawPayload?.oraya_check_out) ??
+      readOptionalIsoDate(nestedRawPayload?.check_out),
   );
 
   const labels = readLabels(body.labels);
