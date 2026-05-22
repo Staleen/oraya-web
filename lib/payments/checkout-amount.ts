@@ -1,12 +1,15 @@
 import { roundMoney } from "@/lib/money";
 import type { PaymentRequestPurpose } from "@/lib/payments/domain";
+import { DEFAULT_PAYMENT_PUBLIC_SETTINGS, getMinimumDepositAmountFromPercentage } from "@/lib/payments/settings";
 
-export const MINIMUM_DEPOSIT_RATIO = 0.4;
+export const MINIMUM_DEPOSIT_RATIO =
+  DEFAULT_PAYMENT_PUBLIC_SETTINGS.deposit_minimum_percentage / 100;
 
 export interface PaymentSelectionValidationInput {
   purpose: PaymentRequestPurpose;
   requestedAmount?: number | null;
   amountTotal: number;
+  minimumDepositPercentage?: number;
 }
 
 export type PaymentSelectionValidationResult =
@@ -23,8 +26,11 @@ export type PaymentSelectionValidationResult =
       error: string;
     };
 
-export function getMinimumDepositAmount(amountTotal: number): number {
-  return roundMoney(roundMoney(amountTotal) * MINIMUM_DEPOSIT_RATIO);
+export function getMinimumDepositAmount(
+  amountTotal: number,
+  minimumDepositPercentage: number = DEFAULT_PAYMENT_PUBLIC_SETTINGS.deposit_minimum_percentage,
+): number {
+  return getMinimumDepositAmountFromPercentage(amountTotal, minimumDepositPercentage);
 }
 
 export function validatePaymentSelection(
@@ -55,7 +61,10 @@ export function validatePaymentSelection(
     return { ok: false, error: "Please enter a valid deposit amount." };
   }
 
-  const minimumDeposit = getMinimumDepositAmount(amountTotal);
+  const minimumDeposit = getMinimumDepositAmount(
+    amountTotal,
+    input.minimumDepositPercentage,
+  );
   if (requestedAmount < minimumDeposit) {
     return {
       ok: false,

@@ -150,6 +150,15 @@ export interface HostedCheckoutProvider {
    */
   readonly display_name: string;
   /**
+   * Whether this adapter is ready to start a real hosted checkout session in
+   * the current implementation.
+   */
+  readonly checkout_ready: boolean;
+  /**
+   * Guest-safe setup status for public UI when checkout is not yet available.
+   */
+  readonly guest_setup_message: string | null;
+  /**
    * Value safe to persist into `bookings.payment_link_provider` under the
    * current schema. Null means the runtime adapter exists but cannot yet be
    * safely written to the DB without a later approved migration.

@@ -17,10 +17,11 @@ const hostedCheckoutProviders: Record<HostedCheckoutProviderKey, HostedCheckoutP
 
 function readConfiguredHostedCheckoutProviderKey(): HostedCheckoutProviderKey {
   const value = process.env.PAYMENT_PROVIDER?.trim().toLowerCase();
+  const isProduction = process.env.NODE_ENV === "production";
   if (!value) {
-    if (process.env.NODE_ENV === "production") {
+    if (isProduction) {
       throw new PaymentProviderConfigurationError(
-        "PAYMENT_PROVIDER is required in production. Set it to `credit_libanais` for the target bank gateway or `stripe` only if Stripe is the intentional production provider.",
+        "PAYMENT_PROVIDER is required in production and must be `credit_libanais`. Stripe is not an approved Oraya production provider.",
       );
     }
     return DEFAULT_NON_PRODUCTION_PROVIDER;
@@ -29,6 +30,12 @@ function readConfiguredHostedCheckoutProviderKey(): HostedCheckoutProviderKey {
   if (!isHostedCheckoutProviderKey(value)) {
     throw new PaymentProviderConfigurationError(
       `Unsupported PAYMENT_PROVIDER value "${value}". Allowed values: ${HOSTED_CHECKOUT_PROVIDER_KEYS.join(", ")}.`,
+    );
+  }
+
+  if (isProduction && value !== "credit_libanais") {
+    throw new PaymentProviderConfigurationError(
+      `PAYMENT_PROVIDER="${value}" is not allowed in production. Oraya production must use \`credit_libanais\`.`,
     );
   }
 
@@ -45,4 +52,31 @@ export function getHostedCheckoutProviderByKey(
   return isHostedCheckoutProviderKey(providerKey)
     ? hostedCheckoutProviders[providerKey]
     : null;
+}
+
+export function getHostedCheckoutPublicStatus() {
+  try {
+    const provider = getConfiguredHostedCheckoutProvider();
+    return {
+      provider_key: provider.key,
+      provider_display_name: provider.display_name,
+      online_checkout_ready: provider.checkout_ready && provider.persisted_link_provider !== null,
+      online_checkout_message:
+        provider.checkout_ready && provider.persisted_link_provider !== null
+          ? ""
+          : provider.guest_setup_message ??
+            `${provider.display_name} secure payment is not available yet.`,
+    };
+  } catch (error) {
+    const message =
+      error instanceof PaymentProviderConfigurationError
+        ? error.message
+        : "Online payment setup is in progress.";
+    return {
+      provider_key: null,
+      provider_display_name: null,
+      online_checkout_ready: false,
+      online_checkout_message: message,
+    };
+  }
 }

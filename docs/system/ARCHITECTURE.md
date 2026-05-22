@@ -68,7 +68,7 @@ Password-gated; bearer or signed `oraya_admin` cookie required on every API call
 | `/admin/rates` | Add-ons + villa pricing |
 | `/admin/media` | Asset management |
 | `/admin/members` | Member management |
-| `/admin/settings` | System configuration (`whatsapp_number`, instant booking flags, admin password) |
+| `/admin/settings` | System configuration (`whatsapp_number`, instant booking flags, admin password, guest-facing payment settings) |
 
 Live data: `AdminDataProvider` polls `/api/admin/data` every 45s and best-effort subscribes to Supabase Realtime `postgres_changes` on `public.bookings`. State-only updates - preserves tabs/filters/scroll.
 
@@ -104,7 +104,7 @@ All routes verified against the current repo. Locked APIs are marked **locked** 
 | `/api/members` | POST | Member create (same-user bearer auth) | open w/ guard |
 | `/api/pricing` | GET | Public pricing query | open |
 | `/api/profile` | GET/PATCH | Member profile | open |
-| `/api/settings` | GET | Public allowlisted settings (`whatsapp_number` only) | open |
+| `/api/settings` | GET | Public allowlisted settings (`whatsapp_number`, payment public settings, selected operational flags) | open |
 | `/api/butler/health` | GET | Butler liveness + secret check | secret-guarded |
 | `/api/butler/event-types` | GET | Canonical event types for Butler intake | secret-guarded |
 | `/api/butler/addons` | GET | Villa+context filtered add-ons (no prices) | secret-guarded |
@@ -117,7 +117,7 @@ All routes verified against the current repo. Locked APIs are marked **locked** 
 | `/api/butler/identify` | POST | WhatsApp identity orchestration — phone continuity → reference fallback → identity-verification gate, one call per turn | secret-guarded |
 | `/api/payments/checkout` | POST | Create a hosted checkout session for an existing booking via the selected provider adapter | payment |
 | `/api/payments/webhook/[provider]` | POST | Verified hosted-payment callback reconciliation for the selected provider | payment |
-| `/api/payments/webhook/stripe` | POST | Stripe compatibility shim onto the generic hosted-payment callback handler | payment |
+| `/api/payments/webhook/stripe` | POST | Stripe dev/test compatibility shim onto the generic hosted-payment callback handler | payment |
 
 `secret-guarded` rows require an `X-Butler-Secret` header matching `BUTLER_WEBHOOK_SECRET`. `/api/butler/lead` is the first Butler write, but it writes only to `whatsapp_leads` and does not touch `bookings` or any locked surface.
 
@@ -128,6 +128,13 @@ All routes verified against the current repo. Locked APIs are marked **locked** 
    - **Reserve path** (default): goes to Step 2 (Stay Setup).
    - **Instant Book path** (when villa is instant-eligible per `settings`): UI-only review + payment placeholder. **No booking persisted from this path today** - payment execution is Phase 16B.
 3. Step 2: bedrooms, guests, add-ons, special requests; live total via [lib/pricing/](../../lib/pricing/) helpers.
+4. Step 3: review + payment decision on the Reserve path.
+   - Guest sees two clear paths: **Pay now and reserve** or **Submit booking request and pay later**.
+   - When hosted checkout is truly ready, the pay-now path offers **full payment** or **custom deposit**.
+   - Custom deposit is validated client-side and server-side against the admin-configured minimum percentage and the total-amount maximum.
+   - When the active provider is not ready, the pay-now path is blocked in the UI with clear setup messaging instead of falling into a fake checkout flow.
+5. Reserve submit path:
+   - `POST /api/bookings` remains the authoritative booking-creation route.
 4. Step 3: review + submit -> `POST /api/bookings`.
    - Server validates overlap, pricing snapshot, and addon operational rules.
    - On success, persists a `bookings` row including `pricing_snapshot` and `addons`.
@@ -179,7 +186,7 @@ The WhatsApp AI Butler (WhatChimp today; vendor-agnostic by design) talks to Ora
 - **Provenance writer on the locked booking route.** `/api/bookings` POST accepts an optional `butler_prefill_token`. After successful booking insert, the locked route verifies the token and best-effort updates `whatsapp_leads.linked_booking_id`. None of those failure paths block booking creation.
 - **Booking reference vs access PIN.** The 8-character uppercased prefix of `bookings.id` shown on `/booking/view/[token]` and in emails is intentionally a public support reference code, not an access PIN. Access credential issuance is Phase 16D.
 - **No payment or smart-lock behavior in Butler.** Payment remains Phase 16B. Smart-lock remains 16D. Member -> phone linkage is a later phase. The current approved architecture is lead capture plus secure website continuation into the existing locked `/api/bookings` pipeline, not direct WhatsApp-side booking submission.
-- **Hosted payment lives after booking creation, not inside Butler.** The website Reserve path creates the booking through the locked `/api/bookings` POST first, then starts provider-hosted payment via `/api/payments/checkout`. Butler still does not create payment links or mark payments received.
+- **Hosted payment lives after booking creation, not inside Butler.** The website Reserve path creates the booking through the locked `/api/bookings` POST first, then starts provider-hosted payment via `/api/payments/checkout`. Credit Libanais / MPGS is the production target gateway; the retained Stripe shim is for isolated dev/test use only. Butler still does not create payment links or mark payments received.
 - **No payment, smart-lock, member-linking, or booking-creation writes** beyond the provenance enrichment above. Booking creation via WhatsApp (`POST /api/butler/flow-submit`) is still outstanding. The locked `/api/bookings*`, `/api/admin/bookings*`, `/api/calendar/*`, `/api/cron/*` surfaces remain otherwise untouched.
 
 ## Email system

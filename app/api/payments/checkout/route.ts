@@ -6,6 +6,11 @@ import { getMinimumDepositAmount, validatePaymentSelection } from "@/lib/payment
 import type { PaymentRequestPurpose } from "@/lib/payments/domain";
 import { PaymentProviderConfigurationError } from "@/lib/payments/provider";
 import { getConfiguredHostedCheckoutProvider } from "@/lib/payments/runtime";
+import {
+  PAYMENT_PUBLIC_SETTINGS_KEY,
+  parsePaymentPublicSettings,
+  paymentModeAllowsPayNow,
+} from "@/lib/payments/settings";
 import { derivePaymentFoundationStage, getFoundationAmountTotal } from "@/lib/payment-foundation";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
@@ -113,6 +118,35 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "This booking already has a recorded payment." }, { status: 400 });
     }
 
+    const { data: paymentSettingsRow } = await supabaseAdmin
+      .from("settings")
+      .select("value")
+      .eq("key", PAYMENT_PUBLIC_SETTINGS_KEY)
+      .maybeSingle<{ value: unknown }>();
+
+    const paymentSettings = parsePaymentPublicSettings(paymentSettingsRow?.value ?? null);
+
+    if (!paymentSettings.online_payment_enabled || !paymentModeAllowsPayNow(paymentSettings.active_payment_mode)) {
+      return NextResponse.json(
+        { error: "Online payment is not available for this booking right now." },
+        { status: 400 },
+      );
+    }
+
+    if (purpose === "full" && !paymentSettings.allow_full_payment) {
+      return NextResponse.json(
+        { error: "Full payment is not available for this booking right now." },
+        { status: 400 },
+      );
+    }
+
+    if (purpose === "deposit" && !paymentSettings.allow_custom_deposit) {
+      return NextResponse.json(
+        { error: "Deposit payment is not available for this booking right now." },
+        { status: 400 },
+      );
+    }
+
     const amountTotal = roundMoney(
       typeof booking.amount_total === "number" && Number.isFinite(booking.amount_total)
         ? booking.amount_total
@@ -126,6 +160,7 @@ export async function POST(request: Request) {
       purpose,
       requestedAmount,
       amountTotal,
+      minimumDepositPercentage: paymentSettings.deposit_minimum_percentage,
     });
 
     if (!selection.ok) {
@@ -142,7 +177,7 @@ export async function POST(request: Request) {
     const hostedCheckoutProvider = getConfiguredHostedCheckoutProvider();
     if (!hostedCheckoutProvider.persisted_link_provider) {
       throw new PaymentProviderConfigurationError(
-        `${hostedCheckoutProvider.display_name} is configured as the hosted payment provider, but the current bookings.payment_link_provider allow-list cannot persist it yet. Use the optional Stripe adapter for development, or approve the bank-provider schema compatibility step before enabling live bank checkout.`,
+        `${hostedCheckoutProvider.display_name} is configured as the hosted payment provider, but the current bookings.payment_link_provider allow-list cannot persist it yet. Approve the bank-provider schema compatibility step before enabling live Credit Libanais checkout.`,
       );
     }
 
@@ -200,7 +235,10 @@ export async function POST(request: Request) {
         purpose,
         charge_amount: selection.chargeAmount,
         amount_total: amountTotal,
-        minimum_deposit: getMinimumDepositAmount(amountTotal),
+        minimum_deposit: getMinimumDepositAmount(
+          amountTotal,
+          paymentSettings.deposit_minimum_percentage,
+        ),
         remaining_balance: selection.remainingBalance,
       },
     });

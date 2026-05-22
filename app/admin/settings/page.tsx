@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import SettingsSections from "@/components/admin/SettingsSections";
+import PaymentSettingsSection from "@/components/admin/PaymentSettingsSection";
 import TestimonialManager from "@/components/admin/TestimonialManager";
 import { useAdminData } from "@/components/admin/AdminDataProvider";
 import { BORDER, CHARCOAL, GOLD, LATO, MUTED, SURFACE, WHITE } from "@/components/admin/theme";
@@ -12,6 +13,13 @@ import {
   parseInstantBookingSetting,
   type InstantBookingFlags,
 } from "@/lib/instant-booking-settings";
+import {
+  DEFAULT_PAYMENT_PUBLIC_SETTINGS,
+  PAYMENT_PUBLIC_SETTINGS_KEY,
+  parsePaymentPublicSettings,
+  serializePaymentPublicSettings,
+  type PaymentPublicSettings,
+} from "@/lib/payments/settings";
 
 export default function AdminSettingsPage() {
   const { error, setError } = useAdminData();
@@ -33,6 +41,11 @@ export default function AdminSettingsPage() {
   });
   const [instantBookingSaving, setInstantBookingSaving] = useState(false);
   const [instantBookingSaved, setInstantBookingSaved] = useState(false);
+  const [paymentSettings, setPaymentSettings] = useState<PaymentPublicSettings>(
+    DEFAULT_PAYMENT_PUBLIC_SETTINGS,
+  );
+  const [paymentSaving, setPaymentSaving] = useState(false);
+  const [paymentSaved, setPaymentSaved] = useState(false);
 
   useEffect(() => {
     fetch("/api/admin/settings", adminApiFetchInit)
@@ -57,6 +70,8 @@ export default function AdminSettingsPage() {
         } else {
           setTestimonialRows([]);
         }
+        const payment = rows.find((s: { key: string; value: string }) => s.key === PAYMENT_PUBLIC_SETTINGS_KEY);
+        setPaymentSettings(parsePaymentPublicSettings(payment?.value ?? null));
       })
       .catch((e) => console.error("[admin] settings fetch error:", e));
   }, []);
@@ -186,6 +201,29 @@ export default function AdminSettingsPage() {
     }
   }
 
+  async function savePaymentSettings() {
+    setPaymentSaving(true);
+    setPaymentSaved(false);
+    const res = await fetch("/api/admin/settings", {
+      ...adminApiFetchInit,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        key: PAYMENT_PUBLIC_SETTINGS_KEY,
+        value: serializePaymentPublicSettings(paymentSettings),
+      }),
+    });
+    setPaymentSaving(false);
+    if (res.ok) {
+      setPaymentSaved(true);
+      setPaymentSettings(parsePaymentPublicSettings(paymentSettings));
+      setTimeout(() => setPaymentSaved(false), 3000);
+    } else {
+      const d = await res.json();
+      setError(d.error ?? "Failed to save payment settings.");
+    }
+  }
+
   return (
     <>
       {error && (
@@ -209,6 +247,17 @@ export default function AdminSettingsPage() {
         notifSaving={notifSaving}
         notifSaved={notifSaved}
         saveNotifEmails={saveNotifEmails}
+      />
+
+      <PaymentSettingsSection
+        value={paymentSettings}
+        onChange={(next) => {
+          setPaymentSaved(false);
+          setPaymentSettings(parsePaymentPublicSettings(next));
+        }}
+        onSave={savePaymentSettings}
+        saving={paymentSaving}
+        saved={paymentSaved}
       />
 
       <div

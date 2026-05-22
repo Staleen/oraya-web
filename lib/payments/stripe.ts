@@ -154,6 +154,8 @@ function toProviderEvent(event: StripeEventEnvelope): PaymentProviderEvent | nul
 export const stripePaymentProvider: HostedCheckoutProvider = {
   key: "stripe",
   display_name: "Stripe",
+  checkout_ready: true,
+  guest_setup_message: null,
   persisted_link_provider: "stripe",
 
   async createCheckoutSession(input: CreateCheckoutSessionInput): Promise<CreateCheckoutSessionResult> {

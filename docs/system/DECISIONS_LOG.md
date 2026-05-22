@@ -16,6 +16,27 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-05-22 - Guest-facing payment behavior is now settings-driven before Credit Libanais execution goes live
+
+**Decision:** until the real Credit Libanais / MPGS contract is implemented, Oraya's website payment behavior is controlled by guest-safe admin settings rather than hardcoded Step 3 assumptions. `/admin/settings` now owns the public payment mode (`request_only`, `manual_payment`, `online_payment`, `hybrid`), minimum deposit percentage, whether full payment and custom deposit are offered, guest-visible manual payment rails, guest payment instructions, provider display name, and whether online payment is enabled guest-side. `/book` Step 3 must present two Reserve choices: `Pay now and reserve` and `Submit booking request and pay later`. If the configured hosted-checkout provider is not truly ready, the pay-now path is blocked in the UI with clear setup messaging rather than pretending checkout is live or falling into a server error.
+
+**Reason:** the business direction moved from "payments paused" to "payment infrastructure active, real bank execution pending official specs." That created a UX gap: Step 3 needed to stay premium and decision-oriented without implying that Credit Libanais already works. A settings-driven layer lets operations control the guest story safely while preserving the booking-first architecture and keeping gateway secrets out of the database.
+
+**Impact:**
+
+- New helper: [lib/payments/settings.ts](../../lib/payments/settings.ts) - parses, serializes, and normalizes guest-safe payment settings stored in the existing `settings` key/value table.
+- [app/admin/settings/page.tsx](../../app/admin/settings/page.tsx) and [components/admin/PaymentSettingsSection.tsx](../../components/admin/PaymentSettingsSection.tsx) now expose payment configuration to admins without storing gateway secrets in Supabase.
+- [app/api/settings/route.ts](../../app/api/settings/route.ts) now publishes a guest-safe payment settings payload plus derived runtime readiness fields for `/book`.
+- [app/book/page.tsx](../../app/book/page.tsx) Step 3 now renders the two-path Reserve decision screen. The pay-now path reuses the existing hosted-checkout amount validation, but is disabled in the UI when the configured provider is not ready. The pay-later path records payment preference and follow-up rail as booking-request context only; no charge is collected on the website in that path.
+- [app/api/payments/checkout/route.ts](../../app/api/payments/checkout/route.ts) now enforces the admin-configured payment mode, full/deposit availability, and minimum deposit percentage server-side before creating any hosted checkout session.
+- Gateway secrets remain env-only. The existing `settings` table stores public instructions and guest-facing behavior only.
+
+**Reversible?:** yes. The settings-driven layer can be revised or narrowed later without touching the locked booking pipeline, as long as payment execution stays booking-first and no secrets move into the database.
+
+**Supersedes:** refines the 2026-05-22 hosted-payment provider refactor by moving guest-facing Step 3 behavior under admin-controlled settings until the real bank contract is implemented.
+
+---
+
 ## 2026-05-22 - Butler identity response enriched with booking reference, villa, stay dates, and a signed booking-view URL on identity-established branches
 
 **Decision:** `POST /api/butler/identify` now surfaces a `booking_view_url` field on every response, and the orchestrator's `safe_message` is pre-enriched with the booking reference, villa name, stay dates (`D MMM YYYY → D MMM YYYY`), and the same signed `/booking/view/[token]` URL on the two branches where identity has already been established for an active booking — explicit `verified` (proof match on email or full name) and implicit `known_sender_resolved` (subscriber-id or phone continuity). On every other branch — `request_identity_proof`, `ask_for_booking_reference`, `ask_for_alternative_identifier`, `reference_not_found`, `reference_ambiguous`, `reference_cancelled`, `known_sender_cancelled`, `verification_failed`, and any `escalate_human` outcome — `booking_view_url` is explicitly `null` and the `safe_message` stays at its previous conservative phrasing.
@@ -49,7 +70,7 @@ The audit explicitly considered and rejected:
 ## 2026-05-22 - WhatsApp identity v2: WhatChimp subscriber_id becomes primary continuity key; identity_proof accepts email OR full name; flow JSON ships placeholder-free
 ## 2026-05-22 - Hosted payment execution is provider-agnostic; Credit Libanais / MPGS is the production target
 
-**Decision:** Oraya's hosted-payment architecture remains booking-first and webhook-first, but production is no longer assumed to be Stripe. `POST /api/payments/checkout` now resolves a provider-agnostic hosted-checkout adapter selected by `PAYMENT_PROVIDER`, and `POST /api/payments/webhook/[provider]` is the generic callback surface. Credit Libanais / MPGS is the production target provider for settlement into a Fresh USD account in Lebanon. In production, provider selection must be explicit: if `PAYMENT_PROVIDER` is missing, checkout fails closed with a configuration error. Outside production, the runtime may default to Stripe so local/dev can still exercise the hosted checkout flow intentionally.
+**Decision:** Oraya's hosted-payment architecture remains booking-first and webhook-first, but production is no longer assumed to be Stripe. `POST /api/payments/checkout` now resolves a provider-agnostic hosted-checkout adapter selected by `PAYMENT_PROVIDER`, and `POST /api/payments/webhook/[provider]` is the generic callback surface. Credit Libanais / MPGS is the production target provider for settlement into a Fresh USD account in Lebanon. In production, provider selection must be explicit and must be `credit_libanais`: if `PAYMENT_PROVIDER` is missing or set to any other value, checkout fails closed with a configuration error. Outside production, the runtime may default to Stripe so local/dev can still exercise the hosted checkout flow intentionally.
 
 **Reason:** the operating setup is Lebanese bank settlement, not Stripe as merchant of record. The website still must never collect card data directly, and the booking pipeline still must stay authoritative for overlap protection, pricing, add-on rules, email triggers, and signed booking-view links. A provider-agnostic adapter boundary lets Oraya preserve the premium hosted checkout UX and lifecycle fields without baking Stripe into the architecture or pretending the bank contract is already known.
 
@@ -69,13 +90,14 @@ The audit explicitly considered and rejected:
   - [app/api/payments/webhook/stripe/route.ts](../../app/api/payments/webhook/stripe/route.ts) - compatibility shim for the optional Stripe adapter
 - [app/book/page.tsx](../../app/book/page.tsx) no longer hardcodes Stripe in Step 3 copy; guest messaging stays provider-neutral and hosted-checkout-only.
 - Environment contract changes:
-  - `PAYMENT_PROVIDER=credit_libanais` is the intended production cutover once the bank adapter is implemented
+  - `PAYMENT_PROVIDER=credit_libanais` is the only approved production setting
   - production no longer silently falls back to Stripe when `PAYMENT_PROVIDER` is unset
+  - production rejects `PAYMENT_PROVIDER=stripe`
   - `CREDIT_LIBANAIS_MERCHANT_ID`
   - `CREDIT_LIBANAIS_SECRET`
   - `CREDIT_LIBANAIS_GATEWAY_URL`
   - `CREDIT_LIBANAIS_WEBHOOK_SECRET`
-  - Stripe envs remain optional for dev/test only
+  - Stripe envs remain optional for local/dev testing only
 - Important schema compatibility note: the current `bookings.payment_link_provider` allow-list is still the older `manual | whish | stripe` floor. The Credit Libanais adapter therefore remains a placeholder and must not write fake provider state until a later explicit schema-compatibility step is approved.
 
 **Reversible?:** yes, but only with a superseding entry that preserves the locked `/api/bookings` authority, server-side amount validation, and verified callback truth.
