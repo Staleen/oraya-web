@@ -1,6 +1,6 @@
 # Architecture - Oraya Web
 
-**Updated:** 2026-05-22
+**Updated:** 2026-05-18
 **Authority order:** see [PROJECT_STATE.md](PROJECT_STATE.md). This file is the descriptive map; if it conflicts with PROJECT_STATE.md, PROJECT_STATE.md wins.
 
 > Secret model and per-variable risk live in **[ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md)** - this doc only references it.
@@ -47,7 +47,7 @@ Next.js App Router (TypeScript)
 |---|---|---|
 | `/` | [app/page.tsx](../../app/page.tsx) | Homepage / brand entry |
 | `/villas/byblos`, `/villas/mechmech` | `app/villas/<villa>/page.tsx` | Per-villa detail |
-| `/book` | [app/book/page.tsx](../../app/book/page.tsx) | Booking flow (Reserve + hosted payment Step 3; Instant Book UI only) |
+| `/book` | [app/book/page.tsx](../../app/book/page.tsx) | Booking flow (Reserve + Instant Book UI) |
 | `/booking-confirmed` | [app/booking-confirmed/page.tsx](../../app/booking-confirmed/page.tsx) | Post-submit confirmation |
 | `/booking/view/[token]` | [app/booking/view/[token]/page.tsx](../../app/booking/view/%5Btoken%5D/page.tsx) | Guest booking-view via signed token |
 | `/booking-action/confirm`, `/result` | `app/booking-action/*/page.tsx` | Admin email-link confirm/cancel |
@@ -113,8 +113,8 @@ All routes verified against the current repo. Locked APIs are marked **locked** 
 | `/api/butler/normalize-dates` | POST | Natural date normalization for Butler/WhatChimp intake | secret-guarded |
 | `/api/butler/lead` | POST | WhatsApp/WhatChimp lead persistence into `whatsapp_leads` | secret-guarded |
 | `/api/butler/prefill` | GET | Public short-lived token-auth prefill hydration for `/book?h=...` | token-auth |
-| `/api/payments/checkout` | POST | Create Stripe Checkout session for an existing booking | payment |
-| `/api/payments/webhook/stripe` | POST | Verified Stripe webhook reconciliation | payment |
+| `/api/butler/booking-lookup` | POST | Reference-based booking lookup (returns safe-state envelope, never sensitive fields) | secret-guarded |
+| `/api/butler/identify` | POST | WhatsApp identity orchestration — phone continuity → reference fallback → identity-verification gate, one call per turn | secret-guarded |
 
 `secret-guarded` rows require an `X-Butler-Secret` header matching `BUTLER_WEBHOOK_SECRET`. `/api/butler/lead` is the first Butler write, but it writes only to `whatsapp_leads` and does not touch `bookings` or any locked surface.
 
@@ -123,21 +123,14 @@ All routes verified against the current repo. Locked APIs are marked **locked** 
 1. Guest lands on `/book` with optional `?villa=...` preselect.
 2. Step 1: dates -> eligibility check.
    - **Reserve path** (default): goes to Step 2 (Stay Setup).
-   - **Instant Book path** (when villa is instant-eligible per `settings`): UI-only review. **No booking persisted from this path today** - execution remains later Phase 16B work.
+   - **Instant Book path** (when villa is instant-eligible per `settings`): UI-only review + payment placeholder. **No booking persisted from this path today** - payment execution is Phase 16B.
 3. Step 2: bedrooms, guests, add-ons, special requests; live total via [lib/pricing/](../../lib/pricing/) helpers.
-4. Step 3: review + payment selection on the Reserve path.
-   - Guest chooses **full payment** or **custom deposit**.
-   - Custom deposit is validated client-side and server-side with a 40% minimum and a total-amount maximum.
-5. Reserve submit path:
-   - `POST /api/bookings` remains the authoritative booking-creation route.
+4. Step 3: review + submit -> `POST /api/bookings`.
    - Server validates overlap, pricing snapshot, and addon operational rules.
    - On success, persists a `bookings` row including `pricing_snapshot` and `addons`.
    - Triggers transactional emails and generates signed view + admin-action tokens.
-6. After booking creation succeeds, `POST /api/payments/checkout` creates a Stripe Checkout session, persists `payment_link_*` state on the booking row, and returns the hosted checkout URL.
-7. Guest is redirected to Stripe-hosted checkout. Success/cancel returns land on `/booking/view/[token]?payment=success|cancelled`.
-8. `POST /api/payments/webhook/stripe` is the authority for payment receipt / expiry updates. Success redirects are informational only and never mark payment received by themselves.
-9. Admin receives email with signed confirm/cancel links -> `/api/booking-action` mutates status.
-10. Guest can revisit booking via `/booking/view/[token]`.
+5. Admin receives email with signed confirm/cancel links -> `/api/booking-action` mutates status.
+6. Guest can revisit booking via `/booking/view/[token]`.
 
 ## Event inquiry flow
 
@@ -178,7 +171,6 @@ The WhatsApp AI Butler (WhatChimp today; vendor-agnostic by design) talks to Ora
 - **Provenance writer on the locked booking route.** `/api/bookings` POST accepts an optional `butler_prefill_token`. After successful booking insert, the locked route verifies the token and best-effort updates `whatsapp_leads.linked_booking_id`. None of those failure paths block booking creation.
 - **Booking reference vs access PIN.** The 8-character uppercased prefix of `bookings.id` shown on `/booking/view/[token]` and in emails is intentionally a public support reference code, not an access PIN. Access credential issuance is Phase 16D.
 - **No payment or smart-lock behavior in Butler.** Payment remains Phase 16B. Smart-lock remains 16D. Member -> phone linkage is a later phase. The current approved architecture is lead capture plus secure website continuation into the existing locked `/api/bookings` pipeline, not direct WhatsApp-side booking submission.
-- **Hosted payment lives after booking creation, not inside Butler.** The website Reserve path creates the booking through the locked `/api/bookings` POST first, then starts Stripe-hosted payment via `/api/payments/checkout`. Butler still does not create payment links or mark payments received.
 - **No payment, smart-lock, member-linking, or booking-creation writes** beyond the provenance enrichment above. Booking creation via WhatsApp (`POST /api/butler/flow-submit`) is still outstanding. The locked `/api/bookings*`, `/api/admin/bookings*`, `/api/calendar/*`, `/api/cron/*` surfaces remain otherwise untouched.
 
 ## Email system
@@ -206,6 +198,24 @@ The WhatsApp AI Butler (WhatChimp today; vendor-agnostic by design) talks to Ora
 ## Environment & secrets model
 
 Full per-variable risk profile in **[ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md)**.
+
+## Booking identity model
+
+Oraya keeps **public guest-facing identifiers** and **private signed tokens** strictly separated. Never blur the two.
+
+- **Public guest-facing booking reference.** The first 8 hex characters of `bookings.id`, uppercased (for example `A1B2C3D4`). Centralized in [lib/booking-reference.ts](../../lib/booking-reference.ts) via `formatBookingReference`, `normalizeBookingReference`, and `resolveBookingByReference`. Visible to the guest in pending / event-inquiry / confirmed / cancelled emails (the `Reference` row of the summary card) and at the top of `/booking/view/[token]`. **Safe to share** in support channels (email, WhatsApp). **Knowing the reference is not proof of identity** and never authorizes sensitive disclosure on its own. It is **not** an access PIN, smart-lock PIN, or gate code — access credential issuance remains Phase 16D.
+- **Private signed tokens.** The HMAC `view` / `confirmed` / `cancelled` action tokens minted by [lib/booking-action-token.ts](../../lib/booking-action-token.ts) and the `BUTLER_PREFILL_SECRET`-signed handoff tokens minted by [lib/butler/prefill-token.ts](../../lib/butler/prefill-token.ts). These are credentials. They are delivered only via the guest's own email or WhatsApp handoff, never quoted, never asked of the guest in conversation, and never interchangeable with the public reference.
+
+WhatsApp identity flow (shipped, owned by [lib/butler/identity-orchestrator.ts](../../lib/butler/identity-orchestrator.ts) and surfaced via `POST /api/butler/identify`):
+
+- **Primary path (WhatChimp):** the bot passes `subscriber_id` (the stable `#LEAD_USER_SUBSCRIBER_ID#` hashtag variable) and optional `chat_id`. The orchestrator queries `whatsapp_leads.whatsapp_subscriber_id` → `linked_booking_id` → `bookings`. On a hit, identity is implicit and the bot is told to reply with status; villa / check_in / check_out are surfaced.
+- **Secondary path (future channels):** the same shape but keyed on `whatsapp_leads.phone`. Retained because Telegram, Messenger, and direct WhatsApp Cloud API expose a sender phone where WhatChimp does not. On the WhatChimp channel this is a no-op unless the booking-request flow happened to capture a phone.
+- **Fallback path:** no continuity match → the bot asks for the booking reference. `resolveBookingByReference` returns the booking_id and non-sensitive context. For pending / confirmed matches, the orchestrator refuses to surface villa / dates until the guest also supplies an `identity_proof` — accepted as **either the email or the full name** used on the booking. The proof is normalized (lowercased, trimmed, whitespace-collapsed) and compared exact-after-normalization against `bookings.guest_email`, `bookings.guest_name`, and (when the booking is linked to a member) the member's `auth.users.email` and `members.full_name`. A match on any of these four equals verified.
+- **Escalation:** ambiguous references, failed proofs, and any unsafe state hand off to a human; the bot stops auto-replying about the booking.
+
+Schema dependency: the subscriber-id path requires the columns added by [sql/phase-16a3-whatsapp-subscriber-identity.sql](../../sql/phase-16a3-whatsapp-subscriber-identity.sql) (`whatsapp_leads.whatsapp_subscriber_id`, `whatsapp_leads.whatsapp_chat_id`). Until that migration is applied in Supabase, the orchestrator gracefully degrades (`undefined_column` → silent fall-through to phone / reference), and the lead ingest route (`POST /api/butler/lead`) retries inserts without the new fields. Applying the migration enables the subscriber-id auto-resume path.
+
+Resolution is intentionally lossy: a Supabase outage or genuinely-missing row both collapse to `{ kind: "not_found" }`. Either way the operator path is identity-verify or escalate.
 
 ## Database schema (high level)
 

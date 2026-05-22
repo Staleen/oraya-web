@@ -16,27 +16,125 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
-## 2026-05-22 - Phase 16B.3 Reserve-path payment execution uses booking-first + hosted Stripe checkout
+## 2026-05-22 - WhatsApp identity v2: WhatChimp subscriber_id becomes primary continuity key; identity_proof accepts email OR full name; flow JSON ships placeholder-free
 
-**Decision:** the first real payment execution path for Oraya stays **booking-first**. The website Reserve flow creates the booking through the locked `/api/bookings` POST first, then starts hosted Stripe checkout through a separate `POST /api/payments/checkout` route. Stripe success redirects are informational only; `POST /api/payments/webhook/stripe` is the authority that marks payment received, updates `amount_paid` / `amount_due`, and flips `payment_link_status`.
+**Decision:** the WhatsApp identity orchestration surface from earlier today is revised to fit WhatChimp's actual variable set and to support bookings with no email on file.
 
-**Reason:** this keeps the existing booking pipeline authoritative for overlap protection, pricing, add-on enforcement, email triggers, and signed booking-view tokens while still delivering real hosted payment. It also keeps Oraya out of card-data collection scope on the website itself and avoids trusting a client redirect for payment success. The payment-link columns introduced in 16B.1 / 16B.2 now have a concrete runtime role: store the active hosted checkout URL, expiry, provider, and provider session id needed for verified webhook reconciliation.
+Concrete changes:
+
+- The primary continuity key becomes **WhatChimp `subscriber_id`**, looked up against a new `whatsapp_leads.whatsapp_subscriber_id` column. The earlier phone-keyed lookup remains but is demoted to "future channels only" — WhatChimp does NOT expose the sender phone as a variable, so the original design could never auto-resume a returning WhatChimp conversation on its own.
+- A diagnostic-only `whatsapp_chat_id` column is added alongside. The orchestrator never queries it; it is captured purely for ops correlation between WhatChimp logs and `whatsapp_leads` rows. No index.
+- The identity-proof field is renamed `identity_proof` (was `identity_proof_email`) and now accepts **the email OR the full name** used on the booking. Comparison is exact-after-normalization (lowercased, trimmed, internal whitespace collapsed to single spaces) against `bookings.guest_email`, `bookings.guest_name`, and (when the booking is linked to a member) the member's `auth.users.email` and `members.full_name`. Substring / fuzzy / startsWith matching is intentionally rejected for v1 to prevent name-prefix leakage (e.g. "John" matching every John).
+- The new priority order is **subscriber_id → phone → reference + identity_proof gate → human escalation**.
+- The WhatChimp flow JSON ships as [whatsapp-bot_guest-identification_v2.json](../../) **placeholder-free**: all WhatChimp ids (HTTP API id, custom field ids, label ids) are empty strings or empty arrays while the human-readable names live in the parallel `*_SelectedOptionText` / `*TextsArray` fields. Matches the user's own re-export pattern from `whatsapp-bot_1857205_*`. Operator wires the ids via the WhatChimp UI after import.
+- The legacy `identity_proof_email` field on `POST /api/butler/identify` is accepted as a transitional alias while the v1 flow is migrated. The route prefers `identity_proof` when both are present.
+
+**Schema impact:** new additive migration [sql/phase-16a3-whatsapp-subscriber-identity.sql](../../sql/phase-16a3-whatsapp-subscriber-identity.sql) (NOT auto-applied; idempotent; reversible) adds the two nullable text columns and indexes `whatsapp_subscriber_id` only. Backend degrades gracefully when the migration is not yet applied: the orchestrator detects PostgREST error `42703` (undefined_column) on the subscriber-id path and falls through silently, the ingest route (`POST /api/butler/lead`) retries inserts without the new fields, and both admin lead routes fall back to a base column list.
+
+**Reason:** the v1 design assumed `{{contact.phone}}` would be available on the WhatChimp channel; verification of WhatChimp's actual variable set proved that wrong (only `#LEAD_USER_*#` hashtag variables, no sender phone). Without a stable continuity key the orchestrator could never auto-resume a returning guest in production — every WhatsApp turn would have fallen straight to the reference + identity-proof gate. The subscriber-id path restores the intended UX. Accepting full name as identity proof closes the second real gap: many bookings do not have an email captured (early phases collected name + phone only), so email-only proof would have left the human-escalation arm as the only resolution path for those guests.
+
+The audit explicitly considered and rejected:
+
+- **Substring or startsWith matching on names.** Rejected — a guest named "John Smith" typing "John" would have verified against every other John in the database. Exact-after-normalization is the right safety/usability trade for v1.
+- **Two separate proof fields (`identity_proof_email`, `identity_proof_name`).** Rejected — forces the bot to ask the guest which they want to share before they share it, and forces a second WhatChimp custom field. One free-text field that compares against both stores is simpler and equally safe given the exact-match rule.
+- **Indexing `whatsapp_chat_id`.** Rejected — it is not a lookup key. The orchestrator does not query it. Indexing it would be dead weight.
+- **Auto-applying the SQL migration.** Rejected per the repo's standing rule that schema changes are operator-applied, never auto-applied, and must be reversible. The graceful degradation in the backend means the migration can be applied at any time without downtime.
 
 **Impact:**
 
-- New payment execution routes:
-  - [app/api/payments/checkout/route.ts](../../app/api/payments/checkout/route.ts) - validates `deposit|full` payment selection server-side, creates Stripe Checkout, persists `payment_link_url`, `payment_link_provider`, `payment_link_status`, `payment_link_issued_at`, `payment_link_expires_at`, and `payment_provider_session_id`, then returns the hosted checkout URL.
-  - [app/api/payments/webhook/stripe/route.ts](../../app/api/payments/webhook/stripe/route.ts) - verifies Stripe signatures, treats duplicate webhook deliveries idempotently, looks up the booking by `payment_provider_session_id`, and updates `payment_status`, `payment_stage`, `amount_paid`, `amount_due`, `payment_reference`, and `payment_link_status`.
-- New runtime helper files:
-  - [lib/payments/checkout-amount.ts](../../lib/payments/checkout-amount.ts) - shared 40% minimum-deposit validation used by both the client Step 3 UX and the checkout route.
-  - [lib/payments/stripe.ts](../../lib/payments/stripe.ts) - concrete Stripe adapter implementing the existing `PaymentProvider` interface without changing the locked booking route.
-- [app/book/page.tsx](../../app/book/page.tsx) Step 3 is now a hosted payment-selection experience for the Reserve path, with full-payment and custom-deposit modes, total / due-now / remaining-balance display, and redirect to Stripe only after booking creation succeeds.
-- [app/booking/view/[token]/page.tsx](../../app/booking/view/%5Btoken%5D/page.tsx) now recognizes `?payment=success|cancelled|setup_failed` return states, but those banners remain informational. Stored booking state is still the authority.
-- New environment contract: `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` are now required for preview/production hosted payment; `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` is reserved for future client-side Stripe surfaces.
+- [lib/butler/identity-orchestrator.ts](../../lib/butler/identity-orchestrator.ts) — `IdentityInput` gains `subscriber_id`, `chat_id`, `identity_proof`; `phone` retained. `IdentityResult` shape unchanged. New helpers `resolveBookingBySubscriberId`, `verifyIdentityProofMatchesBooking`; the prior `resolveBookingByPhone` / `verifyEmailMatchesBooking` are refactored into a shared lookup. Priority order updated. Safe-message for `request_identity_proof` reworded to "share the email or the full name used on your booking".
+- [app/api/butler/identify/route.ts](../../app/api/butler/identify/route.ts) — body now reads `subscriber_id` (cap 128), `chat_id` (cap 128), `phone` (cap 64), `booking_reference` (cap 64), `identity_proof` (cap 320). Legacy `identity_proof_email` accepted as a fallback. Unchanged: auth contract (503/401), 400 on shape errors, 200 on every orchestration outcome.
+- [lib/butler/leads.ts](../../lib/butler/leads.ts) — `normalizeLeadInput` picks `subscriber_id` and `chat_id` from a handful of WhatChimp aliases (`oraya_subscriber_id`, `lead_user_subscriber_id`, `subscriber_id`, `whatsapp_subscriber_id`, `whatchimp_subscriber_id`; mirror set for chat). `NormalizedLeadInput` and `WhatsappLeadAdminRow` gain `whatsapp_subscriber_id` / `whatsapp_chat_id` as `string | null`.
+- [app/api/butler/lead/route.ts](../../app/api/butler/lead/route.ts) — retries insert without the new columns when Supabase returns `42703`; raw values stay in `raw_payload` regardless.
+- [app/api/admin/leads/route.ts](../../app/api/admin/leads/route.ts) + [app/api/admin/leads/[id]/route.ts](../../app/api/admin/leads/%5Bid%5D/route.ts) — `SELECT_COLUMNS_FULL` includes the new fields; both fall back to `SELECT_COLUMNS_BASE` on `42703`.
+- [sql/phase-16a3-whatsapp-subscriber-identity.sql](../../sql/phase-16a3-whatsapp-subscriber-identity.sql) — new additive migration. Adds the two columns + the subscriber-id index. Comments document the diagnostic-only intent of `whatsapp_chat_id`.
+- [whatsapp-bot_guest-identification_v2.json](../../) (Desktop + `Oraya/`, both `.json` and `.txt`) — replaces the v1 flow. Welcome step unchanged (3 buttons). Identity-proof step rephrased + `emailQuickreply` set to `false` + custom field renamed `oraya_identity_proof_email` → `oraya_identity_proof`. All WhatChimp ids are empty strings; names preserved.
+- [ARCHITECTURE.md](ARCHITECTURE.md) WhatsApp identity flow section rewritten for the v2 priority order + schema dependency. [BUTLER_PLAYBOOK.md](BUTLER_PLAYBOOK.md) identity orchestration section rewritten with the new request body shape, the email-or-name proof rule, the schema dependency, and the booking-request flow gap callout.
+- `tsc --noEmit` clean; `npm run build` clean; new `/api/butler/identify` and `/api/butler/booking-lookup` routes confirmed in the build manifest.
 
-**Reversible?:** hard. The execution model can be changed later, but only with a superseding decision that preserves the locked booking authority and webhook-first payment truth.
+**Known gap (intentional, scoped follow-up):** the existing booking-request flow (`whatsapp-bot_1846656_*`) does NOT yet pass `subscriber_id` to `POST /api/butler/lead`. Until that flow is updated separately, new leads created via the booking-request path won't be auto-resumable by subscriber id from WhatChimp — they fall through to the reference + identity-proof gate. The schema and backend already accept the field; only the WhatChimp-side wiring on that other flow is missing. The user's standing instruction is to NOT modify the booking-request flow file in this turn.
 
-**Supersedes:** refines the 2026-05-18 "Phase 16B.1 architecture freeze" entry by choosing the first live provider path (`stripe`) for website Reserve payments while keeping the locked `/api/bookings` POST untouched.
+**Reversible?:** yes. Backend: revert the three TS files + the two route files + the SQL migration; the prior phone-keyed orchestrator returns. Schema: `drop column if exists whatsapp_subscriber_id`, same for `whatsapp_chat_id`, drop the index. Flow JSON: the v1 file is preserved on Desktop and in the Oraya folder; re-importing it restores the old behavior. No data destroyed (the SQL is additive; the columns are nullable; the rename `identity_proof_email` → `identity_proof` is also accepted as the legacy alias by the route).
+
+**Supersedes:** today's earlier entry "WhatsApp identity orchestration: phone continuity → booking-reference fallback → human escalation, single `/api/butler/identify` endpoint" is updated, not retracted. The endpoint, the orchestrator helper, and the safe-message + sensitive-disclosure contracts all carry forward; only the priority order, the input shape, and the proof comparison set change.
+
+---
+
+## 2026-05-22 - WhatsApp identity orchestration: phone continuity → booking-reference fallback → human escalation, single `/api/butler/identify` endpoint
+
+**Decision:** WhatsApp identity resolution for the Butler is owned server-side by a single stateless orchestrator helper, [lib/butler/identity-orchestrator.ts](../../lib/butler/identity-orchestrator.ts), and exposed to WhatChimp through one Butler-secret-guarded endpoint, `POST /api/butler/identify`. The bot does not branch on its own; each turn it passes whatever signals it has gathered (`phone`, `booking_reference`, `identity_proof_email`) and receives back a deterministic `recommended_next_action` plus the only `safe_message` the Butler is allowed to echo.
+
+The priority order is locked:
+
+1. **Phone continuity (primary).** Inbound WhatsApp sender phone → `whatsapp_leads.phone` → `linked_booking_id` → `bookings`. When this succeeds, identity is implicit; villa / check_in / check_out / status are returned and the bot composes a status reply (or, for a cancelled booking, an acknowledgement that withholds details).
+2. **Booking-reference fallback.** No phone match → bot asks for the 8-character reference. The orchestrator resolves it via [resolveBookingByReference](../../lib/booking-reference.ts). Pending/confirmed matches gate disclosure behind explicit identity verification; cancelled matches return a safe acknowledgement.
+3. **Human escalation.** Ambiguous reference, failed identity proof, or any unsafe state hands off to a human; the bot stops auto-replying about the booking and operators pick up from `/admin/leads`.
+
+**Identity verification options recognized today (closed allow-list):**
+
+- Phone continuity (implicit, primary path only).
+- Booking email match — case-insensitive comparison against `bookings.guest_email` and (when the booking is linked to a member) the member's `auth.users.email`. Mismatch escalates to human; the bot does not loop on retries.
+- Manual escalation — every other case.
+
+**Sensitive-disclosure rule:** `villa`, `check_in`, `check_out` are returned by the orchestrator only when identity is verified. The bot must never echo a cached value for those fields when the current orchestrator response has them null — the orchestrator is the single source of truth per turn.
+
+**Reason:** the Butler must correctly identify a returning guest before disclosing anything stay-specific, but it must also be operationally cheap to use (one call per turn, deterministic output, no client-side policy logic). Centralizing the priority order, the verification gate, and the safe-message strings server-side keeps the WhatChimp configuration trivial and audit-able: the bot reads `recommended_next_action`, calls the next correct primitive, and echoes `safe_message`. It also keeps the security model honest — there is exactly one code path that decides "is this person verified for this booking?" and that code path lives in this repo, not in WhatChimp's AI Training.
+
+The decision explicitly considered and rejected alternatives:
+
+- **Doing the priority logic in WhatChimp AI Training.** Rejected — AI Training is not auditable, drifts silently, and would mean the security model lives in a vendor surface outside the repo. The same argument the 2026-05-12 architecture freeze made about pricing / availability / status applies in full to identity.
+- **Storing a per-conversation identity-state column.** Rejected — every signal the orchestrator needs is already on `bookings` or `whatsapp_leads`. Adding a third table would introduce a stateful surface that drifts from the underlying truth (a booking cancelled after a turn was "verified" would silently surface stale state).
+- **Multiple specialized endpoints (`/api/butler/lookup-by-phone`, `/api/butler/verify-identity`).** Rejected as scope creep. The single multi-signal endpoint produces the same outcome with less surface, fewer round-trips, and one place to audit the priority order.
+
+**Impact:**
+
+- New file [lib/butler/identity-orchestrator.ts](../../lib/butler/identity-orchestrator.ts). Single exported async function `orchestrateButlerIdentity(input)` plus the discriminated `IdentityState` / `IdentityAction` types. Always resolves; never throws. Operational errors (Supabase outage, unexpected throw) collapse to the safest "ask for reference" or "escalate human" result, with the error logged server-side.
+- New file [app/api/butler/identify/route.ts](../../app/api/butler/identify/route.ts). Thin HTTP wrapper. Reuses `requireButlerAuth` (503 / 401 contract unchanged). 400 on invalid JSON / body shape / over-length input. 200 on every orchestration outcome, including escalations.
+- [ARCHITECTURE.md](ARCHITECTURE.md) API surface table gains `/api/butler/booking-lookup` and `/api/butler/identify`.
+- [BUTLER_PLAYBOOK.md](BUTLER_PLAYBOOK.md) gains a "WhatsApp identity orchestration" section that documents the priority order, the action allow-list, the sensitive-disclosure rule, and the closed identity-verification options list. This is the operational contract WhatChimp configuration must respect.
+- **No schema change.** Reuses existing `whatsapp_leads` (phone, linked_booking_id), `bookings` (id, status, villa, check_in, check_out, guest_email, member_id), and `auth.users` (email via service-role).
+- **No new env var.** `BUTLER_WEBHOOK_SECRET` already required and already documented in [ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md).
+- **No new dependency.** Uses `supabaseAdmin`, `requireButlerAuth`, and the existing `lib/booking-reference.ts`.
+- **No locked-surface touch.** `/api/bookings*`, `/api/admin/*`, `/api/calendar/*`, `/api/cron/*`, the email senders, the auth and token systems, and the existing schema remain untouched.
+
+**Reversible?:** yes — easy. Delete the two new files, revert the ARCHITECTURE.md + BUTLER_PLAYBOOK.md additions, add a superseding entry here. No data persisted; no external consumer locked in (WhatChimp does not call this endpoint until its outbound flow is configured to).
+
+**Supersedes:** does not supersede a prior decision. Builds on the 2026-05-12 Butler architecture freeze (locked namespace + secret), the 2026-05-15 `whatsapp_leads` persistence (provides the phone → booking linkage), the 2026-05-18 lead → booking provenance writer (populates `linked_booking_id`), and the 2026-05-22 booking-reference helper (the fallback identifier this orchestrator resolves).
+
+---
+
+## 2026-05-22 - Guest-facing booking reference formalized as the bookings.id 8-char uppercase prefix; lib/booking-reference.ts owns the contract
+
+**Decision:** the existing 8-character uppercased prefix of `bookings.id` is the single guest-facing booking reference. A new module [lib/booking-reference.ts](../../lib/booking-reference.ts) owns the format / normalize / resolve contract. No parallel identifier system is introduced; no schema change; no migration; no env var.
+
+Public / private boundary is now formal:
+
+- **Public guest-facing identifier** = `formatBookingReference(booking.id)`. Visible in pending / event-inquiry / confirmed / cancelled emails (the `Reference` row in the summary card) and at the top of `/booking/view/[token]`. Safe to quote in support channels. Knowing the reference is **not** proof of identity and never authorizes sensitive disclosure on its own.
+- **Private signed credentials** = `createActionToken(...)` in [lib/booking-action-token.ts](../../lib/booking-action-token.ts) and `createPrefillToken(...)` in [lib/butler/prefill-token.ts](../../lib/butler/prefill-token.ts). These remain the only credentials that authorize sensitive operations. They are never quoted, never asked of the guest in conversation, never interchangeable with the public reference.
+
+Future WhatsApp identity model (planning context — not implemented in this entry):
+
+- **Primary path:** known WhatsApp sender → Butler token continuity / lead-linkage continuity → linked booking → deterministic safe status reply (see [/docs/phases/PHASE_16B_PLAN.md](../phases/PHASE_16B_PLAN.md) §4).
+- **Fallback path:** unknown sender / spouse / changed number → ask for the booking reference → `resolveBookingByReference` returns booking_id + non-sensitive context (status, villa, check_in, check_out) → identity verification (phone match, booking email match, manual escalation) MUST run before any sensitive field is exposed.
+
+**Reason:** the 8-char-prefix reference is already shipped and visible in three call sites ([app/booking/view/[token]/page.tsx](../../app/booking/view/%5Btoken%5D/page.tsx), [lib/send-booking-pending-email.ts](../../lib/send-booking-pending-email.ts), [lib/send-booking-email.ts](../../lib/send-booking-email.ts)) and explicitly named the "public guest-facing support code" in [PROJECT_STATE.md](PROJECT_STATE.md), [BUTLER_PLAYBOOK.md](BUTLER_PLAYBOOK.md), and [/docs/phases/PHASE_16B_PLAN.md](../phases/PHASE_16B_PLAN.md). Introducing a second identifier would have meant two reference systems, two migration risks, and a years-long deprecation tail; centralizing the existing one into a named helper achieves every product goal (human-friendly identifier, safe for WhatsApp/support use, future-ready for payment-lookup and arrival-messaging flows) with zero schema or env impact.
+
+The audit explicitly considered and rejected the alternatives:
+
+- A new `bookings.booking_reference` text column. Rejected — duplicates an identifier already derived from the primary key; adds a migration with no observable guest benefit; collision-prevention logic (the only argument for a separate column) is unnecessary at Oraya's booking volume given uuid v4 first-8-hex entropy and is already handled by the `ambiguous` branch of the new resolver.
+- A short opaque token (e.g. base32 nanoid) separate from `bookings.id`. Rejected — same migration cost, plus historical bookings would need backfill; the existing reference is already in production emails and the guest already knows it as theirs.
+
+**Impact:**
+
+- New file [lib/booking-reference.ts](../../lib/booking-reference.ts). Three exports: `formatBookingReference(id) -> string | null`, `normalizeBookingReference(value) -> string | null`, `resolveBookingByReference(reference) -> Promise<BookingReferenceResolution>`. Type-and-helper module; no runtime side-effects at import time (the Supabase admin client is already lazy-Proxy-loaded).
+- The `resolveBookingByReference` discriminated union returns `not_found` / `ambiguous` / `found`. The `found` variant exposes only `booking_id`, `status`, `villa`, `check_in`, `check_out` — the same fields the guest already sees on `/booking/view/[token]`. Sensitive fields (phone, email, payment ledger, `payment_link_*`, raw payload, admin notes) are never returned by the resolver; identity verification is the caller's job.
+- [ARCHITECTURE.md](ARCHITECTURE.md) gains a "Booking identity model" section formalizing the public / private split and documenting the primary / fallback WhatsApp identity flow.
+- **No schema, no env, no new dependency, no new route.** The three existing call sites that compute `.slice(0, 8).toUpperCase()` are left untouched (minimal diff; the email senders are listed as locked surfaces in [AGENT_RULES.md](AGENT_RULES.md) §4, so even a no-op refactor was deferred). The helper has no callers in this commit; it is scaffolding for the next WhatsApp / payment-lookup PR.
+- `tsc --noEmit` clean. `npm run build` clean.
+
+**Reversible?:** yes — trivially. Delete the new file, revert the ARCHITECTURE.md section, add a superseding entry here. No data persisted; no external consumer locked in.
+
+**Supersedes:** does not supersede a prior decision. Formalizes a convention that has been informally documented across [PROJECT_STATE.md](PROJECT_STATE.md), [BUTLER_PLAYBOOK.md](BUTLER_PLAYBOOK.md), and [/docs/phases/PHASE_16B_PLAN.md](../phases/PHASE_16B_PLAN.md) since Phase 16A but had no central code module.
 
 ---
 

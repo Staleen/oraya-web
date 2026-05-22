@@ -49,11 +49,17 @@ export const dynamic = "force-dynamic";
 const NO_STORE_HEADERS = { "Cache-Control": "no-store" } as const;
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
-const SELECT_COLUMNS =
+const SELECT_COLUMNS_BASE =
   "id, created_at, updated_at, source, phone, name, request_type, villa, " +
   "check_in_text, check_out_text, normalized_check_in, normalized_check_out, " +
   "guest_count, addons_interest, special_requests, follow_up_status, labels, " +
   "linked_booking_id, admin_notes";
+
+// Phase 16A.3 — subscriber/chat identity columns. Requires
+// sql/phase-16a3-whatsapp-subscriber-identity.sql; the PATCH degrades to
+// SELECT_COLUMNS_BASE if the columns do not exist yet.
+const SELECT_COLUMNS_FULL =
+  `${SELECT_COLUMNS_BASE}, whatsapp_subscriber_id, whatsapp_chat_id`;
 
 function invalid() {
   return NextResponse.json(
@@ -94,12 +100,24 @@ export async function PATCH(
   const update: Record<string, unknown> = { ...parsed, updated_at: new Date().toISOString() };
 
   try {
-    const { data, error } = await supabaseAdmin
-      .from("whatsapp_leads")
-      .update(update)
-      .eq("id", id)
-      .select(SELECT_COLUMNS)
-      .maybeSingle();
+    const runUpdate = async (selectColumns: string) =>
+      supabaseAdmin
+        .from("whatsapp_leads")
+        .update(update)
+        .eq("id", id)
+        .select(selectColumns)
+        .maybeSingle();
+
+    let { data, error } = await runUpdate(SELECT_COLUMNS_FULL);
+
+    if (error && (error as { code?: string }).code === "42703") {
+      console.warn(
+        "[api/admin/leads/:id] subscriber identity columns missing; falling back to base select. Apply sql/phase-16a3-whatsapp-subscriber-identity.sql to enable.",
+      );
+      const retry = await runUpdate(SELECT_COLUMNS_BASE);
+      data = retry.data;
+      error = retry.error;
+    }
 
     if (error) {
       console.error("[api/admin/leads/:id] update error:", error);
