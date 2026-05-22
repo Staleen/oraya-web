@@ -40,15 +40,21 @@
  *   - **Manual escalation** — anything else.
  *
  * SENSITIVE-DISCLOSURE RULE: the orchestrator never returns villa /
- * check_in / check_out when identity is unverified. The four nullable
- * sensitive fields in the result are NULL until either a primary
- * continuity path resolves OR an explicit identity proof matches.
- * A bot that caches values across turns must still respect this contract:
- * if the current orchestrator response has them null, the bot must not
- * echo a previously-cached value.
+ * check_in / check_out / booking_view_url when identity is unverified.
+ * All four sensitive fields stay NULL until either a primary continuity
+ * path resolves OR an explicit identity proof matches. A bot that caches
+ * values across turns must still respect this contract: if the current
+ * orchestrator response has them null, the bot must not echo a
+ * previously-cached value. The booking_view_url is treated as sensitive
+ * because the underlying `/booking/view/[token]` page renders villa,
+ * dates, and the full booking summary; surfacing the URL before identity
+ * is established would be an indirect bypass of the disclosure gate.
  *
  * Out of scope for this module: payments, payment links, smart-lock
- * PINs, exact addresses, admin notes, raw payload, signed tokens.
+ * PINs, exact addresses, admin notes, raw payload, signed action tokens
+ * (confirm/cancel) — the signed view URL is the ONLY signed credential
+ * this module is allowed to mint, and only on identity-established
+ * branches.
  *
  * SCHEMA DEPENDENCY: the subscriber path requires the columns added by
  * sql/phase-16a3-whatsapp-subscriber-identity.sql
@@ -61,6 +67,7 @@
 
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { formatBookingReference, resolveBookingByReference } from "@/lib/booking-reference";
+import { buildButlerBookingViewUrl } from "@/lib/butler/booking-view-link";
 
 export type IdentityState =
   | "ask_for_booking_reference"
@@ -109,6 +116,17 @@ export interface IdentityResult {
   check_in: string | null;
   /** Sensitive — YYYY-MM-DD or null. Never parsed with new Date(). */
   check_out: string | null;
+  /**
+   * Signed `/booking/view/[token]` URL minted by
+   * [lib/butler/booking-view-link.ts] when identity has been established
+   * (verified proof OR implicit subscriber/phone continuity on an active
+   * booking). Null on every unverified / cancelled / not-found / ambiguous
+   * / escalation branch — the URL is a credential and is never surfaced
+   * before identity is established. Null is also possible when
+   * BOOKING_ACTION_SECRET is missing server-side; in that case the bot
+   * must not invent a substitute link.
+   */
+  booking_view_url: string | null;
   safe_message: string;
 }
 
@@ -146,6 +164,76 @@ function normalizeProofString(value: string | null | undefined): string | null {
   const collapsed = lowered.replace(/\s+/g, " ");
   if (collapsed.length > PROOF_MAX_LEN) return null;
   return collapsed;
+}
+
+/**
+ * Format a stay date `YYYY-MM-DD` string as a short human-readable label
+ * (e.g. `2026-06-10` → `10 Jun 2026`) WITHOUT passing through JS Date
+ * parsing. Mirrors the `fmtDate` helper used on the booking-view page so
+ * the Butler's safe_message phrasing matches what the guest would see if
+ * they clicked the view link. Returns null for missing / malformed input.
+ */
+function formatStayDateLabel(iso: string | null | undefined): string | null {
+  if (typeof iso !== "string") return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!match) return null;
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const monthIndex = Number(match[2]) - 1;
+  if (monthIndex < 0 || monthIndex > 11) return null;
+  return `${Number(match[3])} ${months[monthIndex]} ${match[1]}`;
+}
+
+/**
+ * Compose the enriched safe_message used when identity is established on
+ * an active (pending or confirmed) booking. The message folds in the
+ * booking reference, villa, stay dates, and signed booking-view URL when
+ * they are available, but degrades gracefully when any of them are
+ * missing — never inserting "null", "undefined", or an empty placeholder.
+ *
+ * Two voice variants:
+ *   - `lead` = "Thank you — I've verified your booking" (explicit proof match)
+ *   - `lead` = "Welcome back" (implicit continuity)
+ */
+function composeActiveIdentitySafeMessage(args: {
+  lead: "verified" | "welcome_back";
+  status: "pending" | "confirmed";
+  reference: string | null;
+  villa: string | null;
+  checkIn: string | null;
+  checkOut: string | null;
+  viewUrl: string | null;
+}): string {
+  const { lead, status, reference, villa, checkIn, checkOut, viewUrl } = args;
+
+  const stayLabel = (() => {
+    const villaPart = typeof villa === "string" && villa.trim().length > 0 ? villa.trim() : null;
+    const inLabel = formatStayDateLabel(checkIn);
+    const outLabel = formatStayDateLabel(checkOut);
+    const datesPart = inLabel && outLabel ? `${inLabel} → ${outLabel}` : null;
+    if (villaPart && datesPart) return `${villaPart} (${datesPart})`;
+    if (villaPart) return villaPart;
+    if (datesPart) return datesPart;
+    return null;
+  })();
+
+  const referencePart =
+    typeof reference === "string" && reference.trim().length > 0 ? ` Reference ${reference}.` : "";
+
+  const stayClause = stayLabel ? ` for ${stayLabel}` : "";
+
+  const opener =
+    lead === "verified"
+      ? status === "confirmed"
+        ? `Thank you — I've verified your booking${stayClause}. Your stay is confirmed.`
+        : `Thank you — I've verified your booking${stayClause}. It's still under review.`
+      : status === "confirmed"
+        ? `Welcome back — your stay${stayClause} is confirmed.`
+        : `Welcome back — your booking${stayClause} is still under review.`;
+
+  const viewPart =
+    typeof viewUrl === "string" && viewUrl.length > 0 ? ` Full details: ${viewUrl}` : "";
+
+  return `${opener}${referencePart}${viewPart} How can I help today?`;
 }
 
 function normalizeBookingStatus(status: string | null | undefined): string {
@@ -327,6 +415,7 @@ function askForReferenceResult(): IdentityResult {
     villa: null,
     check_in: null,
     check_out: null,
+    booking_view_url: null,
     safe_message:
       "Could you share your Oraya booking reference? It's the 8-character code on your confirmation email.",
   };
@@ -342,6 +431,7 @@ function escalateResult(state: IdentityState, safeMessage: string): IdentityResu
     villa: null,
     check_in: null,
     check_out: null,
+    booking_view_url: null,
     safe_message: safeMessage,
   };
 }
@@ -352,7 +442,9 @@ function knownSenderResolvedResult(booking: ContinuityBookingRow): IdentityResul
 
   if (status === "cancelled") {
     // Continuity reached a cancelled booking — acknowledge, do not surface
-    // stale stay details, no verification needed.
+    // stale stay details, no verification needed. The view URL is also
+    // withheld: the playbook's "do not surface villa/dates on cancelled"
+    // rule covers indirect exposure through a freshly minted view link.
     return {
       state: "known_sender_cancelled",
       recommended_next_action: "acknowledge_cancellation",
@@ -362,13 +454,18 @@ function knownSenderResolvedResult(booking: ContinuityBookingRow): IdentityResul
       villa: null,
       check_in: null,
       check_out: null,
+      booking_view_url: null,
       safe_message:
         "I see your earlier booking with us was cancelled. The Oraya team can help with any next steps.",
     };
   }
 
   // Continuity = implicit identity verification. Safe to surface the
-  // booking's non-sensitive context for the bot to compose a status reply.
+  // booking's non-sensitive context AND a signed view URL for the bot to
+  // compose a status reply. The URL is a credential gated by HMAC, so
+  // minting it on identity-established branches is the only safe place.
+  const viewUrl = buildButlerBookingViewUrl(booking.id);
+  const normalizedStatus = status === "confirmed" ? "confirmed" : "pending";
   return {
     state: "known_sender_resolved",
     recommended_next_action: "reply_with_status",
@@ -378,10 +475,16 @@ function knownSenderResolvedResult(booking: ContinuityBookingRow): IdentityResul
     villa: booking.villa,
     check_in: booking.check_in,
     check_out: booking.check_out,
-    safe_message:
-      status === "confirmed"
-        ? "Welcome back — your stay is confirmed. How can I help today?"
-        : "Welcome back — your booking is still under review. How can I help today?",
+    booking_view_url: viewUrl,
+    safe_message: composeActiveIdentitySafeMessage({
+      lead: "welcome_back",
+      status: normalizedStatus,
+      reference,
+      villa: booking.villa,
+      checkIn: booking.check_in,
+      checkOut: booking.check_out,
+      viewUrl,
+    }),
   };
 }
 
@@ -436,6 +539,7 @@ export async function orchestrateButlerIdentity(input: IdentityInput): Promise<I
       villa: null,
       check_in: null,
       check_out: null,
+      booking_view_url: null,
       safe_message:
         "I couldn't find a booking with that reference. Please double-check the code on your Oraya confirmation email.",
     };
@@ -462,6 +566,7 @@ export async function orchestrateButlerIdentity(input: IdentityInput): Promise<I
       villa: null,
       check_in: null,
       check_out: null,
+      booking_view_url: null,
       safe_message:
         "That reference matches a cancelled booking. The Oraya team can help with any next steps.",
     };
@@ -471,6 +576,8 @@ export async function orchestrateButlerIdentity(input: IdentityInput): Promise<I
   if (identityProof) {
     const verified = await verifyIdentityProofMatchesBooking(refResolution.booking_id, identityProof);
     if (verified) {
+      const viewUrl = buildButlerBookingViewUrl(refResolution.booking_id);
+      const normalizedStatus = status === "confirmed" ? "confirmed" : "pending";
       return {
         state: "verified",
         recommended_next_action: "reply_with_status",
@@ -480,10 +587,16 @@ export async function orchestrateButlerIdentity(input: IdentityInput): Promise<I
         villa: refResolution.villa,
         check_in: refResolution.check_in,
         check_out: refResolution.check_out,
-        safe_message:
-          status === "confirmed"
-            ? "Thank you — I've verified your booking. Your stay is confirmed. How can I help today?"
-            : "Thank you — I've verified your booking. It's still under review. How can I help today?",
+        booking_view_url: viewUrl,
+        safe_message: composeActiveIdentitySafeMessage({
+          lead: "verified",
+          status: normalizedStatus,
+          reference,
+          villa: refResolution.villa,
+          checkIn: refResolution.check_in,
+          checkOut: refResolution.check_out,
+          viewUrl,
+        }),
       };
     }
     return escalateResult(
@@ -493,7 +606,9 @@ export async function orchestrateButlerIdentity(input: IdentityInput): Promise<I
   }
 
   // No proof yet → ask for it. Status surfaced (already public knowledge
-  // for anyone holding the booking reference), but villa/dates withheld.
+  // for anyone holding the booking reference), but villa/dates AND the
+  // signed view URL are withheld — the URL would otherwise expose the
+  // sensitive fields indirectly through the booking-view page.
   return {
     state: status === "confirmed" ? "reference_confirmed_unverified" : "reference_pending_unverified",
     recommended_next_action: "request_identity_proof",
@@ -503,6 +618,7 @@ export async function orchestrateButlerIdentity(input: IdentityInput): Promise<I
     villa: null,
     check_in: null,
     check_out: null,
+    booking_view_url: null,
     safe_message:
       "Before I share details, could you share the email or the full name used on your booking?",
   };
