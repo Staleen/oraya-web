@@ -1,6 +1,6 @@
 # Known Agent Failure Patterns — Catalog
 
-**Updated:** 2026-05-09
+**Updated:** 2026-05-23
 **Companion to:** [/docs/archive/SESSION_LESSONS.md](../archive/SESSION_LESSONS.md) (the narrative version). This file is the **structured catalog** — short rows, scan-friendly, designed for "did this fail before?" lookups during PR review.
 
 **Use during PR review:** scan this list against the agent's diff. If you can match the pattern, push back on the PR before merging.
@@ -87,10 +87,10 @@
 
 - **Severity:** 🟠 High
 - **Category:** drift
-- **Symptom:** client code calls `/api/payments`, `/api/whatsapp`, `/api/cancellations`. None exist.
-- **Root cause:** Phase 16 planning context leaked into the agent's mental model.
+- **Symptom:** client code calls `/api/whatsapp`, `/api/cancellations`, or an unlisted payment/Butler route. `/api/payments/*` now exists, but only for the documented Phase 16B hosted-checkout surfaces.
+- **Root cause:** stale Phase 16 planning context leaked into the agent's mental model, or the agent guessed a route name without checking the current inventory.
 - **Detection cue:** new fetch URL not present in [/docs/system/ARCHITECTURE.md](../system/ARCHITECTURE.md) "Public surface" / "Admin surface" tables.
-- **Mitigation rule:** [/docs/system/PROJECT_STATE.md](../system/PROJECT_STATE.md) constraint #9 (no Phase 16 implementation).
+- **Mitigation rule:** [/docs/system/ARCHITECTURE.md](../system/ARCHITECTURE.md) is the current route inventory; Phase 16 implementation still requires explicit scope and audit/architecture grounding.
 - **Narrative:** [SESSION_LESSONS.md](../archive/SESSION_LESSONS.md) §3.4.
 
 ### #7 — Inventing helper modules

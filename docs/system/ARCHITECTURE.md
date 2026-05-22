@@ -1,6 +1,6 @@
 # Architecture - Oraya Web
 
-**Updated:** 2026-05-18
+**Updated:** 2026-05-23
 **Authority order:** see [PROJECT_STATE.md](PROJECT_STATE.md). This file is the descriptive map; if it conflicts with PROJECT_STATE.md, PROJECT_STATE.md wins.
 
 > Secret model and per-variable risk live in **[ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md)** - this doc only references it.
@@ -128,7 +128,7 @@ All routes verified against the current repo. Locked APIs are marked **locked** 
 1. Guest lands on `/book` with optional `?villa=...` preselect.
 2. Step 1: dates -> eligibility check.
    - **Reserve path** (default): goes to Step 2 (Stay Setup).
-   - **Instant Book path** (when villa is instant-eligible per `settings`): UI-only review + payment placeholder. **No booking persisted from this path today** - payment execution is Phase 16B.
+   - **Instant Book path** (when villa is instant-eligible per `settings`): UI-only review + payment placeholder. **No booking persisted from this path today** - execution remains later Phase 16B work.
 3. Step 2: bedrooms, guests, add-ons, special requests; live total via [lib/pricing/](../../lib/pricing/) helpers.
 4. Step 3: review + payment decision on the Reserve path.
    - Guest sees two clear paths: **Pay now and reserve** or **Submit booking request and pay later**.
@@ -137,12 +137,9 @@ All routes verified against the current repo. Locked APIs are marked **locked** 
    - When the active provider is not ready, the pay-now path is blocked in the UI with clear setup messaging instead of falling into a fake checkout flow.
 5. Reserve submit path:
    - `POST /api/bookings` remains the authoritative booking-creation route.
-4. Step 3: review + submit -> `POST /api/bookings`.
    - Server validates overlap, pricing snapshot, and addon operational rules.
    - On success, persists a `bookings` row including `pricing_snapshot` and `addons`.
    - Triggers transactional emails and generates signed view + admin-action tokens.
-5. Admin receives email with signed confirm/cancel links -> `/api/booking-action` mutates status.
-6. Guest can revisit booking via `/booking/view/[token]`.
 6. After booking creation succeeds, `POST /api/payments/checkout` resolves the configured hosted-checkout adapter, creates a provider session when the adapter is fully implemented, persists `payment_link_*` state on the booking row, and returns the hosted checkout URL.
 7. Guest is redirected to the provider-hosted payment page. Success/cancel returns land on `/booking/view/[token]?payment=success|cancelled`.
 8. `POST /api/payments/webhook/[provider]` is the authority for payment receipt / expiry updates. Success redirects are informational only and never mark payment received by themselves.

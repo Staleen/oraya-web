@@ -1,6 +1,6 @@
 # Legacy Doc Map — Root-Level Markdown Files
 
-**Updated:** 2026-05-09
+**Updated:** 2026-05-23
 **Purpose:** explain what each pre-`/docs/system/` root-level Markdown file is for, what is still authoritative, what is historical only, and where future updates should go. New AI sessions should read this once before treating any root-level doc as canonical.
 
 ---
@@ -55,7 +55,7 @@
 
 - **What it is:** the planning context for Phase 16 — five sub-phases (16A WhatsApp, 16B Payments, 16C Manual, 16D Smart Lock, 16E Rewards), dependencies, risk notes, and a "Must NOT be implemented yet" boundary.
 - **Authoritative:** yes. The "Must NOT be implemented yet" list is enforced by [/docs/system/PROJECT_STATE.md](../system/PROJECT_STATE.md) constraint #9 and [/docs/system/AGENT_RULES.md](../system/AGENT_RULES.md) §3.
-- **Migration direction:** stays at root for now. When Phase 16A actually starts, the kickoff replaces [/docs/system/CURRENT_PHASE.md](../system/CURRENT_PHASE.md) and PHASE_16_PLAN.md becomes a historical reference.
+- **Migration direction:** stays at root as forward-looking roadmap context. Phase 16A / 16B active state now lives in [/docs/system/CURRENT_PHASE.md](../system/CURRENT_PHASE.md); use PHASE_16_PLAN.md for planned later sub-phases and original guardrails, not as proof that a surface is unimplemented.
 
 ### [/README.md](../../README.md) — developer onboarding
 

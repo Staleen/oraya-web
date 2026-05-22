@@ -1,6 +1,6 @@
 # AI Workflow — How Oraya Actually Ships Changes
 
-**Updated:** 2026-05-09
+**Updated:** 2026-05-23
 **Authority:** descriptive. The behavior contract for agents is [/docs/system/AGENT_RULES.md](../system/AGENT_RULES.md). This file describes the *operational* workflow around it — who does what, in what order, with which tool.
 
 ---
@@ -117,7 +117,7 @@ These are conventions, not enforced. New AI sessions: match the existing pattern
 
 ### 4.3 Audit-only runs
 
-For risky phases (e.g. Phase 15A, Phase 14C), the first agent run is **read-only audit** — the agent reads the code, documents risks and unknowns, but does not edit anything. The human reviews the audit, then dispatches an implementation agent with explicit scope. Phase 16 is required to start this way per [/PHASE_16_PLAN.md](../../PHASE_16_PLAN.md).
+For risky phases (e.g. Phase 15A, Phase 14C), the first agent run is **read-only audit** - the agent reads the code, documents risks and unknowns, but does not edit anything. The human reviews the audit, then dispatches an implementation agent with explicit scope. New Phase 16 implementation threads should start this way unless [/docs/system/CURRENT_PHASE.md](../system/CURRENT_PHASE.md) already records the relevant architecture freeze for that surface.
 
 ### 4.4 Re-roll the prompt, not the diff
 
@@ -162,7 +162,7 @@ The historical knowledge layer (this file's directory + [/docs/phases/](../phase
 - **"I'll push directly to master to save a step."** — never. Branch + PR.
 - **"No risks identified."** with no stated check — challenge before merging.
 - **"I read the docs."** with no list of which ones — re-prompt for the list.
-- **"I'll add Stripe / WhatsApp / a PIN service."** — Phase 16 work, planning only. Architecture/audit pass required first.
+- **"I'll add a payment provider / WhatsApp write flow / PIN service."** - Phase 16 work with locked boundaries. Architecture/audit pass and explicit scope are required first; Credit Libanais is the only approved production payment provider path.
 
 ## 8. When this workflow does not work
 

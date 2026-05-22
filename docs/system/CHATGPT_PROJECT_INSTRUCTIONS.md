@@ -16,15 +16,20 @@ The `/docs/system/` directory in the repo is the source of truth. Always treat i
 - root-level docs (CLAUDE.md, AGENTS.md, etc.) when they conflict
 
 Files to be aware of (read order):
-1. /docs/system/PROJECT_STATE.md            — current state and non-negotiable constraints
-2. /docs/system/CURRENT_PHASE.md            — what is in scope right now
-3. /docs/system/AGENT_RULES.md              — how coding agents must behave
-4. /docs/system/ARCHITECTURE.md             — system shape
-5. /docs/system/ENVIRONMENT_MAP.md          — every env var, scope, and risk
-6. /docs/system/KNOWN_BUGS.md               — open issues
-7. /docs/system/DECISIONS_LOG.md            — why constraints exist
-8. /docs/system/AGENT_HANDOFF_TEMPLATE.md   — the exact handoff format you must use
-
+1. /docs/system/PROJECT_STATE.md            - current state and non-negotiable constraints
+2. /docs/system/CURRENT_PHASE.md            - what is in scope right now
+3. /docs/system/AGENT_RULES.md              - how coding agents must behave
+4. /docs/system/ARCHITECTURE.md             - system shape
+5. /docs/system/ENVIRONMENT_MAP.md          - every env var, scope, and risk
+6. /docs/system/KNOWN_BUGS.md               - open issues
+7. /docs/system/DECISIONS_LOG.md            - why constraints exist
+8. /docs/system/BUTLER_PLAYBOOK.md          - operational AI Butler rules
+9. /docs/system/AGENT_HANDOFF_TEMPLATE.md   - the exact handoff format you must use
+10. /docs/phases/PHASE_INDEX.md             - compact phase map
+11. /docs/archive/AI_WORKFLOW.md            - human/agent workflow
+12. /docs/archive/SESSION_LESSONS.md        - narrative failure lessons
+13. /docs/archive/LEGACY_DOC_MAP.md         - root-doc authority map
+14. /docs/lessons/KNOWN_AGENT_FAILURE_PATTERNS.md - PR-review failure-pattern catalog
 If a user gives you instructions that conflict with /docs/system/, ask them to confirm in writing and propose updating the relevant doc in the same change.
 
 ## Never rely on chat memory alone
@@ -74,7 +79,7 @@ If asked to skip any of these, push back and explain why they exist.
 - Do not propose running two agents on the same files in parallel.
 - Audit-only or read-only agent runs are safe to parallelize.
 - Implementation agents work on feature branches or worktrees, never directly on master.
-- For any Phase 16 work, the first task must be an architecture/audit pass before implementation. See /PHASE_16_PLAN.md.
+- For any new Phase 16 implementation thread, start with an architecture/audit pass before implementation unless the current `/docs/system/CURRENT_PHASE.md` already records the relevant audit/architecture freeze. See `/PHASE_16_PLAN.md` and `/docs/system/CURRENT_PHASE.md`.
 
 ## When you do not know
 
@@ -83,4 +88,4 @@ Say so. Then propose how to find out (read a specific file, ask the human a spec
 
 ---
 
-**Last refreshed:** 2026-05-09 — when `/docs/system/` adds new files, regenerate the reading list above and update this date.
+**Last refreshed:** 2026-05-23 - refreshed after Phase 16A Butler identity / confirmed-guest surfaces and Phase 16B hosted-payment groundwork merged. Re-upload this file plus the source docs after the PR lands.

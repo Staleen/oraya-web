@@ -1,6 +1,6 @@
 # Oraya — Phase Index
 
-**Updated:** 2026-05-09
+**Updated:** 2026-05-23
 **Authority:** descriptive only. The current state is in [/docs/system/PROJECT_STATE.md](../system/PROJECT_STATE.md). The full historical detail log is in [/PROJECT_STATE.md](../../PROJECT_STATE.md). When this index disagrees with either, the system docs win.
 
 This file is the **master index** of every Oraya delivery phase. One row per phase (or sub-phase cluster), kept short on purpose. For any "why" that does not fit in one line, follow the link to the source-of-truth doc.
@@ -140,16 +140,16 @@ This file is the **master index** of every Oraya delivery phase. One row per pha
 - **Major systems introduced:** [/docs/system/PROJECT_STATE.md](../system/PROJECT_STATE.md), [CURRENT_PHASE.md](../system/CURRENT_PHASE.md), [AGENT_RULES.md](../system/AGENT_RULES.md), [ARCHITECTURE.md](../system/ARCHITECTURE.md), [ENVIRONMENT_MAP.md](../system/ENVIRONMENT_MAP.md), [KNOWN_BUGS.md](../system/KNOWN_BUGS.md), [DECISIONS_LOG.md](../system/DECISIONS_LOG.md), [AGENT_HANDOFF_TEMPLATE.md](../system/AGENT_HANDOFF_TEMPLATE.md), [CHATGPT_PROJECT_INSTRUCTIONS.md](../system/CHATGPT_PROJECT_INSTRUCTIONS.md), and the historical knowledge layer this index belongs to.
 - **Authoritative refs:** [/docs/system/CURRENT_PHASE.md](../system/CURRENT_PHASE.md), [/docs/system/DECISIONS_LOG.md](../system/DECISIONS_LOG.md) "2026-05-09 — `/docs/system/` is the AI source of truth".
 
-## Phase 16 — In Progress (16A lead-intake + identity continuity shipped; 16B planning context)
+## Phase 16 - In Progress (16A Butler identity boundary + 16B payment groundwork)
 
-- **Status:** 🟡 in progress
+- **Status:** in progress
 - **Sub-phases:**
-  - **16A** WhatsApp AI Butler — 🟡 in progress. Read-only foundation (`/api/butler/health|event-types|addons|availability|normalize-dates`), lead intake (`/api/butler/lead` + `whatsapp_leads` + `/admin/leads`), secure website handoff (`/api/butler/prefill` + `?h=…` on `/book`), and lead → booking identity continuity (best-effort `whatsapp_leads.linked_booking_id` writer on `/api/bookings` POST) are all shipped. Outstanding: `POST /api/butler/flow-submit` (write-capable booking adapter), human-escalation routing, AI prompt tuning. Smart-lock PIN / access-code delivery is **not** Phase 16A — see 16D.
-  - **16B** Payment processing + refunds — ⏳ provisioned. Architecture plan in [/docs/phases/PHASE_16B_PLAN.md](PHASE_16B_PLAN.md). No implementation yet.
-  - **16C** Guest manual — ⏳ planned. Pre-arrival, during-stay, house rules, troubleshooting.
-  - **16D** Smart lock — ⏳ planned. PIN issuance / revocation, check-in / check-out validity windows, guest access delivery, cancellation hooks. The 8-character booking reference on `/booking/view/[token]` is a public **support code**, not an access PIN — access credentials are this phase's scope, not Phase 16A or Phase 16B.
-  - **16E** Membership points & rewards — ⏳ planned. Earn / redeem, admin control, anti-abuse.
-- **Authoritative refs:** [/PHASE_16_PLAN.md](../../PHASE_16_PLAN.md) (forward-looking roadmap), [/docs/phases/PHASE_16B_PLAN.md](PHASE_16B_PLAN.md) (Phase 16B architecture / schema decision / WhatsApp payment branching / roadmap), [/docs/system/CURRENT_PHASE.md](../system/CURRENT_PHASE.md) (rolling phase snapshot). Implementation continues to be gated on architecture/audit pass per [/docs/system/AGENT_RULES.md](../system/AGENT_RULES.md) §3 and `PROJECT_STATE.md` constraint #9.
+  - **16A** WhatsApp AI Butler - in progress. Read-only foundation (`/api/butler/health|event-types|addons|availability|normalize-dates`), lead intake (`/api/butler/lead` + `whatsapp_leads` + `/admin/leads`), secure website handoff (`/api/butler/prefill` + `?h=...` on `/book`), lead -> booking identity continuity, booking lookup, identity orchestration, signed booking-view URL surfacing on identity-established active bookings, and confirmed-guest info boundary are shipped. Outstanding: `POST /api/butler/flow-submit`, WhatChimp-side subscriber-id wiring confirmation for the booking-request flow, human-escalation routing, AI prompt tuning. Smart-lock PIN / access-code delivery is **not** Phase 16A - see 16D.
+  - **16B** Payment processing + refunds - in progress. Payment-link schema/domain scaffolding, runtime plumbing, settings-driven Reserve Step 3 payment choices, provider-agnostic hosted checkout, verified webhook callback surface, admin payment settings, and Credit Libanais readiness placeholder are shipped. Real Credit Libanais / MPGS execution, refunds automation, WhatsApp payment replies, and Instant Book execution remain outstanding.
+  - **16C** Guest manual - planned. Pre-arrival, during-stay, house rules, troubleshooting.
+  - **16D** Smart lock - planned. PIN issuance / revocation, check-in / check-out validity windows, guest access delivery, cancellation hooks. The 8-character booking reference on `/booking/view/[token]` is a public **support code**, not an access PIN - access credentials are this phase's scope, not Phase 16A or Phase 16B.
+  - **16E** Membership points & rewards - planned. Earn / redeem, admin control, anti-abuse.
+- **Authoritative refs:** [/PHASE_16_PLAN.md](../../PHASE_16_PLAN.md) (forward-looking roadmap), [/docs/phases/PHASE_16B_PLAN.md](PHASE_16B_PLAN.md) (Phase 16B architecture / schema decision / WhatsApp payment branching / roadmap), [/docs/system/CURRENT_PHASE.md](../system/CURRENT_PHASE.md) (rolling phase snapshot). New Phase 16 implementation threads still begin with architecture/audit unless the current phase docs already record the relevant freeze.
 
 ---
 

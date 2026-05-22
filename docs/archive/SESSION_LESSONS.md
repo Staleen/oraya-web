@@ -1,9 +1,9 @@
 # Session Lessons — Recurring AI-Session Pitfalls
 
-**Updated:** 2026-05-09
+**Updated:** 2026-05-23
 **Authority:** historical / advisory. Not a substitute for [/docs/system/AGENT_RULES.md](../system/AGENT_RULES.md) — that is the enforced behavior contract. This file is the *narrative* version of "things we learned the hard way" so future agents understand *why* the rules exist.
 
-These lessons are aggregated from real ChatGPT, Claude Code, Codex, and Cursor sessions on the Oraya codebase across Phases 8–15. Examples are paraphrased to remove noise; the patterns are real.
+These lessons are aggregated from real ChatGPT, Claude Code, Codex, and Cursor sessions on the Oraya codebase across Phases 8-16. Examples are paraphrased to remove noise; the patterns are real.
 
 ---
 
@@ -88,7 +88,7 @@ Agents have proposed columns that "obviously should exist" (e.g. a `bookings.can
 
 ### 3.2 Inventing env vars or secret values
 
-A previous session made up a Stripe key path because Phase 16B mentions payments. Phase 16 is **not implemented**. There is no Stripe integration today.
+A previous session made up a Stripe key path before payment work existed. Current state is different: Phase 16B now has provider-agnostic hosted-payment groundwork, and Stripe exists only as an isolated local/dev test adapter. Credit Libanais / MPGS is the only approved production provider path.
 
 **Mitigation:** [/docs/system/ENVIRONMENT_MAP.md](../system/ENVIRONMENT_MAP.md) is the exhaustive list. If a variable is not there, it does not exist.
 
@@ -100,7 +100,7 @@ Agents have called `lib/payments.ts` and `lib/whatsapp/*` helpers that do not ex
 
 ### 3.4 Inventing routes
 
-`/api/payments`, `/api/whatsapp`, `/api/cancellations` — none exist. Real route inventory is in [/docs/system/ARCHITECTURE.md](../system/ARCHITECTURE.md).
+`/api/whatsapp` and `/api/cancellations` still do not exist. `/api/payments/*` now exists for the Phase 16B hosted-checkout groundwork, so agents must check the current route inventory in [/docs/system/ARCHITECTURE.md](../system/ARCHITECTURE.md) instead of relying on older examples.
 
 ### 3.5 Date / timezone hallucinations
 

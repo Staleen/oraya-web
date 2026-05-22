@@ -1,6 +1,6 @@
 # Known Bugs & Open Issues
 
-**Updated:** 2026-05-09
+**Updated:** 2026-05-23
 
 Living list of bugs, gaps, and operational pitfalls that are **known** but **not yet fixed** (or accepted as a permanent trade-off). New AI sessions: read this before assuming production is in a clean state.
 
@@ -65,13 +65,13 @@ Living list of bugs, gaps, and operational pitfalls that are **known** but **not
 
 ---
 
-### #4 — Vercel env values not yet manually populated
+### #4 - Vercel env values and human-gated SQL application status need re-verification
 
-- **Severity:** 🟠 High (until done)
-- **Area:** Deployment readiness
-- **Description:** [ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md) and [/.env.example](../../.env.example) are accurate, but Vercel's Project → Settings → Environment Variables has not been re-verified against the audit. If a variable is missing or stale in Vercel, a redeploy could hit it with no obvious signal.
-- **Status:** open — human action item.
-- **Recommended fix path:** follow the "Recommended next steps" section of [ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md) — set/verify each variable per environment scope (Production / Preview / Development), mark sensitive ones, then redeploy and check production logs for env-related throws.
+- **Severity:** High (until done)
+- **Area:** Deployment readiness / schema readiness
+- **Description:** [ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md) and [/.env.example](../../.env.example) list the current Phase 16A / 16B env contract, but this repo audit cannot verify Vercel's Project -> Settings -> Environment Variables or whether the human-gated SQL helpers have been applied in Supabase. The important unverified items are Butler secrets (`BUTLER_WEBHOOK_SECRET`, `BUTLER_PREFILL_SECRET`), hosted-payment envs (`PAYMENT_PROVIDER`, Credit Libanais placeholders once enabled), `NEXT_PUBLIC_SITE_URL`, and SQL helpers such as [sql/phase-16a3-whatsapp-subscriber-identity.sql](../../sql/phase-16a3-whatsapp-subscriber-identity.sql) and [sql/phase-16b4-credit-libanais-provider-compat.sql](../../sql/phase-16b4-credit-libanais-provider-compat.sql).
+- **Status:** open - human action item.
+- **Recommended fix path:** verify each variable per environment scope (Production / Preview / Development), mark sensitive ones, redeploy, confirm WhatChimp can call the Butler routes, and confirm in Supabase whether the Phase 16A.3 / 16B.4 SQL helpers have been applied before relying on subscriber-id auto-resume or persisted `credit_libanais` payment links.
 - **Discovered:** 2026-05-09
 
 ---
@@ -87,6 +87,16 @@ Living list of bugs, gaps, and operational pitfalls that are **known** but **not
 
 ---
 
+### #6 - ChatGPT Project uploaded source docs are stale until this refresh PR is merged and re-uploaded
+
+- **Severity:** Medium
+- **Area:** AI workflow / documentation source freshness
+- **Description:** The ChatGPT Project currently has uploaded source files dated 2026-05-09. The repo has since merged Phase 16A Butler identity / confirmed-guest surfaces and Phase 16B hosted-payment groundwork. New orchestrator chats that rely on the old upload may incorrectly think `/api/payments` does not exist, that Stripe is entirely absent, or that the Butler surface stops at lead intake.
+- **Status:** in-progress - this documentation PR refreshes the repo source files; human still needs to re-upload them into the ChatGPT Project after merge.
+- **Recommended fix path:** after this PR is merged, re-upload the refreshed in-scope docs to ChatGPT Project Sources and update the Project Instructions from [CHATGPT_PROJECT_INSTRUCTIONS.md](CHATGPT_PROJECT_INSTRUCTIONS.md).
+- **Discovered:** 2026-05-23 (ChatGPT Project source refresh audit)
+
+---
 <!-- New entries go above this line, lowest # at the top. Closed entries can be moved to a "Closed" section below or stay in place with status: closed + date. -->
 
 ## Closed / wontfix

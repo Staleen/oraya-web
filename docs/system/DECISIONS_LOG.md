@@ -16,6 +16,20 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-05-23 - ChatGPT Project source docs require refresh after Phase 16A / 16B merges
+
+**Decision:** the ChatGPT Project source pack should be refreshed from the repo after this documentation PR merges. The previous uploaded source files were dated 2026-05-09 and no longer describe the current production state accurately: Phase 16A now includes Butler identity orchestration, booking lookup, signed booking-view URL surfacing, and confirmed-guest info boundaries; Phase 16B now includes provider-agnostic hosted-payment groundwork, admin payment settings, webhook reconciliation, and Credit Libanais readiness placeholders.
+
+**Reason:** stale project sources create orchestration risk. A new ChatGPT Project chat using the old upload may incorrectly state that `/api/payments` does not exist, that Stripe is entirely absent rather than isolated to local/dev, or that the Butler only supports read-only/lead-intake routes. Those are now repo-proven false.
+
+**Impact:** update the in-scope source docs only. No production code, API route, schema, package, or real env file changes. After merge, the human should re-upload the refreshed source docs into ChatGPT Project Sources and update the Project Instructions from [CHATGPT_PROJECT_INSTRUCTIONS.md](CHATGPT_PROJECT_INSTRUCTIONS.md).
+
+**Reversible?:** yes - documentation-only. If a later PR supersedes the current production state, add a new source-refresh entry and re-upload again.
+
+**Supersedes:** none.
+
+---
+
 ## 2026-05-22 - Credit Libanais provider compatibility is widened at the schema boundary while the adapter stays placeholder-only
 
 **Decision:** Oraya now treats `credit_libanais` as a first-class persisted `bookings.payment_link_provider` value, but the Credit Libanais / MPGS adapter remains an explicit placeholder until the bank delivers the real hosted-checkout contract. The additive migration `sql/phase-16b4-credit-libanais-provider-compat.sql` is the human-gated schema-compatibility step that widens the `payment_link_provider` allow-list to `manual | whish | stripe | credit_libanais` and keeps `stripe` only for backward-compatible dev/test rows. Runtime readiness must report four things clearly: whether the selected provider is configured, whether it is actually implemented vs placeholder-only, a guest-safe setup message, and an admin-facing missing-requirements list that never exposes raw secret values. `/admin/settings` is now the operator surface for that non-secret readiness state, while credentials remain env-only.
