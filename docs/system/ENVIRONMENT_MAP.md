@@ -27,9 +27,9 @@
 | `CREDIT_LIBANAIS_SECRET` | server-only | optional (until the bank contract is implemented) | yes (when Credit Libanais is enabled) | yes (when Credit Libanais is enabled) | yes |
 | `CREDIT_LIBANAIS_GATEWAY_URL` | server-only | optional (until the bank contract is implemented) | yes (when Credit Libanais is enabled) | yes (when Credit Libanais is enabled) | yes |
 | `CREDIT_LIBANAIS_WEBHOOK_SECRET` | server-only | optional (until the bank callback contract is implemented) | yes (when Credit Libanais is enabled) | yes (when Credit Libanais is enabled) | yes |
-| `STRIPE_SECRET_KEY` | server-only | optional (Stripe dev/test only) | optional | optional | yes |
-| `STRIPE_WEBHOOK_SECRET` | server-only | optional (Stripe dev/test webhook only) | optional | optional | yes |
-| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | public | optional | optional | optional | yes |
+| `STRIPE_SECRET_KEY` | server-only | optional (Stripe local/dev test only) | optional | optional | optional |
+| `STRIPE_WEBHOOK_SECRET` | server-only | optional (Stripe local/dev webhook only) | optional | optional | optional |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | public | optional (Stripe local/dev only) | optional | optional | optional |
 | `NODE_ENV` | system | auto | auto | auto | n/a (Next.js / Vercel sets) |
 
 Public vs server-only:
@@ -192,7 +192,7 @@ Public vs server-only:
 - **Allowed values today:** `credit_libanais`, `stripe`.
 - **Configure in Vercel:** yes — Production + Preview, plus Development if you want local parity.
 - **Risk if missing:** in `NODE_ENV=production`, checkout fails closed with a configuration error and no provider is selected. Outside production, runtime defaults to Stripe so local/dev can still exercise the hosted checkout flow intentionally.
-- **Operational note:** Credit Libanais / MPGS is the target production provider. Stripe remains an optional dev/test provider, or an explicit override only if the business intentionally chooses it.
+- **Operational note:** Credit Libanais / MPGS is the only approved Oraya production provider. `PAYMENT_PROVIDER=stripe` is accepted only outside production for isolated local/dev testing.
 
 ### `CREDIT_LIBANAIS_MERCHANT_ID`
 
@@ -236,12 +236,12 @@ Public vs server-only:
 - **Status:** optional dev/test adapter only. No longer the assumed production provider.
 - **Used in:**
   - [lib/payments/stripe.ts](../../lib/payments/stripe.ts) - authorizes Stripe Checkout session creation against Stripe's server API.
-  - [app/api/payments/checkout/route.ts](../../app/api/payments/checkout/route.ts) - Reserve-path hosted payment session creation when `PAYMENT_PROVIDER=stripe`.
-- **Required:** local optional (only if you want real Stripe test-mode checkout locally) Â· preview yes Â· production yes.
+  - [app/api/payments/checkout/route.ts](../../app/api/payments/checkout/route.ts) - Reserve-path hosted payment session creation when `PAYMENT_PROVIDER=stripe` outside production.
+- **Required:** local optional (only if you want real Stripe test-mode checkout locally) · preview optional · production not used.
 - **Where to get it:** Stripe Dashboard â†’ Developers â†’ API keys â†’ **Secret key** for the correct mode (test vs live).
-- **Configure in Vercel:** yes â€” Production + Preview, marked Sensitive.
-- **Risk if missing:** Step 3 on `/book` can still create the booking row via the locked `/api/bookings` route, but hosted checkout setup fails immediately afterward and the guest falls back to `/booking/view/[token]?payment=setup_failed`.
-- **Operational note:** use Stripe test keys in preview/development and live keys only in production.
+- **Configure in Vercel:** optional. If used at all, prefer local/development only.
+- **Risk if missing:** none unless a non-production environment intentionally sets `PAYMENT_PROVIDER=stripe`.
+- **Operational note:** Stripe is not an approved Oraya production provider.
 
 ### `STRIPE_WEBHOOK_SECRET`
 
@@ -250,20 +250,20 @@ Public vs server-only:
 - **Used in:**
   - [lib/payments/stripe.ts](../../lib/payments/stripe.ts) - verifies Stripe `Stripe-Signature` headers.
   - [app/api/payments/webhook/stripe/route.ts](../../app/api/payments/webhook/stripe/route.ts) - rejects unsigned/invalid webhook deliveries.
-- **Required:** local optional (only if you are forwarding Stripe webhooks locally) Â· preview yes Â· production yes.
+- **Required:** local optional (only if you are forwarding Stripe webhooks locally) · preview optional · production not used.
 - **Where to get it:** Stripe Dashboard â†’ Developers â†’ Webhooks â†’ select the endpoint â†’ **Signing secret**.
-- **Configure in Vercel:** yes â€” Production + Preview, marked Sensitive.
-- **Risk if missing:** hosted checkout sessions may still be created, but Oraya cannot safely trust payment success. `/booking/view/[token]?payment=success` remains informational only; `payment_status` does not update without a verified webhook.
-- **Operational note:** each Stripe webhook endpoint has its own signing secret. Preview and production should not share one casually.
+- **Configure in Vercel:** optional. If used at all, prefer local/development only.
+- **Risk if missing:** none unless a non-production environment intentionally uses the Stripe adapter.
+- **Operational note:** each Stripe webhook endpoint has its own signing secret. Stripe remains isolated to dev/test use.
 
 ### `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
 
 - **Scope:** public.
-- **Used in:** no runtime consumer in the current Phase 16B.3 hosted-checkout flow. Reserved now so future Stripe client surfaces use a stable env name.
+- **Used in:** no runtime consumer in the current hosted-checkout flow. Reserved only if Stripe is exercised in local/dev later.
 - **Required:** optional in local / preview / production for the current implementation.
 - **Where to get it:** Stripe Dashboard â†’ Developers â†’ API keys â†’ **Publishable key**.
 - **Configure in Vercel:** optional for now.
-- **Risk if missing:** none today. A future client-side Stripe integration would require it.
+- **Risk if missing:** none today.
 
 ### Butler secret rotation checklist
 
