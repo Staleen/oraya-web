@@ -3,7 +3,9 @@ import { roundMoney } from "@/lib/money";
 import type {
   CreateCheckoutSessionInput,
   CreateCheckoutSessionResult,
+  HostedCheckoutEnvironment,
   HostedCheckoutProvider,
+  HostedCheckoutProviderReadiness,
   PaymentBookingDelta,
   PaymentProviderEvent,
 } from "@/lib/payments/provider";
@@ -44,6 +46,36 @@ function getStripeWebhookSecret() {
     throw new Error("STRIPE_WEBHOOK_SECRET is not configured.");
   }
   return value;
+}
+
+function detectStripeEnvironment(secretKey: string | null): HostedCheckoutEnvironment {
+  if (!secretKey) return "unknown";
+  if (secretKey.startsWith("sk_test_")) return "sandbox";
+  if (secretKey.startsWith("sk_live_")) return "live";
+  return "unknown";
+}
+
+function getStripeReadiness(): HostedCheckoutProviderReadiness {
+  const secretKey = process.env.STRIPE_SECRET_KEY?.trim() || null;
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim() || null;
+  const missingRequirements: string[] = [];
+  if (!secretKey) missingRequirements.push("Stripe secret key is not configured");
+  if (!webhookSecret) missingRequirements.push("Stripe webhook secret is not configured");
+  const configured = missingRequirements.length === 0;
+
+  return {
+    configured,
+    implemented: true,
+    checkout_ready: configured,
+    environment: detectStripeEnvironment(secretKey),
+    guest_message: configured
+      ? ""
+      : "Online payment setup is in progress.",
+    admin_message: configured
+      ? "Stripe dev/test checkout is configured."
+      : "Stripe dev/test checkout is selected, but one or more required Stripe secrets are missing.",
+    missing_requirements: missingRequirements,
+  };
 }
 
 function buildCheckoutLineItemName(input: CreateCheckoutSessionInput) {
@@ -157,6 +189,10 @@ export const stripePaymentProvider: HostedCheckoutProvider = {
   checkout_ready: true,
   guest_setup_message: null,
   persisted_link_provider: "stripe",
+
+  getReadiness() {
+    return getStripeReadiness();
+  },
 
   async createCheckoutSession(input: CreateCheckoutSessionInput): Promise<CreateCheckoutSessionResult> {
     const secretKey = getStripeSecretKey();

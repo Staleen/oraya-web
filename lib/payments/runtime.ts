@@ -3,8 +3,10 @@ import {
   HOSTED_CHECKOUT_PROVIDER_KEYS,
   isHostedCheckoutProviderKey,
   PaymentProviderConfigurationError,
+  type HostedCheckoutEnvironment,
   type HostedCheckoutProvider,
   type HostedCheckoutProviderKey,
+  type PaymentLinkProvider,
 } from "@/lib/payments/provider";
 import { stripePaymentProvider } from "@/lib/payments/stripe";
 
@@ -54,19 +56,39 @@ export function getHostedCheckoutProviderByKey(
     : null;
 }
 
-export function getHostedCheckoutPublicStatus() {
+export interface HostedCheckoutAdminStatus {
+  provider_key: HostedCheckoutProviderKey | null;
+  provider_display_name: string | null;
+  persisted_link_provider: PaymentLinkProvider | null;
+  configured: boolean;
+  implemented: boolean;
+  checkout_ready: boolean;
+  environment: HostedCheckoutEnvironment | null;
+  guest_message: string;
+  admin_message: string;
+  missing_requirements: string[];
+}
+
+function getHostedCheckoutStatusFromProvider(provider: HostedCheckoutProvider): HostedCheckoutAdminStatus {
+  const readiness = provider.getReadiness();
+  return {
+    provider_key: provider.key,
+    provider_display_name: provider.display_name,
+    persisted_link_provider: provider.persisted_link_provider,
+    configured: readiness.configured,
+    implemented: readiness.implemented,
+    checkout_ready: readiness.checkout_ready && provider.checkout_ready,
+    environment: readiness.environment,
+    guest_message: readiness.guest_message,
+    admin_message: readiness.admin_message,
+    missing_requirements: readiness.missing_requirements,
+  };
+}
+
+export function getHostedCheckoutAdminStatus(): HostedCheckoutAdminStatus {
   try {
     const provider = getConfiguredHostedCheckoutProvider();
-    return {
-      provider_key: provider.key,
-      provider_display_name: provider.display_name,
-      online_checkout_ready: provider.checkout_ready && provider.persisted_link_provider !== null,
-      online_checkout_message:
-        provider.checkout_ready && provider.persisted_link_provider !== null
-          ? ""
-          : provider.guest_setup_message ??
-            `${provider.display_name} secure payment is not available yet.`,
-    };
+    return getHostedCheckoutStatusFromProvider(provider);
   } catch (error) {
     const message =
       error instanceof PaymentProviderConfigurationError
@@ -75,8 +97,27 @@ export function getHostedCheckoutPublicStatus() {
     return {
       provider_key: null,
       provider_display_name: null,
-      online_checkout_ready: false,
-      online_checkout_message: message,
+      persisted_link_provider: null,
+      configured: false,
+      implemented: false,
+      checkout_ready: false,
+      environment: null,
+      guest_message: "Online payment setup is in progress.",
+      admin_message: message,
+      missing_requirements: [message],
     };
   }
+}
+
+export function getHostedCheckoutPublicStatus() {
+  const status = getHostedCheckoutAdminStatus();
+  return {
+    provider_key: status.provider_key,
+    provider_display_name: status.provider_display_name,
+    online_checkout_ready: status.checkout_ready && status.persisted_link_provider !== null,
+    online_checkout_message:
+      status.checkout_ready && status.persisted_link_provider !== null
+        ? ""
+        : status.guest_message || "Online payment setup is in progress.",
+  };
 }
