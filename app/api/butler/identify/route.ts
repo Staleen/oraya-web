@@ -19,11 +19,28 @@ import { orchestrateButlerIdentity } from "@/lib/butler/identity-orchestrator";
  *   4. Human escalation
  *
  * Sensitive disclosure rule (also enforced in the orchestrator): villa,
- * check_in, check_out are returned only when identity is verified —
- * either implicitly via subscriber/phone continuity or explicitly via an
- * identity proof (email or full name) that matches the booking. Pending
- * or confirmed references with no verification return null sensitive
- * fields and `recommended_next_action="request_identity_proof"`.
+ * check_in, check_out, and booking_view_url are returned only when
+ * identity is verified — either implicitly via subscriber/phone
+ * continuity or explicitly via an identity proof (email or full name)
+ * that matches the booking. Pending or confirmed references with no
+ * verification return null sensitive fields and
+ * `recommended_next_action="request_identity_proof"`. The
+ * booking_view_url is treated as sensitive because it is a signed
+ * credential for `/booking/view/[token]`, which renders the full booking
+ * summary.
+ *
+ * Response shape (always wrapped as `{ ok: true, ...result }` on 200):
+ *   - state, recommended_next_action — control fields the bot branches on
+ *   - booking_id, booking_reference, booking_status — non-sensitive
+ *     identifiers; safe to surface once an active booking is matched
+ *   - villa, check_in, check_out — null unless identity is established
+ *   - booking_view_url — null unless identity is established AND the
+ *     booking is active (pending or confirmed). Always null on cancelled,
+ *     not_found, ambiguous, request_identity_proof, escalate_human, and
+ *     ask_for_booking_reference branches. The bot must not synthesize a
+ *     substitute link when this field is null (the helper returns null
+ *     when BOOKING_ACTION_SECRET is missing server-side).
+ *   - safe_message — the only sentence the bot may echo about the outcome
  *
  * Contract:
  *   - 503 if BUTLER_WEBHOOK_SECRET is unset
@@ -39,7 +56,9 @@ import { orchestrateButlerIdentity } from "@/lib/butler/identity-orchestrator";
  * This endpoint MUST NOT:
  *   - mutate any booking, lead, or token
  *   - send email
- *   - mint or rotate tokens
+ *   - mint or rotate confirm/cancel tokens (the signed view URL minted by
+ *     the orchestrator is the only credential this surface produces, and
+ *     only on identity-established branches)
  *   - call any payment / smart-lock / location surface
  */
 
