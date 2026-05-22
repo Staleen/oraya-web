@@ -8,7 +8,7 @@
 
 **Scope:** operational and behavioral rules for the Butler. The data plane (auth, endpoints, secrets, source-of-truth lib paths) lives in [ARCHITECTURE.md](ARCHITECTURE.md) ("Butler flow"), [ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md) (`BUTLER_WEBHOOK_SECRET`), and [DECISIONS_LOG.md](DECISIONS_LOG.md) (2026-05-12 Butler architecture freeze). This file does **not** duplicate those.
 
-**Updated:** 2026-05-22.
+**Updated:** 2026-05-23.
 
 ---
 
@@ -202,6 +202,54 @@ The composer degrades gracefully — any missing field is omitted rather than re
 - a window into admin-only data, `raw_payload`, internal labels, follow-up status, or operator notes.
 
 If the guest asks for any of the above, the Butler escalates to a human per the existing "Human escalation routing" section above — it does not improvise, derive, or quote those values, even when they are stored elsewhere in the same booking row.
+
+## Confirmed-guest info boundary (Phase 16A)
+
+`POST /api/butler/confirmed-guest-info` is the dedicated Butler surface for guests who have already been identified AND whose booking is in `confirmed` status. The endpoint reuses the identity orchestrator (subscriber-id → phone → reference + identity-proof gate) and then narrows further: only a confirmed booking with established identity receives the structured allow-list. Everything else — pending, cancelled, ambiguous, unverified — refuses safely with a `safe_message` and a non-deliver `recommended_next_action`.
+
+**Allowed output (confirmed verified guest only):**
+
+- `booking_reference` — the 8-character uppercased public support code
+- `villa` — villa name (`"Villa Byblos"` / `"Villa Mechmech"`)
+- `check_in` / `check_out` — `YYYY-MM-DD` strings, never re-parsed with JS Date
+- `booking_view_url` — the signed `/booking/view/[token]` URL minted by [lib/butler/booking-view-link.ts](../../lib/butler/booking-view-link.ts); `null` when `BOOKING_ACTION_SECRET` is missing
+- `checkin_guidance` — either operator-configured text from the `butler_checkin_guidance` settings key (`configured: true`), or a polite placeholder (`configured: false`) saying detailed guidance will be shared closer to arrival. The operator manages this row by inserting into the existing `settings` table; no schema change.
+- `location_access_note` — an explicit, fixed safety note: exact location, gate codes, and smart-lock access are NOT shared by the Butler today and remain a Phase 16D approval-gated concern.
+- `safe_message` — a pre-composed sentence echoing the stay summary plus the guidance/access disclosure, ready for the bot to send verbatim.
+
+**Always blocked (this endpoint returns `null` for these on every branch, and the orchestrator never surfaces them upstream):**
+
+- smart-lock PIN, gate code, door code, or any access credential (Phase 16D)
+- exact GPS coordinates or street address (Phase 16D)
+- payment links, payment ledger, payment status detail (Phase 16B / future Butler payment surface)
+- admin notes, internal labels, `follow_up_status`, `raw_payload` (admin-only via `/admin/leads`)
+- internal booking IDs (only the public 8-char reference is exposed)
+- signed confirm/cancel tokens (admin email surface only)
+- email or phone fields belonging to anyone
+
+**Refusal branches the bot must honor:**
+
+| `recommended_next_action` | Guest situation | What the bot does |
+|---|---|---|
+| `deliver_confirmed_guest_info` | confirmed + identity established | Echo `safe_message`; display `checkin_guidance.message` + `location_access_note` as separate sections; the `booking_view_url` is the guest's read-only window. |
+| `wait_for_confirmation` | pending + identity established | Echo `safe_message`; do NOT surface villa/dates/URL even if the bot has them from `/api/butler/identify` — this endpoint deliberately withholds them on pending. |
+| `acknowledge_cancellation` | cancelled booking | Echo `safe_message`; offer to put the team in touch; do NOT mint or echo a view link. |
+| `request_identity_proof` | reference matched, no proof | Echo `safe_message`; collect the next guest message as the identity proof (email OR full name). |
+| `ask_for_booking_reference` | no signals at all | Echo `safe_message`; collect the next guest message as the reference. |
+| `ask_for_alternative_identifier` | reference not found | Echo `safe_message`; collect an alternative reference. |
+| `escalate_human` | ambiguous / verification failed / other unsafe | Echo `safe_message`; stop bot replies about this booking; operator picks up from [`/admin/leads`](../../app/admin/leads/page.tsx). |
+
+**Future location/PIN endpoint requirements** — when the operator team is ready to deliver exact arrival details, the future endpoint must, at minimum:
+
+- live under a new path (do NOT widen `/api/butler/confirmed-guest-info` to return PIN / GPS — that breaks the boundary this playbook locks in today);
+- be gated on the same identity-orchestrator pre-check used here, plus an additional explicit approval flag persisted on the booking row (e.g. `arrival_ready_at`, gated by admin action — schema change requires its own approval gate);
+- enforce a time window (no early disclosure — access credentials are time-bound to the arrival window);
+- single-use or short-lived credentials only;
+- never quote PINs in clear text in WhatsApp; if PINs ship, the Butler must send a deep link to the booking-view page (or future arrival-page) where the guest sees the PIN behind the same signed-token gate as the rest of the booking;
+- never log the PIN or arrival coordinates to any guest-visible field, lead admin_notes, or `raw_payload`;
+- explicit DECISIONS_LOG entry and BUTLER_PLAYBOOK update before any code lands.
+
+**Operator note — configuring `butler_checkin_guidance`:** insert one row into the existing `settings` table with key `butler_checkin_guidance` and the guest-safe guidance text as `value`. The endpoint will pick it up on the next call and switch `checkin_guidance.configured` from `false` to `true`. To unconfigure, delete the row or clear the value. No deployment required; no schema change. Length is capped server-side at 4000 characters with a defensive ellipsis truncate.
 
 **Identity verification options recognized today:**
 
