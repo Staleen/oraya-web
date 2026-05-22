@@ -148,6 +148,59 @@ WhatChimp captures guest details in labels and custom fields during the conversa
 - For website-originated completions from WhatsApp, Oraya now attempts to back-link that lead automatically after successful booking creation. Operators should still verify the link during closeout and use manual patching only as a fallback.
 - The AI Butler must **never** tell a guest "your booking is confirmed" because a lead was created. The Butler may only say something like *"I've passed your details to the Oraya team - someone will follow up."*
 
+## WhatsApp identity orchestration (Phase 16A)
+
+Every Butler turn that needs to know "which booking is this guest?" goes through one call to `POST /api/butler/identify` (Butler-secret-guarded). The bot does **not** branch on its own; it passes the signals it has, reads `recommended_next_action` from the response, and echoes only the response's `safe_message`.
+
+Request body (all fields optional, capped lengths):
+
+```json
+{
+  "subscriber_id":     "#LEAD_USER_SUBSCRIBER_ID#",
+  "chat_id":           "#LEAD_USER_CHAT_ID#",
+  "booking_reference": "#oraya_booking_reference#",
+  "identity_proof":    "#oraya_identity_proof#"
+}
+```
+
+`phone` is also accepted but is only useful for future Butler channels (Telegram, Messenger, direct WhatsApp Cloud API) — **WhatChimp does not expose the sender phone as a variable**, so the WhatsApp v2 flow does not send it. `chat_id` is captured for ops correlation only; the orchestrator never uses it as a lookup key. The legacy `identity_proof_email` field is accepted as a transitional alias while the v1 flow is migrated.
+
+Priority order (enforced server-side in [lib/butler/identity-orchestrator.ts](../../lib/butler/identity-orchestrator.ts)):
+
+1. **Subscriber continuity (primary, WhatChimp).** `subscriber_id` → `whatsapp_leads.whatsapp_subscriber_id` → `linked_booking_id` → `bookings`. On a hit, identity is implicit; the response surfaces `villa` / `check_in` / `check_out`; `recommended_next_action` is `reply_with_status` (active stays) or `acknowledge_cancellation` (cancelled).
+2. **Phone continuity (future channels).** Same shape but keyed on `whatsapp_leads.phone`. No-op on the WhatChimp channel today.
+3. **Booking-reference fallback + identity-proof gate.** No continuity match → the bot asks for the 8-character reference. When the guest sends it, the orchestrator resolves it via [lib/booking-reference.ts](../../lib/booking-reference.ts). Pending / confirmed matches gate disclosure behind an explicit identity proof — accepted as **either the email or the full name** on the booking.
+4. **Human escalation.** Ambiguous reference, failed identity proof, or any unsafe state — the response sets `recommended_next_action="escalate_human"` and the bot stops auto-replying.
+
+Bot-facing actions and the only behaviors the Butler may exhibit:
+
+| `recommended_next_action` | What the bot does |
+|---|---|
+| `ask_for_booking_reference` | Send `safe_message`. Collect the next guest message as the reference. |
+| `ask_for_alternative_identifier` | Send `safe_message`. Collect the next guest message as a new reference. |
+| `request_identity_proof` | Send `safe_message`. Collect the next guest message as the identity proof (email OR full name). |
+| `reply_with_status` | Use `villa` / `check_in` / `check_out` / `booking_status` in the reply. Send `safe_message` plus normal hospitality follow-up. |
+| `acknowledge_cancellation` | Send `safe_message`. Do NOT surface villa / dates (the response withholds them). Hand off if the guest pushes for more. |
+| `escalate_human` | Send `safe_message`. Stop bot replies about this booking. Operator picks up from [`/admin/leads`](../../app/admin/leads/page.tsx). |
+
+**Sensitive-disclosure rule (non-negotiable).** When `villa` / `check_in` / `check_out` are `null` in the orchestrator response, the bot must **never** echo a previously-cached value for those fields, even if a prior turn had them populated. The orchestrator is the single source of truth per turn; cache invalidation is by re-call, not by guesswork.
+
+**Identity verification options recognized today:**
+
+- **Subscriber / phone continuity** — implicit when a primary path succeeds. The bot does not ask for additional proof.
+- **Booking identity-proof match** — explicit. The bot prompts for either the email or the full name on the booking. The orchestrator normalizes both sides (lowercased, trimmed, internal whitespace collapsed to single spaces) and runs an exact-after-normalization comparison against `bookings.guest_email`, `bookings.guest_name`, and (when the booking is linked to a member) the member's `auth.users.email` and `members.full_name`. A match on any of these four equals `verified`; mismatch → `escalate_human` (the bot does NOT loop on retries). Substring / fuzzy / startsWith matching is intentionally **not** used — first names alone would otherwise verify against every other guest with the same first name.
+- **Manual escalation** — the only valid path for everything else.
+
+**Never** verify identity by asking for: phone number, address, ID number, date of birth, last 4 of payment instrument, or any other sensitive credential. The current options are the complete allowed set; expansion requires an approved task.
+
+**Sensitive fields the orchestrator NEVER returns** (so the bot can never echo them): phone numbers other than the inbound one, email addresses, payment ledger / status / link, exact location, smart-lock PIN, admin notes, raw_payload, signed tokens. These are layered concerns owned by future phases (16B / 16D) and are deliberately walled off from the identity surface.
+
+**Schema dependency.** The subscriber-id path requires [sql/phase-16a3-whatsapp-subscriber-identity.sql](../../sql/phase-16a3-whatsapp-subscriber-identity.sql) to be applied in Supabase (adds `whatsapp_subscriber_id` + `whatsapp_chat_id` columns + an index on `whatsapp_subscriber_id`). Until applied, the orchestrator silently falls through to the phone / reference paths, and the lead ingest route retries inserts without the new fields — safe but not optimal. The admin lead routes degrade the same way.
+
+**WhatChimp flow JSON.** The shipped flow is [whatsapp-bot_guest-identification_v2.json](../../) (placeholder-free; operator wires HTTP API id / custom field ids / label ids via the WhatChimp UI after import). It calls `POST /api/butler/identify` at three points: after the welcome step (continuity check, no `booking_reference` yet), after the booking-reference step, and after the identity-proof step.
+
+**Out-of-scope follow-up.** The booking-request flow (whatsapp-bot_1846656_*) does **not** yet send `subscriber_id` to `POST /api/butler/lead`. Until that flow is updated separately, new leads created via the booking-request path won't be auto-resumable by subscriber id from WhatChimp — the orchestrator will fall through to the reference + identity-proof gate. Tracked as a follow-up; the schema and backend already accept the field, only the WhatChimp-side wiring is missing.
+
 ## Forbidden AI behavior
 
 The Butler must **never**:

@@ -47,6 +47,10 @@ export interface WhatsappLeadAdminRow {
   labels: string[];
   linked_booking_id: string | null;
   admin_notes: string | null;
+  /** WhatChimp subscriber id — primary continuity key (Phase 16A.3). */
+  whatsapp_subscriber_id: string | null;
+  /** WhatChimp chat id — diagnostic only, never part of the primary lookup. */
+  whatsapp_chat_id: string | null;
 }
 
 /** Subset of columns the admin PATCH endpoint is allowed to write. v1 keeps
@@ -59,7 +63,14 @@ export interface WhatsappLeadAdminPatch {
   linked_booking_id?: string | null;
 }
 
-/** Normalized insert row written by `POST /api/butler/lead`. */
+/** Normalized insert row written by `POST /api/butler/lead`.
+ *
+ *  `whatsapp_subscriber_id` and `whatsapp_chat_id` are populated when the
+ *  Butler is on the WhatChimp channel (or any future channel exposing the
+ *  same hashtag variables). The DB columns are added by
+ *  `sql/phase-16a3-whatsapp-subscriber-identity.sql` and are nullable +
+ *  unindexed-on-chat — `whatsapp_chat_id` is purely diagnostic; the
+ *  identity orchestrator never looks it up. */
 export interface NormalizedLeadInput {
   source: string;
   phone: string | null;
@@ -76,15 +87,18 @@ export interface NormalizedLeadInput {
   labels: string[];
   raw_payload: Record<string, unknown>;
   linked_booking_id: string | null;
+  whatsapp_subscriber_id: string | null;
+  whatsapp_chat_id: string | null;
 }
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
-const MAX_SHORT_FIELD_LEN = 200;
-const MAX_LONG_FIELD_LEN  = 4000;
-const MAX_LABEL_LEN       = 80;
-const MAX_LABELS          = 32;
+const MAX_SHORT_FIELD_LEN     = 200;
+const MAX_LONG_FIELD_LEN      = 4000;
+const MAX_LABEL_LEN           = 80;
+const MAX_LABELS              = 32;
+const MAX_SUBSCRIBER_FIELD_LEN = 128;
 
 function readOptionalString(
   value: unknown,
@@ -213,6 +227,33 @@ export function normalizeLeadInput(body: unknown): NormalizedLeadInput | null {
   const addonsInterest   = pickFirstString(body, ["oraya_addons_interest", "addons_interest"], MAX_LONG_FIELD_LEN);
   const specialRequests  = pickFirstString(body, ["oraya_special_requests", "special_requests"], MAX_LONG_FIELD_LEN);
 
+  // WhatChimp delivers these as hashtag variables (#LEAD_USER_SUBSCRIBER_ID#,
+  // #LEAD_USER_CHAT_ID#). The bot is free to remap them to any of the
+  // aliases below; we accept all of them so flow re-imports do not break
+  // the ingest contract.
+  const subscriberId     = pickFirstString(
+    body,
+    [
+      "oraya_subscriber_id",
+      "subscriber_id",
+      "lead_user_subscriber_id",
+      "whatsapp_subscriber_id",
+      "whatchimp_subscriber_id",
+    ],
+    MAX_SUBSCRIBER_FIELD_LEN,
+  );
+  const chatId           = pickFirstString(
+    body,
+    [
+      "oraya_chat_id",
+      "chat_id",
+      "lead_user_chat_id",
+      "whatsapp_chat_id",
+      "whatchimp_chat_id",
+    ],
+    MAX_SUBSCRIBER_FIELD_LEN,
+  );
+
   const normalizedDates = sanitizeNormalizedDateRange(
     readOptionalIsoDate(body.normalized_check_in) ??
       readOptionalIsoDate(body.oraya_check_in) ??
@@ -253,6 +294,8 @@ export function normalizeLeadInput(body: unknown): NormalizedLeadInput | null {
     labels,
     raw_payload: rawPayload,
     linked_booking_id: linkedBookingId,
+    whatsapp_subscriber_id: subscriberId,
+    whatsapp_chat_id: chatId,
   };
 }
 
