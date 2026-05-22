@@ -16,6 +16,26 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-05-22 - Credit Libanais provider compatibility is widened at the schema boundary while the adapter stays placeholder-only
+
+**Decision:** Oraya now treats `credit_libanais` as a first-class persisted `bookings.payment_link_provider` value, but the Credit Libanais / MPGS adapter remains an explicit placeholder until the bank delivers the real hosted-checkout contract. The additive migration `sql/phase-16b4-credit-libanais-provider-compat.sql` is the human-gated schema-compatibility step that widens the `payment_link_provider` allow-list to `manual | whish | stripe | credit_libanais` and keeps `stripe` only for backward-compatible dev/test rows. Runtime readiness must report four things clearly: whether the selected provider is configured, whether it is actually implemented vs placeholder-only, a guest-safe setup message, and an admin-facing missing-requirements list that never exposes raw secret values. `/admin/settings` is now the operator surface for that non-secret readiness state, while credentials remain env-only.
+
+**Reason:** after the provider refactor, the code correctly selected Credit Libanais as the only approved production provider, but two readiness gaps remained. First, the database constraint still prevented persisting `credit_libanais` in `bookings.payment_link_provider`, which would have forced another refactor the moment the bank contract arrived. Second, the runtime only reported a coarse guest-safe `online_checkout_ready` boolean/message, which was not enough for operators to tell the difference between "envs missing", "placeholder adapter", and "real bank contract still pending". Widening the persisted provider allow-list now and adding explicit non-secret readiness reporting keeps the codebase ready for the bank specs without faking checkout or leaking secrets.
+
+**Impact:**
+
+- New human-gated migration: [sql/phase-16b4-credit-libanais-provider-compat.sql](../../sql/phase-16b4-credit-libanais-provider-compat.sql). Idempotent; safe to re-run; not auto-applied. Recreates the `bookings.payment_link_provider` check constraint to include `credit_libanais` while preserving `manual`, `whish`, and `stripe` for backward compatibility. No other payment fields are changed.
+- [lib/payments/provider.ts](../../lib/payments/provider.ts) now treats `credit_libanais` as a valid persisted provider and adds a shared readiness contract for hosted-checkout adapters.
+- [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) now models the exact placeholder contract the real implementation must satisfy: merchant id, gateway URL, session-creation endpoint, auth/signing method, callback verification method, provider session id field, currency/settlement behavior, and sandbox/live mode. It still never fakes a successful checkout or webhook.
+- [lib/payments/runtime.ts](../../lib/payments/runtime.ts) now separates guest-safe public readiness from admin-safe readiness, and [app/api/payments/readiness/route.ts](../../app/api/payments/readiness/route.ts) exposes the latter only behind admin auth.
+- [app/admin/settings/page.tsx](../../app/admin/settings/page.tsx) and [components/admin/PaymentSettingsSection.tsx](../../components/admin/PaymentSettingsSection.tsx) now show the non-secret provider readiness summary and missing-requirements list directly in the payment settings UI. Secrets remain env-only and are never written to Supabase.
+
+**Reversible?:** yes. The migration can be superseded by a later constraint rewrite, and the readiness route/UI can be reverted without touching booking creation, pricing, overlap protection, or Butler surfaces. The one thing that should not be reversed casually is the "no secret values in DB or readiness responses" boundary.
+
+**Supersedes:** refines the 2026-05-22 entry "Hosted payment execution is provider-agnostic; Credit Libanais / MPGS is the production target" by completing the provider-schema compatibility step and locking the non-secret readiness contract needed before the bank specs land.
+
+---
+
 ## 2026-05-22 - Guest-facing payment behavior is now settings-driven before Credit Libanais execution goes live
 
 **Decision:** until the real Credit Libanais / MPGS contract is implemented, Oraya's website payment behavior is controlled by guest-safe admin settings rather than hardcoded Step 3 assumptions. `/admin/settings` now owns the public payment mode (`request_only`, `manual_payment`, `online_payment`, `hybrid`), minimum deposit percentage, whether full payment and custom deposit are offered, guest-visible manual payment rails, guest payment instructions, provider display name, and whether online payment is enabled guest-side. `/book` Step 3 must present two Reserve choices: `Pay now and reserve` and `Submit booking request and pay later`. If the configured hosted-checkout provider is not truly ready, the pay-now path is blocked in the UI with clear setup messaging rather than pretending checkout is live or falling into a server error.

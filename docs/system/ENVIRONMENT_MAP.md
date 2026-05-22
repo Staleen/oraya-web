@@ -193,6 +193,7 @@ Public vs server-only:
 - **Configure in Vercel:** yes — Production + Preview, plus Development if you want local parity.
 - **Risk if missing:** in `NODE_ENV=production`, checkout fails closed with a configuration error and no provider is selected. Outside production, runtime defaults to Stripe so local/dev can still exercise the hosted checkout flow intentionally.
 - **Operational note:** Credit Libanais / MPGS is the only approved Oraya production provider. `PAYMENT_PROVIDER=stripe` is accepted only outside production for isolated local/dev testing.
+- **Admin/runtime note:** non-secret readiness is surfaced to admins via `/api/payments/readiness` and `/admin/settings`; raw env values are never returned there.
 
 ### `CREDIT_LIBANAIS_MERCHANT_ID`
 
@@ -201,7 +202,7 @@ Public vs server-only:
 - **Required:** local optional until the bank contract is implemented · preview yes when Credit Libanais is enabled · production yes when Credit Libanais is enabled.
 - **Where to get it:** Credit Libanais / MPGS merchant onboarding package.
 - **Configure in Vercel:** yes — Production + Preview, marked Sensitive.
-- **Risk if missing:** the Credit Libanais adapter cannot move beyond placeholder status.
+- **Risk if missing:** the Credit Libanais adapter cannot move beyond placeholder status. `/api/payments/readiness` reports "Merchant ID is not configured" to admins without exposing the value.
 
 ### `CREDIT_LIBANAIS_SECRET`
 
@@ -210,7 +211,7 @@ Public vs server-only:
 - **Required:** local optional until the bank contract is implemented · preview yes when Credit Libanais is enabled · production yes when Credit Libanais is enabled.
 - **Where to get it:** exact value type still depends on the bank contract. It may be an API key, shared secret, certificate reference, or signature secret.
 - **Configure in Vercel:** yes — Production + Preview, marked Sensitive.
-- **Risk if missing:** Oraya cannot safely authenticate hosted-checkout creation or verify callbacks with the bank gateway.
+- **Risk if missing:** Oraya cannot safely authenticate hosted-checkout creation or verify callbacks with the bank gateway. Admin readiness surfaces report the missing requirement generically ("Gateway secret/key is not configured") without exposing env names or values.
 
 ### `CREDIT_LIBANAIS_GATEWAY_URL`
 
@@ -219,7 +220,7 @@ Public vs server-only:
 - **Required:** local optional until the bank contract is implemented · preview yes when Credit Libanais is enabled · production yes when Credit Libanais is enabled.
 - **Where to get it:** exact bank gateway base URL or MPGS endpoint supplied by Credit Libanais.
 - **Configure in Vercel:** yes — Production + Preview.
-- **Risk if missing:** the adapter cannot know where to create hosted sessions or verify gateway responses.
+- **Risk if missing:** the adapter cannot know where to create hosted sessions or verify gateway responses. The adapter remains placeholder-only until the bank also confirms the specific session-creation endpoint.
 
 ### `CREDIT_LIBANAIS_WEBHOOK_SECRET`
 
@@ -228,7 +229,7 @@ Public vs server-only:
 - **Required:** local optional until the bank callback contract is implemented · preview yes when Credit Libanais is enabled · production yes when Credit Libanais is enabled.
 - **Where to get it:** exact callback verification secret or signature material supplied by the bank.
 - **Configure in Vercel:** yes — Production + Preview, marked Sensitive.
-- **Risk if missing:** Oraya cannot safely trust any Credit Libanais payment callback.
+- **Risk if missing:** Oraya cannot safely trust any Credit Libanais payment callback. The admin readiness surface reports the missing verification secret without exposing the real value.
 
 ### `STRIPE_SECRET_KEY`
 
