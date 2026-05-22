@@ -115,6 +115,7 @@ All routes verified against the current repo. Locked APIs are marked **locked** 
 | `/api/butler/prefill` | GET | Public short-lived token-auth prefill hydration for `/book?h=...` | token-auth |
 | `/api/butler/booking-lookup` | POST | Reference-based booking lookup (returns safe-state envelope, never sensitive fields) | secret-guarded |
 | `/api/butler/identify` | POST | WhatsApp identity orchestration — phone continuity → reference fallback → identity-verification gate, one call per turn | secret-guarded |
+| `/api/butler/confirmed-guest-info` | POST | Confirmed-guest-only info boundary — narrow Phase 16A allow-list (reference / villa / dates / view URL / check-in guidance / location-access safety note); refuses pending / cancelled / unverified | secret-guarded |
 | `/api/payments/checkout` | POST | Create a hosted checkout session for an existing booking via the selected provider adapter | payment |
 | `/api/payments/webhook/[provider]` | POST | Verified hosted-payment callback reconciliation for the selected provider | payment |
 | `/api/payments/webhook/stripe` | POST | Stripe dev/test compatibility shim onto the generic hosted-payment callback handler | payment |
@@ -175,6 +176,7 @@ The WhatsApp AI Butler (WhatChimp today; vendor-agnostic by design) talks to Ora
   - `/api/butler/availability` GET - merged unavailable ranges plus heated-pool carryover.
   - `/api/butler/availability` POST - yes/no availability for a specific stay.
   - `/api/butler/normalize-dates` - natural-language date normalization helper.
+- **Confirmed-guest info boundary (shipped).** `POST /api/butler/confirmed-guest-info` is the secret-guarded surface that returns the Phase 16A allow-list of fields a confirmed, identity-established guest is permitted to receive: public booking reference, villa name, check-in/check-out dates, signed `/booking/view/[token]` URL, high-level `checkin_guidance` (operator-managed via the `butler_checkin_guidance` settings key — placeholder when unset), and an explicit `location_access_note` that exact location, gate codes, and smart-lock access are not yet provided and remain a Phase 16D approval-gated concern. Reuses `orchestrateButlerIdentity` for the identity decision and refuses pending / cancelled / unverified bookings without surfacing any sensitive structured field. Never returns: PIN, exact GPS, payment links, admin notes, internal IDs.
 - **Write endpoints (shipped).**
   - `/api/butler/lead` - persists a WhatsApp lead into `whatsapp_leads`. The lead is **not** a booking. `prefill_url` is additive and best-effort only: if `BUTLER_PREFILL_SECRET` is missing, lead capture still succeeds and the handoff is omitted. WhatChimp should use the returned `prefill_url` as the website continuation link; a static `/book` URL is only a fallback.
   - `/api/butler/prefill` - public short-lived prefill hydration. Returns only `villa`, normalized `check_in`, normalized `check_out`, `sleeping_guests`, `full_name`, and `source`.

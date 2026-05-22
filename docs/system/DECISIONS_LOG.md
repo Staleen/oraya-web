@@ -16,6 +16,46 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-05-23 - Phase 16A confirmed-guest info boundary endpoint (`POST /api/butler/confirmed-guest-info`)
+
+**Decision:** introduce a dedicated, secret-guarded Butler endpoint, `POST /api/butler/confirmed-guest-info`, whose entire purpose is to materialize the narrow allow-list of fields a *confirmed, identity-established* guest is permitted to receive in Phase 16A. The endpoint reuses `orchestrateButlerIdentity` for identity (subscriber-id → phone → reference + identity-proof gate → escalation), then narrows further on `booking_status === "confirmed"`. Pending / cancelled / not-found / ambiguous / unverified all refuse safely with a `safe_message` and a non-deliver `recommended_next_action`; the structured sensitive fields (`villa`, `check_in`, `check_out`, `booking_view_url`, `checkin_guidance`, `location_access_note`) are explicitly `null` on every refusal branch.
+
+The allow-list returned on `deliver_confirmed_guest_info` is and remains exactly:
+
+- `booking_reference` — the 8-character uppercased public support code
+- `villa` — villa name
+- `check_in` / `check_out` — `YYYY-MM-DD` strings (never JS-Date-parsed)
+- `booking_view_url` — the signed `/booking/view/[token]` URL minted by [lib/butler/booking-view-link.ts](../../lib/butler/booking-view-link.ts)
+- `checkin_guidance` — operator-managed text read from the existing `settings` table under the new `butler_checkin_guidance` key; safe placeholder when the key is missing/blank
+- `location_access_note` — a fixed safety note stating that exact location / gate codes / smart-lock PINs are not provided today and require a future approved configuration
+
+The endpoint NEVER returns: smart-lock PIN, gate code, door access code, exact GPS / street address, payment links / status / ledger, admin notes, internal labels, follow-up status, `raw_payload`, internal booking IDs, signed confirm/cancel tokens, or guest/owner email/phone.
+
+**Reason:** the Butler playbook already locks in a clear sensitive-disclosure boundary, but until today there was no single endpoint that materialized "what a confirmed verified guest is allowed to receive right now." WhatChimp was instead expected to compose that view by stitching together fields from `/api/butler/identify` plus ad-hoc branching, which (a) put policy in the bot prompt rather than the backend, (b) risked drift between WhatsApp turns when the orchestrator added new structured fields (as it did in the 2026-05-22 `booking_view_url` enrichment), and (c) gave no canonical home for the location/access "future-approved-configuration" safety note. A dedicated backend endpoint makes the boundary enforceable in code, leaves the bot prompt thin, and creates the right shape for the Phase 16D location/PIN endpoint to slot in beside without widening this surface.
+
+The audit explicitly considered and rejected:
+
+- **Widening `/api/butler/identify` to return `checkin_guidance` + `location_access_note`.** Rejected — `/api/butler/identify` is the per-turn identity decision point, called both before and after the guest supplies the booking reference / identity proof. Bundling Phase 16A guest-info fields onto it would (a) inflate the response shape on every continuity-check turn even when the guest has not yet been asked for anything, and (b) blur the boundary between "who is this guest?" and "what may we tell them?". A dedicated endpoint keeps each Butler call's contract single-purpose.
+- **Returning `checkin_guidance` even for pending bookings.** Rejected — until the booking is confirmed, the operational arrival setup is not finalized, so any guidance shown could become incorrect before the stay. The endpoint deliberately withholds even the placeholder guidance on `not_confirmed_yet`; the `safe_message` is enough.
+- **Reading guidance from `bookings.checkin_guidance` (per-booking).** Rejected for v1 — that would require a schema change (locked) and per-booking operator authoring. The existing `settings` key/value table is the right venue for villa-level guidance: one operator-managed row, zero schema change, immediate rollout.
+- **Inlining the configured guidance text into the `safe_message`.** Rejected — when the operator configures multi-paragraph guidance, embedding it would produce a single oversized WhatsApp message. The structured `checkin_guidance.message` field is the dual-channel format; the `safe_message` references its availability without quoting it.
+- **Returning villa/dates + URL on the pending branch under "identity is established."** Rejected — even though the identity orchestrator already surfaces those for verified-pending, this endpoint's contract is stricter ("confirmed-guest info"). Surfacing the same fields here on pending would conflate "you have been identified" with "your arrival is happening" — operationally different states.
+- **Auto-applying a new settings row at deploy time.** Rejected — no schema mutation, no seed write; until the human operator inserts `butler_checkin_guidance`, the response surfaces the safe placeholder. This matches the repo's standing rule that operational content is operator-managed, never auto-applied.
+
+**Impact:**
+
+- [app/api/butler/confirmed-guest-info/route.ts](../../app/api/butler/confirmed-guest-info/route.ts) — new secret-guarded `POST` route. Mirrors the auth contract (503/401/400/200) and body-shape conventions used by `/api/butler/identify` and `/api/butler/booking-lookup`. Inputs (`subscriber_id`, `chat_id`, `phone`, `booking_reference`, `identity_proof`, transitional `identity_proof_email`) are capped strings, identical to `/api/butler/identify`. The route is a thin policy layer on top of `orchestrateButlerIdentity`.
+- [docs/system/ARCHITECTURE.md](ARCHITECTURE.md) — API surface table row added; Butler-flow section gains a "Confirmed-guest info boundary (shipped)" bullet.
+- [docs/system/BUTLER_PLAYBOOK.md](BUTLER_PLAYBOOK.md) — new "Confirmed-guest info boundary (Phase 16A)" section documents the allow-list, the blocked fields, the refusal branch table, the operator-managed `butler_checkin_guidance` settings key, and the requirements for the future location/PIN endpoint (separate path, additional approval flag, time-windowed, single-use credentials, no clear-text PIN in WhatsApp, no logging of access credentials).
+- No schema changes. No new env vars (the helper reuses `BUTLER_WEBHOOK_SECRET` + `BOOKING_ACTION_SECRET` + `NEXT_PUBLIC_SITE_URL`). No new dependencies. No locked-API touches. No payment-file touches. No booking-creation / pricing / overlap / WhatChimp flow export changes.
+- `tsc --noEmit` clean; `npm run build` clean.
+
+**Reversible?:** yes. Revert the single new route file + the three doc edits; the endpoint is removed cleanly. The `settings` table is untouched (the route only reads from it). No data migrated. No tokens minted that need invalidation (the issued view tokens use the existing 72h TTL HMAC).
+
+**Supersedes:** none. This decision extends the 2026-05-22 "Butler identity response enriched with booking_view_url" entry by adding the dedicated confirmed-guest surface; the identity orchestrator's behavior, the safe_message enrichment, the booking-view URL minting, and the sensitive-disclosure rule all carry forward unchanged.
+
+---
+
 ## 2026-05-22 - Guest-facing payment behavior is now settings-driven before Credit Libanais execution goes live
 
 **Decision:** until the real Credit Libanais / MPGS contract is implemented, Oraya's website payment behavior is controlled by guest-safe admin settings rather than hardcoded Step 3 assumptions. `/admin/settings` now owns the public payment mode (`request_only`, `manual_payment`, `online_payment`, `hybrid`), minimum deposit percentage, whether full payment and custom deposit are offered, guest-visible manual payment rails, guest payment instructions, provider display name, and whether online payment is enabled guest-side. `/book` Step 3 must present two Reserve choices: `Pay now and reserve` and `Submit booking request and pay later`. If the configured hosted-checkout provider is not truly ready, the pay-now path is blocked in the UI with clear setup messaging rather than pretending checkout is live or falling into a server error.
