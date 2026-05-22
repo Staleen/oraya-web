@@ -20,6 +20,7 @@ import {
   serializePaymentPublicSettings,
   type PaymentPublicSettings,
 } from "@/lib/payments/settings";
+import type { HostedCheckoutAdminStatus } from "@/lib/payments/runtime";
 
 export default function AdminSettingsPage() {
   const { error, setError } = useAdminData();
@@ -44,6 +45,7 @@ export default function AdminSettingsPage() {
   const [paymentSettings, setPaymentSettings] = useState<PaymentPublicSettings>(
     DEFAULT_PAYMENT_PUBLIC_SETTINGS,
   );
+  const [paymentProviderStatus, setPaymentProviderStatus] = useState<HostedCheckoutAdminStatus | null>(null);
   const [paymentSaving, setPaymentSaving] = useState(false);
   const [paymentSaved, setPaymentSaved] = useState(false);
 
@@ -74,6 +76,13 @@ export default function AdminSettingsPage() {
         setPaymentSettings(parsePaymentPublicSettings(payment?.value ?? null));
       })
       .catch((e) => console.error("[admin] settings fetch error:", e));
+
+    fetch("/api/payments/readiness", adminApiFetchInit)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.status) setPaymentProviderStatus(d.status as HostedCheckoutAdminStatus);
+      })
+      .catch((e) => console.error("[admin] payment readiness fetch error:", e));
   }, []);
 
   async function saveWhatsapp() {
@@ -251,6 +260,7 @@ export default function AdminSettingsPage() {
 
       <PaymentSettingsSection
         value={paymentSettings}
+        providerStatus={paymentProviderStatus}
         onChange={(next) => {
           setPaymentSaved(false);
           setPaymentSettings(parsePaymentPublicSettings(next));

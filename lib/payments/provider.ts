@@ -7,11 +7,10 @@
  *    in sync with the current database constraint.
  * 2. The runtime hosted-checkout provider key selected via `PAYMENT_PROVIDER`.
  *
- * Today those layers are not identical: the repo docs lock the persisted
- * column to `manual | whish | stripe`, while the business target provider is
- * moving toward a Credit Libanais / MPGS hosted gateway. Until a later,
- * explicitly approved schema change widens the DB allow-list, new runtime
- * providers must not write invented `payment_link_provider` values.
+ * Today those layers are still intentionally distinct: the runtime hosted
+ * adapter surface may be broader than the persisted DB allow-list, but the
+ * persisted values must only include providers that the schema explicitly
+ * permits.
  */
 
 export const PAYMENT_LINK_STATUSES = [
@@ -31,10 +30,12 @@ export function isPaymentLinkStatus(value: unknown): value is PaymentLinkStatus 
 
 /**
  * Persisted provider values stored on `bookings.payment_link_provider`.
- * Keep this aligned with the current database allow-list until a human-approved
- * migration widens it.
+ *
+ * `stripe` remains allowed for backward compatibility with older dev/test rows.
+ * `credit_libanais` is now included so the production-target bank gateway can
+ * persist its provider key once the official contract is implemented.
  */
-export const PAYMENT_LINK_PROVIDERS = ["manual", "whish", "stripe"] as const;
+export const PAYMENT_LINK_PROVIDERS = ["manual", "whish", "stripe", "credit_libanais"] as const;
 
 export type PaymentLinkProvider = (typeof PAYMENT_LINK_PROVIDERS)[number];
 
@@ -54,6 +55,10 @@ export type HostedCheckoutProviderKey = (typeof HOSTED_CHECKOUT_PROVIDER_KEYS)[n
 export function isHostedCheckoutProviderKey(value: unknown): value is HostedCheckoutProviderKey {
   return typeof value === "string" && (HOSTED_CHECKOUT_PROVIDER_KEYS as readonly string[]).includes(value);
 }
+
+export const HOSTED_CHECKOUT_ENVIRONMENTS = ["sandbox", "live", "unknown"] as const;
+
+export type HostedCheckoutEnvironment = (typeof HOSTED_CHECKOUT_ENVIRONMENTS)[number];
 
 export const PAYMENT_CURRENCIES = ["USD", "LBP"] as const;
 
@@ -130,6 +135,16 @@ export type WebhookVerificationResult =
   | { ok: true; event: PaymentProviderEvent }
   | { ok: false };
 
+export interface HostedCheckoutProviderReadiness {
+  configured: boolean;
+  implemented: boolean;
+  checkout_ready: boolean;
+  environment: HostedCheckoutEnvironment;
+  guest_message: string;
+  admin_message: string;
+  missing_requirements: string[];
+}
+
 export class PaymentProviderConfigurationError extends Error {
   readonly statusCode: number;
 
@@ -160,10 +175,14 @@ export interface HostedCheckoutProvider {
   readonly guest_setup_message: string | null;
   /**
    * Value safe to persist into `bookings.payment_link_provider` under the
-   * current schema. Null means the runtime adapter exists but cannot yet be
-   * safely written to the DB without a later approved migration.
+   * current schema.
    */
   readonly persisted_link_provider: PaymentLinkProvider | null;
+  /**
+   * Safe runtime readiness summary for guest/admin UI. Never include raw
+   * secret values here.
+   */
+  getReadiness(): HostedCheckoutProviderReadiness;
 
   createCheckoutSession(input: CreateCheckoutSessionInput): Promise<CreateCheckoutSessionResult>;
   verifyWebhook(input: WebhookVerificationInput): Promise<WebhookVerificationResult>;

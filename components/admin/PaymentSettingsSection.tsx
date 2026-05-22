@@ -10,6 +10,7 @@ import {
   type PaymentMode,
   type PaymentPublicSettings,
 } from "@/lib/payments/settings";
+import type { HostedCheckoutAdminStatus } from "@/lib/payments/runtime";
 import { BORDER, CHARCOAL, GOLD, LATO, MUTED, SURFACE, WHITE, fieldStyle } from "./theme";
 
 const PAYMENT_MODE_LABELS: Record<PaymentMode, string> = {
@@ -30,12 +31,14 @@ function textareaStyle(): CSSProperties {
 
 export default function PaymentSettingsSection({
   value,
+  providerStatus,
   onChange,
   onSave,
   saving,
   saved,
 }: {
   value: PaymentPublicSettings;
+  providerStatus: HostedCheckoutAdminStatus | null;
   onChange: (next: PaymentPublicSettings) => void;
   onSave: () => void;
   saving: boolean;
@@ -69,6 +72,49 @@ export default function PaymentSettingsSection({
       <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "0 0 1.5rem", lineHeight: 1.7 }}>
         Configure the guest-facing payment experience and post-confirmation instructions. Gateway credentials stay in environment variables and are never stored here.
       </p>
+
+      <div
+        style={{
+          border: `0.5px solid ${BORDER}`,
+          padding: "14px 16px",
+          backgroundColor: "rgba(255,255,255,0.02)",
+          marginBottom: "1.5rem",
+        }}
+      >
+        <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, margin: "0 0 10px" }}>
+          Gateway readiness
+        </p>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "10px" }}>
+          <span style={{ fontFamily: LATO, fontSize: "11px", color: WHITE }}>
+            Provider: {providerStatus?.provider_display_name ?? "Not configured"}
+          </span>
+          <span style={{ fontFamily: LATO, fontSize: "11px", color: providerStatus?.configured ? "#6fcf8a" : "#e7b66d" }}>
+            {providerStatus?.configured ? "Configured" : "Not configured"}
+          </span>
+          <span style={{ fontFamily: LATO, fontSize: "11px", color: providerStatus?.implemented ? "#6fcf8a" : "#e7b66d" }}>
+            {providerStatus?.implemented ? "Implemented" : "Placeholder"}
+          </span>
+          <span style={{ fontFamily: LATO, fontSize: "11px", color: providerStatus?.checkout_ready ? "#6fcf8a" : "#e7b66d" }}>
+            {providerStatus?.checkout_ready ? "Checkout ready" : "Checkout blocked"}
+          </span>
+          <span style={{ fontFamily: LATO, fontSize: "11px", color: MUTED }}>
+            Mode: {providerStatus?.environment ?? "unknown"}
+          </span>
+        </div>
+        <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "0 0 10px", lineHeight: 1.6 }}>
+          {providerStatus?.admin_message ??
+            "Provider readiness is loading. Secrets remain environment-based and are never stored here."}
+        </p>
+        {providerStatus?.missing_requirements?.length ? (
+          <div style={{ display: "grid", gap: "6px" }}>
+            {providerStatus.missing_requirements.map((item) => (
+              <span key={item} style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, lineHeight: 1.5 }}>
+                - {item}
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </div>
 
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "16px", marginBottom: "1.5rem" }}>
         <div>
