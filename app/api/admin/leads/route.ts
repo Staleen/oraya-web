@@ -29,11 +29,17 @@ const NO_STORE_HEADERS = { "Cache-Control": "no-store" } as const;
 const DEFAULT_LIMIT = 100;
 const MAX_LIMIT     = 500;
 
-const SELECT_COLUMNS =
+const SELECT_COLUMNS_BASE =
   "id, created_at, updated_at, source, phone, name, request_type, villa, " +
   "check_in_text, check_out_text, normalized_check_in, normalized_check_out, " +
   "guest_count, addons_interest, special_requests, follow_up_status, labels, " +
   "linked_booking_id, admin_notes";
+
+// Phase 16A.3 — subscriber/chat identity columns. SELECT_COLUMNS_FULL
+// requires sql/phase-16a3-whatsapp-subscriber-identity.sql to be applied;
+// if the columns are missing the route degrades to SELECT_COLUMNS_BASE.
+const SELECT_COLUMNS_FULL =
+  `${SELECT_COLUMNS_BASE}, whatsapp_subscriber_id, whatsapp_chat_id`;
 
 function parseLimit(raw: string | null): number {
   if (!raw) return DEFAULT_LIMIT;
@@ -54,23 +60,37 @@ export async function GET(request: Request) {
   const limit           = parseLimit(url.searchParams.get("limit"));
 
   try {
-    let query = supabaseAdmin
-      .from("whatsapp_leads")
-      .select(SELECT_COLUMNS)
-      .order("created_at", { ascending: false })
-      .limit(limit);
+    const runQuery = async (selectColumns: string) => {
+      let query = supabaseAdmin
+        .from("whatsapp_leads")
+        .select(selectColumns)
+        .order("created_at", { ascending: false })
+        .limit(limit);
 
-    if (statusFilter && isFollowUpStatus(statusFilter)) {
-      query = query.eq("follow_up_status", statusFilter);
-    }
-    if (requestTypeFilt) {
-      query = query.eq("request_type", requestTypeFilt);
-    }
-    if (villaFilter) {
-      query = query.eq("villa", villaFilter);
+      if (statusFilter && isFollowUpStatus(statusFilter)) {
+        query = query.eq("follow_up_status", statusFilter);
+      }
+      if (requestTypeFilt) {
+        query = query.eq("request_type", requestTypeFilt);
+      }
+      if (villaFilter) {
+        query = query.eq("villa", villaFilter);
+      }
+      return query;
+    };
+
+    let { data, error } = await runQuery(SELECT_COLUMNS_FULL);
+
+    // Pre-migration fallback: subscriber/chat columns may not exist yet.
+    if (error && (error as { code?: string }).code === "42703") {
+      console.warn(
+        "[api/admin/leads] subscriber identity columns missing; falling back to base select. Apply sql/phase-16a3-whatsapp-subscriber-identity.sql to enable.",
+      );
+      const retry = await runQuery(SELECT_COLUMNS_BASE);
+      data = retry.data;
+      error = retry.error;
     }
 
-    const { data, error } = await query;
     if (error) {
       console.error("[api/admin/leads] query error:", error);
       return NextResponse.json(

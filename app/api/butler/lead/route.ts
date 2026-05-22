@@ -77,11 +77,43 @@ export async function POST(request: Request) {
   if (!normalized) return invalidRequest();
 
   try {
-    const { data, error } = await supabaseAdmin
+    const insertResp = await supabaseAdmin
       .from("whatsapp_leads")
       .insert(normalized)
       .select("id")
       .single();
+
+    let data = insertResp.data;
+    let error = insertResp.error;
+
+    // Pre-migration fallback: if Supabase reports the new subscriber columns
+    // are missing (sql/phase-16a3-whatsapp-subscriber-identity.sql not yet
+    // applied), retry once without them. The subscriber/chat ids stay in
+    // raw_payload regardless, so operators can still see the values; only
+    // the dedicated columns are temporarily skipped.
+    if (
+      error &&
+      (error as { code?: string }).code === "42703" &&
+      (normalized.whatsapp_subscriber_id !== null || normalized.whatsapp_chat_id !== null)
+    ) {
+      console.warn(
+        "[api/butler/lead] subscriber identity columns missing; retrying insert without them. Apply sql/phase-16a3-whatsapp-subscriber-identity.sql to enable.",
+      );
+      const {
+        whatsapp_subscriber_id: _droppedSubscriberId,
+        whatsapp_chat_id: _droppedChatId,
+        ...fallback
+      } = normalized;
+      void _droppedSubscriberId;
+      void _droppedChatId;
+      const retryResp = await supabaseAdmin
+        .from("whatsapp_leads")
+        .insert(fallback)
+        .select("id")
+        .single();
+      data = retryResp.data;
+      error = retryResp.error;
+    }
 
     if (error || !data?.id) {
       console.error("[api/butler/lead] insert error:", error);
