@@ -42,11 +42,6 @@ import { getMinimumDepositAmount, validatePaymentSelection } from "@/lib/payment
 import {
   DEFAULT_PAYMENT_PUBLIC_SETTINGS,
   fetchPublicPaymentSettings,
-  formatDepositPercentageLabel,
-  getManualRailLabel,
-  paymentModeAllowsPayNow,
-  paymentModePrefersManualFollowUp,
-  type GuestManualPaymentRail,
   type PaymentPublicRuntimeSettings,
 } from "@/lib/payments/settings";
 
@@ -961,7 +956,6 @@ function BookPageInner() {
   const [reserveCheckoutPath, setReserveCheckoutPath] = useState<ReserveCheckoutPath>("pay_later");
   const [paymentPurpose, setPaymentPurpose] = useState<"full" | "deposit">("deposit");
   const [customDepositAmount, setCustomDepositAmount] = useState("");
-  const [manualPaymentPreference, setManualPaymentPreference] = useState<GuestManualPaymentRail | "">("");
   const [paymentSettings, setPaymentSettings] = useState<PaymentPublicRuntimeSettings>({
     ...DEFAULT_PAYMENT_PUBLIC_SETTINGS,
     online_checkout_ready: false,
@@ -1939,20 +1933,31 @@ function BookPageInner() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  async function handleSubmit() {
+  async function handleSubmit(options?: { checkoutPath?: ReserveCheckoutPath; paymentPurpose?: "full" | "deposit" }) {
     if (step !== 3 || bookingPath !== "request") return;
     setError("");
     setLoading(true);
     try {
-      const attemptingOnlineCheckout = reserveCheckoutPath === "pay_now";
+      const selectedCheckoutPath = options?.checkoutPath ?? reserveCheckoutPath;
+      const selectedPaymentPurpose = options?.paymentPurpose ?? paymentPurpose;
+      const attemptingOnlineCheckout = selectedCheckoutPath === "pay_now";
       if (step3AmountTotal === null) {
         throw new Error("Booking total is unavailable for payment. Please review your stay details.");
       }
-      if (attemptingOnlineCheckout && !paymentSelection.ok) {
-        throw new Error(paymentSelection.error);
-      }
-      if (attemptingOnlineCheckout && !canStartOnlineCheckout) {
-        throw new Error(payNowBlockedReason || "Online payment setup is in progress.");
+
+      const selectedPaymentSelection = validatePaymentSelection({
+        purpose: selectedPaymentPurpose,
+        requestedAmount:
+          selectedPaymentPurpose === "deposit"
+            ? (customDepositAmount.trim()
+                ? Number(customDepositAmount)
+                : getMinimumDepositAmount(step3AmountTotal, paymentSettings.deposit_minimum_percentage))
+            : step3AmountTotal,
+        amountTotal: step3AmountTotal,
+        minimumDepositPercentage: paymentSettings.deposit_minimum_percentage,
+      });
+      if (attemptingOnlineCheckout && !selectedPaymentSelection.ok) {
+        throw new Error(selectedPaymentSelection.error);
       }
 
       if (guestMode) {
@@ -2008,29 +2013,25 @@ function BookPageInner() {
         const paymentPreferenceLines =
           bookingPath === "request"
             ? [
-                "[Payment Preference]",
+                "[Payment Protocol]",
                 `Checkout path: ${
                   attemptingOnlineCheckout
-                    ? "Pay now / reserve with payment"
-                    : "Submit booking request / pay later"
+                    ? "Pay now and reserve"
+                    : "Request booking and pay later"
                 }`,
                 attemptingOnlineCheckout
-                  ? paymentPurpose === "full"
+                  ? selectedPaymentPurpose === "full"
                     ? "Payment choice: Full payment on hosted checkout"
-                    : "Payment choice: Deposit payment on hosted checkout"
+                    : "Payment choice: Minimum deposit on hosted checkout"
                   : "Charge status: No charge collected on website at booking-request stage",
-                !attemptingOnlineCheckout && manualPaymentPreference
-                  ? `Preferred follow-up payment method: ${getManualRailLabel(manualPaymentPreference)}`
-                  : "Preferred follow-up payment method: Not specified",
-                !attemptingOnlineCheckout && paymentPurpose === "deposit"
-                  ? `Preferred deposit amount after confirmation: ${
-                      paymentSelection.ok ? formatUsd(paymentSelection.chargeAmount) : "Not provided"
+                attemptingOnlineCheckout
+                  ? "Supported online protocol targets: card/debit card, Apple Pay, Google Pay when enabled by the hosted provider"
+                  : "Future follow-up payment rails: OMT Pay, Western Union, Wish, bank transfer, or cash by Oraya confirmation",
+                attemptingOnlineCheckout
+                  ? `Amount to collect now: ${
+                      selectedPaymentSelection.ok ? formatUsd(selectedPaymentSelection.chargeAmount) : "Not available"
                     }`
-                  : !attemptingOnlineCheckout
-                    ? "Preferred deposit amount after confirmation: Not specified"
-                    : `Amount to collect now: ${
-                        paymentSelection.ok ? formatUsd(paymentSelection.chargeAmount) : "Not available"
-                      }`,
+                  : "Preferred follow-up payment method: Not specified in schema; operator confirms manually",
               ]
             : [];
         return [
@@ -2097,8 +2098,8 @@ function BookPageInner() {
             body: JSON.stringify({
               booking_id: bookingObj?.id,
               booking_token: bookingToken,
-              payment_purpose: paymentPurpose,
-              amount: paymentSelection.ok ? paymentSelection.chargeAmount : null,
+              payment_purpose: selectedPaymentPurpose,
+              amount: selectedPaymentSelection.ok ? selectedPaymentSelection.chargeAmount : null,
             }),
           });
           let checkoutJson: unknown;
@@ -2150,56 +2151,11 @@ function BookPageInner() {
   // ── Auth loading spinner ──────────────────────────────────────────────────
   const step3AmountTotal =
     step === 3 && bookingPath === "request" && estimatedTotal > 0 ? estimatedTotal : null;
-  const paymentModeAllowsImmediateCheckout = paymentModeAllowsPayNow(paymentSettings.active_payment_mode);
-  const paymentModeAllowsManualFollowUp = paymentModePrefersManualFollowUp(paymentSettings.active_payment_mode);
-  const hasPayNowOptionConfigured =
-    paymentModeAllowsImmediateCheckout &&
-    paymentSettings.online_payment_enabled &&
-    (paymentSettings.allow_full_payment || paymentSettings.allow_custom_deposit);
-  const canStartOnlineCheckout =
-    hasPayNowOptionConfigured && paymentSettings.online_checkout_ready;
-  const payNowBlockedReason = !paymentModeAllowsImmediateCheckout
-    ? "Online payment is not offered for this payment mode right now."
-    : !paymentSettings.online_payment_enabled
-      ? paymentSettings.online_checkout_message
-      : !paymentSettings.allow_full_payment && !paymentSettings.allow_custom_deposit
-        ? "Online payment options are not configured yet."
-        : paymentSettings.online_checkout_ready
-          ? ""
-          : paymentSettings.online_checkout_message;
-  const payLaterModeLabel = paymentModeAllowsManualFollowUp
-    ? "Submit booking request and pay later"
-    : "Submit booking request";
-  const paymentInstructionsText =
-    paymentSettings.payment_instructions.trim() ||
-    "Oraya will confirm availability first, then share the next payment step with you directly.";
-  const reservePrimaryCtaLabel =
-    reserveCheckoutPath === "pay_now" ? "Continue to secure payment" : "Submit booking request";
-  const reservePrimaryLoadingLabel =
-    reserveCheckoutPath === "pay_now" ? "Preparing secure payment..." : "Submitting booking request...";
-  const reservePrimaryHelperText =
-    reserveCheckoutPath === "pay_now"
-      ? canStartOnlineCheckout
-        ? `We will create your booking first, then redirect you to ${paymentSettings.provider_display_name} for secure hosted payment.`
-        : payNowBlockedReason || "Online payment setup is in progress."
-      : "We’ll submit your booking request now. If approved, Oraya will follow up with confirmation and payment instructions.";
+  const payNowPaymentPurpose: "full" | "deposit" = paymentSettings.allow_full_payment ? "full" : "deposit";
   const minimumDepositAmount =
     step3AmountTotal !== null
       ? getMinimumDepositAmount(step3AmountTotal, paymentSettings.deposit_minimum_percentage)
       : null;
-  const paymentSelection =
-    step3AmountTotal !== null
-      ? validatePaymentSelection({
-          purpose: paymentPurpose,
-          requestedAmount:
-            paymentPurpose === "deposit"
-              ? (customDepositAmount.trim() ? Number(customDepositAmount) : null)
-              : step3AmountTotal,
-          amountTotal: step3AmountTotal,
-          minimumDepositPercentage: paymentSettings.deposit_minimum_percentage,
-        })
-      : ({ ok: false, error: "Booking total is unavailable for payment." } as const);
-
   useEffect(() => {
     if (step !== 3 || bookingPath !== "request" || minimumDepositAmount === null) return;
     setCustomDepositAmount((current) => (current.trim() ? current : String(minimumDepositAmount)));
@@ -2211,21 +2167,6 @@ function BookPageInner() {
       setPaymentPurpose("deposit");
     }
   }, [paymentSettings.allow_custom_deposit, paymentSettings.allow_full_payment]);
-
-  useEffect(() => {
-    if (step !== 3 || bookingPath !== "request") return;
-    if (canStartOnlineCheckout) {
-      setReserveCheckoutPath((current) => (current === "pay_now" ? current : "pay_now"));
-      return;
-    }
-    setReserveCheckoutPath("pay_later");
-  }, [bookingPath, canStartOnlineCheckout, step]);
-
-  useEffect(() => {
-    if (manualPaymentPreference) return;
-    const firstRail = paymentSettings.manual_payment_rails[0] ?? "";
-    setManualPaymentPreference(firstRail);
-  }, [manualPaymentPreference, paymentSettings.manual_payment_rails]);
 
   if (authStatus === "loading") {
     return (
@@ -3780,468 +3721,44 @@ function BookPageInner() {
 
               {estimatePanel}
 
-              <div style={{ border: "0.5px solid rgba(197,164,109,0.28)", backgroundColor: "rgba(197,164,109,0.06)", padding: "16px 18px", display: "grid", gap: "12px" }}>
-                <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
-                  What happens next
-                </p>
-                <p style={{ fontFamily: PLAYFAIR, fontSize: "17px", fontWeight: 400, color: WHITE, margin: 0, lineHeight: 1.45 }}>
-                  {trustCopyMode === "instant" ? STEP4_TRUST.instant.headline : STEP4_TRUST.request.headline}
-                </p>
-                {trustCopyMode === "instant" ? (
-                  STEP4_TRUST.instant.payment ? (
-                    <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65 }}>
-                      {STEP4_TRUST.instant.payment}
-                    </p>
-                  ) : null
-                ) : (
-                  <>
-                    <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65 }}>
-                      {STEP4_TRUST.request.noPayment}
-                    </p>
-                    <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65 }}>
-                      {STEP4_TRUST.request.contact}
-                    </p>
-                  </>
-                )}
-                <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
-                  {WHATSAPP_SUPPORT_LINE}
-                </p>
-              </div>
-
-              <div style={{ border: "0.5px solid rgba(197,164,109,0.24)", backgroundColor: "rgba(197,164,109,0.05)", padding: "16px 18px", display: "grid", gap: "14px" }}>
-                <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
-                  Checkout choices
-                </p>
-                <div style={{ display: "grid", gap: "8px" }}>
-                  <p style={{ fontFamily: PLAYFAIR, fontSize: "20px", color: WHITE, margin: 0, lineHeight: 1.45 }}>
-                    Choose how you would like to continue with your stay
-                  </p>
-                  <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.7 }}>
-                    You can reserve with secure online payment when available, or submit a booking request and finalize payment after Oraya confirms availability.
-                  </p>
-                </div>
-                <div style={{ display: "grid", gap: "14px" }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "10px" }}>
-                    <button
-                      type="button"
-                      onClick={() => setReserveCheckoutPath("pay_now")}
-                      aria-pressed={reserveCheckoutPath === "pay_now"}
-                      className="oraya-pressable"
-                      style={{
-                        textAlign: "left",
-                        border:
-                          reserveCheckoutPath === "pay_now"
-                            ? `1px solid ${GOLD}`
-                            : "0.5px solid rgba(197,164,109,0.18)",
-                        backgroundColor:
-                          reserveCheckoutPath === "pay_now"
-                            ? "rgba(197,164,109,0.1)"
-                            : "rgba(255,255,255,0.02)",
-                        padding: "14px 16px",
-                        display: "grid",
-                        gap: "6px",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <span style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD }}>
-                        Path A
-                      </span>
-                      <span style={{ fontFamily: PLAYFAIR, fontSize: "20px", color: WHITE, lineHeight: 1.3 }}>
-                        Pay now and reserve
-                      </span>
-                      <span style={{ fontFamily: LATO, fontSize: "12px", color: canStartOnlineCheckout ? "var(--oraya-book-p76)" : "#e0b97b", lineHeight: 1.6 }}>
-                        {canStartOnlineCheckout ? `Continue to ${paymentSettings.provider_display_name} after booking creation.` : payNowBlockedReason || "Online payment setup is in progress."}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setReserveCheckoutPath("pay_later")}
-                      aria-pressed={reserveCheckoutPath === "pay_later"}
-                      className="oraya-pressable"
-                      style={{
-                        textAlign: "left",
-                        border:
-                          reserveCheckoutPath === "pay_later"
-                            ? `1px solid ${GOLD}`
-                            : "0.5px solid rgba(197,164,109,0.18)",
-                        backgroundColor:
-                          reserveCheckoutPath === "pay_later"
-                            ? "rgba(197,164,109,0.1)"
-                            : "rgba(255,255,255,0.02)",
-                        padding: "14px 16px",
-                        display: "grid",
-                        gap: "6px",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <span style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD }}>
-                        Path B
-                      </span>
-                      <span style={{ fontFamily: PLAYFAIR, fontSize: "20px", color: WHITE, lineHeight: 1.3 }}>
-                        {payLaterModeLabel}
-                      </span>
-                      <span style={{ fontFamily: LATO, fontSize: "12px", color: "var(--oraya-book-p76)", lineHeight: 1.6 }}>
-                        No charge is made now. Oraya confirms availability first, then shares the next payment step.
-                      </span>
-                    </button>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setReserveCheckoutPath("pay_now");
-                      setPaymentPurpose("full");
-                    }}
-                    aria-pressed={reserveCheckoutPath === "pay_now" && paymentPurpose === "full"}
-                    className="oraya-pressable"
-                    style={{
-                      textAlign: "left",
-                      border:
-                        reserveCheckoutPath === "pay_now" && paymentPurpose === "full"
-                          ? `1px solid ${GOLD}`
-                          : "0.5px solid rgba(197,164,109,0.22)",
-                      backgroundColor:
-                        reserveCheckoutPath === "pay_now" && paymentPurpose === "full"
-                          ? "rgba(197,164,109,0.1)"
-                          : GLASS1,
-                      padding: "16px 18px",
-                      display: "grid",
-                      gap: "6px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
-                      <span style={{ fontFamily: PLAYFAIR, fontSize: "18px", color: WHITE }}>
-                        Pay in full now
-                      </span>
-                      <span style={{ fontFamily: LATO, fontSize: "14px", color: GOLD }}>
-                        {step3AmountTotal !== null ? formatUsd(step3AmountTotal) : "—"}
-                      </span>
-                    </div>
-                    <span style={{ fontFamily: LATO, fontSize: "12px", color: "var(--oraya-book-p76)", lineHeight: 1.6 }}>
-                      Reserve this stay with the full amount collected on the secure hosted payment page.
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setReserveCheckoutPath("pay_now");
-                      setPaymentPurpose("deposit");
-                    }}
-                    aria-pressed={reserveCheckoutPath === "pay_now" && paymentPurpose === "deposit"}
-                    className="oraya-pressable"
-                    style={{
-                      textAlign: "left",
-                      border:
-                        reserveCheckoutPath === "pay_now" && paymentPurpose === "deposit"
-                          ? `1px solid ${GOLD}`
-                          : "0.5px solid rgba(197,164,109,0.22)",
-                      backgroundColor:
-                        reserveCheckoutPath === "pay_now" && paymentPurpose === "deposit"
-                          ? "rgba(197,164,109,0.1)"
-                          : GLASS1,
-                      padding: "16px 18px",
-                      display: "grid",
-                      gap: "8px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
-                      <span style={{ fontFamily: PLAYFAIR, fontSize: "18px", color: WHITE }}>
-                        Pay a custom deposit now
-                      </span>
-                      <span style={{ fontFamily: LATO, fontSize: "12px", color: GOLD }}>
-                        Minimum {minimumDepositAmount !== null ? formatUsd(minimumDepositAmount) : "—"}
-                      </span>
-                    </div>
-                    <span style={{ fontFamily: LATO, fontSize: "12px", color: "var(--oraya-book-p76)", lineHeight: 1.6 }}>
-                      Choose the amount you want to pay now. Minimum guidance is {formatDepositPercentageLabel(paymentSettings.deposit_minimum_percentage)} of the booking value.
-                    </span>
-                    {reserveCheckoutPath === "pay_now" && paymentPurpose === "deposit" && (
-                      <div style={{ display: "grid", gap: "10px", marginTop: "6px" }}>
-                        <label style={{ ...labelStyle, marginBottom: 0 }}>
-                          Deposit amount
-                        </label>
-                        <input
-                          type="number"
-                          min={minimumDepositAmount ?? undefined}
-                          max={step3AmountTotal ?? undefined}
-                          step="0.01"
-                          inputMode="decimal"
-                          value={customDepositAmount}
-                          onChange={(event) => setCustomDepositAmount(event.target.value)}
-                          onFocus={focusGold}
-                          onBlur={blurGold}
-                          placeholder={minimumDepositAmount !== null ? String(minimumDepositAmount) : "0"}
-                          style={inputStyle}
-                        />
-                      </div>
-                    )}
-                  </button>
-                </div>
-                <div style={{ border: "0.5px solid rgba(197,164,109,0.18)", backgroundColor: "rgba(197,164,109,0.04)", padding: "14px 16px", display: "grid", gap: "8px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "baseline" }}>
-                    <span style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED }}>
-                      Total booking value
-                    </span>
-                    <span style={{ fontFamily: LATO, fontSize: "14px", color: WHITE }}>
-                      {step3AmountTotal !== null ? formatUsd(step3AmountTotal) : "—"}
-                    </span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "baseline" }}>
-                    <span style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED }}>
-                      Due now
-                    </span>
-                    <span style={{ fontFamily: PLAYFAIR, fontSize: "20px", color: GOLD }}>
-                      {paymentSelection.ok ? formatUsd(paymentSelection.chargeAmount) : "—"}
-                    </span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "baseline" }}>
-                    <span style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED }}>
-                      Remaining balance
-                    </span>
-                    <span style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p82)" }}>
-                      {paymentSelection.ok ? formatUsd(paymentSelection.remainingBalance) : "—"}
-                    </span>
-                  </div>
-                  <p style={{ fontFamily: LATO, fontSize: "12px", color: canStartOnlineCheckout ? MUTED : "#e0b97b", margin: "4px 0 0", lineHeight: 1.6 }}>
-                    {canStartOnlineCheckout
-                      ? "Oraya never collects card details on this page. Payment continues on the secure hosted checkout page after your booking is created."
-                      : payNowBlockedReason || "Online payment setup is in progress."}
-                  </p>
-                </div>
-
-                <div
-                  style={{
-                    border:
-                      reserveCheckoutPath === "pay_later"
-                        ? `1px solid ${GOLD}`
-                        : "0.5px solid rgba(197,164,109,0.18)",
-                    backgroundColor:
-                      reserveCheckoutPath === "pay_later"
-                        ? "rgba(197,164,109,0.08)"
-                        : "rgba(255,255,255,0.02)",
-                    padding: "16px 18px",
-                    display: "grid",
-                    gap: "12px",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
-                    <div style={{ display: "grid", gap: "6px", minWidth: 0 }}>
-                      <span style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD }}>
-                        Path B
-                      </span>
-                      <span style={{ fontFamily: PLAYFAIR, fontSize: "20px", color: WHITE, lineHeight: 1.35 }}>
-                        {payLaterModeLabel}
-                      </span>
-                    </div>
-                    <span style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase", color: SUCCESS }}>
-                      No charge now
-                    </span>
-                  </div>
-
-                  <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.7 }}>
-                    Submit your stay request now and let Oraya confirm availability before sending the correct payment instructions.
-                  </p>
-
-                  <div style={{ display: "grid", gap: "8px" }}>
-                    <label style={{ ...labelStyle, marginBottom: 0 }}>
-                      Payment preference after confirmation
-                    </label>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "10px" }}>
-                      {paymentSettings.allow_full_payment ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setReserveCheckoutPath("pay_later");
-                          setPaymentPurpose("full");
-                        }}
-                        aria-pressed={reserveCheckoutPath === "pay_later" && paymentPurpose === "full"}
-                        className="oraya-pressable"
-                        style={{
-                          textAlign: "left",
-                          border:
-                            reserveCheckoutPath === "pay_later" && paymentPurpose === "full"
-                              ? `1px solid ${GOLD}`
-                              : "0.5px solid rgba(197,164,109,0.18)",
-                          backgroundColor:
-                            reserveCheckoutPath === "pay_later" && paymentPurpose === "full"
-                              ? "rgba(197,164,109,0.1)"
-                              : "rgba(255,255,255,0.02)",
-                          padding: "12px 14px",
-                          display: "grid",
-                          gap: "4px",
-                          cursor: "pointer",
-                        }}
-                      >
-                        <span style={{ fontFamily: PLAYFAIR, fontSize: "17px", color: WHITE }}>
-                          Prefer full payment
-                        </span>
-                        <span style={{ fontFamily: LATO, fontSize: "12px", color: "var(--oraya-book-p76)", lineHeight: 1.6 }}>
-                          Settle the full amount after confirmation.
-                        </span>
-                      </button>
-                      ) : null}
-                      {paymentSettings.allow_custom_deposit ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setReserveCheckoutPath("pay_later");
-                          setPaymentPurpose("deposit");
-                        }}
-                        aria-pressed={reserveCheckoutPath === "pay_later" && paymentPurpose === "deposit"}
-                        className="oraya-pressable"
-                        style={{
-                          textAlign: "left",
-                          border:
-                            reserveCheckoutPath === "pay_later" && paymentPurpose === "deposit"
-                              ? `1px solid ${GOLD}`
-                              : "0.5px solid rgba(197,164,109,0.18)",
-                          backgroundColor:
-                            reserveCheckoutPath === "pay_later" && paymentPurpose === "deposit"
-                              ? "rgba(197,164,109,0.1)"
-                              : "rgba(255,255,255,0.02)",
-                          padding: "12px 14px",
-                          display: "grid",
-                          gap: "4px",
-                          cursor: "pointer",
-                        }}
-                      >
-                        <span style={{ fontFamily: PLAYFAIR, fontSize: "17px", color: WHITE }}>
-                          Prefer deposit payment
-                        </span>
-                        <span style={{ fontFamily: LATO, fontSize: "12px", color: "var(--oraya-book-p76)", lineHeight: 1.6 }}>
-                          Minimum guidance is {formatDepositPercentageLabel(paymentSettings.deposit_minimum_percentage)}. No charge is made now.
-                        </span>
-                      </button>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  {reserveCheckoutPath === "pay_later" && paymentPurpose === "deposit" ? (
-                    <div style={{ display: "grid", gap: "10px" }}>
-                      <label style={{ ...labelStyle, marginBottom: 0 }}>
-                        Preferred deposit amount after confirmation
-                      </label>
-                      <input
-                        type="number"
-                        min={minimumDepositAmount ?? undefined}
-                        max={step3AmountTotal ?? undefined}
-                        step="0.01"
-                        inputMode="decimal"
-                        value={customDepositAmount}
-                        onChange={(event) => setCustomDepositAmount(event.target.value)}
-                        onFocus={focusGold}
-                        onBlur={blurGold}
-                        placeholder={minimumDepositAmount !== null ? String(minimumDepositAmount) : "0"}
-                        style={inputStyle}
-                      />
-                    </div>
-                  ) : null}
-
-                  <div style={{ display: "grid", gap: "8px" }}>
-                    <label style={{ ...labelStyle, marginBottom: 0 }}>
-                      Preferred follow-up payment method
-                    </label>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "10px" }}>
-                      {paymentSettings.manual_payment_rails.map((rail) => (
-                        <button
-                          key={rail}
-                          type="button"
-                          onClick={() => {
-                            setReserveCheckoutPath("pay_later");
-                            setManualPaymentPreference(rail);
-                          }}
-                          aria-pressed={manualPaymentPreference === rail}
-                          className="oraya-pressable"
-                          style={{
-                            textAlign: "left",
-                            border:
-                              manualPaymentPreference === rail
-                                ? `1px solid ${GOLD}`
-                                : "0.5px solid rgba(197,164,109,0.18)",
-                            backgroundColor:
-                              manualPaymentPreference === rail
-                                ? "rgba(197,164,109,0.1)"
-                                : "rgba(255,255,255,0.02)",
-                            padding: "12px 14px",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            gap: "8px",
-                            cursor: "pointer",
-                          }}
-                        >
-                          <span style={{ fontFamily: LATO, fontSize: "13px", color: WHITE }}>
-                            {getManualRailLabel(rail)}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div style={{ border: "0.5px solid rgba(197,164,109,0.18)", backgroundColor: "rgba(197,164,109,0.04)", padding: "14px 16px", display: "grid", gap: "8px" }}>
-                    <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED, margin: 0 }}>
-                      What happens next
-                    </p>
-                    <p style={{ fontFamily: LATO, fontSize: "12px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.7 }}>
-                      {paymentInstructionsText}
-                    </p>
-                    {manualPaymentPreference === "bank_transfer" && paymentSettings.bank_transfer_public_details.trim() ? (
-                      <p style={{ fontFamily: LATO, fontSize: "12px", color: "var(--oraya-book-p76)", margin: 0, lineHeight: 1.7, whiteSpace: "pre-line" }}>
-                        {paymentSettings.bank_transfer_public_details.trim()}
-                      </p>
-                    ) : null}
-                    {paymentModeAllowsManualFollowUp ? null : (
-                      <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.6 }}>
-                        Online payment is the preferred operating mode, but you can still submit a request here while hosted checkout is being finalized.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ border: "0.5px solid rgba(197,164,109,0.22)", backgroundColor: "rgba(197,164,109,0.04)", padding: "14px 16px", display: "grid", gap: "10px" }}>
-                <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
-                  {STEP4_REFUND_TRUST.title}
-                </p>
-                <p style={{ fontFamily: LATO, fontSize: "12px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65 }}>
-                  {STEP4_REFUND_TRUST.body}
-                </p>
-                <a
-                  href={REFUND_POLICY_HREF}
-                  className="oraya-link-text"
-                  style={{ fontFamily: LATO, fontSize: "12px", color: GOLD, textDecoration: "underline", textUnderlineOffset: "3px", justifySelf: "start" }}
-                >
-                  {STEP4_REFUND_TRUST.linkLabel}
-                </a>
-              </div>
-
               {error && (
                 <p style={{ fontFamily: LATO, fontSize: "14px", color: "#e07070", textAlign: "center", lineHeight: 1.6, margin: 0 }}>
                   {error}
                 </p>
               )}
 
-              <div style={{ display: "flex", gap: "12px", alignItems: "stretch" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px", alignItems: "stretch" }}>
                 <button type="button" onClick={goBack} disabled={loading}
                   className={loading ? undefined : "oraya-pressable oraya-cta-book-back"}
-                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: "var(--oraya-book-text)", backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", padding: "14px 22px", minHeight: "50px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.5 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  ← Back
+                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: "var(--oraya-book-text)", backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", padding: "14px 18px", minHeight: "50px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.5 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  Back
                 </button>
-                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "8px", alignItems: "stretch", minWidth: 0 }}>
-                  <button type="button" onClick={() => { void handleSubmit(); }} disabled={loading || (reserveCheckoutPath === "pay_now" && !canStartOnlineCheckout)}
-                    className={loading ? undefined : "oraya-pressable oraya-cta-gold-hover"}
-                    style={{ fontFamily: LATO, fontSize: "0", letterSpacing: "0.8px", color: "transparent", backgroundColor: GOLD, border: "none", padding: "14px 16px", width: "100%", minHeight: "50px", cursor: loading || (reserveCheckoutPath === "pay_now" && !canStartOnlineCheckout) ? "not-allowed" : "pointer", opacity: loading || (reserveCheckoutPath === "pay_now" && !canStartOnlineCheckout) ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <span style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA }}>
-                      {loading ? reservePrimaryLoadingLabel : reservePrimaryCtaLabel}
-                    </span>
-                    {loading ? "Submitting booking request…" : "Submit booking request"}
-                  </button>
-                  <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, textAlign: "center", margin: 0, lineHeight: 1.5 }}>
-                    {reservePrimaryHelperText}
-                  </p>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReserveCheckoutPath("pay_now");
+                    setPaymentPurpose(payNowPaymentPurpose);
+                    void handleSubmit({ checkoutPath: "pay_now", paymentPurpose: payNowPaymentPurpose });
+                  }}
+                  disabled={loading}
+                  className={loading ? undefined : "oraya-pressable oraya-cta-gold-hover"}
+                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 18px", minHeight: "50px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}
+                >
+                  {loading && reserveCheckoutPath === "pay_now" ? "Preparing payment..." : "Pay now and reserve"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReserveCheckoutPath("pay_later");
+                    setPaymentPurpose("deposit");
+                    void handleSubmit({ checkoutPath: "pay_later", paymentPurpose: "deposit" });
+                  }}
+                  disabled={loading}
+                  className={loading ? undefined : "oraya-pressable"}
+                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD, backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.45)", padding: "14px 18px", minHeight: "50px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.65 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}
+                >
+                  {loading && reserveCheckoutPath === "pay_later" ? "Sending request..." : "Request booking and pay later"}
+                </button>
               </div>
             </div>
           )}
