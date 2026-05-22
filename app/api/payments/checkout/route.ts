@@ -4,7 +4,8 @@ import { SITE_URL } from "@/lib/brand";
 import { roundMoney } from "@/lib/money";
 import { getMinimumDepositAmount, validatePaymentSelection } from "@/lib/payments/checkout-amount";
 import type { PaymentRequestPurpose } from "@/lib/payments/domain";
-import { stripePaymentProvider } from "@/lib/payments/stripe";
+import { PaymentProviderConfigurationError } from "@/lib/payments/provider";
+import { getConfiguredHostedCheckoutProvider } from "@/lib/payments/runtime";
 import { derivePaymentFoundationStage, getFoundationAmountTotal } from "@/lib/payment-foundation";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
@@ -138,7 +139,14 @@ export async function POST(request: Request) {
     const successUrl = `${baseUrl}/booking/view/${viewToken}?payment=success`;
     const cancelUrl = `${baseUrl}/booking/view/${viewToken}?payment=cancelled`;
 
-    const checkout = await stripePaymentProvider.createPaymentLink({
+    const hostedCheckoutProvider = getConfiguredHostedCheckoutProvider();
+    if (!hostedCheckoutProvider.persisted_link_provider) {
+      throw new PaymentProviderConfigurationError(
+        `${hostedCheckoutProvider.display_name} is configured as the hosted payment provider, but the current bookings.payment_link_provider allow-list cannot persist it yet. Use the optional Stripe adapter for development, or approve the bank-provider schema compatibility step before enabling live bank checkout.`,
+      );
+    }
+
+    const checkout = await hostedCheckoutProvider.createCheckoutSession({
       booking_id: booking.id,
       amount_due: selection.chargeAmount,
       currency: "USD",
@@ -164,7 +172,7 @@ export async function POST(request: Request) {
       payment_last_at: nowIso,
       payment_reference: null,
       payment_link_url: checkout.payment_link_url,
-      payment_link_provider: "stripe",
+      payment_link_provider: hostedCheckoutProvider.persisted_link_provider,
       payment_link_status: "active",
       payment_link_issued_at: nowIso,
       payment_link_expires_at: checkout.expires_at,
@@ -198,7 +206,10 @@ export async function POST(request: Request) {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Payment checkout could not be created.";
-    const status = message.includes("STRIPE_SECRET_KEY") ? 503 : 500;
+    const status =
+      err instanceof PaymentProviderConfigurationError || message.includes("STRIPE_SECRET_KEY")
+        ? 503
+        : 500;
     console.error("[api/payments/checkout] unexpected error:", err);
     return NextResponse.json({ error: message }, { status });
   }
