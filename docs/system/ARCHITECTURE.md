@@ -114,7 +114,7 @@ All routes verified against the current repo. Locked APIs are marked **locked** 
 | `/api/butler/lead` | POST | WhatsApp/WhatChimp lead persistence into `whatsapp_leads` | secret-guarded |
 | `/api/butler/prefill` | GET | Public short-lived token-auth prefill hydration for `/book?h=...` | token-auth |
 | `/api/butler/booking-lookup` | POST | Reference-based booking lookup (returns safe-state envelope, never sensitive fields) | secret-guarded |
-| `/api/butler/identify` | POST | WhatsApp identity orchestration — phone continuity → reference fallback → identity-verification gate, one call per turn | secret-guarded |
+| `/api/butler/identify` | POST | WhatsApp identity orchestration — subscriber-id / phone continuity → booking-reference fallback → identity-verification gate, one call per turn. Optional `message_text` body field lets the route derive `booking_reference` from the inbound WhatsApp message via a bounded `\b[0-9A-Fa-f]{8}\b` extraction when no explicit reference was provided. | secret-guarded |
 | `/api/butler/confirmed-guest-info` | POST | Confirmed-guest-only info boundary — narrow Phase 16A allow-list (reference / villa / dates / view URL / check-in guidance / location-access safety note); refuses pending / cancelled / unverified | secret-guarded |
 | `/api/payments/checkout` | POST | Create a hosted checkout session for an existing booking via the selected provider adapter | payment |
 | `/api/payments/readiness` | GET | Admin-auth safe provider-readiness summary (configured vs placeholder, no secrets) | payment |

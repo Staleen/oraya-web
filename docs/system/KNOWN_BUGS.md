@@ -87,6 +87,18 @@ Living list of bugs, gaps, and operational pitfalls that are **known** but **not
 
 ---
 
+### #6 — Website-CTA WhatsApp continuity: booking reference inside trigger message is lost; bot redundantly asks for it
+
+- **Severity:** 🟠 High — degrades premium hospitality UX on the primary returning-guest entry point.
+- **Area:** WhatsApp Butler / `/api/butler/identify` / WhatChimp Guest Identification v2 flow
+- **Description:** the website "Continue on WhatsApp" CTA opens WhatsApp pre-filled with a context line like `"Hello Oraya — booking reference A0B8CECB"`. The Guest Identification v2 trigger correctly fires on the `"booking reference"` substring, but the 8-character hex value `A0B8CECB` is never captured into a custom field — WhatChimp's Condition / save-to-custom-field primitives can route on substring matches but cannot run a regex capture to lift a token out of the trigger message body. The flow therefore reaches the HTTP API call at Node 7 (`/api/butler/identify`) with `booking_reference` empty. For a fresh visitor with no prior `whatsapp_leads.linked_booking_id`, the orchestrator's priority chain falls through to `ask_for_booking_reference`, and the bot asks the guest to type the reference they had just provided in the trigger message. Naive recovery (passing the entire trigger message into the existing `booking_reference` field and letting `normalizeBookingReference` strip non-hex chars) is unsafe — the string `"Hello Oraya — booking reference A0B8CECB"` contains valid hex letters scattered through "Hello/Oraya/booking/reference" and would be silently mis-extracted as `EAABEFEE`, producing a confidently-wrong "I couldn't find that booking" response.
+- **Status:** **closed (resolved 2026-05-23)** — `/api/butler/identify` now accepts an optional `message_text` body field. When `booking_reference` is absent and `message_text` is present, the route extracts the first word-boundary-anchored 8-character hex token via [lib/butler/extract-booking-reference.ts](../../lib/butler/extract-booking-reference.ts) (regex `/\b[0-9A-Fa-f]{8}\b/`) and forwards it as the `booking_reference` to the orchestrator unchanged. Existing callers that pass `booking_reference` explicitly continue to win; `message_text` never overrides an explicit reference. No naive hex stripping is performed anywhere on this path. No schema changes; no locked-API touches; no auth changes; no payment-file touches. The WhatChimp operator side requires two surgical UI changes documented in [BUTLER_PLAYBOOK.md](BUTLER_PLAYBOOK.md) — HTTP API 7219's request body adds `"message_text": "#last_user_message#"` (or the operator's chosen inbound-message system variable), and an optional early-route Condition can be added before the Welcome menu to skip it when the inbound message already carries a booking-reference context.
+- **Recommended fix path:** n/a — resolved.
+- **Discovered:** 2026-05-23 (live production traffic + WhatChimp flow export `whatsapp-bot_1858233_20260523090930.txt` audit).
+- **Resolved:** 2026-05-23
+
+---
+
 <!-- New entries go above this line, lowest # at the top. Closed entries can be moved to a "Closed" section below or stay in place with status: closed + date. -->
 
 ## Closed / wontfix

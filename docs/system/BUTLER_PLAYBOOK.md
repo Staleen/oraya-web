@@ -10,6 +10,8 @@
 
 **Updated:** 2026-05-23.
 
+> Note: this date is shared by the 2026-05-23 confirmed-guest info boundary update and the 2026-05-23 `message_text` inbound-message convenience update. Both are reflected in this file.
+
 ---
 
 ## Butler identity
@@ -159,11 +161,37 @@ Request body (all fields optional, capped lengths):
   "subscriber_id":     "#LEAD_USER_SUBSCRIBER_ID#",
   "chat_id":           "#LEAD_USER_CHAT_ID#",
   "booking_reference": "#oraya_booking_reference#",
-  "identity_proof":    "#oraya_identity_proof#"
+  "identity_proof":    "#oraya_identity_proof#",
+  "message_text":      "#last_user_message#"
 }
 ```
 
 `phone` is also accepted but is only useful for future Butler channels (Telegram, Messenger, direct WhatsApp Cloud API) — **WhatChimp does not expose the sender phone as a variable**, so the WhatsApp v2 flow does not send it. `chat_id` is captured for ops correlation only; the orchestrator never uses it as a lookup key. The legacy `identity_proof_email` field is accepted as a transitional alias while the v1 flow is migrated.
+
+**Inbound-message convenience (`message_text`).** WhatChimp's Condition / save-to-custom-field primitives can route on substring matches but cannot run a regex capture to lift an 8-character booking reference out of the trigger message body. To bridge that gap without backend rewrites, `/api/butler/identify` accepts an optional `message_text` field carrying the verbatim inbound WhatsApp turn (typically the website-CTA pre-fill, e.g. `"Hello Oraya — booking reference A0B8CECB"`). The route consults `message_text` ONLY when `booking_reference` was not provided in the body, and then extracts the first **word-boundary-anchored** 8-character hex token via [lib/butler/extract-booking-reference.ts](../../lib/butler/extract-booking-reference.ts). The matched token is forwarded as `booking_reference` to the orchestrator unchanged; the orchestrator does not need to know `message_text` exists.
+
+Safety guarantees of the extractor (non-negotiable; documented at the helper):
+
+- Only the FIRST standalone 8-char hex token is returned (e.g. `"Hello Oraya — booking reference A0B8CECB"` → `"A0B8CECB"`).
+- No naive `replace(/[^0-9a-fA-F]/g, "")` stripping — the message text contains valid hex letters scattered through ordinary English words (`Hello`, `Oraya`, `booking`, `reference`), and stripping would corrupt the extraction to e.g. `"EAABEFEE"` and silently mis-identify the booking.
+- Explicit `booking_reference` always wins; `message_text` never overrides it.
+- When `message_text` is present but contains no clean token, behavior is identical to today — the orchestrator asks the guest for the reference.
+- The helper is a pure string function; it does not touch Supabase, mutate state, or call any locked surface.
+
+**WhatChimp operator changes required to consume `message_text`** (manual UI work — not in the flow JSON export):
+
+1. **HTTP API `7219` (Oraya Identify - Production) request body** — add one field:
+   ```
+   message_text: #last_user_message#
+   ```
+   (Or whichever inbound-message system variable your WhatChimp tenant exposes for "the verbatim text of the user's most recent inbound message." Common variants on similar platforms include `#user_message#` / `#contact_last_message#` / `#last_incoming_message#` — confirm in the WhatChimp UI variable picker.) Repeat the same change on the HTTP API node body wherever `7219` is invoked in the flow if it appears multiple times.
+2. **(Optional polish — recommended for UX) Early-route Condition before Node 3 (Welcome menu)** — when the trigger message already contains "booking reference" context, the redundant Welcome menu can be skipped. Add a Condition node between Node 1 (trigger) and Node 2 (input flow) that tests:
+   ```
+   System field: <inbound message variable>   contains   booking reference
+   ```
+   `True` branch routes directly to Node 6 (`Of course. Let me check your booking…`) → Node 7 (HTTP API). `False` branch routes to Node 2 as today. This is purely cosmetic — without it, the bot still successfully identifies the guest on the first HTTP API call thanks to `message_text`; the Welcome menu just shows for one extra turn.
+
+**Caller-side invariant.** Existing callers that do not send `message_text` are entirely unaffected — the field is additive and optional, and the orchestrator's behavior is unchanged when `booking_reference` is empty and `message_text` is absent.
 
 Priority order (enforced server-side in [lib/butler/identity-orchestrator.ts](../../lib/butler/identity-orchestrator.ts)):
 

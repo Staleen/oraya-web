@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireButlerAuth } from "@/lib/butler/auth";
 import { orchestrateButlerIdentity } from "@/lib/butler/identity-orchestrator";
+import { extractBookingReferenceFromText } from "@/lib/butler/extract-booking-reference";
 
 /**
  * Phase 16A — WhatsApp identity orchestration.
@@ -53,6 +54,24 @@ import { orchestrateButlerIdentity } from "@/lib/butler/identity-orchestrator";
  * is migrated to the v2 JSON. The route prefers `identity_proof` when
  * both are present.
  *
+ * Inbound-message convenience (Phase 16A.x):
+ *   - An optional `message_text` body field is accepted. It is intended
+ *     to carry the verbatim inbound WhatsApp message that triggered the
+ *     Butler flow (e.g. `"Hello Oraya — booking reference A0B8CECB"`),
+ *     populated by WhatChimp via its inbound-message system variable.
+ *   - It is consulted ONLY when `booking_reference` was not provided in
+ *     the body. When consulted, the route extracts the first
+ *     word-boundary-anchored 8-character hex token via
+ *     `lib/butler/extract-booking-reference.ts` and forwards that as the
+ *     `booking_reference` to the orchestrator. Existing callers that
+ *     pass `booking_reference` explicitly continue to win — `message_text`
+ *     never overrides an explicit reference.
+ *   - If `message_text` is present but contains no standalone hex token,
+ *     the route proceeds exactly as if it had been absent. No fallback
+ *     hex-stripping. No naive normalization. No silent mis-identification.
+ *   - The field is capped server-side. Existing callers that do not send
+ *     it are entirely unaffected — the field is additive and optional.
+ *
  * This endpoint MUST NOT:
  *   - mutate any booking, lead, or token
  *   - send email
@@ -71,6 +90,11 @@ const CHAT_ID_MAX_LEN = 128;
 const PHONE_MAX_LEN = 64;
 const REFERENCE_MAX_LEN = 64;
 const IDENTITY_PROOF_MAX_LEN = 320;
+// WhatsApp messages have an upper bound around ~4096 chars; 2048 is more
+// than enough for any realistic trigger message ("Hello Oraya — booking
+// reference A0B8CECB" + multilingual variants) and protects the route
+// from oversized payloads being shipped from WhatChimp.
+const MESSAGE_TEXT_MAX_LEN = 2048;
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -112,6 +136,7 @@ export async function POST(request: Request) {
     raw.identity_proof_email,
     IDENTITY_PROOF_MAX_LEN,
   );
+  const messageText = readOptionalCappedString(raw.message_text, MESSAGE_TEXT_MAX_LEN);
 
   if (
     subscriberId === "invalid" ||
@@ -119,16 +144,29 @@ export async function POST(request: Request) {
     phone === "invalid" ||
     bookingReference === "invalid" ||
     identityProof === "invalid" ||
-    identityProofEmailLegacy === "invalid"
+    identityProofEmailLegacy === "invalid" ||
+    messageText === "invalid"
   ) {
     return badRequest("invalid_body");
   }
+
+  // Derive a booking_reference from `message_text` ONLY when no explicit
+  // reference was provided. Explicit reference always wins. If
+  // `message_text` contains no clean standalone 8-char hex token, this
+  // call returns null and the orchestrator proceeds exactly as before
+  // (it asks the guest for the reference). No naive hex-stripping is
+  // performed anywhere on this path.
+  const hasExplicitReference =
+    typeof bookingReference === "string" && bookingReference.trim().length > 0;
+  const derivedBookingReference = hasExplicitReference
+    ? bookingReference
+    : extractBookingReferenceFromText(messageText);
 
   const result = await orchestrateButlerIdentity({
     subscriber_id: subscriberId,
     chat_id: chatId,
     phone,
-    booking_reference: bookingReference,
+    booking_reference: derivedBookingReference,
     identity_proof: identityProof ?? identityProofEmailLegacy,
   });
 
