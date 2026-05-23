@@ -952,6 +952,7 @@ function BookPageInner() {
   // UI
   const [error,   setError]   = useState("");
   const [loading, setLoading] = useState(false);
+  const [submitIntent, setSubmitIntent] = useState<"reserve" | "pay_now" | null>(null);
   const [paymentSettings, setPaymentSettings] = useState<PaymentPublicRuntimeSettings>({
     ...DEFAULT_PAYMENT_PUBLIC_SETTINGS,
     online_checkout_ready: false,
@@ -1902,9 +1903,10 @@ function BookPageInner() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  async function handleSubmit() {
+  async function handleSubmit(intent: "reserve" | "pay_now") {
     if (step !== 3 || bookingPath !== "request") return;
     setError("");
+    setSubmitIntent(intent);
     setLoading(true);
     try {
       if (step3AmountTotal === null) {
@@ -1943,6 +1945,7 @@ function BookPageInner() {
         !dateConflict &&
         availabilityReadyForSelection;
       const attemptingOnlineCheckout =
+        intent === "pay_now" &&
         hostedCheckoutReady &&
         paymentPurposeAvailable &&
         availabilityValid &&
@@ -1950,6 +1953,13 @@ function BookPageInner() {
         bookingTrustMode === "instant" &&
         !hasSpecialRequest &&
         !hasManualReviewAddonSelection;
+      if (intent === "pay_now" && !attemptingOnlineCheckout) {
+        throw new Error(
+          !hostedCheckoutReady
+            ? paymentSettings.online_checkout_message || "Online payment is not available for this booking right now."
+            : "This stay needs Oraya review before payment can be collected.",
+        );
+      }
       if (attemptingOnlineCheckout && !selectedPaymentSelection.ok) {
         throw new Error(selectedPaymentSelection.error);
       }
@@ -2139,6 +2149,7 @@ function BookPageInner() {
       setError(friendlyError(msg));
     } finally {
       setLoading(false);
+      setSubmitIntent(null);
     }
   }
 
@@ -3459,13 +3470,24 @@ function BookPageInner() {
                 <button
                   type="button"
                   onClick={() => {
-                    void handleSubmit();
+                    void handleSubmit("reserve");
+                  }}
+                  disabled={loading}
+                  className={loading ? undefined : "oraya-pressable"}
+                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD, backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.45)", padding: "14px 18px", minHeight: "50px", flex: 1, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.65 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}
+                >
+                  {loading && submitIntent === "reserve" ? "Reserving..." : "Reserve this stay"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void handleSubmit("pay_now");
                   }}
                   disabled={loading}
                   className={loading ? undefined : "oraya-pressable oraya-cta-gold-hover"}
-                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 18px", minHeight: "50px", flex: 1, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}
+                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 18px", minHeight: "50px", flex: 1.15, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}
                 >
-                  {loading ? "Reserving..." : "Reserve this stay"}
+                  {loading && submitIntent === "pay_now" ? "Preparing payment..." : "Pay now to confirm booking"}
                 </button>
               </div>
             </div>
