@@ -821,7 +821,7 @@ function StepIndicator({ step, bookingPath }: { step: number; bookingPath: Booki
     );
   }
 
-  const labels = ["Villa & Dates", "Stay Setup", "Review & Payment"];
+  const labels = ["Villa & Dates", "Stay Setup", "Review & Guest Details"];
   return (
     <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -928,7 +928,7 @@ function BookPageInner() {
   });
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
-  // Guest contact (shown on step 2 when guestMode)
+  // Guest contact (shown on review step when guestMode)
   const [guest, setGuest] = useState({
     fullName:    "",
     email:       "",
@@ -1828,30 +1828,6 @@ function BookPageInner() {
     window.setTimeout(() => field?.focus(), 380);
   }
 
-  /** Guest bookings: name required; at least one of WhatsApp/phone or email; validate email only if provided. */
-  function enforceGuestContactForStep2(): boolean {
-    if (!guestMode) return true;
-    const name = guest.fullName.trim();
-    const emailT = guest.email.trim();
-    const phoneT = guest.phoneNumber.trim();
-    if (!name) {
-      setError("Please enter your name so we know who the booking is for.");
-      focusGuestFieldAfterScroll(guestFullNameInputRef.current);
-      return false;
-    }
-    if (!phoneT && !emailT) {
-      setError("Please enter a WhatsApp number or email so Oraya can contact you about your stay.");
-      focusGuestFieldAfterScroll(guestPhoneInputRef.current);
-      return false;
-    }
-    if (emailT && !EMAIL_RE.test(emailT)) {
-      setError("Please enter a valid email address.");
-      focusGuestFieldAfterScroll(guestEmailInputRef.current);
-      return false;
-    }
-    return true;
-  }
-
   function goNext() {
     setError("");
     if (step === 3 && bookingPath === "request") return;
@@ -1859,7 +1835,6 @@ function BookPageInner() {
     if (step === 2) {
       if (bookingPath !== "request") return;
       if (!form.bedroomCount)                  { setError("Please select how many bedrooms you would like prepared."); return; }
-      if (!enforceGuestContactForStep2()) return;
       const sleeping = parseInt(form.sleepingGuests, 10);
       if (!sleeping || sleeping < 1)           { setError("Please enter at least 1 estimated guest before continuing."); return; }
     }
@@ -2747,73 +2722,6 @@ function BookPageInner() {
                 </div>
               </div>
 
-              {/* Guest contact (priority order: name → WhatsApp/phone → email → country) */}
-              {guestMode && (
-                <div ref={guestDetailsSectionRef} style={{ border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: GLASS1, padding: "1.5rem", display: "flex", flexDirection: "column", gap: "14px" }}>
-                  <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
-                    Your details
-                  </p>
-                  <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
-                    WhatsApp is preferred. If you do not use WhatsApp, please enter your email.
-                  </p>
-
-                  <div>
-                    <label style={labelStyle}>Full name</label>
-                    <input ref={guestFullNameInputRef} name="fullName" type="text" required value={guest.fullName} onChange={handleGuestChange}
-                      placeholder="Your full name" style={inputStyle} onFocus={focusGold} onBlur={blurGold} />
-                  </div>
-
-                  <div>
-                    <label style={labelStyle}>WhatsApp / phone number</label>
-                    <div style={{ display: "flex" }}>
-                      <select name="dialCode" value={guest.dialCode} onChange={handleGuestChange}
-                        onFocus={focusGold} onBlur={blurGold}
-                        style={{ ...inputStyle, width: "auto", flexShrink: 0, paddingRight: "10px", borderRight: "none", cursor: "pointer", minWidth: "120px" }}>
-                        {DIAL_CODES.map((d, i) =>
-                          d.code === "" ? (
-                            <option key={`div-${i}`} disabled value="" style={{ backgroundColor: OPT_BG, color: MUTED }}>{d.label}</option>
-                          ) : (
-                            <option key={`${d.code}-${d.label}`} value={d.code} style={{ backgroundColor: OPT_BG }}>{d.flag} {d.code}</option>
-                          )
-                        )}
-                      </select>
-                      <input ref={guestPhoneInputRef} name="phoneNumber" type="tel" value={guest.phoneNumber} onChange={handleGuestChange}
-                        placeholder="70 000 000" style={{ ...inputStyle, flex: 1 }} onFocus={focusGold} onBlur={blurGold} />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label style={labelStyle}>Email address</label>
-                    <input ref={guestEmailInputRef} name="email" type="email" autoComplete="email" value={guest.email} onChange={handleGuestChange}
-                      placeholder="you@example.com"
-                      style={{
-                        ...inputStyle,
-                        borderColor: guestEmailInvalid ? "#e07070" : "rgba(197,164,109,0.25)",
-                      }}
-                      onFocus={focusGold} onBlur={blurGold} />
-                    {guestEmailInvalid && (
-                      <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070", marginTop: "8px", lineHeight: 1.55 }}>
-                        Please enter a valid email address.
-                      </p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label style={labelStyle}>Country</label>
-                    <select name="country" value={guest.country} onChange={handleGuestChange}
-                      onFocus={focusGold} onBlur={blurGold} style={{ ...inputStyle, cursor: "pointer" }}>
-                      {COUNTRIES.map((c, i) =>
-                        c.value === "" ? (
-                          <option key={`div-${i}`} disabled value="" style={{ backgroundColor: OPT_BG, color: MUTED }}>{c.label}</option>
-                        ) : (
-                          <option key={c.value} value={c.value} style={{ backgroundColor: OPT_BG }}>{c.label}</option>
-                        )
-                      )}
-                    </select>
-                  </div>
-                </div>
-              )}
-
               <div style={{ display: "flex", flexDirection: "column", gap: "24px", width: "100%" }}>
 
               {/* ── Add-ons ─────────────────────────────────────────────── */}
@@ -3381,7 +3289,7 @@ function BookPageInner() {
                 <button type="button" onClick={goNext}
                   className="oraya-pressable oraya-cta-gold-hover"
                   style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 16px", flex: 1, cursor: "pointer", minHeight: "50px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  Review your stay
+                  Review & Guest Details
                 </button>
               </div>
 
@@ -3463,6 +3371,81 @@ function BookPageInner() {
                 </div>
               </div>
 
+              {guestMode ? (
+                <div ref={guestDetailsSectionRef} style={{ border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: GLASS1, padding: "1.5rem", display: "flex", flexDirection: "column", gap: "14px" }}>
+                  <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+                    Guest details
+                  </p>
+                  <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
+                    WhatsApp is preferred. If you do not use WhatsApp, please enter your email.
+                  </p>
+
+                  <div>
+                    <label style={labelStyle}>Full name</label>
+                    <input ref={guestFullNameInputRef} name="fullName" type="text" required value={guest.fullName} onChange={handleGuestChange}
+                      placeholder="Your full name" style={inputStyle} onFocus={focusGold} onBlur={blurGold} />
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>WhatsApp / phone number</label>
+                    <div style={{ display: "flex" }}>
+                      <select name="dialCode" value={guest.dialCode} onChange={handleGuestChange}
+                        onFocus={focusGold} onBlur={blurGold}
+                        style={{ ...inputStyle, width: "auto", flexShrink: 0, paddingRight: "10px", borderRight: "none", cursor: "pointer", minWidth: "120px" }}>
+                        {DIAL_CODES.map((d, i) =>
+                          d.code === "" ? (
+                            <option key={`div-${i}`} disabled value="" style={{ backgroundColor: OPT_BG, color: MUTED }}>{d.label}</option>
+                          ) : (
+                            <option key={`${d.code}-${d.label}`} value={d.code} style={{ backgroundColor: OPT_BG }}>{d.flag} {d.code}</option>
+                          )
+                        )}
+                      </select>
+                      <input ref={guestPhoneInputRef} name="phoneNumber" type="tel" value={guest.phoneNumber} onChange={handleGuestChange}
+                        placeholder="70 000 000" style={{ ...inputStyle, flex: 1 }} onFocus={focusGold} onBlur={blurGold} />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>Email address</label>
+                    <input ref={guestEmailInputRef} name="email" type="email" autoComplete="email" value={guest.email} onChange={handleGuestChange}
+                      placeholder="you@example.com"
+                      style={{
+                        ...inputStyle,
+                        borderColor: guestEmailInvalid ? "#e07070" : "rgba(197,164,109,0.25)",
+                      }}
+                      onFocus={focusGold} onBlur={blurGold} />
+                    {guestEmailInvalid && (
+                      <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070", marginTop: "8px", lineHeight: 1.55 }}>
+                        Please enter a valid email address.
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>Country</label>
+                    <select name="country" value={guest.country} onChange={handleGuestChange}
+                      onFocus={focusGold} onBlur={blurGold} style={{ ...inputStyle, cursor: "pointer" }}>
+                      {COUNTRIES.map((c, i) =>
+                        c.value === "" ? (
+                          <option key={`div-${i}`} disabled value="" style={{ backgroundColor: OPT_BG, color: MUTED }}>{c.label}</option>
+                        ) : (
+                          <option key={c.value} value={c.value} style={{ backgroundColor: OPT_BG }}>{c.label}</option>
+                        )
+                      )}
+                    </select>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: "rgba(197,164,109,0.04)", padding: "1.25rem", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "14px", flexWrap: "wrap" }}>
+                  <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p82)", margin: 0, lineHeight: 1.6 }}>
+                    Booking as <span style={{ color: GOLD }}>{memberName || "member"}</span>
+                  </p>
+                  <a href="/login" className="oraya-link-text" style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED }}>
+                    Not you?
+                  </a>
+                </div>
+              )}
+
               {estimatePanel}
 
               {!hasAddonsOrSpecialRequestsForReview && (
@@ -3497,28 +3480,26 @@ function BookPageInner() {
                 <button
                   type="button"
                   onClick={() => {
-                    void handleSubmit("reserve");
+                    void handleSubmit("pay_now");
                   }}
                   disabled={loading}
-                  className={loading ? undefined : "oraya-pressable"}
-                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD, backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.45)", padding: "14px 18px", minHeight: "50px", flex: 1, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.65 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}
+                  className={loading ? undefined : "oraya-pressable oraya-cta-gold-hover"}
+                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 18px", minHeight: "50px", flex: 1, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}
                 >
-                  {loading && submitIntent === "reserve" ? "Reserving..." : "Reserve this stay"}
+                  {loading && submitIntent === "pay_now" ? "Preparing payment..." : "Continue to secure payment"}
                 </button>
-                {!hasAddonsOrSpecialRequestsForReview && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void handleSubmit("pay_now");
-                    }}
-                    disabled={loading}
-                    className={loading ? undefined : "oraya-pressable oraya-cta-gold-hover"}
-                    style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 18px", minHeight: "50px", flex: 1.15, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}
-                  >
-                    {loading && submitIntent === "pay_now" ? "Preparing payment..." : "Pay now to confirm booking"}
-                  </button>
-                )}
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  void handleSubmit("reserve");
+                }}
+                disabled={loading}
+                className={loading ? undefined : "oraya-link-text"}
+                style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, backgroundColor: "transparent", border: "none", padding: "2px 0", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.65 : 1, alignSelf: "center", lineHeight: 1.6 }}
+              >
+                {loading && submitIntent === "reserve" ? "Submitting request..." : "Prefer to reserve and pay later? Submit booking request"}
+              </button>
             </div>
           )}
 
