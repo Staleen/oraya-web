@@ -42,6 +42,7 @@ import { getMinimumDepositAmount, validatePaymentSelection } from "@/lib/payment
 import {
   DEFAULT_PAYMENT_PUBLIC_SETTINGS,
   fetchPublicPaymentSettings,
+  paymentModeAllowsPayNow,
   type PaymentPublicRuntimeSettings,
 } from "@/lib/payments/settings";
 
@@ -238,7 +239,6 @@ const labelRowTextStyle: React.CSSProperties = {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type AuthStatus = "loading" | "member" | "none";
-type ReserveCheckoutPath = "pay_now" | "pay_later";
 interface ConfirmedRange { check_in: string; check_out: string; }
 interface ButlerPrefillPayload {
   villa: string | null;
@@ -953,9 +953,6 @@ function BookPageInner() {
   // UI
   const [error,   setError]   = useState("");
   const [loading, setLoading] = useState(false);
-  const [reserveCheckoutPath, setReserveCheckoutPath] = useState<ReserveCheckoutPath>("pay_later");
-  const [paymentPurpose, setPaymentPurpose] = useState<"full" | "deposit">("deposit");
-  const [customDepositAmount, setCustomDepositAmount] = useState("");
   const [paymentSettings, setPaymentSettings] = useState<PaymentPublicRuntimeSettings>({
     ...DEFAULT_PAYMENT_PUBLIC_SETTINGS,
     online_checkout_ready: false,
@@ -1933,29 +1930,54 @@ function BookPageInner() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  async function handleSubmit(options?: { checkoutPath?: ReserveCheckoutPath; paymentPurpose?: "full" | "deposit" }) {
+  async function handleSubmit() {
     if (step !== 3 || bookingPath !== "request") return;
     setError("");
     setLoading(true);
     try {
-      const selectedCheckoutPath = options?.checkoutPath ?? reserveCheckoutPath;
-      const selectedPaymentPurpose = options?.paymentPurpose ?? paymentPurpose;
-      const attemptingOnlineCheckout = selectedCheckoutPath === "pay_now";
       if (step3AmountTotal === null) {
         throw new Error("Booking total is unavailable for payment. Please review your stay details.");
       }
 
+      const selectedPaymentPurpose: "full" | "deposit" = paymentSettings.allow_full_payment ? "full" : "deposit";
       const selectedPaymentSelection = validatePaymentSelection({
         purpose: selectedPaymentPurpose,
         requestedAmount:
           selectedPaymentPurpose === "deposit"
-            ? (customDepositAmount.trim()
-                ? Number(customDepositAmount)
-                : getMinimumDepositAmount(step3AmountTotal, paymentSettings.deposit_minimum_percentage))
+            ? getMinimumDepositAmount(step3AmountTotal, paymentSettings.deposit_minimum_percentage)
             : step3AmountTotal,
         amountTotal: step3AmountTotal,
         minimumDepositPercentage: paymentSettings.deposit_minimum_percentage,
       });
+
+      const hasSpecialRequest = (form.message ?? "").trim().length > 0;
+      const hasManualReviewAddonSelection = selectedAddons.some((id) => {
+        const addon = stayApplicableAddons.find((item) => item.id === id);
+        if (!addon) return true;
+        if (addon.requires_approval) return true;
+        if (getAddonEnforcementMode(addon.enforcement_mode) === "strict") return true;
+        return getAddonOperationalFeedback(addon).some((message) => message.tone === "warning");
+      });
+      const paymentPurposeAvailable =
+        selectedPaymentPurpose === "full"
+          ? paymentSettings.allow_full_payment
+          : paymentSettings.allow_custom_deposit;
+      const hostedCheckoutReady =
+        paymentSettings.online_payment_enabled &&
+        paymentSettings.online_checkout_ready &&
+        paymentModeAllowsPayNow(paymentSettings.active_payment_mode);
+      const availabilityValid =
+        Boolean(form.villa && checkIn && checkOut && checkOut > checkIn) &&
+        !dateConflict &&
+        availabilityReadyForSelection;
+      const attemptingOnlineCheckout =
+        hostedCheckoutReady &&
+        paymentPurposeAvailable &&
+        availabilityValid &&
+        instantEligible &&
+        bookingTrustMode === "instant" &&
+        !hasSpecialRequest &&
+        !hasManualReviewAddonSelection;
       if (attemptingOnlineCheckout && !selectedPaymentSelection.ok) {
         throw new Error(selectedPaymentSelection.error);
       }
@@ -2013,11 +2035,11 @@ function BookPageInner() {
         const paymentPreferenceLines =
           bookingPath === "request"
             ? [
-                "[Payment Protocol]",
-                `Checkout path: ${
+                "[Booking Protocol]",
+                `System branch: ${
                   attemptingOnlineCheckout
-                    ? "Pay now and reserve"
-                    : "Request booking and pay later"
+                    ? "Hosted checkout after booking creation"
+                    : "Pending booking request for admin review"
                 }`,
                 attemptingOnlineCheckout
                   ? selectedPaymentPurpose === "full"
@@ -2151,22 +2173,6 @@ function BookPageInner() {
   // ── Auth loading spinner ──────────────────────────────────────────────────
   const step3AmountTotal =
     step === 3 && bookingPath === "request" && estimatedTotal > 0 ? estimatedTotal : null;
-  const payNowPaymentPurpose: "full" | "deposit" = paymentSettings.allow_full_payment ? "full" : "deposit";
-  const minimumDepositAmount =
-    step3AmountTotal !== null
-      ? getMinimumDepositAmount(step3AmountTotal, paymentSettings.deposit_minimum_percentage)
-      : null;
-  useEffect(() => {
-    if (step !== 3 || bookingPath !== "request" || minimumDepositAmount === null) return;
-    setCustomDepositAmount((current) => (current.trim() ? current : String(minimumDepositAmount)));
-  }, [step, bookingPath, minimumDepositAmount]);
-
-  useEffect(() => {
-    if (paymentSettings.allow_full_payment) return;
-    if (paymentSettings.allow_custom_deposit) {
-      setPaymentPurpose("deposit");
-    }
-  }, [paymentSettings.allow_custom_deposit, paymentSettings.allow_full_payment]);
 
   if (authStatus === "loading") {
     return (
@@ -3704,11 +3710,9 @@ function BookPageInner() {
                       ["Villa", form.villa],
                       ["Check-in", fmtDate(checkIn)],
                       ["Check-out", fmtDate(checkOut)],
-                      ["Duration", `${nights} ${nights === 1 ? "night" : "nights"}`],
+                      ["Nights", `${nights} ${nights === 1 ? "night" : "nights"}`],
                       ["Bedrooms", formatBedroomLabel(form.bedroomCount)],
                       ["Guest estimate", form.sleepingGuests],
-                      ...(sleepingGuestsCount > 6 ? [["Sleeping setup", sleepingSetupLabel]] : []),
-                      ...(selectedAddons.length > 0 ? [["Selected add-ons", selectedAddonDetails.map((addon) => addon.label).join(", ")]] : []),
                     ] as [string, string][]
                   ).map(([label, value]) => (
                     <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "10px 0", borderBottom: "0.5px solid var(--oraya-book-subtle-border)", gap: "16px" }}>
@@ -3720,6 +3724,10 @@ function BookPageInner() {
               </div>
 
               {estimatePanel}
+
+              <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", lineHeight: 1.65, margin: 0, textAlign: "center" }}>
+                Instant confirmation available for eligible stays. Some requests may require review.
+              </p>
 
               {error && (
                 <p style={{ fontFamily: LATO, fontSize: "14px", color: "#e07070", textAlign: "center", lineHeight: 1.6, margin: 0 }}>
@@ -3736,28 +3744,13 @@ function BookPageInner() {
                 <button
                   type="button"
                   onClick={() => {
-                    setReserveCheckoutPath("pay_now");
-                    setPaymentPurpose(payNowPaymentPurpose);
-                    void handleSubmit({ checkoutPath: "pay_now", paymentPurpose: payNowPaymentPurpose });
+                    void handleSubmit();
                   }}
                   disabled={loading}
                   className={loading ? undefined : "oraya-pressable oraya-cta-gold-hover"}
                   style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 18px", minHeight: "50px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}
                 >
-                  {loading && reserveCheckoutPath === "pay_now" ? "Preparing payment..." : "Pay now and reserve"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setReserveCheckoutPath("pay_later");
-                    setPaymentPurpose("deposit");
-                    void handleSubmit({ checkoutPath: "pay_later", paymentPurpose: "deposit" });
-                  }}
-                  disabled={loading}
-                  className={loading ? undefined : "oraya-pressable"}
-                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD, backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.45)", padding: "14px 18px", minHeight: "50px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.65 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}
-                >
-                  {loading && reserveCheckoutPath === "pay_later" ? "Sending request..." : "Request booking and pay later"}
+                  {loading ? "Reserving..." : "Reserve this stay"}
                 </button>
               </div>
             </div>
