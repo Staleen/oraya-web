@@ -787,7 +787,7 @@ function useMatchMediaMaxWidth(maxPx: number) {
 // ─── Step indicator ───────────────────────────────────────────────────────────
 function StepIndicator({ step, bookingPath }: { step: number; bookingPath: BookingPath }) {
   if (bookingPath === "instant") {
-    const labels = ["Villa & Dates", "Review & Payment"];
+    const labels = ["Stay", "Review & Guest Details"];
     return (
       <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -821,7 +821,7 @@ function StepIndicator({ step, bookingPath }: { step: number; bookingPath: Booki
     );
   }
 
-  const labels = ["Villa & Dates", "Stay Setup", "Review & Payment"];
+  const labels = ["Stay", "Customize", "Review & Guest Details"];
   return (
     <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -1859,7 +1859,6 @@ function BookPageInner() {
     if (step === 2) {
       if (bookingPath !== "request") return;
       if (!form.bedroomCount)                  { setError("Please select how many bedrooms you would like prepared."); return; }
-      if (!enforceGuestContactForStep2()) return;
       const sleeping = parseInt(form.sleepingGuests, 10);
       if (!sleeping || sleeping < 1)           { setError("Please enter at least 1 estimated guest before continuing."); return; }
     }
@@ -2159,6 +2158,39 @@ function BookPageInner() {
     step === 3 && bookingPath === "request" && estimatedTotal > 0 ? estimatedTotal : null;
   const hasAddonsOrSpecialRequestsForReview =
     selectedAddons.length > 0 || (form.message ?? "").trim().length > 0;
+  const canPayOnline = (() => {
+    const hostedCheckoutReady =
+      paymentSettings.online_payment_enabled &&
+      paymentSettings.online_checkout_ready &&
+      paymentModeAllowsPayNow(paymentSettings.active_payment_mode);
+    const selectedPaymentPurpose: "full" | "deposit" = paymentSettings.allow_full_payment ? "full" : "deposit";
+    const paymentPurposeAvailable =
+      selectedPaymentPurpose === "full"
+        ? paymentSettings.allow_full_payment
+        : paymentSettings.allow_custom_deposit;
+    const availabilityValid =
+      Boolean(form.villa && checkIn && checkOut && checkOut > checkIn) &&
+      !dateConflict &&
+      availabilityReadyForSelection;
+    const hasSpecialRequest = (form.message ?? "").trim().length > 0;
+    const hasManualReviewAddonSelection = selectedAddons.some((id) => {
+      const addon = stayApplicableAddons.find((item) => item.id === id);
+      if (!addon) return true;
+      if (addon.requires_approval) return true;
+      if (getAddonEnforcementMode(addon.enforcement_mode) === "strict") return true;
+      return getAddonOperationalFeedback(addon).some((message) => message.tone === "warning");
+    });
+    return (
+      hostedCheckoutReady &&
+      paymentPurposeAvailable &&
+      availabilityValid &&
+      instantEligible &&
+      bookingTrustMode === "instant" &&
+      selectedAddons.length === 0 &&
+      !hasSpecialRequest &&
+      !hasManualReviewAddonSelection
+    );
+  })();
 
   if (authStatus === "loading") {
     return (
@@ -2746,73 +2778,6 @@ function BookPageInner() {
                   </div>
                 </div>
               </div>
-
-              {/* Guest contact (priority order: name → WhatsApp/phone → email → country) */}
-              {guestMode && (
-                <div ref={guestDetailsSectionRef} style={{ border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: GLASS1, padding: "1.5rem", display: "flex", flexDirection: "column", gap: "14px" }}>
-                  <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
-                    Your details
-                  </p>
-                  <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
-                    WhatsApp is preferred. If you do not use WhatsApp, please enter your email.
-                  </p>
-
-                  <div>
-                    <label style={labelStyle}>Full name</label>
-                    <input ref={guestFullNameInputRef} name="fullName" type="text" required value={guest.fullName} onChange={handleGuestChange}
-                      placeholder="Your full name" style={inputStyle} onFocus={focusGold} onBlur={blurGold} />
-                  </div>
-
-                  <div>
-                    <label style={labelStyle}>WhatsApp / phone number</label>
-                    <div style={{ display: "flex" }}>
-                      <select name="dialCode" value={guest.dialCode} onChange={handleGuestChange}
-                        onFocus={focusGold} onBlur={blurGold}
-                        style={{ ...inputStyle, width: "auto", flexShrink: 0, paddingRight: "10px", borderRight: "none", cursor: "pointer", minWidth: "120px" }}>
-                        {DIAL_CODES.map((d, i) =>
-                          d.code === "" ? (
-                            <option key={`div-${i}`} disabled value="" style={{ backgroundColor: OPT_BG, color: MUTED }}>{d.label}</option>
-                          ) : (
-                            <option key={`${d.code}-${d.label}`} value={d.code} style={{ backgroundColor: OPT_BG }}>{d.flag} {d.code}</option>
-                          )
-                        )}
-                      </select>
-                      <input ref={guestPhoneInputRef} name="phoneNumber" type="tel" value={guest.phoneNumber} onChange={handleGuestChange}
-                        placeholder="70 000 000" style={{ ...inputStyle, flex: 1 }} onFocus={focusGold} onBlur={blurGold} />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label style={labelStyle}>Email address</label>
-                    <input ref={guestEmailInputRef} name="email" type="email" autoComplete="email" value={guest.email} onChange={handleGuestChange}
-                      placeholder="you@example.com"
-                      style={{
-                        ...inputStyle,
-                        borderColor: guestEmailInvalid ? "#e07070" : "rgba(197,164,109,0.25)",
-                      }}
-                      onFocus={focusGold} onBlur={blurGold} />
-                    {guestEmailInvalid && (
-                      <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070", marginTop: "8px", lineHeight: 1.55 }}>
-                        Please enter a valid email address.
-                      </p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label style={labelStyle}>Country</label>
-                    <select name="country" value={guest.country} onChange={handleGuestChange}
-                      onFocus={focusGold} onBlur={blurGold} style={{ ...inputStyle, cursor: "pointer" }}>
-                      {COUNTRIES.map((c, i) =>
-                        c.value === "" ? (
-                          <option key={`div-${i}`} disabled value="" style={{ backgroundColor: OPT_BG, color: MUTED }}>{c.label}</option>
-                        ) : (
-                          <option key={c.value} value={c.value} style={{ backgroundColor: OPT_BG }}>{c.label}</option>
-                        )
-                      )}
-                    </select>
-                  </div>
-                </div>
-              )}
 
               <div style={{ display: "flex", flexDirection: "column", gap: "24px", width: "100%" }}>
 
@@ -3440,6 +3405,73 @@ function BookPageInner() {
 
           {step === 3 && bookingPath === "request" && (
             <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+              {/* Guest contact (priority order: name → WhatsApp/phone → email → country) */}
+              {guestMode && (
+                <div ref={guestDetailsSectionRef} style={{ border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: GLASS1, padding: "1.5rem", display: "flex", flexDirection: "column", gap: "14px" }}>
+                  <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+                    Your details
+                  </p>
+                  <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
+                    WhatsApp is preferred. If you do not use WhatsApp, please enter your email.
+                  </p>
+
+                  <div>
+                    <label style={labelStyle}>Full name</label>
+                    <input ref={guestFullNameInputRef} name="fullName" type="text" required value={guest.fullName} onChange={handleGuestChange}
+                      placeholder="Your full name" style={inputStyle} onFocus={focusGold} onBlur={blurGold} />
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>WhatsApp / phone number</label>
+                    <div style={{ display: "flex" }}>
+                      <select name="dialCode" value={guest.dialCode} onChange={handleGuestChange}
+                        onFocus={focusGold} onBlur={blurGold}
+                        style={{ ...inputStyle, width: "auto", flexShrink: 0, paddingRight: "10px", borderRight: "none", cursor: "pointer", minWidth: "120px" }}>
+                        {DIAL_CODES.map((d, i) =>
+                          d.code === "" ? (
+                            <option key={`div-${i}`} disabled value="" style={{ backgroundColor: OPT_BG, color: MUTED }}>{d.label}</option>
+                          ) : (
+                            <option key={`${d.code}-${d.label}`} value={d.code} style={{ backgroundColor: OPT_BG }}>{d.flag} {d.code}</option>
+                          )
+                        )}
+                      </select>
+                      <input ref={guestPhoneInputRef} name="phoneNumber" type="tel" value={guest.phoneNumber} onChange={handleGuestChange}
+                        placeholder="70 000 000" style={{ ...inputStyle, flex: 1 }} onFocus={focusGold} onBlur={blurGold} />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>Email address</label>
+                    <input ref={guestEmailInputRef} name="email" type="email" autoComplete="email" value={guest.email} onChange={handleGuestChange}
+                      placeholder="you@example.com"
+                      style={{
+                        ...inputStyle,
+                        borderColor: guestEmailInvalid ? "#e07070" : "rgba(197,164,109,0.25)",
+                      }}
+                      onFocus={focusGold} onBlur={blurGold} />
+                    {guestEmailInvalid && (
+                      <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070", marginTop: "8px", lineHeight: 1.55 }}>
+                        Please enter a valid email address.
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>Country</label>
+                    <select name="country" value={guest.country} onChange={handleGuestChange}
+                      onFocus={focusGold} onBlur={blurGold} style={{ ...inputStyle, cursor: "pointer" }}>
+                      {COUNTRIES.map((c, i) =>
+                        c.value === "" ? (
+                          <option key={`div-${i}`} disabled value="" style={{ backgroundColor: OPT_BG, color: MUTED }}>{c.label}</option>
+                        ) : (
+                          <option key={c.value} value={c.value} style={{ backgroundColor: OPT_BG }}>{c.label}</option>
+                        )
+                      )}
+                    </select>
+                  </div>
+                </div>
+              )}
+
               <div>
                 <p style={{ fontFamily: PLAYFAIR, fontSize: "20px", fontWeight: 400, color: WHITE, margin: "0 0 10px" }}>
                   Review your stay
@@ -3465,22 +3497,11 @@ function BookPageInner() {
 
               {estimatePanel}
 
-              {!hasAddonsOrSpecialRequestsForReview && (
-                <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", lineHeight: 1.65, margin: 0, textAlign: "center" }}>
-                  Instant confirmation available for eligible stays. Some requests may require review.
+              <div style={{ border: "0.5px solid rgba(197,164,109,0.24)", backgroundColor: "rgba(197,164,109,0.05)", padding: "14px 16px" }}>
+                <p style={{ fontFamily: LATO, fontSize: "12px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65 }}>
+                  Secure payment is for the stay only. Add-ons and special requests are reviewed separately by Oraya and charged only if approved.
                 </p>
-              )}
-
-              {hasAddonsOrSpecialRequestsForReview && (
-                <div style={{ border: "0.5px solid rgba(197,164,109,0.24)", backgroundColor: "rgba(197,164,109,0.05)", padding: "14px 16px", display: "grid", gap: "6px" }}>
-                  <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "1.6px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
-                    Payment after Oraya review
-                  </p>
-                  <p style={{ fontFamily: LATO, fontSize: "12px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65 }}>
-                    Add-ons and special requests are confirmed by Oraya first. Reserve the stay now; we will send the correct payment step after approval, usually within 24 hours.
-                  </p>
-                </div>
-              )}
+              </div>
 
               {error && (
                 <p style={{ fontFamily: LATO, fontSize: "14px", color: "#e07070", textAlign: "center", lineHeight: 1.6, margin: 0 }}>
@@ -3497,27 +3518,14 @@ function BookPageInner() {
                 <button
                   type="button"
                   onClick={() => {
-                    void handleSubmit("reserve");
+                    void handleSubmit(canPayOnline ? "pay_now" : "reserve");
                   }}
                   disabled={loading}
-                  className={loading ? undefined : "oraya-pressable"}
-                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD, backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.45)", padding: "14px 18px", minHeight: "50px", flex: 1, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.65 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}
+                  className={loading ? undefined : "oraya-pressable oraya-cta-gold-hover"}
+                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 18px", minHeight: "50px", flex: 1, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}
                 >
-                  {loading && submitIntent === "reserve" ? "Reserving..." : "Reserve this stay"}
+                  {loading ? "Preparing payment…" : "Continue to secure payment"}
                 </button>
-                {!hasAddonsOrSpecialRequestsForReview && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void handleSubmit("pay_now");
-                    }}
-                    disabled={loading}
-                    className={loading ? undefined : "oraya-pressable oraya-cta-gold-hover"}
-                    style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 18px", minHeight: "50px", flex: 1.15, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}
-                  >
-                    {loading && submitIntent === "pay_now" ? "Preparing payment..." : "Pay now to confirm booking"}
-                  </button>
-                )}
               </div>
             </div>
           )}
