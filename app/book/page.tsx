@@ -821,11 +821,11 @@ function StepIndicator({ step, bookingPath }: { step: number; bookingPath: Booki
     );
   }
 
-  const labels = ["Villa & Dates", "Stay Setup", "Review & Payment"];
+  const labels = ["Stay", "Customize", "Guest Details", "Checkout"];
   return (
     <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-        {([1, 2, 3] as const).map((s, i) => (
+        {([1, 2, 3, 4] as const).map((s, i) => (
           <div key={s} style={{ display: "flex", alignItems: "center" }}>
             <div style={{
               width: "26px", height: "26px", borderRadius: "50%", flexShrink: 0,
@@ -838,7 +838,7 @@ function StepIndicator({ step, bookingPath }: { step: number; bookingPath: Booki
             }}>
               {step > s ? "✓" : s}
             </div>
-            {i < 2 && (
+            {i < 3 && (
               <div style={{
                 width: "52px", height: "0.5px",
                 backgroundColor: step > s ? GOLD : "var(--oraya-step-line)",
@@ -1854,14 +1854,16 @@ function BookPageInner() {
 
   function goNext() {
     setError("");
-    if (step === 3 && bookingPath === "request") return;
+    if (step === 4 && bookingPath === "request") return;
     if (step === 2 && bookingPath === "instant") return;
     if (step === 2) {
       if (bookingPath !== "request") return;
       if (!form.bedroomCount)                  { setError("Please select how many bedrooms you would like prepared."); return; }
-      if (!enforceGuestContactForStep2()) return;
       const sleeping = parseInt(form.sleepingGuests, 10);
       if (!sleeping || sleeping < 1)           { setError("Please enter at least 1 estimated guest before continuing."); return; }
+    }
+    if (step === 3 && bookingPath === "request") {
+      if (!enforceGuestContactForStep2()) return;
     }
     setStep(s => s + 1);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1904,7 +1906,7 @@ function BookPageInner() {
   }
 
   async function handleSubmit(intent: "reserve" | "pay_now") {
-    if (step !== 3 || bookingPath !== "request") return;
+    if (step !== 4 || bookingPath !== "request") return;
     setError("");
     setSubmitIntent(intent);
     setLoading(true);
@@ -1924,14 +1926,6 @@ function BookPageInner() {
         minimumDepositPercentage: paymentSettings.deposit_minimum_percentage,
       });
 
-      const hasSpecialRequest = (form.message ?? "").trim().length > 0;
-      const hasManualReviewAddonSelection = selectedAddons.some((id) => {
-        const addon = stayApplicableAddons.find((item) => item.id === id);
-        if (!addon) return true;
-        if (addon.requires_approval) return true;
-        if (getAddonEnforcementMode(addon.enforcement_mode) === "strict") return true;
-        return getAddonOperationalFeedback(addon).some((message) => message.tone === "warning");
-      });
       const paymentPurposeAvailable =
         selectedPaymentPurpose === "full"
           ? paymentSettings.allow_full_payment
@@ -1948,17 +1942,12 @@ function BookPageInner() {
         intent === "pay_now" &&
         hostedCheckoutReady &&
         paymentPurposeAvailable &&
-        availabilityValid &&
-        instantEligible &&
-        bookingTrustMode === "instant" &&
-        selectedAddons.length === 0 &&
-        !hasSpecialRequest &&
-        !hasManualReviewAddonSelection;
+        availabilityValid;
       if (intent === "pay_now" && !attemptingOnlineCheckout) {
         throw new Error(
           !hostedCheckoutReady
             ? paymentSettings.online_checkout_message || "Online payment is not available for this booking right now."
-            : "This stay needs Oraya review before payment can be collected.",
+            : "Secure payment is not available for this stay right now. You can still submit a booking request.",
         );
       }
       if (attemptingOnlineCheckout && !selectedPaymentSelection.ok) {
@@ -2021,12 +2010,12 @@ function BookPageInner() {
                 "[Booking Protocol]",
                 `System branch: ${
                   attemptingOnlineCheckout
-                    ? "Hosted checkout after booking creation"
+                    ? "Hosted checkout after booking creation - stay amount only"
                     : "Pending booking request for admin review"
                 }`,
                 attemptingOnlineCheckout
                   ? selectedPaymentPurpose === "full"
-                    ? "Payment choice: Full payment on hosted checkout"
+                    ? "Payment choice: Stay-only payment on hosted checkout"
                     : "Payment choice: Minimum deposit on hosted checkout"
                   : "Charge status: No charge collected on website at booking-request stage",
                 attemptingOnlineCheckout
@@ -2156,9 +2145,8 @@ function BookPageInner() {
 
   // ── Auth loading spinner ──────────────────────────────────────────────────
   const step3AmountTotal =
-    step === 3 && bookingPath === "request" && estimatedTotal > 0 ? estimatedTotal : null;
-  const hasAddonsOrSpecialRequestsForReview =
-    selectedAddons.length > 0 || (form.message ?? "").trim().length > 0;
+    step === 4 && bookingPath === "request" && staySubtotal !== null && staySubtotal > 0 ? staySubtotal : null;
+  const specialRequestText = (form.message ?? "").trim();
 
   if (authStatus === "loading") {
     return (
@@ -2325,7 +2313,7 @@ function BookPageInner() {
             {" "}for member benefits.
           </p>
           <p style={{ fontFamily: LATO, fontSize: "12px", color: "var(--oraya-book-p72)", lineHeight: 1.65, margin: 0, textAlign: "center" }}>
-            Booking on this site is direct with Oraya — not instant self-checkout. Every request is reviewed before confirmation; payment is requested only after that review. For help,{" "}
+            Booking on this site is direct with Oraya. You may continue to checkout or submit a request for Oraya follow-up. For help,{" "}
             <a href="mailto:hello@stayoraya.com" className="oraya-link-text" style={{ color: GOLD }}>hello@stayoraya.com</a>.
           </p>
         </div>
@@ -2746,73 +2734,6 @@ function BookPageInner() {
                   </div>
                 </div>
               </div>
-
-              {/* Guest contact (priority order: name → WhatsApp/phone → email → country) */}
-              {guestMode && (
-                <div ref={guestDetailsSectionRef} style={{ border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: GLASS1, padding: "1.5rem", display: "flex", flexDirection: "column", gap: "14px" }}>
-                  <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
-                    Your details
-                  </p>
-                  <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
-                    WhatsApp is preferred. If you do not use WhatsApp, please enter your email.
-                  </p>
-
-                  <div>
-                    <label style={labelStyle}>Full name</label>
-                    <input ref={guestFullNameInputRef} name="fullName" type="text" required value={guest.fullName} onChange={handleGuestChange}
-                      placeholder="Your full name" style={inputStyle} onFocus={focusGold} onBlur={blurGold} />
-                  </div>
-
-                  <div>
-                    <label style={labelStyle}>WhatsApp / phone number</label>
-                    <div style={{ display: "flex" }}>
-                      <select name="dialCode" value={guest.dialCode} onChange={handleGuestChange}
-                        onFocus={focusGold} onBlur={blurGold}
-                        style={{ ...inputStyle, width: "auto", flexShrink: 0, paddingRight: "10px", borderRight: "none", cursor: "pointer", minWidth: "120px" }}>
-                        {DIAL_CODES.map((d, i) =>
-                          d.code === "" ? (
-                            <option key={`div-${i}`} disabled value="" style={{ backgroundColor: OPT_BG, color: MUTED }}>{d.label}</option>
-                          ) : (
-                            <option key={`${d.code}-${d.label}`} value={d.code} style={{ backgroundColor: OPT_BG }}>{d.flag} {d.code}</option>
-                          )
-                        )}
-                      </select>
-                      <input ref={guestPhoneInputRef} name="phoneNumber" type="tel" value={guest.phoneNumber} onChange={handleGuestChange}
-                        placeholder="70 000 000" style={{ ...inputStyle, flex: 1 }} onFocus={focusGold} onBlur={blurGold} />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label style={labelStyle}>Email address</label>
-                    <input ref={guestEmailInputRef} name="email" type="email" autoComplete="email" value={guest.email} onChange={handleGuestChange}
-                      placeholder="you@example.com"
-                      style={{
-                        ...inputStyle,
-                        borderColor: guestEmailInvalid ? "#e07070" : "rgba(197,164,109,0.25)",
-                      }}
-                      onFocus={focusGold} onBlur={blurGold} />
-                    {guestEmailInvalid && (
-                      <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070", marginTop: "8px", lineHeight: 1.55 }}>
-                        Please enter a valid email address.
-                      </p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label style={labelStyle}>Country</label>
-                    <select name="country" value={guest.country} onChange={handleGuestChange}
-                      onFocus={focusGold} onBlur={blurGold} style={{ ...inputStyle, cursor: "pointer" }}>
-                      {COUNTRIES.map((c, i) =>
-                        c.value === "" ? (
-                          <option key={`div-${i}`} disabled value="" style={{ backgroundColor: OPT_BG, color: MUTED }}>{c.label}</option>
-                        ) : (
-                          <option key={c.value} value={c.value} style={{ backgroundColor: OPT_BG }}>{c.label}</option>
-                        )
-                      )}
-                    </select>
-                  </div>
-                </div>
-              )}
 
               <div style={{ display: "flex", flexDirection: "column", gap: "24px", width: "100%" }}>
 
@@ -3353,17 +3274,6 @@ function BookPageInner() {
                 )}
               </div>
 
-              {hasAddonsOrSpecialRequestsForReview && (
-                <div style={{ border: "0.5px solid rgba(197,164,109,0.24)", backgroundColor: "rgba(197,164,109,0.05)", padding: "14px 16px", display: "grid", gap: "6px" }}>
-                  <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "1.6px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
-                    Review before payment
-                  </p>
-                  <p style={{ fontFamily: LATO, fontSize: "12px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65 }}>
-                    Add-ons and special requests are confirmed by Oraya first. We will review availability and send the correct payment step, usually within 24 hours.
-                  </p>
-                </div>
-              )}
-
               {error && (
                 <div style={{ width: "100%" }}>
                   <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070", textAlign: "center", lineHeight: 1.6, margin: 0 }}>
@@ -3381,7 +3291,7 @@ function BookPageInner() {
                 <button type="button" onClick={goNext}
                   className="oraya-pressable oraya-cta-gold-hover"
                   style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 16px", flex: 1, cursor: "pointer", minHeight: "50px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  Review your stay
+                  Continue to guest details
                 </button>
               </div>
 
@@ -3441,10 +3351,120 @@ function BookPageInner() {
           {step === 3 && bookingPath === "request" && (
             <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
               <div>
+                <p style={{ fontFamily: PLAYFAIR, fontSize: "20px", fontWeight: 400, color: WHITE, margin: "0 0 8px" }}>
+                  Guest details
+                </p>
+                <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65 }}>
+                  Share the best contact details for Oraya to confirm your stay and coordinate any requests.
+                </p>
+              </div>
+
+              {guestMode ? (
+                <div ref={guestDetailsSectionRef} style={{ border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: GLASS1, padding: "1.5rem", display: "flex", flexDirection: "column", gap: "14px" }}>
+                  <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+                    Contact
+                  </p>
+                  <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
+                    WhatsApp is preferred. If you do not use WhatsApp, please enter your email.
+                  </p>
+
+                  <div>
+                    <label style={labelStyle}>Full name</label>
+                    <input ref={guestFullNameInputRef} name="fullName" type="text" required value={guest.fullName} onChange={handleGuestChange}
+                      placeholder="Your full name" style={inputStyle} onFocus={focusGold} onBlur={blurGold} />
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>WhatsApp / phone number</label>
+                    <div style={{ display: "flex" }}>
+                      <select name="dialCode" value={guest.dialCode} onChange={handleGuestChange}
+                        onFocus={focusGold} onBlur={blurGold}
+                        style={{ ...inputStyle, width: "auto", flexShrink: 0, paddingRight: "10px", borderRight: "none", cursor: "pointer", minWidth: "120px" }}>
+                        {DIAL_CODES.map((d, i) =>
+                          d.code === "" ? (
+                            <option key={`div-${i}`} disabled value="" style={{ backgroundColor: OPT_BG, color: MUTED }}>{d.label}</option>
+                          ) : (
+                            <option key={`${d.code}-${d.label}`} value={d.code} style={{ backgroundColor: OPT_BG }}>{d.flag} {d.code}</option>
+                          )
+                        )}
+                      </select>
+                      <input ref={guestPhoneInputRef} name="phoneNumber" type="tel" value={guest.phoneNumber} onChange={handleGuestChange}
+                        placeholder="70 000 000" style={{ ...inputStyle, flex: 1 }} onFocus={focusGold} onBlur={blurGold} />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>Email address</label>
+                    <input ref={guestEmailInputRef} name="email" type="email" autoComplete="email" value={guest.email} onChange={handleGuestChange}
+                      placeholder="you@example.com"
+                      style={{
+                        ...inputStyle,
+                        borderColor: guestEmailInvalid ? "#e07070" : "rgba(197,164,109,0.25)",
+                      }}
+                      onFocus={focusGold} onBlur={blurGold} />
+                    {guestEmailInvalid && (
+                      <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070", marginTop: "8px", lineHeight: 1.55 }}>
+                        Please enter a valid email address.
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>Country</label>
+                    <select name="country" value={guest.country} onChange={handleGuestChange}
+                      onFocus={focusGold} onBlur={blurGold} style={{ ...inputStyle, cursor: "pointer" }}>
+                      {COUNTRIES.map((c, i) =>
+                        c.value === "" ? (
+                          <option key={`div-${i}`} disabled value="" style={{ backgroundColor: OPT_BG, color: MUTED }}>{c.label}</option>
+                        ) : (
+                          <option key={c.value} value={c.value} style={{ backgroundColor: OPT_BG }}>{c.label}</option>
+                        )
+                      )}
+                    </select>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: "rgba(197,164,109,0.04)", padding: "1.25rem", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "14px", flexWrap: "wrap" }}>
+                  <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p82)", margin: 0, lineHeight: 1.6 }}>
+                    Booking as <span style={{ color: GOLD }}>{memberName || "member"}</span>
+                  </p>
+                  <a href="/login" className="oraya-link-text" style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED }}>
+                    Not you?
+                  </a>
+                </div>
+              )}
+
+              {error && (
+                <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070", textAlign: "center", lineHeight: 1.6, margin: 0 }}>
+                  {error}
+                </p>
+              )}
+
+              <div style={{ display: "flex", gap: "12px", alignItems: "stretch", marginTop: "4px" }}>
+                <button type="button" onClick={goBack}
+                  className="oraya-pressable oraya-cta-book-back"
+                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: "var(--oraya-book-text)", backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", padding: "14px 22px", cursor: "pointer", minHeight: "50px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {"\u2190"} Back
+                </button>
+                <button type="button" onClick={goNext}
+                  className="oraya-pressable oraya-cta-gold-hover"
+                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 16px", flex: 1, cursor: "pointer", minHeight: "50px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  Continue to checkout
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 4 && bookingPath === "request" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+              <div>
                 <p style={{ fontFamily: PLAYFAIR, fontSize: "20px", fontWeight: 400, color: WHITE, margin: "0 0 10px" }}>
-                  Review your stay
+                  Checkout
                 </p>
                 <div style={{ border: "0.5px solid rgba(197,164,109,0.18)", padding: "1.25rem", backgroundColor: GLASS3 }}>
+                  <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: "0 0 8px" }}>
+                    Booking summary
+                  </p>
                   {(
                     [
                       ["Villa", form.villa],
@@ -3463,24 +3483,62 @@ function BookPageInner() {
                 </div>
               </div>
 
-              {estimatePanel}
-
-              {!hasAddonsOrSpecialRequestsForReview && (
-                <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", lineHeight: 1.65, margin: 0, textAlign: "center" }}>
-                  Instant confirmation available for eligible stays. Some requests may require review.
+              <div style={{ border: "0.5px solid rgba(197,164,109,0.18)", padding: "1.25rem", backgroundColor: GLASS1, display: "grid", gap: "12px" }}>
+                <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+                  Requested add-ons
                 </p>
-              )}
+                {selectedAddonDetails.length > 0 ? (
+                  <div style={{ display: "grid", gap: "10px" }}>
+                    {selectedAddonDetails.map((addon) => {
+                      const addonPrice = computeAddonPrice(addon);
+                      return (
+                        <div key={addon.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "16px" }}>
+                          <span style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, lineHeight: 1.5 }}>{addon.label}</span>
+                          <span style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, textAlign: "right", lineHeight: 1.5 }}>
+                            {addonPrice !== null ? formatUsd(addonPrice) : "Price on request"}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: 0, lineHeight: 1.6 }}>
+                    No add-ons requested.
+                  </p>
+                )}
+              </div>
 
-              {hasAddonsOrSpecialRequestsForReview && (
-                <div style={{ border: "0.5px solid rgba(197,164,109,0.24)", backgroundColor: "rgba(197,164,109,0.05)", padding: "14px 16px", display: "grid", gap: "6px" }}>
-                  <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "1.6px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
-                    Payment after Oraya review
-                  </p>
-                  <p style={{ fontFamily: LATO, fontSize: "12px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65 }}>
-                    Add-ons and special requests are confirmed by Oraya first. Reserve the stay now; we will send the correct payment step after approval, usually within 24 hours.
-                  </p>
+              <div style={{ border: "0.5px solid rgba(197,164,109,0.18)", padding: "1.25rem", backgroundColor: GLASS1, display: "grid", gap: "10px" }}>
+                <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+                  Special requests
+                </p>
+                <p style={{ fontFamily: LATO, fontSize: "13px", color: specialRequestText ? WHITE : MUTED, margin: 0, lineHeight: 1.65, whiteSpace: "pre-wrap" }}>
+                  {specialRequestText || "No special requests added."}
+                </p>
+              </div>
+
+              <div style={{ border: "0.5px solid rgba(197,164,109,0.24)", backgroundColor: "rgba(197,164,109,0.05)", padding: "1.25rem", display: "grid", gap: "12px" }}>
+                <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+                  Payment summary
+                </p>
+                <div style={{ display: "grid", gap: "8px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: "16px" }}>
+                    <span style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p76)" }}>Estimated booking total</span>
+                    <span style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, textAlign: "right" }}>{formatUsd(estimatedTotal)}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: "16px" }}>
+                    <span style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p76)" }}>Amount due now (stay only)</span>
+                    <span style={{ fontFamily: LATO, fontSize: "15px", color: GOLD, textAlign: "right", fontWeight: 600 }}>{formatUsd(staySubtotal ?? 0)}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: "16px" }}>
+                    <span style={{ fontFamily: LATO, fontSize: "12px", color: MUTED }}>Add-ons and requests</span>
+                    <span style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, textAlign: "right" }}>Reviewed separately</span>
+                  </div>
                 </div>
-              )}
+                <p style={{ fontFamily: LATO, fontSize: "12px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65 }}>
+                  Selected add-ons and special requests are subject to Oraya review and may require additional payment after approval.
+                </p>
+              </div>
 
               {error && (
                 <p style={{ fontFamily: LATO, fontSize: "14px", color: "#e07070", textAlign: "center", lineHeight: 1.6, margin: 0 }}>
@@ -3497,28 +3555,26 @@ function BookPageInner() {
                 <button
                   type="button"
                   onClick={() => {
-                    void handleSubmit("reserve");
+                    void handleSubmit("pay_now");
                   }}
                   disabled={loading}
-                  className={loading ? undefined : "oraya-pressable"}
-                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD, backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.45)", padding: "14px 18px", minHeight: "50px", flex: 1, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.65 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}
+                  className={loading ? undefined : "oraya-pressable oraya-cta-gold-hover"}
+                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 18px", minHeight: "50px", flex: 1, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}
                 >
-                  {loading && submitIntent === "reserve" ? "Reserving..." : "Reserve this stay"}
+                  {loading && submitIntent === "pay_now" ? "Preparing payment..." : "Continue to secure payment"}
                 </button>
-                {!hasAddonsOrSpecialRequestsForReview && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void handleSubmit("pay_now");
-                    }}
-                    disabled={loading}
-                    className={loading ? undefined : "oraya-pressable oraya-cta-gold-hover"}
-                    style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 18px", minHeight: "50px", flex: 1.15, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}
-                  >
-                    {loading && submitIntent === "pay_now" ? "Preparing payment..." : "Pay now to confirm booking"}
-                  </button>
-                )}
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  void handleSubmit("reserve");
+                }}
+                disabled={loading}
+                className={loading ? undefined : "oraya-link-text"}
+                style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, backgroundColor: "transparent", border: "none", padding: "2px 0", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.65 : 1, alignSelf: "center", lineHeight: 1.6 }}
+              >
+                {loading && submitIntent === "reserve" ? "Submitting request..." : "Prefer to reserve and pay later? Submit booking request"}
+              </button>
             </div>
           )}
 
