@@ -4,7 +4,6 @@ import { useSearchParams } from "next/navigation";
 import { DayPicker } from "react-day-picker";
 import type { DateRange, Matcher } from "react-day-picker";
 import "react-day-picker/dist/style.css";
-import InstantBookingIcon from "@/components/icons/InstantBookingIcon";
 import OrayaLogoFull from "@/components/OrayaLogoFull";
 import { getVillaBasePrice, getVillaEntryPrice, getVillaPricing } from "@/lib/admin-pricing";
 import { ADDON_OPERATIONAL_SETTINGS_KEY, formatPreparationTime, getAddonAppliesTo, getAddonEnforcementMode, getAddonTimingType, mergeAddonsWithOperationalSettings, parseAddonOperationalSetting, type AddonCategory, type AddonCutoffType, type AddonEnforcementMode, type AddonPricingType } from "@/lib/addon-operations";
@@ -1710,19 +1709,6 @@ function BookPageInner() {
     };
   }, [step, bookingPath]);
 
-  /** Default reserve path: skip decision screen when instant booking is not offered for this stay. */
-  useEffect(() => {
-    if (!butlerPrefillReady) return;
-    if (!availabilityReadyForSelection) return;
-    if (step !== 1 || instantEligible) return;
-    if (!form.villa || !checkIn || !checkOut || checkOut <= checkIn || dateConflict) return;
-    if (reserveAutoAdvanceSuppressedRef.current) return;
-    if (reserveAutoNavigatedRef.current) return;
-    reserveAutoNavigatedRef.current = true;
-    setError("");
-    transitionStep1To("request");
-  }, [step, instantEligible, form.villa, checkIn, checkOut, dateConflict, butlerPrefillReady, availabilityReadyForSelection, transitionStep1To]);
-
   useEffect(() => {
     setSelectedAddons((prev) => prev.filter((id) => {
       const addon = stayApplicableAddons.find((item) => item.id === id);
@@ -1834,20 +1820,6 @@ function BookPageInner() {
     setError("");
     if (!validateStep1Basics()) return;
     transitionStep1To("request");
-  }
-
-  function proceedFromStep1ToInstant() {
-    setError("");
-    if (!validateStep1Basics()) return;
-    transitionStep1To("instant");
-  }
-
-  /** From instant Step 2 — jump into full request flow at add-ons (stay setup still required before submit). */
-  function switchInstantFlowToAddons() {
-    setError("");
-    setBookingPath("request");
-    setStep(2);
-    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function focusGuestFieldAfterScroll(field: HTMLInputElement | null) {
@@ -2282,118 +2254,16 @@ function BookPageInner() {
 
   const moStep1 = (order: number): React.CSSProperties => (narrowStep1 ? { order } : {});
 
-  const eligibilitySecondaryStep1 =
-    form.villa && checkIn && checkOut && checkOut > checkIn && !dateConflict ? (
-      instantEligible ? (
-        <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
-          Self-service stay only. No add-ons or special requests.
-        </p>
-      ) : (
-        <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
-          Oraya will confirm availability based on timing or services.
-        </p>
-      )
-    ) : null;
-
-  const step1DecisionBlock = instantEligible && checkOut ? (
-    <div style={{ display: "flex", flexDirection: "column", gap: narrowStep1 ? "14px" : "20px", alignItems: "stretch", width: "100%" }}>
-      <p style={{ fontFamily: PLAYFAIR, fontSize: narrowStep1 ? "18px" : "22px", fontWeight: 400, color: WHITE, margin: 0, textAlign: "center", lineHeight: 1.3 }}>
-        Continue your booking
-      </p>
-
-      {/* Primary path — Reserve dominates */}
-      <div
-        style={{
-          border: "0.5px solid rgba(197,164,109,0.5)",
-          backgroundColor: "rgba(197,164,109,0.11)",
-          padding: narrowStep1 ? "18px 16px 16px" : "24px 22px 20px",
-          display: "flex",
-          flexDirection: "column",
-          gap: "14px",
-          textAlign: "left",
-          boxShadow: "inset 0 0 0 1px rgba(197,164,109,0.06)",
-        }}
-      >
-        <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
-          Full Oraya experience
-        </p>
-        <p style={{ fontFamily: PLAYFAIR, fontSize: narrowStep1 ? "22px" : "26px", fontWeight: 400, color: WHITE, margin: 0, lineHeight: 1.3 }}>
-          Reserve Your Stay
-        </p>
-        <p style={{ fontFamily: LATO, fontSize: narrowStep1 ? "13px" : "14px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65, fontWeight: 300, whiteSpace: "pre-line" }}>
-          Enhance your stay with services, add-ons, and special requests.{"\n"}Perfect for a fully prepared Oraya experience.
-        </p>
-        <button
-          type="button"
-          className="oraya-pressable oraya-cta-gold-hover"
-          onClick={proceedFromStep1ToReserve}
-          style={{
-            fontFamily: LATO,
-            fontSize: "13px",
-            letterSpacing: "0.9px",
-            color: GOLD_CTA,
-            backgroundColor: GOLD,
-            border: "none",
-            padding: "15px 18px",
-            marginTop: "4px",
-            cursor: "pointer",
-            textAlign: "center",
-            width: "100%",
-          }}
-        >
-          Reserve Your Stay
-        </button>
-      </div>
-
-      {/* Secondary — compact instant action + info popover */}
-      <div
-        className="book-instant-secondary-row"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: "12px",
-          flexWrap: "wrap",
-        }}
-      >
-        <button
-          type="button"
-          className="oraya-pressable oraya-cta-book-back"
-          onClick={proceedFromStep1ToInstant}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "8px",
-            fontFamily: LATO,
-            fontSize: "12px",
-            letterSpacing: "0.5px",
-            color: GOLD,
-            backgroundColor: "transparent",
-            border: "0.5px solid rgba(197,164,109,0.42)",
-            padding: "10px 18px",
-            cursor: "pointer",
-          }}
-        >
-          <InstantBookingIcon size={14} />
-          Book Instantly
-        </button>
-        <InfoPopover
-          label="About instant booking"
-          text="Best for simple self-service stays with no add-ons, services, or special requests."
-        />
-      </div>
-    </div>
-  ) : (!form.villa || !checkIn || !checkOut || checkOut <= checkIn || dateConflict) ? (
+  const step1DecisionBlock = (
     <button
       type="button"
       className="oraya-pressable oraya-cta-gold-hover"
       onClick={proceedFromStep1ToReserve}
       style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 16px", minHeight: "50px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", width: "100%" }}
     >
-      Reserve Your Stay
+      Continue to stay setup
     </button>
-  ) : null;
+  );
 
   if (authStatus === "none" && !guestMode) {
     return (
@@ -2469,7 +2339,7 @@ function BookPageInner() {
         {step !== 1 && (
           <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
             <h1 style={{ fontFamily: PLAYFAIR, fontSize: "2rem", fontWeight: 400, color: WHITE, margin: 0 }}>
-              {bookingPath === "instant" ? "Instant booking" : "Request a booking"}
+              Request a booking
             </h1>
           </div>
         )}
@@ -2587,15 +2457,6 @@ function BookPageInner() {
                                 pointerEvents: "none",
                               }}
                             />
-                            {instantBookingEnabledForVilla(villa, instantBookingFlags) && (
-                              <span
-                                className="instant-badge instant-badge--on-photo pointer-events-none"
-                                style={{ position: "absolute", top: "8px", right: "8px", zIndex: 2 }}
-                              >
-                                <InstantBookingIcon size={14} />
-                                <span>Instant booking available</span>
-                              </span>
-                            )}
                           </div>
                           <div style={{ padding: "16px" }}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
@@ -2732,7 +2593,6 @@ function BookPageInner() {
                             <p style={{ fontFamily: LATO, fontSize: "12px", color: "var(--oraya-book-p76)", margin: 0, lineHeight: 1.55 }}>
                               Rates vary by selected dates, season, and bedroom setup.
                             </p>
-                            {eligibilitySecondaryStep1}
                           </div>
                         </details>
                       </>
@@ -2756,49 +2616,6 @@ function BookPageInner() {
                       </p>
                     )}
 
-                    {form.villa && checkIn && checkOut && checkOut > checkIn && !dateConflict && (
-                      <div
-                        style={{
-                          marginTop: narrowStep1 ? 0 : "14px",
-                          padding: narrowStep1 ? "10px 14px" : "12px 16px",
-                          border: "0.5px solid rgba(197,164,109,0.22)",
-                          backgroundColor: "rgba(197,164,109,0.05)",
-                          display: "flex",
-                          flexDirection: "column",
-                          alignItems: "flex-start",
-                          gap: narrowStep1 ? "6px" : "8px",
-                          ...moStep1(5),
-                        }}
-                      >
-                        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-                          {instantEligible ? (
-                            <>
-                              <InstantBookingIcon size={narrowStep1 ? 18 : 20} />
-                              <span style={{ fontFamily: LATO, fontSize: narrowStep1 ? "12px" : "13px", color: WHITE, lineHeight: 1.55 }}>
-                                {narrowStep1 ? "Eligible for instant booking" : "This stay is eligible for instant booking"}
-                              </span>
-                            </>
-                          ) : (
-                            <span style={{ fontFamily: LATO, fontSize: narrowStep1 ? "12px" : "13px", color: "var(--oraya-book-p78)", lineHeight: 1.55 }}>
-                              {narrowStep1 ? "Requires review before confirmation" : "This stay requires review"}
-                            </span>
-                          )}
-                        </div>
-                        {!narrowStep1 && (
-                          <>
-                            {instantEligible ? (
-                              <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0, lineHeight: 1.55, paddingLeft: "30px" }}>
-                                Self-service stay only. No add-ons or special requests.
-                              </p>
-                            ) : (
-                              <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
-                                Oraya will confirm availability based on timing or services.
-                              </p>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    )}
                   </div>
 
                 </div>
@@ -2819,108 +2636,6 @@ function BookPageInner() {
               {!narrowStep1 && step1DecisionBlock}
             </div>
           )}
-
-          {/* ════════════════════════════════════════════════════════════════
-              STEP 2 — Instant path — Review & payment placeholder (no submission)
-          ════════════════════════════════════════════════════════════════ */}
-          {step === 2 && bookingPath === "instant" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-              <div style={{ display: "flex", justifyContent: "center" }}>
-                <span className="instant-badge instant-badge--active" style={{ backgroundColor: "rgba(197,164,109,0.08)" }}>
-                  <InstantBookingIcon size={16} />
-                  <span>Instant booking</span>
-                </span>
-              </div>
-              <div>
-                <p style={{ fontFamily: PLAYFAIR, fontSize: "20px", fontWeight: 400, color: WHITE, margin: "0 0 10px", textAlign: "center" }}>
-                  Review & payment
-                </p>
-                <div style={{ border: "0.5px solid rgba(197,164,109,0.18)", padding: "1.25rem", backgroundColor: GLASS3 }}>
-                  {(
-                    [
-                      ["Villa", form.villa],
-                      ["Check-in", fmtDate(checkIn)],
-                      ["Check-out", fmtDate(checkOut)],
-                      ["Duration", `${nights} ${nights === 1 ? "night" : "nights"}`],
-                      ["Bedrooms", formatBedroomLabel(form.bedroomCount)],
-                      ["Guest estimate", form.sleepingGuests],
-                    ] as [string, string][]
-                  ).map(([label, value]) => (
-                    <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "10px 0", borderBottom: "0.5px solid var(--oraya-book-subtle-border)", gap: "16px" }}>
-                      <span style={{ fontFamily: LATO, fontSize: "12px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--oraya-book-p62)", flexShrink: 0, paddingRight: "16px" }}>{label}</span>
-                      <span style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, textAlign: "right", lineHeight: 1.5, maxWidth: "60%" }}>{value}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {estimatePanel}
-
-              <div style={{ border: "0.5px solid rgba(197,164,109,0.24)", backgroundColor: "rgba(197,164,109,0.05)", padding: "16px 18px", display: "grid", gap: "10px" }}>
-                <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65 }}>
-                  {STEP4_TRUST.instant.headline}
-                </p>
-                <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0, lineHeight: 1.6 }}>
-                  Instant Booking will be available once secure online payment is activated. No booking is created and no charge is made from this screen.
-                </p>
-              </div>
-
-              <div style={{ border: "0.5px solid rgba(197,164,109,0.2)", backgroundColor: GLASS1, padding: "14px 16px", textAlign: "center" }}>
-                <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: "0 0 10px" }}>
-                  Payment
-                </p>
-                <button
-                  type="button"
-                  disabled
-                  style={{
-                    fontFamily: LATO,
-                    fontSize: "12px",
-                    letterSpacing: "1.5px",
-                    textTransform: "uppercase",
-                    color: MUTED,
-                    backgroundColor: "rgba(197,164,109,0.08)",
-                    border: "0.5px solid rgba(197,164,109,0.22)",
-                    padding: "14px 18px",
-                    cursor: "not-allowed",
-                    width: "100%",
-                    maxWidth: "340px",
-                    opacity: 0.72,
-                  }}
-                >
-                  Book Instantly (coming soon)
-                </button>
-              </div>
-
-              <button
-                type="button"
-                className="oraya-link-text"
-                onClick={switchInstantFlowToAddons}
-                style={{
-                  fontFamily: LATO,
-                  fontSize: "12px",
-                  color: GOLD,
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  textDecoration: "underline",
-                  textUnderlineOffset: "3px",
-                  padding: "4px 0",
-                  alignSelf: "center",
-                }}
-              >
-                Add services to your stay
-              </button>
-
-              <div style={{ display: "flex", gap: "12px", alignItems: "stretch" }}>
-                <button type="button" onClick={goBack}
-                  className="oraya-pressable oraya-cta-book-back"
-                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: "var(--oraya-book-text)", backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", padding: "14px 22px", minHeight: "50px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  ← Back
-                </button>
-              </div>
-            </div>
-          )}
-
           {/* ════════════════════════════════════════════════════════════════
               STEP 2 — Stay Details
           ════════════════════════════════════════════════════════════════ */}
@@ -3641,7 +3356,7 @@ function BookPageInner() {
                 <button type="button" onClick={goNext}
                   className="oraya-pressable oraya-cta-gold-hover"
                   style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 16px", flex: 1, cursor: "pointer", minHeight: "50px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  Continue to review
+                  Review your stay
                 </button>
               </div>
 
@@ -3735,11 +3450,11 @@ function BookPageInner() {
                 </p>
               )}
 
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px", alignItems: "stretch" }}>
-                <button type="button" onClick={goBack} disabled={loading}
+              <div style={{ display: "flex", gap: "12px", alignItems: "stretch" }}>
+                <button type="button" onClick={goBack} disabled={loading} aria-label="Back"
                   className={loading ? undefined : "oraya-pressable oraya-cta-book-back"}
-                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: "var(--oraya-book-text)", backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", padding: "14px 18px", minHeight: "50px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.5 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  Back
+                  style={{ fontFamily: LATO, fontSize: "18px", color: "var(--oraya-book-text)", backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.25)", width: "50px", minWidth: "50px", minHeight: "50px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.5 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  ←
                 </button>
                 <button
                   type="button"
@@ -3748,7 +3463,7 @@ function BookPageInner() {
                   }}
                   disabled={loading}
                   className={loading ? undefined : "oraya-pressable oraya-cta-gold-hover"}
-                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 18px", minHeight: "50px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}
+                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 18px", minHeight: "50px", flex: 1, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}
                 >
                   {loading ? "Reserving..." : "Reserve this stay"}
                 </button>
