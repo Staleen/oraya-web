@@ -16,6 +16,49 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-05-23 - `/api/butler/identify` accepts optional `message_text` with safe word-boundary-anchored booking-reference extraction
+
+**Decision:** `POST /api/butler/identify` accepts an optional `message_text` body field carrying the verbatim inbound WhatsApp turn that triggered the Butler flow. When `booking_reference` is absent from the request body and `message_text` is present, the route extracts the first word-boundary-anchored 8-character hex token via the new pure helper [lib/butler/extract-booking-reference.ts](../../lib/butler/extract-booking-reference.ts) (`/\b[0-9A-Fa-f]{8}\b/`) and forwards it as `booking_reference` to the orchestrator. Explicit `booking_reference` always wins; `message_text` never overrides it. When `message_text` contains no clean token, behavior is identical to the prior contract — the orchestrator's existing chain still asks the guest for the reference. The orchestrator itself is **unchanged**. The seven refusal/ask `safe_message` strings on the orchestrator's non-success branches receive string-only hospitality copy upgrades; behavior, action enums, sensitive-disclosure rules, and the active-identity composer are all unchanged.
+
+**Reason:** the live website-CTA WhatsApp path opens conversations with text like `"Hello Oraya — booking reference A0B8CECB"`. WhatChimp's Condition / save-to-custom-field primitives can route on substring matches but cannot run a regex capture to lift the 8-character token out of the trigger message into a custom field. The Butler flow therefore reached `/api/butler/identify` with `booking_reference` empty, and the orchestrator correctly fell through to `ask_for_booking_reference` — making the bot redundantly ask the guest for a value they had already provided. A bot-prompt-level workaround was rejected: dropping the entire trigger message into the existing `booking_reference` field and relying on `normalizeBookingReference` would have silently mis-extracted `"Hello Oraya — booking reference A0B8CECB"` as `"EAABEFEE"` because the surrounding English words contain valid hex letters (`e`, `aa`, `b`, `efeece`). The minimal-honest fix is a single additive backend field plus a single bounded-regex helper.
+
+The audit explicitly considered and rejected:
+
+- **Flow-only fix via WhatChimp Condition + custom-field capture.** Rejected — the exported flow's Condition nodes only support `contains` / `equal` operators on system / custom fields. No regex, no capture-group, no substring-extract, no transformation node exists in the available vocabulary. Substring detection is possible (`contains "booking reference"`) and is documented as an optional polish, but the actual hex token cannot be extracted by WhatChimp into a custom field.
+- **Naive hex stripping in the existing `normalizeBookingReference` path.** Rejected — `replace(/[^0-9a-fA-F]/g, "")` on the trigger message produces `"eaabefeeceA0B8CECB"` (hex letters from "Hello/Oraya/booking/reference" survive), then `.slice(0, 8)` yields `"EAABEFEE"`, a confidently-wrong reference. Worse than asking twice.
+- **Adding `message_text` to the orchestrator's `IdentityInput`.** Rejected — the orchestrator's contract is "decide identity given structured signals." Free-text parsing belongs at the route boundary, not inside the orchestrator. Keeping the extraction in the route also means `/api/butler/confirmed-guest-info` and other identity-using surfaces are not implicitly affected; each surface opts in by accepting and forwarding the derived reference itself if it wants this convenience.
+- **Adding a separate `/api/butler/identify-from-message` endpoint.** Rejected — it would duplicate the auth / validation / orchestration shell for a single string transformation. An optional additive field on the existing endpoint is one helper file plus ~10 lines of route code.
+- **Widening the extractor to be tolerant of non-word boundaries (e.g. `[A-Fa-f0-9]{8}` anywhere).** Rejected — `\b` is the safety boundary that prevents matching a substring of a longer hex run. `"A0B8CECB1234ABCD"` (which could happen if a guest pastes the full UUID instead of the prefix) does not match because the position after the 8th hex char has no word boundary; that case still falls through cleanly to `ask_for_booking_reference`.
+
+**Hospitality copy upgrade scope** — string-only, no behavior change:
+
+- `ask_for_booking_reference` — softened opener; explains where to find the reference.
+- `reference_not_found` — gentler "I'm not finding…" framing; preserves the ask.
+- `reference_ambiguous` (escalation) — warmer escalation phrasing.
+- `verification_failed` (escalation) — explicit "to keep your booking secure" rationale before handing off.
+- `request_identity_proof` — warmer opener; same email-or-name semantics.
+- `known_sender_cancelled` — gracious acknowledgement; offers next-step framing.
+- `reference_cancelled` — same.
+
+The active-identity `composeActiveIdentitySafeMessage` output (the `verified` and `known_sender_resolved` branches) is left untouched — it already reads warm, and changing it would require co-touching the structured-field consumers.
+
+**Impact:**
+
+- New helper: [lib/butler/extract-booking-reference.ts](../../lib/butler/extract-booking-reference.ts). Pure function `extractBookingReferenceFromText(text)`. Never throws; returns the uppercased 8-char hex token or `null`. Single regex `/\b[0-9A-Fa-f]{8}\b/`. No Supabase, no env, no side effects.
+- [app/api/butler/identify/route.ts](../../app/api/butler/identify/route.ts) — accepts optional `message_text` (capped at 2048 chars). Derives `booking_reference` from it via the helper when the body did not carry an explicit reference. Updated docstring. Wire contract unchanged (503 / 401 / 400 / 200). All existing callers' payloads remain valid and produce identical responses.
+- [lib/butler/identity-orchestrator.ts](../../lib/butler/identity-orchestrator.ts) — seven `safe_message` strings receive hospitality copy upgrades on the refusal / ask / cancellation branches. Behavior, action enums, sensitive-disclosure rules unchanged.
+- [docs/system/KNOWN_BUGS.md](KNOWN_BUGS.md) — new entry #6 documents the bug + the fix (closed).
+- [docs/system/BUTLER_PLAYBOOK.md](BUTLER_PLAYBOOK.md) — request-body example updated to include `message_text`; new "Inbound-message convenience" subsection documents the safe extraction rule, the no-naive-stripping invariant, the caller-side invariant, and the two manual WhatChimp operator changes required (HTTP API 7219 body addition + optional early-route Condition).
+- [docs/system/ARCHITECTURE.md](ARCHITECTURE.md) — `/api/butler/identify` API-surface table row updated.
+- No schema changes. No new env vars. No new dependencies. No locked-API touches. No payment-file touches. No booking-creation, pricing, overlap, schema, auth, token-continuity, secure-handoff, or unrelated-flow changes.
+- `tsc --noEmit` clean; `npm run build` clean.
+
+**Reversible?:** yes. Revert the new helper file + the route changes + the orchestrator string changes + the four doc edits; the endpoint returns to its prior contract. No data migrated. No tokens minted that need invalidation. Existing WhatChimp wiring (without the `message_text` body addition) continues to work unchanged.
+
+**Supersedes:** none. This decision extends the 2026-05-22 "WhatsApp identity v2" entry by adding a safe inbound-message convenience field; the priority order, request-body shape, identity-proof comparison set, and 503/401/400/200 contract from that entry all carry forward unchanged.
+
+---
+
 ## 2026-05-22 - Credit Libanais provider compatibility is widened at the schema boundary while the adapter stays placeholder-only
 
 **Decision:** Oraya now treats `credit_libanais` as a first-class persisted `bookings.payment_link_provider` value, but the Credit Libanais / MPGS adapter remains an explicit placeholder until the bank delivers the real hosted-checkout contract. The additive migration `sql/phase-16b4-credit-libanais-provider-compat.sql` is the human-gated schema-compatibility step that widens the `payment_link_provider` allow-list to `manual | whish | stripe | credit_libanais` and keeps `stripe` only for backward-compatible dev/test rows. Runtime readiness must report four things clearly: whether the selected provider is configured, whether it is actually implemented vs placeholder-only, a guest-safe setup message, and an admin-facing missing-requirements list that never exposes raw secret values. `/admin/settings` is now the operator surface for that non-secret readiness state, while credentials remain env-only.

@@ -417,7 +417,7 @@ function askForReferenceResult(): IdentityResult {
     check_out: null,
     booking_view_url: null,
     safe_message:
-      "Could you share your Oraya booking reference? It's the 8-character code on your confirmation email.",
+      "Welcome to Oraya — happy to help with your stay. Could you share your 8-character booking reference? You'll find it at the top of your confirmation email.",
   };
 }
 
@@ -456,7 +456,7 @@ function knownSenderResolvedResult(booking: ContinuityBookingRow): IdentityResul
       check_out: null,
       booking_view_url: null,
       safe_message:
-        "I see your earlier booking with us was cancelled. The Oraya team can help with any next steps.",
+        "Looking at our records, that earlier booking with us was cancelled. The Oraya team is here to walk you through any next steps — whether that's a new stay, a refund query, or anything else I can pass along.",
     };
   }
 
@@ -541,14 +541,14 @@ export async function orchestrateButlerIdentity(input: IdentityInput): Promise<I
       check_out: null,
       booking_view_url: null,
       safe_message:
-        "I couldn't find a booking with that reference. Please double-check the code on your Oraya confirmation email.",
+        "I'm not finding a booking under that reference just yet. Would you mind double-checking the 8-character code on your Oraya confirmation email and sending it again?",
     };
   }
 
   if (refResolution.kind === "ambiguous") {
     return escalateResult(
       "reference_ambiguous",
-      "I'd like to confirm a few details with the Oraya team before I share more. Someone will follow up shortly.",
+      "Let me have the Oraya team confirm a few details with you before I share anything further — someone will be in touch very shortly.",
     );
   }
 
@@ -568,7 +568,7 @@ export async function orchestrateButlerIdentity(input: IdentityInput): Promise<I
       check_out: null,
       booking_view_url: null,
       safe_message:
-        "That reference matches a cancelled booking. The Oraya team can help with any next steps.",
+        "That reference belongs to a booking that was cancelled. The Oraya team can guide you through any next steps — a new stay, a refund query, or anything else you'd like to explore.",
     };
   }
 
@@ -601,7 +601,7 @@ export async function orchestrateButlerIdentity(input: IdentityInput): Promise<I
     }
     return escalateResult(
       "verification_failed",
-      "I couldn't verify those details. The Oraya team will follow up with you to help.",
+      "Those details didn't match what we have on file. To keep your booking secure, I'll pass this to the Oraya team so they can help you directly — someone will be in touch very shortly.",
     );
   }
 
@@ -620,6 +620,6 @@ export async function orchestrateButlerIdentity(input: IdentityInput): Promise<I
     check_out: null,
     booking_view_url: null,
     safe_message:
-      "Before I share details, could you share the email or the full name used on your booking?",
+      "To keep your booking secure, would you share the email or the full name used when you booked? I'll take it from there.",
   };
 }
