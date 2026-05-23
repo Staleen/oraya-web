@@ -16,6 +16,27 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-05-23 - Payment readiness route names and MPGS state vocabulary are prepared without activating bank checkout
+
+**Decision:** Oraya now exposes `POST /api/payments/create-session` as the production-facing hosted-checkout session route while keeping the existing `/api/payments/checkout` handler as the implementation. Step 4 on `/book` calls the new route name, but the flow still creates the booking through the locked `/api/bookings` route first and does not mark anything paid without a verified provider callback. The Credit Libanais adapter remains placeholder-only. A new `lib/payments/mpgs.ts` alias documents the future MPGS module boundary, and `lib/payments/payment-state.ts` records the target provider-neutral lifecycle states (`unpaid`, `pending_payment`, `authorized`, `paid`, `failed`, `cancelled`, `refunded`, `partially_refunded`, `addon_payment_pending`) without changing the current database contract.
+
+**Reason:** the production payment prompt names `create-session`, `mpgs.ts`, and `payment-state.ts` as the intended architecture, while the repo already had most of the provider-neutral foundation under older names. Adding aliases and vocabulary avoids a disruptive rename and keeps the live checkout path closed until the bank supplies official hosted-checkout and callback details.
+
+**Impact:**
+
+- [app/api/payments/create-session/route.ts](../../app/api/payments/create-session/route.ts) re-exports the existing checkout `POST` handler.
+- [app/book/page.tsx](../../app/book/page.tsx) calls `/api/payments/create-session` for the Step 4 pay-now CTA.
+- [app/api/payments/checkout/route.ts](../../app/api/payments/checkout/route.ts) now includes a stable `code` field (`provider_not_configured` for 503 setup failures, `checkout_failed` otherwise).
+- [lib/payments/payment-state.ts](../../lib/payments/payment-state.ts) holds target lifecycle constants only; no schema change consumes them yet.
+- [lib/payments/mpgs.ts](../../lib/payments/mpgs.ts) aliases the current Credit Libanais placeholder provider as the MPGS boundary.
+- Guest-facing placeholder copy now says secure card payment is unavailable yet and Oraya will follow up after review, instead of saying setup is in progress.
+
+**Reversible?:** yes. Remove the alias route and new constants, switch `/book` back to `/api/payments/checkout`, and revert the copy changes. No data migration or credential rotation is involved.
+
+**Supersedes:** none. This complements the 2026-05-22 Credit Libanais placeholder decision without activating live bank checkout.
+
+---
+
 ## 2026-05-23 - Website WhatsApp CTA prefills become structured markers (`#ORAYA_REF:<ref>` / `#ORAYA_CHANGE:<ref>`)
 
 **Decision:** the two website-side WhatsApp CTAs that pre-fill the WhatsApp compose box (booking-view "WhatsApp us" and booking-confirmed "Change/cancel via WhatsApp") now emit a structured marker instead of a human sentence. `bookingWhatsAppPrefill(ref)` in [lib/booking-trust-messaging.ts](../../lib/booking-trust-messaging.ts) returns `#ORAYA_REF:<ref>`; `bookingWhatsAppChangePrefill(ref)` returns `#ORAYA_CHANGE:<ref>`. The no-reference fallback constants (`WHATSAPP_GENERAL_CONTACT_PREFILL`, `WHATSAPP_CANCEL_CHANGE_NO_REF`) remain plain human sentences and continue to enter the welcome flow. The two markers are operator-routing infrastructure that WhatChimp triggers on; the guest never needs to understand them. Normal greetings (`"hi"`, `"hello"`, free-form questions) continue to enter the existing welcome menu — the markers are emitted only by website CTAs, never by user typing.

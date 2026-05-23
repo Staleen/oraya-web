@@ -70,7 +70,7 @@ function getStripeReadiness(): HostedCheckoutProviderReadiness {
     environment: detectStripeEnvironment(secretKey),
     guest_message: configured
       ? ""
-      : "Online payment setup is in progress.",
+      : "Secure card payment is not available yet. Oraya will follow up with the approved payment step after reviewing your booking.",
     admin_message: configured
       ? "Stripe dev/test checkout is configured."
       : "Stripe dev/test checkout is selected, but one or more required Stripe secrets are missing.",

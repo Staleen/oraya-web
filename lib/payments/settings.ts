@@ -185,7 +185,8 @@ export async function fetchPublicPaymentSettings(): Promise<PaymentPublicRuntime
     return {
       ...DEFAULT_PAYMENT_PUBLIC_SETTINGS,
       online_checkout_ready: false,
-      online_checkout_message: "Online payment setup is in progress.",
+      online_checkout_message:
+        "Secure card payment is not available yet. Oraya will follow up with the approved payment step after reviewing your booking.",
     };
   }
   const data = (await response.json().catch(() => ({}))) as { value?: unknown };
@@ -197,7 +198,7 @@ export async function fetchPublicPaymentSettings(): Promise<PaymentPublicRuntime
     const message =
       typeof raw.online_checkout_message === "string" && raw.online_checkout_message.trim()
         ? raw.online_checkout_message.trim()
-        : "Online payment setup is in progress.";
+        : "Secure card payment is not available yet. Oraya will follow up with the approved payment step after reviewing your booking.";
     return {
       ...base,
       online_checkout_ready: ready,
@@ -207,6 +208,7 @@ export async function fetchPublicPaymentSettings(): Promise<PaymentPublicRuntime
   return {
     ...base,
     online_checkout_ready: false,
-    online_checkout_message: "Online payment setup is in progress.",
+    online_checkout_message:
+      "Secure card payment is not available yet. Oraya will follow up with the approved payment step after reviewing your booking.",
   };
 }

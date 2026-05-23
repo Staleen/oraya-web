@@ -956,7 +956,8 @@ function BookPageInner() {
   const [paymentSettings, setPaymentSettings] = useState<PaymentPublicRuntimeSettings>({
     ...DEFAULT_PAYMENT_PUBLIC_SETTINGS,
     online_checkout_ready: false,
-    online_checkout_message: "Online payment setup is in progress.",
+    online_checkout_message:
+      "Secure card payment is not available yet. Oraya will follow up with the approved payment step after reviewing your booking.",
   });
   // Phase 12E Batch 5: addon IDs that have had the dead-day discount applied (client-only, display only).
   const [appliedDiscounts, setAppliedDiscounts] = useState<string[]>([]);
@@ -2086,7 +2087,7 @@ function BookPageInner() {
         "";
       if (bookingToken) {
         if (attemptingOnlineCheckout) {
-          const checkoutRes = await fetch("/api/payments/checkout", {
+          const checkoutRes = await fetch("/api/payments/create-session", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({

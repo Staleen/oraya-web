@@ -249,6 +249,12 @@ export async function POST(request: Request) {
         ? 503
         : 500;
     console.error("[api/payments/checkout] unexpected error:", err);
-    return NextResponse.json({ error: message }, { status });
+    return NextResponse.json(
+      {
+        error: message,
+        code: status === 503 ? "provider_not_configured" : "checkout_failed",
+      },
+      { status },
+    );
   }
 }
