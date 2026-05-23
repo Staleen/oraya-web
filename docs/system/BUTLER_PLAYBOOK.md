@@ -10,7 +10,7 @@
 
 **Updated:** 2026-05-23.
 
-> Note: this date is shared by the 2026-05-23 confirmed-guest info boundary update and the 2026-05-23 `message_text` inbound-message convenience update. Both are reflected in this file.
+> Note: this date is shared by the 2026-05-23 confirmed-guest info boundary update, the 2026-05-23 `message_text` inbound-message convenience update, and the 2026-05-23 website CTA marker routing update. All three are reflected in this file.
 
 ---
 
@@ -119,6 +119,47 @@ Recommended escalation message style:
 - The 8-character uppercased booking reference shown on `/booking/view/[token]` (for example `A1B2C3D4`) is a **public guest-facing support code** - it lets the operator find the booking quickly when the guest mentions it.
 - It is **not** an access PIN, gate code, smart-lock PIN, or door code. Phase 16A and Phase 16B do not issue access credentials of any kind.
 - Smart-lock PIN / access-code delivery is **Phase 16D**. Until 16D ships, the Butler must never claim the booking reference will "open the gate" or "unlock the villa", and must never quote a PIN.
+
+## Website CTA marker routing
+
+The Oraya website embeds two "Talk to us on WhatsApp" CTAs on the booking-view page and the booking-confirmed page. Both CTAs pre-fill the WhatsApp compose box with a **structured marker** rather than a human sentence — the marker is the signal WhatChimp uses to route the guest into the right Butler path without the redundant Welcome-menu loop. The guest does **not** need to understand the marker; it is operator-facing routing metadata that happens to live in the message body.
+
+Marker format (built by [lib/booking-trust-messaging.ts](../../lib/booking-trust-messaging.ts) `bookingWhatsAppPrefill` / `bookingWhatsAppChangePrefill`):
+
+| CTA intent | Pre-filled WhatsApp body | Bot routing |
+|---|---|---|
+| View / check booking status | `#ORAYA_REF:<8-char-uppercased-hex>` | Oraya Identify - Production flow |
+| Change / cancel booking | `#ORAYA_CHANGE:<8-char-uppercased-hex>` | Change/cancel assistance flow |
+
+The 8-character reference inside the marker is the public guest-facing support code defined in [lib/booking-reference.ts](../../lib/booking-reference.ts) (`formatBookingReference`). It is **not** an access PIN or credential; surfacing it in the prefill carries no new disclosure risk.
+
+When the guest has no booking reference yet (pre-submit or generic contact), the fallback constants `WHATSAPP_GENERAL_CONTACT_PREFILL` and `WHATSAPP_CANCEL_CHANGE_NO_REF` remain plain human sentences — those messages do not target the marker-routed paths and are intentionally human-friendly so they enter the normal welcome flow.
+
+### Routing contract — what WhatChimp must recognize
+
+| Inbound message pattern | WhatChimp routing |
+|---|---|
+| Contains `#ORAYA_REF:` | Skip the Welcome menu. Route directly to the booking-reference / identity path that calls `POST /api/butler/identify`. |
+| Contains `#ORAYA_CHANGE:` | Skip the Welcome menu. Route to the change/cancel support path. |
+| Neither marker present (`"hi"`, `"hello"`, `"my reservation"`, free-form questions) | Existing welcome / greeting flow unchanged. |
+
+The marker is the **only** route into the website-CTA flow. A guest who hand-types a booking reference into a fresh chat (without the marker) still enters the welcome menu and chooses "Booking reference" the normal way — both paths are preserved.
+
+### Operator manual steps required in WhatChimp
+
+These are UI changes the operator must apply once (no flow JSON is committed to this repo):
+
+1. **Add a new trigger node** matching `#ORAYA_REF:` (substring, case-insensitive). Wire it directly into the existing booking-reference flow at the same downstream node where the current "Booking reference" menu choice routes (Node 6 `"Of course. Let me check your booking…"` → Node 7 HTTP API 7219 in the v2 Guest Identification flow). The HTTP API 7219 body should already include `message_text: <inbound-message-variable>` (PR #47); the server-side extractor `lib/butler/extract-booking-reference.ts` pulls the 8-char reference out of the marker via `\b[0-9A-Fa-f]{8}\b`.
+2. **Add a second new trigger node** matching `#ORAYA_CHANGE:` (substring, case-insensitive). Wire it into the change/cancel assistance path (the same one a guest reaches today by choosing "Need RSVP help" / similar from the Welcome menu — operator wires per current internal routing). Same `message_text` extractor handles the reference on the backend.
+3. **Do NOT remove the existing Welcome trigger** (`"hi"`, `"hello"`, `"my reservation"`, `"booking reference"`, etc.). The two new triggers run alongside it; users who type free-form text still enter the welcome menu as today.
+4. **Do NOT expose marker syntax** (`#ORAYA_REF:`, `#ORAYA_CHANGE:`) inside any guest-facing Welcome menu copy or AI Training prompt. The marker is operator-routing infrastructure, not a thing the guest should learn or be instructed to type.
+5. **Fallback if WhatChimp cannot pass the inbound message text to the HTTP API.** Even without `message_text`, the marker still helps the bot route to the right path; the user just gets asked once for the reference inside that path (the existing Node 12 "Please share your Oraya booking reference" step). The marker is therefore a UX improvement even on tenants where `message_text` cannot be wired — it eliminates the Welcome-menu redundancy. Wiring `message_text` is still the recommended state because it removes that single remaining ask entirely.
+
+### Backend invariants this change preserves
+
+- `/api/butler/identify` contract is **unchanged**. The same `subscriber_id` / `phone` / `booking_reference` / `identity_proof` / `message_text` fields, the same orchestrator priority chain, the same sensitive-disclosure rules.
+- The server-side extractor (`lib/butler/extract-booking-reference.ts`) uses `\b[0-9A-Fa-f]{8}\b`, which matches the reference cleanly inside both `#ORAYA_REF:A0B8CECB` and `#ORAYA_CHANGE:A0B8CECB` (the `:` is a non-word character, so the word boundary holds; the leading `#` is also non-word).
+- No new env vars, no schema changes, no auth changes, no token-continuity changes, no WhatsApp handoff changes, no payment surface touched.
 
 ## WhatChimp prefill response mapping
 

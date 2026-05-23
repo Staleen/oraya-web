@@ -129,11 +129,49 @@ export function digitsOnlyPhone(value: string | null | undefined): string | null
   return d.length > 0 ? d : null;
 }
 
-/** Prefilled WhatsApp body — include booking reference for routing */
+/**
+ * Prefilled WhatsApp body — structured marker that lets WhatChimp route the
+ * inbound message into the correct Butler flow without asking the guest to
+ * retype anything.
+ *
+ * Format: `#ORAYA_REF:<8-char-uppercase-booking-reference>`
+ *
+ * Routing contract (operator-side WhatChimp UI, documented in
+ * /docs/system/BUTLER_PLAYBOOK.md "Website CTA marker routing"):
+ *   - Trigger keyword: `#ORAYA_REF:` (substring match)
+ *   - Route directly to the Oraya Identify - Production HTTP API node
+ *   - The trailing 8-char reference is extracted server-side by
+ *     `/api/butler/identify`'s `message_text` field (see
+ *     `lib/butler/extract-booking-reference.ts`)
+ *
+ * Why a marker rather than a human sentence:
+ *   - The previous human sentence ("Hello Oraya — booking reference …") let
+ *     WhatChimp catch the trigger keyword but did not let the trigger
+ *     distinguish a website-CTA arrival from a guest who typed the phrase
+ *     by hand. The marker is unambiguous and machine-readable while staying
+ *     plain text in the WhatsApp UI.
+ *   - Normal greetings ("hi", "hello", free-form questions) continue to
+ *     enter the existing welcome menu — the marker is only emitted by
+ *     website CTAs, never by user typing.
+ *   - The 8-character reference inside the marker is a public guest-facing
+ *     support code (see `lib/booking-reference.ts`), not a credential —
+ *     surfacing it in the prefill carries no new disclosure risk.
+ */
 export function bookingWhatsAppPrefill(refDisplay: string): string {
-  return `Hello Oraya — booking reference ${refDisplay}.`;
+  return `#ORAYA_REF:${refDisplay}`;
 }
 
+/**
+ * Change / cancel CTA — same marker convention but a distinct prefix so
+ * WhatChimp can route to the change-or-cancel support path without first
+ * asking the guest what they want to do.
+ *
+ * Format: `#ORAYA_CHANGE:<8-char-uppercase-booking-reference>`
+ *
+ * The reference is still extractable by the same server-side helper, so
+ * the Butler backend continues to identify the booking unchanged. Intent
+ * (change vs view) lives in the marker prefix that WhatChimp branches on.
+ */
 export function bookingWhatsAppChangePrefill(refDisplay: string): string {
-  return `Hello Oraya — booking reference ${refDisplay}. I need help cancelling or changing this booking.`;
+  return `#ORAYA_CHANGE:${refDisplay}`;
 }
