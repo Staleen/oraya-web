@@ -16,6 +16,26 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-05-23 - Payment readiness route names and MPGS state vocabulary are prepared without activating bank checkout
+
+**Decision:** Oraya now exposes `POST /api/payments/create-session` as the production-facing hosted-checkout session route while keeping the existing `/api/payments/checkout` handler as the implementation. The Credit Libanais adapter remains placeholder-only. A new `lib/payments/mpgs.ts` alias documents the future MPGS module boundary, and `lib/payments/payment-state.ts` records the target provider-neutral lifecycle states (`unpaid`, `pending_payment`, `authorized`, `paid`, `failed`, `cancelled`, `refunded`, `partially_refunded`, `addon_payment_pending`) without changing the current database contract.
+
+**Reason:** the production payment architecture names `create-session`, `mpgs.ts`, and `payment-state.ts` as the intended foundation, while the repo already had most of the provider-neutral foundation under older names. Adding aliases and vocabulary avoids a disruptive rename and keeps the live checkout path closed until the bank supplies official hosted-checkout and callback details.
+
+**Impact:**
+
+- [app/api/payments/create-session/route.ts](../../app/api/payments/create-session/route.ts) re-exports the existing checkout `POST` handler.
+- [app/api/payments/checkout/route.ts](../../app/api/payments/checkout/route.ts) now includes a stable `code` field (`provider_not_configured` for 503 setup failures, `checkout_failed` otherwise).
+- [lib/payments/payment-state.ts](../../lib/payments/payment-state.ts) holds target lifecycle constants only; no schema change consumes them yet.
+- [lib/payments/mpgs.ts](../../lib/payments/mpgs.ts) aliases the current Credit Libanais placeholder provider as the MPGS boundary.
+- Guest-facing placeholder copy now says secure card payment is unavailable yet and Oraya will follow up after review, instead of saying setup is in progress.
+
+**Reversible?:** yes. Remove the alias route and new constants, and revert the copy changes. No data migration or credential rotation is involved.
+
+**Supersedes:** none. This complements the 2026-05-22 Credit Libanais placeholder decision without activating live bank checkout.
+
+---
+
 ## 2026-05-23 - WhatChimp inbound-text limitation verified; marker-routing operator flow corrected to explicit reference-input step (supersedes auto-extract assumption in the earlier 2026-05-23 marker decision)
 
 **Decision:** the website-side WhatsApp CTA markers (`#ORAYA_REF:<ref>` / `#ORAYA_CHANGE:<ref>`) introduced in PR #51 stay in place. **The operator-side WhatChimp routing**, however, no longer assumes that the booking reference can be auto-extracted from the marker on the backend via `message_text`. Production testing confirmed that the WhatChimp tenant exposes only six system fields (first name, last name, label, email, phone number, chat ID) — no usable "last user message" / inbound-text variable, no Condition field for the message body, no HTTP API body-interpolation token. The marker trigger therefore routes the guest to an **explicit booking-reference input step** that captures the 8-char code via the existing `User Input Flow Single` → `oraya_booking_reference` custom field, then merges into the existing Node 13 (HTTP API 7219 → `POST /api/butler/identify`) identity orchestration unchanged. The marker eliminates the Welcome-menu redundancy; the explicit reference ask remains because WhatChimp cannot do the extraction itself. PR #47's `message_text` field on `/api/butler/identify` and the bounded extractor in `lib/butler/extract-booking-reference.ts` stay in the codebase as forward-compatible code for future non-WhatChimp channels (Telegram, Messenger, direct WhatsApp Cloud API) and for any future WhatChimp version that exposes inbound text.

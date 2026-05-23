@@ -42,8 +42,9 @@ export async function GET(request: NextRequest) {
     const onlineCheckoutMessage = !onlineModeAllowed
       ? "Online payment is not offered for this payment mode right now."
       : !base.online_payment_enabled
-        ? "Online payment setup is in progress."
-        : runtime.online_checkout_message || "Online payment setup is in progress.";
+        ? "Secure card payment is not available yet. Oraya will follow up with the approved payment step after reviewing your booking."
+        : runtime.online_checkout_message ||
+          "Secure card payment is not available yet. Oraya will follow up with the approved payment step after reviewing your booking.";
 
     return NextResponse.json({
       value: {

@@ -30,7 +30,7 @@ interface CreditLibanaisGatewayContract {
 }
 
 const CREDIT_LIBANAIS_GUEST_MESSAGE =
-  "Online payment setup is in progress. Oraya will activate secure card checkout as soon as Credit Libanais / MPGS onboarding is complete.";
+  "Secure card payment is not available yet. Oraya will follow up with the approved payment step after reviewing your booking.";
 
 const CREDIT_LIBANAIS_CONTRACT_REQUIREMENTS = [
   "Hosted checkout/session creation endpoint from the bank",

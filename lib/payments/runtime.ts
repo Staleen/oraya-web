@@ -93,7 +93,7 @@ export function getHostedCheckoutAdminStatus(): HostedCheckoutAdminStatus {
     const message =
       error instanceof PaymentProviderConfigurationError
         ? error.message
-        : "Online payment setup is in progress.";
+        : "Secure card payment is not available yet. Oraya will follow up with the approved payment step after reviewing your booking.";
     return {
       provider_key: null,
       provider_display_name: null,
@@ -102,7 +102,7 @@ export function getHostedCheckoutAdminStatus(): HostedCheckoutAdminStatus {
       implemented: false,
       checkout_ready: false,
       environment: null,
-      guest_message: "Online payment setup is in progress.",
+      guest_message: "Secure card payment is not available yet. Oraya will follow up with the approved payment step after reviewing your booking.",
       admin_message: message,
       missing_requirements: [message],
     };
@@ -118,6 +118,7 @@ export function getHostedCheckoutPublicStatus() {
     online_checkout_message:
       status.checkout_ready && status.persisted_link_provider !== null
         ? ""
-        : status.guest_message || "Online payment setup is in progress.",
+        : status.guest_message ||
+          "Secure card payment is not available yet. Oraya will follow up with the approved payment step after reviewing your booking.",
   };
 }
