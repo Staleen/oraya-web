@@ -10,7 +10,7 @@
 
 **Updated:** 2026-05-23.
 
-> Note: this date is shared by the 2026-05-23 confirmed-guest info boundary update, the 2026-05-23 `message_text` inbound-message convenience update, and the 2026-05-23 website CTA marker routing update. All three are reflected in this file.
+> Note: this date is shared by four 2026-05-23 updates: the confirmed-guest info boundary, the `message_text` inbound-message convenience on `/api/butler/identify`, the website CTA marker prefill, and the verified-WhatChimp-limitation correction to the marker-routing operator flow. All four are reflected in this file.
 
 ---
 
@@ -135,30 +135,62 @@ The 8-character reference inside the marker is the public guest-facing support c
 
 When the guest has no booking reference yet (pre-submit or generic contact), the fallback constants `WHATSAPP_GENERAL_CONTACT_PREFILL` and `WHATSAPP_CANCEL_CHANGE_NO_REF` remain plain human sentences — those messages do not target the marker-routed paths and are intentionally human-friendly so they enter the normal welcome flow.
 
+### Verified WhatChimp platform limitation (2026-05-23)
+
+After live testing with the production WhatChimp tenant the operator confirmed that **WhatChimp does not expose the inbound message text as a usable Condition system field or as a usable HTTP API body variable**. The only system fields available in the WhatChimp UI's variable picker are:
+
+- first name
+- last name
+- label
+- email
+- phone number
+- chat ID
+
+There is no "last user message", no "last incoming text", no equivalent inbound-message variable that can be referenced in a Condition node, saved into a custom field at trigger time, or interpolated into an HTTP API request body. This means the auto-extraction of the booking reference from the marker via the backend's `message_text` field (the helper added by PR #47, `lib/butler/extract-booking-reference.ts`) **is not reachable on the production WhatChimp tenant**. The backend helper stays in place — it is forward-compatible with other channels (Telegram, Messenger, direct WhatsApp Cloud API) that do expose inbound text, and with any future WhatChimp version that adds the capability — but the production operator flow must not depend on it today.
+
 ### Routing contract — what WhatChimp must recognize
 
 | Inbound message pattern | WhatChimp routing |
 |---|---|
-| Contains `#ORAYA_REF:` | Skip the Welcome menu. Route directly to the booking-reference / identity path that calls `POST /api/butler/identify`. |
-| Contains `#ORAYA_CHANGE:` | Skip the Welcome menu. Route to the change/cancel support path. |
+| Contains `#ORAYA_REF:` | Skip the Welcome menu. Route directly to the **booking-reference input** step (the existing Node 12 "Please share your Oraya booking reference" question). The user's next reply is captured into the existing `oraya_booking_reference` custom field and the existing Oraya Identify - Production HTTP API call proceeds unchanged. |
+| Contains `#ORAYA_CHANGE:` | Skip the Welcome menu. Route to the **change/cancel booking-reference input** step (operator may reuse the same booking-reference input node or create a parallel one with change/cancel-specific downstream copy — either is acceptable; the identity-orchestration HTTP API call stays identical). |
 | Neither marker present (`"hi"`, `"hello"`, `"my reservation"`, free-form questions) | Existing welcome / greeting flow unchanged. |
 
-The marker is the **only** route into the website-CTA flow. A guest who hand-types a booking reference into a fresh chat (without the marker) still enters the welcome menu and chooses "Booking reference" the normal way — both paths are preserved.
+The marker eliminates the Welcome-menu redundancy on the website-CTA path. It does **not** eliminate the booking-reference ask itself — that ask remains a single explicit step because WhatChimp cannot extract the 8-char code from the trigger message on its own. The Butler answers warmly, then captures the reference like the existing reference flow does. A guest who hand-types a booking reference into a fresh chat (without the marker) still enters the welcome menu and chooses "Booking reference" the normal way — both paths are preserved.
 
 ### Operator manual steps required in WhatChimp
 
-These are UI changes the operator must apply once (no flow JSON is committed to this repo):
+These are UI changes the operator must apply once (no flow JSON is committed to this repo). The exact wording of nodes the operator may copy verbatim is included.
 
-1. **Add a new trigger node** matching `#ORAYA_REF:` (substring, case-insensitive). Wire it directly into the existing booking-reference flow at the same downstream node where the current "Booking reference" menu choice routes (Node 6 `"Of course. Let me check your booking…"` → Node 7 HTTP API 7219 in the v2 Guest Identification flow). The HTTP API 7219 body should already include `message_text: <inbound-message-variable>` (PR #47); the server-side extractor `lib/butler/extract-booking-reference.ts` pulls the 8-char reference out of the marker via `\b[0-9A-Fa-f]{8}\b`.
-2. **Add a second new trigger node** matching `#ORAYA_CHANGE:` (substring, case-insensitive). Wire it into the change/cancel assistance path (the same one a guest reaches today by choosing "Need RSVP help" / similar from the Welcome menu — operator wires per current internal routing). Same `message_text` extractor handles the reference on the backend.
-3. **Do NOT remove the existing Welcome trigger** (`"hi"`, `"hello"`, `"my reservation"`, `"booking reference"`, etc.). The two new triggers run alongside it; users who type free-form text still enter the welcome menu as today.
-4. **Do NOT expose marker syntax** (`#ORAYA_REF:`, `#ORAYA_CHANGE:`) inside any guest-facing Welcome menu copy or AI Training prompt. The marker is operator-routing infrastructure, not a thing the guest should learn or be instructed to type.
-5. **Fallback if WhatChimp cannot pass the inbound message text to the HTTP API.** Even without `message_text`, the marker still helps the bot route to the right path; the user just gets asked once for the reference inside that path (the existing Node 12 "Please share your Oraya booking reference" step). The marker is therefore a UX improvement even on tenants where `message_text` cannot be wired — it eliminates the Welcome-menu redundancy. Wiring `message_text` is still the recommended state because it removes that single remaining ask entirely.
+1. **Add a new trigger node** matching `#ORAYA_REF:` (substring, case-insensitive).
+   - First downstream node: a **Text** node with the agreed hospitality prompt:
+     > Hello from Oraya ✨
+     > Please send only your 8-character booking reference so I can check your booking securely.
+     > Example: A0B8CECB
+   - Next node: a **User Input Flow Single** with `replyType: "Text"`, `customField: oraya_booking_reference` (custom_59254 in the current v2 flow), to capture the user's reply.
+   - Then: route into the **existing** Node 13 (HTTP API 7219 → Oraya Identify - Production). Reuse the existing identity flow downstream verbatim — do not duplicate identity logic, do not introduce a parallel identify call.
+   - Net effect: the user lands directly on the reference prompt without the Welcome-menu detour.
+
+2. **Add a second new trigger node** matching `#ORAYA_CHANGE:` (substring, case-insensitive).
+   - First downstream node: a **Text** node with a change/cancel-flavoured variant of the hospitality prompt:
+     > Hello from Oraya ✨
+     > To help with changing or cancelling your booking, please send only your 8-character booking reference so we can locate it securely.
+     > Example: A0B8CECB
+   - Next node: same User Input Flow Single saving the reply into `oraya_booking_reference`.
+   - Then: route into the existing Node 13 (HTTP API 7219) so the identity orchestrator runs, AND additionally apply the change/cancel label the operator already uses for change/cancel triage on `/admin/leads`. Whether the downstream Butler response branches further on the change/cancel intent is operator-internal — the identity layer remains the same.
+
+3. **Do NOT remove the existing Welcome trigger** (`"hi"`, `"hello"`, `"my reservation"`, `"booking reference"`, etc.). The two new marker triggers run alongside it; guests who type free-form text still see the welcome menu as today.
+
+4. **Do NOT expose marker syntax** (`#ORAYA_REF:`, `#ORAYA_CHANGE:`) inside any guest-facing Welcome menu copy, AI Training prompt, or Bot Reply template. The marker is operator-routing infrastructure that the guest never needs to know exists. If a curious guest asks "what is `#ORAYA_REF:`?", the Butler answers truthfully and briefly — "It's a routing tag the website adds so we can find your booking faster. You can ignore it." — and never instructs anyone to type it manually.
+
+5. **Reuse the existing identity orchestration.** The marker-routed paths must **not** create a parallel identify call, a parallel `whatsapp_leads` write, or any new HTTP API node. They share the existing Node 13 (HTTP API 7219 → `POST /api/butler/identify`) and the entire downstream identity / proof / status branch as today. The only WhatChimp-side novelty is the two new trigger nodes + the two short Text prompts above them.
+
+6. **Forward-compat note for future WhatChimp versions / non-WhatChimp channels.** If WhatChimp ever exposes inbound message text, OR Oraya later adds a Telegram / Messenger / direct WhatsApp Cloud API channel that does, the backend's `message_text` field on `/api/butler/identify` (and the bounded extractor in `lib/butler/extract-booking-reference.ts`) will activate automatically — the marker-routed paths could then skip even the reference ask. No code change required when that day comes; only the HTTP API body in WhatChimp (or the equivalent on the new channel) needs to start sending `message_text`. Until then, the explicit reference ask is the production path.
 
 ### Backend invariants this change preserves
 
-- `/api/butler/identify` contract is **unchanged**. The same `subscriber_id` / `phone` / `booking_reference` / `identity_proof` / `message_text` fields, the same orchestrator priority chain, the same sensitive-disclosure rules.
-- The server-side extractor (`lib/butler/extract-booking-reference.ts`) uses `\b[0-9A-Fa-f]{8}\b`, which matches the reference cleanly inside both `#ORAYA_REF:A0B8CECB` and `#ORAYA_CHANGE:A0B8CECB` (the `:` is a non-word character, so the word boundary holds; the leading `#` is also non-word).
+- `/api/butler/identify` contract is **unchanged**. Same `subscriber_id` / `phone` / `booking_reference` / `identity_proof` / `message_text` fields. Same orchestrator priority chain. Same sensitive-disclosure rules. No duplicate identity logic.
+- The server-side helper (`lib/butler/extract-booking-reference.ts`) stays in place as forward-compatible code. It does nothing today because no channel currently sends `message_text` — and that is exactly the "do nothing" path it was designed for (returns `null` → orchestrator falls through to the explicit reference ask, which is now the website-CTA path's explicit step).
 - No new env vars, no schema changes, no auth changes, no token-continuity changes, no WhatsApp handoff changes, no payment surface touched.
 
 ## WhatChimp prefill response mapping
