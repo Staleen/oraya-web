@@ -1951,6 +1951,7 @@ function BookPageInner() {
         availabilityValid &&
         instantEligible &&
         bookingTrustMode === "instant" &&
+        selectedAddons.length === 0 &&
         !hasSpecialRequest &&
         !hasManualReviewAddonSelection;
       if (intent === "pay_now" && !attemptingOnlineCheckout) {
@@ -2156,6 +2157,8 @@ function BookPageInner() {
   // ── Auth loading spinner ──────────────────────────────────────────────────
   const step3AmountTotal =
     step === 3 && bookingPath === "request" && estimatedTotal > 0 ? estimatedTotal : null;
+  const hasAddonsOrSpecialRequestsForReview =
+    selectedAddons.length > 0 || (form.message ?? "").trim().length > 0;
 
   if (authStatus === "loading") {
     return (
@@ -3350,6 +3353,17 @@ function BookPageInner() {
                 )}
               </div>
 
+              {hasAddonsOrSpecialRequestsForReview && (
+                <div style={{ border: "0.5px solid rgba(197,164,109,0.24)", backgroundColor: "rgba(197,164,109,0.05)", padding: "14px 16px", display: "grid", gap: "6px" }}>
+                  <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "1.6px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+                    Review before payment
+                  </p>
+                  <p style={{ fontFamily: LATO, fontSize: "12px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65 }}>
+                    Add-ons and special requests are confirmed by Oraya first. We will review availability and send the correct payment step, usually within 24 hours.
+                  </p>
+                </div>
+              )}
+
               {error && (
                 <div style={{ width: "100%" }}>
                   <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e07070", textAlign: "center", lineHeight: 1.6, margin: 0 }}>
@@ -3451,9 +3465,22 @@ function BookPageInner() {
 
               {estimatePanel}
 
-              <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", lineHeight: 1.65, margin: 0, textAlign: "center" }}>
-                Instant confirmation available for eligible stays. Some requests may require review.
-              </p>
+              {!hasAddonsOrSpecialRequestsForReview && (
+                <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", lineHeight: 1.65, margin: 0, textAlign: "center" }}>
+                  Instant confirmation available for eligible stays. Some requests may require review.
+                </p>
+              )}
+
+              {hasAddonsOrSpecialRequestsForReview && (
+                <div style={{ border: "0.5px solid rgba(197,164,109,0.24)", backgroundColor: "rgba(197,164,109,0.05)", padding: "14px 16px", display: "grid", gap: "6px" }}>
+                  <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "1.6px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+                    Payment after Oraya review
+                  </p>
+                  <p style={{ fontFamily: LATO, fontSize: "12px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65 }}>
+                    Add-ons and special requests are confirmed by Oraya first. Reserve the stay now; we will send the correct payment step after approval, usually within 24 hours.
+                  </p>
+                </div>
+              )}
 
               {error && (
                 <p style={{ fontFamily: LATO, fontSize: "14px", color: "#e07070", textAlign: "center", lineHeight: 1.6, margin: 0 }}>
@@ -3478,17 +3505,19 @@ function BookPageInner() {
                 >
                   {loading && submitIntent === "reserve" ? "Reserving..." : "Reserve this stay"}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void handleSubmit("pay_now");
-                  }}
-                  disabled={loading}
-                  className={loading ? undefined : "oraya-pressable oraya-cta-gold-hover"}
-                  style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 18px", minHeight: "50px", flex: 1.15, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}
-                >
-                  {loading && submitIntent === "pay_now" ? "Preparing payment..." : "Pay now to confirm booking"}
-                </button>
+                {!hasAddonsOrSpecialRequestsForReview && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleSubmit("pay_now");
+                    }}
+                    disabled={loading}
+                    className={loading ? undefined : "oraya-pressable oraya-cta-gold-hover"}
+                    style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 18px", minHeight: "50px", flex: 1.15, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}
+                  >
+                    {loading && submitIntent === "pay_now" ? "Preparing payment..." : "Pay now to confirm booking"}
+                  </button>
+                )}
               </div>
             </div>
           )}
