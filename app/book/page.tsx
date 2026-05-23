@@ -956,7 +956,7 @@ function BookPageInner() {
   const [paymentSettings, setPaymentSettings] = useState<PaymentPublicRuntimeSettings>({
     ...DEFAULT_PAYMENT_PUBLIC_SETTINGS,
     online_checkout_ready: false,
-    online_checkout_message: "Online payment setup is in progress.",
+    online_checkout_message: "",
   });
   // Phase 12E Batch 5: addon IDs that have had the dead-day discount applied (client-only, display only).
   const [appliedDiscounts, setAppliedDiscounts] = useState<string[]>([]);
@@ -3495,10 +3495,25 @@ function BookPageInner() {
                   void handleSubmit("reserve");
                 }}
                 disabled={loading}
-                className={loading ? undefined : "oraya-link-text"}
-                style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, backgroundColor: "transparent", border: "none", padding: "2px 0", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.65 : 1, alignSelf: "center", lineHeight: 1.6 }}
+                className={loading ? undefined : "oraya-pressable"}
+                style={{
+                  fontFamily: LATO,
+                  fontSize: "13px",
+                  letterSpacing: "0.8px",
+                  color: GOLD,
+                  backgroundColor: "transparent",
+                  border: "0.5px solid rgba(197,164,109,0.4)",
+                  padding: "12px 18px",
+                  minHeight: "46px",
+                  width: "100%",
+                  cursor: loading ? "not-allowed" : "pointer",
+                  opacity: loading ? 0.65 : 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
               >
-                {loading && submitIntent === "reserve" ? "Submitting request..." : "Prefer to reserve and pay later? Submit booking request"}
+                {loading && submitIntent === "reserve" ? "Submitting request..." : "Reserve now, pay later"}
               </button>
             </div>
           )}
