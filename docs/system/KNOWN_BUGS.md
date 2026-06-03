@@ -1,6 +1,6 @@
 # Known Bugs & Open Issues
 
-**Updated:** 2026-05-09
+**Updated:** 2026-06-03 (file last accumulated entries through 2026-05-23 + new 2026-06-03 wrong-domain entry; the file's actual updated date now reflects this).
 
 Living list of bugs, gaps, and operational pitfalls that are **known** but **not yet fixed** (or accepted as a permanent trade-off). New AI sessions: read this before assuming production is in a clean state.
 
@@ -108,6 +108,21 @@ Living list of bugs, gaps, and operational pitfalls that are **known** but **not
 - **Status:** **open (operator-side platform constraint; backend remains forward-compat)**. No code action required. The production operator routing for the website CTA markers uses an explicit reference-input step downstream of the marker trigger, captures the user's typed reply into `oraya_booking_reference`, and merges back into the existing identity flow. See [BUTLER_PLAYBOOK.md](BUTLER_PLAYBOOK.md) "Website CTA marker routing" → "Verified WhatChimp platform limitation" + "Operator manual steps required in WhatChimp" for the documented flow.
 - **Recommended fix path:** none required for the backend. Operator-side: if WhatChimp later exposes an inbound-text variable, the operator can add `"message_text": "<the-new-variable>"` to HTTP API 7219's body and the existing extractor activates automatically — no Oraya code change. Independently: if Oraya adds a non-WhatChimp channel (Telegram, Messenger, direct WhatsApp Cloud API) that does expose inbound text, the same backend already supports it.
 - **Discovered:** 2026-05-23 (live operator UI verification).
+
+---
+
+### #8 — AI / WhatChimp wrong-domain response risk: `www.oraya.com.lb` is not the Oraya web origin
+
+- **Severity:** 🟠 High — guests routed at a non-existent domain lose access to the booking flow, the booking-view page, and every email CTA target.
+- **Area:** AI Training / WhatChimp Bot Reply / generic AI assistants outside this repo / human ops copy
+- **Description:** the canonical Oraya web origin is `https://stayoraya.com` and only `https://stayoraya.com`. This is the host every transactional email helper builds links from (`lib/brand.ts` `SITE_URL` fallback), every `/legal/*` page is served from, every `/booking/view/[token]` link points at, and every `/api/payments/checkout` return URL lands at. Despite this, generic AI assistants outside Oraya (including external WhatChimp configurations and untrained chat surfaces) have on occasion produced replies that name `www.oraya.com.lb` (or `oraya.com.lb`, or `oraya.com`) as if those were Oraya web properties. They are not. There is no LB-TLD Oraya web property today. This is **not** a domain migration — it is a wrong-domain bug whenever it appears.
+- **Status:** open — operator-side AI Training discipline + documentation hardening.
+- **Recommended fix path:**
+  1. Make the canonical-origin invariant explicit in all AI-facing docs (PROJECT_STATE.md, BUTLER_PLAYBOOK.md, DECISIONS_LOG.md — landed 2026-06-03).
+  2. Ensure WhatChimp Bot Reply / AI Training templates never reference any host other than `https://stayoraya.com`.
+  3. If a guest reports they were directed at `oraya.com.lb` from any AI surface, treat it as a high-priority operator-side configuration bug.
+  4. Optional: server-side hardening — a future task could add a 301 redirect from `oraya.com.lb` to `stayoraya.com` if the LB TLD is ever registered defensively. Not in scope today.
+- **Discovered:** 2026-06-03 (reconciliation pass — risk surfaced from external observations of generic AI behavior, not from production traffic against Oraya's own surfaces).
 
 ---
 

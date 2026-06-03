@@ -16,6 +16,103 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-06-03 - Canonical Oraya web origin is `https://stayoraya.com`; `www.oraya.com.lb` is a wrong-domain response, not a migration
+
+**Decision:** the single canonical Oraya web origin is **`https://stayoraya.com`** and only `https://stayoraya.com`. Any AI Training, WhatChimp Bot Reply, generic AI assistant, or human-facing reply that proposes a different host - in particular `www.oraya.com.lb`, `oraya.com.lb`, or any unprefixed `oraya.com` variant - is a wrong-domain bug and must be treated as one. This is not a domain migration. There is no LB-TLD Oraya web property today. This is documented in [docs/system/PROJECT_STATE.md](PROJECT_STATE.md), [docs/system/KNOWN_BUGS.md](KNOWN_BUGS.md) (entry #8), and [docs/system/BUTLER_PLAYBOOK.md](BUTLER_PLAYBOOK.md) (canonical-domain section).
+
+**Reason:** the canonical origin has been stable since launch: `lib/brand.ts` `SITE_URL` falls back to `https://stayoraya.com` when `NEXT_PUBLIC_SITE_URL` is unset, every transactional email helper builds links off that origin, and every `/legal/*` and `/booking/view/[token]` URL is served from that host. Despite this, generic AI assistants outside Oraya's repo (including external WhatChimp configurations and untrained chat surfaces) have occasionally produced `www.oraya.com.lb` when asked for "the Oraya website." Such responses route guests at a non-existent domain. Documenting the canonical origin as a non-negotiable in the durable decision log prevents future AI-trained surfaces from being miswired or misrepresented as a migration.
+
+**Impact:**
+
+- [docs/system/PROJECT_STATE.md](PROJECT_STATE.md) — canonical-origin line added near the production-status bullets.
+- [docs/system/KNOWN_BUGS.md](KNOWN_BUGS.md) — new entry #8 documents the AI wrong-domain response risk.
+- [docs/system/BUTLER_PLAYBOOK.md](BUTLER_PLAYBOOK.md) — new "Canonical Oraya web origin" subsection (operational guidance for AI Training / WhatChimp configuration).
+- [docs/system/CURRENT_PHASE.md](CURRENT_PHASE.md) — open-issues bullet added.
+- No code change. No env change. No schema change.
+
+**Reversible?:** trivial — this is a clarifying decision, not a new constraint. If Oraya ever introduces an `.lb` web property, that becomes a new decision that supersedes this one explicitly.
+
+**Supersedes:** none. Formalizes an invariant that was already shipped in code ([lib/brand.ts](../../lib/brand.ts), every `lib/send-*-email.ts`) but not previously captured as an explicit AI-facing constraint.
+
+---
+
+## 2026-06-03 - Booking flow is consolidated into three explicit steps (Villa & Dates → Stay Setup → Review & Guest Details); Step 3 ships a dual-CTA Reserve action set
+
+**Decision:** the public Reserve booking flow at [app/book/page.tsx](../../app/book/page.tsx) is consolidated to three explicit steps:
+
+1. **Villa & Dates** — villa selection + check-in/check-out picker + eligibility check.
+2. **Stay Setup** — bedrooms, guests, add-ons, special requests; live estimated total.
+3. **Review & Guest Details** — review summary, guest-details form (Reserve path), payment decision.
+
+The step labels are exact and verified in code (`labels = ["Villa & Dates", "Stay Setup", "Review & Guest Details"]` at app/book/page.tsx:824).
+
+A visible Step 4, a standalone Guest Details step, and a four-step booking journey were explicitly evaluated and **rejected**. Step 3 hosts both the review summary AND the guest-details form; checkout / payment is a final action invoked from Step 3, not a separate visual step.
+
+Step 3 (Reserve path) presents **two clear actions**:
+
+- **Primary:** **"Continue to secure payment"** — solid gold button, full-width within the action row, leads to hosted-checkout execution via `POST /api/payments/checkout`. Blocked in the UI with clear setup messaging when the configured hosted-checkout provider is not truly ready (no fake checkout, no silent fall-through).
+- **Secondary:** **"Reserve now, pay later"** — outline / transparent-background button with a thin gold border and gold text, separate row below the primary action so it reads as visibly lower priority. Submits a booking request without collecting payment on the website. Used by guests who prefer to be confirmed before paying, by guests holding add-ons / special requests that need Oraya review first, and by operators wiring manual / bank-transfer rails.
+
+**Reason:** the prior architecture had drifted toward a four-step UX with a separate Guest Details step and a Step 4 review. Operationally this was extra friction, and guests reading the progress indicator perceived the journey as longer than it actually was. Collapsing review and guest details into Step 3 (a) keeps the Reserve path under three visible steps for premium hospitality framing, (b) ensures the guest-details form is shown alongside the final review that locks in their decision, and (c) gives both pay-now and pay-later Reserve paths a single shared review surface. The dual-CTA pattern makes the "secure payment" intent unambiguously primary while still preserving the operator-friendly "Reserve now, pay later" path. The earlier Step 3 secondary path was a plain text link ("Prefer to reserve and pay later? Submit booking request") — the visual ranking is now reinforced by treating the secondary as a real outline button.
+
+**Impact:**
+
+- [app/book/page.tsx](../../app/book/page.tsx) — three-step layout, exact step labels, dual-CTA Step 3 (action rendering + intent dispatch via `submitIntent = "pay_now" | "reserve"`). Shipped via [apps#56](https://github.com/Staleen/oraya-web/pull/56) (three-step consolidation) and [apps#58](https://github.com/Staleen/oraya-web/pull/58) (secondary CTA upgrade).
+- [lib/payments/runtime.ts](../../lib/payments/runtime.ts) and the readiness contract control the pay-now path's blocked / available state without leaking secret env values.
+- No schema change. No locked API behavior change. No new dependency.
+
+**Reversible?:** yes — single-file revert per change restores prior layout. The booking pipeline never depended on the visual step count.
+
+**Supersedes:** refines the 2026-05-22 "Guest-facing payment behavior is now settings-driven before Credit Libanais execution goes live" decision by locking the visual step shape that drives Step 3.
+
+---
+
+## 2026-06-03 - Stay payment proceeds independently of add-ons and special requests; approval-based items are reviewed and charged separately
+
+**Decision:** the website Reserve "pay now" path collects the stay payment first. Add-ons and special requests do NOT block the stay payment. Approval-based add-ons (those flagged `requires_approval` per the existing addon-operations model) are reviewed by Oraya after the booking is reserved and charged separately if and when they are confirmed. The Step 3 review surface tells the guest explicitly when add-ons or special requests are present: "Add-ons and special requests are confirmed by Oraya first. Reserve the stay now; we will send the correct payment step after approval, usually within 24 hours." (verified in [app/book/page.tsx](../../app/book/page.tsx) at the "Payment after Oraya review" panel).
+
+**Reason:** under the old model, the presence of an approval-required add-on or a non-trivial special request blocked the entire pay-now flow because the total wasn't yet final. That kept Oraya's premium guests waiting on manual Oraya confirmation for the stay portion that was already determinate. Splitting "stay charge now" from "add-ons reviewed and charged later" gives the guest a faster confirmation path on the stay (premium hospitality UX), keeps the operator's add-on review surface unchanged (admin operations confirm add-ons explicitly), and aligns with the booking-first / webhook-first hosted checkout architecture that already separates payment lifecycle from booking lifecycle.
+
+**Impact:**
+
+- [app/book/page.tsx](../../app/book/page.tsx) — Step 3 "Payment after Oraya review" panel renders when `hasAddonsOrSpecialRequestsForReview` is true; the primary CTA remains "Continue to secure payment". No change to the locked `/api/bookings` POST contract, the addon-audit fail-closed rules, or the operational strict-rule enforcement.
+- The "Reserve now, pay later" secondary CTA remains the explicit pay-later path for guests / operators who prefer admin confirmation before any charge.
+- Approval-based add-ons continue to be tracked on the booking row and the admin review surface. The pay-now hosted-checkout amount is the stay total; add-on charging occurs through the existing admin-driven payment flow once admin approves.
+
+**Reversible?:** yes — single-file revert. The booking pipeline did not change.
+
+**Supersedes:** none. Formalizes the policy that ships with the three-step + dual-CTA Step 3 above.
+
+---
+
+## 2026-06-03 - WhatsApp CTA prefills reverted to plain human sentences ("Check my booking <ref>" / "Help with my booking <ref>"); structured-marker scheme withdrawn
+
+**Decision:** the two website-side WhatsApp CTAs that pre-fill the WhatsApp compose box - booking-view "WhatsApp us" and booking-confirmed "Change/cancel via WhatsApp" - now emit **plain human sentences**, not structured markers. `bookingWhatsAppPrefill(ref)` in [lib/booking-trust-messaging.ts](../../lib/booking-trust-messaging.ts) returns `"Check my booking <ref>"`; `bookingWhatsAppChangePrefill(ref)` returns `"Help with my booking <ref>"`. The earlier `#ORAYA_REF:<ref>` / `#ORAYA_CHANGE:<ref>` marker scheme is **withdrawn**. The no-reference fallback constants (`WHATSAPP_GENERAL_CONTACT_PREFILL`, `WHATSAPP_CANCEL_CHANGE_NO_REF`) remain plain human sentences and continue to enter the welcome flow. Normal greetings ("hi", "hello", free-form questions) continue to enter the existing welcome menu - prefills are emitted only by website CTAs, never typed by the guest.
+
+**Reason:** the 2026-05-23 marker scheme assumed WhatChimp would route on the structured marker prefix and skip the welcome menu. Live operator testing confirmed that WhatChimp does not expose the inbound message text to Condition / HTTP-API-body interpolation on the production tenant (the only system fields available are first name, last name, label, email, phone number, chat ID; no "last user message" variable). The marker's only value over a plain sentence was the visual distinctiveness of the `#`-prefixed tag - but the operator routing has to happen on the SUBSTRING the trigger matches either way, and a plain sentence like `"Check my booking"` is at least as routable as `"#ORAYA_REF:"` while reading naturally to any human who sees the prefill in their compose box. The structured marker also created a small but real UX risk: a curious guest seeing `#ORAYA_REF:A0B8CECB` in their compose box might wonder whether they should type that themselves, or might paste it elsewhere. Plain hospitality language ("Check my booking A0B8CECB") eliminates that ambiguity entirely without sacrificing routing.
+
+The audit explicitly considered and rejected:
+
+- **Keeping the marker scheme behind WhatChimp.** Rejected — the marker introduced a guest-visible artifact (`#ORAYA_REF:`) that has no positive use for the guest and creates a low-grade "what is this?" friction. The plain sentence routes equally well via substring matching and reads better.
+- **Reverting only the prefill copy while keeping the marker as a hidden routing tag elsewhere.** Rejected — there is no other surface emitting the marker today; the prefill was the marker's only carrier.
+- **Going back to the pre-marker generic prefill (`"Hello Oraya — I have a question about a booking."`).** Rejected — the original problem the marker solved was that the generic prefill landed in the welcome menu when the website CTA wanted to disambiguate "view" vs "change/cancel" intent. Plain sentence prefills that NAME the intent ("Check my booking", "Help with my booking") preserve that disambiguation.
+
+**Impact:**
+
+- [lib/booking-trust-messaging.ts](../../lib/booking-trust-messaging.ts) — `bookingWhatsAppPrefill` and `bookingWhatsAppChangePrefill` return plain sentences; updated docstrings explain the substring-routing model and the WhatChimp limitation. Shipped via [apps#54](https://github.com/Staleen/oraya-web/pull/54).
+- [docs/system/BUTLER_PLAYBOOK.md](BUTLER_PLAYBOOK.md) — "Website CTA marker routing" section rewritten as "Website CTA prefill routing"; documents the plain-sentence format, the substring trigger contract, and the operator manual steps. The "Verified WhatChimp platform limitation" subsection (added 2026-05-23) carries forward unchanged because it still describes the underlying constraint.
+- [docs/system/PROJECT_STATE.md](PROJECT_STATE.md) — "Main completed systems" "Website CTA prefill routing" entry reflects the plain-sentence format.
+- [docs/system/ARCHITECTURE.md](ARCHITECTURE.md) — Butler-flow "Website CTA marker prefill" bullet updated to "Website CTA prefill" plain-sentence format.
+- [docs/system/CURRENT_PHASE.md](CURRENT_PHASE.md) — Just-completed entry added; out-of-scope item bans re-introducing the marker scheme without a superseding entry.
+- The `/api/butler/identify` `message_text` field and the bounded `\b[0-9A-Fa-f]{8}\b` extractor in [lib/butler/extract-booking-reference.ts](../../lib/butler/extract-booking-reference.ts) remain in the codebase as forward-compatible code for non-WhatChimp channels (Telegram, Messenger, direct WhatsApp Cloud API) that DO expose inbound text. Their presence and behavior do not depend on the prefill format.
+- No backend behavior change. No schema, env, auth, token, payment, calendar, or booking-pipeline touch.
+
+**Reversible?:** yes — single-file revert restores the prior marker prefills. The WhatChimp operator side can keep or remove triggers independently.
+
+**Supersedes:** both 2026-05-23 entries below — "Website WhatsApp CTA prefills become structured markers (`#ORAYA_REF:<ref>` / `#ORAYA_CHANGE:<ref>`)" AND its same-day correction "WhatChimp inbound-text limitation verified; marker-routing operator flow corrected to explicit reference-input step." The earlier entries are kept in place per the append-only rule; this entry records the reversal authoritatively.
+
+---
+
 ## 2026-05-23 - WhatChimp inbound-text limitation verified; marker-routing operator flow corrected to explicit reference-input step (supersedes auto-extract assumption in the earlier 2026-05-23 marker decision)
 
 **Decision:** the website-side WhatsApp CTA markers (`#ORAYA_REF:<ref>` / `#ORAYA_CHANGE:<ref>`) introduced in PR #51 stay in place. **The operator-side WhatChimp routing**, however, no longer assumes that the booking reference can be auto-extracted from the marker on the backend via `message_text`. Production testing confirmed that the WhatChimp tenant exposes only six system fields (first name, last name, label, email, phone number, chat ID) — no usable "last user message" / inbound-text variable, no Condition field for the message body, no HTTP API body-interpolation token. The marker trigger therefore routes the guest to an **explicit booking-reference input step** that captures the 8-char code via the existing `User Input Flow Single` → `oraya_booking_reference` custom field, then merges into the existing Node 13 (HTTP API 7219 → `POST /api/butler/identify`) identity orchestration unchanged. The marker eliminates the Welcome-menu redundancy; the explicit reference ask remains because WhatChimp cannot do the extraction itself. PR #47's `message_text` field on `/api/butler/identify` and the bounded extractor in `lib/butler/extract-booking-reference.ts` stay in the codebase as forward-compatible code for future non-WhatChimp channels (Telegram, Messenger, direct WhatsApp Cloud API) and for any future WhatChimp version that exposes inbound text.
@@ -187,6 +284,15 @@ The audit explicitly considered and rejected:
 ---
 
 ## 2026-05-22 - WhatsApp identity v2: WhatChimp subscriber_id becomes primary continuity key; identity_proof accepts email OR full name; flow JSON ships placeholder-free
+
+> **Reconciliation note (added 2026-06-03):** the original commit that landed these 2026-05-22 entries left two heading lines stacked above the "Hosted payment execution is provider-agnostic" body, and re-titled what is now the lower 2026-05-22 entry ("Phase 16B.3 Reserve-path payment execution uses booking-first + hosted Stripe checkout") as a duplicate carrier for the "WhatsApp identity v2" body. The bodies are factually correct and in chronological order; only the header/body pairing got shuffled. To preserve append-only history without rewriting the original prose, the headings are left in place and this note documents the mismatch:
+>
+> - The body immediately under the "Hosted payment execution is provider-agnostic" heading below belongs to **that** decision (provider-agnostic hosted checkout, Credit Libanais production target).
+> - The body under the later "Phase 16B.3 Reserve-path payment execution uses booking-first + hosted Stripe checkout" heading describes **the WhatsApp identity v2** work (subscriber_id primary key, email-or-name identity proof, placeholder-free flow JSON).
+> - "Phase 16B.3 Reserve-path payment execution uses booking-first + hosted Stripe checkout" remains historically accurate as the precursor decision that the same-day "provider-agnostic" entry supersedes - both are kept for traceability.
+>
+> Subsequent decisions (2026-05-23 onward) reference the v2 identity body by the "WhatsApp identity v2" heading; the supersession-tracking still works because the body content is unambiguous.
+
 ## 2026-05-22 - Hosted payment execution is provider-agnostic; Credit Libanais / MPGS is the production target
 
 **Decision:** Oraya's hosted-payment architecture remains booking-first and webhook-first, but production is no longer assumed to be Stripe. `POST /api/payments/checkout` now resolves a provider-agnostic hosted-checkout adapter selected by `PAYMENT_PROVIDER`, and `POST /api/payments/webhook/[provider]` is the generic callback surface. Credit Libanais / MPGS is the production target provider for settlement into a Fresh USD account in Lebanon. In production, provider selection must be explicit and must be `credit_libanais`: if `PAYMENT_PROVIDER` is missing or set to any other value, checkout fails closed with a configuration error. Outside production, the runtime may default to Stripe so local/dev can still exercise the hosted checkout flow intentionally.

@@ -1,7 +1,7 @@
-# Current Phase - Phase 16A closeout / Phase 16B hosted payment provider refactor
+# Current Phase - Phase 16A closeout (substantially complete) / Phase 16B hosted payment execution
 
-**Updated:** 2026-05-22
-**Status:** Phase 16A WhatsApp / WhatChimp / Butler lead capture + secure website handoff + identity continuity remain shipped. Phase 16A.2 `flow-submit` write-capable booking adapter remains outstanding. Phase 16B is now live through the settings-driven Reserve payment foundation: payment-link schema, runtime plumbing, admin payment settings, premium Step 3 decision UX, provider-agnostic hosted checkout architecture, and verified hosted-payment callbacks. Credit Libanais / MPGS is the only approved production provider path; Stripe remains isolated to local/dev testing only.
+**Updated:** 2026-06-03
+**Status:** Phase 16A is **substantially complete** for the lead-intake, secure website handoff, identity continuity, and confirmed-guest info boundary. Remaining 16A scope is operator-side WhatChimp wiring, confirmed-guest routing refinement, ensuring the generic AI does not answer booking-sensitive confirmed-guest questions, and (if/when scoped in) the `flow-submit` write-capable booking adapter. Location / PIN / access automation is **not** Phase 16A - it remains Phase 16D. Phase 16B is **active**: the provider-agnostic hosted-checkout architecture, payment-link schema, runtime plumbing, admin payment settings, Step 3 booking-flow consolidation (three explicit steps), and the dual-CTA Step 3 (primary "Continue to secure payment" + secondary "Reserve now, pay later") are all shipped. Credit Libanais / NetCommerce / MPGS is the only approved production provider; Stripe is isolated to local/dev. Live MPGS session creation, verified webhook execution, settlement reconciliation, refunds automation, WhatsApp payment-status replies, and Instant Book execution remain outstanding.
 
 This file is rewritten at every phase transition. Treat it as a snapshot, not a log.
 
@@ -9,47 +9,72 @@ This file is rewritten at every phase transition. Treat it as a snapshot, not a 
 
 ## Active phase
 
-**Phase 16A closeout + Phase 16B hosted payment provider refactor.**
+**Phase 16A closeout (substantially complete) + Phase 16B hosted payment execution.**
 
-Phase 16A is functionally complete for the lead-intake half of the WhatsApp Butler journey:
+Phase 16A is substantially complete:
 
-- `/api/butler/health|event-types|addons|availability|normalize-dates|lead|prefill` are live and guarded by `BUTLER_WEBHOOK_SECRET` (or `BUTLER_PREFILL_SECRET` for the public prefill route).
+- `/api/butler/health|event-types|addons|availability|normalize-dates|lead|prefill|identify|confirmed-guest-info|booking-lookup` are live and guarded by `BUTLER_WEBHOOK_SECRET` (or `BUTLER_PREFILL_SECRET` for the public prefill route).
 - `whatsapp_leads` is the operational source of truth for WhatsApp-originated booking intent.
 - `/book` accepts a short-lived opaque handoff token (`?h=...`) and continues the conversation on the website without retyping.
-- A successful booking now best-effort links `whatsapp_leads.linked_booking_id` to the new booking row via `butler_prefill_token` in the booking POST body. This closes the lead -> booking provenance loop without changing locked-pipeline behavior on failure.
+- A successful booking best-effort links `whatsapp_leads.linked_booking_id` to the new booking row via `butler_prefill_token` in the booking POST body. This closes the lead -> booking provenance loop without changing locked-pipeline behavior on failure.
+- WhatsApp identity v2 ships through `/api/butler/identify`: subscriber-id is the primary continuity key; `chat_id` is diagnostic-only and is **never** treated as a phone number; the reference fallback gates disclosure behind an identity proof (email OR full name, normalized exact-after-normalization match); the response is enriched with the 8-character public booking reference plus the signed `/booking/view/[token]` URL on identity-established active branches.
+- `/api/butler/confirmed-guest-info` is the dedicated confirmed-guest boundary: allows the reference, villa, dates, signed booking-view URL, operator-configured `butler_checkin_guidance`, and an explicit `location_access_note`; blocks PIN, exact GPS, payment links, admin notes, internal IDs, and confirm/cancel tokens.
+- The booking-reference + change/cancel website CTAs pre-fill WhatsApp with **plain human sentences** (`"Check my booking <ref>"` / `"Help with my booking <ref>"`) - the earlier `#ORAYA_REF:` / `#ORAYA_CHANGE:` marker scheme has been withdrawn. See [DECISIONS_LOG.md](DECISIONS_LOG.md) "WhatsApp CTA prefills reverted to plain human sentences" (2026-06-03).
+- `/api/butler/identify` accepts an optional `message_text` field that runs a **word-boundary-anchored 8-character hex** extractor ([lib/butler/extract-booking-reference.ts](../../lib/butler/extract-booking-reference.ts)) so non-WhatChimp channels (Telegram, Messenger, WhatsApp Cloud API) that DO expose inbound text auto-skip the reference ask. The WhatChimp tenant does not expose inbound text today, so the production path still asks for the reference once.
 
-The remaining Phase 16A scope is `POST /api/butler/flow-submit` - the write-capable booking adapter that turns a WhatsApp Flow submission directly into an Oraya booking row through the locked `/api/bookings` POST contract. No schema changes. No locked-API behavior changes. Idempotency keyed on a Flow-supplied submission token so retries do not create duplicates.
+The remaining Phase 16A scope is operator-side and policy-side:
 
-Phase 16B is now active on the website Reserve path:
+1. **WhatChimp confirmed-guest flow wiring.** The new `/api/butler/confirmed-guest-info` endpoint exists, but the WhatChimp flow that calls it on identity-established confirmed guests still needs to be wired and tested against the production tenant.
+2. **Confirmed-guest routing refinement.** Once wired, ensure the bot routes correctly between "deliver confirmed-guest info" (active, identity established) vs "wait for confirmation" (pending) vs "acknowledge cancellation" (cancelled) without leaking sensitive fields.
+3. **Generic AI containment.** Ensure the generic AI Training layer does not answer booking-sensitive confirmed-guest questions (villa, dates, view URL, check-in guidance, location-access policy) outside the `confirmed-guest-info` boundary. The orchestrator is the single source of truth per turn.
+4. **`POST /api/butler/flow-submit`** is still the remaining WhatsApp write-capable booking-adapter scope IF/when WhatsApp-side booking submission is scoped in. The current architecture keeps `/book` as the authoritative booking surface and WhatsApp as lead-capture + secure handoff.
+5. **Location / PIN / access automation is explicitly NOT 16A** - it remains Phase 16D. The Butler must never quote a PIN, gate code, or exact arrival coordinates today.
 
-- payment-link columns exist on `bookings`
-- admin + guest runtime surfaces understand `payment_link_*`
-- `/book` Step 3 now supports a settings-driven premium decision flow for the Reserve path: pay now when hosted checkout is truly ready, or submit the booking request and pay later after confirmation
-- `/admin/settings` now owns public payment behavior such as mode, deposit minimum, guest instructions, manual rails, and whether online payment is enabled guest-side
-- `POST /api/payments/checkout` creates a hosted checkout session only after the locked `/api/bookings` POST successfully creates the booking row
-- `POST /api/payments/webhook/[provider]` is the authority for payment receipt updates; success redirects are informational only
+Phase 16B is active on the website Reserve path:
 
-Phase 16B is still incomplete. Real Credit Libanais execution, WhatsApp payment replies, refunds automation, and Instant Book execution are not part of the shipped path yet. See [/docs/phases/PHASE_16B_PLAN.md](../phases/PHASE_16B_PLAN.md) for the broader roadmap.
+- payment-link columns exist on `bookings` (the additive `phase-16b1` migration shipped, and the `phase-16b4` Credit Libanais provider-compat constraint widening migration is staged).
+- admin + guest runtime surfaces understand `payment_link_*`.
+- `/book` is now a **three-step** flow (Villa & Dates -> Stay Setup -> Review & Guest Details). The hidden Step 4 / standalone Guest Details step / four-step journey were all explicitly rejected in favor of this consolidation.
+- Step 3 presents two explicit Reserve actions: **primary "Continue to secure payment"** (gold solid CTA; blocks in the UI when the configured hosted-checkout provider is not truly ready) and **secondary "Reserve now, pay later"** (gold outline / transparent background CTA; submits a booking request without collecting payment on the website).
+- Add-ons and special requests do NOT block the stay payment. Approval-based add-ons are reviewed and charged separately after Oraya confirms. The pay-now path collects the stay payment first; approval items are reconciled afterwards.
+- `/admin/settings` owns guest-safe public payment behavior such as mode, deposit minimum, guest instructions, manual rails, provider display name, and the guest-visible online-payment-enabled flag. Gateway credentials remain server-only env vars and are never written to Supabase.
+- `POST /api/payments/checkout` creates a hosted checkout session only after the locked `/api/bookings` POST successfully creates the booking row.
+- `POST /api/payments/webhook/[provider]` is the authority for payment receipt updates; success redirects are informational only.
+- `/api/payments/readiness` surfaces non-secret provider readiness state to admins (configured vs implemented vs checkout-ready, missing requirements).
+
+Phase 16B is still incomplete. Live MPGS execution (session creation, callback verification, settlement), WhatsApp payment replies, refunds automation, and Instant Book execution are not part of the shipped path yet. See [/docs/phases/PHASE_16B_PLAN.md](../phases/PHASE_16B_PLAN.md) for the broader roadmap.
 
 The current closeout work around those shipped Phase 16A surfaces is operational:
 
-1. keep WhatChimp production wiring aligned with the shipped backend contract
-2. keep Butler prompt/escalation rules aligned with human operations
+1. keep WhatChimp production wiring aligned with the shipped backend contract (welcome flow + the two new CTA-substring triggers + the confirmed-guest flow once wired)
+2. keep Butler prompt / escalation rules aligned with human operations and with the confirmed-guest disclosure boundary
 3. keep secret handling, rotation, and Vercel env posture explicit
 4. avoid any accidental Phase 16B payment promises in WhatsApp or website handoff copy
+5. **canonical domain hygiene** - the canonical Oraya origin is `https://stayoraya.com` and only `https://stayoraya.com`. Any AI / WhatChimp reply that suggests `www.oraya.com.lb` or any other host is a wrong-domain bug; this is documented in [KNOWN_BUGS.md](KNOWN_BUGS.md) and [BUTLER_PLAYBOOK.md](BUTLER_PLAYBOOK.md).
 
 ## Active objective
 
-Keep the new hosted Reserve payment flow stable while Phase 16A closeout continues:
+Keep the shipped Reserve payment flow stable while Phase 16A operator-side closeout continues and Phase 16B execution work proceeds:
 
 1. **Hosted-checkout execution hardening.** Ensure `POST /api/payments/checkout` and verified provider callbacks remain the only payment execution authority for Reserve bookings after the booking row exists.
 2. **Webhook-first truth.** Guest return URLs on `/booking/view/[token]` stay informational; payment state comes from verified webhook updates only.
-3. **Phase 16A closeout.** `POST /api/butler/flow-submit` is still the remaining WhatsApp booking-adapter scope, but it must not bypass the locked `/api/bookings` POST or promise any payment automation beyond the shipped website hosted-payment flow.
-4. **Operational readiness.** Preview + production must carry `PAYMENT_PROVIDER`, `NEXT_PUBLIC_SITE_URL`, the Phase 16A Butler secrets, and whichever provider-specific payment secrets match the selected hosted gateway before the new payment flow is considered stable.
+3. **Confirmed-guest support wiring.** Wire the WhatChimp flow that calls `/api/butler/confirmed-guest-info` for identity-established confirmed guests, including the `butler_checkin_guidance` operator-managed settings row.
+4. **Operational readiness.** Preview + production must carry `PAYMENT_PROVIDER`, `NEXT_PUBLIC_SITE_URL`, the Phase 16A Butler secrets, and whichever provider-specific payment secrets match the selected hosted gateway. Credit Libanais merchant onboarding, MPGS endpoint + auth/signing method, and callback verification method must be confirmed before live execution is enabled.
+5. **`POST /api/butler/flow-submit`** if/when scoped in must not bypass the locked `/api/bookings` POST or promise any payment automation beyond the shipped website hosted-payment flow.
 
 ## Just completed
 
-- **Phase 16B.4 - Credit Libanais readiness foundation + provider-schema compatibility (this commit).** Added the human-gated migration [sql/phase-16b4-credit-libanais-provider-compat.sql](../../sql/phase-16b4-credit-libanais-provider-compat.sql) so `bookings.payment_link_provider` can safely persist `credit_libanais` alongside the older backward-compatible `manual` / `whish` / `stripe` values. [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) now models the real bank-integration contract explicitly without faking checkout: merchant id, gateway URL, session-creation endpoint, auth/signing method, callback verification method, provider session id field, currency/settlement behavior, and sandbox/live mode all remain typed placeholders until the bank confirms them. [lib/payments/runtime.ts](../../lib/payments/runtime.ts) now separates guest-safe readiness from admin-safe readiness, and `/admin/settings` surfaces the non-secret provider status plus missing requirements via [app/api/payments/readiness/route.ts](../../app/api/payments/readiness/route.ts). No Butler/WhatsApp changes. No booking, pricing, overlap, or payment-success simulation changes.
+- **Phase 16B - Step 3 dual-CTA refinement (2026-05-23, [apps#58](https://github.com/Staleen/oraya-web/pull/58)).** The Step 3 secondary action is now a real lower-priority button. The flow previously rendered the secondary path as a plain text link ("Prefer to reserve and pay later? Submit booking request"); it now renders as an outline button with a transparent background, thin gold border, and gold text labelled **"Reserve now, pay later"** that reads as visibly lower priority than the solid gold **"Continue to secure payment"** primary CTA. The apologetic "Online payment setup is in progress." copy was dropped from the page-level default; the neutral fallback at the throw site ("Online payment is not available for this booking right now.") applies when no admin-configured message is returned.
+
+- **Phase 16B - Booking flow consolidated to three steps (2026-05-23, [apps#56](https://github.com/Staleen/oraya-web/pull/56)).** [app/book/page.tsx](../../app/book/page.tsx) now ships a three-step Reserve flow with labels `["Villa & Dates", "Stay Setup", "Review & Guest Details"]` (verified at app/book/page.tsx:824). A visible Step 4, a standalone Guest Details step, and a four-step booking journey were all explicitly rejected. Step 3 hosts both the review summary AND the guest-details form; checkout/payment is a final action invoked from Step 3 via the dual-CTA pattern. No schema, API, or locked-pipeline change.
+
+- **Phase 16A - WhatsApp CTA prefills reverted to plain human sentences (2026-05-23, [apps#54](https://github.com/Staleen/oraya-web/pull/54)).** The earlier structured-marker scheme (`#ORAYA_REF:<ref>` / `#ORAYA_CHANGE:<ref>`) is withdrawn. `bookingWhatsAppPrefill(ref)` in [lib/booking-trust-messaging.ts](../../lib/booking-trust-messaging.ts) now returns `"Check my booking <ref>"`; `bookingWhatsAppChangePrefill(ref)` returns `"Help with my booking <ref>"`. WhatChimp triggers on those substrings (the only platform capability available on the production tenant - see [KNOWN_BUGS.md](KNOWN_BUGS.md) #7). The 8-char reference inside the sentence is the public guest-facing support code from [lib/booking-reference.ts](../../lib/booking-reference.ts) and carries no new disclosure risk. The two prior 2026-05-23 marker entries in [DECISIONS_LOG.md](DECISIONS_LOG.md) are now superseded by the 2026-06-03 entry that records this reversion.
+
+- **Phase 16A/16B - Booking flow polish + pay-now / reserve action unification (2026-05-23, [apps#46](https://github.com/Staleen/oraya-web/pull/46) + [apps#48](https://github.com/Staleen/oraya-web/pull/48) + [apps#49](https://github.com/Staleen/oraya-web/pull/49) + [apps#50](https://github.com/Staleen/oraya-web/pull/50)).** Booking-flow polish, the unified "pay now" booking action, and clarified review-before-payment behavior for add-ons / special requests. Approval-based add-ons are explicitly reviewed and charged separately after Oraya confirms; the stay payment is not blocked by them. No schema, API, or locked-pipeline change.
+
+- **Phase 16A - WhatChimp marker-routing correction (2026-05-23, [apps#52](https://github.com/Staleen/oraya-web/pull/52)).** Now superseded by [apps#54](https://github.com/Staleen/oraya-web/pull/54) above - kept in the log for traceability. The 2026-05-23 marker correction documented the WhatChimp inbound-text limitation and corrected the operator routing for the marker-based prefill; the subsequent reversion to plain human sentences eliminates the marker scheme entirely.
+
+- **Phase 16B.4 - Credit Libanais readiness foundation + provider-schema compatibility (2026-05-22, [apps#44](https://github.com/Staleen/oraya-web/pull/44)).** Added the human-gated migration [sql/phase-16b4-credit-libanais-provider-compat.sql](../../sql/phase-16b4-credit-libanais-provider-compat.sql) so `bookings.payment_link_provider` can safely persist `credit_libanais` alongside the older backward-compatible `manual` / `whish` / `stripe` values. [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) now models the real bank-integration contract explicitly without faking checkout: merchant id, gateway URL, session-creation endpoint, auth/signing method, callback verification method, provider session id field, currency/settlement behavior, and sandbox/live mode all remain typed placeholders until the bank confirms them. [lib/payments/runtime.ts](../../lib/payments/runtime.ts) now separates guest-safe readiness from admin-safe readiness, and `/admin/settings` surfaces the non-secret provider status plus missing requirements via [app/api/payments/readiness/route.ts](../../app/api/payments/readiness/route.ts). No Butler/WhatsApp changes. No booking, pricing, overlap, or payment-success simulation changes.
 - **Phase 16A - Butler website handoff date/auth persistence hardening (this commit).** `normalizeLeadInput` now accepts plain `check_in` / `check_out` aliases in addition to the normalized WhatChimp fields when persisting `whatsapp_leads`, and also falls back to the nested `raw_payload` object WhatChimp sends when the ISO stay dates are not duplicated at the top level. This closes the production gap where villa/name/guest count were mapped from top-level fields but `oraya_check_in` / `oraya_check_out` existed only inside `raw_payload`, leaving `normalized_check_in` / `normalized_check_out` null and causing `/api/butler/prefill` to return null dates. On the `/book` client, Butler date hydration is queued into the exact `dateRange` state the calendar uses and is re-applied after the auth gate resolves, so late villa resets or the guest/member gate cannot drop the decoded stay dates, and the visible calendar month now follows the hydrated `dateRange` so a December handoff opens on December rather than staying anchored to the current month. The `/book` auth gate also preserves the full current booking URL in its member sign-in redirect, so the signed handoff token survives the login round-trip instead of depending on session timing. No schema changes. No locked API behavior changes.
 - **Phase 16B - admin payment settings + Step 3 decision foundation (this commit).** `/admin/settings` now manages the guest-facing payment mode (`request_only`, `manual_payment`, `online_payment`, `hybrid`), deposit minimum percentage, full/custom deposit availability, manual payment rails, guest payment instructions, bank-transfer public details, provider display name, and the guest-visible online-payment enabled flag through the existing `settings` table. `/book` Step 3 now presents two clear Reserve paths: `Pay now and reserve` and `Submit booking request and pay later`. The pay-now path still uses hosted-checkout amount validation and the existing `/api/payments/checkout` route, but it is blocked in the UI whenever the configured provider is not truly ready. The pay-later path keeps booking-first behavior, records payment preferences in the booking request context, and makes it explicit that no charge is collected on the website until Oraya confirms the stay. No schema change. No locked booking-creation behavior change.
 
@@ -86,45 +111,49 @@ Keep the new hosted Reserve payment flow stable while Phase 16A closeout continu
 
 ## Open issues to be aware of right now
 
-Pre-existing gaps that become more visible when 16A.2 ships:
+- **WhatChimp remains an operational dependency outside this repo.** The exported flow must stay aligned with the backend contract: route on the `"Check my booking"` / `"Help with my booking"` substrings the website CTAs emit; call `POST /api/butler/identify` for identity resolution; call `POST /api/butler/confirmed-guest-info` for identity-established confirmed guests; capture and use `prefill_url` from `POST /api/butler/lead` when present. If WhatChimp drifts (e.g. back to a static `/book` link, or routing on the withdrawn `#ORAYA_REF:` / `#ORAYA_CHANGE:` markers), guests lose the secure continuation benefit even though the backend is healthy.
 
-- **WhatChimp remains an operational dependency outside this repo.**
-  - The exported flow must stay aligned with the backend contract:
-    - call `POST /api/butler/lead`
-    - capture `prefill_url`
-    - use that returned URL in the outgoing WhatsApp reply
-  - If WhatChimp drifts back to a static `/book` link, guests lose the secure continuation benefit even though the backend is healthy.
+- **Confirmed-guest support wiring is the active operator-side closeout.** The `/api/butler/confirmed-guest-info` endpoint, the operator-managed `butler_checkin_guidance` settings row, the disclosure boundary, and the explicit `location_access_note` are all live. The WhatChimp flow that calls this endpoint for identity-established confirmed guests still needs to be wired in the production tenant.
+
+- **Generic AI must not answer booking-sensitive confirmed-guest questions outside the dedicated boundary.** Villa, stay dates, signed booking-view URL, check-in guidance, and location-access policy belong to `/api/butler/confirmed-guest-info`. The orchestrator is the single source of truth per turn; AI Training / Bot Reply must never paraphrase or invent any of these fields.
+
+- **AI wrong-domain response risk.** AI Training (WhatChimp or any external assistant outside this repo) has previously returned `www.oraya.com.lb` and similar hosts. The canonical Oraya origin is **`https://stayoraya.com`** and only `https://stayoraya.com`. This is **not** a domain migration; it is a wrong-domain bug whenever it appears. See [KNOWN_BUGS.md](KNOWN_BUGS.md) and the canonical-domain section in [BUTLER_PLAYBOOK.md](BUTLER_PLAYBOOK.md).
 
 - **Booking reference is a public support code, not an access PIN.** The 8-character uppercased prefix of `bookings.id` that appears on `/booking/view/[token]` and in emails is intentionally a guest-facing support reference only. There is **no access PIN, smart-lock PIN, or gate code** in Phase 16A or Phase 16B. Access credential issuance is Phase 16D (smart lock). The Butler must never present the booking reference as an access PIN or imply it grants entry.
 
-- **BUTLER_PREFILL_SECRET must be set in Vercel for website handoff.** Without it, POST /api/butler/lead still succeeds but omits `prefill_url`, and `/api/butler/prefill` cannot verify tokens. This is an intentional business-continuity trade-off for lead capture, but production needs the env set before the handoff can be relied on. The same secret is now consumed by `/api/bookings` POST to verify `butler_prefill_token` for identity-continuity linkage - failure to verify is non-blocking; the booking still goes through.
+- **BUTLER_PREFILL_SECRET must be set in Vercel for website handoff.** Without it, POST /api/butler/lead still succeeds but omits `prefill_url`, and `/api/butler/prefill` cannot verify tokens. This is an intentional business-continuity trade-off for lead capture, but production needs the env set before the handoff can be relied on. The same secret is consumed by `/api/bookings` POST to verify `butler_prefill_token` for identity-continuity linkage - failure to verify is non-blocking; the booking still goes through.
 
-- **Missing `RESEND_API_KEY` is a stealth failure.** The Butler tells guests "you'll get an email confirmation"; without Resend wired, no email goes out and no error surfaces. 16A.2 should refuse submissions when the key is unset in production. See [KNOWN_BUGS.md](KNOWN_BUGS.md) #2.
-- **Missing `NEXT_PUBLIC_SITE_URL` on preview links to production.** When 16A.2 echoes a booking view URL, preview-environment Butler messages would point at live data. Set `NEXT_PUBLIC_SITE_URL` on Vercel Preview before 16A.2 ships. See [KNOWN_BUGS.md](KNOWN_BUGS.md) #3.
-- **`BUTLER_WEBHOOK_SECRET` not yet in Vercel.** This PR wires the consumer but does not populate the Vercel env panel. Production and Preview need the value set (Sensitive) before WhatChimp can call any `/api/butler/*` route in those environments. See [KNOWN_BUGS.md](KNOWN_BUGS.md) #4.
-- **DECISIONS_LOG header-name example drift.** The 2026-05-12 DECISIONS_LOG entry used `X-Butler-Auth` as an illustrative header name; the actual implementation in 16A.1 uses `X-Butler-Secret` per the 16A.1 task spec. Architecturally identical ("shared secret in header"); only the header name differs. Not worth a superseding DECISIONS_LOG entry - flagged here for future agents reading old context.
-- **Payment remains Phase 16B.** Instant-book UI exists, but WhatsApp and the website continuation path must not imply payment completion, payment collection, refund handling, or any final paid confirmation state.
-- **Payment-provider envs are now required for the hosted Reserve payment path.** Missing or incomplete provider configuration no longer means "feature unavailable only on paper" - it means Step 3 can create a booking row but fail to start hosted checkout, leaving the guest on `/booking/view/[token]?payment=setup_failed` until Oraya follows up manually.
+- **Missing `RESEND_API_KEY` is a stealth failure.** Without Resend wired, no transactional email goes out and no error surfaces. See [KNOWN_BUGS.md](KNOWN_BUGS.md) #2.
+- **Missing `NEXT_PUBLIC_SITE_URL` on preview links to production.** Preview-environment Butler messages and hosted-checkout return URLs would point at live data. Set `NEXT_PUBLIC_SITE_URL` on Vercel Preview. See [KNOWN_BUGS.md](KNOWN_BUGS.md) #3.
+- **`BUTLER_WEBHOOK_SECRET` Vercel posture.** Production and Preview need the value set (Sensitive) before WhatChimp can call any `/api/butler/*` route in those environments. See [KNOWN_BUGS.md](KNOWN_BUGS.md) #4.
+- **DECISIONS_LOG header-name example drift.** The 2026-05-12 DECISIONS_LOG entry used `X-Butler-Auth` as an illustrative header name; the actual implementation in 16A.1 uses `X-Butler-Secret`. Architecturally identical; only the header name differs.
+- **WhatChimp inbound-text platform limitation.** The production WhatChimp tenant does not expose inbound message text as a Condition system field or HTTP API body variable - only first name, last name, label, email, phone number, chat ID are available. The backend's `message_text` extractor is forward-compatible code for channels that DO expose inbound text. See [KNOWN_BUGS.md](KNOWN_BUGS.md) #7.
+- **Payment execution remains incomplete.** Real MPGS session creation, verified callback execution, settlement reconciliation, refunds automation, WhatsApp payment-status replies, and Instant Book execution are not part of the shipped path. The shipped path supports admin-controlled settings-driven Step 3 plus booking-first hosted checkout against a placeholder Credit Libanais adapter and an isolated dev/test Stripe adapter.
+- **Payment-provider envs are required for the hosted Reserve payment path.** Missing or incomplete provider configuration means Step 3 can create a booking row but fail to start hosted checkout, leaving the guest on `/booking/view/[token]?payment=setup_failed` until Oraya follows up manually.
 
-## Out of scope this phase (16A.2)
+## Out of scope this phase
 
-- No schema changes without explicit approval in the task prompt - even for the idempotency table. If a new `butler_submissions` table is chosen over the jsonb-enrichment path, that decision goes through a separate approval gate.
-- No payment / refund flow over WhatsApp. Phase 16B.
-- No refunds automation or manual-transfer rails in this hosted-checkout refactor step. Those remain later 16B work.
+- No schema changes without explicit approval in the task prompt. If a new `butler_submissions` table is chosen over the jsonb-enrichment path, that decision goes through a separate approval gate.
+- No live Credit Libanais / MPGS execution until the bank contract (merchant id, gateway URL, session-creation endpoint, auth/signing method, callback verification method, currency/settlement behavior, sandbox/live mode) is confirmed and the adapter is implemented to match.
+- No refunds automation. Refund handling remains a later 16B work item.
+- No Instant Book payment execution. The instant-book UI exists but executes through the same hosted-checkout placeholder today; live instant execution remains later 16B work.
 - No smart-lock PIN issuance or access-code delivery. Phase 16D.
 - No member -> phone linkage. Every Butler-originated booking is the guest path. A future phase ships the verification flow.
 - No AI prompt engineering in this repo. AI Training, Bot Reply, Labels, and Custom Fields live in WhatChimp.
-- No `/api/bookings` POST behavior change. The adapter normalizes the Flow payload into the existing body shape - pricing/overlap/addon audit remain the locked source of truth.
+- No `/api/bookings` POST behavior change. The booking pipeline (overlap, pricing, addon audit, email triggers, view-token issuance) remains the authoritative source of truth.
 - No locked-API touches. `/api/bookings*`, `/api/admin/*`, `/api/calendar/*`, `/api/cron/*`, the email senders, the auth/token systems, and existing schema remain off-limits.
 - No widening of `/api/settings` allowlist to satisfy WhatChimp. Butler reads belong under `/api/butler/*`.
 - No `NEXT_PUBLIC_BUTLER_*` env vars. Server-only.
+- No re-introduction of the withdrawn `#ORAYA_REF:` / `#ORAYA_CHANGE:` marker prefill scheme without an explicit superseding decision-log entry.
 
 ## Next recommended steps
 
 In order:
 
-1. **Human action:** confirm the real bank gateway contract for Credit Libanais / MPGS: merchant id, API endpoint, auth secret/key/certificate, callback verification method, and settlement/currency rules.
-2. **Human action:** set `PAYMENT_PROVIDER` and the matching provider secrets in Vercel Preview + Production, then register the real provider callback URL for each environment.
+1. **Human action:** confirm the real bank gateway contract for Credit Libanais / NetCommerce / MPGS: merchant id, API endpoint, auth secret/key/certificate, callback verification method, settlement/currency rules, and sandbox vs live mode.
+2. **Human action:** set `PAYMENT_PROVIDER=credit_libanais` and the matching `CREDIT_LIBANAIS_*` secrets in Vercel Preview + Production, then register the real provider callback URL for each environment.
 3. **Human action:** confirm `NEXT_PUBLIC_SITE_URL` is set correctly in Preview + Production so hosted-payment success/cancel returns land on the right booking-view host.
-4. **16A.2 implementation (next coding session):** design and ship `POST /api/butler/flow-submit` per "Active objective" above without bypassing the locked `/api/bookings` authority.
-5. **Next 16B increment:** real Credit Libanais / MPGS adapter implementation, then admin payment controls / link reissue / payment refresh and the separate refund workflow, then WhatsApp payment-status replies only after identity-safe continuity remains stable.
+4. **Operator wiring:** wire the WhatChimp confirmed-guest flow that calls `POST /api/butler/confirmed-guest-info` on identity-established confirmed guests, and populate the `butler_checkin_guidance` settings row.
+5. **Operator wiring:** confirm the WhatChimp welcome + booking-reference flow routes correctly on the `"Check my booking"` / `"Help with my booking"` substrings (the plain-sentence prefill format) - and confirm that the older `#ORAYA_REF:` / `#ORAYA_CHANGE:` triggers, if they were ever added, are removed or harmless.
+6. **Next 16B increment:** real Credit Libanais / MPGS adapter implementation, then admin payment controls / link reissue / payment refresh and the separate refund workflow, then WhatsApp payment-status replies only after identity-safe continuity remains stable.
+7. **`POST /api/butler/flow-submit`** if/when scoped in: design and ship without bypassing the locked `/api/bookings` authority and without promising payment automation beyond the shipped hosted-payment flow.

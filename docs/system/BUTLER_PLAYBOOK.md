@@ -8,9 +8,9 @@
 
 **Scope:** operational and behavioral rules for the Butler. The data plane (auth, endpoints, secrets, source-of-truth lib paths) lives in [ARCHITECTURE.md](ARCHITECTURE.md) ("Butler flow"), [ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md) (`BUTLER_WEBHOOK_SECRET`), and [DECISIONS_LOG.md](DECISIONS_LOG.md) (2026-05-12 Butler architecture freeze). This file does **not** duplicate those.
 
-**Updated:** 2026-05-23.
+**Updated:** 2026-06-03.
 
-> Note: this date is shared by four 2026-05-23 updates: the confirmed-guest info boundary, the `message_text` inbound-message convenience on `/api/butler/identify`, the website CTA marker prefill, and the verified-WhatChimp-limitation correction to the marker-routing operator flow. All four are reflected in this file.
+> Note: the 2026-06-03 update reverses the 2026-05-23 marker-prefill scheme back to plain human sentences (see [DECISIONS_LOG.md](DECISIONS_LOG.md)) and adds the canonical-domain operational guardrail. The 2026-05-23 updates remain reflected where still accurate: confirmed-guest info boundary, the `message_text` inbound-message convenience on `/api/butler/identify`, the verified-WhatChimp-limitation note. The marker-routing section below was rewritten as "Website CTA prefill routing" to match the shipped plain-sentence format.
 
 ---
 
@@ -54,12 +54,24 @@
 - Add-on recommendations are primarily appropriate **within 5-7 days** before the stay/event.
 - Any add-on with `requires_approval: true` (returned by [`/api/butler/addons`](../../app/api/butler/addons/route.ts)) **triggers human notification before** the Butler implies confirmation. The guest must be told the add-on is "subject to confirmation."
 
+## Canonical Oraya web origin
+
+The single canonical Oraya web origin is **`https://stayoraya.com`** and only `https://stayoraya.com`.
+
+- Every transactional email helper builds links off `lib/brand.ts` `SITE_URL`, which falls back to `https://stayoraya.com`.
+- Every `/booking/view/[token]` URL and `/legal/*` page is served from this host.
+- Every hosted-checkout success / cancel return URL lands at this host.
+
+**AI Training / WhatChimp Bot Reply / generic AI must never name any other host as an Oraya web property.** In particular, `www.oraya.com.lb`, `oraya.com.lb`, and any unprefixed `oraya.com` variant are **not** Oraya web origins. There is no LB-TLD Oraya web property today.
+
+When asked "what is the Oraya website?" the only correct answer the Butler may give is `https://stayoraya.com`. This is not a domain migration in either direction; it is a wrong-domain bug whenever a different host appears. See [KNOWN_BUGS.md](KNOWN_BUGS.md) #8 and [DECISIONS_LOG.md](DECISIONS_LOG.md) "Canonical Oraya web origin is `https://stayoraya.com`" (2026-06-03).
+
 ## Knowledge source-of-truth
 
 The Butler derives knowledge from:
 
 - The **Oraya backend** (Supabase + the locked `/api/bookings*` surface, exposed read-only to the Butler via `/api/butler/*`).
-- The **Oraya website** (`https://stayoraya.com`).
+- The **Oraya website** (`https://stayoraya.com` — the canonical origin per the "Canonical Oraya web origin" section above).
 - **Admin-managed content** (settings, addons table, operational settings).
 
 The Butler must **never invent**:
@@ -120,20 +132,22 @@ Recommended escalation message style:
 - It is **not** an access PIN, gate code, smart-lock PIN, or door code. Phase 16A and Phase 16B do not issue access credentials of any kind.
 - Smart-lock PIN / access-code delivery is **Phase 16D**. Until 16D ships, the Butler must never claim the booking reference will "open the gate" or "unlock the villa", and must never quote a PIN.
 
-## Website CTA marker routing
+## Website CTA prefill routing
 
-The Oraya website embeds two "Talk to us on WhatsApp" CTAs on the booking-view page and the booking-confirmed page. Both CTAs pre-fill the WhatsApp compose box with a **structured marker** rather than a human sentence — the marker is the signal WhatChimp uses to route the guest into the right Butler path without the redundant Welcome-menu loop. The guest does **not** need to understand the marker; it is operator-facing routing metadata that happens to live in the message body.
+The Oraya website embeds two "Talk to us on WhatsApp" CTAs on the booking-view page and the booking-confirmed page. Both CTAs pre-fill the WhatsApp compose box with a **plain human sentence** built by [lib/booking-trust-messaging.ts](../../lib/booking-trust-messaging.ts) (`bookingWhatsAppPrefill` / `bookingWhatsAppChangePrefill`). The sentence carries the guest's intent ("Check my booking" vs "Help with my booking"), the 8-character public booking reference, and reads naturally inside the guest's WhatsApp compose box. WhatChimp routes on the leading substring; the guest never needs to understand any routing tag.
 
-Marker format (built by [lib/booking-trust-messaging.ts](../../lib/booking-trust-messaging.ts) `bookingWhatsAppPrefill` / `bookingWhatsAppChangePrefill`):
+Prefill format:
 
-| CTA intent | Pre-filled WhatsApp body | Bot routing |
+| CTA intent | Pre-filled WhatsApp body | WhatChimp routing substring |
 |---|---|---|
-| View / check booking status | `#ORAYA_REF:<8-char-uppercased-hex>` | Oraya Identify - Production flow |
-| Change / cancel booking | `#ORAYA_CHANGE:<8-char-uppercased-hex>` | Change/cancel assistance flow |
+| View / check booking status | `Check my booking <8-char-uppercased-hex>` | `Check my booking` |
+| Change / cancel booking | `Help with my booking <8-char-uppercased-hex>` | `Help with my booking` |
 
-The 8-character reference inside the marker is the public guest-facing support code defined in [lib/booking-reference.ts](../../lib/booking-reference.ts) (`formatBookingReference`). It is **not** an access PIN or credential; surfacing it in the prefill carries no new disclosure risk.
+The 8-character reference inside the sentence is the public guest-facing support code defined in [lib/booking-reference.ts](../../lib/booking-reference.ts) (`formatBookingReference`). It is **not** an access PIN or credential; surfacing it in the prefill carries no new disclosure risk.
 
-When the guest has no booking reference yet (pre-submit or generic contact), the fallback constants `WHATSAPP_GENERAL_CONTACT_PREFILL` and `WHATSAPP_CANCEL_CHANGE_NO_REF` remain plain human sentences — those messages do not target the marker-routed paths and are intentionally human-friendly so they enter the normal welcome flow.
+When the guest has no booking reference yet (pre-submit or generic contact), the fallback constants `WHATSAPP_GENERAL_CONTACT_PREFILL` and `WHATSAPP_CANCEL_CHANGE_NO_REF` remain plain human sentences and intentionally enter the normal welcome flow.
+
+> **History — withdrawn marker scheme.** Between 2026-05-23 and 2026-06-03 the website CTAs briefly emitted structured markers (`#ORAYA_REF:<ref>` / `#ORAYA_CHANGE:<ref>`) to disambiguate website-CTA-originated turns from hand-typed messages. The marker scheme was withdrawn on 2026-06-03 in favor of the plain human sentences documented above, because (a) WhatChimp routes on substrings either way, (b) the marker created a small guest-visible "what is this?" friction without unlocking any new capability, and (c) the plain sentences carry the intent verb directly. The withdrawal is recorded in [DECISIONS_LOG.md](DECISIONS_LOG.md) "WhatsApp CTA prefills reverted to plain human sentences" (2026-06-03), which supersedes the two 2026-05-23 marker entries. The earlier "Verified WhatChimp platform limitation (2026-05-23)" subsection below stays in this file because the underlying tenant limitation it describes is unchanged.
 
 ### Verified WhatChimp platform limitation (2026-05-23)
 
@@ -152,40 +166,47 @@ There is no "last user message", no "last incoming text", no equivalent inbound-
 
 | Inbound message pattern | WhatChimp routing |
 |---|---|
-| Contains `#ORAYA_REF:` | Skip the Welcome menu. Route directly to the **booking-reference input** step (the existing Node 12 "Please share your Oraya booking reference" question). The user's next reply is captured into the existing `oraya_booking_reference` custom field and the existing Oraya Identify - Production HTTP API call proceeds unchanged. |
-| Contains `#ORAYA_CHANGE:` | Skip the Welcome menu. Route to the **change/cancel booking-reference input** step (operator may reuse the same booking-reference input node or create a parallel one with change/cancel-specific downstream copy — either is acceptable; the identity-orchestration HTTP API call stays identical). |
-| Neither marker present (`"hi"`, `"hello"`, `"my reservation"`, free-form questions) | Existing welcome / greeting flow unchanged. |
+| Starts with `Check my booking` (substring, case-insensitive) | Skip the Welcome menu. Route directly to the **booking-reference input** step (the existing Node 12 "Please share your Oraya booking reference" question). The user's next reply is captured into the existing `oraya_booking_reference` custom field and the existing Oraya Identify - Production HTTP API call proceeds unchanged. |
+| Starts with `Help with my booking` (substring, case-insensitive) | Skip the Welcome menu. Route to the **change/cancel booking-reference input** step (operator may reuse the same booking-reference input node or create a parallel one with change/cancel-specific downstream copy — either is acceptable; the identity-orchestration HTTP API call stays identical). |
+| Neither phrase present (`"hi"`, `"hello"`, `"my reservation"`, free-form questions) | Existing welcome / greeting flow unchanged. |
 
-The marker eliminates the Welcome-menu redundancy on the website-CTA path. It does **not** eliminate the booking-reference ask itself — that ask remains a single explicit step because WhatChimp cannot extract the 8-char code from the trigger message on its own. The Butler answers warmly, then captures the reference like the existing reference flow does. A guest who hand-types a booking reference into a fresh chat (without the marker) still enters the welcome menu and chooses "Booking reference" the normal way — both paths are preserved.
+The plain-sentence prefill eliminates the Welcome-menu redundancy on the website-CTA path. It does **not** eliminate the booking-reference ask itself — that ask remains a single explicit step because WhatChimp cannot extract the 8-char code from the trigger message on its own. The Butler answers warmly, then captures the reference like the existing reference flow does. A guest who hand-types a booking reference into a fresh chat (without the website CTA prefill) still enters the welcome menu and chooses "Booking reference" the normal way — both paths are preserved.
 
 ### Operator manual steps required in WhatChimp
 
-These are UI changes the operator must apply once (no flow JSON is committed to this repo). The exact wording of nodes the operator may copy verbatim is included.
+These are UI changes the operator must apply once (no flow JSON is committed to this repo). The exact wording of nodes the operator may copy verbatim is included. Operators previously wired triggers for the withdrawn marker scheme should remove or repurpose those triggers (see "Withdrawn marker cleanup" below).
 
-1. **Add a new trigger node** matching `#ORAYA_REF:` (substring, case-insensitive).
+1. **Add a new trigger node** matching `Check my booking` (substring, case-insensitive).
    - First downstream node: a **Text** node with the agreed hospitality prompt:
      > Hello from Oraya ✨
      > Please send only your 8-character booking reference so I can check your booking securely.
      > Example: A0B8CECB
-   - Next node: a **User Input Flow Single** with `replyType: "Text"`, `customField: oraya_booking_reference` (custom_59254 in the current v2 flow), to capture the user's reply.
+   - Next node: a **User Input Flow Single** with `replyType: "Text"`, `customField: oraya_booking_reference`, to capture the user's reply.
    - Then: route into the **existing** Node 13 (HTTP API 7219 → Oraya Identify - Production). Reuse the existing identity flow downstream verbatim — do not duplicate identity logic, do not introduce a parallel identify call.
    - Net effect: the user lands directly on the reference prompt without the Welcome-menu detour.
 
-2. **Add a second new trigger node** matching `#ORAYA_CHANGE:` (substring, case-insensitive).
+2. **Add a second new trigger node** matching `Help with my booking` (substring, case-insensitive).
    - First downstream node: a **Text** node with a change/cancel-flavoured variant of the hospitality prompt:
      > Hello from Oraya ✨
      > To help with changing or cancelling your booking, please send only your 8-character booking reference so we can locate it securely.
      > Example: A0B8CECB
    - Next node: same User Input Flow Single saving the reply into `oraya_booking_reference`.
-   - Then: route into the existing Node 13 (HTTP API 7219) so the identity orchestrator runs, AND additionally apply the change/cancel label the operator already uses for change/cancel triage on `/admin/leads`. Whether the downstream Butler response branches further on the change/cancel intent is operator-internal — the identity layer remains the same.
+   - Then: route into the existing Node 13 (HTTP API 7219) so the identity orchestrator runs, AND additionally apply the change/cancel label the operator already uses for change/cancel triage on `/admin/leads`.
 
-3. **Do NOT remove the existing Welcome trigger** (`"hi"`, `"hello"`, `"my reservation"`, `"booking reference"`, etc.). The two new marker triggers run alongside it; guests who type free-form text still see the welcome menu as today.
+3. **Do NOT remove the existing Welcome trigger** (`"hi"`, `"hello"`, `"my reservation"`, `"booking reference"`, etc.). The two new substring triggers run alongside it; guests who type free-form text still see the welcome menu as today.
 
-4. **Do NOT expose marker syntax** (`#ORAYA_REF:`, `#ORAYA_CHANGE:`) inside any guest-facing Welcome menu copy, AI Training prompt, or Bot Reply template. The marker is operator-routing infrastructure that the guest never needs to know exists. If a curious guest asks "what is `#ORAYA_REF:`?", the Butler answers truthfully and briefly — "It's a routing tag the website adds so we can find your booking faster. You can ignore it." — and never instructs anyone to type it manually.
+4. **Reuse the existing identity orchestration.** The substring-routed paths must **not** create a parallel identify call, a parallel `whatsapp_leads` write, or any new HTTP API node. They share the existing Node 13 (HTTP API 7219 → `POST /api/butler/identify`) and the entire downstream identity / proof / status branch as today. The only WhatChimp-side novelty is the two new trigger nodes + the two short Text prompts above them.
 
-5. **Reuse the existing identity orchestration.** The marker-routed paths must **not** create a parallel identify call, a parallel `whatsapp_leads` write, or any new HTTP API node. They share the existing Node 13 (HTTP API 7219 → `POST /api/butler/identify`) and the entire downstream identity / proof / status branch as today. The only WhatChimp-side novelty is the two new trigger nodes + the two short Text prompts above them.
+5. **Forward-compat note for future WhatChimp versions / non-WhatChimp channels.** If WhatChimp ever exposes inbound message text, OR Oraya later adds a Telegram / Messenger / direct WhatsApp Cloud API channel that does, the backend's `message_text` field on `/api/butler/identify` (and the bounded extractor in `lib/butler/extract-booking-reference.ts`) will activate automatically — the substring-routed paths could then skip even the reference ask. No code change required when that day comes; only the HTTP API body in WhatChimp (or the equivalent on the new channel) needs to start sending `message_text`. Until then, the explicit reference ask is the production path.
 
-6. **Forward-compat note for future WhatChimp versions / non-WhatChimp channels.** If WhatChimp ever exposes inbound message text, OR Oraya later adds a Telegram / Messenger / direct WhatsApp Cloud API channel that does, the backend's `message_text` field on `/api/butler/identify` (and the bounded extractor in `lib/butler/extract-booking-reference.ts`) will activate automatically — the marker-routed paths could then skip even the reference ask. No code change required when that day comes; only the HTTP API body in WhatChimp (or the equivalent on the new channel) needs to start sending `message_text`. Until then, the explicit reference ask is the production path.
+### Withdrawn marker cleanup (operators who wired the 2026-05-23 marker scheme)
+
+If your WhatChimp tenant has triggers matching `#ORAYA_REF:` or `#ORAYA_CHANGE:` (added during the brief 2026-05-23 marker window), you can take one of two actions:
+
+- **Recommended:** remove the marker triggers. The website no longer emits the marker prefill; any guest who reaches a tenant with both triggers configured would still match on the plain-sentence triggers above. The marker triggers are dead code.
+- **Acceptable (defensive):** leave the marker triggers in place but point them at the same downstream Text node + reference-input step as the plain-sentence triggers. They will never fire from a current website CTA, but the cost of leaving them is zero.
+
+Do not re-introduce the marker prefill in the Oraya website CTAs without an explicit superseding decision-log entry. The current shipped contract is plain human sentences — see [DECISIONS_LOG.md](DECISIONS_LOG.md) "WhatsApp CTA prefills reverted to plain human sentences" (2026-06-03).
 
 ### Backend invariants this change preserves
 
