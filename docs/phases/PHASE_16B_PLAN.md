@@ -1,12 +1,16 @@
 # Phase 16B — Payment Processing + Refunds (Architecture Plan)
 
-**Status:** ⏳ provisioned, no implementation. This file is **planning context only**. No code lands until a Phase 16B kickoff task is approved.
+**Status:** 🟡 in progress, active. This file is the architecture plan; the most current status snapshot lives in [/docs/system/CURRENT_PHASE.md](../system/CURRENT_PHASE.md).
 
 **Audience:** future Claude / Codex / Cursor sessions executing Phase 16B work, plus humans approving each PR-safe sub-phase.
 
 **Authority order:** [/docs/system/PROJECT_STATE.md](../system/PROJECT_STATE.md) > [/docs/system/AGENT_RULES.md](../system/AGENT_RULES.md) > [/docs/system/DECISIONS_LOG.md](../system/DECISIONS_LOG.md) > this file. If this file conflicts with any of those, the more conservative reading wins.
 
-**Last updated:** 2026-05-18.
+**Last updated:** 2026-06-03.
+
+> **2026-06-03 reconciliation note.** This document was originally drafted as planning context only ("⏳ provisioned, no implementation"). Phase 16B is now actively shipping: provider-agnostic hosted-checkout architecture, payment-link columns, admin payment settings, three-step booking flow with dual-CTA Step 3, Credit Libanais readiness foundation, and verified webhook callback surface are all live. The roadmap sub-phase headers below now annotate shipped vs outstanding state. The original prose (provider list, schema design rationale, WhatsApp branching table) carries forward unchanged because the decisions it documents remain authoritative — only the implementation status has moved.
+>
+> **Reconciliation context updates:** the original 16B.1 sub-phase locked Whish + Stripe as the v1 provider floor. The 2026-05-22 "Hosted payment execution is provider-agnostic" decision (see [/docs/system/DECISIONS_LOG.md](../system/DECISIONS_LOG.md)) replaced that with Credit Libanais / NetCommerce / MPGS as the only approved production target and Stripe as a dev/test-only adapter (`PAYMENT_PROVIDER=stripe` is explicitly rejected in production). The 2026-05-22 "Credit Libanais provider compatibility" decision added the additive schema migration [/sql/phase-16b4-credit-libanais-provider-compat.sql](../../sql/phase-16b4-credit-libanais-provider-compat.sql) widening `bookings.payment_link_provider` to include `credit_libanais`. The Whish-specific assumptions below ("Whish manual link creation", Whish-rooted v1 floor) are historical context; production targeting is now Credit Libanais.
 
 ---
 
@@ -347,40 +351,45 @@ Each sub-phase is a **PR-safe**, independently mergeable unit. Every PR must com
   - [/lib/payments/provider.ts](../../lib/payments/provider.ts) — type-only. Exports `PaymentProvider`, `PaymentProviderEvent`, `PaymentBookingDelta`, plus `PAYMENT_LINK_STATUSES` / `PAYMENT_LINK_PROVIDERS` / `PAYMENT_CURRENCIES` / `PAYMENT_LINK_PURPOSES` const arrays + matching types + type guards. No runtime behavior; not imported by any route yet.
 - Decision recorded: [/docs/system/DECISIONS_LOG.md](../system/DECISIONS_LOG.md) — 2026-05-18 entry "Phase 16B.1 architecture freeze: payment link columns + provider abstraction".
 
-### 16B.2 — Payment state model (schema + admin route)
+### 16B.2 — Payment state model (schema + runtime plumbing) — ✅ shipped (2026-05-XX, [apps#38](https://github.com/Staleen/oraya-web/pull/38))
 
-- Apply the additive migration (§1.3) in Supabase.
-- Update `/api/admin/bookings/[id]` PATCH allow-list to accept the new columns (mirror the existing `payment_status` / `payment_method` pattern).
-- Update `/api/admin/data` SELECT list, `/booking/view/[token]` SELECT list, and `lib/admin-booking-diff.ts` to include the new columns.
-- No UI yet. No provider code yet.
+- Additive `phase-16b1` migration applied in Supabase (payment-link columns on `bookings`).
+- `/api/admin/bookings/[id]` PATCH allow-list extended.
+- `/api/admin/data` SELECT list + `/booking/view/[token]` SELECT list + `lib/admin-booking-diff.ts` updated.
 
-### 16B.3 — Admin payment controls
+### 16B.3 — Reserve-path payment execution (booking-first hosted checkout) — ✅ shipped (2026-05-22)
 
-- Add the Payment section in `/admin/bookings/[id]` (§5.1).
-- Implement `lib/payments/provider.ts` interface + `lib/payments/manual.ts` and `lib/payments/whish.ts` (manual-link adapter both).
-- Implement `/api/admin/bookings/[id]/payment/link` for create / reissue / cancel.
-- Implement `/api/admin/bookings/[id]/payment/refresh` for provider-side status refresh.
-- **No webhook routes yet.** All sync is admin-driven in this PR.
+- Originally landed as "hosted Stripe checkout" in [apps#38](https://github.com/Staleen/oraya-web/pull/38) and immediately superseded the same day by the **provider-agnostic** refactor in [apps#39](https://github.com/Staleen/oraya-web/pull/39) per the 2026-05-22 DECISIONS_LOG entry "Hosted payment execution is provider-agnostic; Credit Libanais / MPGS is the production target."
+- `POST /api/payments/checkout` resolves the configured hosted-checkout adapter selected by `PAYMENT_PROVIDER` via [lib/payments/runtime.ts](../../lib/payments/runtime.ts).
+- `lib/payments/provider.ts` defines the generic hosted-checkout adapter contract (`createCheckoutSession` / `verifyWebhook` / `mapProviderEventToBookingUpdate`); `lib/payments/credit-libanais.ts` is the explicit non-faking placeholder for the production target; `lib/payments/stripe.ts` is retained as a dev/test-only adapter; `lib/payments/webhook-handler.ts` is the generic callback application logic; `app/api/payments/webhook/[provider]/route.ts` is the generic callback surface; `app/api/payments/webhook/stripe/route.ts` is the Stripe compatibility shim.
+- The 16B.1 Whish-vs-Stripe provider-floor rationale is **superseded** by the Credit Libanais / MPGS production target and the rejection of Stripe in production. The Stripe adapter remains optional for local/dev exercise; the Credit Libanais adapter remains a placeholder until the real bank contract lands.
 
-### 16B.4 — Guest payment view
+### 16B.4 — Credit Libanais provider-schema compatibility + non-secret readiness contract — ✅ shipped (2026-05-22, [apps#44](https://github.com/Staleen/oraya-web/pull/44))
 
-- Add the payment-link CTA + status rendering on `/booking/view/[token]` (§6.2).
-- Update `lib/send-booking-payment-email.ts` to include the link when present and active.
-- Add a new `lib/send-booking-payment-link-email.ts` triggered when admin generates a fresh link (separate from "payment received").
+- Additive migration [sql/phase-16b4-credit-libanais-provider-compat.sql](../../sql/phase-16b4-credit-libanais-provider-compat.sql) widens `bookings.payment_link_provider` to include `credit_libanais` alongside `manual` / `whish` / `stripe`. Human-gated; not auto-applied.
+- [lib/payments/runtime.ts](../../lib/payments/runtime.ts) separates guest-safe public readiness from admin-safe readiness.
+- [app/api/payments/readiness/route.ts](../../app/api/payments/readiness/route.ts) is the admin-only readiness surface; `/admin/settings` surfaces non-secret provider status + missing requirements.
 
-### 16B.5 — WhatsApp payment lookup / response
+### 16B.4.b — Admin payment settings + Step 3 dual-CTA decision foundation — ✅ shipped (2026-05-22, [apps#42](https://github.com/Staleen/oraya-web/pull/42); refined 2026-05-23 [apps#56](https://github.com/Staleen/oraya-web/pull/56), [apps#58](https://github.com/Staleen/oraya-web/pull/58))
 
-- Add `lib/payments/whatsapp-reply.ts` with the deterministic strings from §4.
-- Add `POST /api/butler/payment-status` (Butler-secret-guarded) — input: WhatsApp number → match to booking via lead linkage; output: deterministic response string + booking summary fields.
-- Add a Vercel Cron job (`0 */6 * * *`, hourly grace) under `/api/cron/payment-link-expiry` to flip stale links to `expired`. Honor `CRON_SECRET` like the existing `/api/cron/calendar-sync`.
+- `/admin/settings` owns guest-facing payment behavior: mode (`request_only` / `manual_payment` / `online_payment` / `hybrid`), deposit minimum %, full / custom deposit availability, manual rails, guest instructions, bank-transfer public details, provider display name, guest-visible online-payment-enabled flag. Stored in the existing `settings` table; gateway credentials remain server-only env vars and are **never** written to Supabase.
+- `/book` Step 3 ships as a three-step flow consolidation (Villa & Dates → Stay Setup → Review & Guest Details) with two clear Reserve actions: **primary "Continue to secure payment"** (gold solid CTA, blocked when the provider is not truly ready) and **secondary "Reserve now, pay later"** (outline button). The 2026-06-03 DECISIONS_LOG entries document the structural and CTA decisions.
+
+### 16B.5 — Real Credit Libanais / MPGS execution + WhatsApp payment lookup — ⏳ outstanding
+
+- Real MPGS session creation, callback verification, settlement reconciliation, and sandbox/live mode discipline (gated on the bank contract).
+- `lib/payments/whatsapp-reply.ts` with the deterministic strings from §4.
+- `POST /api/butler/payment-status` (Butler-secret-guarded) — input: WhatsApp number → match to booking via lead linkage; output: deterministic response string + booking summary fields.
+- Vercel Cron job (`0 */6 * * *`, hourly grace) under `/api/cron/payment-link-expiry` to flip stale links to `expired`. Honor `CRON_SECRET` like the existing `/api/cron/calendar-sync`.
 - Document the WhatChimp side-mapping (`oraya_payment_response` → outbound WhatsApp message) in `BUTLER_PLAYBOOK.md`.
 
-### 16B.6 — Refund handling + Stripe (optional)
+### 16B.6 — Refund handling + Instant-book execution — ⏳ outstanding
 
-- Implement the refund-completed email (§7.1).
-- (Optional, gated on Stripe approval) Add `lib/payments/stripe.ts` and `/api/payments/webhook/stripe`.
-- Add a `payment_event_log` table for audit history.
-- Add admin "refund" action that wraps the manual flow today and the provider API later.
+- Refund-completed email (§7.1).
+- Provider-side refund API integration once the bank contract supports it.
+- `payment_event_log` table for audit history.
+- Admin "refund" action that wraps the manual flow today and the provider API later.
+- Instant Book live execution path (today the Instant Book UI is shipped but executes against the same hosted-checkout placeholder).
 
 ---
 

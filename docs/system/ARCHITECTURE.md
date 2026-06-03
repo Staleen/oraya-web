@@ -1,6 +1,6 @@
 # Architecture - Oraya Web
 
-**Updated:** 2026-05-18
+**Updated:** 2026-06-03
 **Authority order:** see [PROJECT_STATE.md](PROJECT_STATE.md). This file is the descriptive map; if it conflicts with PROJECT_STATE.md, PROJECT_STATE.md wins.
 
 > Secret model and per-variable risk live in **[ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md)** - this doc only references it.
@@ -125,29 +125,22 @@ All routes verified against the current repo. Locked APIs are marked **locked** 
 
 ## Booking flow
 
-1. Guest lands on `/book` with optional `?villa=...` preselect.
-2. Step 1: dates -> eligibility check.
-   - **Reserve path** (default): goes to Step 2 (Stay Setup).
-   - **Instant Book path** (when villa is instant-eligible per `settings`): UI-only review + payment placeholder. **No booking persisted from this path today** - payment execution is Phase 16B.
-3. Step 2: bedrooms, guests, add-ons, special requests; live total via [lib/pricing/](../../lib/pricing/) helpers.
-4. Step 3: review + payment decision on the Reserve path.
-   - Guest sees two clear paths: **Pay now and reserve** or **Submit booking request and pay later**.
-   - When hosted checkout is truly ready, the pay-now path offers **full payment** or **custom deposit**.
-   - Custom deposit is validated client-side and server-side against the admin-configured minimum percentage and the total-amount maximum.
-   - When the active provider is not ready, the pay-now path is blocked in the UI with clear setup messaging instead of falling into a fake checkout flow.
-5. Reserve submit path:
-   - `POST /api/bookings` remains the authoritative booking-creation route.
-4. Step 3: review + submit -> `POST /api/bookings`.
-   - Server validates overlap, pricing snapshot, and addon operational rules.
-   - On success, persists a `bookings` row including `pricing_snapshot` and `addons`.
-   - Triggers transactional emails and generates signed view + admin-action tokens.
-5. Admin receives email with signed confirm/cancel links -> `/api/booking-action` mutates status.
-6. Guest can revisit booking via `/booking/view/[token]`.
-6. After booking creation succeeds, `POST /api/payments/checkout` resolves the configured hosted-checkout adapter, creates a provider session when the adapter is fully implemented, persists `payment_link_*` state on the booking row, and returns the hosted checkout URL.
-7. Guest is redirected to the provider-hosted payment page. Success/cancel returns land on `/booking/view/[token]?payment=success|cancelled`.
-8. `POST /api/payments/webhook/[provider]` is the authority for payment receipt / expiry updates. Success redirects are informational only and never mark payment received by themselves.
-9. Admin receives email with signed confirm/cancel links -> `/api/booking-action` mutates status.
-10. Guest can revisit booking via `/booking/view/[token]`.
+The public Reserve booking flow at [app/book/page.tsx](../../app/book/page.tsx) is a **three-step** UX. Step labels are exact and verified in code (`labels = ["Villa & Dates", "Stay Setup", "Review & Guest Details"]` at app/book/page.tsx:824).
+
+1. Guest lands on `/book` with optional `?villa=...` preselect (or a Butler `?h=...` opaque handoff token).
+2. **Step 1 — Villa & Dates.** Villa selection + check-in / check-out picker + eligibility check.
+   - **Reserve path** (default): auto-advances to Step 2 (Stay Setup) when the prefilled villa+dates have settled and availability resolves.
+   - **Instant Book path** (when villa is instant-eligible per `settings`): UI-only review + payment placeholder. **No booking persisted from this path today** — instant-book payment execution remains later Phase 16B work.
+3. **Step 2 — Stay Setup.** Bedrooms, guests, add-ons, special requests; live estimated total via [lib/pricing/](../../lib/pricing/) helpers. Add-ons and special requests do NOT block the stay payment; approval-based add-ons are reviewed and charged separately after Oraya confirms.
+4. **Step 3 — Review & Guest Details.** Review summary, guest-details form (Reserve path), and payment decision. Step 3 presents two explicit Reserve actions:
+   - **Primary:** **"Continue to secure payment"** — solid gold CTA. When clicked, `submitIntent = "pay_now"`. The flow first calls `POST /api/bookings` (the locked booking-creation authority), then calls `POST /api/payments/checkout` to start hosted checkout. Blocked in the UI with clear setup messaging when the configured hosted-checkout provider is not truly ready (no fake checkout, no silent fall-through to a placeholder).
+   - **Secondary:** **"Reserve now, pay later"** — outline / transparent-background button with a thin gold border. `submitIntent = "reserve"`. Calls `POST /api/bookings` only; no checkout session is created on the website. Oraya follows up via the existing manual / bank-transfer / admin-link rails configured under `/admin/settings`.
+   - When hosted checkout is ready, the pay-now path offers full payment or admin-configured custom deposit (validated client-side and server-side against the admin-configured minimum percentage and the total-amount maximum).
+5. **Server side (`POST /api/bookings`).** The locked booking-creation route validates overlap, pricing snapshot, and addon operational rules. On success, persists a `bookings` row including `pricing_snapshot` and `addons`. Triggers transactional emails and generates signed view + admin-action tokens. Optionally back-links `whatsapp_leads.linked_booking_id` when the request carried a verified `butler_prefill_token`. None of the back-linking can block booking creation.
+6. **Hosted checkout (pay-now path).** `POST /api/payments/checkout` resolves the configured hosted-checkout adapter ([lib/payments/runtime.ts](../../lib/payments/runtime.ts)), creates a provider session when the adapter is fully implemented, persists `payment_link_*` state on the booking row, and returns the hosted checkout URL. The guest is redirected to the provider-hosted payment page.
+7. **Verified callbacks.** `POST /api/payments/webhook/[provider]` is the authority for payment receipt / expiry updates. Success / cancel redirects on `/booking/view/[token]?payment=success|cancelled` are informational only and never mark payment received by themselves.
+8. **Admin lifecycle.** Admin receives the booking-request email with signed confirm/cancel links → `/api/booking-action` mutates status.
+9. **Guest lifecycle.** Guest can revisit the booking via the signed `/booking/view/[token]` URL (also surfaced through `POST /api/butler/identify` on identity-established branches).
 
 ## Event inquiry flow
 
@@ -188,7 +181,7 @@ The WhatsApp AI Butler (WhatChimp today; vendor-agnostic by design) talks to Ora
   - `/admin/leads` is the operator dashboard.
 - **Provenance writer on the locked booking route.** `/api/bookings` POST accepts an optional `butler_prefill_token`. After successful booking insert, the locked route verifies the token and best-effort updates `whatsapp_leads.linked_booking_id`. None of those failure paths block booking creation.
 - **Booking reference vs access PIN.** The 8-character uppercased prefix of `bookings.id` shown on `/booking/view/[token]` and in emails is intentionally a public support reference code, not an access PIN. Access credential issuance is Phase 16D.
-- **Website CTA marker prefill.** The two booking-support WhatsApp CTAs on `/booking/view/[token]` and `/booking-confirmed` pre-fill the WhatsApp compose box with a structured marker — `#ORAYA_REF:<8-char-reference>` for the view/status CTA and `#ORAYA_CHANGE:<8-char-reference>` for the cancel/change CTA — built by [lib/booking-trust-messaging.ts](../../lib/booking-trust-messaging.ts). WhatChimp triggers route on these markers to the booking-reference / change-or-cancel paths respectively; the 8-char reference inside the marker is extracted server-side via the existing `message_text` field on `/api/butler/identify`. Normal greetings ("hi", "hello", free-form questions) continue to enter the welcome menu. Operator routing details live in [BUTLER_PLAYBOOK.md](BUTLER_PLAYBOOK.md) "Website CTA marker routing".
+- **Website CTA prefill (plain human sentences; marker scheme withdrawn 2026-06-03).** The two booking-support WhatsApp CTAs on `/booking/view/[token]` and `/booking-confirmed` pre-fill the WhatsApp compose box with **plain human sentences** built by [lib/booking-trust-messaging.ts](../../lib/booking-trust-messaging.ts): `"Check my booking <8-char-reference>"` for the view/status CTA and `"Help with my booking <8-char-reference>"` for the cancel/change CTA. WhatChimp triggers route on the `"Check my booking"` / `"Help with my booking"` substrings (the only platform capability available on the production tenant — see [KNOWN_BUGS.md](KNOWN_BUGS.md) #7). The 8-character reference inside the sentence is the public guest-facing support code from [lib/booking-reference.ts](../../lib/booking-reference.ts) and is not a credential. Normal greetings ("hi", "hello", free-form questions) continue to enter the welcome menu. The earlier `#ORAYA_REF:<ref>` / `#ORAYA_CHANGE:<ref>` structured-marker scheme has been withdrawn — see [DECISIONS_LOG.md](DECISIONS_LOG.md) "WhatsApp CTA prefills reverted to plain human sentences" (2026-06-03). Operator routing details live in [BUTLER_PLAYBOOK.md](BUTLER_PLAYBOOK.md) "Website CTA prefill routing".
 - **No payment or smart-lock behavior in Butler.** Payment remains Phase 16B. Smart-lock remains 16D. Member -> phone linkage is a later phase. The current approved architecture is lead capture plus secure website continuation into the existing locked `/api/bookings` pipeline, not direct WhatsApp-side booking submission.
 - **Hosted payment lives after booking creation, not inside Butler.** The website Reserve path creates the booking through the locked `/api/bookings` POST first, then starts provider-hosted payment via `/api/payments/checkout`. Credit Libanais / MPGS is the production target gateway; the retained Stripe shim is for isolated dev/test use only. `/api/payments/readiness` is the admin-only safe surface for provider configuration/readiness gaps. Butler still does not create payment links or mark payments received.
 - **No payment, smart-lock, member-linking, or booking-creation writes** beyond the provenance enrichment above. Booking creation via WhatsApp (`POST /api/butler/flow-submit`) is still outstanding. The locked `/api/bookings*`, `/api/admin/bookings*`, `/api/calendar/*`, `/api/cron/*` surfaces remain otherwise untouched.
