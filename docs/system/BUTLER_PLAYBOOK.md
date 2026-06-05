@@ -214,6 +214,85 @@ Do not re-introduce the marker prefill in the Oraya website CTAs without an expl
 - The server-side helper (`lib/butler/extract-booking-reference.ts`) stays in place as forward-compatible code. It does nothing today because no channel currently sends `message_text` — and that is exactly the "do nothing" path it was designed for (returns `null` → orchestrator falls through to the explicit reference ask, which is now the website-CTA path's explicit step).
 - No new env vars, no schema changes, no auth changes, no token-continuity changes, no WhatsApp handoff changes, no payment surface touched.
 
+## Natural stay intake (Phase 16A)
+
+The rigid four-step intake (check-in → check-out → guests → villa) is replaced by a single natural-language ask. The Butler opens with one question covering all four fields, the guest replies in one message (in whatever shape they like), and the backend decomposes the reply into structured fields the bot can confirm.
+
+**Backend surface:** `POST /api/butler/normalize-stay-intent`. Secret-guarded with `X-Butler-Secret`. Pure extraction — never reads/writes Supabase, never checks availability, never persists a lead.
+
+**Request body** (capped sizes enforced server-side):
+
+```json
+{
+  "stay_text":      "I want Mechmech from June 10 to 15, 3 adults",
+  "reference_date": "2026-06-05"
+}
+```
+
+`reference_date` is optional and used only for deterministic relative-date resolution ("this Saturday", "next Saturday"). Omit it in production — the server uses today (UTC).
+
+**Response shape:**
+
+```json
+{
+  "ok": true,
+  "status": "clear" | "partial" | "unclear",
+  "extracted": {
+    "check_in":    "YYYY-MM-DD" | null,
+    "check_out":   "YYYY-MM-DD" | null,
+    "nights":      number | null,
+    "villa":       "Villa Mechmech" | "Villa Byblos" | null,
+    "guest_count": number | null
+  },
+  "missing_fields": ["check_in" | "check_out" | "villa" | "guest_count"],
+  "human_readable": "Wed Jun 10 → Mon Jun 15 (5 nights), Villa Mechmech, 3 guests",
+  "safe_message":   "I have you down for Wed Jun 10 → Mon Jun 15 (5 nights), Villa Mechmech, 3 guests. Should I share this with Oraya, or would you like to adjust anything?",
+  "confirm_prompt": "Please confirm before I share this with Oraya."
+}
+```
+
+**Status semantics:**
+
+- `"clear"` — all four fields populated; the bot echoes `safe_message` and asks the guest to confirm (two buttons: ✅ Looks right / ✏️ Edit).
+- `"partial"` — `check_in` is set; one or more of `check_out` / `villa` / `guest_count` is missing. The bot echoes `safe_message` (which names the missing fields) and asks only for the missing ones.
+- `"unclear"` — `check_in` could not be extracted. The bot re-prompts with a friendlier ask; it does NOT proceed with the guest's partial data.
+
+**Fallback prompts for missing fields:**
+
+| Missing field | Bot fallback |
+|---|---|
+| `villa` | Buttons only: **Villa Mechmech** / **Villa Byblos**. No "Other" option — there are only two villas. |
+| `guest_count` | Number buttons 1–8. (For larger groups, the guest can free-text after a "more than 8?" option.) |
+| `check_in` / `check_out` | Free text, then re-call `normalize-stay-intent` with the new reply concatenated to the prior `stay_text`. |
+
+On confirmation the bot calls the existing `POST /api/butler/lead` with the now-complete normalized payload (`normalized_check_in`, `normalized_check_out`, `villa`, `guest_count`, plus the original `stay_text` inside `raw_payload` for audit). The response carries `prefill_url` as today; the bot offers "Continue on website" with that URL.
+
+**Operator wiring required in WhatChimp** (UI work, no flow JSON committed to this repo):
+
+1. **New custom field:** `oraya_stay_text` (text).
+2. **New trigger** for the natural-intake flow:
+   - Text node: the natural-intake prompt (operator may copy verbatim):
+     > To help me prepare your stay, please tell me your preferred dates, villa (Mechmech or Byblos), and how many guests — all in one message if you already know them. If you only know some, that's fine too.
+   - `User Input Flow Single` (`replyType: "Text"`) → saves to `oraya_stay_text`.
+   - HTTP API call to `POST /api/butler/normalize-stay-intent` with body `{ "stay_text": "#oraya_stay_text#" }` and the existing `X-Butler-Secret` header.
+3. **Response-driven branches** keyed on `extracted.villa` / `extracted.guest_count` / `extracted.check_in` / `extracted.check_out` — only the missing fields are asked about. WhatChimp's HTTP API response-to-custom-field mapping is the same mechanism used by `/api/butler/identify` and `/api/butler/lead` responses today.
+4. **Confirmation step:** two buttons (Looks right / Edit). Edit re-prompts free text and re-calls the extractor with the new reply.
+5. **On confirmation:** call existing `POST /api/butler/lead` with the normalized fields. Consume `prefill_url` and route into the existing website handoff flow unchanged.
+
+**Backend invariants this flow preserves:**
+
+- `/api/butler/normalize-dates` is unchanged — kept for any caller that still wants the two-field input shape. The new endpoint delegates its date arithmetic to the same `normalizeStayDates` helper, so date discipline (`YYYY-MM-DD` end-to-end, no `new Date(<guest text>)`, UTC round-trip validation) stays in one place.
+- `/api/butler/lead` is unchanged. It already accepts `normalized_check_in` / `normalized_check_out` / `villa` / `guest_count` and persists `raw_payload` verbatim — the new flow simply gives it cleaner inputs.
+- `/api/butler/prefill` is unchanged. Only validated ISO dates flow into `/book?h=...` hydration.
+- No new env var. Reuses `BUTLER_WEBHOOK_SECRET` (and `BUTLER_PREFILL_SECRET` for the existing handoff).
+- No schema change. No locked-API touch. No new dependency.
+
+**Known limitations of v1:**
+
+- ASCII-text-only (English-first per [Butler identity](#butler-identity)). Multilingual input (Arabic, French) still falls through to `status: "unclear"` and a graceful re-ask.
+- Slash-separated date formats (`10/06/2026`) are not parsed. Use ISO (`2026-06-10`) or month-day form (`June 10`).
+- Mixed-month bare-day reconstruction only works when the check-out fragment is a bare day immediately after a check-in that named its month (`June 10 to 15` → June 15). Across months, the guest must say `June 30 to July 2`.
+
 ## WhatChimp prefill response mapping
 
 When `POST /api/butler/lead` succeeds with `BUTLER_PREFILL_SECRET` set, the response includes `prefill_url`. WhatChimp must:
@@ -403,6 +482,7 @@ The Butler must **never**:
 - Bypass approval flows on add-ons marked `requires_approval`.
 - Expose internal operational details (admin-only data, cutoffs, enforcement modes, hidden calculations).
 - Quote final totals - those are the locked booking pipeline's output, never the Butler's.
+- Pre-process, paraphrase, summarize, or extract structured fields (dates, villa, guest count, nights) from the guest's raw `oraya_stay_text` reply before sending it to `POST /api/butler/normalize-stay-intent`. The verbatim guest message is the input; the backend is the only normalization authority. WhatChimp AI Training / Bot Reply must remain a tone layer, never a decision layer.
 
 ---
 
