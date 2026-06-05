@@ -16,6 +16,30 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-06-05 - Butler handoff auto-advance and bedroom derivation shipped in `/book`
+
+**Decision:** two behaviour gaps in the WhatsApp → website handoff are closed in [app/book/page.tsx](../../app/book/page.tsx):
+
+1. **Bedroom derivation from hydrated guest count.** `applyButlerPrefill` now derives `bedroomCount` from `sleeping_guests` using the inverse of `BEDROOM_CAPACITY` (`≤ 2 guests → "1"`, `≤ 4 → "2"`, `≤ 6 → "3"`). The derivation only fires when `bedroomCount` is still the un-touched default `"1"`; any manual selection already made by the guest is preserved.
+
+2. **Butler-handoff auto-advance from Step 1 → Step 2.** A new `useEffect` fires when `butlerPrefillReady` and `availabilityReadyForSelection` are both true, the stay selection passes the same validity checks as the manual "Continue" button (dates present, no conflict), and the session is identified as a butler handoff (`?h=` param present OR stored butler prefill in `sessionStorage`). It sets `reserveAutoNavigatedRef.current = true` to prevent duplicate firing and calls the existing `transitionStep1To("request")` which also handles scroll-to-top. The `reserveAutoAdvanceSuppressedRef` already prevents re-advance after an explicit Back action; the `reserveAutoAdvanceSignature` reset re-enables it only when the villa/date selection changes.
+
+**Reason:** live testing of the Phase 16A WhatsApp → website handoff revealed: (a) opening `/book?h=<token>` with 3 guests hydrated `sleepingGuests = 3` but left `bedroomCount = 1` (capacity 2), showing a capacity warning instead of the correct 2-bedroom default; (b) the page stayed on Step 1 after hydration, forcing the guest to manually click "Continue to stay setup" — defeating the "seamless continuation" intent of the handoff. The "Butler continuation auto-advance readiness gate" in CURRENT_PHASE.md (PR #25 description) documented the design intent; the gating variables (`butlerPrefillReady`, `availabilityReadyForSelection`, `reserveAutoNavigatedRef`, `reserveAutoAdvanceSuppressedRef`) existed but the actual `useEffect` that acted on them was never implemented.
+
+**Impact:**
+
+- [app/book/page.tsx](../../app/book/page.tsx) — two additions:
+  1. Bedroom-derivation block inside `applyButlerPrefill` (after the `sleepingGuests` setter).
+  2. Auto-advance `useEffect` placed after `transitionStep1To` declaration, before the existing scroll useEffect.
+- No schema change. No API change. No auth change. No new dependency.
+- `npx tsc --noEmit`: clean. `npm run build`: clean.
+
+**Reversible?:** yes — single-file revert restores prior behaviour (manual "Continue" required; bedroom stays at default 1).
+
+**Supersedes:** closes the implementation gap left by the CURRENT_PHASE.md entry for PR #25 ("Butler continuation auto-advance readiness gate") — that entry described the gating design; this entry records the wiring that makes it functional.
+
+---
+
 ## 2026-06-03 - Canonical Oraya web origin is `https://stayoraya.com`; `www.oraya.com.lb` is a wrong-domain response, not a migration
 
 **Decision:** the single canonical Oraya web origin is **`https://stayoraya.com`** and only `https://stayoraya.com`. Any AI Training, WhatChimp Bot Reply, generic AI assistant, or human-facing reply that proposes a different host - in particular `www.oraya.com.lb`, `oraya.com.lb`, or any unprefixed `oraya.com` variant - is a wrong-domain bug and must be treated as one. This is not a domain migration. There is no LB-TLD Oraya web property today. This is documented in [docs/system/PROJECT_STATE.md](PROJECT_STATE.md), [docs/system/KNOWN_BUGS.md](KNOWN_BUGS.md) (entry #8), and [docs/system/BUTLER_PLAYBOOK.md](BUTLER_PLAYBOOK.md) (canonical-domain section).
