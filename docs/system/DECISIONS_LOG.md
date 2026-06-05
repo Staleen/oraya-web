@@ -16,6 +16,15 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-06-05 - Phase 16A natural stay intake — Batch 2 operator gate passed
+
+**Decision:** Technical gate passed: WhatChimp confirmed able to call `POST /api/butler/normalize-stay-intent` and map nested `extracted.*` response fields (`extracted.check_in`, `extracted.check_out`, `extracted.villa`, `extracted.guest_count`). Architecture validated, endpoint reachable, nested field mapping verified. Production stay-booking flow migration (custom field, trigger, capture node, HTTP API call, response branches, retirement of old four-step intake) is still pending operator action.
+**Reason:** Human-in-the-loop gate was required to confirm HTTP reachability and WhatChimp's ability to dereference nested JSON fields — the platform-side capability question that needed live verification before committing to production flow migration.
+**Impact:** Technology validated; production flow migration still pending. `CURRENT_PHASE.md` and `BUTLER_PLAYBOOK.md` updated to reflect this distinction. No code change; docs only.
+**Reversible?:** N/A (gate confirmation record).
+
+---
+
 ## 2026-06-05 - Natural WhatsApp stay intake — new `POST /api/butler/normalize-stay-intent` endpoint
 
 **Decision:** the rigid four-step WhatsApp intake (check-in → check-out → guests → villa) is replaced by a single natural-language ask backed by a new extraction endpoint. `POST /api/butler/normalize-stay-intent` accepts one free-text `stay_text` field (capped at 512 chars) plus an optional `reference_date` and returns `{ status: "clear" | "partial" | "unclear", extracted: { check_in, check_out, nights, villa, guest_count }, missing_fields, human_readable, safe_message, confirm_prompt }`. The endpoint is pure extraction — no Supabase read/write, no availability check, no email, no token, no lead persist. Date arithmetic is delegated to the existing `normalizeStayDates` helper so `YYYY-MM-DD` discipline (no `new Date(<guest text>)`) stays in one place. Villa detection is a substring scan over the canonical names plus the same aliases the existing `lib/butler/villa.ts` resolver recognizes (`mechmech`, `annaya`, `byblos`, `jbeil`). Guest-count detection is a small regex set (`N people / guests / adults / pax / persons`, `for N people`, `we are N`, `group of N`, `N of us`, number words). Missing-field fallbacks are buttons-only for villa (Mechmech / Byblos, no "Other") and number buttons 1–8 for guest count.
