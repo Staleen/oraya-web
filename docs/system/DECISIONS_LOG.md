@@ -18,9 +18,9 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ## 2026-06-05 - Phase 16A natural stay intake — Batch 2 operator gate passed
 
-**Decision:** Live WhatChimp gate test confirmed end-to-end: WhatChimp can call `POST /api/butler/normalize-stay-intent` and map nested `extracted.*` response fields (`extracted.check_in`, `extracted.check_out`, `extracted.villa`, `extracted.guest_count`) into custom fields. The rigid four-step intake is retired on the production tenant.
-**Reason:** Human-in-the-loop gate was required before declaring the natural-intake path fully live. The gate confirmed both HTTP reachability and WhatChimp's ability to dereference nested JSON fields — the one platform-side capability question that needed live verification.
-**Impact:** Phase 16A natural-intake is fully live. `CURRENT_PHASE.md` open-issue updated. `BUTLER_PLAYBOOK.md` "Operator wiring" section updated. No code change; docs only.
+**Decision:** Technical gate passed: WhatChimp confirmed able to call `POST /api/butler/normalize-stay-intent` and map nested `extracted.*` response fields (`extracted.check_in`, `extracted.check_out`, `extracted.villa`, `extracted.guest_count`). Architecture validated, endpoint reachable, nested field mapping verified. Production stay-booking flow migration (custom field, trigger, capture node, HTTP API call, response branches, retirement of old four-step intake) is still pending operator action.
+**Reason:** Human-in-the-loop gate was required to confirm HTTP reachability and WhatChimp's ability to dereference nested JSON fields — the platform-side capability question that needed live verification before committing to production flow migration.
+**Impact:** Technology validated; production flow migration still pending. `CURRENT_PHASE.md` and `BUTLER_PLAYBOOK.md` updated to reflect this distinction. No code change; docs only.
 **Reversible?:** N/A (gate confirmation record).
 
 ---

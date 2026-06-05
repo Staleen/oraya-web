@@ -267,7 +267,7 @@ The rigid four-step intake (check-in → check-out → guests → villa) is repl
 
 On confirmation the bot calls the existing `POST /api/butler/lead` with the now-complete normalized payload (`normalized_check_in`, `normalized_check_out`, `villa`, `guest_count`, plus the original `stay_text` inside `raw_payload` for audit). The response carries `prefill_url` as today; the bot offers "Continue on website" with that URL.
 
-**Operator wiring — CONFIRMED LIVE 2026-06-05** (live WhatChimp gate test passed: endpoint callable, nested `extracted.*` field mapping verified):
+**Operator wiring — technical gate passed 2026-06-05, production flow migration still pending** (endpoint callable, nested `extracted.*` field mapping verified; the steps below have not yet been confirmed as wired in the production tenant):
 
 1. **New custom field:** `oraya_stay_text` (text).
 2. **New trigger** for the natural-intake flow:
