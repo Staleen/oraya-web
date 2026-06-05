@@ -16,6 +16,40 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-06-05 - Natural WhatsApp stay intake — new `POST /api/butler/normalize-stay-intent` endpoint
+
+**Decision:** the rigid four-step WhatsApp intake (check-in → check-out → guests → villa) is replaced by a single natural-language ask backed by a new extraction endpoint. `POST /api/butler/normalize-stay-intent` accepts one free-text `stay_text` field (capped at 512 chars) plus an optional `reference_date` and returns `{ status: "clear" | "partial" | "unclear", extracted: { check_in, check_out, nights, villa, guest_count }, missing_fields, human_readable, safe_message, confirm_prompt }`. The endpoint is pure extraction — no Supabase read/write, no availability check, no email, no token, no lead persist. Date arithmetic is delegated to the existing `normalizeStayDates` helper so `YYYY-MM-DD` discipline (no `new Date(<guest text>)`) stays in one place. Villa detection is a substring scan over the canonical names plus the same aliases the existing `lib/butler/villa.ts` resolver recognizes (`mechmech`, `annaya`, `byblos`, `jbeil`). Guest-count detection is a small regex set (`N people / guests / adults / pax / persons`, `for N people`, `we are N`, `group of N`, `N of us`, number words). Missing-field fallbacks are buttons-only for villa (Mechmech / Byblos, no "Other") and number buttons 1–8 for guest count.
+
+The existing two-field `POST /api/butler/normalize-dates` endpoint is **untouched** and remains available — Option A (extend the existing endpoint) was explicitly rejected because widening it from "date normalization" to "villa + guest-count detection" would silently shift the endpoint's purpose. A new endpoint named for what it actually does is cleaner to document, easier to retire later if the WhatChimp tenant ever gains LLM-grade extraction primitives, and produces a sharper DECISIONS_LOG entry.
+
+**Reason:** live guests do not type information in the rigid order the existing flow asks for. The audit collected concrete examples (`"June 10 to June 15"`, `"June 10 till June 15 for 4 people"`, `"I want Mechmech from June 10 to 15, 3 adults"`, `"10 June for 3 nights"`, `"Book Byblos for 5 people next Saturday to Monday"`) and confirmed all five fail under the current four-field intake without a single-message extractor at the backend. The extractor stays at the backend (not in WhatChimp's AI Training layer) because the [BUTLER_PLAYBOOK.md](BUTLER_PLAYBOOK.md) "Knowledge source-of-truth" boundary forbids AI from inventing availability / pricing / policy / structured booking fields — by extension, any free-text-to-structured-fields decision must be made by Oraya's deterministic code, not by an LLM. Pushing extraction into the backend keeps the boundary intact while still letting WhatChimp run a *natural* opening prompt.
+
+**Operator-side WhatChimp wiring is intentionally separate** (the existing pattern from the 2026-05-23 marker / sentence work). This decision lands the backend + tests + docs only; the WhatChimp custom-field + trigger + branches changes are batch 2 of the audit and are documented in the BUTLER_PLAYBOOK natural-intake section.
+
+The audit explicitly considered and rejected:
+
+- **Option A — extending `/api/butler/normalize-dates`.** Rejected because the endpoint's name + DECISIONS_LOG history (2026-05-14 read-only date normalization) advertise it as a *date* helper. Adding villa + guest-count detection would either widen the endpoint silently or require renaming it, both of which are noisier than just adding the new dedicated endpoint.
+- **Letting WhatChimp's AI Training layer extract the structured fields.** Rejected — direct violation of the playbook's no-AI-decisions boundary. The backend must remain the only normalization authority.
+- **Schema changes (e.g. adding a `stay_text` column to `whatsapp_leads`).** Rejected — the verbatim `stay_text` already flows into `whatsapp_leads.raw_payload` via the existing ingest contract; no column is required.
+
+**Impact:**
+
+- [lib/butler/extract-stay-intent.ts](../../lib/butler/extract-stay-intent.ts) — new pure helper. `extractStayIntent({ stay_text, reference_date })` returns the `StayIntentResult` envelope. Delegates date parsing to `normalizeStayDates`. Adds connective splitting (`to` / `till` / `until` / `through` / `thru` / `->` / `→` / spaced ` - `), bare-day check-out reconstruction (`June 10 to 15` → `June 15`), bare-weekday check-out anchored to the parsed check-in (`Saturday to Monday` → Monday after Saturday), and a `2026-06-10 2026-06-15` ISO-pair injector. ASCII-only character class (English-first per playbook).
+- [app/api/butler/normalize-stay-intent/route.ts](../../app/api/butler/normalize-stay-intent/route.ts) — new secret-guarded POST route. Same 503 / 401 / 400 / 200 contract as the rest of `/api/butler/*`. Caps `stay_text` at 512 chars, validates `reference_date` as ISO when present.
+- [lib/butler/extract-stay-intent.test.mts](../../lib/butler/extract-stay-intent.test.mts) — 31 unit tests covering the headline combined-message cases, villa + guest-count detectors, hyphen day-range normalization, ISO date pair handling, partial/unclear paths, the safe-message + confirm-prompt copy, and hostile-input safety (oversize text, emojis, non-string input, missing reference date). Runner is Node's built-in `node:test` via the `.mts` ESM TS-strip loader — no new dependency. Run with `node --test lib/butler/extract-stay-intent.test.mts`.
+- [tsconfig.json](../../tsconfig.json) — added `"allowImportingTsExtensions": true`. Required for the helper's explicit `.ts` extension on `import "./normalize-dates.ts"`, which in turn is required so the same file resolves both under Next.js (via webpack/SWC) and under Node's TS-strip ESM loader (which does not auto-resolve extensionless imports). `noEmit: true` was already set, which is the TypeScript-required precondition for this flag.
+- [docs/system/ARCHITECTURE.md](ARCHITECTURE.md) — new API surface row + new entry under "Butler flow (Phase 16A — operational surface) → Read endpoints (shipped)".
+- [docs/system/BUTLER_PLAYBOOK.md](BUTLER_PLAYBOOK.md) — new "Natural stay intake (Phase 16A)" section documenting the request/response contract, status semantics, fallback prompts, operator wiring, backend invariants, and v1 limitations. New bullet under "Forbidden AI behavior" banning AI pre-processing of `oraya_stay_text`.
+- [docs/system/CURRENT_PHASE.md](CURRENT_PHASE.md) — "Just completed" entry added; open-issues bullet for operator-side WhatChimp wiring (batch 2).
+- No new env var. No schema change. No dependency added. No locked-API touch. `/api/butler/normalize-dates`, `/api/butler/lead`, `/api/butler/prefill`, `/api/bookings*`, `/api/admin/*`, `/api/calendar/*`, `/api/cron/*`, payment files, and WhatChimp export files all untouched.
+- `npx tsc --noEmit`: exit 0, clean. `npm run build`: exit 0, new `/api/butler/normalize-stay-intent` route registered. `node --test lib/butler/extract-stay-intent.test.mts`: 31 pass / 0 fail.
+
+**Reversible?:** yes — single-PR revert restores the prior state. The two new files can be removed; the four doc edits + the one-line tsconfig edit can be reverted. Operator-side WhatChimp wiring is independent (batch 2) and would simply never call the missing endpoint.
+
+**Supersedes:** none. Extends the 2026-05-14 read-only `normalize-dates` decision by adding a second, more ambitious extraction surface alongside it; the 2026-05-14 endpoint is unchanged.
+
+---
+
 ## 2026-06-05 - Butler handoff auto-advance and bedroom derivation shipped in `/book`
 
 **Decision:** two behaviour gaps in the WhatsApp → website handoff are closed in [app/book/page.tsx](../../app/book/page.tsx):
