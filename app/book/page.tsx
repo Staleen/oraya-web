@@ -1023,6 +1023,16 @@ function BookPageInner() {
       });
     }
 
+    if (prefill.sleeping_guests) {
+      const guestCount = parseInt(prefill.sleeping_guests, 10);
+      const derivedBedrooms: BedroomCount =
+        guestCount <= 2 ? "1" : guestCount <= 4 ? "2" : "3";
+      setForm((current) => {
+        if (current.bedroomCount !== "1") return current;
+        return { ...current, bedroomCount: derivedBedrooms };
+      });
+    }
+
     if (prefill.full_name) {
       setGuest((current) => {
         if (current.fullName.trim()) return current;
@@ -1685,6 +1695,19 @@ function BookPageInner() {
     setBookingPath(nextBookingPath);
     setStep(2);
   }, [blurActiveCalendarDayIfSelectedRangeComplete]);
+
+  useEffect(() => {
+    if (!butlerPrefillReady) return;
+    if (!availabilityReadyForSelection) return;
+    if (!checkIn || !checkOut || checkOut <= checkIn) return;
+    if (dateConflict) return;
+    if (step !== 1) return;
+    if (reserveAutoNavigatedRef.current) return;
+    if (reserveAutoAdvanceSuppressedRef.current) return;
+    if (!searchParams.get("h") && !readStoredButlerPrefill()) return;
+    reserveAutoNavigatedRef.current = true;
+    transitionStep1To("request");
+  }, [butlerPrefillReady, availabilityReadyForSelection, checkIn, checkOut, dateConflict, step, transitionStep1To, searchParams]);
 
   useEffect(() => {
     const pending = pendingStep1TopScrollRef.current;
