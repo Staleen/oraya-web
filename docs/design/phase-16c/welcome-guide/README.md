@@ -30,6 +30,7 @@ Direction 2 was selected over the two alternatives because:
 ```
 docs/design/phase-16c/welcome-guide/
 ├── README.md                                        ← this file
+├── GUEST_GUIDE_ENGINE_PLAN.md                       ← future engine architecture (document only)
 ├── oraya-guest-welcome-guide.html                   ← digital guide prototype (screen only)
 ├── oraya-guest-welcome-guide.css                    ← digital guide styles
 ├── oraya-guest-welcome-guide-print-byblos.html      ← A4 print · Villa Byblos · 7 pages
@@ -56,10 +57,12 @@ docs/design/phase-16c/welcome-guide/
 2. **The browser view IS the source of truth.** Each page card shows exactly what will print.
 3. To print or save PDF: Ctrl+P / Cmd+P → Paper: A4 · Scale: Default (100%) · Margins: None · ☑ Background graphics · Headers/Footers: Off.
 4. Print preview must match the browser view. If it does not, the CSS has diverged — raise it as a bug.
+5. **Browser print is the review fallback only.** Production guest guides are generated server-side (Puppeteer or equivalent). See `GUEST_GUIDE_ENGINE_PLAN.md`.
 
 **A4 print — Villa Mechmech:**
 1. Open `oraya-guest-welcome-guide-print-mechmech.html` in a desktop browser.
 2. Same rules as Byblos above.
+3. Same review-fallback caveat applies.
 
 **Print settings standard (both files):**
 - Paper: A4
@@ -104,7 +107,7 @@ Every piece of operational content in this prototype is classified one of three 
 See `CONTENT_MATRIX.md` for the full image inventory and content status table.
 
 
-## Print layout — A4 WYSIWYG architecture (2026-06-07)
+## Print layout — A4 print architecture (2026-06-07)
 
 Print output is standalone A4 HTML. Key decisions and architecture:
 
@@ -112,37 +115,43 @@ Print output is standalone A4 HTML. Key decisions and architecture:
 |------|----------|
 | **Print target** | A4 portrait, 14mm margins |
 | **File architecture** | Two standalone HTML files — one per villa. Shared stylesheet `oraya-print-a4.css`. |
-| **WYSIWYG principle** | **The browser view IS the print preview.** Screen and print use identical layout. |
-| **Dimensional units** | All layout in `mm` (page structure) and `pt` (typography/spacing). No `px` in layout. |
-| **`@media screen`** | Adds body background (`#ddd8cf`) and page box-shadow only. No layout changes. |
-| **`@media print`** | Removes review bar and prototype notice. No layout changes. |
-| **`.print-page` base** | `width: 210mm; height: 297mm; padding: 14mm` — defined once, identical on screen and print. |
-| **Hero bleed** | `margin: -14mm -14mm 0; width: 210mm` — bleeds to page edges in both contexts. |
-| **Image heights** | All in `mm` — same value renders same physical height on screen and in print. |
+| **Parity principle** | **The browser view IS the approved visual.** Print is calibrated to match it — visually equivalent, not mechanically identical. |
+| **Screen layout** | `max-width: 620px; min-height: 877px; padding: 36px 40px` · `html { font-size: 16px }` — approved proportions. |
+| **`@media screen`** | Body background, page box-shadow. No A4 overrides on screen. |
+| **`@media print`** | Full A4 physical dimensions (`width: 210mm; height: 297mm; padding: 14mm`). Typography at `12pt` (= 16px, matches screen). Image heights calibrated to match screen px values. |
+| **Hero bleed** | Screen: `margin: -36px -40px 0`. Print: `margin: -14mm -14mm 0; width: 210mm`. |
+| **Image heights — screen** | `px` values: hero 195px · medium 130px · small 82px · thumb 108px · micro 58px |
+| **Image heights — print** | `mm` values calibrated to match: hero 52mm · medium 34mm · small 22mm · thumb 29mm · micro 15mm |
 | **Page 2 access support** | One compact `.pp-access-support` block |
 | **Page 3 Byblos** | 7 utilities: Wi-Fi, TV, AC, Hot Water, Kitchen, BBQ, Pool |
 | **Page 3 Mechmech** | 9 utilities: Wi-Fi, TV, Heating, Hot Water, Kitchen, BBQ, Fireplace, Winter Room, Pool |
 | **Page 7 location** | Each file shows only its own villa's location |
 | **Page number** | `margin-top: auto` in flex column. Never `position: fixed`. |
+| **No overflow:hidden** | Content must genuinely fit each page. Do not hide overflow. If a page overflows, reduce the relevant image height in `oraya-print-a4.css` Section 14. |
 
 **Expected output:**
 - Byblos: **7 pages** (Welcome · Arrival · Utilities · Using the Villa · Expectations · Checkout · Emergency)
 - Mechmech: **7 pages** (same structure, Mechmech-specific content)
 
-**If a page overflows:** Reduce the image `height` value in the relevant `.concept-img-wrap--*` rule in `oraya-print-a4.css` Section 14. The same reduction applies to both screen and print — this is correct WYSIWYG behaviour.
+**If a page overflows in print:** Reduce the image `max-height` value in the relevant `.concept-img-wrap--*` print rule in `oraya-print-a4.css`. Check both the mm and px values — they should stay proportional.
 
 **Historical fixes:**
-- v1: 163% manual scale required — root cause: `@page { margin: 14mm }` + pixel-based `.print-page`. Fixed by `@page { margin: 0 }` + `width: 210mm` at base.
-- v2: Screen/print divergence — root cause: two separate layout systems (px screen vs mm/pt print in `@media print`). Fixed by WYSIWYG single-source architecture — all layout dimensions defined at base level in `mm`/`pt` only.
+- v1: 163% manual scale required — root cause: `@page { margin: 14mm }` double-counted with `.print-page` padding. Fixed: `@page { margin: 0 }` so all padding is owned by `.print-page`.
+- v2 (reverted): Physical-unit rewrite attempted to make browser and print share identical mm/pt dimensions. Root cause of revert: this degraded the approved browser visual — smaller font (10pt), compressed spacing, overflow:hidden clipping. Reverted in favour of the calibrated dual-mode approach.
+- v3: Print parity improved via calibration — raised print base to `12pt` (matches screen 16px), corrected image mm heights to match screen px values, removed overflow:hidden.
 
 ---
 
 ## What is not production-ready
 
-- **Provided concept images** (`byblos-exterior.png`, `mechmech-pool.png`, `mechmech-02.png`, `mechmech-03-garden.png`, `mechmech-04.png`, `mechmech-06.png`, `mechmech-exterior.png`) are in the guide with "Concept image" labels. They require David's explicit approval before guest distribution.
+This prototype is a **static design foundation**. The following items are required before any of this reaches a guest.
+
+- **Server-side PDF generation**: The browser File → Print method is the review fallback only. Each stay requires a server-generated, personalized A4 PDF (guest name, stay dates, booking reference, QR codes) produced by Puppeteer or equivalent. The print HTML files in this folder are the design source. See `GUEST_GUIDE_ENGINE_PLAN.md`.
+- **Guest portal route**: No `/booking/view/[token]/guide` route exists. In production, this page hydrates from the booking row using a signed, short-lived token. See `GUEST_GUIDE_ENGINE_PLAN.md`.
+- **Admin preview / download / send**: No admin UI exists for previewing, downloading, or sending the guest guide. See `GUEST_GUIDE_ENGINE_PLAN.md`.
+- **Personalization**: Guest name, villa name, stay dates, and booking reference are static placeholders in this prototype. Populated dynamically in production.
+- **Provided concept images** (`byblos-exterior.png`, `mechmech-pool.png`, `mechmech-02.png`, `mechmech-03-garden.png`, `mechmech-04.png`, `mechmech-06.png`, `mechmech-exterior.png`) are labeled "Concept image." They require David's explicit approval before guest distribution.
 - **10 image slots remain prompt-only**: gate/driveway, gate keypad, front-door keypad, foyer/entrance, Byblos kitchen, Mechmech kitchen, Byblos BBQ, Mechmech BBQ, Byblos pool, winter room, fireplace, garbage bins. Generation prompts are in `IMAGE_PROMPTS.md`.
-- Personalization placeholders (guest name, villa name, dates, booking reference) are populated dynamically in production — this prototype uses static placeholder strings.
-- The digital guide has no backend. In production, the guest-specific URL includes a signed token; the page hydrates from the booking row.
 - Page 3 exists in two variants (Byblos / Mechmech). Only the correct variant is printed per stay. The switching logic is not automated — both variants are shown in the review prototype with screen-only labels.
 - No push notifications, no offline-mode service worker, and no WhatsApp integration are implemented in this prototype.
 

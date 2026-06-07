@@ -74,24 +74,30 @@ Placeholders in prototype: `[Gate PIN — provided before arrival]` and `[Front-
 
 These are not blocking prototype review. They require an Oraya decision before appearing in a guest-facing guide.
 
-| Item | What is needed |
-|------|---------------|
-| Diesel stove pricing | If Oraya wants to publish the additional diesel charge, confirm the amount or rate |
-| Late checkout pricing | If Oraya wants to publish discounted late-checkout or night-checkout rates, confirm the amounts |
-| Final image approval | 9 provided concept images are integrated and labeled. 10 image slots remain prompt-only (no image file yet). Final guest distribution requires either approved villa photography or explicit David approval to use concept images as-is. |
+| # | Item | What is needed |
+|---|------|---------------|
+| 2 | Diesel stove pricing | If Oraya wants to publish the additional diesel charge, confirm the amount or rate. Currently shown as "may charge for additional diesel" with no figure. |
+| 3 | Late / night checkout pricing | If Oraya wants to publish discounted late-checkout or night-checkout rates, confirm the amounts. Currently shown as "discounted pricing when available and confirmed by Oraya" with no figure. |
+| 4 | Final image approval | 9 provided concept images are integrated and labeled "Concept image." 10 image slots remain prompt-only (no file yet). Final guest distribution requires either approved villa photography or explicit David approval to use concept images as-is. |
 
 ---
 
-## Future production integration
+## Future production requirements
 
-These are not content questions. They are technical tasks required to move from design prototype to live guest product.
+These are not content questions. They are technical tasks required before this prototype can reach guests.
 
-| Integration item | Notes |
-|-----------------|-------|
-| Booking data personalization | In production, guest name, villa name, stay dates, and booking reference are sourced from the booking row and injected into the guide. The prototype uses static placeholders. |
-| Per-villa PDF generation | Each stay requires a correctly composed 7-page PDF — Byblos or Mechmech — with guest-specific data and booking QR code. The standalone print HTML files are the design source for each. Tooling TBD (e.g. Puppeteer from `oraya-guest-welcome-guide-print-byblos.html` or `...-mechmech.html`). |
-| Villa variant selection | Two separate print files: `print-byblos.html` (Byblos utilities, Byblos location on Page 7) and `print-mechmech.html` (Mechmech utilities, Mechmech location on Page 7). No variant switching required — correct file per stay. |
-| QR code generation | Navigation QR (Maps link) and booking-view QR must be generated per stay. Maps links are confirmed. Booking-view link is already live at `/booking/view/[token]`. |
-| Guest portal integration | If the digital guide is served as a web page, it requires a signed guest-facing route (e.g. `/guest/guide/[token]`) and booking-row hydration. |
-| Access-code (PIN) delivery — Phase 16D | Gate and front-door PINs are delivered via a separate, confirmed-guest secure channel. This is Phase 16D scope — not part of this static prototype. |
-| Digital guide delivery channel | How and when the digital guide URL reaches the guest (WhatsApp butler, email, or both) is a Phase 16D+ workflow decision. |
+| # | Item | Notes |
+|---|------|-------|
+| 1 | PIN delivery (Phase 16D) | Gate and front-door PINs are withheld from the guide by design. Phase 16D will establish the confirmed-guest secure channel for PIN delivery — separate from this guide. |
+| 5 | Production PDF generation | Each stay requires a server-generated 7-page PDF (Byblos or Mechmech variant) with guest name, stay dates, booking reference, and QR codes injected. Source files are the print HTML files in this folder. Recommended engine: Puppeteer or equivalent headless Chromium. Browser print is the review fallback only — it is not the production delivery path. See `GUEST_GUIDE_ENGINE_PLAN.md`. |
+| 6 | Guest portal integration | The digital guide needs a signed guest-facing route (`/booking/view/[token]/guide`) with booking-row hydration (guest name, villa, dates, ref). No guest portal route exists yet. See `GUEST_GUIDE_ENGINE_PLAN.md`. |
+| 7 | Admin preview / download | Admin needs a view at `/admin/bookings/[id]/guide` to preview the guest guide for a specific booking, download the generated PDF, and trigger send. Not yet implemented. See `GUEST_GUIDE_ENGINE_PLAN.md`. |
+| 8 | WhatsApp / email send workflow | How and when the guest receives the guide link (WhatsApp butler, email, or both) and who triggers it (auto on confirmation vs. manual admin send) is undecided. See `GUEST_GUIDE_ENGINE_PLAN.md`. |
+
+---
+
+## Future format option
+
+| # | Item | Notes |
+|---|------|-------|
+| 9 | Optional A5 booklet | An A5 saddle-stitched booklet was considered and deferred. If Oraya wants a premium physical booklet for high-value stays, the A4 print files are the design source. The A5 adaptation would require a new print stylesheet and page layout pass. Not in scope for Phase 16C or 16D. |
