@@ -1,0 +1,1206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Oraya Guest Welcome Guide — Design Prototype · Phase 16C</title>
+  <meta name="description" content="Design prototype only. Not for guest distribution. Phase 16C — The Compendium.">
+  <meta name="robots" content="noindex, nofollow">
+
+  <!-- Google Fonts — Oraya brand fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="oraya-guest-welcome-guide.css">
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════════
+     PROTOTYPE NOTICE — visible on screen, hidden in print
+     ════════════════════════════════════════════════════════════ -->
+<div class="prototype-notice" aria-hidden="true">
+  <span class="prototype-notice__label">Design Prototype</span>
+  Phase 16C · The Compendium · Not for guest distribution · All operational details require David Confirmation
+</div>
+
+
+<!-- ════════════════════════════════════════════════════════════
+     DIGITAL GUIDE
+     Mobile-first · Sent before arrival · Screen only in print
+     ════════════════════════════════════════════════════════════ -->
+<div class="digital-guide" id="digital-guide">
+
+  <!-- Header -->
+  <header class="dg-header">
+    <div class="dg-header__inner">
+      <div class="dg-header__brand">
+        <span class="dg-header__wordmark">ORAYA</span>
+        <span class="dg-header__separator">·</span>
+        <span class="dg-header__villa">Villa <span class="placeholder-inline">[Villa Name]</span></span>
+      </div>
+      <div class="dg-header__meta">
+        <span class="dg-header__guest">For <em class="placeholder-inline">[Guest Name]</em></span>
+        <span class="dg-header__dates">
+          <span class="placeholder-inline">[Check-in date]</span>
+          &ensp;—&ensp;
+          <span class="placeholder-inline">[Check-out date]</span>
+        </span>
+      </div>
+    </div>
+    <div class="dg-header__rule"></div>
+  </header>
+
+  <!-- Journey Rail — 8 steps, scrollable on mobile -->
+  <nav class="dg-journey-rail" aria-label="Guest arrival journey">
+    <div class="dg-journey-rail__inner">
+
+      <a href="#step-1" class="dg-step-node">
+        <span class="dg-step-node__number">1</span>
+        <span class="dg-step-node__label">Before<br>You Leave</span>
+      </a>
+      <div class="dg-step-connector" aria-hidden="true"></div>
+
+      <a href="#step-2" class="dg-step-node">
+        <span class="dg-step-node__number">2</span>
+        <span class="dg-step-node__label">On the<br>Way</span>
+      </a>
+      <div class="dg-step-connector" aria-hidden="true"></div>
+
+      <a href="#step-3" class="dg-step-node">
+        <span class="dg-step-node__number">3</span>
+        <span class="dg-step-node__label">At the<br>Gate</span>
+      </a>
+      <div class="dg-step-connector" aria-hidden="true"></div>
+
+      <a href="#step-4" class="dg-step-node">
+        <span class="dg-step-node__number">4</span>
+        <span class="dg-step-node__label">Parking</span>
+      </a>
+      <div class="dg-step-connector" aria-hidden="true"></div>
+
+      <a href="#step-5" class="dg-step-node">
+        <span class="dg-step-node__number">5</span>
+        <span class="dg-step-node__label">Front<br>Door</span>
+      </a>
+      <div class="dg-step-connector" aria-hidden="true"></div>
+
+      <a href="#step-6" class="dg-step-node">
+        <span class="dg-step-node__number">6</span>
+        <span class="dg-step-node__label">Settling<br>In</span>
+      </a>
+      <div class="dg-step-connector" aria-hidden="true"></div>
+
+      <a href="#step-7" class="dg-step-node">
+        <span class="dg-step-node__number">7</span>
+        <span class="dg-step-node__label">During<br>Your Stay</span>
+      </a>
+      <div class="dg-step-connector" aria-hidden="true"></div>
+
+      <a href="#step-8" class="dg-step-node">
+        <span class="dg-step-node__number">8</span>
+        <span class="dg-step-node__label">Checkout</span>
+      </a>
+
+    </div>
+  </nav>
+
+  <!-- ─── Journey Sections ─── -->
+  <main class="dg-main">
+
+
+    <!-- ── Step 1: Before You Leave ── -->
+    <section class="dg-section" id="step-1" aria-labelledby="s1-title">
+      <div class="dg-section__inner">
+        <div class="dg-section__number-tag">Step 1</div>
+        <h2 class="dg-section__title" id="s1-title">Before You Leave</h2>
+        <p class="dg-section__intro">Make sure you have everything you need before setting out for the villa.</p>
+
+        <div class="dg-checklist" role="list">
+          <div class="dg-checklist__item" role="listitem">
+            <span class="dg-checklist__box" aria-hidden="true"></span>
+            <span class="dg-checklist__text">This guide is saved on your phone or available offline</span>
+          </div>
+          <div class="dg-checklist__item" role="listitem">
+            <span class="dg-checklist__box" aria-hidden="true"></span>
+            <span class="dg-checklist__text">
+              Gate PIN confirmed:
+              <span class="placeholder-tag">[Gate PIN — provided before arrival]</span>
+            </span>
+          </div>
+          <div class="dg-checklist__item" role="listitem">
+            <span class="dg-checklist__box" aria-hidden="true"></span>
+            <span class="dg-checklist__text">
+              Front-door PIN confirmed:
+              <span class="placeholder-tag">[Front-door PIN — provided before arrival]</span>
+            </span>
+          </div>
+          <div class="dg-checklist__item" role="listitem">
+            <span class="dg-checklist__box" aria-hidden="true"></span>
+            <span class="dg-checklist__text">
+              Villa address saved for navigation:
+              <span class="placeholder-tag">[Address — Requires David Confirmation]</span>
+            </span>
+          </div>
+          <div class="dg-checklist__item" role="listitem">
+            <span class="dg-checklist__box" aria-hidden="true"></span>
+            <span class="dg-checklist__text">
+              Oraya WhatsApp saved in contacts:
+              <span class="placeholder-tag">[Number — Requires David Confirmation]</span>
+            </span>
+          </div>
+        </div>
+
+        <p class="dg-page-ref">→ See print guide p. 1–2 for full arrival information</p>
+      </div>
+    </section>
+
+
+    <!-- ── Step 2: On the Way ── -->
+    <section class="dg-section dg-section--alt" id="step-2" aria-labelledby="s2-title">
+      <div class="dg-section__inner">
+        <div class="dg-section__number-tag">Step 2</div>
+        <h2 class="dg-section__title" id="s2-title">On the Way</h2>
+        <p class="dg-section__intro">Navigate to the villa using the address and map below.</p>
+
+        <div class="dg-info-card">
+          <div class="dg-info-card__label">Villa address</div>
+          <div class="dg-info-card__value">
+            <span class="status-badge status-needs-confirmation">⚑ Requires David Confirmation</span>
+            <p class="placeholder-block">[Full villa address for both villas — to be confirmed]</p>
+          </div>
+        </div>
+
+        <div class="image-placeholder image-placeholder--map" role="img" aria-label="Map placeholder">
+          <p class="image-placeholder__label">TEMP PLACEHOLDER — REPLACE WITH MAP</p>
+          <p class="image-placeholder__desc">Required: Static map or embedded map showing villa location.<br>GPS coordinates needed before this can be produced.</p>
+        </div>
+
+        <div class="dg-info-card" style="margin-top: 16px;">
+          <div class="dg-info-card__label">GPS &amp; navigation QR</div>
+          <div class="dg-info-card__value">
+            <span class="status-badge status-needs-confirmation">⚑ Requires David Confirmation</span>
+            <p class="placeholder-block">[GPS coordinates — required to generate QR code]</p>
+          </div>
+        </div>
+
+        <p class="dg-page-ref">→ See print guide p. 1 for map and QR code</p>
+      </div>
+    </section>
+
+
+    <!-- ── Step 3: At the Gate ── -->
+    <section class="dg-section" id="step-3" aria-labelledby="s3-title">
+      <div class="dg-section__inner">
+        <div class="dg-section__number-tag">Step 3</div>
+        <h2 class="dg-section__title" id="s3-title">At the Gate</h2>
+        <p class="dg-section__intro">When you reach the property, follow these steps to open the gate.</p>
+
+        <div class="image-placeholder" role="img" aria-label="Gate image placeholder">
+          <p class="image-placeholder__label">TEMP PLACEHOLDER — REPLACE WITH REAL VILLA PHOTO</p>
+          <p class="image-placeholder__desc">Required image: Villa gate and driveway approach</p>
+        </div>
+
+        <ol class="dg-step-list" style="margin-top: 24px;">
+          <li class="dg-step-list__item">
+            <span class="dg-step-list__number">1</span>
+            <div class="dg-step-list__content">
+              <strong>Arrive at the property gate</strong>
+            </div>
+          </li>
+          <li class="dg-step-list__item">
+            <span class="dg-step-list__number">2</span>
+            <div class="dg-step-list__content">
+              <strong>Enter your gate PIN on the keypad</strong>
+              <div class="dg-pin-display">
+                <span class="placeholder-tag">[Gate PIN — provided before arrival]</span>
+              </div>
+            </div>
+          </li>
+          <li class="dg-step-list__item">
+            <span class="dg-step-list__number">3</span>
+            <div class="dg-step-list__content">
+              <strong>Press the gate open button</strong>
+            </div>
+          </li>
+          <li class="dg-step-list__item">
+            <span class="dg-step-list__number">4</span>
+            <div class="dg-step-list__content">
+              <strong>The gate will slide open</strong>
+            </div>
+          </li>
+        </ol>
+
+        <div class="image-placeholder" role="img" aria-label="Gate keypad placeholder">
+          <p class="image-placeholder__label">TEMP PLACEHOLDER — REPLACE WITH REAL VILLA PHOTO</p>
+          <p class="image-placeholder__desc">Required image: Gate keypad close-up — showing PIN pad and open button</p>
+        </div>
+
+        <div class="dg-troubleshoot">
+          <h3 class="dg-troubleshoot__title">Gate not opening?</h3>
+          <p>Wait 10 seconds and try again. If the gate still does not respond after a second attempt, contact Oraya directly: <span class="placeholder-tag">[WhatsApp concierge — Placeholder]</span></p>
+        </div>
+
+        <p class="dg-page-ref">→ See print guide p. 2 for full troubleshooting</p>
+      </div>
+    </section>
+
+
+    <!-- ── Step 4: Parking ── -->
+    <section class="dg-section dg-section--alt" id="step-4" aria-labelledby="s4-title">
+      <div class="dg-section__inner">
+        <div class="dg-section__number-tag">Step 4</div>
+        <h2 class="dg-section__title" id="s4-title">Parking</h2>
+        <p class="dg-section__intro">Drive through the gate and park in the designated area.</p>
+
+        <div class="dg-info-card">
+          <div class="dg-info-card__label">Where to park</div>
+          <div class="dg-info-card__value">
+            <span class="status-badge status-needs-confirmation">⚑ Requires David Confirmation</span>
+            <p class="placeholder-block">[Parking instructions for each villa — where to park, capacity, any restrictions on vehicle type or size. To be confirmed per villa.]</p>
+          </div>
+        </div>
+
+        <p class="dg-page-ref">→ See print guide p. 2</p>
+      </div>
+    </section>
+
+
+    <!-- ── Step 5: Front Door ── -->
+    <section class="dg-section" id="step-5" aria-labelledby="s5-title">
+      <div class="dg-section__inner">
+        <div class="dg-section__number-tag">Step 5</div>
+        <h2 class="dg-section__title" id="s5-title">Front Door</h2>
+        <p class="dg-section__intro">Walk to the front door and enter using your second PIN.</p>
+
+        <div class="image-placeholder" role="img" aria-label="Front door keypad placeholder">
+          <p class="image-placeholder__label">TEMP PLACEHOLDER — REPLACE WITH REAL VILLA PHOTO</p>
+          <p class="image-placeholder__desc">Required image: Front-door keypad close-up</p>
+        </div>
+
+        <ol class="dg-step-list" style="margin-top: 24px;">
+          <li class="dg-step-list__item">
+            <span class="dg-step-list__number">5</span>
+            <div class="dg-step-list__content">
+              <strong>Park your vehicle and walk to the front door</strong>
+            </div>
+          </li>
+          <li class="dg-step-list__item">
+            <span class="dg-step-list__number">6</span>
+            <div class="dg-step-list__content">
+              <strong>Enter your front-door PIN on the keypad</strong>
+              <div class="dg-pin-display">
+                <span class="placeholder-tag">[Front-door PIN — provided before arrival]</span>
+              </div>
+            </div>
+          </li>
+          <li class="dg-step-list__item">
+            <span class="dg-step-list__number">7</span>
+            <div class="dg-step-list__content">
+              <strong>You are in. Welcome to the villa.</strong>
+            </div>
+          </li>
+        </ol>
+
+        <div class="image-placeholder" role="img" aria-label="Villa entrance placeholder">
+          <p class="image-placeholder__label">TEMP PLACEHOLDER — REPLACE WITH REAL VILLA PHOTO</p>
+          <p class="image-placeholder__desc">Required image: Villa entrance or foyer — first interior impression</p>
+        </div>
+
+        <div class="dg-troubleshoot">
+          <h3 class="dg-troubleshoot__title">PIN not working?</h3>
+          <p>If the front-door PIN is not accepted, do not attempt it more than three times. Contact Oraya immediately: <span class="placeholder-tag">[WhatsApp concierge — Placeholder]</span></p>
+        </div>
+
+        <div class="dg-troubleshoot" style="margin-top: 12px;">
+          <h3 class="dg-troubleshoot__title">Late arrival or lost access?</h3>
+          <span class="status-badge status-needs-confirmation">⚑ Requires David Confirmation</span>
+          <p style="margin-top: 8px;" class="placeholder-block">[Late arrival procedure and emergency caretaker contact — to be confirmed.]</p>
+        </div>
+
+        <p class="dg-page-ref">→ See print guide p. 2 for full troubleshooting and emergency contacts</p>
+      </div>
+    </section>
+
+
+    <!-- ── Step 6: Settling In ── -->
+    <section class="dg-section dg-section--alt" id="step-6" aria-labelledby="s6-title">
+      <div class="dg-section__inner">
+        <div class="dg-section__number-tag">Step 6</div>
+        <h2 class="dg-section__title" id="s6-title">Settling In</h2>
+        <p class="dg-section__intro">Your essential comforts, ready when you arrive. Select your villa to see the relevant utilities.</p>
+
+        <!-- CSS-only villa tab selector -->
+        <div class="villa-selector">
+          <input type="radio" name="villa-digital" id="vd-byblos" checked class="villa-radio" aria-label="Villa Byblos">
+          <input type="radio" name="villa-digital" id="vd-mechmech" class="villa-radio" aria-label="Villa Mechmech">
+
+          <div class="villa-tabs">
+            <label for="vd-byblos" class="villa-tab">Villa Byblos</label>
+            <label for="vd-mechmech" class="villa-tab">Villa Mechmech</label>
+          </div>
+
+          <!-- Byblos utilities -->
+          <div class="villa-panel" id="vp-byblos">
+            <div class="dg-utility-item">
+              <h4 class="dg-utility-item__title">Wi-Fi</h4>
+              <p><span class="label-small">Network</span> <span class="placeholder-tag">[Network name — Placeholder]</span></p>
+              <p><span class="label-small">Password</span> <span class="placeholder-tag">[Password — Placeholder]</span></p>
+              <span class="status-badge status-placeholder" style="margin-top:4px;">Placeholder</span>
+            </div>
+
+            <div class="dg-utility-item">
+              <h4 class="dg-utility-item__title">AC &amp; Cooling</h4>
+              <span class="status-badge status-needs-confirmation">⚑ Requires David Confirmation</span>
+              <p class="placeholder-block">[Air conditioning — how to operate, remote/control location, thermostat notes]</p>
+            </div>
+
+            <div class="dg-utility-item">
+              <h4 class="dg-utility-item__title">Pool</h4>
+              <span class="status-badge status-needs-confirmation">⚑ Requires David Confirmation</span>
+              <p class="placeholder-block">[Pool access, heated pool operation, cover usage — Byblos specific]</p>
+            </div>
+
+            <div class="dg-utility-item">
+              <h4 class="dg-utility-item__title">Hot Water</h4>
+              <span class="status-badge status-needs-confirmation">⚑ Requires David Confirmation</span>
+              <p class="placeholder-block">[Hot water system — any warm-up wait time, boiler notes]</p>
+            </div>
+
+            <div class="dg-utility-item">
+              <h4 class="dg-utility-item__title">Kitchen &amp; BBQ</h4>
+              <span class="status-badge status-needs-confirmation">⚑ Requires David Confirmation</span>
+              <p class="placeholder-block">[Kitchen overview and BBQ basics — Byblos. Full instructions in print guide p. 3–4.]</p>
+            </div>
+
+            <div class="dg-utility-item">
+              <h4 class="dg-utility-item__title">TV &amp; Entertainment</h4>
+              <span class="status-badge status-needs-confirmation">⚑ Requires David Confirmation</span>
+              <p class="placeholder-block">[TV operation, smart TV notes, streaming accounts if provided]</p>
+            </div>
+          </div><!-- end vp-byblos -->
+
+          <!-- Mechmech utilities -->
+          <div class="villa-panel" id="vp-mechmech">
+            <div class="dg-utility-item">
+              <h4 class="dg-utility-item__title">Wi-Fi</h4>
+              <p><span class="label-small">Network</span> <span class="placeholder-tag">[Network name — Placeholder]</span></p>
+              <p><span class="label-small">Password</span> <span class="placeholder-tag">[Password — Placeholder]</span></p>
+              <span class="status-badge status-placeholder" style="margin-top:4px;">Placeholder</span>
+            </div>
+
+            <div class="dg-utility-item">
+              <h4 class="dg-utility-item__title">Heating</h4>
+              <span class="status-badge status-needs-confirmation">⚑ Requires David Confirmation</span>
+              <p class="placeholder-block">[Heating system type (radiator, underfloor, split unit), controls, thermostat notes]</p>
+            </div>
+
+            <div class="dg-utility-item">
+              <h4 class="dg-utility-item__title">Fireplace</h4>
+              <span class="status-badge status-needs-confirmation">⚑ Requires David Confirmation</span>
+              <p class="placeholder-block">[Fireplace location, fuel type (diesel/wood), how to operate — Mechmech specific]</p>
+            </div>
+
+            <div class="dg-utility-item">
+              <h4 class="dg-utility-item__title">Winter Room</h4>
+              <span class="status-badge status-needs-confirmation">⚑ Requires David Confirmation</span>
+              <p class="placeholder-block">[What is the winter room, where is it, how do guests access or use it]</p>
+            </div>
+
+            <div class="dg-utility-item">
+              <h4 class="dg-utility-item__title">Kitchen &amp; BBQ</h4>
+              <span class="status-badge status-needs-confirmation">⚑ Requires David Confirmation</span>
+              <p class="placeholder-block">[Kitchen overview and BBQ basics — Mechmech. Full instructions in print guide p. 3–4.]</p>
+            </div>
+
+            <div class="dg-utility-item">
+              <h4 class="dg-utility-item__title">TV &amp; Entertainment</h4>
+              <span class="status-badge status-needs-confirmation">⚑ Requires David Confirmation</span>
+              <p class="placeholder-block">[TV operation, smart TV notes, streaming accounts if provided]</p>
+            </div>
+          </div><!-- end vp-mechmech -->
+
+        </div><!-- end villa-selector -->
+
+        <p class="dg-page-ref">→ See print guide p. 3 for full utilities reference</p>
+      </div>
+    </section>
+
+
+    <!-- ── Step 7: During Your Stay ── -->
+    <section class="dg-section" id="step-7" aria-labelledby="s7-title">
+      <div class="dg-section__inner">
+        <div class="dg-section__number-tag">Step 7</div>
+        <h2 class="dg-section__title" id="s7-title">During Your Stay</h2>
+        <p class="dg-section__intro">The complete villa guide is available in the printed handbook inside the villa. Quick links below.</p>
+
+        <nav class="dg-quick-links" aria-label="Villa guide sections">
+          <a href="#print-p4" class="dg-quick-link">
+            <span class="dg-quick-link__title">Using the Villa</span>
+            <span class="dg-quick-link__sub">Kitchen · BBQ · Pool · Bathrooms · Garbage</span>
+          </a>
+          <a href="#print-p5" class="dg-quick-link">
+            <span class="dg-quick-link__title">House Expectations</span>
+            <span class="dg-quick-link__sub">Visitors · Smoking · Pool safety · Property care</span>
+          </a>
+          <a href="#print-p7" class="dg-quick-link">
+            <span class="dg-quick-link__title">Emergency &amp; Contacts</span>
+            <span class="dg-quick-link__sub">Oraya support · Emergency services · Caretaker</span>
+          </a>
+        </nav>
+
+        <div class="dg-info-card" style="margin-top: 16px;">
+          <div class="dg-info-card__label">Oraya WhatsApp concierge</div>
+          <div class="dg-info-card__value">
+            <span class="placeholder-tag">[WhatsApp number — Requires David Confirmation]</span>
+            <p style="font-size:13px; color: var(--muted); margin-top:6px;">We are available throughout your stay. Message us any time for assistance.</p>
+          </div>
+        </div>
+
+        <p class="dg-page-ref">→ See print guide p. 4–5 for full villa information</p>
+      </div>
+    </section>
+
+
+    <!-- ── Step 8: Checkout ── -->
+    <section class="dg-section dg-section--alt" id="step-8" aria-labelledby="s8-title">
+      <div class="dg-section__inner">
+        <div class="dg-section__number-tag">Step 8</div>
+        <h2 class="dg-section__title" id="s8-title">Checkout</h2>
+        <p class="dg-section__intro">Complete this checklist before leaving the villa.</p>
+
+        <div class="dg-info-card">
+          <div class="dg-info-card__label">Checkout time</div>
+          <div class="dg-info-card__value">
+            <span class="status-badge status-needs-confirmation">⚑ Requires David Confirmation</span>
+            <p style="font-size:13px; color:var(--muted); margin-top:6px;">A late checkout may be available on request. Contact Oraya via WhatsApp before your checkout date.</p>
+          </div>
+        </div>
+
+        <div class="dg-checklist" role="list">
+          <div class="dg-checklist__item" role="listitem">
+            <span class="dg-checklist__box" aria-hidden="true"></span>
+            <span class="dg-checklist__text">All dishes washed and returned to their places</span>
+          </div>
+          <div class="dg-checklist__item" role="listitem">
+            <span class="dg-checklist__box" aria-hidden="true"></span>
+            <span class="dg-checklist__text">
+              Garbage removed to the designated outdoor area
+              <span class="placeholder-tag">[Location — Requires David Confirmation]</span>
+            </span>
+          </div>
+          <div class="dg-checklist__item" role="listitem">
+            <span class="dg-checklist__box" aria-hidden="true"></span>
+            <span class="dg-checklist__text">Pool cover replaced and secured</span>
+          </div>
+          <div class="dg-checklist__item" role="listitem">
+            <span class="dg-checklist__box" aria-hidden="true"></span>
+            <span class="dg-checklist__text">All lights off throughout the villa</span>
+          </div>
+          <div class="dg-checklist__item" role="listitem">
+            <span class="dg-checklist__box" aria-hidden="true"></span>
+            <span class="dg-checklist__text">AC / Heating turned off</span>
+          </div>
+          <div class="dg-checklist__item" role="listitem">
+            <span class="dg-checklist__box" aria-hidden="true"></span>
+            <span class="dg-checklist__text">All interior doors closed</span>
+          </div>
+          <div class="dg-checklist__item" role="listitem">
+            <span class="dg-checklist__box" aria-hidden="true"></span>
+            <span class="dg-checklist__text">All windows closed and latched</span>
+          </div>
+          <div class="dg-checklist__item" role="listitem">
+            <span class="dg-checklist__box" aria-hidden="true"></span>
+            <span class="dg-checklist__text">Front door secured · Gate closed behind you</span>
+          </div>
+        </div>
+
+        <div class="dg-farewell">
+          <p>Thank you for staying with Oraya.</p>
+          <p>We hope to welcome you back soon.</p>
+          <p class="dg-farewell__contact">
+            Left something behind?&ensp;
+            <span class="placeholder-tag">[WhatsApp concierge — Placeholder]</span>
+          </p>
+        </div>
+
+        <p class="dg-page-ref">→ See print guide p. 6 for the full checkout checklist</p>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Digital footer -->
+  <footer class="dg-footer">
+    <div class="dg-footer__inner">
+      <div class="dg-footer__brand">ORAYA</div>
+      <div class="dg-footer__link">stayoraya.com</div>
+      <p class="dg-footer__note">A printed copy of this guide is available inside the villa.</p>
+      <a href="#print-manual" class="dg-footer__print-link">↓ View print version</a>
+    </div>
+  </footer>
+
+</div><!-- end .digital-guide -->
+
+
+<!-- ════════════════════════════════════════════════════════════
+     PRINT MANUAL PREVIEW
+     Shown on screen as a scrollable preview section.
+     When printed (File → Print), the digital guide hides
+     and this section formats as 7 A5 pages.
+     ════════════════════════════════════════════════════════════ -->
+<div class="print-manual" id="print-manual">
+
+  <div class="pm-header screen-only">
+    <h2 class="pm-header__title">Print Manual Preview</h2>
+    <p class="pm-header__note">A5 format · 7 pages · Print-ready — use File → Print or Ctrl+P / Cmd+P to print</p>
+    <p class="pm-header__note">Page 3 has two variants — Byblos and Mechmech. Print only the correct variant for each villa. Both are shown here for review.</p>
+    <p class="pm-header__note"><span class="status-badge status-needs-confirmation">⚑</span> Items marked "Requires David Confirmation" are placeholders. Do not print for guests until confirmed.</p>
+  </div>
+
+
+  <!-- ══ PRINT PAGE 1 — WELCOME ══ -->
+  <div class="print-page" id="print-p1">
+
+    <!-- Hero image — full-width across top of page -->
+    <div class="pp-hero">
+      <div class="image-placeholder image-placeholder--hero" role="img" aria-label="Hero image placeholder">
+        <p class="image-placeholder__label">TEMP PLACEHOLDER — REPLACE WITH REAL VILLA PHOTO</p>
+        <p class="image-placeholder__desc">Required image: Signature exterior view of the villa — the image guests will associate with their stay</p>
+      </div>
+    </div>
+
+    <div class="pp-welcome">
+
+      <div class="pp-brand">
+        <span class="pp-brand__wordmark">ORAYA</span>
+      </div>
+
+      <hr class="pp-rule">
+
+      <h1 class="pp-villa-name">Villa <span class="placeholder-inline">[Villa Name]</span></h1>
+
+      <div class="pp-guest-greeting">
+        Welcome,<br>
+        <span class="pp-guest-name placeholder-inline">[Guest Name]</span>
+      </div>
+
+      <div class="pp-stay-dates">
+        <span class="label-small">Your stay</span>
+        <span class="placeholder-inline">[Check-in date]</span> — <span class="placeholder-inline">[Check-out date]</span>
+      </div>
+
+      <hr class="pp-rule pp-rule--light">
+
+      <div class="pp-info-grid">
+        <div class="pp-info-item">
+          <span class="label-small">Villa address</span>
+          <p class="placeholder-block">[Full street address — Requires David Confirmation]</p>
+        </div>
+        <div class="pp-info-item">
+          <span class="label-small">GPS &amp; map</span>
+          <div class="image-placeholder image-placeholder--qr" role="img" aria-label="QR code placeholder">
+            <p class="image-placeholder__label">GPS QR</p>
+            <p class="image-placeholder__desc">Links to maps</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="pp-contacts">
+        <div class="pp-contact-row">
+          <span class="label-small">Oraya WhatsApp</span>
+          <span class="placeholder-tag">[Number — Placeholder]</span>
+        </div>
+        <div class="pp-contact-row">
+          <span class="label-small">Emergency</span>
+          <span class="placeholder-tag">[Number — Placeholder]</span>
+        </div>
+      </div>
+
+      <div class="pp-guide-note">
+        <p>This digital guide was sent before your arrival. A complete printed copy is available inside the villa for reference throughout your stay.</p>
+      </div>
+
+    </div>
+
+    <div class="pp-page-number">1 / 7</div>
+  </div><!-- end print page 1 -->
+
+
+  <!-- ══ PRINT PAGE 2 — ARRIVAL & ACCESS ══ -->
+  <div class="print-page" id="print-p2">
+
+    <div class="pp-page-header">
+      <span class="pp-page-label">Arrival &amp; Access</span>
+      <hr class="pp-rule">
+    </div>
+
+    <div class="pp-content">
+
+      <div class="pp-section">
+        <h3 class="pp-section-title">Before you leave</h3>
+        <ul class="pp-checklist">
+          <li>Guide saved on phone · Gate PIN confirmed · Front-door PIN confirmed · Address saved for navigation</li>
+        </ul>
+      </div>
+
+      <div class="pp-section">
+        <h3 class="pp-section-title">Arrival sequence — confirmed</h3>
+        <div class="pp-two-col">
+          <div class="pp-two-col__left">
+            <ol class="pp-numbered-steps">
+              <li>Arrive at the property</li>
+              <li>Enter gate PIN:
+                <span class="placeholder-tag">[Gate PIN]</span>
+              </li>
+              <li>Press the gate open button</li>
+              <li>Gate slides open</li>
+              <li>Park your vehicle</li>
+              <li>Enter front-door PIN:
+                <span class="placeholder-tag">[Front-door PIN]</span>
+              </li>
+              <li>Enter the villa. Welcome.</li>
+            </ol>
+          </div>
+          <div class="pp-two-col__right">
+            <div class="image-placeholder image-placeholder--small" role="img" aria-label="Gate keypad placeholder">
+              <p class="image-placeholder__label">TEMP PLACEHOLDER</p>
+              <p class="image-placeholder__desc">Required: Gate keypad</p>
+            </div>
+            <div class="image-placeholder image-placeholder--small" role="img" aria-label="Front door keypad placeholder">
+              <p class="image-placeholder__label">TEMP PLACEHOLDER</p>
+              <p class="image-placeholder__desc">Required: Front-door keypad</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pp-section">
+        <h3 class="pp-section-title">Parking</h3>
+        <span class="status-badge status-needs-confirmation">⚑ Requires David Confirmation</span>
+        <p class="placeholder-block">[Parking area instructions — vehicle placement, capacity, restrictions if any]</p>
+      </div>
+
+      <div class="pp-section">
+        <h3 class="pp-section-title">If something is not working</h3>
+        <div class="pp-troubleshoot-grid">
+          <div class="pp-troubleshoot-item">
+            <strong>Gate not opening</strong>
+            <p>Wait 10 sec, try again. Contact: <span class="placeholder-tag">[WhatsApp — Placeholder]</span></p>
+          </div>
+          <div class="pp-troubleshoot-item">
+            <strong>PIN not working</strong>
+            <p>Max 3 attempts. Contact Oraya: <span class="placeholder-tag">[WhatsApp — Placeholder]</span></p>
+          </div>
+          <div class="pp-troubleshoot-item">
+            <strong>Late arrival</strong>
+            <span class="status-badge status-needs-confirmation">⚑ Requires Confirmation</span>
+            <p class="placeholder-block">[Late arrival procedure]</p>
+          </div>
+          <div class="pp-troubleshoot-item">
+            <strong>Lost access</strong>
+            <p class="placeholder-block">[Emergency caretaker — Requires Confirmation]</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="pp-page-number">2 / 7</div>
+  </div><!-- end print page 2 -->
+
+
+  <!-- ══ PRINT PAGE 3A — UTILITIES & COMFORT (BYBLOS) ══ -->
+  <div class="print-page print-page--byblos" id="print-p3-byblos">
+
+    <div class="pp-page-header">
+      <span class="pp-page-label">Utilities &amp; Comfort <span class="pp-villa-tag">Villa Byblos</span></span>
+      <hr class="pp-rule">
+    </div>
+
+    <div class="pp-content">
+      <div class="pp-utilities-grid">
+
+        <div class="pp-utility-item">
+          <h4 class="pp-utility-title">Wi-Fi</h4>
+          <p><span class="label-small">Network</span> <span class="placeholder-tag">[SSID — Placeholder]</span></p>
+          <p><span class="label-small">Password</span> <span class="placeholder-tag">[Password — Placeholder]</span></p>
+          <span class="status-badge status-placeholder">Placeholder</span>
+        </div>
+
+        <div class="pp-utility-item">
+          <h4 class="pp-utility-title">TV &amp; Entertainment</h4>
+          <span class="status-badge status-needs-confirmation">⚑ Requires Confirmation</span>
+          <p class="placeholder-block">[TV and streaming operation]</p>
+        </div>
+
+        <div class="pp-utility-item">
+          <h4 class="pp-utility-title">Kitchen</h4>
+          <div class="image-placeholder image-placeholder--small" role="img" aria-label="Kitchen photo placeholder">
+            <p class="image-placeholder__label">TEMP PLACEHOLDER</p>
+            <p class="image-placeholder__desc">Required: Kitchen (Byblos)</p>
+          </div>
+          <span class="status-badge status-needs-confirmation">⚑ Requires Confirmation</span>
+          <p class="placeholder-block">[Kitchen overview — appliances, hob type, oven]</p>
+        </div>
+
+        <div class="pp-utility-item">
+          <h4 class="pp-utility-title">BBQ</h4>
+          <div class="image-placeholder image-placeholder--small" role="img" aria-label="BBQ photo placeholder">
+            <p class="image-placeholder__label">TEMP PLACEHOLDER</p>
+            <p class="image-placeholder__desc">Required: BBQ (Byblos)</p>
+          </div>
+          <span class="status-badge status-needs-confirmation">⚑ Requires Confirmation</span>
+          <p class="placeholder-block">[BBQ location and basic operation]</p>
+        </div>
+
+        <div class="pp-utility-item">
+          <h4 class="pp-utility-title">AC &amp; Cooling</h4>
+          <span class="status-badge status-needs-confirmation">⚑ Requires Confirmation</span>
+          <p class="placeholder-block">[AC controls, thermostat, remote location]</p>
+        </div>
+
+        <div class="pp-utility-item">
+          <h4 class="pp-utility-title">Hot Water</h4>
+          <span class="status-badge status-needs-confirmation">⚑ Requires Confirmation</span>
+          <p class="placeholder-block">[Hot water system notes]</p>
+        </div>
+
+        <div class="pp-utility-item pp-utility-item--wide">
+          <h4 class="pp-utility-title">Pool</h4>
+          <div class="image-placeholder image-placeholder--small" role="img" aria-label="Pool photo placeholder">
+            <p class="image-placeholder__label">TEMP PLACEHOLDER</p>
+            <p class="image-placeholder__desc">Required: Pool (Byblos)</p>
+          </div>
+          <span class="status-badge status-needs-confirmation">⚑ Requires Confirmation</span>
+          <p class="placeholder-block">[Pool access, heated pool operation, cover instructions, hours if applicable]</p>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="pp-page-number">3 / 7 · Villa Byblos variant</div>
+  </div><!-- end page 3A -->
+
+
+  <!-- ══ PRINT PAGE 3B — UTILITIES & COMFORT (MECHMECH) ══ -->
+  <div class="print-page print-page--mechmech" id="print-p3-mechmech">
+
+    <div class="pp-page-header">
+      <span class="pp-page-label">Utilities &amp; Comfort <span class="pp-villa-tag">Villa Mechmech</span></span>
+      <hr class="pp-rule">
+    </div>
+
+    <div class="pp-content">
+      <div class="pp-utilities-grid">
+
+        <div class="pp-utility-item">
+          <h4 class="pp-utility-title">Wi-Fi</h4>
+          <p><span class="label-small">Network</span> <span class="placeholder-tag">[SSID — Placeholder]</span></p>
+          <p><span class="label-small">Password</span> <span class="placeholder-tag">[Password — Placeholder]</span></p>
+          <span class="status-badge status-placeholder">Placeholder</span>
+        </div>
+
+        <div class="pp-utility-item">
+          <h4 class="pp-utility-title">TV &amp; Entertainment</h4>
+          <span class="status-badge status-needs-confirmation">⚑ Requires Confirmation</span>
+          <p class="placeholder-block">[TV and streaming operation]</p>
+        </div>
+
+        <div class="pp-utility-item">
+          <h4 class="pp-utility-title">Kitchen</h4>
+          <div class="image-placeholder image-placeholder--small" role="img" aria-label="Kitchen photo placeholder">
+            <p class="image-placeholder__label">TEMP PLACEHOLDER</p>
+            <p class="image-placeholder__desc">Required: Kitchen (Mechmech)</p>
+          </div>
+          <span class="status-badge status-needs-confirmation">⚑ Requires Confirmation</span>
+          <p class="placeholder-block">[Kitchen overview — appliances, hob type, oven]</p>
+        </div>
+
+        <div class="pp-utility-item">
+          <h4 class="pp-utility-title">BBQ</h4>
+          <div class="image-placeholder image-placeholder--small" role="img" aria-label="BBQ photo placeholder">
+            <p class="image-placeholder__label">TEMP PLACEHOLDER</p>
+            <p class="image-placeholder__desc">Required: BBQ (Mechmech)</p>
+          </div>
+          <span class="status-badge status-needs-confirmation">⚑ Requires Confirmation</span>
+          <p class="placeholder-block">[BBQ location and basic operation]</p>
+        </div>
+
+        <div class="pp-utility-item">
+          <h4 class="pp-utility-title">Heating</h4>
+          <span class="status-badge status-needs-confirmation">⚑ Requires Confirmation</span>
+          <p class="placeholder-block">[Heating system type, controls, thermostat]</p>
+        </div>
+
+        <div class="pp-utility-item">
+          <h4 class="pp-utility-title">Fireplace</h4>
+          <div class="image-placeholder image-placeholder--small" role="img" aria-label="Fireplace photo placeholder">
+            <p class="image-placeholder__label">TEMP PLACEHOLDER</p>
+            <p class="image-placeholder__desc">Required: Fireplace (Mechmech)</p>
+          </div>
+          <span class="status-badge status-needs-confirmation">⚑ Requires Confirmation</span>
+          <p class="placeholder-block">[Fireplace location, fuel type: diesel or wood, ignition steps]</p>
+        </div>
+
+        <div class="pp-utility-item pp-utility-item--wide">
+          <h4 class="pp-utility-title">Winter Room</h4>
+          <span class="status-badge status-needs-confirmation">⚑ Requires Confirmation</span>
+          <p class="placeholder-block">[What is the winter room, where is it located, how to access and use it — Mechmech specific]</p>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="pp-page-number">3 / 7 · Villa Mechmech variant</div>
+  </div><!-- end page 3B -->
+
+
+  <!-- ══ PRINT PAGE 4 — USING THE VILLA ══ -->
+  <div class="print-page" id="print-p4">
+
+    <div class="pp-page-header">
+      <span class="pp-page-label">Using the Villa</span>
+      <hr class="pp-rule">
+    </div>
+
+    <div class="pp-content">
+      <div class="pp-two-col pp-two-col--auto">
+
+        <div class="pp-section">
+          <h3 class="pp-section-title">Kitchen</h3>
+          <div class="image-placeholder image-placeholder--small" role="img" aria-label="Kitchen placeholder">
+            <p class="image-placeholder__label">TEMP PLACEHOLDER</p>
+            <p class="image-placeholder__desc">Required: Kitchen photo</p>
+          </div>
+          <span class="status-badge status-needs-confirmation">⚑ Requires Confirmation</span>
+          <p class="placeholder-block">[Kitchen use notes — how to use appliances, storage, any important notes]</p>
+        </div>
+
+        <div class="pp-section">
+          <h3 class="pp-section-title">BBQ</h3>
+          <div class="image-placeholder image-placeholder--small" role="img" aria-label="BBQ placeholder">
+            <p class="image-placeholder__label">TEMP PLACEHOLDER</p>
+            <p class="image-placeholder__desc">Required: BBQ photo</p>
+          </div>
+          <span class="status-badge status-needs-confirmation">⚑ Requires Confirmation</span>
+          <p class="placeholder-block">[BBQ step-by-step operation — ignition, burners, shutdown, cleaning]</p>
+        </div>
+
+        <div class="pp-section">
+          <h3 class="pp-section-title">Bathrooms</h3>
+          <span class="status-badge status-needs-confirmation">⚑ Requires Confirmation</span>
+          <p class="placeholder-block">[Any bathroom-specific notes — hot water wait time, shower settings, towels]</p>
+        </div>
+
+        <div class="pp-section">
+          <h3 class="pp-section-title">Garbage</h3>
+          <span class="status-badge status-needs-confirmation">⚑ Requires Confirmation</span>
+          <p class="placeholder-block">[Bin locations inside villa, outdoor bin location, collection days if known]</p>
+        </div>
+
+        <div class="pp-section">
+          <h3 class="pp-section-title">Pool Cover</h3>
+          <div class="image-placeholder image-placeholder--small" role="img" aria-label="Pool cover placeholder">
+            <p class="image-placeholder__label">TEMP PLACEHOLDER</p>
+            <p class="image-placeholder__desc">Required: Pool cover photo</p>
+          </div>
+          <span class="status-badge status-needs-confirmation">⚑ Requires Confirmation</span>
+          <p class="placeholder-block">[How to remove and replace the pool cover — mechanism, storage position]</p>
+        </div>
+
+        <div class="pp-section">
+          <h3 class="pp-section-title">Pool Usage</h3>
+          <span class="status-badge status-needs-confirmation">⚑ Requires Confirmation</span>
+          <p class="placeholder-block">[Pool access notes, any chemical/maintenance days guests should be aware of]</p>
+        </div>
+
+        <div class="pp-section pp-section--full">
+          <h3 class="pp-section-title">Restricted Areas</h3>
+          <span class="status-badge status-needs-confirmation">⚑ Requires Confirmation</span>
+          <p class="placeholder-block">[Areas of the property guests should not access — utility rooms, storage, neighbor boundaries, etc.]</p>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="pp-page-number">4 / 7</div>
+  </div><!-- end print page 4 -->
+
+
+  <!-- ══ PRINT PAGE 5 — HOUSE EXPECTATIONS ══ -->
+  <div class="print-page" id="print-p5">
+
+    <div class="pp-page-header">
+      <span class="pp-page-label">House Expectations</span>
+      <hr class="pp-rule">
+    </div>
+
+    <div class="pp-content">
+
+      <div class="pp-expectations-notice">
+        <p>All categories below require David's confirmation before any policy language is finalized. These headings define the structure only. No rules have been invented or assumed.</p>
+      </div>
+
+      <div class="pp-expectations-grid">
+
+        <div class="pp-expectation-item">
+          <h4 class="pp-expectation-title">Visitors &amp; Gatherings</h4>
+          <span class="status-badge status-needs-confirmation">⚑ Requires David Confirmation</span>
+          <p class="placeholder-block">[Are additional visitors permitted during the stay? Are gatherings or events welcome? Any size or timing limits?]</p>
+        </div>
+
+        <div class="pp-expectation-item">
+          <h4 class="pp-expectation-title">Restricted Areas</h4>
+          <span class="status-badge status-needs-confirmation">⚑ Requires David Confirmation</span>
+          <p class="placeholder-block">[Which specific areas are off-limits to guests? Utility rooms, neighboring areas, staff quarters?]</p>
+        </div>
+
+        <div class="pp-expectation-item">
+          <h4 class="pp-expectation-title">Smoking</h4>
+          <span class="status-badge status-needs-confirmation">⚑ Requires David Confirmation</span>
+          <p class="placeholder-block">[Is smoking permitted at the villa? If yes, where is it allowed?]</p>
+        </div>
+
+        <div class="pp-expectation-item">
+          <h4 class="pp-expectation-title">Pool Safety</h4>
+          <span class="status-badge status-needs-confirmation">⚑ Requires David Confirmation</span>
+          <p class="placeholder-block">[Any specific pool safety guidelines Oraya requires guests to follow?]</p>
+        </div>
+
+        <div class="pp-expectation-item">
+          <h4 class="pp-expectation-title">Children &amp; Supervision</h4>
+          <span class="status-badge status-needs-confirmation">⚑ Requires David Confirmation</span>
+          <p class="placeholder-block">[Any specific guidance for family stays with young children — pool access, supervision requirements?]</p>
+        </div>
+
+        <div class="pp-expectation-item">
+          <h4 class="pp-expectation-title">Property Care</h4>
+          <span class="status-badge status-needs-confirmation">⚑ Requires David Confirmation</span>
+          <p class="placeholder-block">[How should guests care for the villa, furnishings, and outdoor areas during their stay?]</p>
+        </div>
+
+      </div>
+
+    </div>
+
+    <div class="pp-page-number">5 / 7</div>
+  </div><!-- end print page 5 -->
+
+
+  <!-- ══ PRINT PAGE 6 — CHECKOUT ══ -->
+  <div class="print-page" id="print-p6">
+
+    <div class="pp-page-header">
+      <span class="pp-page-label">Checkout</span>
+      <hr class="pp-rule">
+    </div>
+
+    <div class="pp-content">
+
+      <div class="pp-checkout-time">
+        <span class="label-small">Checkout time</span>
+        <span class="placeholder-tag">[Checkout time — Requires David Confirmation]</span>
+        <p class="pp-checkout-note">A late checkout may be available on request. Contact Oraya via WhatsApp before your checkout date.</p>
+      </div>
+
+      <div class="pp-checkout-list">
+
+        <div class="pp-checkout-item">
+          <span class="pp-checkout-item__number">1</span>
+          <span class="pp-checkout-item__box"></span>
+          <div class="pp-checkout-item__content">
+            <strong>Dishes</strong>
+            <p>All dishes washed, dried, and returned to their original places.</p>
+          </div>
+        </div>
+
+        <div class="pp-checkout-item">
+          <span class="pp-checkout-item__number">2</span>
+          <span class="pp-checkout-item__box"></span>
+          <div class="pp-checkout-item__content">
+            <strong>Garbage</strong>
+            <p>All bags removed and taken to the outdoor area. <span class="placeholder-tag">[Location — Requires Confirmation]</span></p>
+          </div>
+        </div>
+
+        <div class="pp-checkout-item">
+          <span class="pp-checkout-item__number">3</span>
+          <span class="pp-checkout-item__box"></span>
+          <div class="pp-checkout-item__content">
+            <strong>Pool cover</strong>
+            <p>Pool cover replaced and secured as found.</p>
+          </div>
+        </div>
+
+        <div class="pp-checkout-item">
+          <span class="pp-checkout-item__number">4</span>
+          <span class="pp-checkout-item__box"></span>
+          <div class="pp-checkout-item__content">
+            <strong>Lights</strong>
+            <p>All lights switched off throughout the villa, including outdoor areas.</p>
+          </div>
+        </div>
+
+        <div class="pp-checkout-item">
+          <span class="pp-checkout-item__number">5</span>
+          <span class="pp-checkout-item__box"></span>
+          <div class="pp-checkout-item__content">
+            <strong>AC &amp; Heating</strong>
+            <p>All air conditioning or heating systems turned off.</p>
+          </div>
+        </div>
+
+        <div class="pp-checkout-item">
+          <span class="pp-checkout-item__number">6</span>
+          <span class="pp-checkout-item__box"></span>
+          <div class="pp-checkout-item__content">
+            <strong>Doors</strong>
+            <p>All interior doors closed.</p>
+          </div>
+        </div>
+
+        <div class="pp-checkout-item">
+          <span class="pp-checkout-item__number">7</span>
+          <span class="pp-checkout-item__box"></span>
+          <div class="pp-checkout-item__content">
+            <strong>Windows</strong>
+            <p>All windows closed and latched.</p>
+          </div>
+        </div>
+
+        <div class="pp-checkout-item">
+          <span class="pp-checkout-item__number">8</span>
+          <span class="pp-checkout-item__box"></span>
+          <div class="pp-checkout-item__content">
+            <strong>Final lock-up</strong>
+            <p>Front door secured. Gate closed and locked behind you.</p>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="pp-farewell">
+        <hr class="pp-rule--light">
+        <p>Thank you for staying at Oraya.</p>
+        <p>We hope to welcome you back.</p>
+      </div>
+
+    </div>
+
+    <div class="pp-page-number">6 / 7</div>
+  </div><!-- end print page 6 -->
+
+
+  <!-- ══ PRINT PAGE 7 — EMERGENCY & CONTACTS ══ -->
+  <div class="print-page" id="print-p7">
+
+    <div class="pp-page-header">
+      <span class="pp-page-label">Emergency &amp; Contacts</span>
+      <hr class="pp-rule">
+    </div>
+
+    <div class="pp-content">
+
+      <div class="pp-contacts-grid">
+
+        <!-- Emergency services — full row, public numbers -->
+        <div class="pp-contact-section pp-contact-section--emergency">
+          <h3 class="pp-contact-section-title">Emergency services — public Lebanese numbers</h3>
+          <div class="pp-contact-item">
+            <span class="pp-contact-label">Medical / Ambulance</span>
+            <span class="pp-contact-value">140 <span class="status-badge status-confirmed">Public</span></span>
+          </div>
+          <div class="pp-contact-item">
+            <span class="pp-contact-label">Red Cross Lebanon</span>
+            <span class="pp-contact-value">1876 <span class="status-badge status-confirmed">Public</span></span>
+          </div>
+          <div class="pp-contact-item">
+            <span class="pp-contact-label">Police (ISF)</span>
+            <span class="pp-contact-value">112 <span class="status-badge status-confirmed">Public</span></span>
+          </div>
+          <div class="pp-contact-item">
+            <span class="pp-contact-label">Fire brigade</span>
+            <span class="pp-contact-value">175 <span class="status-badge status-confirmed">Public</span></span>
+          </div>
+          <div class="pp-contact-item">
+            <span class="pp-contact-label">Civil Defense</span>
+            <span class="pp-contact-value">125 <span class="status-badge status-confirmed">Public</span></span>
+          </div>
+        </div>
+
+        <!-- Oraya support -->
+        <div class="pp-contact-section">
+          <h3 class="pp-contact-section-title">Oraya support</h3>
+          <div class="pp-contact-item">
+            <span class="pp-contact-label">WhatsApp concierge</span>
+            <span class="pp-contact-value placeholder-tag">[Number — Placeholder]</span>
+          </div>
+          <div class="pp-contact-item">
+            <span class="pp-contact-label">Available</span>
+            <span class="pp-contact-value placeholder-tag">[Hours — Requires Confirmation]</span>
+          </div>
+        </div>
+
+        <!-- Property -->
+        <div class="pp-contact-section">
+          <h3 class="pp-contact-section-title">Property</h3>
+          <div class="pp-contact-item">
+            <span class="pp-contact-label">Caretaker</span>
+            <span class="pp-contact-value placeholder-tag">[Name / Number — Requires Confirmation]</span>
+          </div>
+          <div class="pp-contact-item">
+            <span class="pp-contact-label">Urgent property issues</span>
+            <span class="pp-contact-value placeholder-tag">[Contact — Requires Confirmation]</span>
+          </div>
+        </div>
+
+        <!-- Local services -->
+        <div class="pp-contact-section">
+          <h3 class="pp-contact-section-title">Local services</h3>
+          <div class="pp-contact-item">
+            <span class="pp-contact-label">Nearest hospital</span>
+            <span class="pp-contact-value placeholder-tag">[Name &amp; address — Requires Confirmation]</span>
+          </div>
+          <div class="pp-contact-item">
+            <span class="pp-contact-label">Pharmacy</span>
+            <span class="pp-contact-value placeholder-tag">[Name &amp; address — Requires Confirmation]</span>
+          </div>
+        </div>
+
+      </div><!-- end pp-contacts-grid -->
+
+      <!-- Booking reference and QR -->
+      <div class="pp-booking-ref">
+        <hr class="pp-rule pp-rule--light">
+        <div class="pp-booking-ref__inner">
+          <div class="pp-booking-ref__text">
+            <span class="label-small">Your booking reference</span>
+            <span class="pp-booking-ref__code placeholder-tag">[8-character reference]</span>
+            <p class="pp-booking-ref__note">Use this reference when contacting Oraya support or to view your booking details.</p>
+          </div>
+          <div class="pp-booking-ref__qr">
+            <div class="image-placeholder image-placeholder--qr" role="img" aria-label="Booking QR placeholder">
+              <p class="image-placeholder__label">QR</p>
+              <p class="image-placeholder__desc">Booking view link</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Last brand mark -->
+      <div class="pp-last-brand">
+        <span class="pp-brand__wordmark">ORAYA</span>
+        <span class="pp-last-brand__url">stayoraya.com</span>
+      </div>
+
+    </div>
+
+    <div class="pp-page-number">7 / 7</div>
+  </div><!-- end print page 7 -->
+
+
+</div><!-- end .print-manual -->
+
+</body>
+</html>
