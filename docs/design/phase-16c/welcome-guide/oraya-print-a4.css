@@ -8,9 +8,16 @@
  *   oraya-guest-welcome-guide-print-byblos.html
  *   oraya-guest-welcome-guide-print-mechmech.html
  *
+ * WYSIWYG ARCHITECTURE (2026-06-07):
+ * All layout dimensions are in physical units (mm, pt).
+ * At 96 CSS dpi: 1mm = 3.779px · 1pt = 1.333px
+ * The browser view IS the print preview — no layout divergence.
+ *
+ * @media screen  → adds decoration only (body bg, page shadow)
+ * @media print   → removes decoration only (shadow, review bar)
+ * Content layout → identical in both contexts
+ *
  * DESIGN PROTOTYPE — NOT PRODUCTION.
- * Review and confirmation use only.
- * Do not distribute to guests until all placeholders are resolved.
  * ═══════════════════════════════════════════════════════════════════
  */
 
@@ -20,7 +27,6 @@
    ═══════════════════════════════════════════════════════ */
 
 :root {
-  /* Brand palette — Oraya */
   --gold:         #C5A46D;
   --gold-faint:   rgba(197, 164, 109, 0.10);
   --gold-soft:    rgba(197, 164, 109, 0.28);
@@ -32,7 +38,6 @@
   --muted:        #8a8070;
   --muted-light:  rgba(138, 128, 112, 0.22);
 
-  /* Typography */
   --font-serif: 'Playfair Display', Georgia, 'Times New Roman', serif;
   --font-sans:  'Lato', system-ui, -apple-system, sans-serif;
 }
@@ -48,13 +53,13 @@
   padding: 0;
 }
 
-html { font-size: 16px; }
+/* pt base = WYSIWYG: same physical rendering on screen and in print */
+html { font-size: 10pt; }
 
 body {
   font-family: var(--font-sans);
   color: var(--charcoal);
-  background: #ddd8cf;
-  padding: 32px 16px 64px;
+  /* body background/padding defined in @media screen below */
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -64,9 +69,9 @@ h1, h2, h3, h4, h5, h6 {
   line-height: 1.25;
 }
 
-p  { line-height: 1.6; }
-ul, ol { padding-left: 1.25em; }
-li { margin-bottom: 2px; }
+p  { line-height: 1.5; }
+ul, ol { padding-left: 1em; }
+li { margin-bottom: 0; }
 a  { color: var(--midnight); text-decoration: none; }
 strong { font-weight: 700; }
 
@@ -76,17 +81,17 @@ strong { font-weight: 700; }
    ═══════════════════════════════════════════════════════ */
 
 .prototype-notice {
-  max-width: 680px;
-  margin: 0 auto 20px;
+  width: 210mm;
+  margin: 0 auto 8px;
   background: var(--midnight);
   color: rgba(255, 255, 255, 0.78);
   font-family: var(--font-sans);
-  font-size: 11px;
+  font-size: 9pt;
   letter-spacing: 0.03em;
-  padding: 10px 16px;
+  padding: 8pt 12pt;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10pt;
   line-height: 1.5;
 }
 
@@ -95,32 +100,67 @@ strong { font-weight: 700; }
   background: var(--gold);
   color: var(--midnight);
   font-weight: 700;
-  font-size: 9.5px;
+  font-size: 7.5pt;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  padding: 3px 8px;
+  padding: 2pt 7pt;
   white-space: nowrap;
   flex-shrink: 0;
 }
 
 
 /* ═══════════════════════════════════════════════════════
-   4. PRINT PAGES — SCREEN PREVIEW CARDS
-   A4 aspect ratio: 210 × 297mm = 1 : 1.4142
-   At 620px wide → min-height 877px
+   4. A4 PAGE ARCHITECTURE — SINGLE SOURCE OF TRUTH
+   ═══════════════════════════════════════════════════════
+
+   .print-document and .print-page are sized in mm.
+   These values are identical on screen and in print.
+
+   At 96 CSS dpi:
+     210mm = 793.7px  (page width)
+     297mm = 1122.5px (page height)
+     14mm  =  52.9px  (padding / bleed offset)
+
+   @media screen adds box-shadow + body background colour.
+   @media print removes box-shadow + screen UI elements.
+   Nothing else changes.
    ═══════════════════════════════════════════════════════ */
 
+.print-document {
+  width: 210mm;
+  margin: 0 auto;
+}
+
 .print-page {
-  width: 100%;
-  max-width: 620px;
-  min-height: 877px;
+  width: 210mm;
+  height: 297mm;
+  padding: 14mm;
+  box-sizing: border-box;
   background: var(--white);
-  margin: 0 auto 32px;
-  padding: 36px 40px;
-  box-shadow: 0 2px 28px rgba(46, 46, 46, 0.16);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   position: relative;
+  /* Page break — active only in print context */
+  break-after: page;
+  page-break-after: always;
+}
+
+.print-page:last-child {
+  break-after: auto;
+  page-break-after: auto;
+}
+
+/* ── Screen decoration (body bg, page shadow) ─────────── */
+@media screen {
+  body {
+    background: #ddd8cf;
+    padding: 32px 16px 64px;
+  }
+  .print-page {
+    margin: 24px auto;
+    box-shadow: 0 4px 32px rgba(46, 46, 46, 0.20);
+  }
 }
 
 
@@ -131,12 +171,12 @@ strong { font-weight: 700; }
 .label-small {
   display: block;
   font-family: var(--font-sans);
-  font-size: 9px;
+  font-size: 7pt;
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--muted);
-  margin-bottom: 2px;
+  margin-bottom: 2pt;
 }
 
 .placeholder-inline {
@@ -149,9 +189,9 @@ strong { font-weight: 700; }
   background: rgba(197, 164, 109, 0.18);
   color: #7a6340;
   font-family: var(--font-sans);
-  font-size: 10px;
+  font-size: 7.5pt;
   font-weight: 600;
-  padding: 1px 5px;
+  padding: 1pt 4pt;
 }
 
 
@@ -160,49 +200,49 @@ strong { font-weight: 700; }
    ═══════════════════════════════════════════════════════ */
 
 .pp-page-header {
-  margin-bottom: 20px;
+  margin-bottom: 8pt;
 }
 
 .pp-page-label {
   display: block;
   font-family: var(--font-sans);
-  font-size: 10px;
+  font-size: 7pt;
   font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--muted);
-  margin-bottom: 7px;
+  margin-bottom: 4pt;
 }
 
 .pp-rule {
   border: none;
-  border-top: 1px solid var(--gold);
+  border-top: 0.5pt solid var(--gold);
   margin: 0;
 }
 
 .pp-rule--light {
   border: none;
-  border-top: 1px solid var(--gold-soft);
-  margin: 12px 0;
+  border-top: 0.5pt solid var(--gold-soft);
+  margin: 4pt 0;
 }
 
 .pp-content {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 7pt;
 }
 
 .pp-page-number {
   font-family: var(--font-sans);
-  font-size: 9px;
+  font-size: 7.5pt;
   letter-spacing: 0.10em;
   text-transform: uppercase;
   color: var(--muted);
   text-align: center;
   margin-top: auto;
-  padding-top: 12px;
-  border-top: 1px solid var(--muted-light);
+  padding-top: 5pt;
+  border-top: 0.5pt solid var(--muted-light);
 }
 
 
@@ -210,13 +250,16 @@ strong { font-weight: 700; }
    7. PAGE 1 — WELCOME
    ═══════════════════════════════════════════════════════ */
 
-/* Hero image — bleeds to page edge on screen */
+/* Hero — bleeds to all physical page edges at top.
+   -14mm offsets exactly cancel the .print-page 14mm padding.
+   width: 210mm = full physical page width.                  */
 .pp-hero {
-  margin: -36px -40px 0;
+  margin: -14mm -14mm 0;
+  width: 210mm;
 }
 
 .pp-welcome {
-  padding-top: 18px;
+  padding-top: 6pt;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -225,52 +268,52 @@ strong { font-weight: 700; }
 .pp-brand__wordmark {
   display: block;
   font-family: var(--font-sans);
-  font-size: 11px;
+  font-size: 9pt;
   font-weight: 900;
-  letter-spacing: 0.36em;
+  letter-spacing: 0.30em;
   text-transform: uppercase;
   color: var(--gold);
-  margin-bottom: 10px;
+  margin-bottom: 4pt;
 }
 
 .pp-villa-name {
   font-family: var(--font-serif);
-  font-size: 26px;
+  font-size: 20pt;
   color: var(--midnight);
-  margin: 14px 0 5px;
+  margin: 6pt 0 3pt;
   font-weight: 700;
 }
 
 .pp-guest-greeting {
   font-family: var(--font-serif);
-  font-size: 13px;
+  font-size: 10.5pt;
   color: var(--charcoal);
   font-style: italic;
   line-height: 1.5;
-  margin-bottom: 10px;
+  margin-bottom: 4pt;
 }
 
 .pp-guest-name {
   display: block;
-  font-size: 22px;
+  font-size: 16pt;
   font-style: italic;
   font-weight: 700;
   color: var(--midnight);
-  margin-top: 2px;
+  margin-top: 1pt;
 }
 
 .pp-stay-dates {
   font-family: var(--font-sans);
-  font-size: 11px;
+  font-size: 9.5pt;
   color: var(--charcoal);
-  margin-bottom: 12px;
+  margin-bottom: 6pt;
 }
 
 .pp-info-grid {
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 12px;
-  margin: 10px 0;
+  gap: 7pt;
+  margin: 6pt 0;
   align-items: start;
 }
 
@@ -280,34 +323,34 @@ strong { font-weight: 700; }
 
 .pp-contacts {
   background: var(--beige-light);
-  padding: 10px 12px;
-  margin-bottom: 12px;
+  padding: 5pt 7pt;
+  margin-bottom: 7pt;
 }
 
 .pp-contact-row {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  gap: 8px;
+  gap: 6pt;
   font-family: var(--font-sans);
-  font-size: 11px;
-  padding: 3px 0;
+  font-size: 9pt;
+  padding: 2pt 0;
 }
 
 .pp-guide-note {
   font-family: var(--font-sans);
-  font-size: 10px;
+  font-size: 8pt;
   color: var(--muted);
   font-style: italic;
   line-height: 1.5;
   margin-top: auto;
-  padding-top: 8px;
+  padding-top: 6pt;
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 7pt;
 }
 
-.pp-guide-note p { font-size: 10px; }
+.pp-guide-note p { font-size: 8pt; }
 
 
 /* ═══════════════════════════════════════════════════════
@@ -316,43 +359,43 @@ strong { font-weight: 700; }
 
 .pp-section-title {
   font-family: var(--font-sans);
-  font-size: 9.5px;
+  font-size: 7pt;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--charcoal);
-  margin-bottom: 6px;
-  padding-bottom: 4px;
-  border-bottom: 1px solid var(--muted-light);
+  margin-bottom: 4pt;
+  padding-bottom: 3pt;
+  border-bottom: 0.5pt solid var(--muted-light);
 }
 
 .pp-section p,
 .pp-section li {
-  font-size: 12px;
-  line-height: 1.6;
+  font-size: 10pt;
+  line-height: 1.5;
   color: var(--charcoal);
 }
 
 .pp-checklist {
   list-style: none;
   padding: 0;
-  font-size: 11px;
+  font-size: 9pt;
   color: var(--charcoal);
-  line-height: 1.7;
+  line-height: 1.6;
 }
 
 /* Arrival sequence — steps on left, keypad images on right */
 .pp-two-col {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
+  gap: 7pt;
 }
 
 .pp-two-col__left  { }
 .pp-two-col__right {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 5pt;
 }
 
 .pp-numbered-steps {
@@ -367,56 +410,56 @@ strong { font-weight: 700; }
   counter-increment: step;
   display: flex;
   align-items: baseline;
-  gap: 8px;
-  font-size: 12px;
-  padding: 5px 0;
-  border-bottom: 1px solid var(--muted-light);
+  gap: 6pt;
+  font-size: 10pt;
+  padding: 3pt 0;
+  border-bottom: 0.5pt solid var(--muted-light);
   color: var(--charcoal);
 }
 
 .pp-numbered-steps li::before {
   content: counter(step);
   font-family: var(--font-sans);
-  font-size: 9px;
+  font-size: 7pt;
   font-weight: 700;
   color: var(--gold);
-  min-width: 14px;
+  min-width: 10pt;
   text-align: center;
   flex-shrink: 0;
 }
 
-/* Compact access support block — ONE block, not 4 boxes */
+/* Compact access support block */
 .pp-access-support {
   background: var(--beige-light);
-  border-left: 2px solid var(--gold);
-  padding: 10px 14px;
+  border-left: 1.5pt solid var(--gold);
+  padding: 6pt 9pt;
 }
 
 .pp-access-support__title {
   font-family: var(--font-sans);
-  font-size: 9px;
+  font-size: 7pt;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--muted);
-  margin-bottom: 7px;
+  margin-bottom: 5pt;
 }
 
 .pp-access-support__row {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  font-size: 11px;
+  font-size: 9.5pt;
   color: var(--charcoal);
-  padding: 2px 0;
-  gap: 8px;
-  line-height: 1.45;
+  padding: 1.5pt 0;
+  gap: 6pt;
+  line-height: 1.4;
 }
 
 .pp-access-support__row em {
   color: var(--muted);
   font-style: italic;
-  font-size: 10px;
+  font-size: 8.5pt;
 }
 
 .pp-access-support__row strong {
@@ -432,13 +475,13 @@ strong { font-weight: 700; }
 .pp-utilities-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 11px;
+  gap: 5pt;
   flex: 1;
 }
 
 .pp-utility-item {
   background: var(--beige-light);
-  padding: 10px 12px;
+  padding: 5pt 7pt;
 }
 
 .pp-utility-item--wide {
@@ -447,41 +490,41 @@ strong { font-weight: 700; }
 
 .pp-utility-title {
   font-family: var(--font-sans);
-  font-size: 9px;
+  font-size: 7pt;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--gold);
-  margin-bottom: 6px;
-  padding-bottom: 4px;
-  border-bottom: 1px solid var(--gold-soft);
+  margin-bottom: 4pt;
+  padding-bottom: 3pt;
+  border-bottom: 0.5pt solid var(--gold-soft);
 }
 
 .pp-utility-item p {
-  font-size: 11px;
-  line-height: 1.55;
+  font-size: 9pt;
+  line-height: 1.4;
   color: var(--charcoal);
-  margin-top: 4px;
+  margin-top: 2pt;
 }
 
 .pp-utility-item p + p {
-  margin-top: 3px;
+  margin-top: 2pt;
 }
 
 .pp-utility-note {
-  font-size: 9.5px;
+  font-size: 8pt;
   color: var(--muted);
   font-style: italic;
-  margin-top: 4px;
+  margin-top: 3pt;
 }
 
 .pp-utilities-safety {
   font-family: var(--font-sans);
-  font-size: 10px;
+  font-size: 8pt;
   color: var(--muted);
   font-style: italic;
-  padding-top: 8px;
-  border-top: 1px solid var(--muted-light);
+  padding-top: 5pt;
+  border-top: 0.5pt solid var(--muted-light);
   margin-top: auto;
 }
 
@@ -492,17 +535,18 @@ strong { font-weight: 700; }
 
 .pp-expectations-notice {
   background: var(--gold-faint);
-  border-left: 2px solid var(--gold);
-  padding: 8px 12px;
-  font-size: 11px;
+  border-left: 1.5pt solid var(--gold);
+  padding: 5pt 8pt;
+  font-size: 9pt;
   color: var(--charcoal);
   line-height: 1.5;
 }
 
+/* minmax(80mm, 1fr): at 182mm inner width → 2 columns on both screen and print */
 .pp-two-col--auto {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(80mm, 1fr));
+  gap: 7pt;
 }
 
 .pp-section--full {
@@ -510,20 +554,20 @@ strong { font-weight: 700; }
 }
 
 .pp-section-body {
-  font-size: 11px;
-  line-height: 1.6;
+  font-size: 10pt;
+  line-height: 1.5;
   color: var(--charcoal);
-  margin-top: 6px;
+  margin-top: 4pt;
 }
 
 .pp-section-body + .pp-section-body {
-  margin-top: 4px;
+  margin-top: 3pt;
 }
 
 .pp-amenity-strip {
   display: flex;
-  gap: 6px;
-  margin: 5px 0 4px;
+  gap: 4pt;
+  margin: 4pt 0 3pt;
 }
 
 .pp-amenity-strip .concept-img-wrap {
@@ -538,30 +582,30 @@ strong { font-weight: 700; }
 .pp-expectations-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 11px;
+  gap: 5pt;
   flex: 1;
 }
 
 .pp-expectation-item {
   background: var(--beige-light);
-  padding: 10px 12px;
+  padding: 5pt 7pt;
 }
 
 .pp-expectation-title {
   font-family: var(--font-sans);
-  font-size: 9px;
+  font-size: 7pt;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--charcoal);
-  margin-bottom: 6px;
-  padding-bottom: 4px;
-  border-bottom: 1px solid var(--muted-light);
+  margin-bottom: 4pt;
+  padding-bottom: 3pt;
+  border-bottom: 0.5pt solid var(--muted-light);
 }
 
 .pp-expectation-item p {
-  font-size: 11px;
-  line-height: 1.55;
+  font-size: 9pt;
+  line-height: 1.4;
   color: var(--charcoal);
 }
 
@@ -572,31 +616,31 @@ strong { font-weight: 700; }
 
 .pp-checkout-time {
   text-align: center;
-  padding: 12px 0 10px;
-  border-bottom: 1px solid var(--gold-soft);
-  margin-bottom: 6px;
+  padding: 8pt 0 7pt;
+  border-bottom: 0.5pt solid var(--gold-soft);
+  margin-bottom: 5pt;
 }
 
 .pp-checkout-time .label-small {
-  margin-bottom: 4px;
+  margin-bottom: 3pt;
 }
 
 .pp-checkout-time-value {
   display: block;
   font-family: var(--font-serif);
-  font-size: 30px;
+  font-size: 24pt;
   font-weight: 700;
   color: var(--midnight);
   letter-spacing: 0.03em;
-  margin-bottom: 6px;
+  margin-bottom: 4pt;
 }
 
 .pp-checkout-note {
-  font-size: 10px;
+  font-size: 8.5pt;
   color: var(--muted);
   font-style: italic;
   line-height: 1.5;
-  max-width: 380px;
+  max-width: 100mm;
   margin: 0 auto;
 }
 
@@ -609,28 +653,28 @@ strong { font-weight: 700; }
 .pp-checkout-item {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  padding: 9px 0;
-  border-bottom: 1px solid var(--muted-light);
+  gap: 7pt;
+  padding: 6pt 0;
+  border-bottom: 0.5pt solid var(--muted-light);
 }
 
 .pp-checkout-item__number {
   font-family: var(--font-sans);
-  font-size: 9px;
+  font-size: 7pt;
   font-weight: 700;
   color: var(--gold);
-  min-width: 14px;
+  min-width: 10pt;
   text-align: center;
-  padding-top: 2px;
+  padding-top: 1pt;
   flex-shrink: 0;
 }
 
 .pp-checkout-item__box {
-  width: 13px;
-  height: 13px;
-  border: 1.5px solid var(--muted);
+  width: 9pt;
+  height: 9pt;
+  border: 1pt solid var(--muted);
   flex-shrink: 0;
-  margin-top: 2px;
+  margin-top: 1pt;
 }
 
 .pp-checkout-item__content {
@@ -638,23 +682,23 @@ strong { font-weight: 700; }
 }
 
 .pp-checkout-item__content strong {
-  font-size: 11px;
+  font-size: 10pt;
   font-family: var(--font-sans);
   display: block;
-  margin-bottom: 2px;
+  margin-bottom: 1pt;
 }
 
 .pp-checkout-item__content p {
-  font-size: 10.5px;
+  font-size: 9.5pt;
   color: var(--muted);
   line-height: 1.4;
 }
 
 .pp-farewell {
   text-align: center;
-  padding: 12px 0 0;
+  padding: 6pt 0 0;
   font-family: var(--font-serif);
-  font-size: 12px;
+  font-size: 10pt;
   font-style: italic;
   color: var(--muted);
   line-height: 1.7;
@@ -668,39 +712,39 @@ strong { font-weight: 700; }
 .pp-contacts-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 11px;
+  gap: 5pt;
 }
 
 .pp-contact-section {
   background: var(--beige-light);
-  padding: 10px 12px;
+  padding: 5pt 7pt;
 }
 
 .pp-contact-section--emergency {
   background: rgba(197, 164, 109, 0.08);
-  border: 1px solid var(--gold-soft);
+  border: 0.5pt solid var(--gold-soft);
 }
 
 .pp-contact-section-title {
   font-family: var(--font-sans);
-  font-size: 9px;
+  font-size: 7pt;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--muted);
-  margin-bottom: 8px;
-  padding-bottom: 4px;
-  border-bottom: 1px solid var(--muted-light);
+  margin-bottom: 5pt;
+  padding-bottom: 3pt;
+  border-bottom: 0.5pt solid var(--muted-light);
 }
 
 .pp-contact-item {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  gap: 8px;
-  padding: 4px 0;
-  border-bottom: 1px solid var(--muted-light);
-  font-size: 11px;
+  gap: 6pt;
+  padding: 2.5pt 0;
+  border-bottom: 0.5pt solid var(--muted-light);
+  font-size: 9pt;
 }
 
 .pp-contact-item:last-child {
@@ -709,12 +753,12 @@ strong { font-weight: 700; }
 
 .pp-contact-label {
   color: var(--muted);
-  font-size: 10.5px;
+  font-size: 8.5pt;
 }
 
 .pp-contact-value {
   font-weight: 700;
-  font-size: 11px;
+  font-size: 9pt;
   color: var(--midnight);
   text-align: right;
 }
@@ -726,8 +770,8 @@ strong { font-weight: 700; }
 .pp-booking-ref__inner {
   display: flex;
   align-items: flex-start;
-  gap: 14px;
-  padding-top: 8px;
+  gap: 10pt;
+  padding-top: 6pt;
 }
 
 .pp-booking-ref__text {
@@ -737,15 +781,15 @@ strong { font-weight: 700; }
 .pp-booking-ref__code {
   display: block;
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 11pt;
   font-weight: 700;
   letter-spacing: 0.12em;
   color: var(--midnight);
-  margin: 4px 0;
+  margin: 3pt 0;
 }
 
 .pp-booking-ref__note {
-  font-size: 10px;
+  font-size: 8pt;
   color: var(--muted);
   font-style: italic;
   line-height: 1.4;
@@ -757,21 +801,24 @@ strong { font-weight: 700; }
 
 .pp-last-brand {
   text-align: center;
-  margin-top: 16px;
+  margin-top: 10pt;
 }
 
 .pp-last-brand__url {
   display: block;
   font-family: var(--font-sans);
-  font-size: 10px;
+  font-size: 8pt;
   color: var(--muted);
   letter-spacing: 0.10em;
-  margin-top: 2px;
+  margin-top: 1pt;
 }
 
 
 /* ═══════════════════════════════════════════════════════
    14. CONCEPT IMAGE WRAPPERS
+   ═══════════════════════════════════════════════════════
+   Heights in mm — render identically on screen and in print.
+   At 96 CSS dpi: 52mm = 196px · 28mm = 106px · 18mm = 68px
    ═══════════════════════════════════════════════════════ */
 
 .concept-img-wrap {
@@ -789,11 +836,13 @@ strong { font-weight: 700; }
   object-position: center;
 }
 
-.concept-img-wrap--hero   .concept-img { height: 195px; }
-.concept-img-wrap--medium .concept-img { height: 130px; }
-.concept-img-wrap--small  .concept-img { height: 82px; }
-.concept-img-wrap--thumb  .concept-img { height: 108px; }
-.concept-img-wrap--micro  .concept-img { height: 58px; }
+/* Same mm values used for screen and print */
+.concept-img-wrap--hero   .concept-img { height: 52mm; }
+.concept-img-wrap--medium .concept-img { height: 28mm; }
+.concept-img-wrap--small  .concept-img { height: 18mm; }
+.concept-img-wrap--thumb  .concept-img { height: 20mm; }
+.concept-img-wrap--micro  .concept-img { height: 12mm; }
+.pp-amenity-strip .concept-img         { height: 12mm; }
 
 .concept-img-label {
   position: absolute;
@@ -802,11 +851,11 @@ strong { font-weight: 700; }
   background: rgba(31, 43, 56, 0.72);
   color: rgba(255, 255, 255, 0.92);
   font-family: var(--font-sans);
-  font-size: 8px;
+  font-size: 6pt;
   font-weight: 700;
   letter-spacing: 0.10em;
   text-transform: uppercase;
-  padding: 3px 7px;
+  padding: 2pt 4pt;
   pointer-events: none;
   line-height: 1.4;
 }
@@ -814,55 +863,61 @@ strong { font-weight: 700; }
 
 /* ═══════════════════════════════════════════════════════
    15. CSS IMAGE PLACEHOLDERS
+   ═══════════════════════════════════════════════════════
+   Compact — matches the print appearance exactly.
+   max-height: 14pt ≈ 19px on screen → same in print.
    ═══════════════════════════════════════════════════════ */
 
 .image-placeholder {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 56px;
+  display: block;
+  max-height: 14pt;
+  min-height: 0;
   background: var(--beige-light);
-  border: 1.5px dashed rgba(138, 128, 112, 0.42);
-  gap: 4px;
-  text-align: center;
-  padding: 8px;
+  border: 0.5pt dashed rgba(138, 128, 112, 0.50);
+  padding: 2pt 5pt;
+  text-align: left;
+  overflow: hidden;
 }
 
 .image-placeholder::before {
-  content: '◻';
-  font-size: 15px;
-  color: var(--muted);
-  opacity: 0.45;
+  display: none;
 }
 
 .image-placeholder__label {
   font-family: var(--font-sans);
-  font-size: 9px;
+  font-size: 7pt;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--muted);
-}
-
-.image-placeholder__desc {
-  font-family: var(--font-sans);
-  font-size: 9px;
-  color: var(--muted);
-  font-style: italic;
+  display: block;
   line-height: 1.4;
 }
 
-.image-placeholder--small { min-height: 44px; }
+.image-placeholder__desc {
+  display: none;
+}
+
+.image-placeholder--small {
+  max-height: 12pt;
+}
+
 .image-placeholder--qr {
-  min-height: 64px;
-  width: 64px;
-  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  max-height: 50pt;
+  min-height: 0;
+  width: 50pt;
+  padding: 5pt;
+  text-align: center;
 }
 
 
 /* ═══════════════════════════════════════════════════════
    15.5 REVIEW BAR (screen only — prototype navigation)
+   px units are fine here: the review bar never prints.
    ═══════════════════════════════════════════════════════ */
 
 .review-bar {
@@ -903,13 +958,8 @@ strong { font-weight: 700; }
   white-space: nowrap;
 }
 
-.review-bar__back:hover {
-  color: var(--gold);
-}
-
-.review-bar__back svg {
-  opacity: 0.7;
-}
+.review-bar__back:hover { color: var(--gold); }
+.review-bar__back svg   { opacity: 0.7; }
 
 .review-bar__divider {
   width: 1px;
@@ -971,9 +1021,7 @@ strong { font-weight: 700; }
   color: var(--midnight);
 }
 
-.review-bar__btn--print:hover {
-  opacity: 0.85;
-}
+.review-bar__btn--print:hover { opacity: 0.85; }
 
 .review-bar__btn--alt {
   background: transparent;
@@ -986,232 +1034,68 @@ strong { font-weight: 700; }
   border-color: rgba(197, 164, 109, 0.35);
 }
 
-/* .print-document — wraps all .print-page divs in print files */
-.print-document {
-  /* Screen: transparent wrapper — layout handled by body centering */
-}
-
 
 /* ═══════════════════════════════════════════════════════
-   16. PRINT MEDIA
+   16. PRINT MEDIA — SUPPRESSION ONLY
+   ═══════════════════════════════════════════════════════
+
+   This block removes screen-only decoration.
+   It does NOT change any content layout, dimensions,
+   typography, or image sizes — those are identical on
+   screen and in print (defined in physical units above).
+
+   Pass condition: print preview matches browser view.
    ═══════════════════════════════════════════════════════ */
 
 @media print {
 
-  /* ─── @page margin: 0 ──────────────────────────────────────────
-     The page content area is the full 210×297mm sheet.
-     Inner content margin is owned by .print-page { padding: 14mm }.
-     DO NOT combine @page margin with .print-page padding — that
-     double-counts space and forces the browser to scale content
-     down below 100% (root cause of the 163% workaround).
-  ─────────────────────────────────────────────────────────────── */
+  /* Tell the browser the sheet is A4 with zero margin.
+     The page padding is owned by .print-page { padding: 14mm }. */
   @page {
     size: A4 portrait;
     margin: 0;
   }
 
-  /* ─── Force document width to physical A4 ──────────────────────
-     With @page margin:0 the paper is 210mm wide.
-     Setting html/body to 210mm tells the print renderer the
-     document is exactly as wide as the paper → no scaling applied.
-     Without this, the renderer may use screen-layout width as
-     the reference and scale it down to fit 210mm.
-  ─────────────────────────────────────────────────────────────── */
+  /* Force document width to physical paper width.
+     Prevents browser from scaling content to fit. */
   html, body {
     width: 210mm;
     margin: 0;
     padding: 0;
     background: #fff;
-    color: #2E2E2E;
-    font-size: 11pt;
-    line-height: 1.5;
   }
 
-  /* Hide prototype notice in print */
+  /* Remove screen-only UI elements */
+  .review-bar,
   .prototype-notice {
     display: none !important;
   }
 
-  /* ─── Each print page — physical A4 sheet ──────────────────────
-     width: 210mm + height: 297mm = one exact A4 page.
-     padding: 14mm provides the inner content margin.
-     box-sizing: border-box so padding is inside the 210×297mm box.
-     overflow: hidden clips any overflow — no extra pages.
-     display: flex + flex-direction: column keeps margin-top:auto
-     working for the page number at the bottom.
-  ─────────────────────────────────────────────────────────────── */
-  .print-page {
+  /* Reset screen centering/decoration on print-document */
+  .print-document {
     width: 210mm;
-    height: 297mm;
-    min-height: 297mm;
-    max-width: none;
-    max-height: none;
     margin: 0;
-    padding: 14mm;
-    box-sizing: border-box;
+    padding: 0;
+  }
+
+  /* Remove screen decoration from pages — layout unchanged */
+  .print-page {
+    margin: 0;
     box-shadow: none;
     border: none;
     transform: none;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    background: #fff;
-    page-break-after: always;
-    break-after: page;
+    zoom: 1;
   }
 
-  .print-page:last-child {
-    page-break-after: auto;
-    break-after: auto;
-  }
+  /* Suppress browser link URL annotation */
+  a::after { content: none !important; }
 
-  /* ─── Hero image — bleed to physical page edges ─────────────────
-     Undo the 14mm content padding so the hero image touches all
-     edges at the top of the page. width: 210mm fills the full sheet.
-  ─────────────────────────────────────────────────────────────── */
-  .pp-hero {
-    margin: -14mm -14mm 0;
-    width: 210mm;
-  }
-
-  /* Welcome page — reduce gap after hero */
-  .pp-welcome { padding-top: 6pt; }
-
-  /* ─── Typography ────────────────────────────────────────────── */
-  .pp-brand__wordmark  { font-size: 9pt; letter-spacing: 0.30em; margin-bottom: 4pt; }
-  .pp-villa-name       { font-size: 20pt; margin: 6pt 0 3pt; }
-  .pp-guest-greeting   { font-size: 10.5pt; margin-bottom: 4pt; }
-  .pp-guest-name       { font-size: 16pt; }
-  .pp-stay-dates       { font-size: 9.5pt; margin-bottom: 6pt; }
-  .pp-checkout-time-value { font-size: 24pt; }
-
-  /* ─── Layout gaps ───────────────────────────────────────────── */
-  .pp-content            { gap: 7pt; }
-  .pp-utilities-grid     { gap: 5pt; }
-  .pp-expectations-grid  { gap: 5pt; }
-  .pp-contacts-grid      { gap: 5pt; }
-  .pp-two-col            { gap: 7pt; }
-  .pp-two-col--auto      { gap: 7pt; }
-  .pp-page-header        { margin-bottom: 8pt; }
-
-  /* ─── Component sizing ──────────────────────────────────────── */
-  .pp-utility-item       { padding: 5pt 7pt; }
-  .pp-utility-item p     { font-size: 9pt; line-height: 1.4; margin-top: 2pt; }
-  .pp-utility-note       { font-size: 8pt; }
-
-  .pp-expectation-item   { padding: 5pt 7pt; }
-  .pp-expectation-item p { font-size: 9pt; line-height: 1.4; }
-
-  .pp-contact-section    { padding: 5pt 7pt; }
-
-  .pp-section p, .pp-section li   { font-size: 10pt; }
-  .pp-section-body                 { font-size: 10pt; }
-  .pp-numbered-steps li            { font-size: 10pt; padding: 3pt 0; }
-  .pp-access-support               { padding: 6pt 9pt; }
-  .pp-access-support__row          { font-size: 9.5pt; }
-
-  .pp-checkout-item                 { padding: 6pt 0; }
-  .pp-checkout-item__content strong { font-size: 10pt; }
-  .pp-checkout-item__content p      { font-size: 9.5pt; }
-  .pp-checkout-note                 { font-size: 8.5pt; }
-  .pp-farewell                      { font-size: 10pt; padding-top: 6pt; }
-
-  .pp-info-grid    { margin: 6pt 0; gap: 7pt; }
-  .pp-contacts     { padding: 5pt 7pt; margin-bottom: 7pt; }
-  .pp-guide-note   { font-size: 8pt; }
-  .pp-guide-note p { font-size: 8pt; }
-
-  /* ─── Label sizing ──────────────────────────────────────────── */
-  .pp-page-label             { font-size: 7pt; }
-  .pp-section-title          { font-size: 7pt; }
-  .pp-utility-title          { font-size: 7pt; }
-  .pp-expectation-title      { font-size: 7pt; }
-  .pp-contact-section-title  { font-size: 7pt; }
-  .pp-access-support__title  { font-size: 7pt; }
-
-  /* ─── Booking ref ───────────────────────────────────────────── */
-  .pp-booking-ref__code  { font-size: 11pt; }
-  .pp-booking-ref__note  { font-size: 8pt; }
-  .pp-booking-ref__inner { gap: 10pt; padding-top: 6pt; }
-
-  /* ─── CSS image placeholders — extremely compact in print ───── */
-  .image-placeholder {
-    min-height: 0;
-    max-height: 14pt;
-    padding: 2pt 5pt;
-    border: 0.5pt dashed rgba(138, 128, 112, 0.50);
-    gap: 2pt;
-    display: block;
-    text-align: left;
-  }
-  .image-placeholder::before  { display: none; }
-  .image-placeholder--small   { max-height: 12pt; }
-  .image-placeholder--qr {
-    max-height: 50pt;
-    min-height: 0;
-    width: 50pt;
-    padding: 5pt;
-    text-align: center;
-  }
-  .image-placeholder__label   { font-size: 7pt; }
-  .image-placeholder__desc    { display: none; }
-
-  /* ─── Real concept images — height caps in mm ───────────────── */
-  .concept-img {
-    width: 100%;
-    display: block;
-    object-fit: cover;
-  }
-  .concept-img-wrap--hero   .concept-img { height: 52mm; max-height: 52mm; }
-  .concept-img-wrap--medium .concept-img { max-height: 28mm; }
-  .concept-img-wrap--small  .concept-img { max-height: 18mm; }
-  .concept-img-wrap--thumb  .concept-img { max-height: 20mm; }
-  .concept-img-wrap--micro  .concept-img { max-height: 12mm; }
-  .pp-amenity-strip .concept-img         { max-height: 12mm; }
-
-  .concept-img-label { font-size: 6pt; padding: 2pt 4pt; }
-
-  /* ─── Page number — static flow at bottom of flex column ───────
-     margin-top: auto pushes it to the very bottom.
-     NEVER use position:fixed — that repeats it on every page
-     and causes all page numbers to overlap and corrupt.
-  ─────────────────────────────────────────────────────────────── */
-  .pp-page-number {
-    position: static;
-    margin-top: auto;
-    padding-top: 5pt;
-    padding-bottom: 0;
-    border-top: 0.5pt solid rgba(138, 128, 112, 0.35);
-    font-size: 7.5pt;
-    text-align: center;
-  }
-
-  /* ─── Checkout checkboxes — visible print form boxes ───────── */
-  .pp-checkout-item__box {
-    width: 9pt;
-    height: 9pt;
-    border: 1pt solid #999;
-  }
-
-  /* ─── Placeholder tags — plain italic in print ──────────────── */
+  /* Placeholder tags — plain italic in print */
   .placeholder-tag {
     background: none;
     color: #2E2E2E;
     padding: 0;
     font-style: italic;
-  }
-
-  /* ─── Suppress URL printing on links ────────────────────────── */
-  a::after { content: none !important; }
-
-  /* ─── Review bar — hide entirely in print ────────────────────── */
-  .review-bar { display: none !important; }
-
-  /* ─── Print document wrapper ─────────────────────────────────── */
-  .print-document {
-    width: 210mm;
-    margin: 0;
-    padding: 0;
   }
 
 }

@@ -49,18 +49,24 @@ docs/design/phase-16c/welcome-guide/
 **Digital guide (mobile-first):**
 1. Open `oraya-guest-welcome-guide.html` in Chrome, Safari, or Firefox.
 2. Resize to ~390px wide to see the mobile digital guide.
-3. Resize to 1024px+ to see the desktop layout.
-4. Scroll to the bottom to see the A4 print file links.
+3. The review hub at the top links to both A4 print files.
 
 **A4 print — Villa Byblos:**
-1. Open `oraya-guest-welcome-guide-print-byblos.html` in a browser.
-2. Scroll to review all 7 pages as screen preview cards.
-3. File → Print (or Ctrl+P / Cmd+P) → set paper size A4, 100% scale, no additional margins.
+1. Open `oraya-guest-welcome-guide-print-byblos.html` in a desktop browser.
+2. **The browser view IS the source of truth.** Each page card shows exactly what will print.
+3. To print or save PDF: Ctrl+P / Cmd+P → Paper: A4 · Scale: Default (100%) · Margins: None · ☑ Background graphics · Headers/Footers: Off.
+4. Print preview must match the browser view. If it does not, the CSS has diverged — raise it as a bug.
 
 **A4 print — Villa Mechmech:**
-1. Open `oraya-guest-welcome-guide-print-mechmech.html` in a browser.
-2. Scroll to review all 7 pages as screen preview cards.
-3. File → Print (or Ctrl+P / Cmd+P) → set paper size A4, 100% scale, no additional margins.
+1. Open `oraya-guest-welcome-guide-print-mechmech.html` in a desktop browser.
+2. Same rules as Byblos above.
+
+**Print settings standard (both files):**
+- Paper: A4
+- Scale: Default / 100%
+- Margins: None (the file owns its own 14mm padding)
+- Background graphics: On
+- Headers and footers: Off
 
 ---
 
@@ -98,29 +104,36 @@ Every piece of operational content in this prototype is classified one of three 
 See `CONTENT_MATRIX.md` for the full image inventory and content status table.
 
 
-## Print layout — A4 format (2026-06-07 rebuild)
+## Print layout — A4 WYSIWYG architecture (2026-06-07)
 
-Print output has been fully rebuilt as standalone A4 files. Key decisions and fixes:
+Print output is standalone A4 HTML. Key decisions and architecture:
 
-| Item | Decision / Fix |
-|------|---------------|
-| **Print target** | A4 portrait, 14mm margins (changed from A5 — A5 deferred as future premium booklet) |
-| **File architecture** | Two standalone HTML files — one per villa. No more combined print-in-digital-guide. |
-| **Shared stylesheet** | `oraya-print-a4.css` — used by both print files. No external dependencies. |
-| **Page 2 access support** | One compact block (`.pp-access-support`) instead of 4 separate boxes |
-| **Page 3** | Byblos file: 7 utilities (Wi-Fi, TV, AC, Hot Water, Kitchen, BBQ, Pool) |
-| **Page 3** | Mechmech file: 9 utilities (Wi-Fi, TV, Heating, Hot Water, Kitchen, BBQ, Fireplace, Winter Room, Pool) |
-| **Page 7 location** | Each file shows only its own villa's location — not both |
-| **Page number fix** | `position: fixed` removed from `.pp-page-number` — uses `margin-top: auto` in flex column |
-| **Image generation** | AI image generation is not available in this environment. Missing slots remain as CSS placeholders. |
+| Item | Decision |
+|------|----------|
+| **Print target** | A4 portrait, 14mm margins |
+| **File architecture** | Two standalone HTML files — one per villa. Shared stylesheet `oraya-print-a4.css`. |
+| **WYSIWYG principle** | **The browser view IS the print preview.** Screen and print use identical layout. |
+| **Dimensional units** | All layout in `mm` (page structure) and `pt` (typography/spacing). No `px` in layout. |
+| **`@media screen`** | Adds body background (`#ddd8cf`) and page box-shadow only. No layout changes. |
+| **`@media print`** | Removes review bar and prototype notice. No layout changes. |
+| **`.print-page` base** | `width: 210mm; height: 297mm; padding: 14mm` — defined once, identical on screen and print. |
+| **Hero bleed** | `margin: -14mm -14mm 0; width: 210mm` — bleeds to page edges in both contexts. |
+| **Image heights** | All in `mm` — same value renders same physical height on screen and in print. |
+| **Page 2 access support** | One compact `.pp-access-support` block |
+| **Page 3 Byblos** | 7 utilities: Wi-Fi, TV, AC, Hot Water, Kitchen, BBQ, Pool |
+| **Page 3 Mechmech** | 9 utilities: Wi-Fi, TV, Heating, Hot Water, Kitchen, BBQ, Fireplace, Winter Room, Pool |
+| **Page 7 location** | Each file shows only its own villa's location |
+| **Page number** | `margin-top: auto` in flex column. Never `position: fixed`. |
 
-**Expected print output:**
+**Expected output:**
 - Byblos: **7 pages** (Welcome · Arrival · Utilities · Using the Villa · Expectations · Checkout · Emergency)
-- Mechmech: **7 pages** (same structure, Mechmech-specific utilities and location)
+- Mechmech: **7 pages** (same structure, Mechmech-specific content)
 
-If any page overflows, reduce the image `max-height` constraints in the `@media print` block of `oraya-print-a4.css`.
+**If a page overflows:** Reduce the image `height` value in the relevant `.concept-img-wrap--*` rule in `oraya-print-a4.css` Section 14. The same reduction applies to both screen and print — this is correct WYSIWYG behaviour.
 
-**Print scaling fix (2026-06-07):** The initial A4 print output required manual 163% scale because `@page { margin: 14mm }` was combined with `width: 100%; height: auto` on `.print-page`. This caused the browser to use screen-layout dimensions as the print reference and scale content down to fit the 182mm content box. Fixed by using `@page { margin: 0 }` + `html, body { width: 210mm }` + `.print-page { width: 210mm; height: 297mm; padding: 14mm; box-sizing: border-box }`. The document is now exactly as wide as the paper — no browser scaling is applied.
+**Historical fixes:**
+- v1: 163% manual scale required — root cause: `@page { margin: 14mm }` + pixel-based `.print-page`. Fixed by `@page { margin: 0 }` + `width: 210mm` at base.
+- v2: Screen/print divergence — root cause: two separate layout systems (px screen vs mm/pt print in `@media print`). Fixed by WYSIWYG single-source architecture — all layout dimensions defined at base level in `mm`/`pt` only.
 
 ---
 
