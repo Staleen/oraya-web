@@ -1,0 +1,1048 @@
+/*
+ * ═══════════════════════════════════════════════════════════════════
+ * ORAYA PRINT GUIDE — A4 SHARED STYLESHEET
+ * Phase 16C · The Compendium · Design Prototype
+ *
+ * A4 portrait · 14mm margins · 7 pages per villa
+ * Used by:
+ *   oraya-guest-welcome-guide-print-byblos.html
+ *   oraya-guest-welcome-guide-print-mechmech.html
+ *
+ * DESIGN PROTOTYPE — NOT PRODUCTION.
+ * Review and confirmation use only.
+ * Do not distribute to guests until all placeholders are resolved.
+ * ═══════════════════════════════════════════════════════════════════
+ */
+
+
+/* ═══════════════════════════════════════════════════════
+   1. TOKENS
+   ═══════════════════════════════════════════════════════ */
+
+:root {
+  /* Brand palette — Oraya */
+  --gold:         #C5A46D;
+  --gold-faint:   rgba(197, 164, 109, 0.10);
+  --gold-soft:    rgba(197, 164, 109, 0.28);
+  --white:        #FFFFFF;
+  --beige:        #EAE3D9;
+  --beige-light:  #F5F1EB;
+  --charcoal:     #2E2E2E;
+  --midnight:     #1F2B38;
+  --muted:        #8a8070;
+  --muted-light:  rgba(138, 128, 112, 0.22);
+
+  /* Typography */
+  --font-serif: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-sans:  'Lato', system-ui, -apple-system, sans-serif;
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   2. RESET & BASE
+   ═══════════════════════════════════════════════════════ */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html { font-size: 16px; }
+
+body {
+  font-family: var(--font-sans);
+  color: var(--charcoal);
+  background: #ddd8cf;
+  padding: 32px 16px 64px;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  color: var(--midnight);
+  line-height: 1.25;
+}
+
+p  { line-height: 1.6; }
+ul, ol { padding-left: 1.25em; }
+li { margin-bottom: 2px; }
+a  { color: var(--midnight); text-decoration: none; }
+strong { font-weight: 700; }
+
+
+/* ═══════════════════════════════════════════════════════
+   3. PROTOTYPE NOTICE (screen only — hidden in print)
+   ═══════════════════════════════════════════════════════ */
+
+.prototype-notice {
+  max-width: 680px;
+  margin: 0 auto 20px;
+  background: var(--midnight);
+  color: rgba(255, 255, 255, 0.78);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  line-height: 1.5;
+}
+
+.prototype-notice__label {
+  display: inline-block;
+  background: var(--gold);
+  color: var(--midnight);
+  font-weight: 700;
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   4. PRINT PAGES — SCREEN PREVIEW CARDS
+   A4 aspect ratio: 210 × 297mm = 1 : 1.4142
+   At 620px wide → min-height 877px
+   ═══════════════════════════════════════════════════════ */
+
+.print-page {
+  width: 100%;
+  max-width: 620px;
+  min-height: 877px;
+  background: var(--white);
+  margin: 0 auto 32px;
+  padding: 36px 40px;
+  box-shadow: 0 2px 28px rgba(46, 46, 46, 0.16);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   5. TYPOGRAPHY UTILITIES
+   ═══════════════════════════════════════════════════════ */
+
+.label-small {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+.placeholder-inline {
+  color: #7a6340;
+  font-style: italic;
+}
+
+.placeholder-tag {
+  display: inline-block;
+  background: rgba(197, 164, 109, 0.18);
+  color: #7a6340;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   6. PAGE STRUCTURE — HEADER, RULE, CONTENT, PAGE NUMBER
+   ═══════════════════════════════════════════════════════ */
+
+.pp-page-header {
+  margin-bottom: 20px;
+}
+
+.pp-page-label {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 7px;
+}
+
+.pp-rule {
+  border: none;
+  border-top: 1px solid var(--gold);
+  margin: 0;
+}
+
+.pp-rule--light {
+  border: none;
+  border-top: 1px solid var(--gold-soft);
+  margin: 12px 0;
+}
+
+.pp-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pp-page-number {
+  font-family: var(--font-sans);
+  font-size: 9px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: center;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--muted-light);
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   7. PAGE 1 — WELCOME
+   ═══════════════════════════════════════════════════════ */
+
+/* Hero image — bleeds to page edge on screen */
+.pp-hero {
+  margin: -36px -40px 0;
+}
+
+.pp-welcome {
+  padding-top: 18px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.pp-brand__wordmark {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.36em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 10px;
+}
+
+.pp-villa-name {
+  font-family: var(--font-serif);
+  font-size: 26px;
+  color: var(--midnight);
+  margin: 14px 0 5px;
+  font-weight: 700;
+}
+
+.pp-guest-greeting {
+  font-family: var(--font-serif);
+  font-size: 13px;
+  color: var(--charcoal);
+  font-style: italic;
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+
+.pp-guest-name {
+  display: block;
+  font-size: 22px;
+  font-style: italic;
+  font-weight: 700;
+  color: var(--midnight);
+  margin-top: 2px;
+}
+
+.pp-stay-dates {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  color: var(--charcoal);
+  margin-bottom: 12px;
+}
+
+.pp-info-grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  margin: 10px 0;
+  align-items: start;
+}
+
+.pp-info-item {
+  font-family: var(--font-sans);
+}
+
+.pp-contacts {
+  background: var(--beige-light);
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.pp-contact-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  padding: 3px 0;
+}
+
+.pp-guide-note {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  color: var(--muted);
+  font-style: italic;
+  line-height: 1.5;
+  margin-top: auto;
+  padding-top: 8px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.pp-guide-note p { font-size: 10px; }
+
+
+/* ═══════════════════════════════════════════════════════
+   8. PAGE 2 — ARRIVAL & ACCESS
+   ═══════════════════════════════════════════════════════ */
+
+.pp-section-title {
+  font-family: var(--font-sans);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--charcoal);
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--muted-light);
+}
+
+.pp-section p,
+.pp-section li {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--charcoal);
+}
+
+.pp-checklist {
+  list-style: none;
+  padding: 0;
+  font-size: 11px;
+  color: var(--charcoal);
+  line-height: 1.7;
+}
+
+/* Arrival sequence — steps on left, keypad images on right */
+.pp-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.pp-two-col__left  { }
+.pp-two-col__right {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pp-numbered-steps {
+  counter-reset: step;
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.pp-numbered-steps li {
+  counter-increment: step;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--muted-light);
+  color: var(--charcoal);
+}
+
+.pp-numbered-steps li::before {
+  content: counter(step);
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--gold);
+  min-width: 14px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* Compact access support block — ONE block, not 4 boxes */
+.pp-access-support {
+  background: var(--beige-light);
+  border-left: 2px solid var(--gold);
+  padding: 10px 14px;
+}
+
+.pp-access-support__title {
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 7px;
+}
+
+.pp-access-support__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 11px;
+  color: var(--charcoal);
+  padding: 2px 0;
+  gap: 8px;
+  line-height: 1.45;
+}
+
+.pp-access-support__row em {
+  color: var(--muted);
+  font-style: italic;
+  font-size: 10px;
+}
+
+.pp-access-support__row strong {
+  white-space: nowrap;
+  color: var(--midnight);
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   9. PAGE 3 — UTILITIES GRID
+   ═══════════════════════════════════════════════════════ */
+
+.pp-utilities-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 11px;
+  flex: 1;
+}
+
+.pp-utility-item {
+  background: var(--beige-light);
+  padding: 10px 12px;
+}
+
+.pp-utility-item--wide {
+  grid-column: 1 / -1;
+}
+
+.pp-utility-title {
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--gold-soft);
+}
+
+.pp-utility-item p {
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--charcoal);
+  margin-top: 4px;
+}
+
+.pp-utility-item p + p {
+  margin-top: 3px;
+}
+
+.pp-utility-note {
+  font-size: 9.5px;
+  color: var(--muted);
+  font-style: italic;
+  margin-top: 4px;
+}
+
+.pp-utilities-safety {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  color: var(--muted);
+  font-style: italic;
+  padding-top: 8px;
+  border-top: 1px solid var(--muted-light);
+  margin-top: auto;
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   10. PAGE 4 — USING THE VILLA
+   ═══════════════════════════════════════════════════════ */
+
+.pp-expectations-notice {
+  background: var(--gold-faint);
+  border-left: 2px solid var(--gold);
+  padding: 8px 12px;
+  font-size: 11px;
+  color: var(--charcoal);
+  line-height: 1.5;
+}
+
+.pp-two-col--auto {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.pp-section--full {
+  grid-column: 1 / -1;
+}
+
+.pp-section-body {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--charcoal);
+  margin-top: 6px;
+}
+
+.pp-section-body + .pp-section-body {
+  margin-top: 4px;
+}
+
+.pp-amenity-strip {
+  display: flex;
+  gap: 6px;
+  margin: 5px 0 4px;
+}
+
+.pp-amenity-strip .concept-img-wrap {
+  flex: 1;
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   11. PAGE 5 — HOUSE EXPECTATIONS
+   ═══════════════════════════════════════════════════════ */
+
+.pp-expectations-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 11px;
+  flex: 1;
+}
+
+.pp-expectation-item {
+  background: var(--beige-light);
+  padding: 10px 12px;
+}
+
+.pp-expectation-title {
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--charcoal);
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--muted-light);
+}
+
+.pp-expectation-item p {
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--charcoal);
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   12. PAGE 6 — CHECKOUT
+   ═══════════════════════════════════════════════════════ */
+
+.pp-checkout-time {
+  text-align: center;
+  padding: 12px 0 10px;
+  border-bottom: 1px solid var(--gold-soft);
+  margin-bottom: 6px;
+}
+
+.pp-checkout-time .label-small {
+  margin-bottom: 4px;
+}
+
+.pp-checkout-time-value {
+  display: block;
+  font-family: var(--font-serif);
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--midnight);
+  letter-spacing: 0.03em;
+  margin-bottom: 6px;
+}
+
+.pp-checkout-note {
+  font-size: 10px;
+  color: var(--muted);
+  font-style: italic;
+  line-height: 1.5;
+  max-width: 380px;
+  margin: 0 auto;
+}
+
+.pp-checkout-list {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.pp-checkout-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--muted-light);
+}
+
+.pp-checkout-item__number {
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--gold);
+  min-width: 14px;
+  text-align: center;
+  padding-top: 2px;
+  flex-shrink: 0;
+}
+
+.pp-checkout-item__box {
+  width: 13px;
+  height: 13px;
+  border: 1.5px solid var(--muted);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.pp-checkout-item__content {
+  flex: 1;
+}
+
+.pp-checkout-item__content strong {
+  font-size: 11px;
+  font-family: var(--font-sans);
+  display: block;
+  margin-bottom: 2px;
+}
+
+.pp-checkout-item__content p {
+  font-size: 10.5px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.pp-farewell {
+  text-align: center;
+  padding: 12px 0 0;
+  font-family: var(--font-serif);
+  font-size: 12px;
+  font-style: italic;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   13. PAGE 7 — EMERGENCY & CONTACTS
+   ═══════════════════════════════════════════════════════ */
+
+.pp-contacts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 11px;
+}
+
+.pp-contact-section {
+  background: var(--beige-light);
+  padding: 10px 12px;
+}
+
+.pp-contact-section--emergency {
+  background: rgba(197, 164, 109, 0.08);
+  border: 1px solid var(--gold-soft);
+}
+
+.pp-contact-section-title {
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--muted-light);
+}
+
+.pp-contact-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--muted-light);
+  font-size: 11px;
+}
+
+.pp-contact-item:last-child {
+  border-bottom: none;
+}
+
+.pp-contact-label {
+  color: var(--muted);
+  font-size: 10.5px;
+}
+
+.pp-contact-value {
+  font-weight: 700;
+  font-size: 11px;
+  color: var(--midnight);
+  text-align: right;
+}
+
+.pp-booking-ref {
+  margin-top: auto;
+}
+
+.pp-booking-ref__inner {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding-top: 8px;
+}
+
+.pp-booking-ref__text {
+  flex: 1;
+}
+
+.pp-booking-ref__code {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--midnight);
+  margin: 4px 0;
+}
+
+.pp-booking-ref__note {
+  font-size: 10px;
+  color: var(--muted);
+  font-style: italic;
+  line-height: 1.4;
+}
+
+.pp-booking-ref__qr {
+  flex-shrink: 0;
+}
+
+.pp-last-brand {
+  text-align: center;
+  margin-top: 16px;
+}
+
+.pp-last-brand__url {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.10em;
+  margin-top: 2px;
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   14. CONCEPT IMAGE WRAPPERS
+   ═══════════════════════════════════════════════════════ */
+
+.concept-img-wrap {
+  position: relative;
+  overflow: hidden;
+  background: var(--beige);
+  display: block;
+  line-height: 0;
+}
+
+.concept-img {
+  width: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: center;
+}
+
+.concept-img-wrap--hero   .concept-img { height: 195px; }
+.concept-img-wrap--medium .concept-img { height: 130px; }
+.concept-img-wrap--small  .concept-img { height: 82px; }
+.concept-img-wrap--thumb  .concept-img { height: 108px; }
+.concept-img-wrap--micro  .concept-img { height: 58px; }
+
+.concept-img-label {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  background: rgba(31, 43, 56, 0.72);
+  color: rgba(255, 255, 255, 0.92);
+  font-family: var(--font-sans);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  pointer-events: none;
+  line-height: 1.4;
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   15. CSS IMAGE PLACEHOLDERS
+   ═══════════════════════════════════════════════════════ */
+
+.image-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 56px;
+  background: var(--beige-light);
+  border: 1.5px dashed rgba(138, 128, 112, 0.42);
+  gap: 4px;
+  text-align: center;
+  padding: 8px;
+}
+
+.image-placeholder::before {
+  content: '◻';
+  font-size: 15px;
+  color: var(--muted);
+  opacity: 0.45;
+}
+
+.image-placeholder__label {
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.image-placeholder__desc {
+  font-family: var(--font-sans);
+  font-size: 9px;
+  color: var(--muted);
+  font-style: italic;
+  line-height: 1.4;
+}
+
+.image-placeholder--small { min-height: 44px; }
+.image-placeholder--qr {
+  min-height: 64px;
+  width: 64px;
+  padding: 8px;
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   16. PRINT MEDIA
+   ═══════════════════════════════════════════════════════ */
+
+@media print {
+
+  @page {
+    size: A4 portrait;
+    margin: 14mm;
+  }
+
+  html, body {
+    background: white;
+    color: var(--charcoal);
+    font-size: 11pt;
+    line-height: 1.5;
+    padding: 0;
+  }
+
+  /* Hide prototype notice in print */
+  .prototype-notice {
+    display: none !important;
+  }
+
+  /* Each print page — keep flex so margin-top:auto works on page number */
+  .print-page {
+    width: 100%;
+    max-width: none;
+    min-height: 0;
+    height: auto;
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+    page-break-after: always;
+    break-after: page;
+    break-inside: avoid;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .print-page:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+
+  /* Hero — reset bleed margin, full width in print content area */
+  .pp-hero {
+    margin: 0;
+    width: 100%;
+  }
+
+  /* Welcome page padding */
+  .pp-welcome { padding-top: 8pt; }
+
+  /* Typography scaling */
+  .pp-brand__wordmark  { font-size: 9pt; letter-spacing: 0.30em; margin-bottom: 5pt; }
+  .pp-villa-name       { font-size: 20pt; margin: 8pt 0 4pt; }
+  .pp-guest-greeting   { font-size: 10.5pt; margin-bottom: 5pt; }
+  .pp-guest-name       { font-size: 16pt; }
+  .pp-stay-dates       { font-size: 9.5pt; margin-bottom: 7pt; }
+  .pp-checkout-time-value { font-size: 24pt; }
+
+  /* Content gaps compacted */
+  .pp-content            { gap: 7pt; }
+  .pp-utilities-grid     { gap: 5pt; }
+  .pp-expectations-grid  { gap: 5pt; }
+  .pp-contacts-grid      { gap: 5pt; }
+  .pp-two-col            { gap: 7pt; }
+  .pp-two-col--auto      { gap: 7pt; }
+  .pp-page-header        { margin-bottom: 8pt; }
+
+  /* Utility items */
+  .pp-utility-item       { padding: 5pt 7pt; }
+  .pp-utility-item p     { font-size: 9pt; line-height: 1.4; margin-top: 2pt; }
+  .pp-utility-note       { font-size: 8pt; }
+
+  /* Expectation items */
+  .pp-expectation-item   { padding: 5pt 7pt; }
+  .pp-expectation-item p { font-size: 9pt; line-height: 1.4; }
+
+  /* Contact sections */
+  .pp-contact-section    { padding: 5pt 7pt; }
+
+  /* Section text */
+  .pp-section p, .pp-section li   { font-size: 10pt; }
+  .pp-section-body                 { font-size: 10pt; }
+  .pp-numbered-steps li            { font-size: 10pt; padding: 3pt 0; }
+  .pp-access-support               { padding: 6pt 9pt; }
+  .pp-access-support__row          { font-size: 9.5pt; }
+
+  /* Checkout */
+  .pp-checkout-item                 { padding: 6pt 0; }
+  .pp-checkout-item__content strong { font-size: 10pt; }
+  .pp-checkout-item__content p      { font-size: 9.5pt; }
+  .pp-checkout-note                 { font-size: 8.5pt; }
+  .pp-farewell                      { font-size: 10pt; padding-top: 6pt; }
+
+  /* Info grid / contacts row */
+  .pp-info-grid    { margin: 6pt 0; gap: 7pt; }
+  .pp-contacts     { padding: 5pt 7pt; margin-bottom: 7pt; }
+  .pp-guide-note   { font-size: 8pt; }
+  .pp-guide-note p { font-size: 8pt; }
+
+  /* Label sizing */
+  .pp-page-label             { font-size: 7pt; }
+  .pp-section-title          { font-size: 7pt; }
+  .pp-utility-title          { font-size: 7pt; }
+  .pp-expectation-title      { font-size: 7pt; }
+  .pp-contact-section-title  { font-size: 7pt; }
+  .pp-access-support__title  { font-size: 7pt; }
+
+  /* Booking ref */
+  .pp-booking-ref__code { font-size: 11pt; }
+  .pp-booking-ref__note { font-size: 8pt; }
+  .pp-booking-ref__inner { gap: 10pt; padding-top: 6pt; }
+
+  /* CSS placeholder divs — extremely compact in print */
+  .image-placeholder {
+    min-height: 0;
+    max-height: 14pt;
+    padding: 2pt 5pt;
+    border: 0.5pt dashed rgba(138, 128, 112, 0.50);
+    gap: 2pt;
+    display: block;
+    text-align: left;
+  }
+  .image-placeholder::before  { display: none; }
+  .image-placeholder--small   { max-height: 12pt; }
+  .image-placeholder--qr {
+    max-height: 50pt;
+    min-height: 0;
+    width: 50pt;
+    padding: 5pt;
+    text-align: center;
+  }
+  .image-placeholder__label   { font-size: 7pt; }
+  .image-placeholder__desc    { display: none; }
+
+  /* Real concept images — height caps in mm */
+  .concept-img {
+    width: 100%;
+    display: block;
+    object-fit: cover;
+  }
+  .concept-img-wrap--hero   .concept-img { height: 50mm; max-height: 50mm; }
+  .concept-img-wrap--medium .concept-img { max-height: 28mm; }
+  .concept-img-wrap--small  .concept-img { max-height: 18mm; }
+  .concept-img-wrap--thumb  .concept-img { max-height: 20mm; }
+  .concept-img-wrap--micro  .concept-img { max-height: 12mm; }
+  .pp-amenity-strip .concept-img         { max-height: 12mm; }
+
+  .concept-img-label { font-size: 6pt; padding: 2pt 4pt; }
+
+  /* Page number — static flow at bottom of flex column */
+  /* NEVER use position:fixed — it corrupts all pages */
+  .pp-page-number {
+    position: static;
+    margin-top: auto;
+    padding-top: 5pt;
+    padding-bottom: 0;
+    border-top: 0.5pt solid rgba(138, 128, 112, 0.35);
+    font-size: 7.5pt;
+    text-align: center;
+  }
+
+  /* Checkout checkboxes in print — visible form boxes */
+  .pp-checkout-item__box {
+    width: 9pt;
+    height: 9pt;
+    border: 1pt solid #999;
+  }
+
+  /* Placeholder tags in print — no background */
+  .placeholder-tag {
+    background: none;
+    color: var(--charcoal);
+    padding: 0;
+    font-style: italic;
+  }
+
+  /* Suppress link URL printing */
+  a::after { content: none !important; }
+
+}

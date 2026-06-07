@@ -1,6 +1,6 @@
 # Open Questions — Phase 16C Guest Welcome Guide
 
-**Updated:** 2026-06-07 — final confirmation set applied + asset integration. 9 provided images integrated. Missing image prompts in `IMAGE_PROMPTS.md`.
+**Updated:** 2026-06-07 — final confirmation set applied + asset integration + A4 print rebuild. 9 provided images integrated. AI image generation unavailable in this environment — missing slots remain as CSS placeholders with prompts in `IMAGE_PROMPTS.md`.
 
 ---
 
@@ -53,7 +53,7 @@ The following items were resolved by the 2026-06-07 confirmation set and are now
 | Emergency — Removed | Fire (175), Civil Defense (125) not included | Removed per David's instruction |
 | Emergency — Medical / pharmacy | Approach | "For nearby medical or pharmacy guidance, contact Oraya Concierge." |
 | Emergency — Procedure | Confirmed wording | "Step outside and move away from the danger zone. Once safe, contact the appropriate emergency service and inform Oraya as soon as possible." |
-| Image policy | Approach | Concept images with discreet "Concept image" overlay label. 9 provided images integrated. Missing images documented with generation prompts in `IMAGE_PROMPTS.md`. |
+| Image policy | Approach | Concept images with discreet "Concept image" overlay label. 9 provided images integrated. Missing images documented with generation prompts in `IMAGE_PROMPTS.md`. AI image generation is not available in this environment — all missing slots remain as CSS placeholders. |
 
 ---
 
@@ -89,8 +89,8 @@ These are not content questions. They are technical tasks required to move from 
 | Integration item | Notes |
 |-----------------|-------|
 | Booking data personalization | In production, guest name, villa name, stay dates, and booking reference are sourced from the booking row and injected into the guide. The prototype uses static placeholders. |
-| Per-villa PDF generation | Each stay requires a correctly composed 7-page PDF: the correct Page 3 variant (Byblos or Mechmech), guest-specific data, and the booking QR code. Tooling TBD (e.g. Puppeteer, print-on-demand). |
-| Villa variant selection | Production must ensure the Byblos PDF contains Page 3A and the Mechmech PDF contains Page 3B. Both are included in the prototype for review. |
+| Per-villa PDF generation | Each stay requires a correctly composed 7-page PDF — Byblos or Mechmech — with guest-specific data and booking QR code. The standalone print HTML files are the design source for each. Tooling TBD (e.g. Puppeteer from `oraya-guest-welcome-guide-print-byblos.html` or `...-mechmech.html`). |
+| Villa variant selection | Two separate print files: `print-byblos.html` (Byblos utilities, Byblos location on Page 7) and `print-mechmech.html` (Mechmech utilities, Mechmech location on Page 7). No variant switching required — correct file per stay. |
 | QR code generation | Navigation QR (Maps link) and booking-view QR must be generated per stay. Maps links are confirmed. Booking-view link is already live at `/booking/view/[token]`. |
 | Guest portal integration | If the digital guide is served as a web page, it requires a signed guest-facing route (e.g. `/guest/guide/[token]`) and booking-row hydration. |
 | Access-code (PIN) delivery — Phase 16D | Gate and front-door PINs are delivered via a separate, confirmed-guest secure channel. This is Phase 16D scope — not part of this static prototype. |

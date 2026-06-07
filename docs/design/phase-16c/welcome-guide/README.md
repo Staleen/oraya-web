@@ -6,9 +6,11 @@ The Compendium is a two-mode guest welcome system for Oraya villa stays:
 
 1. **Digital guide** — a mobile-first journey rail sent to the guest before they travel. Eight sequential steps walk the guest from pre-departure through checkout. No app required; opens in any browser.
 
-2. **Printed in-villa manual** — a physical A5 booklet kept inside the villa. Seven pages. Print-ready via browser File → Print. Covers the same journey in print-optimised layout with more detail for reference during the stay.
+2. **Printed in-villa manual** — a physical A4 print guide kept inside the villa. Seven pages per villa. Print-ready via browser File → Print. Two standalone files — one per villa. Covers the same journey in print-optimised layout with more detail for reference during the stay.
 
-Both modes live in a single HTML file. The print media query hides the digital guide and renders only the print pages when the user prints, at true A5 dimensions.
+**Print target (2026-06-07 decision): A4 portrait, 14mm margins.** A5 format is deferred as a future premium booklet option.
+
+The digital guide and print guides are separate files. The digital guide (`oraya-guest-welcome-guide.html`) is screen-only. The print guides (`oraya-guest-welcome-guide-print-byblos.html` and `oraya-guest-welcome-guide-print-mechmech.html`) are standalone A4 print files with a shared stylesheet (`oraya-print-a4.css`).
 
 ---
 
@@ -27,28 +29,37 @@ Direction 2 was selected over the two alternatives because:
 
 ```
 docs/design/phase-16c/welcome-guide/
-├── README.md                         ← this file
-├── oraya-guest-welcome-guide.html    ← prototype (digital guide + print manual)
-├── oraya-guest-welcome-guide.css     ← all styles; no external CSS dependencies
-├── CONTENT_MATRIX.md                 ← content status per block
-└── OPEN_QUESTIONS.md                 ← items requiring David's input before production
+├── README.md                                        ← this file
+├── oraya-guest-welcome-guide.html                   ← digital guide prototype (screen only)
+├── oraya-guest-welcome-guide.css                    ← digital guide styles
+├── oraya-guest-welcome-guide-print-byblos.html      ← A4 print · Villa Byblos · 7 pages
+├── oraya-guest-welcome-guide-print-mechmech.html    ← A4 print · Villa Mechmech · 7 pages
+├── oraya-print-a4.css                               ← shared A4 print stylesheet
+├── assets/concept/                                  ← provided concept images
+├── CONTENT_MATRIX.md                                ← content status per block
+├── OPEN_QUESTIONS.md                                ← items requiring David's input
+└── IMAGE_PROMPTS.md                                 ← generation prompts for missing images
 ```
 
 ---
 
 ## How to review this prototype
 
-**In a browser:**
+**Digital guide (mobile-first):**
 1. Open `oraya-guest-welcome-guide.html` in Chrome, Safari, or Firefox.
 2. Resize to ~390px wide to see the mobile digital guide.
 3. Resize to 1024px+ to see the desktop layout.
-4. Scroll down past the digital guide to reach the print manual preview section.
+4. Scroll to the bottom to see the A4 print file links.
 
-**Print preview:**
-1. Open the file in a browser.
-2. File → Print (or Ctrl+P / Cmd+P).
-3. The digital guide disappears; the print manual renders as A5 pages.
-4. Set paper size to A5, margins to default or none.
+**A4 print — Villa Byblos:**
+1. Open `oraya-guest-welcome-guide-print-byblos.html` in a browser.
+2. Scroll to review all 7 pages as screen preview cards.
+3. File → Print (or Ctrl+P / Cmd+P) → set paper size A4, 100% scale, no additional margins.
+
+**A4 print — Villa Mechmech:**
+1. Open `oraya-guest-welcome-guide-print-mechmech.html` in a browser.
+2. Scroll to review all 7 pages as screen preview cards.
+3. File → Print (or Ctrl+P / Cmd+P) → set paper size A4, 100% scale, no additional margins.
 
 ---
 
@@ -86,23 +97,27 @@ Every piece of operational content in this prototype is classified one of three 
 See `CONTENT_MATRIX.md` for the full image inventory and content status table.
 
 
-## Print layout — known state after cleanup
+## Print layout — A4 format (2026-06-07 rebuild)
 
-The print layout was rebuilt as of this session to fix the following issues:
+Print output has been fully rebuilt as standalone A4 files. Key decisions and fixes:
 
-| Issue | Fix applied |
-|-------|-------------|
-| Page number corruption / overlap | Removed `position: fixed` from `.pp-page-number` in print CSS. Now uses normal flow with `margin-top: auto` in a flex column. |
-| Content overflow creating 12+ pages | Reduced placeholder `min-height` to near-zero in print; kept `display: flex` on `.print-page` in print for layout control. |
-| Extra pages from dense Page 3B | Image heights capped per class in print (`max-height: mm` constraints on `.concept-img`). |
-| Variant label artifacts | `::before` banners on `.print-page--byblos` and `.print-page--mechmech` are explicitly hidden in print. |
+| Item | Decision / Fix |
+|------|---------------|
+| **Print target** | A4 portrait, 14mm margins (changed from A5 — A5 deferred as future premium booklet) |
+| **File architecture** | Two standalone HTML files — one per villa. No more combined print-in-digital-guide. |
+| **Shared stylesheet** | `oraya-print-a4.css` — used by both print files. No external dependencies. |
+| **Page 2 access support** | One compact block (`.pp-access-support`) instead of 4 separate boxes |
+| **Page 3** | Byblos file: 7 utilities (Wi-Fi, TV, AC, Hot Water, Kitchen, BBQ, Pool) |
+| **Page 3** | Mechmech file: 9 utilities (Wi-Fi, TV, Heating, Hot Water, Kitchen, BBQ, Fireplace, Winter Room, Pool) |
+| **Page 7 location** | Each file shows only its own villa's location — not both |
+| **Page number fix** | `position: fixed` removed from `.pp-page-number` — uses `margin-top: auto` in flex column |
+| **Image generation** | AI image generation is not available in this environment. Missing slots remain as CSS placeholders. |
 
 **Expected print output:**
-- Byblos final: **7 pages** (Pages 1, 2, 3A, 4, 5, 6, 7)
-- Mechmech final: **7 pages** (Pages 1, 2, 3B, 4, 5, 6, 7)
-- Review prototype (browser): **8 page blocks visible on screen** (both Page 3 variants shown, clearly labelled)
+- Byblos: **7 pages** (Welcome · Arrival · Utilities · Using the Villa · Expectations · Checkout · Emergency)
+- Mechmech: **7 pages** (same structure, Mechmech-specific utilities and location)
 
-If any page still overflows slightly due to font rendering differences between browsers, reduce the content density on that specific page or reduce the image `max-height` further in the print CSS.
+If any page overflows, reduce the image `max-height` constraints in the `@media print` block of `oraya-print-a4.css`.
 
 ---
 

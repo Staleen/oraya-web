@@ -1,6 +1,6 @@
 # Content Matrix — Phase 16C Guest Welcome Guide
 
-**Updated:** 2026-06-07 — final David confirmation set applied. Asset integration complete (provided images integrated; missing images documented in `IMAGE_PROMPTS.md`).
+**Updated:** 2026-06-07 — final David confirmation set applied. Asset integration complete. A4 print rebuild complete: standalone print files created for Byblos and Mechmech. Missing image prompts in `IMAGE_PROMPTS.md`.
 
 Status key:
 - **Confirmed** — approved content; shown in the guide
@@ -219,7 +219,7 @@ Status key:
 | 15 | Winter room | Mechmech | `winter-room-concept.jpg` | Prompt-only | Step 6 digital · Page 3B |
 | 16 | Bathrooms / towels | Both | `mechmech-04.png` | Provided concept image | Page 4 bathrooms |
 | 17 | Bathrooms / toiletries | Both | `mechmech-06.png` | Provided concept image | Page 4 bathrooms |
-| 18 | Hospitality detail / robe | Both | `mechmech-02.png` | Provided concept image | Step 7 digital — hospitality mood |
+| 18 | Hospitality detail / robe | Both | `mechmech-02.png` | Provided concept image | Step 7 digital — hospitality mood · Print Page 1 welcome detail (both villas) |
 | 19 | Garbage bins | Both | `garbage-bins-concept.jpg` | Prompt-only | Page 4 garbage section |
 | 20 | Map (static or embedded) | Both | — | Future integration | Generated from confirmed Maps links |
 | 21 | Navigation QR | Both | — | Future integration | Generated from confirmed Maps links |

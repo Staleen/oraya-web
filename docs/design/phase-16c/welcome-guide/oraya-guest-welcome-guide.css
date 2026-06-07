@@ -1629,18 +1629,29 @@ strong {
 
 /* ═══════════════════════════════════════════════════════
    9. PRINT MEDIA
+   ═══════════════════════════════════════════════════════
+   NOTE (2026-06-07): Print output has moved to standalone
+   A4 files. This file (oraya-guest-welcome-guide.html) is
+   the digital guide only. The print-manual section has been
+   removed. Print CSS below is retained as reference but is
+   largely superseded by oraya-print-a4.css.
+
+   For printing, use the standalone files:
+   · oraya-guest-welcome-guide-print-byblos.html
+   · oraya-guest-welcome-guide-print-mechmech.html
    ═══════════════════════════════════════════════════════ */
 
 @media print {
 
   @page {
-    size: A5 portrait;
-    margin: 15mm 15mm 12mm 15mm;
+    size: A4 portrait;
+    margin: 14mm;
   }
 
-  /* Hide everything that is screen-only */
+  /* Hide everything — this file is digital-guide only */
   .prototype-notice,
   .digital-guide,
+  .print-files-notice,
   .pm-header,
   .screen-only {
     display: none !important;

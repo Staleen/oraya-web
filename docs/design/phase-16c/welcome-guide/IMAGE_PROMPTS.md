@@ -1,6 +1,6 @@
 # Image Prompts — Phase 16C Guest Welcome Guide
 
-**Updated:** 2026-06-07
+**Updated:** 2026-06-07 (A4 print rebuild — print files are now standalone per villa)
 
 These are generation-ready prompts for the remaining concept image slots that could not be filled from the provided asset set. Each prompt is suitable for a photorealistic AI image generator (e.g. Midjourney, DALL·E, Firefly, Stable Diffusion).
 
@@ -8,6 +8,8 @@ All generated images must:
 - Be saved to `docs/design/phase-16c/welcome-guide/assets/concept/` using the filename below.
 - Carry a small discreet "Concept image" label in the HTML/CSS overlay.
 - Be replaced with approved final villa photography before any guest distribution.
+
+**AI image generation was not available in the current session.** All missing slots below remain as CSS placeholders. Generate these externally (Midjourney, DALL·E, Firefly, etc.) using the prompts, then save to `assets/concept/` and integrate into the print HTML files (`oraya-guest-welcome-guide-print-byblos.html` and `oraya-guest-welcome-guide-print-mechmech.html`).
 
 ---
 
