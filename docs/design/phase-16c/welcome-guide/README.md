@@ -38,7 +38,8 @@ docs/design/phase-16c/welcome-guide/
 ├── assets/concept/                                  ← provided concept images
 ├── CONTENT_MATRIX.md                                ← content status per block
 ├── OPEN_QUESTIONS.md                                ← items requiring David's input
-└── IMAGE_PROMPTS.md                                 ← generation prompts for missing images
+├── IMAGE_PROMPTS.md                                 ← generation prompts for missing images
+└── IMAGE_CREDITS.md                                 ← image sources, licenses, concept-only status
 ```
 
 ---
@@ -118,6 +119,8 @@ Print output has been fully rebuilt as standalone A4 files. Key decisions and fi
 - Mechmech: **7 pages** (same structure, Mechmech-specific utilities and location)
 
 If any page overflows, reduce the image `max-height` constraints in the `@media print` block of `oraya-print-a4.css`.
+
+**Print scaling fix (2026-06-07):** The initial A4 print output required manual 163% scale because `@page { margin: 14mm }` was combined with `width: 100%; height: auto` on `.print-page`. This caused the browser to use screen-layout dimensions as the print reference and scale content down to fit the 182mm content box. Fixed by using `@page { margin: 0 }` + `html, body { width: 210mm }` + `.print-page { width: 210mm; height: 297mm; padding: 14mm; box-sizing: border-box }`. The document is now exactly as wide as the paper — no browser scaling is applied.
 
 ---
 

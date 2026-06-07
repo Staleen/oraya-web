@@ -867,17 +867,33 @@ strong { font-weight: 700; }
 
 @media print {
 
+  /* ─── @page margin: 0 ──────────────────────────────────────────
+     The page content area is the full 210×297mm sheet.
+     Inner content margin is owned by .print-page { padding: 14mm }.
+     DO NOT combine @page margin with .print-page padding — that
+     double-counts space and forces the browser to scale content
+     down below 100% (root cause of the 163% workaround).
+  ─────────────────────────────────────────────────────────────── */
   @page {
     size: A4 portrait;
-    margin: 14mm;
+    margin: 0;
   }
 
+  /* ─── Force document width to physical A4 ──────────────────────
+     With @page margin:0 the paper is 210mm wide.
+     Setting html/body to 210mm tells the print renderer the
+     document is exactly as wide as the paper → no scaling applied.
+     Without this, the renderer may use screen-layout width as
+     the reference and scale it down to fit 210mm.
+  ─────────────────────────────────────────────────────────────── */
   html, body {
-    background: white;
-    color: var(--charcoal);
+    width: 210mm;
+    margin: 0;
+    padding: 0;
+    background: #fff;
+    color: #2E2E2E;
     font-size: 11pt;
     line-height: 1.5;
-    padding: 0;
   }
 
   /* Hide prototype notice in print */
@@ -885,21 +901,32 @@ strong { font-weight: 700; }
     display: none !important;
   }
 
-  /* Each print page — keep flex so margin-top:auto works on page number */
+  /* ─── Each print page — physical A4 sheet ──────────────────────
+     width: 210mm + height: 297mm = one exact A4 page.
+     padding: 14mm provides the inner content margin.
+     box-sizing: border-box so padding is inside the 210×297mm box.
+     overflow: hidden clips any overflow — no extra pages.
+     display: flex + flex-direction: column keeps margin-top:auto
+     working for the page number at the bottom.
+  ─────────────────────────────────────────────────────────────── */
   .print-page {
-    width: 100%;
+    width: 210mm;
+    height: 297mm;
+    min-height: 297mm;
     max-width: none;
-    min-height: 0;
-    height: auto;
+    max-height: none;
     margin: 0;
-    padding: 0;
+    padding: 14mm;
+    box-sizing: border-box;
     box-shadow: none;
-    page-break-after: always;
-    break-after: page;
-    break-inside: avoid;
+    border: none;
+    transform: none;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    background: #fff;
+    page-break-after: always;
+    break-after: page;
   }
 
   .print-page:last-child {
@@ -907,24 +934,27 @@ strong { font-weight: 700; }
     break-after: auto;
   }
 
-  /* Hero — reset bleed margin, full width in print content area */
+  /* ─── Hero image — bleed to physical page edges ─────────────────
+     Undo the 14mm content padding so the hero image touches all
+     edges at the top of the page. width: 210mm fills the full sheet.
+  ─────────────────────────────────────────────────────────────── */
   .pp-hero {
-    margin: 0;
-    width: 100%;
+    margin: -14mm -14mm 0;
+    width: 210mm;
   }
 
-  /* Welcome page padding */
-  .pp-welcome { padding-top: 8pt; }
+  /* Welcome page — reduce gap after hero */
+  .pp-welcome { padding-top: 6pt; }
 
-  /* Typography scaling */
-  .pp-brand__wordmark  { font-size: 9pt; letter-spacing: 0.30em; margin-bottom: 5pt; }
-  .pp-villa-name       { font-size: 20pt; margin: 8pt 0 4pt; }
-  .pp-guest-greeting   { font-size: 10.5pt; margin-bottom: 5pt; }
+  /* ─── Typography ────────────────────────────────────────────── */
+  .pp-brand__wordmark  { font-size: 9pt; letter-spacing: 0.30em; margin-bottom: 4pt; }
+  .pp-villa-name       { font-size: 20pt; margin: 6pt 0 3pt; }
+  .pp-guest-greeting   { font-size: 10.5pt; margin-bottom: 4pt; }
   .pp-guest-name       { font-size: 16pt; }
-  .pp-stay-dates       { font-size: 9.5pt; margin-bottom: 7pt; }
+  .pp-stay-dates       { font-size: 9.5pt; margin-bottom: 6pt; }
   .pp-checkout-time-value { font-size: 24pt; }
 
-  /* Content gaps compacted */
+  /* ─── Layout gaps ───────────────────────────────────────────── */
   .pp-content            { gap: 7pt; }
   .pp-utilities-grid     { gap: 5pt; }
   .pp-expectations-grid  { gap: 5pt; }
@@ -933,39 +963,34 @@ strong { font-weight: 700; }
   .pp-two-col--auto      { gap: 7pt; }
   .pp-page-header        { margin-bottom: 8pt; }
 
-  /* Utility items */
+  /* ─── Component sizing ──────────────────────────────────────── */
   .pp-utility-item       { padding: 5pt 7pt; }
   .pp-utility-item p     { font-size: 9pt; line-height: 1.4; margin-top: 2pt; }
   .pp-utility-note       { font-size: 8pt; }
 
-  /* Expectation items */
   .pp-expectation-item   { padding: 5pt 7pt; }
   .pp-expectation-item p { font-size: 9pt; line-height: 1.4; }
 
-  /* Contact sections */
   .pp-contact-section    { padding: 5pt 7pt; }
 
-  /* Section text */
   .pp-section p, .pp-section li   { font-size: 10pt; }
   .pp-section-body                 { font-size: 10pt; }
   .pp-numbered-steps li            { font-size: 10pt; padding: 3pt 0; }
   .pp-access-support               { padding: 6pt 9pt; }
   .pp-access-support__row          { font-size: 9.5pt; }
 
-  /* Checkout */
   .pp-checkout-item                 { padding: 6pt 0; }
   .pp-checkout-item__content strong { font-size: 10pt; }
   .pp-checkout-item__content p      { font-size: 9.5pt; }
   .pp-checkout-note                 { font-size: 8.5pt; }
   .pp-farewell                      { font-size: 10pt; padding-top: 6pt; }
 
-  /* Info grid / contacts row */
   .pp-info-grid    { margin: 6pt 0; gap: 7pt; }
   .pp-contacts     { padding: 5pt 7pt; margin-bottom: 7pt; }
   .pp-guide-note   { font-size: 8pt; }
   .pp-guide-note p { font-size: 8pt; }
 
-  /* Label sizing */
+  /* ─── Label sizing ──────────────────────────────────────────── */
   .pp-page-label             { font-size: 7pt; }
   .pp-section-title          { font-size: 7pt; }
   .pp-utility-title          { font-size: 7pt; }
@@ -973,12 +998,12 @@ strong { font-weight: 700; }
   .pp-contact-section-title  { font-size: 7pt; }
   .pp-access-support__title  { font-size: 7pt; }
 
-  /* Booking ref */
-  .pp-booking-ref__code { font-size: 11pt; }
-  .pp-booking-ref__note { font-size: 8pt; }
+  /* ─── Booking ref ───────────────────────────────────────────── */
+  .pp-booking-ref__code  { font-size: 11pt; }
+  .pp-booking-ref__note  { font-size: 8pt; }
   .pp-booking-ref__inner { gap: 10pt; padding-top: 6pt; }
 
-  /* CSS placeholder divs — extremely compact in print */
+  /* ─── CSS image placeholders — extremely compact in print ───── */
   .image-placeholder {
     min-height: 0;
     max-height: 14pt;
@@ -1000,13 +1025,13 @@ strong { font-weight: 700; }
   .image-placeholder__label   { font-size: 7pt; }
   .image-placeholder__desc    { display: none; }
 
-  /* Real concept images — height caps in mm */
+  /* ─── Real concept images — height caps in mm ───────────────── */
   .concept-img {
     width: 100%;
     display: block;
     object-fit: cover;
   }
-  .concept-img-wrap--hero   .concept-img { height: 50mm; max-height: 50mm; }
+  .concept-img-wrap--hero   .concept-img { height: 52mm; max-height: 52mm; }
   .concept-img-wrap--medium .concept-img { max-height: 28mm; }
   .concept-img-wrap--small  .concept-img { max-height: 18mm; }
   .concept-img-wrap--thumb  .concept-img { max-height: 20mm; }
@@ -1015,8 +1040,11 @@ strong { font-weight: 700; }
 
   .concept-img-label { font-size: 6pt; padding: 2pt 4pt; }
 
-  /* Page number — static flow at bottom of flex column */
-  /* NEVER use position:fixed — it corrupts all pages */
+  /* ─── Page number — static flow at bottom of flex column ───────
+     margin-top: auto pushes it to the very bottom.
+     NEVER use position:fixed — that repeats it on every page
+     and causes all page numbers to overlap and corrupt.
+  ─────────────────────────────────────────────────────────────── */
   .pp-page-number {
     position: static;
     margin-top: auto;
@@ -1027,22 +1055,22 @@ strong { font-weight: 700; }
     text-align: center;
   }
 
-  /* Checkout checkboxes in print — visible form boxes */
+  /* ─── Checkout checkboxes — visible print form boxes ───────── */
   .pp-checkout-item__box {
     width: 9pt;
     height: 9pt;
     border: 1pt solid #999;
   }
 
-  /* Placeholder tags in print — no background */
+  /* ─── Placeholder tags — plain italic in print ──────────────── */
   .placeholder-tag {
     background: none;
-    color: var(--charcoal);
+    color: #2E2E2E;
     padding: 0;
     font-style: italic;
   }
 
-  /* Suppress link URL printing */
+  /* ─── Suppress URL printing on links ────────────────────────── */
   a::after { content: none !important; }
 
 }
