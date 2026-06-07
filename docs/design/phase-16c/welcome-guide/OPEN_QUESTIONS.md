@@ -1,198 +1,245 @@
 # Open Questions — Phase 16C Guest Welcome Guide
 
-Items below are blocked on David's input before the guide can be shown to any guest. Grouped by topic. Nothing has been assumed or invented in the prototype.
+**Updated:** 2026-06-07 — reorganized after David's 62-point confirmation set.
 
 ---
 
-## 1. Access & Arrival
+## Section 1 — Answered by David
 
-**Q1.1 — Villa addresses**
-What is the full street address of each villa?
-- Villa Byblos address: [required]
-- Villa Mechmech address: [required]
+The following questions were resolved by the 2026-06-07 confirmation set. The prototype has been updated to reflect these answers.
 
+| # | Question | David's answer | Applied in prototype |
+|---|----------|---------------|----------------------|
+| D1 | Approved design direction? | Direction 2 — "The Compendium" | ✓ |
+| D2 | Digital + print dual-mode? | Yes — digital-first before arrival, print inside villa | ✓ |
+| D3 | Locked 7-page print structure? | Confirmed | ✓ |
+| D4 | Digital journey follows: pre-departure → arrival → villa use → checkout? | Confirmed | ✓ |
+| D5 | Two villas feel like one Oraya family (not separate brands)? | Confirmed | ✓ |
+| D6 | Cover hierarchy: Oraya brand → villa name → guest name → dates? | Confirmed | ✓ |
+| D7 | Keep all sensitive values as placeholders in static prototype? | Confirmed | ✓ |
+| D8 | Same 7-step arrival sequence for both villas unless villa-specific differences provided later? | Confirmed | ✓ |
+| D9 | Separate gate PIN and front-door PIN? | Confirmed | ✓ |
+| D10 | No actual PINs in prototype? | Confirmed | ✓ |
+| D11 | PIN placeholder format? | `[Gate PIN — provided before arrival]` / `[Front-door PIN — provided before arrival]` | ✓ |
+| D12 | Access-code delivery approach finalized? | No — mark as future Phase 16D integration | ✓ |
+| D13 | Gate/PIN/access troubleshoot approach? | Direct to contact Oraya — no invented reset steps | ✓ |
+| D14 | Full villa addresses provided? | No — remain D | ✓ |
+| D15 | GPS coordinates provided? | No — remain D | ✓ |
+| D16 | Map and GPS QR placeholders stay? | Yes | ✓ |
+| D17 | Street addresses invented? | No | ✓ |
+| D18 | Parking wording confirmed (generic)? | "After the gate opens, park in the designated villa parking area." | ✓ |
+| D19 | Specific parking location confirmed? | No — remain D | ✓ |
+| D20 | Late arrival procedure finalized? | No — use generic: "If arriving late or unable to access the villa, contact Oraya support." | ✓ |
+| D21 | Support hours confirmed? | No — remain D | ✓ |
+| D22 | WhatsApp concierge number confirmed? | No — remain D | ✓ |
+| D23 | Caretaker name / number confirmed? | No — remain D | ✓ |
+| D24 | Villa Byblos utility sections confirmed (7 items)? | Wi-Fi · Kitchen · BBQ · TV · AC · Hot Water · Pool — confirmed as sections | ✓ |
+| D25 | Byblos utility operational details confirmed? | No — all remain D (Wi-Fi, AC, hot water, BBQ, kitchen, TV, pool) | ✓ |
+| D26 | Call Byblos pool "heated"? | No — do not reference "heated" until confirmed separately | ✓ |
+| D27 | Villa Mechmech utility sections confirmed (7 items)? | Wi-Fi · Kitchen · BBQ · TV · Heating · Fireplace · Winter Room — confirmed as sections | ✓ |
+| D28 | Mechmech utility operational details confirmed? | No — all remain D | ✓ |
+| D29 | Reference fireplace / winter room as Mechmech features? | Yes — may be referenced as features, operating instructions remain D | ✓ |
+| D30 | Invent fireplace fuel, ignition, heating controls? | No | ✓ |
+| D31 | Pool usage in guide? | Yes — pool usage belongs | ✓ |
+| D32 | Pool cover instructions confirmed? | No — use `[Pool cover instructions — Requires David Confirmation]` | ✓ |
+| D33 | Pool cover at both villas? | Not confirmed — do not claim at both villas | ✓ |
+| D34 | Kitchen / BBQ / TV / Garbage as guide sections? | Yes — keep as practical sections | ✓ |
+| D35 | Invent appliance brands, burner steps, gas valves, bin locations? | No | ✓ |
+| D36 | Safety note for equipment? | "If something does not work as expected, contact Oraya before attempting a fix." | ✓ |
+| D37 | House expectations: confirmed 6 categories? | Visitors · Restricted areas · Smoking · Pool safety · Children · Property care | ✓ |
+| D38 | Add quiet hours, no music, parties, fines, penalties? | No — hospitality-led tone, no legalistic rules invented | ✓ |
+| D39 | Each expectation category detail? | `[Policy detail — Requires David Confirmation]` | ✓ |
+| D40 | Checkout checklist structure confirmed (8 items)? | Yes — Dishes · Garbage · Pool cover · Lights · AC/Heating · Doors · Windows · Final lock-up | ✓ |
+| D41 | Checkout time confirmed? | No — `[Checkout time — Requires David Confirmation]` | ✓ |
+| D42 | Late checkout process confirmed? | No — generic: "may be available on request, contact Oraya via WhatsApp" | ✓ |
+| D43 | Invent checkout penalties or timing rules? | No | ✓ |
+| D44 | Emergency page structure confirmed (10+ items)? | Yes — structure confirmed | ✓ |
+| D45 | Include public emergency numbers (140, 1876, 112, 175, 125) in prototype? | No — all must remain D until David confirms exact values for guest distribution | ✓ |
+| D46 | Image placeholder blocks acceptable in prototype? | Yes — continue using placeholder blocks | ✓ |
+| D47 | Use stock/unrelated luxury imagery? | No | ✓ |
+| D48 | Use website / dashboard / admin screenshots? | No | ✓ |
+| D49 | Confirmed required image list (15 subject types)? | Yes — exterior, gate, gate keypad, front-door keypad, kitchen (×2), BBQ (×2), pool (Byblos), bathroom, TV/entertainment, fireplace (Mechmech), winter room (Mechmech), garbage/bins, emergency card | ✓ |
+| D50 | Connect to booking data in this prototype? | No — static only | ✓ |
+| D51 | PDF export in this prototype? | No | ✓ |
+| D52 | Guest portal integration in this prototype? | No | ✓ |
+| D53 | Backend routes in this prototype? | No | ✓ |
+| D54 | Smart-lock / PIN automation in this prototype? | No | ✓ |
+| D55 | WhatsApp / Butler flow changes in this prototype? | No | ✓ |
+
+---
+
+## Section 2 — Still Requires David Confirmation
+
+Items below have not been answered. They remain marked as placeholders in the prototype. No values have been invented.
+
+### 2A. Access & Arrival
+
+**Q1 — Villa addresses**
+Full street address for Villa Byblos and Villa Mechmech.
 *Blocks: digital step 2, print p. 1, navigation QR code.*
 
-**Q1.2 — GPS coordinates**
-What are the GPS coordinates for each villa? (Needed to generate the navigation QR code and static map image.)
-- Villa Byblos: [required]
-- Villa Mechmech: [required]
-
+**Q2 — GPS coordinates**
+GPS coordinates for each villa.
 *Blocks: digital step 2, print p. 1 — map and QR.*
 
-**Q1.3 — Parking**
-Where should guests park at each villa? How many vehicles fit? Any restrictions (vehicle type, size)?
-- Villa Byblos: [required]
-- Villa Mechmech: [required]
+**Q3 — Parking (per villa)**
+Exact parking location, vehicle capacity, any restrictions (vehicle type, size) — per villa.
+*Blocks: digital step 4, print p. 2 specific section.*
 
-*Blocks: digital step 4, print p. 2.*
+**Q4 — Late arrival — specific procedure**
+Is there a caretaker on call? Is there an emergency contact for after-hours issues? What are the hours?
+*Blocks: digital step 5 troubleshoot, print p. 2.*
 
-**Q1.4 — Late arrival procedure**
-What should a guest do if they arrive late (after a certain hour)? Is there a caretaker on call? Is there an emergency contact for after-hours access issues?
+**Q5 — Emergency caretaker**
+Caretaker name and contact number.
+*Blocks: print p. 2 troubleshoot, print p. 7.*
 
-*Blocks: digital step 5 (troubleshoot), print p. 2.*
+### 2B. Contacts
 
-**Q1.5 — Emergency caretaker contact**
-Who should a guest call if they cannot access the villa and cannot reach Oraya via WhatsApp? Name and number.
+**Q6 — Oraya WhatsApp concierge number**
+The WhatsApp number guests should contact for support.
+*Blocks: digital steps 1, 3, 5, 6, 7, 8; print pp. 1, 2, 4, 7.*
 
-*Blocks: print p. 2 troubleshoot, print p. 7 emergency contacts.*
+**Q7 — Support hours**
+When is the concierge available via WhatsApp?
+*Blocks: print p. 7.*
 
----
+### 2C. Utilities — Villa Byblos
 
-## 2. Utilities — Villa Byblos
+**Q8 — AC / Cooling**
+System type, control location, thermostat or zone notes.
 
-**Q2.1 — AC / Cooling — Byblos**
-What type of air conditioning system does Villa Byblos have? Where are the controls / remote? Any thermostat or zone notes a guest should know?
+**Q9 — Hot water**
+Wait time, fuel type (electric / gas), any reset procedure notes.
 
-**Q2.2 — Hot water — Byblos**
-Is there any warm-up wait time for hot water? Electric or gas? Any notes guests need to know (e.g. boiler reset, limited tank, solar backup)?
+**Q10 — Pool**
+Pool access procedure, any usage notes. Is the pool heated? (Do not call it "heated" in the guide until this is answered.)
 
-**Q2.3 — Pool — Byblos**
-How does the heated pool work? Is there a control panel? Where is the cover and how is it operated? Any restriction on hours of use? Is the pool always accessible or does it need to be switched on?
+**Q11 — Pool cover**
+Does a pool cover exist at Villa Byblos? If yes: how to remove and replace it.
 
-**Q2.4 — Kitchen — Byblos**
-What type of hob (gas, induction, electric)? What appliances are in the kitchen? Anything guests must or must not do when using the kitchen?
+**Q12 — Kitchen**
+Hob type (gas / induction / electric), appliances, any important usage notes.
 
-**Q2.5 — BBQ — Byblos**
-Where is the BBQ located? Gas or charcoal? Step-by-step ignition and shutdown. Who is responsible for cleaning?
+**Q13 — BBQ**
+Location, fuel type, ignition steps, shutdown steps, cleaning responsibility.
 
-**Q2.6 — TV / Entertainment — Byblos**
-How does the TV work? Is it a smart TV? Any streaming accounts provided? Remote location and basic operation.
+**Q14 — TV / Entertainment**
+Smart TV operation, streaming accounts if provided, remote basics.
 
----
+### 2D. Utilities — Villa Mechmech
 
-## 3. Utilities — Villa Mechmech
+**Q15 — Hot water**
+Same questions as Q9 for Mechmech.
 
-**Q3.1 — Heating — Mechmech**
-What type of heating system (radiator, underfloor, split AC/heat, or combination)? Where are the controls?
+**Q16 — Kitchen**
+Same questions as Q12 for Mechmech.
 
-**Q3.2 — Fireplace — Mechmech**
-Where is the fireplace? What fuel does it use — diesel or wood? Step-by-step ignition process. What should a guest do if it does not ignite? Safety notes.
+**Q17 — BBQ**
+Same questions as Q13 for Mechmech.
 
-**Q3.3 — Winter Room — Mechmech**
-What is the "winter room"? Where is it located? How do guests access it? What is it used for?
+**Q18 — TV / Entertainment**
+Same questions as Q14 for Mechmech.
 
-**Q3.4 — Hot water — Mechmech**
-Same questions as Q2.2 above, for Villa Mechmech.
+**Q19 — Heating system**
+System type (radiator / underfloor / split unit), control location, thermostat notes.
 
-**Q3.5 — Kitchen — Mechmech**
-Same questions as Q2.4 above, for Villa Mechmech.
+**Q20 — Fireplace**
+Fuel type (diesel or wood), step-by-step ignition, any safety notes.
 
-**Q3.6 — BBQ — Mechmech**
-Same questions as Q2.5 above, for Villa Mechmech.
+**Q21 — Winter Room**
+What is it, where is it located, how do guests access or use it?
 
-**Q3.7 — TV / Entertainment — Mechmech**
-Same questions as Q2.6 above, for Villa Mechmech.
+### 2E. Using the Villa
 
----
+**Q22 — Pool cover at Mechmech**
+Does Villa Mechmech have a pool cover? If yes, same instructions as Q11. If no, remove item 3 from the Mechmech checkout checklist.
 
-## 4. Using the Villa (both villas)
+**Q23 — Garbage**
+Bin locations inside the villa, outdoor bin or collection point location, any collection days.
 
-**Q4.1 — Bathrooms**
-Any specific notes guests should know about the bathrooms — shower operation, hot water wait time, towel policy, anything villa-specific?
+**Q24 — Bathrooms**
+Any specific notes: shower operation, hot water wait, towel policy.
 
-**Q4.2 — Garbage**
-Where are the bins inside the villa? Where is the outdoor bin or dumpster? Is there a collection schedule guests should be aware of?
+**Q25 — Restricted areas**
+Which areas of each property are off-limits to guests?
 
-**Q4.3 — Restricted areas**
-Which areas of the property are off-limits to guests? Utility rooms, staff quarters, equipment areas, neighboring boundaries?
+### 2F. House Expectations
 
-**Q4.4 — Shared or neighboring areas**
-Are there any shared paths, access routes, or neighboring properties guests should be aware of?
+**Q26 — Visitors & gatherings policy**
+Are additional visitors permitted during a stay? Is there a size or timing limit?
 
----
+**Q27 — Restricted areas policy**
+Which specific areas are off-limits (utility rooms, staff quarters, neighboring boundaries)?
 
-## 5. House Expectations
+**Q28 — Smoking policy**
+Is smoking permitted? If yes, where?
 
-**Q5.1 — Visitors**
-Are guests permitted to invite additional visitors during their stay? If yes, is there a maximum number? Any hours restriction?
+**Q29 — Pool safety guidelines**
+Any specific rules Oraya requires guests to follow at the pool?
 
-**Q5.2 — Events and gatherings**
-Are events, parties, or large gatherings permitted at the villas? If yes, under what conditions?
+**Q30 — Children & supervision guidance**
+Any specific guidance for family stays with young children?
 
-**Q5.3 — Smoking**
-Is smoking permitted? If yes, where (indoors / designated outdoor area only)?
+**Q31 — Property care expectations**
+How should guests treat furnishings, outdoor areas, and equipment during their stay?
 
-**Q5.4 — Pool safety rules**
-Does Oraya have any specific pool safety requirements for guests — supervision of children, no-diving zones, pool hours, etc.?
+### 2G. Checkout
 
-**Q5.5 — Children and supervision**
-Any guidance specific to family stays with young children (pool, kitchen access, supervision)?
+**Q32 — Checkout time**
+Standard checkout time.
 
-**Q5.6 — Property care expectations**
-How does Oraya expect guests to treat furnishings, outdoor areas, and equipment during their stay? What is the expectation for the villa condition at checkout?
+**Q33 — Late checkout process**
+Is late checkout available? What is the process and any cut-off or fee?
 
----
+### 2H. Emergency & Contacts
 
-## 6. Checkout
+**Q34 — Emergency services numbers for guest guide**
+Even though public Lebanese numbers (Ambulance 140, Red Cross 1876, Police 112, Fire 175, Civil Defense 125) are publicly known, David must confirm the exact values to print in the guest-facing guide before they appear.
 
-**Q6.1 — Checkout time**
-What is the standard checkout time?
+**Q35 — Nearest hospital**
+Name and address — near each villa.
 
-**Q6.2 — Late checkout policy**
-Is late checkout available on request? What is the process (WhatsApp request, fee, cut-off)?
+**Q36 — Nearest pharmacy**
+Name and address — near each villa.
 
----
+**Q37 — Property emergency procedure**
+If there is a gas smell, structural concern, flooding, or electrical failure — what should the guest do? Is there a shutoff procedure they need to know?
 
-## 7. Safety and Emergency
+### 2I. Photography
 
-**Q7.1 — Nearest hospital**
-What is the nearest hospital to each villa? Name and address.
-- Near Byblos: [required]
-- Near Mechmech: [required]
-
-**Q7.2 — Nearest pharmacy**
-What is the nearest pharmacy to each villa?
-- Near Byblos: [required]
-- Near Mechmech: [required]
-
-**Q7.3 — Property emergency procedure**
-If there is a property emergency (gas smell, structural concern, flooding, electrical failure) what should a guest do? Is there a shutoff procedure they need to know?
-
----
-
-## 8. Oraya Support / WhatsApp
-
-**Q8.1 — Oraya WhatsApp concierge number**
-What is the WhatsApp number guests should contact for support?
-
-*Blocks: digital steps 1, 3, 5, 7, 8; print pp. 1, 2, 7.*
-
-**Q8.2 — Support hours**
-What hours is the concierge available via WhatsApp?
+**Q38 — 20 required images (see CONTENT_MATRIX.md)**
+Villa-specific photography for all image placeholder slots. Priority: exterior hero (both villas), gate keypad (both), front-door keypad (both), kitchen (both), BBQ (both), pool (Byblos), fireplace (Mechmech).
 
 ---
 
-## 9. Photography
+## Section 3 — Future Production Integration Questions
 
-**Q9.1 — Villa photography for 20 required images**
-See `CONTENT_MATRIX.md` image inventory (items 1–19) for the full list. Key priority images:
+These questions do not block the design prototype. They are relevant when moving to production.
 
-- Signature exterior of each villa (print p. 1 hero)
-- Gate and gate keypad for each villa
-- Front-door keypad for each villa
-- Kitchen for each villa (correctly labeled — must match the right villa)
-- BBQ for each villa (correctly labeled)
-- Pool — Byblos
-- Fireplace — Mechmech
+**F1 — How is the digital guide delivered?**
+Via WhatsApp butler flow, email, or both? At what point before arrival? Is it a signed URL tied to the booking row?
 
-All images must be correctly attributed to the right villa. Substitution of unrelated images is not permitted.
+**F2 — How does the page hydrate guest data?**
+In production, guest name, villa name, dates, and booking reference must be sourced from the booking row. Which route serves the personalized guide? Is it a new `/guest/guide/[token]` route?
 
----
+**F3 — How is the print manual produced per stay?**
+Who generates the per-stay PDF? Does Oraya print in-house or use a print service? How is the correct Page 3 variant (Byblos / Mechmech) selected and output?
 
-## 10. Personalization & Production Workflow
+**F4 — PIN delivery to guest**
+How and when are the gate and front-door PINs sent to the guest? Via WhatsApp butler (Phase 16D confirmed-guest flow), via email, or via the booking-view page?
 
-**Q10.1 — Guest name personalisation**
-In the production version, the guest's name appears on the digital guide header and print page 1. Is the name sourced from the booking row (`bookings.member_id` → `auth.users.user_metadata.full_name`) or from a separate input?
+**F5 — Pool cover per-villa automation**
+The print and digital checkout sections include a pool cover item with a per-villa qualifier. In production, the correct variant should suppress the pool cover item for the villa that does not have one. How is this controlled?
 
-**Q10.2 — How is the digital guide delivered?**
-Via WhatsApp (butler flow), email, or both? Before or after booking confirmation?
+**F6 — Page 3 print variant selection**
+In the static prototype both Page 3A (Byblos) and Page 3B (Mechmech) are visible with screen labels. Production must output a single pre-composed PDF with only the correct variant included. What tooling generates this (Puppeteer, print-on-demand, manual)?
 
-**Q10.3 — How is the print manual produced?**
-Does Oraya print and bind it in-house, or is there a print service? Who generates the per-stay PDF (correct villa variant, guest name, dates)?
+**F7 — Booking QR code on print page 7**
+The booking view QR is generated per booking. What generates it — a server-side QR library at PDF render time, or a static image stored per booking?
 
-**Q10.4 — PIN delivery**
-How and when are the gate and front-door PINs sent to the guest? Via WhatsApp? At what point before arrival?
+**F8 — WhatsApp butler flow wiring**
+The confirmed-guest butler flow (Phase 16A/16D) will eventually surface access-code delivery and villa-specific information. When that integration is designed, this guide's content scope and the butler's scope should be reconciled to avoid duplication.
 
-**Q10.5 — Page 3 villa variant — manual or automated?**
-When printing the manual, the correct Page 3 variant (Byblos or Mechmech) must be selected. Is this a manual print process or should the production system produce a single pre-composed PDF per stay?
+**F9 — Smart-lock / PIN automation (Phase 16D)**
+Access-code delivery is explicitly out of scope for this prototype. Phase 16D defines how PINs are provided to guests before arrival. This guide's placeholder format (`[Gate PIN — provided before arrival]`) is the integration point.
