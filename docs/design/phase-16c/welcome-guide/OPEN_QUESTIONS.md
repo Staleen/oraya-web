@@ -1,6 +1,6 @@
 # Open Questions — Phase 16C Guest Welcome Guide
 
-**Updated:** 2026-06-07 — final confirmation set applied. Guide has no major content-blocking open items.
+**Updated:** 2026-06-07 — final confirmation set applied + asset integration. 9 provided images integrated. Missing image prompts in `IMAGE_PROMPTS.md`.
 
 ---
 
@@ -53,7 +53,7 @@ The following items were resolved by the 2026-06-07 confirmation set and are now
 | Emergency — Removed | Fire (175), Civil Defense (125) not included | Removed per David's instruction |
 | Emergency — Medical / pharmacy | Approach | "For nearby medical or pharmacy guidance, contact Oraya Concierge." |
 | Emergency — Procedure | Confirmed wording | "Step outside and move away from the danger zone. Once safe, contact the appropriate emergency service and inform Oraya as soon as possible." |
-| Image policy | Approach | Concept images with discreet "Concept image — replace with approved final image." label |
+| Image policy | Approach | Concept images with discreet "Concept image" overlay label. 9 provided images integrated. Missing images documented with generation prompts in `IMAGE_PROMPTS.md`. |
 
 ---
 
@@ -78,7 +78,7 @@ These are not blocking prototype review. They require an Oraya decision before a
 |------|---------------|
 | Diesel stove pricing | If Oraya wants to publish the additional diesel charge, confirm the amount or rate |
 | Late checkout pricing | If Oraya wants to publish discounted late-checkout or night-checkout rates, confirm the amounts |
-| Final image approval | Current images are concept images and must be replaced with approved villa photography before any guest distribution |
+| Final image approval | 9 provided concept images are integrated and labeled. 10 image slots remain prompt-only (no image file yet). Final guest distribution requires either approved villa photography or explicit David approval to use concept images as-is. |
 
 ---
 

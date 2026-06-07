@@ -1,11 +1,12 @@
 # Content Matrix — Phase 16C Guest Welcome Guide
 
-**Updated:** 2026-06-07 — final David confirmation set applied.
+**Updated:** 2026-06-07 — final David confirmation set applied. Asset integration complete (provided images integrated; missing images documented in `IMAGE_PROMPTS.md`).
 
 Status key:
 - **Confirmed** — approved content; shown in the guide
 - **Confirmed · sensitive value hidden** — fact confirmed; actual value is a placeholder by design (PINs)
-- **Concept image** — image placeholder present; requires approved villa photography before guest distribution
+- **Provided concept image** — image from David's provided asset set; integrated in guide with "Concept image" label; requires David approval before guest distribution
+- **Prompt-only** — no image available yet; prompt ready in `IMAGE_PROMPTS.md`; CSS slot shown in guide
 - **Business decision pending** — structure confirmed; value requires an Oraya commercial decision
 - **Future integration** — production system must supply this value (booking data, QR, PDF tooling)
 
@@ -199,26 +200,27 @@ Status key:
 
 ## Image inventory
 
-| # | Required subject | Villa | Status |
-|---|-----------------|-------|--------|
-| 1 | Signature exterior view | Byblos | Concept image |
-| 2 | Signature exterior view | Mechmech | Concept image |
-| 3 | Gate and driveway approach | Byblos | Concept image |
-| 4 | Gate and driveway approach | Mechmech | Concept image |
-| 5 | Gate keypad | Byblos | Concept image |
-| 6 | Gate keypad | Mechmech | Concept image |
-| 7 | Front-door keypad | Byblos | Concept image |
-| 8 | Front-door keypad | Mechmech | Concept image |
-| 9 | Villa entrance / foyer | Byblos | Concept image |
-| 10 | Villa entrance / foyer | Mechmech | Concept image |
-| 11 | Kitchen | Byblos | Concept image |
-| 12 | Kitchen | Mechmech | Concept image |
-| 13 | BBQ | Byblos | Concept image |
-| 14 | BBQ | Mechmech | Concept image |
-| 15 | Pool | Byblos | Concept image |
-| 16 | Fireplace / diesel stove | Mechmech | Concept image |
-| 17 | Winter room | Mechmech | Concept image |
-| 18 | Pool cover | TBD per villa | Concept image |
-| 19 | Map (static or embedded) | Both | Future integration — generated from confirmed Maps links |
-| 20 | Navigation QR | Both | Future integration — generated from confirmed Maps links |
-| 21 | Booking QR | Per guest | Future integration — generated from /booking/view/[token] |
+| # | Required subject | Villa | File | Status | Used in |
+|---|-----------------|-------|------|--------|---------|
+| 1 | Signature exterior view | Byblos | `byblos-exterior.png` | Provided concept image | Page 1 hero · Step 2 Byblos card |
+| 2 | Signature exterior view | Mechmech | `mechmech-exterior.png` | Provided concept image | Step 2 Mechmech card |
+| 3 | Gate and driveway approach | Both | `gate-driveway-concept.jpg` | Prompt-only | Step 3 digital · Page 2 print |
+| 4 | Gate keypad | Both | `gate-keypad-concept.jpg` | Prompt-only | Step 3 digital · Page 2 print |
+| 5 | Front-door keypad | Both | `front-door-keypad-concept.jpg` | Prompt-only | Step 5 digital · Page 2 print |
+| 6 | Villa entrance / foyer | Both | — | Prompt-only | Step 5 digital |
+| 7 | Kitchen | Byblos | `byblos-kitchen-concept.jpg` | Prompt-only | Step 6 digital · Page 3A · Page 4 |
+| 8 | Kitchen | Mechmech | `mechmech-kitchen-concept.jpg` | Prompt-only | Step 6 digital · Page 3B |
+| 9 | BBQ | Byblos | `byblos-bbq-concept.jpg` | Prompt-only | Step 6 digital · Page 3A · Page 4 |
+| 10 | BBQ | Mechmech | `mechmech-bbq-winter-concept.jpg` | Prompt-only | Step 6 digital · Page 3B |
+| 11 | Pool | Byblos | `byblos-pool-concept.jpg` | Prompt-only | Page 3A · Page 4 |
+| 12 | Pool | Mechmech | `mechmech-pool.png` | Provided concept image | Step 6 Mechmech pool · Page 3B pool |
+| 13 | Pool / outdoor area | Both | `mechmech-03-garden.png` | Provided concept image | Page 4 pool section |
+| 14 | Fireplace / diesel stove | Mechmech | `fireplace-diesel-stove-concept.jpg` | Prompt-only | Step 6 digital · Page 3B |
+| 15 | Winter room | Mechmech | `winter-room-concept.jpg` | Prompt-only | Step 6 digital · Page 3B |
+| 16 | Bathrooms / towels | Both | `mechmech-04.png` | Provided concept image | Page 4 bathrooms |
+| 17 | Bathrooms / toiletries | Both | `mechmech-06.png` | Provided concept image | Page 4 bathrooms |
+| 18 | Hospitality detail / robe | Both | `mechmech-02.png` | Provided concept image | Step 7 digital — hospitality mood |
+| 19 | Garbage bins | Both | `garbage-bins-concept.jpg` | Prompt-only | Page 4 garbage section |
+| 20 | Map (static or embedded) | Both | — | Future integration | Generated from confirmed Maps links |
+| 21 | Navigation QR | Both | — | Future integration | Generated from confirmed Maps links |
+| 22 | Booking QR | Per guest | — | Future integration | Generated from /booking/view/[token] |

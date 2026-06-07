@@ -216,6 +216,71 @@ strong {
   line-height: 1.4;
 }
 
+
+/* ─── Concept image wrapper (real images with label overlay) ─── */
+
+.concept-img-wrap {
+  position: relative;
+  overflow: hidden;
+  background: var(--beige);
+  display: block;
+  line-height: 0;
+}
+
+.concept-img {
+  width: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: center;
+}
+
+/* Height variants — screen */
+.concept-img-wrap--hero   .concept-img { height: 220px; }
+.concept-img-wrap--medium .concept-img { height: 140px; }
+.concept-img-wrap--small  .concept-img { height: 90px; }
+.concept-img-wrap--thumb  .concept-img { height: 130px; }
+.concept-img-wrap--micro  .concept-img { height: 64px; }
+
+/* Label: small, discreet, bottom-right */
+.concept-img-label {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  background: rgba(31, 43, 56, 0.70);
+  color: rgba(255, 255, 255, 0.92);
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  pointer-events: none;
+  line-height: 1.4;
+}
+
+/* Villa card group: thumbnail above info card */
+.dg-villa-card-group {
+  margin-bottom: var(--space-lg);
+}
+
+.dg-villa-card-group .dg-info-card {
+  margin-bottom: 0;
+  border-top: none;
+  border-top: 1px solid var(--gold);
+}
+
+/* Print page 4 — amenity thumbnail strip */
+.pp-amenity-strip {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0 4px;
+}
+
+.pp-amenity-strip .concept-img-wrap {
+  flex: 1;
+}
+
+
 /* Status badges */
 .status-badge {
   display: inline-flex;
@@ -1595,7 +1660,7 @@ strong {
     padding: 0;
   }
 
-  /* Each print page */
+  /* Each print page — keep flex so margin-top:auto on page number works */
   .print-page {
     width: 100%;
     max-width: none;
@@ -1606,60 +1671,92 @@ strong {
     box-shadow: none;
     page-break-after: always;
     break-after: page;
-    display: block;
+    break-inside: avoid;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
 
-  /* Remove the screen-only variant labels */
+  /* Remove the screen-only variant banner labels */
   .print-page--byblos::before,
   .print-page--mechmech::before {
     display: none;
   }
 
-  /* Page 1 hero takes less height in print */
-  .pp-hero .image-placeholder--hero {
-    min-height: 100px;
-    margin: 0 0 16pt 0;
-  }
-
   /* Typography scaling for print */
-  .pp-villa-name   { font-size: 22pt; }
-  .pp-guest-name   { font-size: 18pt; }
-  .dg-section__title { font-size: 20pt; }
-  .pp-page-label   { font-size: 8pt; }
+  .pp-villa-name    { font-size: 20pt; }
+  .pp-guest-name    { font-size: 16pt; }
+  .dg-section__title { font-size: 18pt; }
+  .pp-page-label    { font-size: 8pt; }
   .pp-section-title { font-size: 8pt; }
+  .pp-section p, .pp-section li { font-size: 11pt; }
+  .pp-utility-item p { font-size: 10pt; }
 
   /* Two-column grids on print */
-  .pp-two-col       { gap: 12pt; }
-  .pp-utilities-grid { gap: 10pt; }
-  .pp-expectations-grid { gap: 10pt; }
-  .pp-contacts-grid { gap: 10pt; }
+  .pp-two-col            { gap: 10pt; }
+  .pp-utilities-grid     { gap: 8pt; }
+  .pp-expectations-grid  { gap: 8pt; }
+  .pp-contacts-grid      { gap: 8pt; }
 
-  /* Smaller placeholders in print */
-  .image-placeholder { min-height: 40pt; padding: 8pt; }
-  .image-placeholder--small { min-height: 30pt; }
+  /* CSS placeholder divs in print — extremely compact: just label text */
+  .image-placeholder {
+    min-height: 0;
+    max-height: 20pt;
+    padding: 3pt 6pt;
+    border: 0.5pt dashed rgba(138, 128, 112, 0.5);
+    gap: 2pt;
+    display: block;
+    text-align: left;
+  }
+  .image-placeholder::before { display: none; }
+  .image-placeholder--hero   { max-height: 30pt; }
+  .image-placeholder--small  { max-height: 16pt; }
+  .image-placeholder--qr     { max-height: 60pt; min-height: 0; width: 60pt; padding: 6pt; }
+  .image-placeholder--map    { max-height: 24pt; }
+  .image-placeholder__label  { font-size: 7pt; }
+  .image-placeholder__desc   { display: none; }
 
-  /* Remove box shadows and backgrounds */
+  /* Real images — height caps per class */
+  .concept-img {
+    width: 100%;
+    display: block;
+    object-fit: cover;
+    max-height: 54mm;
+  }
+  .concept-img-wrap--hero   .concept-img { max-height: 52mm; }
+  .concept-img-wrap--medium .concept-img { max-height: 30mm; }
+  .concept-img-wrap--small  .concept-img { max-height: 20mm; }
+  .concept-img-wrap--thumb  .concept-img { max-height: 22mm; }
+  .concept-img-wrap--micro  .concept-img { max-height: 14mm; }
+  .pp-amenity-strip .concept-img         { max-height: 14mm; }
+
+  /* Concept label — keep visible for prototype review */
+  .concept-img-label { font-size: 7pt; padding: 2pt 5pt; }
+
+  /* Remove box shadows */
   .dg-quick-link { box-shadow: none; }
 
   /* Status badges print smaller */
-  .status-badge { font-size: 7pt; }
+  .status-badge   { font-size: 7pt; }
   .placeholder-block { font-size: 9pt; }
-  .placeholder-tag { font-size: 9pt; }
+  .placeholder-tag   { font-size: 9pt; }
 
-  /* Ensure links don't print as URLs */
+  /* Ensure links don't print as raw URLs */
   a::after { content: none !important; }
 
-  /* Page number at bottom */
+  /* Page number — normal flow element at bottom of flex column */
+  /* NO position:fixed — that causes every page number to overlap and corrupt */
   .pp-page-number {
-    position: fixed;
-    bottom: 8mm;
-    right: 0;
-    width: 100%;
-    text-align: center;
+    position: static;
+    margin-top: auto;
+    padding-top: 8pt;
+    padding-bottom: 0;
+    border-top: 0.5pt solid rgba(138, 128, 112, 0.35);
     font-size: 8pt;
+    text-align: center;
   }
 
-  /* Checkout list for print */
+  /* Checkout checkboxes in print */
   .pp-checkout-item__box {
     width: 10pt;
     height: 10pt;
