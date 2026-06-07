@@ -1,59 +1,65 @@
 # Content Matrix — Phase 16C Guest Welcome Guide
 
-**Updated:** 2026-06-07 — reflects David's 62-point confirmation set.
+**Updated:** 2026-06-07 — final David confirmation set applied.
 
 Status key:
-- **C** = Confirmed (fact or generic wording approved by David)
-- **P** = Placeholder (value exists but not yet provided — e.g. Wi-Fi credentials)
-- **D** = Requires David Confirmation (no value has been provided and none has been assumed)
+- **Confirmed** — approved content; shown in the guide
+- **Confirmed · sensitive value hidden** — fact confirmed; actual value is a placeholder by design (PINs)
+- **Concept image** — image placeholder present; requires approved villa photography before guest distribution
+- **Business decision pending** — structure confirmed; value requires an Oraya commercial decision
+- **Future integration** — production system must supply this value (booking data, QR, PDF tooling)
 
 ---
 
 ## Digital Guide — Journey Steps
 
-| Step | Title | Content block | Status | Required image | Risk if unconfirmed |
-|------|-------|--------------|--------|----------------|---------------------|
-| 1 | Before You Leave | "Guide saved on phone" checklist item | C | — | — |
-| 1 | Before You Leave | Gate PIN checklist item | P | — | Guest cannot enter gate |
-| 1 | Before You Leave | Front-door PIN checklist item | P | — | Guest cannot enter villa |
-| 1 | Before You Leave | Villa address (save for navigation) | D | — | Guest cannot navigate |
-| 1 | Before You Leave | Oraya WhatsApp number | D | — | Guest has no support contact |
-| 2 | On the Way | Villa address (full) | D | Static or satellite map of villa location | Guest cannot navigate; map cannot be produced |
-| 2 | On the Way | GPS coordinates / navigation QR | D | — | Navigation QR cannot be generated |
-| 3 | At the Gate | Gate arrival steps (7-step confirmed sequence, steps 1–4) | C | Gate and driveway approach · Gate keypad close-up | — |
-| 3 | At the Gate | Gate PIN display | P | — | Guest cannot enter gate |
-| 3 | At the Gate | Gate troubleshoot → contact Oraya | C (generic: "contact Oraya") | — | — |
-| 3 | At the Gate | WhatsApp concierge number (troubleshoot) | D | — | Guest has no fallback if gate fails |
-| 4 | Parking | Generic confirmed wording: "park in designated villa parking area" | C (generic) | — | — |
-| 4 | Parking | Specific parking location / vehicle limits / restrictions | D | — | Guest unsure where exactly to park |
-| 5 | Front Door | Front-door entry steps (confirmed sequence, steps 5–7) | C | Front-door keypad · Villa entrance/foyer | — |
-| 5 | Front Door | Front-door PIN display | P | — | Guest cannot enter villa |
-| 5 | Front Door | PIN troubleshoot → contact Oraya | C (generic: "contact Oraya") | — | — |
-| 5 | Front Door | Late arrival / lost access → generic contact Oraya | C (generic) | — | — |
-| 5 | Front Door | Late arrival: WhatsApp concierge number | D | — | Guest has no after-hours contact |
-| 6 | Settling In | Villa selector tab (Byblos / Mechmech) | C (structure) | — | — |
-| 6 | Settling In | Wi-Fi — Byblos (network name / password) | P | — | Guest must ask for credentials |
-| 6 | Settling In | Wi-Fi — Mechmech (network name / password) | P | — | Guest must ask for credentials |
-| 6 | Settling In | AC & Cooling — Byblos | D | — | Guest cannot operate AC |
-| 6 | Settling In | Pool — Byblos (access and usage) | D | — | Guest unaware of pool access |
-| 6 | Settling In | Pool cover — Byblos | D | — | Guest unaware of pool cover procedure |
-| 6 | Settling In | Hot Water — Byblos | D | — | Guest unaware of warm-up wait |
-| 6 | Settling In | Kitchen & BBQ — Byblos | D | — | Guest cannot use kitchen / BBQ |
-| 6 | Settling In | TV & Entertainment — Byblos | D | — | Guest cannot use TV |
-| 6 | Settling In | Heating — Mechmech | D | — | Guest cannot operate heating |
-| 6 | Settling In | Fireplace — Mechmech | D | — | Guest cannot use fireplace |
-| 6 | Settling In | Winter Room — Mechmech | D | — | Guest unaware of feature |
-| 6 | Settling In | Kitchen & BBQ — Mechmech | D | — | Guest cannot use kitchen / BBQ |
-| 6 | Settling In | TV & Entertainment — Mechmech | D | — | Guest cannot use TV |
-| 6 | Settling In | Safety note: "contact Oraya before attempting a fix" | C | — | — |
-| 6 | Settling In | WhatsApp concierge number (safety note) | D | — | No contact for equipment issues |
-| 7 | During Your Stay | Quick-links to print pages 4–5–7 | C (structure) | — | — |
-| 7 | During Your Stay | Oraya WhatsApp concierge card | D | — | Guest has no support contact |
-| 8 | Checkout | Checkout time | D | — | Guest leaves at wrong time |
-| 8 | Checkout | Late checkout note (generic: "available on request") | C (generic) | — | — |
-| 8 | Checkout | 8-item checkout checklist (structure confirmed) | C (structure) | — | — |
-| 8 | Checkout | Garbage outdoor location | D | — | Guest leaves garbage inside |
-| 8 | Checkout | Pool cover item (with per-villa applicability qualifier) | D (per-villa applicability) | — | Pool cover used at wrong villa or not at all |
+| Step | Content block | Status | Notes |
+|------|--------------|--------|-------|
+| 1 | Guide saved checklist item | Confirmed | — |
+| 1 | Gate PIN checklist item | Confirmed · sensitive value hidden | Placeholder: `[Gate PIN — provided before arrival]` |
+| 1 | Front-door PIN checklist item | Confirmed · sensitive value hidden | Placeholder: `[Front-door PIN — provided before arrival]` |
+| 1 | Villa address (save for navigation) | Confirmed | References Step 2 Maps link |
+| 1 | Oraya WhatsApp | Confirmed | +961 71 140 041 |
+| 2 | Villa Byblos location label | Confirmed | Mastita, Jbeil |
+| 2 | Villa Mechmech location label | Confirmed | Mechmech, Sama |
+| 2 | Villa Byblos Maps link | Confirmed | https://maps.app.goo.gl/1a1Ybf4o6Qyzy7xh7 |
+| 2 | Villa Mechmech Maps link | Confirmed | https://maps.app.goo.gl/2A4jAeUKWP8G9GbVA |
+| 2 | Map image | Concept image | Required: static or embedded map per villa |
+| 2 | Navigation QR | Future integration | QR to be generated from confirmed Maps link |
+| 3 | Gate arrival sequence (steps 1–4) | Confirmed | — |
+| 3 | Gate PIN display | Confirmed · sensitive value hidden | — |
+| 3 | Gate image | Concept image | Required: gate and driveway approach |
+| 3 | Gate keypad image | Concept image | Required: gate keypad close-up |
+| 3 | Gate troubleshoot wording | Confirmed | "message Oraya on WhatsApp or call us" |
+| 3 | Oraya contact in troubleshoot | Confirmed | +961 71 140 041 |
+| 4 | Parking | Confirmed | "Inside the gate fits two cars comfortably. Extra cars may park outside the gate." |
+| 5 | Front-door entry sequence (steps 5–7) | Confirmed | — |
+| 5 | Front-door PIN display | Confirmed · sensitive value hidden | — |
+| 5 | Front-door keypad image | Concept image | Required: front-door keypad |
+| 5 | Villa entrance image | Concept image | Required: villa entrance / foyer |
+| 5 | PIN / access troubleshoot | Confirmed | Direct to +961 71 140 041 |
+| 5 | Late / early arrival wording | Confirmed | "Late arrival is fine. Early arrival by request." |
+| 6 | Villa tab selector (Byblos / Mechmech) | Confirmed | CSS-only, no JavaScript |
+| 6 | Wi-Fi — both villas | Confirmed | Network: ORAYA · Password: Oraya2026 |
+| 6 | AC & Cooling — Byblos | Confirmed | Wall-mounted controller next to light switch; cooling and heating |
+| 6 | Hot water — Byblos | Confirmed | Solar-heated tank, day/night |
+| 6 | Pool — Byblos | Confirmed | Available, maintained, kept covered; not called "heated" |
+| 6 | Pool cover — Byblos | Confirmed | Remove before use, replace after |
+| 6 | Kitchen & BBQ — Byblos | Confirmed | Kettle, microwave, gas cooktop, stove, glassware; BBQ kit outdoors |
+| 6 | TV — Byblos | Confirmed | One Smart TV |
+| 6 | Heating — Mechmech | Confirmed | On before arrival; radiator valves per room |
+| 6 | Fireplace / diesel stove — Mechmech | Confirmed | Traditional Lebanese diesel stove, full tank, may charge additional |
+| 6 | Winter room — Mechmech | Confirmed | Panoramic glass, kitchenette, TV, lounge seating |
+| 6 | Hot water — Mechmech | Confirmed | Labeled switch, ~15 min during summer |
+| 6 | Pool — Mechmech | Confirmed | Covered; instructions conditional on whether pool is heated for stay |
+| 6 | Kitchen & BBQ — Mechmech | Confirmed | Same kitchen; BBQ outside winter glass room under roof |
+| 6 | TV — Mechmech | Confirmed | Living room + winter room |
+| 6 | Safety note | Confirmed | "Contact Oraya before attempting a fix" |
+| 7 | Quick links (pp. 4–5–7) | Confirmed | — |
+| 7 | Oraya concierge card | Confirmed | +961 71 140 041 · 24/7 |
+| 8 | Checkout time | Confirmed | 11:00 AM |
+| 8 | Late checkout wording | Confirmed | Extended / night checkout at discounted pricing when available |
+| 8 | Checkout checklist (8 items) | Confirmed | Dishes · Garbage · Pool cover · Lights · AC/Heating · Doors · Windows · Final lock-up |
 
 ---
 
@@ -61,154 +67,158 @@ Status key:
 
 ### Page 1 — Welcome
 
-| Content block | Status | Required image | Risk if unconfirmed |
-|--------------|--------|----------------|---------------------|
-| Oraya wordmark | C | — | — |
-| Villa name | P | Signature exterior view of villa | — |
-| Guest name | P | — | — |
-| Stay dates | P | — | — |
-| Villa address | D | — | Map/QR cannot be produced |
-| GPS QR code | D | — | Navigation aid missing |
-| Oraya WhatsApp | D | — | No support contact on first page |
-| Emergency contact | D | — | Safety contact missing on first page |
-| "Digital guide sent before arrival / printed copy inside villa" note | C | — | — |
+| Content block | Status | Notes |
+|--------------|--------|-------|
+| Oraya wordmark | Confirmed | — |
+| Villa name | Future integration | Personalized from booking row |
+| Guest name | Future integration | Personalized from booking row |
+| Stay dates | Future integration | Personalized from booking row |
+| Villa exterior hero image | Concept image | Required: signature exterior view of the villa |
+| Villa Byblos location | Confirmed | Mastita, Jbeil |
+| Villa Mechmech location | Confirmed | Mechmech, Sama |
+| Navigation QR | Future integration | Generated from confirmed Maps link |
+| Oraya WhatsApp | Confirmed | +961 71 140 041 · 24/7 |
+| "Guide was sent before arrival" note | Confirmed | — |
 
 ---
 
 ### Page 2 — Arrival & Access
 
-| Content block | Status | Required image | Risk if unconfirmed |
-|--------------|--------|----------------|---------------------|
-| Confirmed 7-step arrival sequence | C | Gate keypad · Front-door keypad | — |
-| Gate PIN | P | — | Guest cannot enter gate |
-| Front-door PIN | P | — | Guest cannot enter villa |
-| Parking — confirmed generic wording | C (generic) | — | — |
-| Parking — specific location / restrictions | D | — | Guest unsure where exactly to park |
-| Gate troubleshoot → contact Oraya | C (generic) | — | — |
-| PIN troubleshoot → contact Oraya | C (generic) | — | — |
-| Late arrival → contact Oraya (generic) | C (generic) | — | — |
-| Lost access → contact Oraya | C (generic) | — | — |
-| Emergency caretaker name / number | D | — | Emergency property access unresolved |
+| Content block | Status | Notes |
+|--------------|--------|-------|
+| Before you leave checklist | Confirmed | — |
+| Confirmed 7-step arrival sequence | Confirmed | — |
+| Gate PIN | Confirmed · sensitive value hidden | — |
+| Front-door PIN | Confirmed · sensitive value hidden | — |
+| Gate keypad image | Concept image | Required: gate keypad |
+| Front-door keypad image | Concept image | Required: front-door keypad |
+| Parking | Confirmed | Two cars inside gate; extras outside |
+| Arrival timing | Confirmed | Late fine; early by request |
+| Troubleshoot (gate / PIN / late / lost) | Confirmed | All four direct to +961 71 140 041 |
 
 ---
 
 ### Page 3A — Utilities & Comfort (Villa Byblos)
 
-| Content block | Status | Required image | Risk if unconfirmed |
-|--------------|--------|----------------|---------------------|
-| Wi-Fi network name | P | — | — |
-| Wi-Fi password | P | — | — |
-| TV & entertainment operation | D | — | Guest cannot use TV |
-| Kitchen overview | D | Kitchen (Byblos) | Guest cannot use kitchen |
-| BBQ overview | D | BBQ (Byblos) | Guest cannot use BBQ |
-| AC & cooling controls | D | — | Guest cannot operate AC |
-| Hot water notes | D | — | Guest unaware of wait time |
-| Pool access and usage notes | D | Pool (Byblos) | Guest unaware of pool access |
-| Pool cover instructions | D | — | Guest cannot operate pool cover |
-
-**Note:** Do not call the Byblos pool "heated" until David confirms this separately.
+| Content block | Status | Notes |
+|--------------|--------|-------|
+| Wi-Fi | Confirmed | ORAYA / Oraya2026 |
+| TV | Confirmed | One Smart TV |
+| AC & Cooling | Confirmed | Wall-mounted controller |
+| Hot water | Confirmed | Solar-heated tank |
+| Kitchen | Confirmed | Kettle, microwave, gas cooktop, stove |
+| Kitchen image | Concept image | Required: kitchen (Byblos) |
+| BBQ | Confirmed | Outdoor BBQ/kitchenette; turn off after use |
+| BBQ image | Concept image | Required: BBQ (Byblos) |
+| Pool | Confirmed | Available, maintained, covered; not "heated" |
+| Pool image | Concept image | Required: pool (Byblos) |
+| Pool cover | Confirmed | Remove before use, replace after |
+| Safety note | Confirmed | "Contact Oraya before attempting a fix" |
 
 ---
 
 ### Page 3B — Utilities & Comfort (Villa Mechmech)
 
-| Content block | Status | Required image | Risk if unconfirmed |
-|--------------|--------|----------------|---------------------|
-| Wi-Fi network name | P | — | — |
-| Wi-Fi password | P | — | — |
-| TV & entertainment operation | D | — | Guest cannot use TV |
-| Kitchen overview | D | Kitchen (Mechmech) | Guest cannot use kitchen |
-| BBQ overview | D | BBQ (Mechmech) | Guest cannot use BBQ |
-| Heating system type & controls | D | — | Guest cannot operate heating |
-| Fireplace — location, fuel, ignition | D | Fireplace (Mechmech) | Guest cannot use fireplace |
-| Winter room — what it is, access | D | — | Guest unaware of feature |
-
-**Note:** Fireplace and Winter Room may be referenced as Mechmech villa features; operating instructions must remain placeholders until confirmed.
+| Content block | Status | Notes |
+|--------------|--------|-------|
+| Wi-Fi | Confirmed | ORAYA / Oraya2026 |
+| TV | Confirmed | Living room + winter room |
+| Heating | Confirmed | On before arrival; radiator valves per room |
+| Hot water | Confirmed | Labeled switch; ~15 min during summer |
+| Kitchen | Confirmed | Kettle, microwave, gas cooktop, stove |
+| Kitchen image | Concept image | Required: kitchen (Mechmech) |
+| BBQ | Confirmed | Outside winter glass room; under roof; turn off after use |
+| BBQ image | Concept image | Required: BBQ (Mechmech) |
+| Fireplace / diesel stove | Confirmed | Traditional Lebanese stove; full tank; may charge additional diesel |
+| Fireplace image | Concept image | Required: fireplace / stove (Mechmech) |
+| Winter room | Confirmed | Panoramic glass, kitchenette, TV, lounge |
+| Winter room image | Concept image | Required: winter room (Mechmech) |
+| Pool | Confirmed | Covered; conditional cover replacement if pool not heated |
+| Safety note | Confirmed | "Contact Oraya before attempting a fix" |
 
 ---
 
 ### Page 4 — Using the Villa
 
-| Content block | Status | Required image | Risk if unconfirmed |
-|--------------|--------|----------------|---------------------|
-| Safety note: "contact Oraya before attempting a fix" | C | — | — |
-| Kitchen use notes | D | Kitchen photo | Guest cannot use kitchen |
-| BBQ step-by-step | D | BBQ photo | Guest cannot use BBQ safely |
-| Bathroom notes | D | — | — |
-| Garbage bin location / outdoor bin | D | — | Garbage left inside at checkout |
-| Pool cover instructions | D | Pool cover photo (where applicable) | Cover improperly handled |
-| Pool usage notes | D | — | — |
-| Restricted areas | D | — | Guests access off-limits areas |
+| Content block | Status | Notes |
+|--------------|--------|-------|
+| Safety notice ("contact Oraya first") | Confirmed | +961 71 140 041 |
+| Kitchen | Confirmed | Same wording as Page 3 |
+| Kitchen image | Concept image | Required: kitchen photo |
+| BBQ | Confirmed | Turn off after use |
+| BBQ image | Concept image | Required: BBQ photo |
+| Bathrooms | Confirmed | Towels provided; hot water via villa system; labeled switch ~15 min |
+| Garbage | Confirmed | Small bins in rooms; two large outdoor cans; do not leave on street |
+| Pool cover — Byblos | Confirmed | Remove before use, replace after |
+| Pool cover — Mechmech | Confirmed | Conditional on whether pool is heated |
+| Pool cover image | Concept image | Required: pool cover photo |
+| Pool usage | Confirmed | Maintained before stay; no diving |
+| Restricted areas | Confirmed | Mechanical, electrical, plumbing, security, storage — do not tamper |
 
 ---
 
 ### Page 5 — House Expectations
 
-| Content block | Status | Required image | Risk if unconfirmed |
-|--------------|--------|----------------|---------------------|
-| 6 confirmed categories (structure) | C | — | — |
-| Visitors & gatherings policy detail | D | — | Unintended events at villa |
-| Restricted areas policy detail | D | — | — |
-| Smoking policy detail | D | — | Smoking dispute |
-| Pool safety guidelines detail | D | — | Safety incident |
-| Children supervision guidance detail | D | — | Safety incident |
-| Property care expectations detail | D | — | Damage or misuse |
-
-**Note:** No quiet hours, no music rules, no party bans, no fines, no penalties invented. Each category shows hospitality-led placeholder only.
+| Content block | Status | Notes |
+|--------------|--------|-------|
+| Visitors & Gatherings | Confirmed | Up to 20 visitors; events via Oraya |
+| Restricted Areas | Confirmed | Same as Page 4 restricted areas |
+| Smoking | Confirmed | Allowed; smoke responsibly |
+| Pool Safety | Confirmed | No diving |
+| Children & Supervision | Confirmed | Adult supervision required at all times |
+| Property Care | Confirmed | Treat villa with care |
 
 ---
 
 ### Page 6 — Checkout
 
-| Content block | Status | Required image | Risk if unconfirmed |
-|--------------|--------|----------------|---------------------|
-| Checkout time | D | — | Guest leaves at wrong time |
-| Late checkout note (generic: "available on request") | C (generic) | — | — |
-| 8-item checklist (structure) | C | — | — |
-| Garbage outdoor area location | D | — | Garbage left inside |
-| Pool cover item (with per-villa qualifier) | D (per-villa applicability) | — | Applied at wrong villa |
+| Content block | Status | Notes |
+|--------------|--------|-------|
+| Checkout time | Confirmed | 11:00 AM |
+| Late checkout / night checkout wording | Confirmed | Discounted pricing when available and confirmed by Oraya |
+| Late checkout / night checkout exact pricing | Business decision pending | If Oraya wants to publish pricing, confirm the amounts |
+| Checkout checklist (8 items) | Confirmed | Dishes · Garbage · Pool cover · Lights · AC/Heating · Doors · Windows · Final lock-up |
 
 ---
 
 ### Page 7 — Emergency & Contacts
 
-| Content block | Status | Required image | Risk if unconfirmed |
-|--------------|--------|----------------|---------------------|
-| Emergency services (all: Medical, Red Cross, Police, Fire, Civil Defense) | D | — | Safety-critical gap — must be confirmed before guest distribution |
-| Oraya WhatsApp concierge number | D | — | Guest has no support contact |
-| Oraya support hours | D | — | Guest calls outside hours |
-| Property caretaker name & number | D | — | No emergency property access |
-| Nearest hospital name & address | D | — | Medical emergency unresolved |
-| Nearest pharmacy | D | — | — |
-| Booking reference (8-char hex) | P | Booking QR code | — |
-
-**Note:** Public Lebanese emergency numbers (Ambulance 140, Red Cross 1876, Police 112, Fire 175, Civil Defense 125) are publicly known but will not appear in the guide until David confirms the exact values he wants presented to guests (point 51).
+| Content block | Status | Notes |
+|--------------|--------|-------|
+| Emergency procedure | Confirmed | Step outside; contact services; inform Oraya |
+| Police / ISF | Confirmed | 112 |
+| Lebanese Red Cross | Confirmed | 140 |
+| Medical / pharmacy guidance | Confirmed | "Contact Oraya Concierge" |
+| Oraya concierge | Confirmed | +961 71 140 041 · 24/7 |
+| Villa location — Byblos | Confirmed | Mastita, Jbeil |
+| Villa location — Mechmech | Confirmed | Mechmech, Sama |
+| Booking reference | Future integration | 8-character reference from booking row |
+| Booking QR code | Future integration | Generated per booking from /booking/view/[token] |
 
 ---
 
 ## Image inventory
 
-All images below are required before the prototype can be shown to real guests. Image subject must match the labeled section exactly.
-
-| # | Required subject | Villa | Used in | Status |
-|---|-----------------|-------|---------|--------|
-| 1 | Signature exterior view | Byblos | Print p. 1 | D |
-| 2 | Signature exterior view | Mechmech | Print p. 1 | D |
-| 3 | Gate and driveway approach | Byblos | Digital step 3 | D |
-| 4 | Gate and driveway approach | Mechmech | Digital step 3 | D |
-| 5 | Gate keypad (PIN pad + open button) | Byblos | Digital step 3 · Print p. 2 | D |
-| 6 | Gate keypad (PIN pad + open button) | Mechmech | Digital step 3 · Print p. 2 | D |
-| 7 | Front-door keypad | Byblos | Digital step 5 · Print p. 2 | D |
-| 8 | Front-door keypad | Mechmech | Digital step 5 · Print p. 2 | D |
-| 9 | Villa entrance / foyer | Byblos | Digital step 5 | D |
-| 10 | Villa entrance / foyer | Mechmech | Digital step 5 | D |
-| 11 | Kitchen | Byblos | Print p. 3A · Print p. 4 | D |
-| 12 | Kitchen | Mechmech | Print p. 3B · Print p. 4 | D |
-| 13 | BBQ | Byblos | Print p. 3A · Print p. 4 | D |
-| 14 | BBQ | Mechmech | Print p. 3B · Print p. 4 | D |
-| 15 | Pool | Byblos | Print p. 3A | D |
-| 16 | Fireplace | Mechmech | Print p. 3B | D |
-| 17 | Pool cover (where applicable) | TBD per villa | Print p. 4 | D |
-| 18 | Static or satellite map | Both | Digital step 2 · Print p. 1 | D |
-| 19 | GPS QR code | Both | Digital step 2 · Print p. 1 | D |
-| 20 | Booking QR code (booking view link) | Per guest | Print p. 7 | P (generated per booking) |
+| # | Required subject | Villa | Status |
+|---|-----------------|-------|--------|
+| 1 | Signature exterior view | Byblos | Concept image |
+| 2 | Signature exterior view | Mechmech | Concept image |
+| 3 | Gate and driveway approach | Byblos | Concept image |
+| 4 | Gate and driveway approach | Mechmech | Concept image |
+| 5 | Gate keypad | Byblos | Concept image |
+| 6 | Gate keypad | Mechmech | Concept image |
+| 7 | Front-door keypad | Byblos | Concept image |
+| 8 | Front-door keypad | Mechmech | Concept image |
+| 9 | Villa entrance / foyer | Byblos | Concept image |
+| 10 | Villa entrance / foyer | Mechmech | Concept image |
+| 11 | Kitchen | Byblos | Concept image |
+| 12 | Kitchen | Mechmech | Concept image |
+| 13 | BBQ | Byblos | Concept image |
+| 14 | BBQ | Mechmech | Concept image |
+| 15 | Pool | Byblos | Concept image |
+| 16 | Fireplace / diesel stove | Mechmech | Concept image |
+| 17 | Winter room | Mechmech | Concept image |
+| 18 | Pool cover | TBD per villa | Concept image |
+| 19 | Map (static or embedded) | Both | Future integration — generated from confirmed Maps links |
+| 20 | Navigation QR | Both | Future integration — generated from confirmed Maps links |
+| 21 | Booking QR | Per guest | Future integration — generated from /booking/view/[token] |
