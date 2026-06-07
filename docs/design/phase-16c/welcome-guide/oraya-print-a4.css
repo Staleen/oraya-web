@@ -53,7 +53,8 @@ html { font-size: 16px; }
 body {
   font-family: var(--font-sans);
   color: var(--charcoal);
-  /* background and padding in @media screen below */
+  background: #ddd8cf;
+  padding: 32px 16px 64px;
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -104,40 +105,22 @@ strong { font-weight: 700; }
 
 
 /* ═══════════════════════════════════════════════════════
-   4. A4 PAGE — SINGLE PHYSICAL SIZE FOR SCREEN AND PRINT
-   210mm × 297mm at 96dpi = 793.7px × 1122.5px
-   padding 14mm = 52.9px · content width: 182mm = 688px
+   4. PRINT PAGES — SCREEN PREVIEW CARDS
+   A4 aspect ratio: 210 × 297mm = 1 : 1.4142
+   At 620px wide → min-height 877px
    ═══════════════════════════════════════════════════════ */
 
 .print-page {
-  width: 210mm;
-  height: 297mm;
-  padding: 14mm;
-  box-sizing: border-box;
+  width: 100%;
+  max-width: 620px;
+  min-height: 877px;
   background: var(--white);
+  margin: 0 auto 32px;
+  padding: 36px 40px;
+  box-shadow: 0 2px 28px rgba(46, 46, 46, 0.16);
   display: flex;
   flex-direction: column;
   position: relative;
-  /* Page break — active in print context */
-  break-after: page;
-  page-break-after: always;
-}
-
-.print-page:last-child {
-  break-after: auto;
-  page-break-after: auto;
-}
-
-/* ── Screen decoration (body bg + page card shadow) ─── */
-@media screen {
-  body {
-    background: #ddd8cf;
-    padding: 32px 16px 64px;
-  }
-  .print-page {
-    margin: 24px auto;
-    box-shadow: 0 2px 28px rgba(46, 46, 46, 0.16);
-  }
 }
 
 
@@ -227,10 +210,9 @@ strong { font-weight: 700; }
    7. PAGE 1 — WELCOME
    ═══════════════════════════════════════════════════════ */
 
-/* Hero image — bleeds to page edge (cancels 14mm padding) */
+/* Hero image — bleeds to page edge on screen */
 .pp-hero {
-  margin: -14mm -14mm 0;
-  width: 210mm;
+  margin: -36px -40px 0;
 }
 
 .pp-welcome {
@@ -1004,10 +986,9 @@ strong { font-weight: 700; }
   border-color: rgba(197, 164, 109, 0.35);
 }
 
-/* .print-document — centres the page stack on screen; collapses in print */
+/* .print-document — wraps all .print-page divs in print files */
 .print-document {
-  width: 210mm;
-  margin: 0 auto;
+  /* Screen: transparent wrapper — layout handled by body centering */
 }
 
 
@@ -1017,17 +998,17 @@ strong { font-weight: 700; }
 
 @media print {
 
-  /* ─── @page: A4, zero margin ────────────────────────────────────
-     Padding is owned by .print-page { padding: 14mm }.
-     margin: 0 prevents double-counting.
+  /* ─── A4 page, zero margin ──────────────────────────────────────
+     Content padding is owned by .print-page { padding: 36px 40px }
+     (same as screen). margin: 0 prevents double-counting.
   ─────────────────────────────────────────────────────────────── */
   @page {
     size: A4 portrait;
     margin: 0;
   }
 
-  /* ─── Force document to physical paper width ────────────────────
-     Without this the renderer may auto-scale to fit.
+  /* ─── Set document to physical paper width ──────────────────────
+     Prevents the renderer from auto-scaling the 620px content.
   ─────────────────────────────────────────────────────────────── */
   html, body {
     width: 210mm;
@@ -1036,32 +1017,62 @@ strong { font-weight: 700; }
     background: #fff;
   }
 
-  /* ─── Remove screen-only UI elements ───────────────────────────  */
-  .review-bar,
-  .prototype-notice {
+  /* ─── Hide screen-only UI ───────────────────────────────────── */
+  .prototype-notice,
+  .review-bar {
     display: none !important;
   }
 
-  /* ─── Collapse document wrapper margin in print ─────────────────  */
+  /* ─── Centre the page stack on A4 paper ────────────────────────
+     Pages are 620px wide. A4 is 210mm = 793.7px wide.
+     Flex centering places each page with ~87px (23mm) margins
+     on each side — identical content, clean printed layout.
+  ─────────────────────────────────────────────────────────────── */
   .print-document {
     width: 210mm;
     margin: 0;
     padding: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
   }
 
-  /* ─── Strip screen decoration from each page ────────────────────
-     Layout (width, height, padding, flex) is already set at base
-     level — identical on screen and in print.
+  /* ─── Each print page ───────────────────────────────────────────
+     Same 620px width and 36px/40px padding as the browser view.
+     height: 297mm = one A4 page. break-after: page separates them.
+     No typography overrides — screen px values render identically.
+     No overflow: hidden — content must genuinely fit.
   ─────────────────────────────────────────────────────────────── */
   .print-page {
+    width: 620px;
+    height: 297mm;
+    padding: 36px 40px;
+    box-sizing: border-box;
     margin: 0;
     box-shadow: none;
     border: none;
     transform: none;
+    break-after: page;
+    page-break-after: always;
   }
 
-  /* ─── Suppress browser link URL annotation ──────────────────── */
-  a::after { content: none !important; }
+  .print-page:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  /* ─── Page number — push to bottom of flex column ────────────── */
+  .pp-page-number {
+    position: static;
+    margin-top: auto;
+  }
+
+  /* ─── Checkout checkboxes — visible boxes in print ────────────── */
+  .pp-checkout-item__box {
+    width: 9pt;
+    height: 9pt;
+    border: 1pt solid #999;
+  }
 
   /* ─── Placeholder tags — plain italic in print ──────────────── */
   .placeholder-tag {
@@ -1071,11 +1082,7 @@ strong { font-weight: 700; }
     font-style: italic;
   }
 
-  /* ─── Checkout checkboxes — visible print form boxes ──────────── */
-  .pp-checkout-item__box {
-    width: 9pt;
-    height: 9pt;
-    border: 1pt solid #999;
-  }
+  /* ─── Suppress browser link URL annotation ──────────────────── */
+  a::after { content: none !important; }
 
 }
