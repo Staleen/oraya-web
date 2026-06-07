@@ -77,15 +77,40 @@ const GUIDES = [
       // The HTML files are pure print templates — no media-type switch needed.
       // @page { size: A4; margin: 0 } and physical-unit page dimensions handle
       // the layout. Each .hb-page (210mm × 297mm) maps to exactly one A4 page.
-      await page.pdf({
-        path: guide.pdf,
+      // Write via buffer to survive EBUSY (file open in a PDF viewer / OneDrive lock).
+      const pdfBuffer = await page.pdf({
         format: 'A4',
         printBackground: true,
         displayHeaderFooter: false,
         margin: { top: 0, right: 0, bottom: 0, left: 0 },
       });
 
-      const sizeKB = Math.round(fs.statSync(guide.pdf).size / 1024);
+      let savedPath = guide.pdf;
+      try {
+        fs.writeFileSync(guide.pdf, pdfBuffer);
+      } catch (writeErr) {
+        if (writeErr.code === 'EBUSY') {
+          // File is locked (open in viewer or OneDrive sync). Write to a temp file
+          // then atomically rename over the original.
+          const tmpPath = guide.pdf.replace(/\.pdf$/i, `.tmp${Date.now()}.pdf`);
+          fs.writeFileSync(tmpPath, pdfBuffer);
+          const oldPath = guide.pdf + '.old';
+          try {
+            // Move the locked file out of the way, then rename the new one in.
+            try { fs.renameSync(guide.pdf, oldPath); } catch (_) { /* already gone */ }
+            fs.renameSync(tmpPath, guide.pdf);
+            try { fs.unlinkSync(oldPath); } catch (_) { /* best-effort cleanup */ }
+          } catch (renameErr) {
+            // Could not rename — leave the temp file and report its path.
+            savedPath = tmpPath;
+            console.warn(`  Warning: could not overwrite locked PDF. Saved as: ${path.basename(tmpPath)}`);
+          }
+        } else {
+          throw writeErr;
+        }
+      }
+
+      const sizeKB = Math.round(fs.statSync(savedPath).size / 1024);
       console.log(`  Status : OK — ${sizeKB} KB`);
 
       await page.close();
