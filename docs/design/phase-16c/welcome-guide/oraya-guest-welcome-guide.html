@@ -26,6 +26,78 @@
 
 
 <!-- ════════════════════════════════════════════════════════════
+     REVIEW HUB — prototype overlay (screen only)
+     Three outputs: Digital Guide · Byblos Print · Mechmech Print
+     ════════════════════════════════════════════════════════════ -->
+<section class="review-hub" id="review-hub" aria-label="Prototype review hub">
+  <div class="review-hub__inner">
+
+    <div>
+      <span class="review-hub__tag">Phase 16C · Guest Guide Engine · Design Prototype</span>
+      <h2 class="review-hub__title">Review Hub</h2>
+      <p class="review-hub__subtitle">
+        Three review outputs are available below. Open each one to review the screen experience or print the A4 guide.
+        Scroll down to see the digital guide in full.
+      </p>
+    </div>
+
+    <div class="review-hub__outputs">
+
+      <!-- Output 1 — Digital Guide (this file) -->
+      <div class="review-hub__output review-hub__output--current">
+        <span class="review-hub__output-badge">Currently viewing</span>
+        <span class="review-hub__output-number">Output 1 of 3</span>
+        <span class="review-hub__output-label">Digital<br>Welcome Guide</span>
+        <span class="review-hub__output-desc">
+          Mobile-first journey rail. 8 steps from pre-departure to checkout.
+          Screen only — sent to guest before arrival.
+        </span>
+        <a href="#digital-guide" class="review-hub__output-cta review-hub__output-cta--secondary">
+          ↓ Scroll to guide
+        </a>
+      </div>
+
+      <!-- Output 2 — Byblos A4 Print -->
+      <div class="review-hub__output">
+        <span class="review-hub__output-number">Output 2 of 3</span>
+        <span class="review-hub__output-label">Villa Byblos<br>A4 Print Guide</span>
+        <span class="review-hub__output-desc">
+          7-page A4 in-villa manual. Mastita, Jbeil.
+          Open → File → Print → A4, 100% scale, background graphics on.
+        </span>
+        <a href="oraya-guest-welcome-guide-print-byblos.html" class="review-hub__output-cta" target="_blank" rel="noopener">
+          Open Byblos A4 Guide →
+        </a>
+      </div>
+
+      <!-- Output 3 — Mechmech A4 Print -->
+      <div class="review-hub__output">
+        <span class="review-hub__output-number">Output 3 of 3</span>
+        <span class="review-hub__output-label">Villa Mechmech<br>A4 Print Guide</span>
+        <span class="review-hub__output-desc">
+          7-page A4 in-villa manual. Mechmech, Sama.
+          Open → File → Print → A4, 100% scale, background graphics on.
+        </span>
+        <a href="oraya-guest-welcome-guide-print-mechmech.html" class="review-hub__output-cta" target="_blank" rel="noopener">
+          Open Mechmech A4 Guide →
+        </a>
+      </div>
+
+    </div><!-- end .review-hub__outputs -->
+
+    <div class="review-hub__print-instructions">
+      <strong>To print an A4 guide:</strong>
+      Open the villa file above → browser File → Print (Ctrl+P / Cmd+P) →
+      Paper size: <strong>A4</strong> · Scale: <strong>Default (100%)</strong> ·
+      ☑ Background graphics → Print / Save as PDF.
+      Do not set custom margins — the file manages them internally.
+    </div>
+
+  </div><!-- end .review-hub__inner -->
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════
      DIGITAL GUIDE
      Mobile-first · Sent before arrival · Screen only in print
      ════════════════════════════════════════════════════════════ -->
@@ -594,37 +666,34 @@
 </div><!-- end .digital-guide -->
 
 <!-- ══════════════════════════════════════════════════════════════
-     PRINT FILES POINTER — screen only
-     Shown in the browser when reviewing the prototype.
-     Both print files are standalone A4 HTML files.
+     PRINT FILES FOOTER — screen only (also see review hub above)
      ══════════════════════════════════════════════════════════════ -->
-<div class="print-files-notice" style="background:#1F2B38; padding:32px 20px; margin-top:0;">
-  <div style="max-width:600px; margin:0 auto;">
-    <p style="font-family:'Lato',system-ui,sans-serif; font-size:10px; font-weight:700; letter-spacing:0.18em; text-transform:uppercase; color:rgba(197,164,109,0.85); margin-bottom:14px;">
-      Print-ready A4 guides
-    </p>
-    <p style="font-family:'Lato',system-ui,sans-serif; font-size:13px; color:rgba(255,255,255,0.70); margin-bottom:16px; line-height:1.6;">
-      For printing, open the villa-specific A4 file and use File → Print (A4 portrait, 100% scale).
-    </p>
-    <ul style="list-style:none; padding:0; display:flex; flex-direction:column; gap:10px;">
-      <li>
-        <a href="oraya-guest-welcome-guide-print-byblos.html"
-           style="display:flex; justify-content:space-between; align-items:center; gap:12px; background:rgba(255,255,255,0.06); padding:12px 16px; font-family:'Lato',system-ui,sans-serif; font-size:12px; color:rgba(255,255,255,0.85); text-decoration:none; border-left:2px solid #C5A46D;">
-          <span><strong style="color:#C5A46D; font-weight:700;">Villa Byblos</strong> &nbsp;·&nbsp; A4 · 7 pages</span>
-          <span style="font-size:11px; color:rgba(197,164,109,0.70); white-space:nowrap;">oraya-guest-welcome-guide-print-byblos.html</span>
+<div class="review-hub" style="padding-top:28px; padding-bottom:28px;">
+  <div class="review-hub__inner">
+    <p class="review-hub__tag">A4 print guides — open and print in browser</p>
+    <div class="review-hub__outputs">
+      <div class="review-hub__output">
+        <span class="review-hub__output-label">Villa Byblos · A4 · 7 pages</span>
+        <span class="review-hub__output-desc">Mastita, Jbeil</span>
+        <a href="oraya-guest-welcome-guide-print-byblos.html" class="review-hub__output-cta" target="_blank" rel="noopener">
+          Open Byblos Print Guide →
         </a>
-      </li>
-      <li>
-        <a href="oraya-guest-welcome-guide-print-mechmech.html"
-           style="display:flex; justify-content:space-between; align-items:center; gap:12px; background:rgba(255,255,255,0.06); padding:12px 16px; font-family:'Lato',system-ui,sans-serif; font-size:12px; color:rgba(255,255,255,0.85); text-decoration:none; border-left:2px solid #C5A46D;">
-          <span><strong style="color:#C5A46D; font-weight:700;">Villa Mechmech</strong> &nbsp;·&nbsp; A4 · 7 pages</span>
-          <span style="font-size:11px; color:rgba(197,164,109,0.70); white-space:nowrap;">oraya-guest-welcome-guide-print-mechmech.html</span>
+      </div>
+      <div class="review-hub__output">
+        <span class="review-hub__output-label">Villa Mechmech · A4 · 7 pages</span>
+        <span class="review-hub__output-desc">Mechmech, Sama</span>
+        <a href="oraya-guest-welcome-guide-print-mechmech.html" class="review-hub__output-cta" target="_blank" rel="noopener">
+          Open Mechmech Print Guide →
         </a>
-      </li>
-    </ul>
-    <p style="font-family:'Lato',system-ui,sans-serif; font-size:10px; color:rgba(255,255,255,0.40); margin-top:20px; font-style:italic;">
-      Phase 16C design prototype · A4 format · Images require final approval before guest distribution.
-    </p>
+      </div>
+      <div class="review-hub__output review-hub__output--current">
+        <span class="review-hub__output-label">Review Hub</span>
+        <span class="review-hub__output-desc">Return to the top of this page for all three output links and print instructions.</span>
+        <a href="#review-hub" class="review-hub__output-cta review-hub__output-cta--secondary">
+          ↑ Back to top
+        </a>
+      </div>
+    </div>
   </div>
 </div>
 

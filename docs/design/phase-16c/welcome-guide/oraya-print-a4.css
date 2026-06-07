@@ -862,6 +862,137 @@ strong { font-weight: 700; }
 
 
 /* ═══════════════════════════════════════════════════════
+   15.5 REVIEW BAR (screen only — prototype navigation)
+   ═══════════════════════════════════════════════════════ */
+
+.review-bar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--midnight);
+  border-bottom: 2px solid var(--gold);
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 48px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+}
+
+.review-bar__left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.review-bar__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: rgba(255, 255, 255, 0.55);
+  transition: color 0.15s;
+  white-space: nowrap;
+}
+
+.review-bar__back:hover {
+  color: var(--gold);
+}
+
+.review-bar__back svg {
+  opacity: 0.7;
+}
+
+.review-bar__divider {
+  width: 1px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.10);
+  flex-shrink: 0;
+}
+
+.review-bar__label {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.75);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.review-bar__badge {
+  font-family: var(--font-sans);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--midnight);
+  background: var(--gold);
+  padding: 2px 7px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.review-bar__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.review-bar__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  text-decoration: none;
+  padding: 6px 12px;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+  cursor: pointer;
+  border: none;
+  outline: none;
+}
+
+.review-bar__btn--print {
+  background: var(--gold);
+  color: var(--midnight);
+}
+
+.review-bar__btn--print:hover {
+  opacity: 0.85;
+}
+
+.review-bar__btn--alt {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.review-bar__btn--alt:hover {
+  color: var(--gold);
+  border-color: rgba(197, 164, 109, 0.35);
+}
+
+/* .print-document — wraps all .print-page divs in print files */
+.print-document {
+  /* Screen: transparent wrapper — layout handled by body centering */
+}
+
+
+/* ═══════════════════════════════════════════════════════
    16. PRINT MEDIA
    ═══════════════════════════════════════════════════════ */
 
@@ -1072,5 +1203,15 @@ strong { font-weight: 700; }
 
   /* ─── Suppress URL printing on links ────────────────────────── */
   a::after { content: none !important; }
+
+  /* ─── Review bar — hide entirely in print ────────────────────── */
+  .review-bar { display: none !important; }
+
+  /* ─── Print document wrapper ─────────────────────────────────── */
+  .print-document {
+    width: 210mm;
+    margin: 0;
+    padding: 0;
+  }
 
 }

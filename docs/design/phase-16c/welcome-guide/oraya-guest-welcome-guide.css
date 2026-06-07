@@ -1628,6 +1628,166 @@ strong {
 
 
 /* ═══════════════════════════════════════════════════════
+   8.5 REVIEW HUB (prototype overlay — not guest-facing)
+   ═══════════════════════════════════════════════════════ */
+
+.review-hub {
+  background: var(--midnight);
+  border-bottom: 3px solid var(--gold);
+  padding: var(--space-xl) var(--space-md) var(--space-lg);
+}
+
+.review-hub__inner {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+/* Header */
+.review-hub__tag {
+  display: inline-block;
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.20em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 8px;
+}
+
+.review-hub__title {
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--white);
+  margin-bottom: 6px;
+}
+
+.review-hub__subtitle {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+  margin-bottom: var(--space-lg);
+  line-height: 1.5;
+}
+
+/* Three output cards */
+.review-hub__outputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.review-hub__output {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(197, 164, 109, 0.18);
+  padding: 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+}
+
+.review-hub__output--current {
+  background: rgba(197, 164, 109, 0.08);
+  border-color: rgba(197, 164, 109, 0.35);
+}
+
+.review-hub__output-badge {
+  font-family: var(--font-sans);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gold);
+  background: rgba(197, 164, 109, 0.14);
+  padding: 2px 7px;
+  display: inline-block;
+  width: fit-content;
+  margin-bottom: 2px;
+}
+
+.review-hub__output-number {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.30);
+  letter-spacing: 0.06em;
+}
+
+.review-hub__output-label {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--white);
+  line-height: 1.35;
+}
+
+.review-hub__output-desc {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.45);
+  line-height: 1.4;
+  flex: 1;
+}
+
+.review-hub__output-cta {
+  display: inline-block;
+  margin-top: 10px;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--midnight);
+  background: var(--gold);
+  padding: 7px 12px;
+  text-align: center;
+  transition: opacity 0.15s;
+}
+
+.review-hub__output-cta:hover {
+  opacity: 0.85;
+}
+
+.review-hub__output-cta--secondary {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.review-hub__output-cta--secondary:hover {
+  color: var(--gold);
+  border-color: var(--gold-soft);
+  opacity: 1;
+}
+
+/* Print instructions bar */
+.review-hub__print-instructions {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 10px 14px;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.45);
+  line-height: 1.6;
+}
+
+.review-hub__print-instructions strong {
+  color: rgba(255, 255, 255, 0.65);
+  font-weight: 700;
+}
+
+/* Responsive: stack cards on narrow screens */
+@media (max-width: 540px) {
+  .review-hub__outputs {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* ═══════════════════════════════════════════════════════
    9. PRINT MEDIA
    ═══════════════════════════════════════════════════════
    NOTE (2026-06-07): Print output has moved to standalone
@@ -1652,6 +1812,7 @@ strong {
   .prototype-notice,
   .digital-guide,
   .print-files-notice,
+  .review-hub,
   .pm-header,
   .screen-only {
     display: none !important;
