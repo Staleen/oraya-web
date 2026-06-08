@@ -67,16 +67,28 @@ const GUIDES = [
       // Viewport wider than 210mm (793.7px) so the page card renders naturally
       await page.setViewport({ width: 1080, height: 800 });
 
-      // Load the print template. networkidle2 tolerates slow Google Fonts.
+      // Load the print template. networkidle2 tolerates slow Google Fonts + Unsplash images.
       const fileUrl = pathToFileURL(guide.html).href;
-      await page.goto(fileUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+      await page.goto(fileUrl, { waitUntil: 'networkidle2', timeout: 60000 });
 
       // Wait for fonts (Playfair Display + Lato via Google Fonts CDN)
       await page.evaluate(() => document.fonts.ready);
 
-      // The HTML files are pure print templates — no media-type switch needed.
-      // @page { size: A4; margin: 0 } and physical-unit page dimensions handle
-      // the layout. Each .hb-page (210mm × 297mm) maps to exactly one A4 page.
+      // Switch to print media type so all @media print CSS rules are applied.
+      // Without this, Puppeteer renders in screen mode even during page.pdf(),
+      // causing body padding / page margins to persist and producing 60+ pages
+      // instead of the correct 7 A4 pages.
+      await page.emulateMediaType('print');
+
+      // Inject a safety override — ensures margin:0 even if @media print is
+      // applied late, and re-confirms page-break rules.
+      await page.addStyleTag({ content: [
+        'html,body{margin:0!important;padding:0!important;background:transparent!important;}',
+        '.hb-page{margin:0 auto!important;box-shadow:none!important;',
+        'break-after:page;page-break-after:always;}',
+        '.hb-page:last-of-type{break-after:auto;page-break-after:auto;}',
+      ].join('') });
+
       // Write via buffer to survive EBUSY (file open in a PDF viewer / OneDrive lock).
       const pdfBuffer = await page.pdf({
         format: 'A4',

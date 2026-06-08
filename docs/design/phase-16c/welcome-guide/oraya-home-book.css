@@ -189,6 +189,20 @@ body {
   flex: 1;
 }
 
+/* Entry / access images in the right column */
+.hb-p2-img {
+  height: 26mm;
+  margin-bottom: 3mm;
+  border-radius: 2pt;
+  overflow: hidden;
+  position: relative;
+  flex-shrink: 0;
+}
+.hb-p2-img img {
+  width: 100%; height: 100%;
+  object-fit: cover; object-position: center;
+}
+
 .hb-section { margin-bottom: 4mm; }
 .hb-section:last-child { margin-bottom: 0; }
 
@@ -257,9 +271,18 @@ body {
 .hb-wifi-creds  { display: flex; gap: 5mm; margin-top: 3pt; }
 .hb-wifi-val    { font-size: 10pt; font-weight: 700; color: var(--midnight); display: block; }
 
+/* Utility card top image — bleeds to top/side edges (kitchen, BBQ, fireplace, etc.) */
+.hb-util-card-img {
+  height: 19mm;
+  margin: -3mm -4mm 4pt;
+  overflow: hidden; position: relative;
+  border-radius: 2pt 2pt 0 0;
+}
+.hb-util-card-img img  { width: 100%; height: 100%; object-fit: cover; object-position: center; }
+
 /* Pool image inside card — bleeds to top/side edges of the card */
 .hb-util-pool-img {
-  height: 19mm;
+  height: 22mm;
   margin: -3mm -4mm 4pt;
   overflow: hidden; position: relative;
   border-radius: 2pt 2pt 0 0;
@@ -410,7 +433,22 @@ body {
 
 /* ─── Print overrides ──────────────────────────────────────────────── */
 @media print {
-  html, body { background: #fff; padding: 0; }
-  .hb-page { box-shadow: none; margin: 0; }
+  html, body {
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  .hb-page {
+    box-shadow: none !important;
+    margin: 0 auto !important;
+    width: 210mm !important;
+    height: 297mm !important;
+    break-after: page;
+    page-break-after: always;
+  }
+  .hb-page:last-of-type {
+    break-after: auto;
+    page-break-after: auto;
+  }
   a::after { content: none !important; }
 }
