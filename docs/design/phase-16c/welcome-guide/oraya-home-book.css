@@ -293,7 +293,7 @@ body {
 .hb-util-card--wide  { grid-column: 1 / -1; }
 .hb-util-card--span2 { grid-column: span 2; }
 
-.hb-util-title  { font-size: 9pt; font-weight: 700; color: var(--midnight); margin-bottom: 3pt; }
+.hb-util-title  { font-size: 8.5pt; font-weight: 700; color: var(--gold); text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 3pt; padding-bottom: 3pt; border-bottom: 0.4pt solid rgba(197,164,109,0.30); }
 .hb-util-body   { font-size: 8.5pt; line-height: 1.5; color: var(--charcoal); }
 .hb-util-note   { font-size: 7.5pt; line-height: 1.4; color: var(--muted); font-style: italic; margin-top: 3pt; }
 
@@ -301,21 +301,21 @@ body {
 .hb-wifi-creds  { display: flex; gap: 5mm; margin-top: 3pt; }
 .hb-wifi-val    { font-size: 10pt; font-weight: 700; color: var(--midnight); display: block; }
 
-/* Utility card top image — bleeds to top/side edges (kitchen, BBQ, fireplace, etc.) */
+/* Utility card inline image — appears after title, before body text */
 .hb-util-card-img {
-  height: 19mm;
-  margin: -3mm -4mm 4pt;
+  height: 14mm;
+  margin-bottom: 4pt;
   overflow: hidden; position: relative;
-  border-radius: 2pt 2pt 0 0;
+  border-radius: 2pt;
 }
 .hb-util-card-img img  { width: 100%; height: 100%; object-fit: cover; object-position: center; }
 
-/* Pool image inside card — bleeds to top/side edges of the card */
+/* Pool image inside card — inline, appears after title, slightly taller */
 .hb-util-pool-img {
-  height: 22mm;
-  margin: -3mm -4mm 4pt;
+  height: 18mm;
+  margin-bottom: 4pt;
   overflow: hidden; position: relative;
-  border-radius: 2pt 2pt 0 0;
+  border-radius: 2pt;
 }
 .hb-util-pool-img img  { width: 100%; height: 100%; object-fit: cover; object-position: center; }
 
@@ -330,7 +330,7 @@ body {
    PAGE 4 — USING THE VILLA
 ═══════════════════════════════════════════════════════════════════════ */
 .hb-p4-support {
-  background: var(--beige-lt); border-left: 2pt solid var(--gold);
+  background: rgba(197,164,109,0.10); border-left: 2pt solid var(--gold);
   padding: 3mm 4mm; margin-bottom: 3mm;
   flex-shrink: 0; font-size: 8.5pt; color: var(--charcoal); line-height: 1.5;
 }
