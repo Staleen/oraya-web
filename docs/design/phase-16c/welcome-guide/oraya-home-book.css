@@ -474,6 +474,45 @@ body {
 .hb-p7-brand { text-align: center; margin-top: auto; padding-top: 4mm; flex-shrink: 0; }
 .hb-p7-url   { font-size: 8pt; color: var(--muted); }
 
+/* ─── Page 1 additions: Map link + WhatsApp link ─────────────────────── */
+.hb-p1-map-link {
+  display: flex; align-items: center; gap: 2.5mm;
+  margin-top: 3pt;
+  text-decoration: none; color: inherit;
+  background: var(--beige-lt); border: 0.4pt solid var(--beige);
+  border-radius: 2pt; padding: 2.5mm 3mm;
+}
+.hb-p1-wa-link {
+  display: inline-flex; align-items: center; gap: 2mm;
+  text-decoration: none; color: inherit;
+}
+
+/* ─── Page 2 additions: Lower section wrapper + info callout blocks ───── */
+.hb-p2-lower {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.hb-p2-info-row {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr;
+  gap: 4mm; margin-bottom: 4mm;
+}
+.hb-p2-info-block {
+  background: var(--beige-lt);
+  border: 0.4pt solid var(--beige);
+  border-top: 2pt solid var(--gold);
+  padding: 4mm 5mm;
+  border-radius: 0 0 2pt 2pt;
+}
+.hb-p2-info-block .hb-section-title { margin-bottom: 4pt; }
+.hb-p2-info-block .hb-body { font-size: 10pt; line-height: 1.55; }
+
+/* ─── Page 4 additions: Taller images for merged sections ─────────────── */
+.hb-p4-img--tall { height: 28mm; }
+
 /* ─── Print overrides ──────────────────────────────────────────────── */
 @media print {
   html, body {
