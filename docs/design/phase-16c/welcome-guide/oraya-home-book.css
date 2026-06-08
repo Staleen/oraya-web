@@ -182,26 +182,56 @@ body {
 /* ═══════════════════════════════════════════════════════════════════════
    PAGE 2 — ARRIVAL & ACCESS
 ═══════════════════════════════════════════════════════════════════════ */
-.hb-p2-grid {
+
+/* Arrival sequence sub-grid: steps left, entry images right */
+.hb-p2-seq {
   display: grid;
   grid-template-columns: 5fr 4fr;
   gap: 5mm;
-  flex: 1;
+  align-items: stretch;
+  margin-top: 4pt;
+}
+.hb-p2-seq__steps { /* left column — holds .hb-steps */ }
+
+.hb-p2-seq__imgs {
+  display: flex;
+  flex-direction: column;
+  gap: 3mm;
 }
 
-/* Entry / access images in the right column */
+/* Entry / access images — fill the height of the steps column equally */
 .hb-p2-img {
-  height: 26mm;
-  margin-bottom: 3mm;
+  flex: 1;
+  min-height: 20mm;
   border-radius: 2pt;
   overflow: hidden;
   position: relative;
-  flex-shrink: 0;
 }
 .hb-p2-img img {
   width: 100%; height: 100%;
   object-fit: cover; object-position: center;
+  display: block;
 }
+
+/* Access support box — matches old HTML pp-access-support layout */
+.hb-access-box {
+  background: var(--beige-lt);
+  border: 0.4pt solid var(--beige);
+  border-left: 2pt solid var(--gold);
+  padding: 3mm 4mm;
+}
+.hb-access-box__cases {
+  font-size: 8pt; font-weight: 700; color: var(--midnight);
+  text-transform: uppercase; letter-spacing: 0.04em;
+  line-height: 1.5; margin-bottom: 4pt;
+}
+.hb-access-box__contact-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 4mm; margin-bottom: 2pt; font-size: 9pt;
+}
+.hb-access-box__msg   { color: var(--charcoal); }
+.hb-access-box__phone { font-weight: 700; color: var(--midnight); white-space: nowrap; }
+.hb-access-box__avail { font-size: 8pt; color: var(--muted); font-style: italic; display: block; }
 
 .hb-section { margin-bottom: 4mm; }
 .hb-section:last-child { margin-bottom: 0; }
