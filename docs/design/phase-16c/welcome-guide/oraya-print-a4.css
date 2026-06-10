@@ -294,6 +294,30 @@ strong { font-weight: 700; }
   padding: 3px 0;
 }
 
+/* ─── Clickable maps link (page 1 villa location) ────────────── */
+.pp-maps-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  color: var(--muted);
+  font-style: italic;
+  text-decoration: none;
+  margin-top: 3px;
+}
+.pp-maps-link:hover { color: var(--gold); }
+
+/* ─── WhatsApp clickable link ─────────────────────────────────── */
+.pp-wa-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  text-decoration: none;
+  color: inherit;
+  font-weight: 700;
+}
+
 .pp-guide-note {
   font-family: var(--font-sans);
   font-size: 10px;
@@ -353,6 +377,13 @@ strong { font-weight: 700; }
   display: flex;
   flex-direction: column;
   gap: 8px;
+  align-self: stretch;
+}
+
+/* Keypad images fill the full right-column height equally */
+.pp-two-col__right .image-placeholder {
+  flex: 1;
+  min-height: 0;
 }
 
 .pp-numbered-steps {

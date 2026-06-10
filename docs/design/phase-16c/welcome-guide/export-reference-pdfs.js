@@ -7,13 +7,20 @@
  *   oraya-guest-welcome-guide-print-byblos.html
  *   oraya-guest-welcome-guide-print-mechmech.html
  *
- * These use oraya-print-a4.css which already contains correct @media print
- * rules:  @page { size: A4; margin: 0 }  ·  html { width: 210mm }
- *         .print-page { width: 620px; height: 297mm; break-after: page }
+ * RENDERING STRATEGY — screen mode, not print mode:
+ *   We do NOT call emulateMediaType('print') because the print CSS
+ *   reflows layout and changes font physical sizes relative to the screen
+ *   preview. Instead we render in screen mode and inject CSS that:
+ *     - hides the review bar and prototype notice
+ *     - strips body background / padding
+ *     - adds page breaks between .print-page elements
+ *   Then export with scale ≈ 1.28 so the 620px screen width fills 210mm
+ *   A4 width, and each 877px screen page fills 297mm A4 height exactly.
  *
- * Concept images (assets/concept/*.png) don't exist on disk yet — this
- * script patches them to equivalent Unsplash images before rendering so
- * the PDF visually matches the approved HTML preview.
+ *   Result: PDF looks identical to the HTML browser preview.
+ *
+ * Concept images (assets/concept/*.png) don't exist on disk — this
+ * script patches them to Unsplash equivalents before rendering.
  *
  * Output:
  *   exports/oraya-guide-print-byblos.pdf
@@ -40,25 +47,27 @@ if (!fs.existsSync(EXPORTS_DIR)) {
 /* ─────────────────────────────────────────────────────────────────
    CONCEPT IMAGE REPLACEMENTS
    Maps the local asset filename stem to a matching Unsplash image.
-   Aspect ratios chosen to match the concept-img-wrap heights in CSS:
-     --hero   195px tall, 540px wide  (page-width image)
-     --small   82px tall
-     --micro   58px tall (thumb strip)
 ───────────────────────────────────────────────────────────────── */
 const CONCEPT_IMAGE_MAP = {
-  // Byblos — coastal Mediterranean villa
   'byblos-exterior':    'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=1200&h=400&fit=crop&crop=center',
-
-  // Mechmech — mountain villa with pool
   'mechmech-exterior':  'https://images.unsplash.com/photo-1571896349842-33c89424de2d?w=1200&h=400&fit=crop&crop=center',
   'mechmech-pool':      'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=900&h=320&fit=crop&crop=center',
   'mechmech-03-garden': 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=700&h=280&fit=crop&crop=center',
-
-  // Hospitality details (used in both guides)
   'mechmech-02':        'https://images.unsplash.com/photo-1540518614846-7eded433c457?w=240&h=200&fit=crop&crop=center',
   'mechmech-04':        'https://images.unsplash.com/photo-1452195100486-9cc805987862?w=240&h=180&fit=crop&crop=center',
   'mechmech-06':        'https://images.unsplash.com/photo-1556909212-d5b604d0c90d?w=240&h=180&fit=crop&crop=center',
 };
+
+/* ─────────────────────────────────────────────────────────────────
+   SCALE FACTOR
+   Screen page: 620px wide × 877px tall (A4 ratio at 75 CSS DPI).
+   A4 at 96 CSS DPI: 793.7px wide × 1122px tall.
+   Scale = 793.7 / 620 ≈ 1.28
+   → 620px × 1.28 = 793.6px = 210mm (fills A4 width)
+   → 877px × 1.28 = 1122.6px = 297mm (fills A4 height)
+   The PDF will look exactly like the browser preview.
+───────────────────────────────────────────────────────────────── */
+const PDF_SCALE = 793.7 / 620; // ≈ 1.2802
 
 const GUIDES = [
   {
@@ -74,8 +83,10 @@ const GUIDES = [
 ];
 
 (async () => {
-  console.log('Oraya Print Guide — Reference PDF Export');
-  console.log('─'.repeat(44));
+  console.log('Oraya Print Guide — Reference PDF Export (screen-mode)');
+  console.log('─'.repeat(55));
+  console.log('Scale: ' + PDF_SCALE.toFixed(4) + '  (620px → 210mm A4 width)');
+  console.log('');
 
   const browser = await puppeteer.launch({
     headless: true,
@@ -83,37 +94,34 @@ const GUIDES = [
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--allow-file-access-from-files',
-      '--disable-web-security',          // allows file:// page to load external images
+      '--disable-web-security',
     ],
   });
 
   try {
     for (const guide of GUIDES) {
-      console.log(`\n${guide.label}`);
-      console.log(`  Source : ${path.relative(process.cwd(), guide.html)}`);
-      console.log(`  Output : ${path.relative(process.cwd(), guide.pdf)}`);
+      console.log(guide.label);
+      console.log('  Source : ' + path.relative(process.cwd(), guide.html));
+      console.log('  Output : ' + path.relative(process.cwd(), guide.pdf));
 
       const page = await browser.newPage();
 
-      // Wide viewport so the 620px page cards render naturally in screen mode
-      await page.setViewport({ width: 900, height: 1200 });
+      // Set viewport to exactly 620px — matches .print-page max-width.
+      // No centering margin needed; content fills the viewport width.
+      await page.setViewport({ width: 620, height: 877 });
 
-      // Load the file — networkidle2 waits for Google Fonts CDN
+      // Load in screen mode (no emulateMediaType)
       const fileUrl = pathToFileURL(guide.html).href;
       await page.goto(fileUrl, { waitUntil: 'networkidle2', timeout: 60000 });
 
-      // Wait for Playfair Display + Lato to finish loading
+      // Wait for Playfair Display + Lato
       await page.evaluate(() => document.fonts.ready);
 
       // ── Patch concept image src values to Unsplash equivalents ──────────
-      // The local assets/concept/*.png files don't exist on disk yet; we
-      // replace each broken src with the matching Unsplash URL so the PDF
-      // matches the approved visual design.
       await page.evaluate((imageMap) => {
         document.querySelectorAll('.concept-img').forEach(img => {
-          const src = img.getAttribute('src') || '';
-          // Stem = filename without path or extension
-          const stem = src.replace(/^.*[\\/]/, '').replace(/\.[^.]+$/, '');
+          var src = img.getAttribute('src') || '';
+          var stem = src.replace(/^.*[\\/]/, '').replace(/\.[^.]+$/, '');
           if (imageMap[stem]) {
             img.setAttribute('src', imageMap[stem]);
             img.removeAttribute('srcset');
@@ -122,74 +130,78 @@ const GUIDES = [
         });
       }, CONCEPT_IMAGE_MAP);
 
-      // Wait for patched images to load (up to 15 s)
-      await page.evaluate(() => new Promise(resolve => {
-        const imgs = Array.from(document.querySelectorAll('.concept-img'));
-        let pending = imgs.filter(i => !i.complete).length;
+      // Wait for patched images (up to 12 s)
+      await page.evaluate(() => new Promise(function(resolve) {
+        var imgs = Array.from(document.querySelectorAll('.concept-img'));
+        var pending = imgs.filter(function(i) { return !i.complete; }).length;
         if (pending === 0) { resolve(); return; }
-        const done = () => { if (--pending === 0) resolve(); };
-        imgs.forEach(img => {
+        var done = function() { if (--pending === 0) resolve(); };
+        imgs.forEach(function(img) {
           if (!img.complete) { img.onload = img.onerror = done; }
         });
-        setTimeout(resolve, 15000);
+        setTimeout(resolve, 12000);
       }));
 
-      // ── Switch to print media type ────────────────────────────────────────
-      // oraya-print-a4.css already defines all necessary @media print rules:
-      //   @page { size: A4 portrait; margin: 0 }
-      //   html, body { width: 210mm; }
-      //   .print-page { width: 620px; height: 297mm; break-after: page; }
-      //   .review-bar, .prototype-notice { display: none !important; }
-      await page.emulateMediaType('print');
-
-      // ── Safety overrides — reinforce print rules after media switch ────────
+      // ── Inject screen-mode PDF CSS ────────────────────────────────────────
+      // Hides review UI, strips body chrome, adds page breaks.
+      // No emulateMediaType — screen CSS stays active for identical layout.
       await page.addStyleTag({ content: [
-        'html,body{margin:0!important;padding:0!important;background:#fff!important;}',
+        // Hide prototype UI
         '.review-bar,.prototype-notice{display:none!important;}',
-        '.print-document{width:210mm;margin:0;padding:0;',
-          'display:flex;flex-direction:column;align-items:center;}',
+        // Clean body
+        'html{background:#fff!important;}',
+        'body{margin:0!important;padding:0!important;background:#fff!important;}',
+        // Stack pages flush — no shadow, no gap
+        '.print-document{width:620px;margin:0;padding:0;}',
         '.print-page{',
-          'width:620px;height:297mm;padding:36px 40px;',
-          'box-sizing:border-box;',
-          'box-shadow:none!important;border:none!important;margin:0!important;',
-          'break-after:page;page-break-after:always;}',
+          'box-shadow:none!important;',
+          'border:none!important;',
+          'margin:0!important;',
+          'break-after:page;',
+          'page-break-after:always;',
+        '}',
         '.print-page:last-of-type,.print-page:last-child{',
-          'break-after:auto;page-break-after:auto;}',
-        '.concept-img{width:100%;display:block;object-fit:cover;}',
+          'break-after:auto;page-break-after:auto;',
+        '}',
+        // Suppress link underline annotations in PDF
+        'a::after{content:none!important;}',
       ].join('') });
 
       // ── Generate PDF ──────────────────────────────────────────────────────
+      // scale ≈ 1.28: maps 620px screen width to 210mm A4 width,
+      // and each 877px page to exactly 297mm A4 height.
       const pdfBuffer = await page.pdf({
-        format: 'A4',
-        printBackground: true,
-        displayHeaderFooter: false,
+        format:               'A4',
+        scale:                PDF_SCALE,
+        printBackground:      true,
+        displayHeaderFooter:  false,
         margin: { top: 0, right: 0, bottom: 0, left: 0 },
       });
 
-      // ── Write — survive EBUSY (PDF open in viewer / OneDrive sync) ────────
+      // ── Write — survive EBUSY ─────────────────────────────────────────────
       let savedPath = guide.pdf;
       try {
         fs.writeFileSync(guide.pdf, pdfBuffer);
       } catch (writeErr) {
         if (writeErr.code === 'EBUSY') {
-          const tmpPath = guide.pdf.replace(/\.pdf$/i, `.tmp${Date.now()}.pdf`);
+          var tmpPath = guide.pdf.replace(/\.pdf$/i, '.tmp' + Date.now() + '.pdf');
           fs.writeFileSync(tmpPath, pdfBuffer);
-          const oldPath = guide.pdf + '.old';
           try {
-            try { fs.renameSync(guide.pdf, oldPath); } catch (_) { /* already gone */ }
+            try { fs.renameSync(guide.pdf, guide.pdf + '.old'); } catch (_) {}
             fs.renameSync(tmpPath, guide.pdf);
-            try { fs.unlinkSync(oldPath); } catch (_) { /* best-effort cleanup */ }
-          } catch (renameErr) {
+            try { fs.unlinkSync(guide.pdf + '.old'); } catch (_) {}
+          } catch (_) {
             savedPath = tmpPath;
-            console.warn(`  Warning: PDF locked — saved as: ${path.basename(tmpPath)}`);
+            console.warn('  Warning: PDF locked — saved as: ' + path.basename(tmpPath));
           }
         } else {
           throw writeErr;
         }
       }
 
-      const sizeKB = Math.round(fs.statSync(savedPath).size / 1024);
-      console.log(`  Status : OK — ${sizeKB} KB`);
+      var sizeKB = Math.round(fs.statSync(savedPath).size / 1024);
+      console.log('  Status : OK — ' + sizeKB + ' KB');
+      console.log('');
 
       await page.close();
     }
@@ -197,10 +209,10 @@ const GUIDES = [
     await browser.close();
   }
 
-  console.log('\n' + '─'.repeat(44));
+  console.log('─'.repeat(55));
   console.log('Done. PDFs saved to:');
-  console.log(`  ${EXPORTS_DIR}`);
-})().catch(err => {
+  console.log('  ' + EXPORTS_DIR);
+})().catch(function(err) {
   console.error('\nExport failed:', err.message);
   process.exit(1);
 });
