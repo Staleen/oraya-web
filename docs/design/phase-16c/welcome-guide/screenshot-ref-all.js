@@ -13,6 +13,8 @@ const CONCEPT_IMAGE_MAP = {
   'mechmech-02':        'https://images.unsplash.com/photo-1540518614846-7eded433c457?w=240&h=200&fit=crop',
   'mechmech-04':        'https://images.unsplash.com/photo-1452195100486-9cc805987862?w=240&h=180&fit=crop',
   'mechmech-06':        'https://images.unsplash.com/photo-1556909212-d5b604d0c90d?w=240&h=180&fit=crop',
+  'villa-kitchen':      'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=600&h=100&fit=crop',
+  'villa-bbq':          'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=600&h=100&fit=crop',
 };
 
 (async () => {

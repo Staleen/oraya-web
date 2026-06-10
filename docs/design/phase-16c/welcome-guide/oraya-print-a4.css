@@ -465,6 +465,8 @@ strong { font-weight: 700; }
   grid-template-columns: 1fr 1fr;
   gap: 11px;
   flex: 1;
+  align-items: start; /* cards shrink to content — no giant empty boxes */
+  align-content: start;
 }
 
 .pp-utility-item {
