@@ -465,13 +465,13 @@ strong { font-weight: 700; }
   grid-template-columns: 1fr 1fr;
   gap: 11px;
   flex: 1;
-  align-items: start; /* cards shrink to content — no giant empty boxes */
-  align-content: start;
+  align-items: start;          /* cards shrink to content — no empty beige boxes */
+  align-content: space-between; /* rows spread across the full page height */
 }
 
 .pp-utility-item {
   background: var(--beige-light);
-  padding: 10px 12px;
+  padding: 12px 14px;
 }
 
 .pp-utility-item--wide {
@@ -480,25 +480,25 @@ strong { font-weight: 700; }
 
 .pp-utility-title {
   font-family: var(--font-sans);
-  font-size: 9px;
+  font-size: 9.5px;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--gold);
-  margin-bottom: 6px;
-  padding-bottom: 4px;
+  margin-bottom: 7px;
+  padding-bottom: 5px;
   border-bottom: 1px solid var(--gold-soft);
 }
 
 .pp-utility-item p {
-  font-size: 11px;
-  line-height: 1.55;
+  font-size: 12px;
+  line-height: 1.6;
   color: var(--charcoal);
   margin-top: 4px;
 }
 
 .pp-utility-item p + p {
-  margin-top: 3px;
+  margin-top: 4px;
 }
 
 .pp-utility-note {
@@ -573,28 +573,30 @@ strong { font-weight: 700; }
   grid-template-columns: 1fr 1fr;
   gap: 11px;
   flex: 1;
+  align-items: start;          /* cards shrink to content — no empty beige boxes */
+  align-content: space-between; /* rows spread across the full page height */
 }
 
 .pp-expectation-item {
   background: var(--beige-light);
-  padding: 10px 12px;
+  padding: 12px 14px;
 }
 
 .pp-expectation-title {
   font-family: var(--font-sans);
-  font-size: 9px;
+  font-size: 9.5px;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--charcoal);
-  margin-bottom: 6px;
-  padding-bottom: 4px;
+  margin-bottom: 7px;
+  padding-bottom: 5px;
   border-bottom: 1px solid var(--muted-light);
 }
 
 .pp-expectation-item p {
-  font-size: 11px;
-  line-height: 1.55;
+  font-size: 12px;
+  line-height: 1.6;
   color: var(--charcoal);
 }
 
