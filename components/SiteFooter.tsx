@@ -41,7 +41,7 @@ export default function SiteFooter() {
       title: "Contact",
       links: [
         { label: "hello@stayoraya.com", href: "mailto:hello@stayoraya.com" },
-        { label: "WhatsApp",            href: "#" },
+        { label: "+961 71 140 041",       href: "https://wa.me/96171140041" },
         { label: "Instagram",           href: "#" },
         { label: "Lebanon",             href: "#" },
       ],
