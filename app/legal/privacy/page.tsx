@@ -80,7 +80,16 @@ export default function PrivacyPage() {
       <h2 style={subheading}>Contact</h2>
       <p style={body}>
         Questions about your data? Reach us at{" "}
-        <a href="mailto:hello@stayoraya.com" style={{ color: GOLD, textDecoration: "none" }}>hello@stayoraya.com</a>.
+        <a href="mailto:hello@stayoraya.com" style={{ color: GOLD, textDecoration: "none" }}>hello@stayoraya.com</a>{" "}
+        or by phone at{" "}
+        <a href="https://wa.me/96171140041" style={{ color: GOLD, textDecoration: "none" }}>+961 71 140 041</a>.
+      </p>
+      <p style={body}>
+        <strong>Registered address:</strong><br />
+        Street 413, I-126<br />
+        Hboub, Byblos<br />
+        Mount Lebanon 4001<br />
+        Lebanon
       </p>
     </>
   );
