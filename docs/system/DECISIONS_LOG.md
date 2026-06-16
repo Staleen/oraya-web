@@ -16,6 +16,15 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-06-17 - CyberSource Unified Checkout SDK metadata comes from capture context
+
+**Decision:** Credit Libanais / NetCommerce session parsing reads the CyberSource-returned Unified Checkout SDK metadata from the decoded capture context, including nested `ctx[*].data.clientLibrary` and `ctx[*].data.clientLibraryIntegrity`, before using any fallback asset URL.
+**Reason:** PR #64 Preview validation showed `POST /api/payments/unified-checkout-session` returning 200, but the browser loaded a generic CyberSource asset and the Unified Checkout UI did not mount. Redacted capture-context inspection showed the real SDK URL and integrity value were present under the Unified Checkout context payload, not top-level `data`.
+**Impact:** The checkout page now loads the bank/CyberSource-provided client library for the exact capture context. The session request also includes `PANENTRY` as the allowed payment type for card entry. Oraya still never collects card numbers or CVV; completion remains server-side transient-token authorization.
+**Reversible?:** yes.
+
+---
+
 ## 2026-06-17 - Preview payment links resolve from request origin
 
 **Decision:** Phase 16B payment execution routes resolve checkout, return, and booking-view URLs from the current Vercel Preview request origin instead of blindly falling back to `SITE_URL` when `NEXT_PUBLIC_SITE_URL` is stale or missing. Production behavior remains canonical: `https://stayoraya.com` is still the fallback outside Preview.

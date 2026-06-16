@@ -243,9 +243,31 @@ function decodeJwtPayload(jwt: string): Record<string, unknown> | null {
   }
 }
 
+function readObjectField(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
 function readStringField(payload: Record<string, unknown>, key: string) {
   const value = payload[key];
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function readUnifiedCheckoutContextData(payload: Record<string, unknown> | null) {
+  const topLevelData = readObjectField(payload?.data);
+  if (topLevelData) return topLevelData;
+
+  const contexts = Array.isArray(payload?.ctx) ? payload?.ctx : [];
+  for (const context of contexts) {
+    const row = readObjectField(context);
+    if (!row) continue;
+
+    const data = readObjectField(row.data);
+    if (data) return data;
+  }
+
+  return null;
 }
 
 function buildCaptureContextRequest(
@@ -427,9 +449,7 @@ export async function createCreditLibanaisUnifiedCheckoutSession(
   }
 
   const sessionPayload = decodeJwtPayload(sessionJwt);
-  const data = sessionPayload?.data && typeof sessionPayload.data === "object"
-    ? (sessionPayload.data as Record<string, unknown>)
-    : null;
+  const data = readUnifiedCheckoutContextData(sessionPayload);
   const clientLibrary = data ? readStringField(data, "clientLibrary") : null;
   const clientLibraryIntegrity = data ? readStringField(data, "clientLibraryIntegrity") : null;
 
