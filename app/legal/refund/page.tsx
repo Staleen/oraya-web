@@ -24,7 +24,7 @@ export default function RefundPage() {
       </p>
       <p style={body}>
         If you withdraw a <strong>pending request</strong> before Oraya has confirmed dates and requested payment, there is typically no deposit to refund; simply contact us at{" "}
-        <a href="mailto:hello@stayoraya.com" style={{ color: GOLD, textDecoration: "none" }}>hello@stayoraya.com</a>. Once a booking is confirmed and a deposit has been received, the principles below and any bespoke terms shared with you apply. Payment mechanics are described in our{" "}
+        <a href="mailto:admin@stayoraya.com" style={{ color: GOLD, textDecoration: "none" }}>admin@stayoraya.com</a>. Once a booking is confirmed and a deposit has been received, the principles below and any bespoke terms shared with you apply. Payment mechanics are described in our{" "}
         <a href="/legal/payment" style={{ color: GOLD, textDecoration: "none" }}>Payment Policy</a>; general stay rules are in our{" "}
         <a href="/legal/terms" style={{ color: GOLD, textDecoration: "none" }}>Terms &amp; Conditions</a>.
       </p>
@@ -52,8 +52,9 @@ export default function RefundPage() {
       <h2 style={subheading}>Contact</h2>
       <p style={body}>
         Need to discuss a change?{" "}
-        <a href="mailto:hello@stayoraya.com" style={{ color: GOLD, textDecoration: "none" }}>hello@stayoraya.com</a>
-        {" "}— we read every message.
+        <a href="mailto:admin@stayoraya.com" style={{ color: GOLD, textDecoration: "none" }}>admin@stayoraya.com</a>
+        {" "}or{" "}
+        <a href="https://wa.me/96171140041" style={{ color: GOLD, textDecoration: "none" }}>+961 71 140 041</a>.
       </p>
     </>
   );

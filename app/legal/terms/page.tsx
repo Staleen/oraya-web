@@ -38,7 +38,7 @@ export default function TermsPage() {
       <p style={body}>
         A reservation is considered secured only after Oraya confirms availability and the agreed deposit is received. Payments are coordinated <strong>manually</strong> (for example Whish, bank transfer, or cash as described in our{" "}
         <a href="/legal/payment" style={{ color: GOLD, textDecoration: "none" }}>Payment Policy</a>
-        {" "}) — there is no third-party payment processor completing the stay on your behalf at checkout. Cancellation and refund principles after confirmation are outlined in our{" "}
+        {" "}). Online card payment, when enabled for a booking, is powered by NetCommerce through Credit Libanais / CyberSource Unified Checkout; Oraya records payment only after server-side gateway verification. Cancellation and refund principles after confirmation are outlined in our{" "}
         <a href="/legal/refund" style={{ color: GOLD, textDecoration: "none" }}>Cancellation &amp; Refund Policy</a>.
       </p>
 
@@ -58,7 +58,9 @@ export default function TermsPage() {
       <h2 style={subheading}>Contact</h2>
       <p style={body}>
         Questions about these terms? Reach us at{" "}
-        <a href="mailto:hello@stayoraya.com" style={{ color: GOLD, textDecoration: "none" }}>hello@stayoraya.com</a>.
+        <a href="mailto:admin@stayoraya.com" style={{ color: GOLD, textDecoration: "none" }}>admin@stayoraya.com</a>
+        {" "}or{" "}
+        <a href="https://wa.me/96171140041" style={{ color: GOLD, textDecoration: "none" }}>+961 71 140 041</a>.
       </p>
     </>
   );

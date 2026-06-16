@@ -171,6 +171,8 @@ export async function POST(request: Request) {
     const { token: viewToken } = createActionToken(booking.id, "view", {
       expiresAt: checkOutExpiryUnix(booking.check_out),
     });
+    const paymentDueAt = new Date(checkOutExpiryUnix(booking.check_out) * 1000).toISOString();
+    const paymentPageUrl = `${baseUrl}/payments/checkout/${viewToken}`;
     const successUrl = `${baseUrl}/booking/view/${viewToken}?payment=success`;
     const cancelUrl = `${baseUrl}/booking/view/${viewToken}?payment=cancelled`;
 
@@ -188,6 +190,8 @@ export async function POST(request: Request) {
       purpose,
       return_url: successUrl,
       cancel_url: cancelUrl,
+      payment_page_url: paymentPageUrl,
+      expires_at: paymentDueAt,
     });
 
     const nowIso = new Date().toISOString();

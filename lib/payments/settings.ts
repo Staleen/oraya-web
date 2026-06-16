@@ -46,7 +46,7 @@ export const DEFAULT_PAYMENT_PUBLIC_SETTINGS: PaymentPublicSettings = {
   manual_payment_rails: ["bank_transfer", "whish", "omt", "western_union", "cash"],
   payment_instructions: "",
   bank_transfer_public_details: "",
-  provider_display_name: "Credit Libanais / Online Card Payment",
+  provider_display_name: "Credit Libanais / NetCommerce Unified Checkout",
   online_payment_enabled: false,
 };
 

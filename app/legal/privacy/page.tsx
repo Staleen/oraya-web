@@ -38,6 +38,7 @@ export default function PrivacyPage() {
         <li>Your name and email address</li>
         <li>Your phone number and country, when provided</li>
         <li>Booking details: villa, dates, guest counts, add-ons, and any notes you share</li>
+        <li>Online payment status and gateway reference metadata from NetCommerce / Credit Libanais / CyberSource when you use secure card payment. Oraya does not collect or store your full card number or CVV.</li>
         <li>Payment references you share with us after we have confirmed your booking and requested payment (Whish reference, bank transfer reference, etc.) — see our{" "}
           <a href="/legal/payment" style={{ color: GOLD, textDecoration: "none" }}>Payment Policy</a> for how manual payment works</li>
       </ul>
@@ -80,7 +81,7 @@ export default function PrivacyPage() {
       <h2 style={subheading}>Contact</h2>
       <p style={body}>
         Questions about your data? Reach us at{" "}
-        <a href="mailto:hello@stayoraya.com" style={{ color: GOLD, textDecoration: "none" }}>hello@stayoraya.com</a>{" "}
+        <a href="mailto:admin@stayoraya.com" style={{ color: GOLD, textDecoration: "none" }}>admin@stayoraya.com</a>{" "}
         or by phone at{" "}
         <a href="https://wa.me/96171140041" style={{ color: GOLD, textDecoration: "none" }}>+961 71 140 041</a>.
       </p>

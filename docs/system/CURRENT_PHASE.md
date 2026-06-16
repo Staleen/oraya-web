@@ -1,7 +1,7 @@
 # Current Phase - Phase 16A closeout (substantially complete) / Phase 16B hosted payment execution
 
 **Updated:** 2026-06-03
-**Status:** Phase 16A is **substantially complete** for the lead-intake, secure website handoff, identity continuity, and confirmed-guest info boundary. Remaining 16A scope is operator-side WhatChimp wiring, confirmed-guest routing refinement, ensuring the generic AI does not answer booking-sensitive confirmed-guest questions, and (if/when scoped in) the `flow-submit` write-capable booking adapter. Location / PIN / access automation is **not** Phase 16A - it remains Phase 16D. Phase 16B is **active**: the provider-agnostic hosted-checkout architecture, payment-link schema, runtime plumbing, admin payment settings, Step 3 booking-flow consolidation (three explicit steps), and the dual-CTA Step 3 (primary "Continue to secure payment" + secondary "Reserve now, pay later") are all shipped. Credit Libanais / NetCommerce / MPGS is the only approved production provider; Stripe is isolated to local/dev. Live MPGS session creation, verified webhook execution, settlement reconciliation, refunds automation, WhatsApp payment-status replies, and Instant Book execution remain outstanding.
+**Status:** Phase 16A is **substantially complete** for the lead-intake, secure website handoff, identity continuity, and confirmed-guest info boundary. Remaining 16A scope is operator-side WhatChimp wiring, confirmed-guest routing refinement, ensuring the generic AI does not answer booking-sensitive confirmed-guest questions, and (if/when scoped in) the `flow-submit` write-capable booking adapter. Location / PIN / access automation is **not** Phase 16A - it remains Phase 16D. Phase 16B is **active**: the provider-agnostic hosted-checkout architecture, payment-link schema, runtime plumbing, admin payment settings, Step 3 booking-flow consolidation (three explicit steps), and the dual-CTA Step 3 (primary "Continue to secure payment" + secondary "Reserve now, pay later") are all shipped. Credit Libanais / NetCommerce / CyberSource Unified Checkout is the approved production direction; Stripe is isolated to local/dev. CyberSource session/capture-context plumbing and transient-token server authorization now exist for the Credit Libanais provider. Settlement reconciliation, webhook/MLE reconciliation, refunds automation, WhatsApp payment-status replies, and Instant Book execution remain outstanding.
 
 This file is rewritten at every phase transition. Treat it as a snapshot, not a log.
 
@@ -38,11 +38,11 @@ Phase 16B is active on the website Reserve path:
 - Step 3 presents two explicit Reserve actions: **primary "Continue to secure payment"** (gold solid CTA; blocks in the UI when the configured hosted-checkout provider is not truly ready) and **secondary "Reserve now, pay later"** (gold outline / transparent background CTA; submits a booking request without collecting payment on the website).
 - Add-ons and special requests do NOT block the stay payment. Approval-based add-ons are reviewed and charged separately after Oraya confirms. The pay-now path collects the stay payment first; approval items are reconciled afterwards.
 - `/admin/settings` owns guest-safe public payment behavior such as mode, deposit minimum, guest instructions, manual rails, provider display name, and the guest-visible online-payment-enabled flag. Gateway credentials remain server-only env vars and are never written to Supabase.
-- `POST /api/payments/checkout` creates a hosted checkout session only after the locked `/api/bookings` POST successfully creates the booking row.
-- `POST /api/payments/webhook/[provider]` is the authority for payment receipt updates; success redirects are informational only.
+- `POST /api/payments/checkout` creates a payment link only after the locked `/api/bookings` POST successfully creates the booking row. For Credit Libanais / NetCommerce, the link points to `/payments/checkout/[token]`; that page asks `POST /api/payments/unified-checkout-session` for a fresh CyberSource capture context.
+- Server-side gateway verification and/or `POST /api/payments/webhook/[provider]` is the authority for payment receipt updates; success redirects are informational only.
 - `/api/payments/readiness` surfaces non-secret provider readiness state to admins (configured vs implemented vs checkout-ready, missing requirements).
 
-Phase 16B is still incomplete. Live MPGS execution (session creation, callback verification, settlement), WhatsApp payment replies, refunds automation, and Instant Book execution are not part of the shipped path yet. See [/docs/phases/PHASE_16B_PLAN.md](../phases/PHASE_16B_PLAN.md) for the broader roadmap.
+Phase 16B is still incomplete. CyberSource session creation and transient-token server authorization are scaffolded for sandbox testing, but webhook/MLE reconciliation, settlement reconciliation, WhatsApp payment replies, refunds automation, and Instant Book execution are not complete. See [/docs/phases/PHASE_16B_PLAN.md](../phases/PHASE_16B_PLAN.md) for the broader roadmap.
 
 The current closeout work around those shipped Phase 16A surfaces is operational:
 
@@ -57,9 +57,9 @@ The current closeout work around those shipped Phase 16A surfaces is operational
 Keep the shipped Reserve payment flow stable while Phase 16A operator-side closeout continues and Phase 16B execution work proceeds:
 
 1. **Hosted-checkout execution hardening.** Ensure `POST /api/payments/checkout` and verified provider callbacks remain the only payment execution authority for Reserve bookings after the booking row exists.
-2. **Webhook-first truth.** Guest return URLs on `/booking/view/[token]` stay informational; payment state comes from verified webhook updates only.
+2. **Server-side payment truth.** Guest return URLs on `/booking/view/[token]` stay informational; payment state comes from server-side gateway verification and/or verified webhook updates only.
 3. **Confirmed-guest support wiring.** Wire the WhatChimp flow that calls `/api/butler/confirmed-guest-info` for identity-established confirmed guests, including the `butler_checkin_guidance` operator-managed settings row.
-4. **Operational readiness.** Preview + production must carry `PAYMENT_PROVIDER`, `NEXT_PUBLIC_SITE_URL`, the Phase 16A Butler secrets, and whichever provider-specific payment secrets match the selected hosted gateway. Credit Libanais merchant onboarding, MPGS endpoint + auth/signing method, and callback verification method must be confirmed before live execution is enabled.
+4. **Operational readiness.** Vercel Preview must carry the existing Supabase/token envs plus `PAYMENT_PROVIDER`, `NEXT_PUBLIC_SITE_URL`, and sandbox `NETCOMMERCE_CYBERSOURCE_*` values before Draft PR payment validation. Production remains gated: production credentials, production `NETCOMMERCE_CYBERSOURCE_*` values, and CyberSource webhook/MLE verification are required before live rollout / asynchronous reconciliation.
 5. **`POST /api/butler/flow-submit`** if/when scoped in must not bypass the locked `/api/bookings` POST or promise any payment automation beyond the shipped website hosted-payment flow.
 
 ## Just completed
@@ -136,13 +136,13 @@ Keep the shipped Reserve payment flow stable while Phase 16A operator-side close
 - **`BUTLER_WEBHOOK_SECRET` Vercel posture.** Production and Preview need the value set (Sensitive) before WhatChimp can call any `/api/butler/*` route in those environments. See [KNOWN_BUGS.md](KNOWN_BUGS.md) #4.
 - **DECISIONS_LOG header-name example drift.** The 2026-05-12 DECISIONS_LOG entry used `X-Butler-Auth` as an illustrative header name; the actual implementation in 16A.1 uses `X-Butler-Secret`. Architecturally identical; only the header name differs.
 - **WhatChimp inbound-text platform limitation.** The production WhatChimp tenant does not expose inbound message text as a Condition system field or HTTP API body variable - only first name, last name, label, email, phone number, chat ID are available. The backend's `message_text` extractor is forward-compatible code for channels that DO expose inbound text. See [KNOWN_BUGS.md](KNOWN_BUGS.md) #7.
-- **Payment execution remains incomplete.** Real MPGS session creation, verified callback execution, settlement reconciliation, refunds automation, WhatsApp payment-status replies, and Instant Book execution are not part of the shipped path. The shipped path supports admin-controlled settings-driven Step 3 plus booking-first hosted checkout against a placeholder Credit Libanais adapter and an isolated dev/test Stripe adapter.
+- **Payment execution remains incomplete.** CyberSource Unified Checkout session creation and transient-token server authorization are scaffolded for Credit Libanais / NetCommerce, but verified callback/webhook MLE reconciliation, settlement reconciliation, refunds automation, WhatsApp payment-status replies, and Instant Book execution are not part of the shipped path.
 - **Payment-provider envs are required for the hosted Reserve payment path.** Missing or incomplete provider configuration means Step 3 can create a booking row but fail to start hosted checkout, leaving the guest on `/booking/view/[token]?payment=setup_failed` until Oraya follows up manually.
 
 ## Out of scope this phase
 
 - No schema changes without explicit approval in the task prompt. If a new `butler_submissions` table is chosen over the jsonb-enrichment path, that decision goes through a separate approval gate.
-- No live Credit Libanais / MPGS execution until the bank contract (merchant id, gateway URL, session-creation endpoint, auth/signing method, callback verification method, currency/settlement behavior, sandbox/live mode) is confirmed and the adapter is implemented to match.
+- No production Credit Libanais / NetCommerce rollout until sandbox authorization is validated and the CyberSource webhook/MLE verification contract is completed and tested. Browser success/cancel returns remain informational only.
 - No refunds automation. Refund handling remains a later 16B work item.
 - No Instant Book payment execution. The instant-book UI exists but executes through the same hosted-checkout placeholder today; live instant execution remains later 16B work.
 - No smart-lock PIN issuance or access-code delivery. Phase 16D.
@@ -158,10 +158,10 @@ Keep the shipped Reserve payment flow stable while Phase 16A operator-side close
 
 In order:
 
-1. **Human action:** confirm the real bank gateway contract for Credit Libanais / NetCommerce / MPGS: merchant id, API endpoint, auth secret/key/certificate, callback verification method, settlement/currency rules, and sandbox vs live mode.
-2. **Human action:** set `PAYMENT_PROVIDER=credit_libanais` and the matching `CREDIT_LIBANAIS_*` secrets in Vercel Preview + Production, then register the real provider callback URL for each environment.
-3. **Human action:** confirm `NEXT_PUBLIC_SITE_URL` is set correctly in Preview + Production so hosted-payment success/cancel returns land on the right booking-view host.
+1. **Human action:** confirm the real bank gateway contract for Credit Libanais / NetCommerce / CyberSource: merchant id, API endpoint, auth key/secret, webhook/MLE verification method, settlement/currency rules, and sandbox vs production mode.
+2. **Human action:** set `PAYMENT_PROVIDER=credit_libanais` and sandbox `NETCOMMERCE_CYBERSOURCE_*` secrets in Vercel Preview for Draft PR payment validation. Do not set production live credentials or activate production payment until preview approval is complete.
+3. **Human action:** confirm `NEXT_PUBLIC_SITE_URL` is set to the HTTPS Vercel Preview origin for Draft PR validation so CyberSource capture-context target-origin checks and hosted-payment success/cancel returns land on the right booking-view host.
 4. **Operator wiring:** wire the WhatChimp confirmed-guest flow that calls `POST /api/butler/confirmed-guest-info` on identity-established confirmed guests, and populate the `butler_checkin_guidance` settings row.
 5. **Operator wiring:** confirm the WhatChimp welcome + booking-reference flow routes correctly on the `"Check my booking"` / `"Help with my booking"` substrings (the plain-sentence prefill format) - and confirm that the older `#ORAYA_REF:` / `#ORAYA_CHANGE:` triggers, if they were ever added, are removed or harmless.
-6. **Next 16B increment:** real Credit Libanais / MPGS adapter implementation, then admin payment controls / link reissue / payment refresh and the separate refund workflow, then WhatsApp payment-status replies only after identity-safe continuity remains stable.
+6. **Next 16B increment:** CyberSource webhook/MLE verification, then admin payment controls / link reissue / payment refresh and the separate refund workflow, then WhatsApp payment-status replies only after identity-safe continuity remains stable.
 7. **`POST /api/butler/flow-submit`** if/when scoped in: design and ship without bypassing the locked `/api/bookings` authority and without promising payment automation beyond the shipped hosted-payment flow.
