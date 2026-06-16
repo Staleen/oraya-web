@@ -124,6 +124,7 @@ Public vs server-only:
   - **CyberSource sandbox browser testing:** Unified Checkout requires the payment page origin in the capture context to be HTTPS. Use Vercel Preview, production, or a local HTTPS tunnel for real browser payment UI validation; plain `http://localhost:3000` cannot complete the Unified Checkout browser flow.
 - **Configure in Vercel:** yes for previews and production (so emails sent from a non-prod environment do not silently link to live).
 - **Risk if missing:** no errors — emails still send. But every link inside email bodies points to `https://stayoraya.com`, even from preview/local. Guests testing on preview would land on production data, which is misleading and dangerous for staging email tests. For CyberSource, a non-HTTPS local origin causes capture-context or browser SDK validation to fail before payment UI can mount.
+- **Payment-link behavior:** Phase 16B payment execution routes resolve `/payments/checkout/[token]`, payment return, and payment booking-view URLs from the current request origin when running on Vercel Preview. This prevents Preview-hosted checkout links from falling back to the production host when the Preview env value is stale or missing. Production still falls back to the canonical `https://stayoraya.com` origin. Transactional email and Butler link generation still depend on `NEXT_PUBLIC_SITE_URL` or the canonical fallback.
 
 ### Vercel Preview CyberSource sandbox checklist
 
@@ -151,6 +152,7 @@ Preview expectations:
 - `NETCOMMERCE_CYBERSOURCE_COUNTRY` should be the bank-confirmed country code, currently expected as `LB`.
 - `NETCOMMERCE_CYBERSOURCE_LOCALE` should be the bank-confirmed locale, currently expected as `en_US`.
 - `NEXT_PUBLIC_SITE_URL` should be the HTTPS Vercel Preview origin used for the payment page, because CyberSource validates the capture-context target origin.
+- Payment checkout routes use the actual Vercel Preview request origin for payment-link generation, so the tested branch alias and generated checkout links should stay on the same HTTPS host.
 - The webhook/MLE variables are optional for this sandbox server-side completion test. They are required before production live rollout and before asynchronous webhook reconciliation can be trusted.
 - Browser redirects remain informational. Server-side CyberSource authorization and/or a verified webhook are authoritative for payment state.
 

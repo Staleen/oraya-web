@@ -62,11 +62,28 @@ function formatMoney(amount?: number, currency?: string) {
   return `${currency ?? "USD"} ${amount.toFixed(2)}`;
 }
 
+function hasUnifiedCheckoutClient() {
+  return typeof (window as UnifiedCheckoutWindow).VAS?.UnifiedCheckout === "function";
+}
+
 function loadScript(src: string, integrity?: string | null) {
   return new Promise<void>((resolve, reject) => {
     const existing = document.querySelector<HTMLScriptElement>(`script[data-oraya-cybersource="true"]`);
     if (existing) {
-      resolve();
+      if (hasUnifiedCheckoutClient()) {
+        resolve();
+        return;
+      }
+      existing.addEventListener("load", () => {
+        if (hasUnifiedCheckoutClient()) {
+          resolve();
+        } else {
+          reject(new Error("CyberSource payment client did not initialize."));
+        }
+      }, { once: true });
+      existing.addEventListener("error", () => reject(new Error("CyberSource payment library could not be loaded.")), {
+        once: true,
+      });
       return;
     }
     const script = document.createElement("script");
@@ -77,7 +94,13 @@ function loadScript(src: string, integrity?: string | null) {
     script.crossOrigin = "anonymous";
     script.async = true;
     script.dataset.orayaCybersource = "true";
-    script.addEventListener("load", () => resolve(), { once: true });
+    script.addEventListener("load", () => {
+      if (hasUnifiedCheckoutClient()) {
+        resolve();
+      } else {
+        reject(new Error("CyberSource payment client did not initialize."));
+      }
+    }, { once: true });
     script.addEventListener("error", () => reject(new Error("CyberSource payment library could not be loaded.")), {
       once: true,
     });

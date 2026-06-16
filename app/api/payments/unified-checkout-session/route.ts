@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { verifyViewToken } from "@/lib/booking-action-token";
-import { SITE_URL } from "@/lib/brand";
 import { roundMoney } from "@/lib/money";
 import { createCreditLibanaisUnifiedCheckoutSession } from "@/lib/payments/credit-libanais";
 import { isPaymentLinkExpired } from "@/lib/payments/link-state";
 import { PaymentProviderConfigurationError } from "@/lib/payments/provider";
+import { resolvePaymentRequestOrigin } from "@/lib/payments/request-origin";
 import { getHostedCheckoutProviderByKey } from "@/lib/payments/runtime";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
@@ -103,7 +103,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim() || SITE_URL;
+    const baseUrl = resolvePaymentRequestOrigin(request);
     const successUrl = `${baseUrl}/booking/view/${token}?payment=success`;
     const cancelUrl = `${baseUrl}/booking/view/${token}?payment=cancelled`;
     const chargeAmount = getChargeAmount(booking);

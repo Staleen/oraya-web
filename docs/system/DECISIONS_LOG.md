@@ -16,6 +16,15 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-06-17 - Preview payment links resolve from request origin
+
+**Decision:** Phase 16B payment execution routes resolve checkout, return, and booking-view URLs from the current Vercel Preview request origin instead of blindly falling back to `SITE_URL` when `NEXT_PUBLIC_SITE_URL` is stale or missing. Production behavior remains canonical: `https://stayoraya.com` is still the fallback outside Preview.
+**Reason:** PR #64 Preview validation showed the pay-now path creating a real Preview booking but persisting the hosted payment link as `https://www.stayoraya.com/payments/checkout/...`. That blocked sandbox validation on the branch alias and risked crossing Preview test data into production-domain UX.
+**Impact:** Payment-only helper `lib/payments/request-origin.ts` is used by `POST /api/payments/checkout`, `POST /api/payments/unified-checkout-session`, and `POST /api/payments/unified-checkout-complete`. Locked `/api/bookings` remains untouched, so transactional email and booking-creation links still follow their existing `NEXT_PUBLIC_SITE_URL || SITE_URL` behavior.
+**Reversible?:** yes.
+
+---
+
 ## 2026-06-05 - Phase 16A natural stay intake — Batch 2 operator gate passed
 
 **Decision:** Technical gate passed: WhatChimp confirmed able to call `POST /api/butler/normalize-stay-intent` and map nested `extracted.*` response fields (`extracted.check_in`, `extracted.check_out`, `extracted.villa`, `extracted.guest_count`). Architecture validated, endpoint reachable, nested field mapping verified. Production stay-booking flow migration (custom field, trigger, capture node, HTTP API call, response branches, retirement of old four-step intake) is still pending operator action.

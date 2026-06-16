@@ -17,6 +17,7 @@ const CYBERSOURCE_SESSIONS_PATH = "/uc/v1/sessions";
 const CYBERSOURCE_PAYMENTS_PATH = "/pts/v2/payments";
 const CYBERSOURCE_UNIFIED_CHECKOUT_LIBRARY_PATH = "/uc/v1/assets/1.0.0/UnifiedCheckout.js";
 const DEFAULT_CAPTURE_CONTEXT_TTL_MINUTES = 20;
+const CYBERSOURCE_ALLOWED_PAYMENT_TYPES = ["PANENTRY"] as const;
 
 type NetCommerceEnvironment = "sandbox" | "production";
 
@@ -262,6 +263,7 @@ function buildCaptureContextRequest(
     targetOrigins: [targetOrigin],
     country: config.country,
     locale: config.locale,
+    allowedPaymentTypes: CYBERSOURCE_ALLOWED_PAYMENT_TYPES,
     data: {
       orderInformation: {
         amountDetails: {

@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { verifyViewToken } from "@/lib/booking-action-token";
-import { SITE_URL } from "@/lib/brand";
 import { roundMoney } from "@/lib/money";
 import {
   authorizeCreditLibanaisTransientToken,
@@ -8,6 +7,7 @@ import {
 } from "@/lib/payments/credit-libanais";
 import { isPaymentLinkExpired } from "@/lib/payments/link-state";
 import { PaymentProviderConfigurationError } from "@/lib/payments/provider";
+import { resolvePaymentRequestOrigin } from "@/lib/payments/request-origin";
 import { computeFoundationAmountDue, derivePaymentFoundationStage, getFoundationAmountTotal } from "@/lib/payment-foundation";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
@@ -77,8 +77,8 @@ function getChargeAmount(booking: UnifiedCheckoutCompletionBookingRow) {
   return depositAmount > 0 ? depositAmount : amountDue > 0 ? amountDue : amountTotal;
 }
 
-function bookingViewUrl(token: string) {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim() || SITE_URL;
+function bookingViewUrl(request: Request, token: string) {
+  const baseUrl = resolvePaymentRequestOrigin(request);
   return `${baseUrl}/booking/view/${token}`;
 }
 
@@ -110,7 +110,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Booking not found." }, { status: 404 });
     }
 
-    const viewUrl = bookingViewUrl(token);
+    const viewUrl = bookingViewUrl(request, token);
     if (booking.payment_link_status === "paid" || booking.payment_status === "deposit_paid" || booking.payment_status === "paid_in_full") {
       return NextResponse.json({ ok: true, paid: true, idempotent: true, booking_view_url: `${viewUrl}?payment=success` });
     }

@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { createActionToken, verifyViewToken } from "@/lib/booking-action-token";
-import { SITE_URL } from "@/lib/brand";
 import { roundMoney } from "@/lib/money";
 import { getMinimumDepositAmount, validatePaymentSelection } from "@/lib/payments/checkout-amount";
 import type { PaymentRequestPurpose } from "@/lib/payments/domain";
 import { PaymentProviderConfigurationError } from "@/lib/payments/provider";
+import { resolvePaymentRequestOrigin } from "@/lib/payments/request-origin";
 import { getConfiguredHostedCheckoutProvider } from "@/lib/payments/runtime";
 import {
   PAYMENT_PUBLIC_SETTINGS_KEY,
@@ -167,7 +167,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: selection.error }, { status: 400 });
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim() || SITE_URL;
+    const baseUrl = resolvePaymentRequestOrigin(request);
     const { token: viewToken } = createActionToken(booking.id, "view", {
       expiresAt: checkOutExpiryUnix(booking.check_out),
     });
