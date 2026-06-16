@@ -66,44 +66,62 @@ function hasUnifiedCheckoutClient() {
   return typeof (window as UnifiedCheckoutWindow).VAS?.UnifiedCheckout === "function";
 }
 
+function waitForUnifiedCheckoutClient(timeoutMs = 8000) {
+  return new Promise<void>((resolve, reject) => {
+    const startedAt = Date.now();
+
+    function check() {
+      if (hasUnifiedCheckoutClient()) {
+        resolve();
+        return;
+      }
+
+      if (Date.now() - startedAt >= timeoutMs) {
+        reject(new Error("CyberSource payment client did not initialize."));
+        return;
+      }
+
+      window.setTimeout(check, 100);
+    }
+
+    check();
+  });
+}
+
 function loadScript(src: string, integrity?: string | null) {
   return new Promise<void>((resolve, reject) => {
+    const expectedIntegrity = integrity?.trim() ?? "";
     const existing = document.querySelector<HTMLScriptElement>(`script[data-oraya-cybersource="true"]`);
     if (existing) {
       if (hasUnifiedCheckoutClient()) {
         resolve();
         return;
       }
-      existing.addEventListener("load", () => {
-        if (hasUnifiedCheckoutClient()) {
-          resolve();
-        } else {
-          reject(new Error("CyberSource payment client did not initialize."));
-        }
-      }, { once: true });
-      existing.addEventListener("error", () => reject(new Error("CyberSource payment library could not be loaded.")), {
-        once: true,
-      });
-      return;
+      if (existing.src === src && existing.integrity === expectedIntegrity) {
+        existing.addEventListener("load", () => {
+          waitForUnifiedCheckoutClient().then(resolve).catch(reject);
+        }, { once: true });
+        existing.addEventListener("error", () => reject(new Error("CyberSource payment library could not be loaded.")), {
+          once: true,
+        });
+        return;
+      }
+      existing.remove();
     }
     const script = document.createElement("script");
-    script.src = src;
-    if (integrity) {
-      script.integrity = integrity;
-    }
-    script.crossOrigin = "anonymous";
-    script.async = true;
     script.dataset.orayaCybersource = "true";
+    script.async = true;
+    script.crossOrigin = "anonymous";
+    if (expectedIntegrity) {
+      script.setAttribute("integrity", expectedIntegrity);
+    }
     script.addEventListener("load", () => {
-      if (hasUnifiedCheckoutClient()) {
-        resolve();
-      } else {
-        reject(new Error("CyberSource payment client did not initialize."));
-      }
+      waitForUnifiedCheckoutClient().then(resolve).catch(reject);
     }, { once: true });
     script.addEventListener("error", () => reject(new Error("CyberSource payment library could not be loaded.")), {
       once: true,
     });
+    script.src = src;
     document.head.appendChild(script);
   });
 }
