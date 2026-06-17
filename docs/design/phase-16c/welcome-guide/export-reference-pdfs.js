@@ -147,12 +147,20 @@ const GUIDES = [
 
       // ── Inject screen-mode PDF CSS from oraya-print-export.css ─────────────
       // Edit oraya-print-export.css to patch PDF vs HTML discrepancies.
-      // No emulateMediaType — screen CSS stays active for identical layout.
       await page.addStyleTag({ path: path.join(GUIDE_DIR, 'oraya-print-export.css') });
 
+      // ── FORCE SCREEN MEDIA ─────────────────────────────────────────────────
+      // CRITICAL: page.pdf() applies @media print rules BY DEFAULT, even if you
+      // never call emulateMediaType('print'). The only way to keep the accepted
+      // 620px screen layout is to explicitly emulate 'screen' here. Without this,
+      // the @media print block in oraya-print-a4.css takes over and renders each
+      // page as a fixed 620px box on the A4 sheet (only ~68% width filled).
+      await page.emulateMediaType('screen');
+
       // ── Generate PDF ──────────────────────────────────────────────────────
-      // scale ≈ 1.28: maps 620px screen width to 210mm A4 width,
-      // and each 877px page to exactly 297mm A4 height.
+      // scale ≈ 1.28: maps the 620px screen layout to 210mm A4 width,
+      // and each 877px page to exactly 297mm A4 height. The whole accepted
+      // design is enlarged uniformly to fill the sheet — proportions unchanged.
       const pdfBuffer = await page.pdf({
         format:               'A4',
         scale:                PDF_SCALE,
