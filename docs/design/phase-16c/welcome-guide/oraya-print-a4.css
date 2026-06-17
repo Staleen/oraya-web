@@ -116,7 +116,7 @@ strong { font-weight: 700; }
   min-height: 877px;
   background: var(--white);
   margin: 0 auto 32px;
-  padding: 36px 40px;
+  padding: 36px 24px;
   box-shadow: 0 2px 28px rgba(46, 46, 46, 0.16);
   display: flex;
   flex-direction: column;
@@ -212,7 +212,7 @@ strong { font-weight: 700; }
 
 /* Hero image — bleeds to page edge on screen */
 .pp-hero {
-  margin: -36px -40px 0;
+  margin: -36px -24px 0;
 }
 
 .pp-welcome {
@@ -220,6 +220,7 @@ strong { font-weight: 700; }
   flex: 1;
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
 }
 
 .pp-brand__wordmark {
@@ -324,7 +325,6 @@ strong { font-weight: 700; }
   color: var(--muted);
   font-style: italic;
   line-height: 1.5;
-  margin-top: auto;
   padding-top: 8px;
   display: flex;
   align-items: flex-start;
