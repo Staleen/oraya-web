@@ -128,7 +128,7 @@ Public vs server-only:
 
 ### Vercel Preview CyberSource sandbox checklist
 
-For a Draft PR / Preview deployment that validates the NetCommerce / Credit Libanais CyberSource sandbox flow, configure these variable names in Vercel Preview only, with sandbox values and no production activation:
+For a Draft PR / Preview deployment that validates the NetCommerce / Credit Libanais CyberSource sandbox flow, configure these variable names in Vercel Preview only, with sandbox values and no production activation. Do not commit real merchant values, shared secrets, capture contexts, card numbers, signed checkout URLs, or private Vercel share links to this repository.
 
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
@@ -155,6 +155,8 @@ Preview expectations:
 - Payment checkout routes use the actual Vercel Preview request origin for payment-link generation, so the tested branch alias and generated checkout links should stay on the same HTTPS host.
 - The webhook/MLE variables are optional for this sandbox server-side completion test. They are required before production live rollout and before asynchronous webhook reconciliation can be trusted.
 - Browser redirects remain informational. Server-side CyberSource authorization and/or a verified webhook are authoritative for payment state.
+- PR #64 Preview has passed the approved-card sandbox path and is ready for NetCommerce-side testing. Declined-card validation remains pending until NetCommerce/CyberSource provides an official declined-card vector or decline trigger.
+- Production must stay disabled until NetCommerce sandbox review/approval is complete, production credentials are issued, Vercel Production env values are set deliberately, explicit production enablement is approved, and a controlled live/payment-readiness test is planned. Never copy Preview sandbox values into Production as a shortcut.
 
 ### `BOOKING_ACTION_SECRET`
 
@@ -237,7 +239,7 @@ Preview expectations:
 
 - **Scope:** server-only.
 - **Used in:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) - labels Credit Libanais / NetCommerce runtime as `sandbox` or `production`.
-- **Required:** local yes for sandbox testing - preview yes - production yes.
+- **Required:** local yes for sandbox testing - preview yes with sandbox value - production yes only after production credentials and explicit production enablement are approved.
 - **Allowed values:** `sandbox`, `production`.
 - **Where to get it:** NetCommerce / CyberSource technical package and deployment target.
 - **Configure in Vercel:** yes - Production + Preview.
@@ -247,7 +249,7 @@ Preview expectations:
 
 - **Scope:** server-only.
 - **Used in:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) - `v-c-merchant-id` and CyberSource HTTP Signature authentication.
-- **Required:** local yes for sandbox testing - preview yes - production yes.
+- **Required:** local yes for sandbox testing - preview yes with sandbox value - production yes only after production credentials and explicit production enablement are approved.
 - **Where to get it:** NetCommerce / CyberSource merchant credential package.
 - **Configure in Vercel:** yes - Production + Preview, marked Sensitive.
 - **Risk if missing:** Oraya cannot create CyberSource Unified Checkout sessions.
@@ -256,7 +258,7 @@ Preview expectations:
 
 - **Scope:** server-only.
 - **Used in:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) - CyberSource HTTP Signature `keyid`.
-- **Required:** local yes for sandbox testing - preview yes - production yes.
+- **Required:** local yes for sandbox testing - preview yes with sandbox value - production yes only after production credentials and explicit production enablement are approved.
 - **Where to get it:** NetCommerce / CyberSource key material package.
 - **Configure in Vercel:** yes - Production + Preview, marked Sensitive.
 - **Risk if missing:** session creation requests cannot be authenticated.
@@ -265,7 +267,7 @@ Preview expectations:
 
 - **Scope:** server-only.
 - **Used in:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) - HMAC signing for CyberSource session creation. Never expose to browser code.
-- **Required:** local yes for sandbox testing - preview yes - production yes.
+- **Required:** local yes for sandbox testing - preview yes with sandbox value - production yes only after production credentials and explicit production enablement are approved.
 - **Where to get it:** NetCommerce / CyberSource key material package.
 - **Configure in Vercel:** yes - Production + Preview, marked Sensitive.
 - **Risk if missing:** session creation requests cannot be signed.
@@ -274,7 +276,7 @@ Preview expectations:
 
 - **Scope:** server-only.
 - **Used in:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) - base URL for `POST /uc/v1/sessions` and `POST /pts/v2/payments`.
-- **Required:** local yes for sandbox testing - preview yes - production yes.
+- **Required:** local yes for sandbox testing - preview yes with sandbox host - production yes only after production credentials and explicit production enablement are approved.
 - **Where to get it:** NetCommerce / CyberSource documentation. Sandbox commonly points at the CyberSource test API host; production must use the bank-confirmed production host.
 - **Configure in Vercel:** yes - Production + Preview.
 - **Risk if missing:** the adapter cannot create capture-context sessions or authorize transient-token payments.
@@ -283,7 +285,7 @@ Preview expectations:
 
 - **Scope:** server-only.
 - **Used in:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) - Unified Checkout capture-context `country` and Payments API billing country.
-- **Required:** local yes for sandbox testing - preview yes - production yes.
+- **Required:** local yes for sandbox testing - preview yes with bank-confirmed sandbox value - production yes only after production credentials and explicit production enablement are approved.
 - **Where to get it:** NetCommerce / CyberSource technical package. Current Lebanon merchant expectation is `LB` unless the bank specifies otherwise.
 - **Configure in Vercel:** yes - Production + Preview.
 - **Risk if missing:** the adapter fails readiness because CyberSource country is part of the gateway request contract.
@@ -292,7 +294,7 @@ Preview expectations:
 
 - **Scope:** server-only.
 - **Used in:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) - Unified Checkout capture-context `locale`.
-- **Required:** local yes for sandbox testing - preview yes - production yes.
+- **Required:** local yes for sandbox testing - preview yes with bank-confirmed sandbox value - production yes only after production credentials and explicit production enablement are approved.
 - **Where to get it:** NetCommerce / CyberSource technical package. Current English checkout expectation is `en_US` unless the bank specifies otherwise.
 - **Configure in Vercel:** yes - Production + Preview.
 - **Risk if missing:** the adapter fails readiness because CyberSource locale is part of the gateway request contract.

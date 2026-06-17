@@ -16,6 +16,42 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-06-17 - PR #64 Preview sandbox path is ready for NetCommerce-side testing
+
+**Decision:** Draft PR #64 (`agent/phase-16b-cybersource-unified-checkout-test`) is the current Phase 16B NetCommerce / Credit Libanais / CyberSource sandbox implementation branch. It is open, unmerged, and ready for NetCommerce-side testing on Vercel Preview. Production `master` remains unchanged and production payment is not enabled.
+**Reason:** The original NetCommerce task was to follow the CyberSource Unified Checkout guideline, use sandbox merchant details, add the NetCommerce payment/security seal, and notify NetCommerce when ready for their testing. The Preview approved-card path now passes: `/book` creates a booking; pay-now redirects to `/payments/checkout/[token]`; CyberSource Unified Checkout loads; the NetCommerce seal is visible; an approved sandbox card completes; `POST /api/payments/unified-checkout-complete` succeeds; payment fields update to authorized/paid; `bookings.status` remains `PENDING` for admin/operations confirmation.
+**Impact:** Future agents must treat PR #64 as sandbox/Preview work only until NetCommerce review, declined-card validation, production credentials, production env setup, explicit production enablement, and final merge/release approval are complete. The private Vercel share link was sent outside the repo and must never be committed, quoted, or copied into docs.
+**Reversible?:** yes - this is a status/coordination decision, not a production rollout.
+
+---
+
+## 2026-06-17 - Official NetCommerce payment seal is the approved PR #64 seal asset
+
+**Decision:** The PR #64 checkout page uses the official NetCommerce seal asset (`NCseal_M.png`) for the sandbox payment/security display. The latest payment implementation commit includes `d8828c9 Use official NetCommerce payment seal`.
+**Reason:** The external NetCommerce task explicitly asked Oraya to add the NetCommerce payment/security seal before handing the Preview over for testing. Using the official asset avoids relying on a placeholder or hand-drawn approximation.
+**Impact:** The seal is part of the Preview sandbox readiness evidence for PR #64. Do not swap it for unofficial artwork or remove it without NetCommerce / David approval.
+**Reversible?:** yes, but only if NetCommerce requests a different official asset.
+
+---
+
+## 2026-06-17 - Declined-card sandbox validation requires provider-supplied vector
+
+**Decision:** Declined-card handling is not considered fully validated until NetCommerce/CyberSource provides an official declined-card sandbox vector or decline trigger and Oraya re-tests the Preview browser flow.
+**Reason:** The attempted decline-style sandbox card authorized successfully during PR #64 validation. Treating that attempt as a declined-card pass would be misleading and could hide a real payment-state risk.
+**Impact:** [KNOWN_BUGS.md](KNOWN_BUGS.md) tracks this as a Phase 16B payment QA/open validation item, not a production incident. Production rollout remains blocked until the decline path is validated alongside NetCommerce review/approval and production credential readiness.
+**Reversible?:** yes - once the provider vector is received and the decline path passes, close the known-bug item with the validation date.
+
+---
+
+## 2026-06-17 - Dirty Phase 16B branch recovered; generated exports moved outside repo
+
+**Decision:** The old dirty worktree `C:\Users\David\OneDrive - Sela\Desktop\oraya-web` on branch `codex/phase-16b-payment-readiness` has been recovered from accidental mass deletions and generated artifacts. It now has 0 tracked deletions, 0 tracked modifications, and 0 untracked files. Generated Phase 16C export artifacts were moved outside the repo to `C:\Users\David\OneDrive - Sela\Desktop\oraya-local-backups\phase-16c-exports-from-dirty-tree`.
+**Reason:** The branch previously showed large accidental deletion/generation dirt and overlapped locked surfaces. It contained no useful tracked payment implementation work to salvage for PR #64.
+**Impact:** Future Phase 16B implementation should not be based on that old dirty branch and should not treat it as pending useful payment work. Use updated `master` / a clean branch after the PR #64 decision unless David explicitly instructs otherwise.
+**Reversible?:** N/A - cleanup coordination record.
+
+---
+
 ## 2026-06-17 - CyberSource Unified Checkout SDK metadata comes from capture context
 
 **Decision:** Credit Libanais / NetCommerce session parsing reads the CyberSource-returned Unified Checkout SDK metadata from the decoded capture context, including nested `ctx[*].data.clientLibrary` and `ctx[*].data.clientLibraryIntegrity`, before using any fallback asset URL.
