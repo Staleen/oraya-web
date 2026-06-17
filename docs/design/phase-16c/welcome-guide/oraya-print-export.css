@@ -76,15 +76,19 @@ body {
 
 
 /* ── 5. HERO FULL-BLEED FIX ────────────────────────────────────────
-   .pp-hero uses margin: -36px -40px 0 to bleed past the page padding.
-   In a regular browser this resolves correctly to 620px wide.
-   In Puppeteer PDF mode the negative-margin width expansion misfires
-   (renders ~484px wide, leaving a gap on the right).
-   Fix: pin the hero explicitly to page width and clear the auto cap.
+   .pp-hero is a flex item inside .print-page (flex column). In a
+   regular browser, the block formatting context treats negative margins
+   on a flex child the same as on a block, expanding the item to 620px.
+   In Puppeteer PDF mode:
+     (a) The negative-margin width expansion is ignored — the item
+         defaults to the container's content width (572px).
+     (b) flex-shrink:1 (default) further collapses it if it overflows.
+   Fix: force the exact page width AND prevent any flex shrinking.
 ───────────────────────────────────────────────────────────────── */
 .pp-hero {
-  width:     620px !important;
-  max-width: none  !important;
+  width:        620px !important;
+  max-width:    none  !important;
+  flex-shrink:  0     !important;
 }
 
 
