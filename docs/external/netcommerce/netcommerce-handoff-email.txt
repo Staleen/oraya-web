@@ -1,0 +1,22 @@
+Subject: Oraya sandbox integration ready for NetCommerce testing
+
+Dear NetCommerce team,
+
+We have completed the requested sandbox integration steps for Oraya.
+
+The CyberSource Unified Checkout integration has been implemented using the provided guideline and sandbox merchant details. The NetCommerce payment/security seal has also been added to the website.
+
+Our approved sandbox payment path passed successfully. Payment completion is verified server-side by Oraya after CyberSource authorization. Browser return pages are informational only.
+
+Please note that the booking status intentionally remains pending after payment, because Oraya still requires operational/admin confirmation before a booking is fully confirmed.
+
+Production credentials are not being used. This is Preview/sandbox only. Please do not use live card data for this test.
+
+Preview access:
+[PRIVATE PREVIEW LINK SENT IN EMAIL BODY]
+
+Please also send us the official declined-card test vector or decline trigger for this sandbox merchant so we can validate the failed-payment retry path.
+
+Best regards,
+David Hourani
+Oraya
