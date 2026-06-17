@@ -3,14 +3,15 @@
  * ORAYA PRINT GUIDE — A4 SHARED STYLESHEET
  * Phase 16C · The Compendium · Design Prototype
  *
- * A4 portrait · 14mm margins · 7 pages per villa
+ * A4 portrait · 8mm margins · 7 pages per villa
  * Used by:
  *   oraya-guest-welcome-guide-print-byblos.html
  *   oraya-guest-welcome-guide-print-mechmech.html
  *
- * DESIGN PROTOTYPE — NOT PRODUCTION.
- * Review and confirmation use only.
- * Do not distribute to guests until all placeholders are resolved.
+ * PRODUCTION GUEST GUIDE.
+ * Real villa imagery + scannable Maps QR. Per-booking values
+ * (gate / front-door PIN) remain bracketed placeholders, filled
+ * before each guest's arrival.
  * ═══════════════════════════════════════════════════════════════════
  */
 
@@ -455,6 +456,11 @@ strong { font-weight: 700; }
   color: var(--midnight);
 }
 
+/* Page 2 — distribute the five sections to fill the sheet height */
+#print-p2 .pp-content {
+  justify-content: space-between;
+}
+
 
 /* ═══════════════════════════════════════════════════════
    9. PAGE 3 — UTILITIES GRID
@@ -561,6 +567,14 @@ strong { font-weight: 700; }
 
 .pp-amenity-strip .concept-img-wrap {
   flex: 1;
+}
+
+/* Page 4 — grow the grid and distribute its rows to fill the sheet
+   (text-led sections without per-row images would otherwise bunch at top) */
+#print-p4 .pp-two-col--auto {
+  flex: 1;
+  align-content: space-between;
+  align-items: start;
 }
 
 
@@ -898,6 +912,56 @@ strong { font-weight: 700; }
   min-height: 64px;
   width: 64px;
   padding: 8px;
+}
+
+/* ── Navigation QR (production — real scannable code) ───────── */
+.pp-qr {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.pp-qr__frame {
+  width: 88px;
+  height: 88px;
+  padding: 5px;
+  background: #fff;
+  border: 1px solid var(--muted-light);
+}
+.pp-qr__frame svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.pp-qr__hint {
+  font-family: var(--font-sans);
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ── Keypad tiles (production — branded icon tiles, not placeholders) ── */
+.pp-keypad-tile {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: var(--beige-light);
+  border: 1px solid var(--muted-light);
+}
+.pp-keypad-tile svg { display: block; }
+.pp-keypad-tile__label {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 

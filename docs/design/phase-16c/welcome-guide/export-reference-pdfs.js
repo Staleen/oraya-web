@@ -45,23 +45,6 @@ if (!fs.existsSync(EXPORTS_DIR)) {
 }
 
 /* ─────────────────────────────────────────────────────────────────
-   CONCEPT IMAGE REPLACEMENTS
-   Maps the local asset filename stem to a matching Unsplash image.
-───────────────────────────────────────────────────────────────── */
-const CONCEPT_IMAGE_MAP = {
-  'byblos-exterior':    'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=1200&h=400&fit=crop&crop=center',
-  'mechmech-exterior':  'https://images.unsplash.com/photo-1571896349842-33c89424de2d?w=1200&h=400&fit=crop&crop=center',
-  'mechmech-pool':      'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=900&h=320&fit=crop&crop=center',
-  'mechmech-03-garden': 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=700&h=280&fit=crop&crop=center',
-  'mechmech-02':        'https://images.unsplash.com/photo-1540518614846-7eded433c457?w=240&h=200&fit=crop&crop=center',
-  'mechmech-04':        'https://images.unsplash.com/photo-1452195100486-9cc805987862?w=240&h=180&fit=crop&crop=center',
-  'mechmech-06':        'https://images.unsplash.com/photo-1556909212-d5b604d0c90d?w=240&h=180&fit=crop&crop=center',
-  // Page 4 — Using the Villa
-  'villa-kitchen':      'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=600&h=100&fit=crop&crop=center',
-  'villa-bbq':          'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=600&h=100&fit=crop&crop=center',
-};
-
-/* ─────────────────────────────────────────────────────────────────
    SCALE FACTOR
    Screen page: 620px wide × 877px tall (A4 ratio at 75 CSS DPI).
    A4 at 96 CSS DPI: 793.7px wide × 1122px tall.
@@ -120,20 +103,12 @@ const GUIDES = [
       // Wait for Playfair Display + Lato
       await page.evaluate(() => document.fonts.ready);
 
-      // ── Patch concept image src values to Unsplash equivalents ──────────
-      await page.evaluate((imageMap) => {
-        document.querySelectorAll('.concept-img').forEach(img => {
-          var src = img.getAttribute('src') || '';
-          var stem = src.replace(/^.*[\\/]/, '').replace(/\.[^.]+$/, '');
-          if (imageMap[stem]) {
-            img.setAttribute('src', imageMap[stem]);
-            img.removeAttribute('srcset');
-            img.style.objectFit = 'cover';
-          }
-        });
-      }, CONCEPT_IMAGE_MAP);
+      // ── Real villa imagery ─────────────────────────────────────────────
+      // PRODUCTION: use the real on-disk renders in assets/concept/*.png.
+      // (Earlier builds patched these to Unsplash stock because the files
+      // did not exist on disk; they do now, so we load them directly.)
 
-      // Wait for patched images (up to 12 s)
+      // Wait for images (up to 12 s)
       await page.evaluate(() => new Promise(function(resolve) {
         var imgs = Array.from(document.querySelectorAll('.concept-img'));
         var pending = imgs.filter(function(i) { return !i.complete; }).length;
@@ -144,6 +119,28 @@ const GUIDES = [
         });
         setTimeout(resolve, 12000);
       }));
+
+      // ── Downscale embedded imagery for a sensible file size ─────────────────
+      // The on-disk renders are 2–3 MB PNGs each. Embedding them raw produces
+      // an 8 MB PDF. Re-encode each to a max-1400px high-quality JPEG in-page
+      // (still ~1.8× oversampled vs its printed size, so it stays crisp).
+      await page.evaluate(async () => {
+        var MAXW = 1400;
+        var imgs = Array.from(document.querySelectorAll('.concept-img'));
+        imgs.forEach(function (img) {
+          var nw = img.naturalWidth, nh = img.naturalHeight;
+          if (!nw || !nh) return;
+          var s = Math.min(1, MAXW / nw);
+          var w = Math.round(nw * s), h = Math.round(nh * s);
+          var canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          try { img.setAttribute('src', canvas.toDataURL('image/jpeg', 0.88)); } catch (e) {}
+        });
+        await Promise.all(imgs.map(function (i) {
+          return i.decode ? i.decode().catch(function () {}) : Promise.resolve();
+        }));
+      });
 
       // ── Inject screen-mode PDF CSS from oraya-print-export.css ─────────────
       // Edit oraya-print-export.css to patch PDF vs HTML discrepancies.
