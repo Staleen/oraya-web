@@ -326,14 +326,14 @@ export default function PaymentCheckoutPage({ params }: { params: { token: strin
           }}
         >
           <Image
-            src="/payment/netcommerce-logo.png"
-            alt="NetCommerce Secure Payment Gateway"
+            src="/payment/NCseal_M.png"
+            alt="NetCommerce Security Seal"
             width={130}
-            height={24}
-            style={{ width: "130px", height: "auto", display: "block", background: "#fff", padding: "6px" }}
+            height={72}
+            style={{ width: "130px", height: "72px", display: "block" }}
           />
           <span style={{ color: MUTED, fontSize: "12px", lineHeight: 1.5 }}>
-            Online payment powered by NetCommerce Secure Payment Gateway through Credit Libanais.
+            Online payments are processed securely through NetCommerce Secure Payment Gateway.
           </span>
         </div>
 

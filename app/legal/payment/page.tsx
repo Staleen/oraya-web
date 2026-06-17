@@ -31,15 +31,15 @@ export default function PaymentPage() {
       <p style={meta}>Last updated: 2026</p>
 
       <p style={body}>
-        Oraya handles every reservation directly. Online card payment, when available, is powered by NetCommerce Secure Payment Gateway through Credit Libanais / CyberSource Unified Checkout.
+        Oraya handles every reservation directly. Online payments are processed securely through NetCommerce Secure Payment Gateway.
       </p>
       <div style={gatewayBadge}>
         <Image
-          src="/payment/netcommerce-logo.png"
-          alt="NetCommerce Secure Payment Gateway"
+          src="/payment/NCseal_M.png"
+          alt="NetCommerce Security Seal"
           width={130}
-          height={24}
-          style={{ width: "130px", height: "auto", display: "block" }}
+          height={72}
+          style={{ width: "130px", height: "72px", display: "block" }}
         />
         <p style={{ ...body, margin: 0 }}>
           Oraya does not store card numbers or CVV. Browser payment return pages are informational until server-side gateway verification is complete.
