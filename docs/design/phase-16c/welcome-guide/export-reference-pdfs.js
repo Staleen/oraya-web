@@ -145,30 +145,10 @@ const GUIDES = [
         setTimeout(resolve, 12000);
       }));
 
-      // ── Inject screen-mode PDF CSS ────────────────────────────────────────
-      // Hides review UI, strips body chrome, adds page breaks.
+      // ── Inject screen-mode PDF CSS from oraya-print-export.css ─────────────
+      // Edit oraya-print-export.css to patch PDF vs HTML discrepancies.
       // No emulateMediaType — screen CSS stays active for identical layout.
-      await page.addStyleTag({ content: [
-        // Hide prototype UI
-        '.review-bar,.prototype-notice{display:none!important;}',
-        // Clean body
-        'html{background:#fff!important;}',
-        'body{margin:0!important;padding:0!important;background:#fff!important;}',
-        // Stack pages flush — no shadow, no gap
-        '.print-document{width:620px;margin:0;padding:0;}',
-        '.print-page{',
-          'box-shadow:none!important;',
-          'border:none!important;',
-          'margin:0!important;',
-          'break-after:page;',
-          'page-break-after:always;',
-        '}',
-        '.print-page:last-of-type,.print-page:last-child{',
-          'break-after:auto;page-break-after:auto;',
-        '}',
-        // Suppress link underline annotations in PDF
-        'a::after{content:none!important;}',
-      ].join('') });
+      await page.addStyleTag({ path: path.join(GUIDE_DIR, 'oraya-print-export.css') });
 
       // ── Generate PDF ──────────────────────────────────────────────────────
       // scale ≈ 1.28: maps 620px screen width to 210mm A4 width,
