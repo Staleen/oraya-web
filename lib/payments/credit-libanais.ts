@@ -286,6 +286,13 @@ function buildCaptureContextRequest(
     country: config.country,
     locale: config.locale,
     allowedPaymentTypes: CYBERSOURCE_ALLOWED_PAYMENT_TYPES,
+    captureMandate: {
+      billingType: "FULL",
+      requestEmail: true,
+      requestPhone: true,
+      requestShipping: false,
+      showAcceptedNetworkIcons: true,
+    },
     data: {
       orderInformation: {
         amountDetails: {
