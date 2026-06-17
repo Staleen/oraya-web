@@ -25,7 +25,7 @@ const PDFS = [
     name: 'byblos',
   },
   {
-    file: path.join(OUT, 'oraya-guide-print-mechmech.tmp1781093618989.pdf'),
+    file: path.join(OUT, 'oraya-guide-print-mechmech.pdf'),
     name: 'mechmech',
   },
 ];

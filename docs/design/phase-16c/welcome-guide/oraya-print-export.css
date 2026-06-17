@@ -4,33 +4,25 @@
  * Phase 16C · The Compendium
  *
  * PURPOSE
- *   This file is injected by diff-loop.js (and export-reference-pdfs.js)
- *   at PDF export time. It does NOT affect the browser screen preview.
+ *   Injected by export-reference-pdfs.js at PDF render time only.
+ *   This file must stay MINIMAL — all layout lives in oraya-print-a4.css.
+ *   Only add rules here for things that genuinely differ between the
+ *   browser screen preview and the Puppeteer PDF render.
  *
  * RENDERING MODE
  *   Puppeteer stays in SCREEN mode (no emulateMediaType('print')).
- *   This preserves the screen layout exactly — only the decorative
- *   chrome (review bar, body background, page shadows) is removed.
+ *   This preserves the screen layout exactly.
  *
- * PATCH INSTRUCTIONS
- *   This is the ONLY file you need to edit to fix PDF vs HTML
- *   discrepancies. After patching, re-run:
- *     node docs/design/phase-16c/welcome-guide/diff-loop.js
- *   and review the exports/diff/ comparison images.
- *
- * SCALE FACTOR (DO NOT CHANGE without also updating diff-loop.js)
+ * SCALE FACTOR (DO NOT CHANGE without also updating export-reference-pdfs.js)
  *   Screen .print-page : 620px wide × 877px tall
  *   A4 at 96 CSS DPI   : 793.7px wide × 1122px tall
  *   Scale = 793.7 / 620 ≈ 1.2802
- *   → 620px × 1.2802 = 793.6px = 210mm (fills A4 width exactly)
- *   → 877px × 1.2802 = 1122.7px = 297mm (fills A4 height exactly)
  * ═══════════════════════════════════════════════════════════════════
  */
 
 
 /* ── 1. HIDE PROTOTYPE UI ──────────────────────────────────────────
    Remove the review bar and prototype notice from the PDF.
-   These are screen-only elements.
 ───────────────────────────────────────────────────────────────── */
 .review-bar,
 .prototype-notice {
@@ -39,8 +31,7 @@
 
 
 /* ── 2. CLEAN BODY ─────────────────────────────────────────────────
-   Strip body background colour and padding that only matter on
-   screen. The PDF background comes from .print-page (white).
+   Strip body background colour and padding (screen-only chrome).
 ───────────────────────────────────────────────────────────────── */
 html {
   background: #fff !important;
@@ -66,9 +57,8 @@ body {
 
 
 /* ── 4. INDIVIDUAL PAGES ───────────────────────────────────────────
-   Remove screen-only shadow and gap. Add page break so Puppeteer
-   starts a new PDF page after each .print-page.
-   Do NOT add height here — let content dictate height.
+   Remove screen-only shadow and margin gap between pages.
+   Add page breaks so Puppeteer starts a new PDF page after each.
 ───────────────────────────────────────────────────────────────── */
 .print-page {
   box-shadow: none !important;
@@ -85,441 +75,20 @@ body {
 }
 
 
-/* ── 5. TYPOGRAPHY FIXES ───────────────────────────────────────────
-   PATCH AREA — edit here if fonts, sizes, or spacing look wrong
-   in the PDF compared to the HTML screen preview.
-
-   Currently: no overrides needed — screen px values render
-   identically at scale 1.28.
-───────────────────────────────────────────────────────────────── */
-/* Example patch:
-.pp-villa-name { font-size: 28px !important; }
-*/
-
-
-/* ── 6. COLOUR & BACKGROUND FIXES ─────────────────────────────────
-   PATCH AREA — edit here if colours, gradients, or backgrounds
-   are missing or washed out in the PDF.
-
-   Currently: printBackground: true in Puppeteer covers most cases.
-───────────────────────────────────────────────────────────────── */
-/* Example patch:
-.pp-hero { background-color: #1F2B38 !important; }
-*/
-
-
-/* ── 7. LAYOUT & SPACING FIXES ────────────────────────────────────
-   PATCH AREA — edit here if elements overflow, wrap differently,
-   or have unexpected gaps compared to the HTML preview.
-───────────────────────────────────────────────────────────────── */
-
-/* ── 7A. HERO FULL-BLEED FIX ──────────────────────────────────────
+/* ── 5. HERO FULL-BLEED FIX ────────────────────────────────────────
    .pp-hero uses margin: -36px -40px 0 to bleed past the page padding.
-   In browsers this resolves correctly to 620px; in Puppeteer PDF mode
-   the negative-margin width expansion misfires (renders ~484px wide).
-   Fix: pin the hero explicitly to page width and clear the auto cap. */
+   In a regular browser this resolves correctly to 620px wide.
+   In Puppeteer PDF mode the negative-margin width expansion misfires
+   (renders ~484px wide, leaving a gap on the right).
+   Fix: pin the hero explicitly to page width and clear the auto cap.
+───────────────────────────────────────────────────────────────── */
 .pp-hero {
   width:     620px !important;
   max-width: none  !important;
 }
 
-/* ── 7B. PAGE 1 — FILL THE PAGE ───────────────────────────────────
-   Original 195px hero + small type leaves ~400px of white space.
-   Expand the hero to dominate the top half, scale up all type. */
 
-/* Hero image — fills top 62% of page 1 */
-.concept-img-wrap--hero .concept-img {
-  height: 540px !important;
-}
-
-/* Villa name: large serif headline */
-.pp-villa-name {
-  font-size: 50px !important;
-  line-height: 1.1 !important;
-  margin: 20px 0 10px !important;
-}
-
-/* Brand wordmark */
-.pp-brand__wordmark {
-  font-size: 14px !important;
-  letter-spacing: 0.42em !important;
-  margin-bottom: 16px !important;
-}
-
-/* Welcome greeting */
-.pp-guest-greeting {
-  font-size: 17px !important;
-  line-height: 1.65 !important;
-  margin-bottom: 18px !important;
-}
-
-/* Info grid */
-.pp-info-grid {
-  margin: 18px 0 !important;
-  gap: 18px !important;
-}
-
-.pp-info-item p {
-  font-size: 15px !important;
-  margin-top: 8px !important;
-}
-
-/* Contacts block */
-.pp-contacts {
-  padding: 18px 16px !important;
-  margin-bottom: 20px !important;
-}
-
-.pp-contact-row {
-  font-size: 16px !important;
-  padding: 10px 0 !important;
-}
-
-.pp-rule--light {
-  margin: 20px 0 !important;
-}
-
-/* Distribute all items in pp-welcome to fill the vertical space evenly */
-.pp-welcome {
-  justify-content: space-between !important;
-}
-
-/* Guide note */
-.pp-guide-note p {
-  font-size: 12px !important;
-}
-
-
-/* ── 7C. PAGE 3 — UTILITIES GRID ──────────────────────────────────
-   ROOT CAUSE: align-content:flex-start caused the grid (flex:1) to
-   shrink to natural content height instead of growing. Also,
-   margin-top:auto on .pp-utilities-safety stole all free space
-   inside pp-content before flex:1 on the grid could act.
-   FIX: align-content:stretch restores grid growth; grid-template-rows:1fr
-   distributes height evenly; align-items:stretch fills rows.
-   Remove margin-top:auto from safety so grid gets the free space. */
-
-.pp-utilities-grid {
-  gap: 14px !important;
-  align-content: stretch !important;
-  grid-auto-rows: 1fr !important;
-  align-items: stretch !important;
-}
-
-.pp-utility-item {
-  padding: 22px 24px !important;
-}
-
-.pp-utility-title {
-  font-size: 13px !important;
-  margin-bottom: 14px !important;
-  padding-bottom: 8px !important;
-}
-
-.pp-utility-item p {
-  font-size: 15px !important;
-  line-height: 1.75 !important;
-  margin-top: 8px !important;
-}
-
-.pp-utility-note {
-  font-size: 12px !important;
-  margin-top: 10px !important;
-}
-
-/* Kill the margin-top:auto that was stealing free space from the grid */
-.pp-utilities-safety {
-  font-size: 12px !important;
-  padding-top: 12px !important;
-  margin-top: 16px !important;
-}
-
-
-/* ── 7D. PAGE 5 — HOUSE EXPECTATIONS ─────────────────────────────
-   Same root cause: align-content:flex-start shrinks the grid.
-   Page 5 has no safety note stealing space, so just restoring
-   align-content:stretch + 1fr rows fills the page. */
-
-.pp-expectations-grid {
-  gap: 14px !important;
-  align-content: stretch !important;
-  grid-auto-rows: 1fr !important;
-  align-items: stretch !important;
-}
-
-.pp-expectation-item {
-  padding: 22px 24px !important;
-}
-
-.pp-expectation-title {
-  font-size: 13px !important;
-  margin-bottom: 14px !important;
-  padding-bottom: 8px !important;
-}
-
-.pp-expectation-item p {
-  font-size: 15px !important;
-  line-height: 1.75 !important;
-}
-
-
-/* ── 7E. ALL PAGES — GLOBAL TYPE SCALE-UP ─────────────────────────
-   Every page benefits from slightly larger body text. */
-
-/* Section headings */
-.pp-section-title {
-  font-size: 13px !important;
-  letter-spacing: 0.16em !important;
-  margin-bottom: 9px !important;
-  padding-bottom: 7px !important;
-}
-
-/* Body text in sections */
-.pp-section p,
-.pp-section li,
-.pp-section-body {
-  font-size: 14.5px !important;
-  line-height: 1.7 !important;
-}
-
-/* Numbered steps */
-.pp-numbered-steps li {
-  font-size: 14.5px !important;
-  padding: 8px 0 !important;
-}
-
-/* Checklist */
-.pp-checklist {
-  font-size: 14px !important;
-  line-height: 1.8 !important;
-}
-
-/* Access support block */
-.pp-access-support {
-  padding: 14px 18px !important;
-}
-
-.pp-access-support__title {
-  font-size: 12px !important;
-  margin-bottom: 10px !important;
-}
-
-.pp-access-support__row {
-  font-size: 14px !important;
-  padding: 5px 0 !important;
-}
-
-/* All pages — section gap */
-.pp-content {
-  gap: 18px !important;
-}
-
-.pp-two-col--auto {
-  gap: 16px !important;
-}
-
-/* ── 7G. PAGE 4 — USING THE VILLA ────────────────────────────────
-   5 sections in 2-col grid — make grid fill full page height.
-   ROOT CAUSE (same as p3/p5): flex:1 without !important was being
-   ignored; no grid-template-rows meant no forced row distribution.
-   FIX: add !important, set 3×1fr rows, stretch. */
-
-/* Global concept image defaults (other pages) */
-.concept-img-wrap--small .concept-img {
-  height: 140px !important;
-}
-.concept-img-wrap--micro .concept-img {
-  height: 90px !important;
-}
-
-/* Page 4 image sizes — larger to fill taller rows */
-#print-p4 .concept-img-wrap--small .concept-img {
-  height: 160px !important;
-}
-#print-p4 .concept-img-wrap--micro .concept-img {
-  height: 105px !important;
-}
-
-/* Grid fills remaining pp-content height — 3 equal rows */
-#print-p4 .pp-two-col--auto {
-  flex: 1 !important;
-  min-height: 0 !important;
-  align-content: stretch !important;
-  align-items: stretch !important;
-  grid-auto-rows: 1fr !important;
-}
-
-/* Each section is a flex column so body can grow to fill cell */
-#print-p4 .pp-section {
-  display: flex !important;
-  flex-direction: column !important;
-}
-
-/* Section body grows to consume remaining vertical space in cell */
-#print-p4 .pp-section-body {
-  flex: 1 !important;
-  font-size: 16px !important;
-  line-height: 1.85 !important;
-  margin-top: 8px !important;
-}
-
-/* Pool is the 5th item (last) — span both columns */
-#print-p4 .pp-section:last-child {
-  grid-column: 1 / -1;
-}
-
-
-/* ── 7H. PAGE 6 — CHECKOUT LIST DISTRIBUTION ────────────────────
-   pp-checkout-list already has flex:1 in base CSS so it fills the
-   gap between checkout-time and farewell. Distribute items evenly. */
-
-.pp-checkout-list {
-  justify-content: space-between !important;
-}
-
-
-/* ── 7I. PAGE 7 — CONTACTS GRID EXPANSION ───────────────────────
-   Grid grows to fill the page (flex:1 on grid). But content within
-   each beige box was sparse (3, 2, 2, 1 items) sitting at top of
-   ~345px boxes. FIX: make each .pp-contact-section a flex column
-   and give each .pp-contact-item flex:1 so items distribute evenly
-   across the full box height. align-items:center vertically centers
-   each label+value pair within its allocated slice. */
-
-#print-p7 .pp-contacts-grid {
-  flex: 1 !important;
-  min-height: 0 !important;
-}
-
-/* Section becomes a flex column so items can grow */
-#print-p7 .pp-contact-section {
-  display: flex !important;
-  flex-direction: column !important;
-  padding: 28px 24px !important;
-}
-
-/* Title stays fixed at top */
-#print-p7 .pp-contact-section-title {
-  flex-shrink: 0 !important;
-  font-size: 13px !important;
-  margin-bottom: 16px !important;
-  padding-bottom: 10px !important;
-}
-
-/* Each item grows equally — distributes items across full box height */
-#print-p7 .pp-contact-item {
-  flex: 1 !important;
-  display: flex !important;
-  justify-content: space-between !important;
-  align-items: center !important;
-  border-bottom: 1px solid rgba(0,0,0,0.08) !important;
-  padding: 6px 0 !important;
-  font-size: 15px !important;
-}
-
-#print-p7 .pp-contact-item:last-child {
-  border-bottom: none !important;
-}
-
-#print-p7 .pp-contact-label {
-  font-size: 14px !important;
-}
-
-#print-p7 .pp-contact-value {
-  font-size: 18px !important;
-}
-
-/* Page 2 — distribute sections to fill full page height */
-#print-p2 .pp-content {
-  justify-content: space-between;
-}
-
-/* Checkout items (page 6) */
-.pp-checkout-item {
-  padding: 12px 0 !important;
-}
-
-.pp-checkout-item__content strong {
-  font-size: 15px !important;
-}
-
-.pp-checkout-item__content p {
-  font-size: 13.5px !important;
-  line-height: 1.55 !important;
-}
-
-/* Contacts grid (page 7) */
-.pp-contact-item {
-  padding: 10px 0 !important;
-  font-size: 15px !important;
-}
-
-.pp-contact-section {
-  padding: 22px 24px !important;
-}
-
-.pp-contact-section-title {
-  font-size: 12px !important;
-  margin-bottom: 14px !important;
-  padding-bottom: 7px !important;
-}
-
-.pp-contact-label {
-  font-size: 13px !important;
-}
-
-.pp-contact-value {
-  font-size: 14px !important;
-}
-
-/* Page 7 contacts grid — stretch rows to fill page */
-.pp-contacts-grid {
-  gap: 14px !important;
-  align-content: stretch !important;
-  align-items: stretch !important;
-  grid-auto-rows: 1fr !important;
-}
-
-
-/* ── 7F. PAGE 6 — CHECKOUT ────────────────────────────────────────
-   Checkout list is sparse — stretch items to fill the page. */
-
-.pp-checkout-time {
-  padding: 20px 0 14px !important;
-  margin-bottom: 10px !important;
-}
-
-.pp-checkout-time-value {
-  font-size: 38px !important;
-  margin-bottom: 10px !important;
-}
-
-.pp-checkout-note {
-  font-size: 12px !important;
-}
-
-.pp-checkout-item {
-  padding: 14px 0 !important;
-}
-
-.pp-checkout-item__content strong {
-  font-size: 16px !important;
-  margin-bottom: 4px !important;
-}
-
-.pp-checkout-item__content p {
-  font-size: 13.5px !important;
-  line-height: 1.6 !important;
-}
-
-.pp-farewell {
-  font-size: 16px !important;
-  padding: 16px 0 4px !important;
-  line-height: 1.8 !important;
-}
-
-
-/* ── 8. LINK ANNOTATION SUPPRESSION ───────────────────────────────
+/* ── 6. LINK ANNOTATION SUPPRESSION ───────────────────────────────
    Prevent PDF viewers from appending URL text after links.
 ───────────────────────────────────────────────────────────────── */
 a::after {
