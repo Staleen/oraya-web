@@ -569,12 +569,92 @@ strong { font-weight: 700; }
   flex: 1;
 }
 
-/* Page 4 — grow the grid and distribute its rows to fill the sheet
-   (text-led sections without per-row images would otherwise bunch at top) */
-#print-p4 .pp-two-col--auto {
+/* ─── Feature photo grid (Page 4 — Comfort & Using the Villa) ───── */
+.pp-feature-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
   flex: 1;
   align-content: space-between;
   align-items: start;
+}
+
+.pp-feature-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.pp-feature-card--wide {
+  grid-column: 1 / -1;
+}
+
+.pp-feature-card__title {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--charcoal);
+  margin-bottom: 6px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--muted-light);
+}
+
+.pp-feature-photo {
+  width: 100%;
+  height: 125px;
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 7px;
+  background: var(--beige);
+  line-height: 0;
+}
+
+.pp-feature-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+}
+
+.pp-feature-card--wide .pp-feature-photo {
+  height: 155px;
+}
+
+.pp-feature-photo--placeholder {
+  background: var(--beige-light);
+  border: 1.5px dashed rgba(138, 128, 112, 0.42);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  line-height: 1;
+}
+
+.pp-feature-photo--placeholder::before {
+  content: '◻';
+  font-size: 18px;
+  color: var(--muted);
+  opacity: 0.40;
+  line-height: 1;
+}
+
+.pp-feature-photo__hint {
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  opacity: 0.65;
+}
+
+.pp-feature-card__body {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--charcoal);
 }
 
 
