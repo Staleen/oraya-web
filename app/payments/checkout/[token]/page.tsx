@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 
 const GOLD = "#C9A45C";
@@ -16,6 +17,19 @@ type SessionState =
   | { status: "blocked"; message: string; bookingViewUrl: string | null };
 
 type UnifiedCheckoutWindow = Window & {
+  Accept?: (captureContext: string) => Promise<{
+    dispose?: () => void;
+    unifiedPayments: (sidebar?: boolean) => Promise<{
+      dispose?: () => void;
+      hide?: () => Promise<void>;
+      show: (args: {
+        containers: {
+          paymentSelection: string;
+          paymentScreen?: string;
+        };
+      }) => Promise<string | { transientTokenJwt?: string }>;
+    }>;
+  }>;
   VAS?: {
     UnifiedCheckout?: (captureContext: string) => Promise<{
       createCheckout: (options?: { autoProcessing?: boolean }) => Promise<{
@@ -63,7 +77,11 @@ function formatMoney(amount?: number, currency?: string) {
 }
 
 function hasUnifiedCheckoutClient() {
-  return typeof (window as UnifiedCheckoutWindow).VAS?.UnifiedCheckout === "function";
+  const checkoutWindow = window as UnifiedCheckoutWindow;
+  return (
+    typeof checkoutWindow.Accept === "function" ||
+    typeof checkoutWindow.VAS?.UnifiedCheckout === "function"
+  );
 }
 
 function waitForUnifiedCheckoutClient(timeoutMs = 8000) {
@@ -126,6 +144,35 @@ function loadScript(src: string, integrity?: string | null) {
   });
 }
 
+function nextFrame() {
+  return new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+}
+
+async function waitForCheckoutContainers() {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (
+      document.querySelector("#oraya-payment-buttons") &&
+      document.querySelector("#oraya-payment-screen")
+    ) {
+      return;
+    }
+    await nextFrame();
+  }
+  throw new Error("CyberSource payment containers were not ready.");
+}
+
+function readTransientToken(value: string | { transientTokenJwt?: string }) {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (
+    typeof value !== "string" &&
+    typeof value.transientTokenJwt === "string" &&
+    value.transientTokenJwt.trim()
+  ) {
+    return value.transientTokenJwt.trim();
+  }
+  throw new Error("CyberSource did not return a transient payment token.");
+}
+
 export default function PaymentCheckoutPage({ params }: { params: { token: string } }) {
   const token = params.token;
   const [state, setState] = useState<SessionState>({ status: "loading" });
@@ -167,14 +214,9 @@ export default function PaymentCheckoutPage({ params }: { params: { token: strin
         await loadScript(payload.client_library, payload.client_library_integrity);
 
         const checkoutWindow = window as UnifiedCheckoutWindow;
-        if (!checkoutWindow.VAS?.UnifiedCheckout) {
+        if (!checkoutWindow.Accept && !checkoutWindow.VAS?.UnifiedCheckout) {
           throw new Error("CyberSource payment client did not initialize.");
         }
-
-        const client = await checkoutWindow.VAS.UnifiedCheckout(payload.capture_context);
-        const checkout = await client.createCheckout({ autoProcessing: false });
-        cleanup = checkout.destroy;
-        if (cancelled) return;
 
         const bookingViewUrl = payload.booking_view_url ?? bookingViewFallback;
         setState({
@@ -182,10 +224,34 @@ export default function PaymentCheckoutPage({ params }: { params: { token: strin
           bookingViewUrl,
           cancelUrl: payload.cancel_url,
         });
-        const transientToken = await checkout.mount({
-          paymentSelection: "#oraya-payment-buttons",
-          paymentScreen: "#oraya-payment-screen",
-        });
+        await waitForCheckoutContainers();
+        if (cancelled) return;
+
+        let transientToken: string;
+        if (checkoutWindow.Accept) {
+          const accept = await checkoutWindow.Accept(payload.capture_context);
+          const unifiedPayments = await accept.unifiedPayments(false);
+          cleanup = () => {
+            void unifiedPayments.hide?.();
+            unifiedPayments.dispose?.();
+            accept.dispose?.();
+          };
+          const result = await unifiedPayments.show({
+            containers: {
+              paymentSelection: "#oraya-payment-buttons",
+              paymentScreen: "#oraya-payment-screen",
+            },
+          });
+          transientToken = readTransientToken(result);
+        } else {
+          const client = await checkoutWindow.VAS!.UnifiedCheckout!(payload.capture_context);
+          const checkout = await client.createCheckout({ autoProcessing: false });
+          cleanup = checkout.destroy;
+          transientToken = await checkout.mount({
+            paymentSelection: "#oraya-payment-buttons",
+            paymentScreen: "#oraya-payment-screen",
+          });
+        }
         if (cancelled) return;
 
         setState({ status: "processing", bookingViewUrl });
@@ -248,6 +314,28 @@ export default function PaymentCheckoutPage({ params }: { params: { token: strin
         <p style={{ color: MUTED, fontSize: "15px", lineHeight: 1.7, maxWidth: "620px", margin: "0 0 28px" }}>
           Card details are entered only inside the bank-controlled payment interface. Oraya records payment only after server-side verification from the gateway.
         </p>
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "12px",
+            border: `1px solid ${BORDER}`,
+            background: "rgba(255,255,255,0.03)",
+            padding: "10px 12px",
+            marginBottom: "18px",
+          }}
+        >
+          <Image
+            src="/payment/netcommerce-logo.png"
+            alt="NetCommerce Secure Payment Gateway"
+            width={130}
+            height={24}
+            style={{ width: "130px", height: "auto", display: "block", background: "#fff", padding: "6px" }}
+          />
+          <span style={{ color: MUTED, fontSize: "12px", lineHeight: 1.5 }}>
+            Online payment powered by NetCommerce Secure Payment Gateway through Credit Libanais.
+          </span>
+        </div>
 
         {summary ? (
           <div

@@ -11,7 +11,7 @@ const body: React.CSSProperties = { fontFamily: LATO, fontSize: "14px", color: I
 const meta: React.CSSProperties = { fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "0 0 2.5rem", letterSpacing: "0.5px" };
 const list: React.CSSProperties = { fontFamily: LATO, fontSize: "14px", color: INK, lineHeight: 1.9, fontWeight: 300, paddingLeft: "1.25rem", margin: "0 0 1rem" };
 
-export const metadata = { title: "Privacy Policy — Oraya" };
+export const metadata = { title: "Privacy Policy - Oraya" };
 
 export default function PrivacyPage() {
   return (
@@ -39,7 +39,7 @@ export default function PrivacyPage() {
         <li>Your phone number and country, when provided</li>
         <li>Booking details: villa, dates, guest counts, add-ons, and any notes you share</li>
         <li>Online payment status and gateway reference metadata from NetCommerce / Credit Libanais / CyberSource when you use secure card payment. Oraya does not collect or store your full card number or CVV.</li>
-        <li>Payment references you share with us after we have confirmed your booking and requested payment (Whish reference, bank transfer reference, etc.) — see our{" "}
+        <li>Payment references you share with us after we have confirmed your booking and requested payment (Whish reference, bank transfer reference, etc.) - see our{" "}
           <a href="/legal/payment" style={{ color: GOLD, textDecoration: "none" }}>Payment Policy</a> for how manual payment works</li>
       </ul>
 
@@ -48,7 +48,7 @@ export default function PrivacyPage() {
         <li>To review and confirm your booking or event request</li>
         <li>To communicate with you about availability, payment, and your stay</li>
         <li>To prepare your villa and any selected services</li>
-        <li>To prepare and follow up on <strong>custom event proposals</strong> when you have requested an event — pricing and scope are agreed in writing, not inferred from the form alone</li>
+        <li>To prepare and follow up on <strong>custom event proposals</strong> when you have requested an event - pricing and scope are agreed in writing, not inferred from the form alone</li>
       </ul>
 
       <h2 style={subheading}>Guest responsibilities</h2>

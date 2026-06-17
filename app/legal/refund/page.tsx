@@ -10,7 +10,7 @@ const subheading: React.CSSProperties = { fontFamily: PLAYFAIR, fontSize: "20px"
 const body: React.CSSProperties = { fontFamily: LATO, fontSize: "14px", color: INK, lineHeight: 1.8, margin: "0 0 1rem", fontWeight: 300 };
 const meta: React.CSSProperties = { fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "0 0 2.5rem", letterSpacing: "0.5px" };
 
-export const metadata = { title: "Cancellation & Refund Policy — Oraya" };
+export const metadata = { title: "Cancellation & Refund Policy - Oraya" };
 
 export default function RefundPage() {
   return (
@@ -20,7 +20,7 @@ export default function RefundPage() {
       <p style={meta}>Last updated: 2026</p>
 
       <p style={body}>
-        We aim to keep cancellations simple and fair. The notes below describe the principles we follow — specific terms for your stay are confirmed by our team when your booking moves from <strong>request</strong> to <strong>confirmed</strong>.
+        We aim to keep cancellations simple and fair. The notes below describe the principles we follow - specific terms for your stay are confirmed by our team when your booking moves from <strong>request</strong> to <strong>confirmed</strong>.
       </p>
       <p style={body}>
         If you withdraw a <strong>pending request</strong> before Oraya has confirmed dates and requested payment, there is typically no deposit to refund; simply contact us at{" "}
@@ -31,7 +31,7 @@ export default function RefundPage() {
 
       <h2 style={subheading}>Cancellation window</h2>
       <p style={body}>
-        Specific cancellation terms are confirmed at the time of booking. Where a booking has unique conditions — peak season, full-venue events, or extended stays — those will be shared in writing before payment.
+        Specific cancellation terms are confirmed at the time of booking. Where a booking has unique conditions - peak season, full-venue events, or extended stays - those will be shared in writing before payment.
       </p>
 
       <h2 style={subheading}>Deposit handling</h2>
@@ -46,7 +46,7 @@ export default function RefundPage() {
 
       <h2 style={subheading}>Oraya discretion</h2>
       <p style={body}>
-        Oraya may apply discretion in exceptional situations — including illness, weather, or circumstances beyond your control. Our intent is always to find a reasonable resolution rather than to apply rigid rules.
+        Oraya may apply discretion in exceptional situations - including illness, weather, or circumstances beyond your control. Our intent is always to find a reasonable resolution rather than to apply rigid rules.
       </p>
 
       <h2 style={subheading}>Contact</h2>

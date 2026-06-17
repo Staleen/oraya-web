@@ -11,7 +11,7 @@ const body: React.CSSProperties = { fontFamily: LATO, fontSize: "14px", color: I
 const meta: React.CSSProperties = { fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "0 0 2.5rem", letterSpacing: "0.5px" };
 const list: React.CSSProperties = { fontFamily: LATO, fontSize: "14px", color: INK, lineHeight: 1.9, fontWeight: 300, paddingLeft: "1.25rem", margin: "0 0 1rem" };
 
-export const metadata = { title: "Terms & Conditions — Oraya" };
+export const metadata = { title: "Terms & Conditions - Oraya" };
 
 export default function TermsPage() {
   return (
@@ -21,7 +21,7 @@ export default function TermsPage() {
       <p style={meta}>Last updated: 2026</p>
 
       <p style={body}>
-        These terms apply to bookings and event inquiries submitted through the Oraya website. They are kept short on purpose — please reach out if anything is unclear.
+        These terms apply to bookings and event inquiries submitted through the Oraya website. They are kept short on purpose - please reach out if anything is unclear.
       </p>
 
       <h2 style={subheading}>Booking is a request</h2>
@@ -38,7 +38,7 @@ export default function TermsPage() {
       <p style={body}>
         A reservation is considered secured only after Oraya confirms availability and the agreed deposit is received. Payments are coordinated <strong>manually</strong> (for example Whish, bank transfer, or cash as described in our{" "}
         <a href="/legal/payment" style={{ color: GOLD, textDecoration: "none" }}>Payment Policy</a>
-        {" "}). Online card payment, when enabled for a booking, is powered by NetCommerce through Credit Libanais / CyberSource Unified Checkout; Oraya records payment only after server-side gateway verification. Cancellation and refund principles after confirmation are outlined in our{" "}
+        {" "}). Online card payment, when enabled for a booking, is powered by NetCommerce Secure Payment Gateway through Credit Libanais / CyberSource Unified Checkout; Oraya records payment only after server-side gateway verification. Cancellation and refund principles after confirmation are outlined in our{" "}
         <a href="/legal/refund" style={{ color: GOLD, textDecoration: "none" }}>Cancellation &amp; Refund Policy</a>.
       </p>
 
@@ -52,7 +52,7 @@ export default function TermsPage() {
 
       <h2 style={subheading}>Changes by Oraya</h2>
       <p style={body}>
-        In rare cases, we may need to adjust or rebook a stay due to operational, safety, or force-majeure reasons. Where this happens, we will reach out promptly with options.
+        In rare cases, we may need to adjust or rebook a stay due to operational, safety, or force majeure reasons. Where this happens, we will reach out promptly with options.
       </p>
 
       <h2 style={subheading}>Contact</h2>
