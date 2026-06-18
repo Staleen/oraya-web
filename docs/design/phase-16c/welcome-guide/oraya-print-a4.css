@@ -398,40 +398,87 @@ strong { font-weight: 700; }
 .pp-numbered-steps li {
   counter-increment: step;
   display: flex;
-  align-items: baseline;
-  gap: 8px;
+  align-items: center;
+  gap: 10px;
   font-size: 13px;
-  padding: 6px 0;
+  padding: 6.5px 0;
   border-bottom: 1px solid var(--muted-light);
   color: var(--charcoal);
 }
 
-.pp-numbered-steps li::before {
+/* Gold monochrome step icon — left of the text */
+.pp-step-icon {
+  flex-shrink: 0;
+  width: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pp-step-icon svg { display: block; }
+
+.pp-step-text { flex: 1; }
+
+/* Step number — gold disc on the RIGHT of each step */
+.pp-numbered-steps li::after {
   content: counter(step);
   font-family: var(--font-sans);
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 700;
-  color: var(--gold);
-  min-width: 14px;
-  text-align: center;
+  color: var(--white);
+  background: var(--gold);
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
 }
 
-/* Compact access support block — ONE block, not 4 boxes */
+/* Access-support warning callout — reads as a clear "if stuck" notice */
 .pp-access-support {
-  background: var(--beige-light);
-  border-left: 2px solid var(--gold);
-  padding: 10px 14px;
+  background: var(--gold-faint);
+  border: 1px solid var(--gold-soft);
+  border-left: 3px solid var(--gold);
+  padding: 11px 14px;
 }
 
-.pp-access-support__title {
+.pp-access-support__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 9px;
+}
+
+.pp-access-support__head svg { flex-shrink: 0; display: block; }
+
+.pp-access-support__heading {
   font-family: var(--font-sans);
   font-size: 10.5px;
   font-weight: 700;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--muted);
-  margin-bottom: 8px;
+  color: var(--midnight);
+}
+
+/* Wrapping tag pills — no orphaned words, scannable trigger list */
+.pp-access-support__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 6px;
+  margin-bottom: 9px;
+}
+
+.pp-access-tag {
+  font-family: var(--font-sans);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #7a6340;
+  background: rgba(197, 164, 109, 0.20);
+  padding: 3px 8px;
+  white-space: nowrap;
 }
 
 .pp-access-support__row {
@@ -469,15 +516,22 @@ strong { font-weight: 700; }
 .pp-utilities-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  grid-template-rows: repeat(3, 1fr);
   gap: 11px;
   flex: 1;
-  align-items: start;
-  align-content: space-between;
+  align-items: stretch;
+}
+
+/* Mechmech P3 variant: 4 uniform cards (2 rows) + a full-width strip */
+.pp-utilities-grid--split {
+  grid-template-rows: 1fr 1fr auto;
 }
 
 .pp-utility-item {
   background: var(--beige-light);
-  padding: 11px 13px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
 }
 
 .pp-utility-item--wide {
@@ -512,6 +566,63 @@ strong { font-weight: 700; }
   color: var(--muted);
   font-style: italic;
   margin-top: 4px;
+}
+
+/* ── Wi-Fi / Mesh badges (P3 Wi-Fi card) ───────────────────── */
+.pp-utility-logos {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-top: auto;
+  padding-top: 9px;
+}
+
+.pp-utility-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-sans);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.pp-utility-badge svg { flex-shrink: 0; display: block; width: 22px; height: 22px; }
+
+/* ── TV service chips (P3 TV card — Netflix / webOS / Cablevision) ── */
+.pp-service-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 9px;
+}
+
+.pp-service-chip {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 5px 11px;
+  border: 1px solid var(--muted-light);
+  background: var(--white);
+  color: var(--midnight);
+}
+
+.pp-service-chip--netflix {
+  color: #E50914;
+  border-color: rgba(229, 9, 20, 0.32);
+  letter-spacing: 0.08em;
+}
+
+.pp-service-chip--webos {
+  color: #A50034;
+  border-color: rgba(165, 0, 52, 0.30);
 }
 
 .pp-utilities-safety {
@@ -673,14 +784,19 @@ strong { font-weight: 700; }
 
 .pp-expectation-item {
   background: var(--beige-light);
-  padding: 14px 16px;
+  padding: 13px 15px;
+  display: flex;
+  flex-direction: column;
 }
 
 .pp-expectation-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-family: var(--font-sans);
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.13em;
   text-transform: uppercase;
   color: var(--charcoal);
   margin-bottom: 8px;
@@ -688,9 +804,15 @@ strong { font-weight: 700; }
   border-bottom: 1px solid var(--muted-light);
 }
 
+/* Small relevant icon beside each expectation title */
+.pp-expectation-title svg {
+  flex-shrink: 0;
+  display: block;
+}
+
 .pp-expectation-item p {
-  font-size: 14px;
-  line-height: 1.7;
+  font-size: 12px;
+  line-height: 1.55;
   color: var(--charcoal);
 }
 
@@ -1022,7 +1144,7 @@ strong { font-weight: 700; }
   color: var(--muted);
 }
 
-/* ── Keypad tiles (production — branded icon tiles, not placeholders) ── */
+/* ── Keypad photo slots (drop in real Aqara photos; placeholder until then) ── */
 .pp-keypad-tile {
   flex: 1;
   min-height: 0;
@@ -1030,18 +1152,68 @@ strong { font-weight: 700; }
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 7px;
   background: var(--beige-light);
   border: 1px solid var(--muted-light);
+  position: relative;
+  overflow: hidden;
+}
+.pp-keypad-tile img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.pp-keypad-tile--placeholder {
+  border: 1.5px dashed rgba(138, 128, 112, 0.42);
+}
+.pp-keypad-tile--placeholder::before {
+  content: '\25FB';
+  font-size: 17px;
+  color: var(--muted);
+  opacity: 0.42;
+  line-height: 1;
+}
+.pp-keypad-tile__hint {
+  font-family: var(--font-sans);
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  opacity: 0.7;
 }
 .pp-keypad-tile svg { display: block; }
 .pp-keypad-tile__label {
   font-family: var(--font-sans);
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.10em;
   text-transform: uppercase;
   color: var(--muted);
+  text-align: center;
+  padding: 0 8px;
+  line-height: 1.4;
+}
+
+/* Caption overlay for a real keypad/lock photo */
+.pp-keypad-tile__caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(31, 43, 56, 0.74);
+  color: rgba(255, 255, 255, 0.94);
+  font-family: var(--font-sans);
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  padding: 4px 7px;
+  text-align: center;
+  line-height: 1.35;
 }
 
 
