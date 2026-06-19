@@ -12,7 +12,7 @@ const DIR = __dirname;
 const OUT = path.join(DIR, 'exports');
 const TARGETS = [
   { file: path.join(OUT, 'oraya-guide-print-byblos.pdf'),   name: 'byblos',   pages: [1, 2, 3, 5, 7] },
-  { file: path.join(OUT, 'oraya-guide-print-mechmech.pdf'), name: 'mechmech', pages: [1] },
+  { file: path.join(OUT, 'oraya-guide-print-mechmech.pdf'), name: 'mechmech', pages: [1, 2, 3] },
 ];
 
 (async () => {

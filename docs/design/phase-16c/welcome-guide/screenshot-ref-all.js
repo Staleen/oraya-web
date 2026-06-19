@@ -16,15 +16,14 @@ const OUT = path.join(DIR, 'exports');
     // PRODUCTION: load the real on-disk villa images (no Unsplash patching).
     await new Promise(function(r) { setTimeout(r, 3000); });
 
-    for (var i = 1; i <= 7; i++) {
-      var id = 'print-p' + i;
-      var el = await pg.$('#' + id);
-      if (!el) { console.log('MISSING: ' + villa + ' ' + id); continue; }
-      var box = await el.boundingBox();
-      var outPath = path.join(OUT, 'ref-' + villa + '-p' + i + '.png');
+    var pages = await pg.$$('.print-page');
+    for (var i = 0; i < pages.length; i++) {
+      var n = i + 1;
+      var box = await pages[i].boundingBox();
+      var outPath = path.join(OUT, 'ref-' + villa + '-p' + n + '.png');
       await pg.screenshot({ path: outPath, clip: { x: box.x, y: box.y, width: box.width, height: box.height } });
       var flag = (box.height > 880) ? ' *** OVERFLOW ***' : '';
-      console.log(villa + ' p' + i + ': ' + Math.round(box.width) + 'x' + Math.round(box.height) + 'px' + flag);
+      console.log(villa + ' p' + n + ': ' + Math.round(box.width) + 'x' + Math.round(box.height) + 'px' + flag);
     }
     console.log('');
   }

@@ -13,7 +13,7 @@ const { pathToFileURL } = require('url');
 const DIR = __dirname;
 const OUT = path.join(DIR, 'exports');
 
-const TOTAL_PAGES = 7;
+const TOTAL_PAGES = 9;
 
 // A4 at 96dpi
 const PAGE_W = 794;
