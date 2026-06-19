@@ -596,7 +596,8 @@ strong { font-weight: 700; }
 .pp-service-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  align-items: center;
+  gap: 6px;
   margin-top: auto;
   padding-top: 9px;
 }
@@ -605,10 +606,10 @@ strong { font-weight: 700; }
   display: inline-flex;
   align-items: center;
   font-family: var(--font-sans);
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.03em;
-  padding: 5px 11px;
+  padding: 5px 9px;
   border: 1px solid var(--muted-light);
   background: var(--white);
   color: var(--midnight);
@@ -620,9 +621,14 @@ strong { font-weight: 700; }
   letter-spacing: 0.08em;
 }
 
-.pp-service-chip--webos {
-  color: #A50034;
-  border-color: rgba(165, 0, 52, 0.30);
+/* Real brand-logo chips (webOS, Cablevision) — kept in their own colours */
+.pp-service-chip--logo {
+  padding: 4px 8px;
+}
+.pp-service-chip--logo img {
+  height: 15px;
+  width: auto;
+  display: block;
 }
 
 .pp-utilities-safety {
