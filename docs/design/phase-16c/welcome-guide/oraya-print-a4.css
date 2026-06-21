@@ -471,22 +471,24 @@ strong { font-weight: 700; }
   flex-shrink: 0;
 }
 
-/* ─── Welcome letter (page 2) ────────────────────────────────── */
+/* ─── Welcome letter (page 3) — italic, letter style ─────────── */
 .pp-welcome-letter {
-  margin-top: 16px;
+  margin-top: 20px;
 }
 .pp-welcome-letter p {
   font-family: var(--font-sans);
-  font-size: 13px;
-  line-height: 1.9;
+  font-style: italic;
+  font-size: 15.5px;
+  line-height: 2.0;
   color: var(--charcoal);
-  margin-bottom: 12px;
+  margin-bottom: 15px;
 }
 .pp-welcome-sign {
   font-family: var(--font-sans);
   font-style: italic;
+  font-size: 15.5px;
   color: var(--muted);
-  margin-top: 18px;
+  margin-top: 22px;
 }
 
 /* ─── Back cover ─────────────────────────────────────────────── */
