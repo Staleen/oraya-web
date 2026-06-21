@@ -476,16 +476,67 @@ strong { font-weight: 700; }
   margin-top: 16px;
 }
 .pp-welcome-letter p {
-  font-family: var(--font-serif);
-  font-size: 14px;
-  line-height: 1.85;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.9;
   color: var(--charcoal);
-  margin-bottom: 13px;
+  margin-bottom: 12px;
 }
 .pp-welcome-sign {
+  font-family: var(--font-sans);
   font-style: italic;
   color: var(--muted);
   margin-top: 18px;
+}
+
+/* ─── Back cover ─────────────────────────────────────────────── */
+.print-page--backcover {
+  padding: 0;
+  background: var(--midnight);
+}
+.pp-backcover {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: #fff;
+  padding: 60px 44px;
+}
+.pp-backcover__brand {
+  font-family: var(--font-sans);
+  font-weight: 900;
+  font-size: 20px;
+  letter-spacing: 0.46em;
+  color: var(--gold);
+  padding-left: 0.46em;
+}
+.pp-backcover__rule {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.40);
+  width: 58px;
+  margin: 22px auto;
+}
+.pp-backcover__tagline {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.82);
+  line-height: 1.7;
+  max-width: 300px;
+}
+.pp-backcover__contact {
+  margin-top: 42px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.68);
+  line-height: 2.1;
+}
+.pp-backcover__url {
+  color: var(--gold);
 }
 
 
