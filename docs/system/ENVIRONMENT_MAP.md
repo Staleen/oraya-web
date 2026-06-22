@@ -30,6 +30,8 @@
 | `NETCOMMERCE_CYBERSOURCE_API_BASE_URL` | server-only | yes (sandbox test) | yes | yes | yes |
 | `NETCOMMERCE_CYBERSOURCE_COUNTRY` | server-only | yes (sandbox test) | yes | yes | yes |
 | `NETCOMMERCE_CYBERSOURCE_LOCALE` | server-only | yes (sandbox test) | yes | yes | yes |
+| `NEXT_PUBLIC_NETCOMMERCE_QA_MODE` | public | optional (defaults false) | PR #64 sandbox QA only | no - must stay false/unset | yes - Preview only |
+| `NETCOMMERCE_QA_MODE` | server-only | optional (defaults false) | PR #64 sandbox QA only | no - must stay false/unset | yes - Preview only |
 | `NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_KEY_ID` | server-only | optional for sandbox completion; required for webhook reconciliation | optional for sandbox checkout; yes for webhook test | yes before live rollout | yes - Sensitive |
 | `NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_PRIVATE_KEY` | server-only | optional for sandbox completion; required for webhook reconciliation | optional for sandbox checkout; yes for webhook test | yes before live rollout | yes - Sensitive |
 | `NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_CERTIFICATE_ID` | server-only | optional for sandbox completion; required for webhook reconciliation | optional for sandbox checkout; yes for webhook test | yes before live rollout | yes - Sensitive |
@@ -143,6 +145,8 @@ For a Draft PR / Preview deployment that validates the NetCommerce / Credit Liba
 - `NETCOMMERCE_CYBERSOURCE_COUNTRY`
 - `NETCOMMERCE_CYBERSOURCE_LOCALE`
 - `NEXT_PUBLIC_SITE_URL`
+- `NEXT_PUBLIC_NETCOMMERCE_QA_MODE` (only while NetCommerce external testers need the PR #64 unblock)
+- `NETCOMMERCE_QA_MODE` (only while NetCommerce external testers need the PR #64 unblock)
 
 Preview expectations:
 
@@ -152,6 +156,8 @@ Preview expectations:
 - `NETCOMMERCE_CYBERSOURCE_COUNTRY` should be the bank-confirmed country code, currently expected as `LB`.
 - `NETCOMMERCE_CYBERSOURCE_LOCALE` should be the bank-confirmed locale, currently expected as `en_US`.
 - `NEXT_PUBLIC_SITE_URL` should be the HTTPS Vercel Preview origin used for the payment page, because CyberSource validates the capture-context target origin.
+- `NEXT_PUBLIC_NETCOMMERCE_QA_MODE` should be true only for the approved PR #64 Preview QA window. It lets external NetCommerce testers proceed to payment even when add-ons or special requests would normally show Oraya review copy.
+- `NETCOMMERCE_QA_MODE` should be true only for the approved PR #64 Preview QA window. It lets the server mark the sandbox booking `confirmed` only after authoritative CyberSource approval and successful payment-state persistence.
 - Payment checkout routes use the actual Vercel Preview request origin for payment-link generation, so the tested branch alias and generated checkout links should stay on the same HTTPS host.
 - The webhook/MLE variables are optional for this sandbox server-side completion test. They are required before production live rollout and before asynchronous webhook reconciliation can be trusted.
 - Browser redirects remain informational. Server-side CyberSource authorization and/or a verified webhook are authoritative for payment state.
@@ -298,6 +304,27 @@ Preview expectations:
 - **Where to get it:** NetCommerce / CyberSource technical package. Current English checkout expectation is `en_US` unless the bank specifies otherwise.
 - **Configure in Vercel:** yes - Production + Preview.
 - **Risk if missing:** the adapter fails readiness because CyberSource locale is part of the gateway request contract.
+
+### `NEXT_PUBLIC_NETCOMMERCE_QA_MODE`
+
+- **Scope:** public. This value is inlined into the browser bundle by Next.js and must never contain a secret.
+- **Used in:** [app/book/page.tsx](../../app/book/page.tsx) - PR #64 Preview-only bypass for the Oraya review-before-payment UI gate.
+- **Required:** optional everywhere; defaults false when unset. Enable only on the approved NetCommerce PR #64 Preview QA deployment.
+- **Allowed values:** `true` to enable; anything else is treated as false.
+- **Configure in Vercel:** Preview only for the temporary external NetCommerce sandbox QA window. Leave unset/false in Production.
+- **Risk if missing:** add-ons/special requests keep the normal review-before-payment blocker, so NetCommerce testers cannot reach Unified Checkout on the affected scenario.
+- **Risk if enabled in production:** guests with add-ons or special requests could bypass the review-before-payment UI copy. This flag is not a production payment activation mechanism and must remain false/unset outside the approved Preview test.
+
+### `NETCOMMERCE_QA_MODE`
+
+- **Scope:** server-only.
+- **Used in:** [app/api/payments/unified-checkout-complete/route.ts](../../app/api/payments/unified-checkout-complete/route.ts) - PR #64 Preview-only booking confirmation after authoritative CyberSource approval.
+- **Required:** optional everywhere; defaults false when unset. Enable only on the approved NetCommerce PR #64 Preview QA deployment.
+- **Allowed values:** `true` to enable; anything else is treated as false.
+- **Configure in Vercel:** Preview only for the temporary external NetCommerce sandbox QA window. Leave unset/false in Production.
+- **Risk if missing:** approved sandbox payments still update payment fields, but `bookings.status` remains pending and NetCommerce cannot validate the requested confirmed-after-payment QA behavior.
+- **Safety contract:** browser return pages remain informational. The server flag only takes effect inside `POST /api/payments/unified-checkout-complete` after CyberSource approves the transient-token payment and the same Supabase update persists the payment fields. Failed, declined, incomplete, abandoned, or pay-later bookings are not confirmed by this flag.
+- **Risk if enabled in production:** successful live payments could automatically confirm bookings before Oraya operations review. This is forbidden unless a later production state-machine decision explicitly approves it.
 
 ### `NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_KEY_ID`
 

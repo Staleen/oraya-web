@@ -16,6 +16,15 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-06-22 - PR #64 temporary NetCommerce QA mode unlocks sandbox payment review gate
+
+**Decision:** PR #64 may enable a temporary Preview-only NetCommerce QA mode using `NEXT_PUBLIC_NETCOMMERCE_QA_MODE=true` and `NETCOMMERCE_QA_MODE=true`. The public flag lets external NetCommerce testers proceed from `/book` to hosted checkout even when add-ons or special requests would normally show Oraya review-before-payment copy. The server flag lets `POST /api/payments/unified-checkout-complete` mark the sandbox booking `confirmed` only after CyberSource approves the transient-token payment and the same Supabase update persists the payment fields.
+**Reason:** NetCommerce external testers were blocked before booking creation by the `/book` review gate ("This stay needs Oraya review before payment can be collected"), so they could not complete the required CyberSource Unified Checkout sandbox review. The testing requirement is explicit: add-ons and special requests must not block the sandbox payment path, and successful authoritative sandbox payment must leave the test booking confirmed for NetCommerce workflow validation.
+**Impact:** This is not production activation and does not change production `master`. The flags default false/unset, must be scoped to the PR #64 Vercel Preview QA window only, and must not be copied to Production. Browser success/cancel redirects remain informational; failed, declined, abandoned, incomplete, pay-later, and cancelled bookings are not confirmed by the QA mode.
+**Reversible?:** yes - remove/disable the two env flags for immediate rollback; remove the QA helper and guarded call sites when NetCommerce sandbox testing no longer needs this temporary path.
+
+---
+
 ## 2026-06-17 - PR #64 Preview sandbox path is ready for NetCommerce-side testing
 
 **Decision:** Draft PR #64 (`agent/phase-16b-cybersource-unified-checkout-test`) is the current Phase 16B NetCommerce / Credit Libanais / CyberSource sandbox implementation branch. It is open, unmerged, and ready for NetCommerce-side testing on Vercel Preview. Production `master` remains unchanged and production payment is not enabled.
