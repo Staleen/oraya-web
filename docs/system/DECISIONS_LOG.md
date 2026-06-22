@@ -16,6 +16,15 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-06-22 - Saved-card/tokenization disabled for NetCommerce launch
+
+**Decision:** PR #64 must omit CyberSource Unified Checkout saved-card consent for the NetCommerce launch. Oraya will support one-time Unified Checkout payments only and will not request TMS token creation, persist reusable customer/payment-instrument tokens, record saved-card consent, add token-management UI, or support credentials-on-file, recurring billing, or merchant-initiated payments in this launch.
+**Reason:** NetCommerce confirmed the sandbox testing results were successful and requested that Oraya omit the "Save card for future payment" option before account activation. This keeps the launch scope aligned with one-time guest payment collection and avoids introducing consent, lifecycle, revocation, and security obligations that were not approved for Phase 16B launch.
+**Impact:** `lib/payments/credit-libanais.ts` must keep the CyberSource capture-context saved-card consent request disabled. Remaining balances, approved add-ons, and top-ups require a new payment link unless NetCommerce later approves tokenization with explicit consent UX and security review. Refunds do not require saved-card tokenization. Production credentials are still pending and production payment remains disabled.
+**Reversible?:** yes - but only after explicit NetCommerce approval, consent design, token lifecycle storage/revocation, and security review.
+
+---
+
 ## 2026-06-22 - PR #64 temporary NetCommerce QA mode unlocks sandbox payment review gate
 
 **Decision:** PR #64 may enable a temporary Preview-only NetCommerce QA mode using `NEXT_PUBLIC_NETCOMMERCE_QA_MODE=true` and `NETCOMMERCE_QA_MODE=true`. The public flag lets external NetCommerce testers proceed from `/book` to hosted checkout even when add-ons or special requests would normally show Oraya review-before-payment copy. The server flag lets `POST /api/payments/unified-checkout-complete` mark the sandbox booking `confirmed` only after CyberSource approves the transient-token payment and the same Supabase update persists the payment fields.

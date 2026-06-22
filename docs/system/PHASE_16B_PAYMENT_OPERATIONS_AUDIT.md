@@ -16,6 +16,8 @@ PR #64 is a credible first hosted-payment foundation: it creates a booking first
 
 **2026-06-22 Preview QA addendum:** PR #64 may temporarily enable `NEXT_PUBLIC_NETCOMMERCE_QA_MODE=true` and `NETCOMMERCE_QA_MODE=true` on the approved Vercel Preview so NetCommerce can complete external sandbox workflow testing. In that mode only, add-ons/special requests do not block pay-now and an authoritative approved CyberSource sandbox payment may mark the test booking `confirmed`. This does not supersede the production lifecycle guidance in this audit: production remains disabled, browser redirects remain informational, and production auto-confirmation is still not approved.
 
+**2026-06-22 saved-card addendum:** NetCommerce confirmed PR #64 sandbox testing was successful and requested omission of the "Save card for future payment" option before account activation. PR #64 now explicitly disables saved-card consent/tokenization for the launch while keeping one-time Unified Checkout payments. Oraya does not request TMS token creation, persist reusable customer/payment-instrument tokens, record saved-card consent, or support credentials-on-file / recurring / merchant-initiated payments. Remaining balances and approved add-ons require new payment links unless tokenization is later approved by NetCommerce with consent design and security review. Refunds do not require saved-card tokenization. Production credentials remain pending and production payment remains disabled.
+
 The current implementation is not yet a full payment operating system. It lacks verified CyberSource webhooks/MLE processing, provider-side refund/partial-refund/void/capture APIs, settlement/reconciliation ingestion, durable payment-attempt and transaction tables, tokenization/saved-card consent, fraud review handling, role-based money-movement controls, and a provider-grade payment timeline in admin.
 
 The current CyberSource completion request sends `processingInformation.capture: true` in `lib/payments/credit-libanais.ts`. Based on CyberSource's public payment docs, a sale combines authorization and capture in one transaction, while capture is otherwise a follow-on transaction to an authorization. Therefore the PR #64 browser completion should be treated as "authorization plus capture requested / sale-like" until NetCommerce confirms the merchant configuration and response semantics. It is not a clean auth-only/manual-capture flow today.
@@ -99,6 +101,7 @@ Credit Libanais / NetCommerce / CyberSource implementation:
 - It creates CyberSource Unified Checkout capture contexts with `/uc/v1/sessions`.
 - It loads CyberSource client-library metadata from the capture context JWT where available.
 - It uses `PANENTRY` as the allowed payment type.
+- It explicitly disables Unified Checkout saved-card credential consent for the launch.
 - It authorizes the transient token through `/pts/v2/payments`.
 - It sends `processingInformation.capture: true`, so current behavior should be treated as capture-requested / sale-like until NetCommerce confirms.
 - It marks responses with status `AUTHORIZED` or `CAPTURED` as approved.
@@ -274,8 +277,8 @@ Patterns Oraya should follow:
 | Webhooks | Generic scaffold exists; Stripe dev verification exists; Credit Libanais throws | CyberSource payment and Unified Checkout events require MLE | Required before production hardening |
 | MLE webhook decryption/verification | Not implemented | Required for relevant events | Required before trusting asynchronous events |
 | Settlement/reconciliation | Not implemented | Reporting and Transaction Search APIs exist; bank settlement process must be confirmed | Required after webhooks |
-| Tokenization / TMS | Not implemented | CyberSource TMS supports token management | Later phase with consent |
-| Saved cards | Not implemented | Depends on TMS/COF enablement | Not recommended until core operations are stable |
+| Tokenization / TMS | Intentionally disabled for launch; no token creation request | CyberSource TMS supports token management but NetCommerce requested saved-card omission | Defer until explicit NetCommerce approval, consent design, and security review |
+| Saved cards | Intentionally disabled for launch; no consent storage or token UI | Depends on TMS/COF enablement; NetCommerce requested omission | Do not enable for production launch |
 | Token management | Not implemented | TMS supports create/retrieve/update/delete payment instruments | Later phase |
 | Decision Manager / fraud | Not implemented | Decision can return `REVIEW` when Decision Manager is used | Confirm enablement; surface read-only first |
 | Payer authentication / 3DS | Not explicitly modeled | May be configured through provider/CyberSource | Ask NetCommerce; surface status if enabled |
@@ -311,12 +314,14 @@ Remaining balance:
 - Balance should become due based on Oraya policy: after admin confirmation, before check-in, or at a configured deadline.
 - Balance collection should use a new balance-payment link tied to the booking and prior payments.
 - Balance payment should not reuse the original deposit attempt/session.
+- For the current launch, remaining balances must use a new payment link; Oraya must not reuse a saved card or merchant-initiated charge because tokenization is intentionally disabled.
 
 Add-ons and top-ups:
 
 - Approval-based add-ons and special requests are reviewed after booking creation.
 - Once approved, admin should create an add-on/top-up payment link with its own attempt and transaction records.
 - Add-on payment should not overwrite the stay deposit/full-payment transaction.
+- Add-ons and top-ups must use a new payment link for the current launch unless NetCommerce later approves tokenization.
 
 WhatsApp payment links:
 
@@ -331,6 +336,7 @@ Refunds:
 - Partial refunds must be first-class.
 - Refund records must reference the provider capture/sale transaction.
 - Manual refund records should remain possible only for off-platform refunds, with clear labeling.
+- Refund execution does not require saved-card tokenization; it should reference the original provider capture/sale transaction when provider refund APIs are implemented.
 
 Voids and reversals:
 
@@ -601,6 +607,7 @@ Disabled-state warnings:
 
 - No PAN/CVV storage in Oraya.
 - No full card number in logs, docs, database, screenshots, or admin UI.
+- Saved-card consent/tokenization is disabled for the current NetCommerce launch.
 - Token-only storage if TMS/saved cards are approved.
 - Saved-card consent must be explicit, versioned, and revocable.
 - CyberSource webhook MLE must be implemented before asynchronous events are trusted.
@@ -675,6 +682,7 @@ Exit criteria still open:
 ### 16B.8 - Tokenization and saved cards
 
 - Only if NetCommerce enables TMS and Oraya wants saved cards.
+- Deferred for the current launch after NetCommerce requested omission of saved-card consent.
 - Implement explicit consent, token storage, revocation, and token lifecycle management.
 
 ### 16B.9 - Fraud/risk and Decision Manager
@@ -737,7 +745,7 @@ Exit criteria still open:
 - Production gate risk: a database `online_payment_enabled` toggle should not be the only production safety gate once production credentials exist.
 - Settlement blind spot: payment success is not the same as settled funds.
 - Role risk: all admin users currently share the same auth boundary.
-- Saved-card risk: tokenization must not be added without explicit consent and token lifecycle management.
+- Saved-card risk: tokenization must remain disabled for launch and must not be added without explicit NetCommerce approval, consent UX, security review, and token lifecycle management.
 
 ## Recommended Next Step
 

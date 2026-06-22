@@ -291,6 +291,7 @@ function buildCaptureContextRequest(
       requestEmail: true,
       requestPhone: true,
       requestShipping: false,
+      requestSaveCredentials: false,
       showAcceptedNetworkIcons: true,
     },
     data: {
