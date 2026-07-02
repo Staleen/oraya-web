@@ -1,6 +1,6 @@
 # Known Bugs & Open Issues
 
-**Updated:** 2026-06-03 (file last accumulated entries through 2026-05-23 + new 2026-06-03 wrong-domain entry; the file's actual updated date now reflects this).
+**Updated:** 2026-06-17
 
 Living list of bugs, gaps, and operational pitfalls that are **known** but **not yet fixed** (or accepted as a permanent trade-off). New AI sessions: read this before assuming production is in a clean state.
 
@@ -123,6 +123,21 @@ Living list of bugs, gaps, and operational pitfalls that are **known** but **not
   3. If a guest reports they were directed at `oraya.com.lb` from any AI surface, treat it as a high-priority operator-side configuration bug.
   4. Optional: server-side hardening — a future task could add a 301 redirect from `oraya.com.lb` to `stayoraya.com` if the LB TLD is ever registered defensively. Not in scope today.
 - **Discovered:** 2026-06-03 (reconciliation pass — risk surfaced from external observations of generic AI behavior, not from production traffic against Oraya's own surfaces).
+
+---
+
+### #9 — NetCommerce / CyberSource declined-card sandbox validation still needs provider vector
+
+- **Severity:** 🟡 Medium — payment QA / open validation item, not a production bug.
+- **Area:** Phase 16B / NetCommerce / CyberSource Unified Checkout sandbox validation
+- **Description:** PR #64 Preview has passed the approved-card sandbox path: `/book` creates a booking, pay-now redirects to `/payments/checkout/[token]`, CyberSource Unified Checkout loads with the official NetCommerce seal visible, an approved sandbox card completes, `POST /api/payments/unified-checkout-complete` succeeds, and payment fields update to authorized/paid. Normal behavior leaves `bookings.status` as `PENDING`; the temporary PR #64 NetCommerce QA mode may mark the sandbox booking `confirmed` after authoritative server-side approval only while the approved Preview QA flags are enabled. Declined-card validation is still incomplete because the attempted decline-style sandbox card authorized. Oraya needs the official NetCommerce/CyberSource declined-card vector or decline trigger before declaring decline handling validated.
+- **Status:** open — waiting on NetCommerce/CyberSource test vector or trigger.
+- **Recommended fix path:**
+  1. Ask NetCommerce/CyberSource for the official declined-card sandbox vector or configured decline trigger.
+  2. Re-run the Preview declined-card browser flow on PR #64.
+  3. Confirm the declined attempt does not mark payment paid and remains retryable.
+  4. Keep production payment disabled until NetCommerce review/approval, production credentials, production env setup, and explicit production enablement are complete.
+- **Discovered:** 2026-06-17 (PR #64 Preview sandbox validation).
 
 ---
 

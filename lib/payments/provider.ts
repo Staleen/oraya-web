@@ -83,6 +83,8 @@ export interface CreateCheckoutSessionInput {
   purpose: PaymentLinkPurpose;
   return_url: string;
   cancel_url: string;
+  payment_page_url?: string;
+  expires_at?: string;
 }
 
 export interface CreateCheckoutSessionResult {

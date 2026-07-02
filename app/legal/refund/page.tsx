@@ -10,7 +10,7 @@ const subheading: React.CSSProperties = { fontFamily: PLAYFAIR, fontSize: "20px"
 const body: React.CSSProperties = { fontFamily: LATO, fontSize: "14px", color: INK, lineHeight: 1.8, margin: "0 0 1rem", fontWeight: 300 };
 const meta: React.CSSProperties = { fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "0 0 2.5rem", letterSpacing: "0.5px" };
 
-export const metadata = { title: "Cancellation & Refund Policy — Oraya" };
+export const metadata = { title: "Cancellation & Refund Policy - Oraya" };
 
 export default function RefundPage() {
   return (
@@ -20,18 +20,18 @@ export default function RefundPage() {
       <p style={meta}>Last updated: 2026</p>
 
       <p style={body}>
-        We aim to keep cancellations simple and fair. The notes below describe the principles we follow — specific terms for your stay are confirmed by our team when your booking moves from <strong>request</strong> to <strong>confirmed</strong>.
+        We aim to keep cancellations simple and fair. The notes below describe the principles we follow - specific terms for your stay are confirmed by our team when your booking moves from <strong>request</strong> to <strong>confirmed</strong>.
       </p>
       <p style={body}>
         If you withdraw a <strong>pending request</strong> before Oraya has confirmed dates and requested payment, there is typically no deposit to refund; simply contact us at{" "}
-        <a href="mailto:hello@stayoraya.com" style={{ color: GOLD, textDecoration: "none" }}>hello@stayoraya.com</a>. Once a booking is confirmed and a deposit has been received, the principles below and any bespoke terms shared with you apply. Payment mechanics are described in our{" "}
+        <a href="mailto:admin@stayoraya.com" style={{ color: GOLD, textDecoration: "none" }}>admin@stayoraya.com</a>. Once a booking is confirmed and a deposit has been received, the principles below and any bespoke terms shared with you apply. Payment mechanics are described in our{" "}
         <a href="/legal/payment" style={{ color: GOLD, textDecoration: "none" }}>Payment Policy</a>; general stay rules are in our{" "}
         <a href="/legal/terms" style={{ color: GOLD, textDecoration: "none" }}>Terms &amp; Conditions</a>.
       </p>
 
       <h2 style={subheading}>Cancellation window</h2>
       <p style={body}>
-        Specific cancellation terms are confirmed at the time of booking. Where a booking has unique conditions — peak season, full-venue events, or extended stays — those will be shared in writing before payment.
+        Specific cancellation terms are confirmed at the time of booking. Where a booking has unique conditions - peak season, full-venue events, or extended stays - those will be shared in writing before payment.
       </p>
 
       <h2 style={subheading}>Deposit handling</h2>
@@ -46,14 +46,15 @@ export default function RefundPage() {
 
       <h2 style={subheading}>Oraya discretion</h2>
       <p style={body}>
-        Oraya may apply discretion in exceptional situations — including illness, weather, or circumstances beyond your control. Our intent is always to find a reasonable resolution rather than to apply rigid rules.
+        Oraya may apply discretion in exceptional situations - including illness, weather, or circumstances beyond your control. Our intent is always to find a reasonable resolution rather than to apply rigid rules.
       </p>
 
       <h2 style={subheading}>Contact</h2>
       <p style={body}>
         Need to discuss a change?{" "}
-        <a href="mailto:hello@stayoraya.com" style={{ color: GOLD, textDecoration: "none" }}>hello@stayoraya.com</a>
-        {" "}— we read every message.
+        <a href="mailto:admin@stayoraya.com" style={{ color: GOLD, textDecoration: "none" }}>admin@stayoraya.com</a>
+        {" "}or{" "}
+        <a href="https://wa.me/96171140041" style={{ color: GOLD, textDecoration: "none" }}>+961 71 140 041</a>.
       </p>
     </>
   );

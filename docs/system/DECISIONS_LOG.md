@@ -16,6 +16,78 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-06-22 - Saved-card/tokenization disabled for NetCommerce launch
+
+**Decision:** PR #64 must omit CyberSource Unified Checkout saved-card consent for the NetCommerce launch. Oraya will support one-time Unified Checkout payments only and will not request TMS token creation, persist reusable customer/payment-instrument tokens, record saved-card consent, add token-management UI, or support credentials-on-file, recurring billing, or merchant-initiated payments in this launch.
+**Reason:** NetCommerce confirmed the sandbox testing results were successful and requested that Oraya omit the "Save card for future payment" option before account activation. This keeps the launch scope aligned with one-time guest payment collection and avoids introducing consent, lifecycle, revocation, and security obligations that were not approved for Phase 16B launch.
+**Impact:** `lib/payments/credit-libanais.ts` must keep the CyberSource capture-context saved-card consent request disabled. Remaining balances, approved add-ons, and top-ups require a new payment link unless NetCommerce later approves tokenization with explicit consent UX and security review. Refunds do not require saved-card tokenization. Production credentials are still pending and production payment remains disabled.
+**Reversible?:** yes - but only after explicit NetCommerce approval, consent design, token lifecycle storage/revocation, and security review.
+
+---
+
+## 2026-06-22 - PR #64 temporary NetCommerce QA mode unlocks sandbox payment review gate
+
+**Decision:** PR #64 may enable a temporary Preview-only NetCommerce QA mode using `NEXT_PUBLIC_NETCOMMERCE_QA_MODE=true` and `NETCOMMERCE_QA_MODE=true`. The public flag lets external NetCommerce testers proceed from `/book` to hosted checkout even when add-ons or special requests would normally show Oraya review-before-payment copy. The server flag lets `POST /api/payments/unified-checkout-complete` mark the sandbox booking `confirmed` only after CyberSource approves the transient-token payment and the same Supabase update persists the payment fields.
+**Reason:** NetCommerce external testers were blocked before booking creation by the `/book` review gate ("This stay needs Oraya review before payment can be collected"), so they could not complete the required CyberSource Unified Checkout sandbox review. The testing requirement is explicit: add-ons and special requests must not block the sandbox payment path, and successful authoritative sandbox payment must leave the test booking confirmed for NetCommerce workflow validation.
+**Impact:** This is not production activation and does not change production `master`. The flags default false/unset, must be scoped to the PR #64 Vercel Preview QA window only, and must not be copied to Production. Browser success/cancel redirects remain informational; failed, declined, abandoned, incomplete, pay-later, and cancelled bookings are not confirmed by the QA mode.
+**Reversible?:** yes - remove/disable the two env flags for immediate rollback; remove the QA helper and guarded call sites when NetCommerce sandbox testing no longer needs this temporary path.
+
+---
+
+## 2026-06-17 - PR #64 Preview sandbox path is ready for NetCommerce-side testing
+
+**Decision:** Draft PR #64 (`agent/phase-16b-cybersource-unified-checkout-test`) is the current Phase 16B NetCommerce / Credit Libanais / CyberSource sandbox implementation branch. It is open, unmerged, and ready for NetCommerce-side testing on Vercel Preview. Production `master` remains unchanged and production payment is not enabled.
+**Reason:** The original NetCommerce task was to follow the CyberSource Unified Checkout guideline, use sandbox merchant details, add the NetCommerce payment/security seal, and notify NetCommerce when ready for their testing. The Preview approved-card path now passes: `/book` creates a booking; pay-now redirects to `/payments/checkout/[token]`; CyberSource Unified Checkout loads; the NetCommerce seal is visible; an approved sandbox card completes; `POST /api/payments/unified-checkout-complete` succeeds; payment fields update to authorized/paid; `bookings.status` remains `PENDING` for admin/operations confirmation.
+**Impact:** Future agents must treat PR #64 as sandbox/Preview work only until NetCommerce review, declined-card validation, production credentials, production env setup, explicit production enablement, and final merge/release approval are complete. The private Vercel share link was sent outside the repo and must never be committed, quoted, or copied into docs.
+**Reversible?:** yes - this is a status/coordination decision, not a production rollout.
+
+---
+
+## 2026-06-17 - Official NetCommerce payment seal is the approved PR #64 seal asset
+
+**Decision:** The PR #64 checkout page uses the official NetCommerce seal asset (`NCseal_M.png`) for the sandbox payment/security display. The latest payment implementation commit includes `d8828c9 Use official NetCommerce payment seal`.
+**Reason:** The external NetCommerce task explicitly asked Oraya to add the NetCommerce payment/security seal before handing the Preview over for testing. Using the official asset avoids relying on a placeholder or hand-drawn approximation.
+**Impact:** The seal is part of the Preview sandbox readiness evidence for PR #64. Do not swap it for unofficial artwork or remove it without NetCommerce / David approval.
+**Reversible?:** yes, but only if NetCommerce requests a different official asset.
+
+---
+
+## 2026-06-17 - Declined-card sandbox validation requires provider-supplied vector
+
+**Decision:** Declined-card handling is not considered fully validated until NetCommerce/CyberSource provides an official declined-card sandbox vector or decline trigger and Oraya re-tests the Preview browser flow.
+**Reason:** The attempted decline-style sandbox card authorized successfully during PR #64 validation. Treating that attempt as a declined-card pass would be misleading and could hide a real payment-state risk.
+**Impact:** [KNOWN_BUGS.md](KNOWN_BUGS.md) tracks this as a Phase 16B payment QA/open validation item, not a production incident. Production rollout remains blocked until the decline path is validated alongside NetCommerce review/approval and production credential readiness.
+**Reversible?:** yes - once the provider vector is received and the decline path passes, close the known-bug item with the validation date.
+
+---
+
+## 2026-06-17 - Dirty Phase 16B branch recovered; generated exports moved outside repo
+
+**Decision:** The old dirty worktree `C:\Users\David\OneDrive - Sela\Desktop\oraya-web` on branch `codex/phase-16b-payment-readiness` has been recovered from accidental mass deletions and generated artifacts. It now has 0 tracked deletions, 0 tracked modifications, and 0 untracked files. Generated Phase 16C export artifacts were moved outside the repo to `C:\Users\David\OneDrive - Sela\Desktop\oraya-local-backups\phase-16c-exports-from-dirty-tree`.
+**Reason:** The branch previously showed large accidental deletion/generation dirt and overlapped locked surfaces. It contained no useful tracked payment implementation work to salvage for PR #64.
+**Impact:** Future Phase 16B implementation should not be based on that old dirty branch and should not treat it as pending useful payment work. Use updated `master` / a clean branch after the PR #64 decision unless David explicitly instructs otherwise.
+**Reversible?:** N/A - cleanup coordination record.
+
+---
+
+## 2026-06-17 - CyberSource Unified Checkout SDK metadata comes from capture context
+
+**Decision:** Credit Libanais / NetCommerce session parsing reads the CyberSource-returned Unified Checkout SDK metadata from the decoded capture context, including nested `ctx[*].data.clientLibrary` and `ctx[*].data.clientLibraryIntegrity`, before using any fallback asset URL.
+**Reason:** PR #64 Preview validation showed `POST /api/payments/unified-checkout-session` returning 200, but the browser loaded a generic CyberSource asset and the Unified Checkout UI did not mount. Redacted capture-context inspection showed the real SDK URL and integrity value were present under the Unified Checkout context payload, not top-level `data`.
+**Impact:** The checkout page now loads the bank/CyberSource-provided client library for the exact capture context. The session request also includes `PANENTRY` as the allowed payment type for card entry. Oraya still never collects card numbers or CVV; completion remains server-side transient-token authorization.
+**Reversible?:** yes.
+
+---
+
+## 2026-06-17 - Preview payment links resolve from request origin
+
+**Decision:** Phase 16B payment execution routes resolve checkout, return, and booking-view URLs from the current Vercel Preview request origin instead of blindly falling back to `SITE_URL` when `NEXT_PUBLIC_SITE_URL` is stale or missing. Production behavior remains canonical: `https://stayoraya.com` is still the fallback outside Preview.
+**Reason:** PR #64 Preview validation showed the pay-now path creating a real Preview booking but persisting the hosted payment link as `https://www.stayoraya.com/payments/checkout/...`. That blocked sandbox validation on the branch alias and risked crossing Preview test data into production-domain UX.
+**Impact:** Payment-only helper `lib/payments/request-origin.ts` is used by `POST /api/payments/checkout`, `POST /api/payments/unified-checkout-session`, and `POST /api/payments/unified-checkout-complete`. Locked `/api/bookings` remains untouched, so transactional email and booking-creation links still follow their existing `NEXT_PUBLIC_SITE_URL || SITE_URL` behavior.
+**Reversible?:** yes.
+
+---
+
 ## 2026-06-05 - Phase 16A natural stay intake — Batch 2 operator gate passed
 
 **Decision:** Technical gate passed: WhatChimp confirmed able to call `POST /api/butler/normalize-stay-intent` and map nested `extracted.*` response fields (`extracted.check_in`, `extracted.check_out`, `extracted.villa`, `extracted.guest_count`). Architecture validated, endpoint reachable, nested field mapping verified. Production stay-booking flow migration (custom field, trigger, capture node, HTTP API call, response branches, retirement of old four-step intake) is still pending operator action.

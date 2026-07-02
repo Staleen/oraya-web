@@ -21,12 +21,20 @@
 | `CRON_SECRET` | server-only | optional (cron only fires in Vercel) | yes (Vercel auto-injects for Cron) | yes (Vercel auto-injects for Cron) | yes |
 | `ADMIN_SECRET` | server-only | yes (admin login + admin APIs) | yes | yes | yes |
 | `BUTLER_WEBHOOK_SECRET` | server-only | optional (only for Butler endpoint testing) | yes (once WhatChimp is wired) | yes (once WhatChimp is wired) | yes — Sensitive |
-| `BUTLER_PREFILL_SECRET` | server-only | optional (only for WhatsApp -> /book prefill testing) | yes (once the handoff is wired) | yes (once the handoff is wired) | yes â€” Sensitive |
+| `BUTLER_PREFILL_SECRET` | server-only | optional (only for WhatsApp -> /book prefill testing) | yes (once the handoff is wired) | yes (once the handoff is wired) | yes - Sensitive |
 | `PAYMENT_PROVIDER` | server-only | optional (defaults to `stripe` only outside production) | yes | yes | yes |
-| `CREDIT_LIBANAIS_MERCHANT_ID` | server-only | optional (until the bank contract is implemented) | yes (when Credit Libanais is enabled) | yes (when Credit Libanais is enabled) | yes |
-| `CREDIT_LIBANAIS_SECRET` | server-only | optional (until the bank contract is implemented) | yes (when Credit Libanais is enabled) | yes (when Credit Libanais is enabled) | yes |
-| `CREDIT_LIBANAIS_GATEWAY_URL` | server-only | optional (until the bank contract is implemented) | yes (when Credit Libanais is enabled) | yes (when Credit Libanais is enabled) | yes |
-| `CREDIT_LIBANAIS_WEBHOOK_SECRET` | server-only | optional (until the bank callback contract is implemented) | yes (when Credit Libanais is enabled) | yes (when Credit Libanais is enabled) | yes |
+| `NETCOMMERCE_CYBERSOURCE_ENVIRONMENT` | server-only | yes (sandbox test) | yes | yes | yes |
+| `NETCOMMERCE_CYBERSOURCE_MERCHANT_ID` | server-only | yes (sandbox test) | yes | yes | yes - Sensitive |
+| `NETCOMMERCE_CYBERSOURCE_KEY_ID` | server-only | yes (sandbox test) | yes | yes | yes - Sensitive |
+| `NETCOMMERCE_CYBERSOURCE_SHARED_SECRET` | server-only | yes (sandbox test) | yes | yes | yes - Sensitive |
+| `NETCOMMERCE_CYBERSOURCE_API_BASE_URL` | server-only | yes (sandbox test) | yes | yes | yes |
+| `NETCOMMERCE_CYBERSOURCE_COUNTRY` | server-only | yes (sandbox test) | yes | yes | yes |
+| `NETCOMMERCE_CYBERSOURCE_LOCALE` | server-only | yes (sandbox test) | yes | yes | yes |
+| `NEXT_PUBLIC_NETCOMMERCE_QA_MODE` | public | optional (defaults false) | PR #64 sandbox QA only | no - must stay false/unset | yes - Preview only |
+| `NETCOMMERCE_QA_MODE` | server-only | optional (defaults false) | PR #64 sandbox QA only | no - must stay false/unset | yes - Preview only |
+| `NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_KEY_ID` | server-only | optional for sandbox completion; required for webhook reconciliation | optional for sandbox checkout; yes for webhook test | yes before live rollout | yes - Sensitive |
+| `NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_PRIVATE_KEY` | server-only | optional for sandbox completion; required for webhook reconciliation | optional for sandbox checkout; yes for webhook test | yes before live rollout | yes - Sensitive |
+| `NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_CERTIFICATE_ID` | server-only | optional for sandbox completion; required for webhook reconciliation | optional for sandbox checkout; yes for webhook test | yes before live rollout | yes - Sensitive |
 | `STRIPE_SECRET_KEY` | server-only | optional (Stripe local/dev test only) | optional | optional | optional |
 | `STRIPE_WEBHOOK_SECRET` | server-only | optional (Stripe local/dev webhook only) | optional | optional | optional |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | public | optional (Stripe local/dev only) | optional | optional | optional |
@@ -114,9 +122,47 @@ Public vs server-only:
 - **Where to get it:**
   - **Production:** the canonical site origin (`https://stayoraya.com`).
   - **Preview:** the per-deployment Vercel URL, or set to `https://$VERCEL_URL` style if reuse is acceptable.
-  - **Local:** `http://localhost:3000` (only matters if you want emails sent from `npm run dev` to link back locally).
+  - **Local:** `http://localhost:3000` for general app testing and local email links.
+  - **CyberSource sandbox browser testing:** Unified Checkout requires the payment page origin in the capture context to be HTTPS. Use Vercel Preview, production, or a local HTTPS tunnel for real browser payment UI validation; plain `http://localhost:3000` cannot complete the Unified Checkout browser flow.
 - **Configure in Vercel:** yes for previews and production (so emails sent from a non-prod environment do not silently link to live).
-- **Risk if missing:** no errors — emails still send. But every link inside email bodies points to `https://stayoraya.com`, even from preview/local. Guests testing on preview would land on production data, which is misleading and dangerous for staging email tests.
+- **Risk if missing:** no errors — emails still send. But every link inside email bodies points to `https://stayoraya.com`, even from preview/local. Guests testing on preview would land on production data, which is misleading and dangerous for staging email tests. For CyberSource, a non-HTTPS local origin causes capture-context or browser SDK validation to fail before payment UI can mount.
+- **Payment-link behavior:** Phase 16B payment execution routes resolve `/payments/checkout/[token]`, payment return, and payment booking-view URLs from the current request origin when running on Vercel Preview. This prevents Preview-hosted checkout links from falling back to the production host when the Preview env value is stale or missing. Production still falls back to the canonical `https://stayoraya.com` origin. Transactional email and Butler link generation still depend on `NEXT_PUBLIC_SITE_URL` or the canonical fallback.
+
+### Vercel Preview CyberSource sandbox checklist
+
+For a Draft PR / Preview deployment that validates the NetCommerce / Credit Libanais CyberSource sandbox flow, configure these variable names in Vercel Preview only, with sandbox values and no production activation. Do not commit real merchant values, shared secrets, capture contexts, card numbers, signed checkout URLs, or private Vercel share links to this repository.
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `BOOKING_ACTION_SECRET`
+- `PAYMENT_PROVIDER`
+- `NETCOMMERCE_CYBERSOURCE_ENVIRONMENT`
+- `NETCOMMERCE_CYBERSOURCE_MERCHANT_ID`
+- `NETCOMMERCE_CYBERSOURCE_KEY_ID`
+- `NETCOMMERCE_CYBERSOURCE_SHARED_SECRET`
+- `NETCOMMERCE_CYBERSOURCE_API_BASE_URL`
+- `NETCOMMERCE_CYBERSOURCE_COUNTRY`
+- `NETCOMMERCE_CYBERSOURCE_LOCALE`
+- `NEXT_PUBLIC_SITE_URL`
+- `NEXT_PUBLIC_NETCOMMERCE_QA_MODE` (only while NetCommerce external testers need the PR #64 unblock)
+- `NETCOMMERCE_QA_MODE` (only while NetCommerce external testers need the PR #64 unblock)
+
+Preview expectations:
+
+- `PAYMENT_PROVIDER` should select `credit_libanais`.
+- `NETCOMMERCE_CYBERSOURCE_ENVIRONMENT` should be sandbox.
+- `NETCOMMERCE_CYBERSOURCE_API_BASE_URL` should point to the CyberSource test API host.
+- `NETCOMMERCE_CYBERSOURCE_COUNTRY` should be the bank-confirmed country code, currently expected as `LB`.
+- `NETCOMMERCE_CYBERSOURCE_LOCALE` should be the bank-confirmed locale, currently expected as `en_US`.
+- `NEXT_PUBLIC_SITE_URL` should be the HTTPS Vercel Preview origin used for the payment page, because CyberSource validates the capture-context target origin.
+- `NEXT_PUBLIC_NETCOMMERCE_QA_MODE` should be true only for the approved PR #64 Preview QA window. It lets external NetCommerce testers proceed to payment even when add-ons or special requests would normally show Oraya review copy.
+- `NETCOMMERCE_QA_MODE` should be true only for the approved PR #64 Preview QA window. It lets the server mark the sandbox booking `confirmed` only after authoritative CyberSource approval and successful payment-state persistence.
+- Payment checkout routes use the actual Vercel Preview request origin for payment-link generation, so the tested branch alias and generated checkout links should stay on the same HTTPS host.
+- The webhook/MLE variables are optional for this sandbox server-side completion test. They are required before production live rollout and before asynchronous webhook reconciliation can be trusted.
+- Browser redirects remain informational. Server-side CyberSource authorization and/or a verified webhook are authoritative for payment state.
+- PR #64 Preview has passed the approved-card sandbox path and is ready for NetCommerce-side testing. Declined-card validation remains pending until NetCommerce/CyberSource provides an official declined-card vector or decline trigger.
+- Production must stay disabled until NetCommerce sandbox review/approval is complete, production credentials are issued, Vercel Production env values are set deliberately, explicit production enablement is approved, and a controlled live/payment-readiness test is planned. Never copy Preview sandbox values into Production as a shortcut.
 
 ### `BOOKING_ACTION_SECRET`
 
@@ -174,12 +220,12 @@ Public vs server-only:
 - **Scope:** server-only. **Never expose in a `"use client"` component or any `NEXT_PUBLIC_*` variable.**
 - **Status:** live for the WhatsApp -> website prefill handoff.
 - **Used in:**
-  - [lib/butler/prefill-token.ts](lib/butler/prefill-token.ts) â€” HMAC signing and verification for short-lived opaque prefill tokens.
-  - [app/api/butler/prefill/route.ts](app/api/butler/prefill/route.ts) â€” public token-auth prefill endpoint.
-  - [app/api/butler/lead/route.ts](app/api/butler/lead/route.ts) â€” additive `prefill_url` issuance after successful lead insert.
-- **Required:** local optional (lead capture still succeeds without it; prefill URL is omitted) Â· preview yes once the handoff is tested there Â· production yes once the handoff is live.
-- **Where to get it:** generate (`openssl rand -base64 32`). Distinct from `BUTLER_WEBHOOK_SECRET`, `BOOKING_ACTION_SECRET`, `CRON_SECRET`, and `ADMIN_SECRET` â€” do not reuse.
-- **Configure in Vercel:** yes â€” Production + Preview, marked Sensitive. Different value per environment strongly recommended.
+  - [lib/butler/prefill-token.ts](lib/butler/prefill-token.ts) - HMAC signing and verification for short-lived opaque prefill tokens.
+  - [app/api/butler/prefill/route.ts](app/api/butler/prefill/route.ts) - public token-auth prefill endpoint.
+  - [app/api/butler/lead/route.ts](app/api/butler/lead/route.ts) - additive `prefill_url` issuance after successful lead insert.
+- **Required:** local optional (lead capture still succeeds without it; prefill URL is omitted); preview yes once the handoff is tested there; production yes once the handoff is live.
+- **Where to get it:** generate (`openssl rand -base64 32`). Distinct from `BUTLER_WEBHOOK_SECRET`, `BOOKING_ACTION_SECRET`, `CRON_SECRET`, and `ADMIN_SECRET` - do not reuse.
+- **Configure in Vercel:** yes - Production + Preview, marked Sensitive. Different value per environment strongly recommended.
 - **Risk if missing:** `POST /api/butler/lead` still succeeds, but it omits `prefill_url`. `GET /api/butler/prefill` treats tokens as invalid because verification cannot run.
 - **Security contract:** token payload is opaque HMAC-signed data only; raw booking intent and PII are not placed in the public URL. The public prefill route returns a strict allow-list only.
 
@@ -192,44 +238,120 @@ Public vs server-only:
 - **Allowed values today:** `credit_libanais`, `stripe`.
 - **Configure in Vercel:** yes — Production + Preview, plus Development if you want local parity.
 - **Risk if missing:** in `NODE_ENV=production`, checkout fails closed with a configuration error and no provider is selected. Outside production, runtime defaults to Stripe so local/dev can still exercise the hosted checkout flow intentionally.
-- **Operational note:** Credit Libanais / MPGS is the only approved Oraya production provider. `PAYMENT_PROVIDER=stripe` is accepted only outside production for isolated local/dev testing.
+- **Operational note:** Credit Libanais / NetCommerce / CyberSource Unified Checkout is the approved Oraya production direction. `PAYMENT_PROVIDER=stripe` is accepted only outside production for isolated local/dev testing.
 - **Admin/runtime note:** non-secret readiness is surfaced to admins via `/api/payments/readiness` and `/admin/settings`; raw env values are never returned there.
 
-### `CREDIT_LIBANAIS_MERCHANT_ID`
+### `NETCOMMERCE_CYBERSOURCE_ENVIRONMENT`
 
 - **Scope:** server-only.
-- **Used in:** reserved for the future Credit Libanais / MPGS adapter in [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts).
-- **Required:** local optional until the bank contract is implemented · preview yes when Credit Libanais is enabled · production yes when Credit Libanais is enabled.
-- **Where to get it:** Credit Libanais / MPGS merchant onboarding package.
-- **Configure in Vercel:** yes — Production + Preview, marked Sensitive.
-- **Risk if missing:** the Credit Libanais adapter cannot move beyond placeholder status. `/api/payments/readiness` reports "Merchant ID is not configured" to admins without exposing the value.
+- **Used in:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) - labels Credit Libanais / NetCommerce runtime as `sandbox` or `production`.
+- **Required:** local yes for sandbox testing - preview yes with sandbox value - production yes only after production credentials and explicit production enablement are approved.
+- **Allowed values:** `sandbox`, `production`.
+- **Where to get it:** NetCommerce / CyberSource technical package and deployment target.
+- **Configure in Vercel:** yes - Production + Preview.
+- **Risk if missing:** `/api/payments/readiness` reports the provider as incomplete and checkout remains blocked.
 
-### `CREDIT_LIBANAIS_SECRET`
-
-- **Scope:** server-only.
-- **Used in:** reserved for the future Credit Libanais / MPGS adapter in [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts).
-- **Required:** local optional until the bank contract is implemented · preview yes when Credit Libanais is enabled · production yes when Credit Libanais is enabled.
-- **Where to get it:** exact value type still depends on the bank contract. It may be an API key, shared secret, certificate reference, or signature secret.
-- **Configure in Vercel:** yes — Production + Preview, marked Sensitive.
-- **Risk if missing:** Oraya cannot safely authenticate hosted-checkout creation or verify callbacks with the bank gateway. Admin readiness surfaces report the missing requirement generically ("Gateway secret/key is not configured") without exposing env names or values.
-
-### `CREDIT_LIBANAIS_GATEWAY_URL`
+### `NETCOMMERCE_CYBERSOURCE_MERCHANT_ID`
 
 - **Scope:** server-only.
-- **Used in:** reserved for the future Credit Libanais / MPGS adapter in [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts).
-- **Required:** local optional until the bank contract is implemented · preview yes when Credit Libanais is enabled · production yes when Credit Libanais is enabled.
-- **Where to get it:** exact bank gateway base URL or MPGS endpoint supplied by Credit Libanais.
-- **Configure in Vercel:** yes — Production + Preview.
-- **Risk if missing:** the adapter cannot know where to create hosted sessions or verify gateway responses. The adapter remains placeholder-only until the bank also confirms the specific session-creation endpoint.
+- **Used in:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) - `v-c-merchant-id` and CyberSource HTTP Signature authentication.
+- **Required:** local yes for sandbox testing - preview yes with sandbox value - production yes only after production credentials and explicit production enablement are approved.
+- **Where to get it:** NetCommerce / CyberSource merchant credential package.
+- **Configure in Vercel:** yes - Production + Preview, marked Sensitive.
+- **Risk if missing:** Oraya cannot create CyberSource Unified Checkout sessions.
 
-### `CREDIT_LIBANAIS_WEBHOOK_SECRET`
+### `NETCOMMERCE_CYBERSOURCE_KEY_ID`
 
 - **Scope:** server-only.
-- **Used in:** reserved for the future Credit Libanais / MPGS callback verification path in [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) and [app/api/payments/webhook/[provider]/route.ts](../../app/api/payments/webhook/%5Bprovider%5D/route.ts).
-- **Required:** local optional until the bank callback contract is implemented · preview yes when Credit Libanais is enabled · production yes when Credit Libanais is enabled.
-- **Where to get it:** exact callback verification secret or signature material supplied by the bank.
-- **Configure in Vercel:** yes — Production + Preview, marked Sensitive.
-- **Risk if missing:** Oraya cannot safely trust any Credit Libanais payment callback. The admin readiness surface reports the missing verification secret without exposing the real value.
+- **Used in:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) - CyberSource HTTP Signature `keyid`.
+- **Required:** local yes for sandbox testing - preview yes with sandbox value - production yes only after production credentials and explicit production enablement are approved.
+- **Where to get it:** NetCommerce / CyberSource key material package.
+- **Configure in Vercel:** yes - Production + Preview, marked Sensitive.
+- **Risk if missing:** session creation requests cannot be authenticated.
+
+### `NETCOMMERCE_CYBERSOURCE_SHARED_SECRET`
+
+- **Scope:** server-only.
+- **Used in:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) - HMAC signing for CyberSource session creation. Never expose to browser code.
+- **Required:** local yes for sandbox testing - preview yes with sandbox value - production yes only after production credentials and explicit production enablement are approved.
+- **Where to get it:** NetCommerce / CyberSource key material package.
+- **Configure in Vercel:** yes - Production + Preview, marked Sensitive.
+- **Risk if missing:** session creation requests cannot be signed.
+
+### `NETCOMMERCE_CYBERSOURCE_API_BASE_URL`
+
+- **Scope:** server-only.
+- **Used in:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) - base URL for `POST /uc/v1/sessions` and `POST /pts/v2/payments`.
+- **Required:** local yes for sandbox testing - preview yes with sandbox host - production yes only after production credentials and explicit production enablement are approved.
+- **Where to get it:** NetCommerce / CyberSource documentation. Sandbox commonly points at the CyberSource test API host; production must use the bank-confirmed production host.
+- **Configure in Vercel:** yes - Production + Preview.
+- **Risk if missing:** the adapter cannot create capture-context sessions or authorize transient-token payments.
+
+### `NETCOMMERCE_CYBERSOURCE_COUNTRY`
+
+- **Scope:** server-only.
+- **Used in:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) - Unified Checkout capture-context `country` and Payments API billing country.
+- **Required:** local yes for sandbox testing - preview yes with bank-confirmed sandbox value - production yes only after production credentials and explicit production enablement are approved.
+- **Where to get it:** NetCommerce / CyberSource technical package. Current Lebanon merchant expectation is `LB` unless the bank specifies otherwise.
+- **Configure in Vercel:** yes - Production + Preview.
+- **Risk if missing:** the adapter fails readiness because CyberSource country is part of the gateway request contract.
+
+### `NETCOMMERCE_CYBERSOURCE_LOCALE`
+
+- **Scope:** server-only.
+- **Used in:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) - Unified Checkout capture-context `locale`.
+- **Required:** local yes for sandbox testing - preview yes with bank-confirmed sandbox value - production yes only after production credentials and explicit production enablement are approved.
+- **Where to get it:** NetCommerce / CyberSource technical package. Current English checkout expectation is `en_US` unless the bank specifies otherwise.
+- **Configure in Vercel:** yes - Production + Preview.
+- **Risk if missing:** the adapter fails readiness because CyberSource locale is part of the gateway request contract.
+
+### `NEXT_PUBLIC_NETCOMMERCE_QA_MODE`
+
+- **Scope:** public. This value is inlined into the browser bundle by Next.js and must never contain a secret.
+- **Used in:** [app/book/page.tsx](../../app/book/page.tsx) - PR #64 Preview-only bypass for the Oraya review-before-payment UI gate.
+- **Required:** optional everywhere; defaults false when unset. Enable only on the approved NetCommerce PR #64 Preview QA deployment.
+- **Allowed values:** `true` to enable; anything else is treated as false.
+- **Configure in Vercel:** Preview only for the temporary external NetCommerce sandbox QA window. Leave unset/false in Production.
+- **Risk if missing:** add-ons/special requests keep the normal review-before-payment blocker, so NetCommerce testers cannot reach Unified Checkout on the affected scenario.
+- **Risk if enabled in production:** guests with add-ons or special requests could bypass the review-before-payment UI copy. This flag is not a production payment activation mechanism and must remain false/unset outside the approved Preview test.
+
+### `NETCOMMERCE_QA_MODE`
+
+- **Scope:** server-only.
+- **Used in:** [app/api/payments/unified-checkout-complete/route.ts](../../app/api/payments/unified-checkout-complete/route.ts) - PR #64 Preview-only booking confirmation after authoritative CyberSource approval.
+- **Required:** optional everywhere; defaults false when unset. Enable only on the approved NetCommerce PR #64 Preview QA deployment.
+- **Allowed values:** `true` to enable; anything else is treated as false.
+- **Configure in Vercel:** Preview only for the temporary external NetCommerce sandbox QA window. Leave unset/false in Production.
+- **Risk if missing:** approved sandbox payments still update payment fields, but `bookings.status` remains pending and NetCommerce cannot validate the requested confirmed-after-payment QA behavior.
+- **Safety contract:** browser return pages remain informational. The server flag only takes effect inside `POST /api/payments/unified-checkout-complete` after CyberSource approves the transient-token payment and the same Supabase update persists the payment fields. Failed, declined, incomplete, abandoned, or pay-later bookings are not confirmed by this flag.
+- **Risk if enabled in production:** successful live payments could automatically confirm bookings before Oraya operations review. This is forbidden unless a later production state-machine decision explicitly approves it.
+
+### `NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_KEY_ID`
+
+- **Scope:** server-only.
+- **Used in:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) readiness contract for CyberSource Unified Checkout webhook/message-level encryption.
+- **Required:** optional for sandbox server-side completion testing; required before production live rollout and before asynchronous webhook reconciliation can be trusted.
+- **Where to get it:** CyberSource Business Center / NetCommerce webhook setup.
+- **Configure in Vercel:** optional in Preview for checkout-only sandbox validation; required in Preview when testing webhooks; required in Production before live rollout. Mark as Sensitive.
+- **Risk if missing:** Oraya cannot safely trust asynchronous Unified Checkout webhook payloads; browser redirects remain informational and server-side authorization must carry the sandbox test.
+
+### `NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_PRIVATE_KEY`
+
+- **Scope:** server-only.
+- **Used in:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) readiness contract for decrypting/verifying CyberSource webhook payloads.
+- **Required:** optional for sandbox server-side completion testing; required before production live rollout and before asynchronous webhook reconciliation can be trusted.
+- **Where to get it:** key material generated/registered for CyberSource webhook MLE.
+- **Configure in Vercel:** optional in Preview for checkout-only sandbox validation; required in Preview when testing webhooks; required in Production before live rollout. Mark as Sensitive.
+- **Risk if missing:** Oraya cannot safely trust asynchronous Unified Checkout webhook payloads; browser redirects remain informational and server-side authorization must carry the sandbox test.
+
+### `NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_CERTIFICATE_ID`
+
+- **Scope:** server-only.
+- **Used in:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) readiness contract for the CyberSource webhook MLE certificate binding.
+- **Required:** optional for sandbox server-side completion testing; required before production live rollout and before asynchronous webhook reconciliation can be trusted.
+- **Where to get it:** CyberSource Business Center / NetCommerce webhook setup.
+- **Configure in Vercel:** optional in Preview for checkout-only sandbox validation; required in Preview when testing webhooks; required in Production before live rollout. Mark as Sensitive.
+- **Risk if missing:** Oraya cannot safely trust asynchronous Unified Checkout webhook payloads; browser redirects remain informational and server-side authorization must carry the sandbox test.
 
 ### `STRIPE_SECRET_KEY`
 
@@ -239,7 +361,7 @@ Public vs server-only:
   - [lib/payments/stripe.ts](../../lib/payments/stripe.ts) - authorizes Stripe Checkout session creation against Stripe's server API.
   - [app/api/payments/checkout/route.ts](../../app/api/payments/checkout/route.ts) - Reserve-path hosted payment session creation when `PAYMENT_PROVIDER=stripe` outside production.
 - **Required:** local optional (only if you want real Stripe test-mode checkout locally) · preview optional · production not used.
-- **Where to get it:** Stripe Dashboard â†’ Developers â†’ API keys â†’ **Secret key** for the correct mode (test vs live).
+- **Where to get it:** Stripe Dashboard -> Developers -> API keys -> **Secret key** for the correct mode (test vs live).
 - **Configure in Vercel:** optional. If used at all, prefer local/development only.
 - **Risk if missing:** none unless a non-production environment intentionally sets `PAYMENT_PROVIDER=stripe`.
 - **Operational note:** Stripe is not an approved Oraya production provider.
@@ -252,7 +374,7 @@ Public vs server-only:
   - [lib/payments/stripe.ts](../../lib/payments/stripe.ts) - verifies Stripe `Stripe-Signature` headers.
   - [app/api/payments/webhook/stripe/route.ts](../../app/api/payments/webhook/stripe/route.ts) - rejects unsigned/invalid webhook deliveries.
 - **Required:** local optional (only if you are forwarding Stripe webhooks locally) · preview optional · production not used.
-- **Where to get it:** Stripe Dashboard â†’ Developers â†’ Webhooks â†’ select the endpoint â†’ **Signing secret**.
+- **Where to get it:** Stripe Dashboard -> Developers -> Webhooks -> select the endpoint -> **Signing secret**.
 - **Configure in Vercel:** optional. If used at all, prefer local/development only.
 - **Risk if missing:** none unless a non-production environment intentionally uses the Stripe adapter.
 - **Operational note:** each Stripe webhook endpoint has its own signing secret. Stripe remains isolated to dev/test use.
@@ -262,7 +384,7 @@ Public vs server-only:
 - **Scope:** public.
 - **Used in:** no runtime consumer in the current hosted-checkout flow. Reserved only if Stripe is exercised in local/dev later.
 - **Required:** optional in local / preview / production for the current implementation.
-- **Where to get it:** Stripe Dashboard â†’ Developers â†’ API keys â†’ **Publishable key**.
+- **Where to get it:** Stripe Dashboard -> Developers -> API keys -> **Publishable key**.
 - **Configure in Vercel:** optional for now.
 - **Risk if missing:** none today.
 
