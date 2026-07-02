@@ -244,6 +244,8 @@ interface ButlerPrefillPayload {
   check_in: string | null;
   check_out: string | null;
   sleeping_guests: string | null;
+  /** Explicit WhatsApp bedroom preference ("1" | "2" | "3"); advisory only. */
+  bedroom_count: string | null;
   full_name: string | null;
   source: string | null;
 }
@@ -319,6 +321,7 @@ function readStoredButlerPrefill(): ButlerPrefillPayload | null {
       check_in: typeof parsed.check_in === "string" ? parsed.check_in : null,
       check_out: typeof parsed.check_out === "string" ? parsed.check_out : null,
       sleeping_guests: typeof parsed.sleeping_guests === "string" ? parsed.sleeping_guests : null,
+      bedroom_count: typeof parsed.bedroom_count === "string" ? parsed.bedroom_count : null,
       full_name: typeof parsed.full_name === "string" ? parsed.full_name : null,
       source: typeof parsed.source === "string" ? parsed.source : null,
     };
@@ -1023,7 +1026,16 @@ function BookPageInner() {
       });
     }
 
-    if (prefill.sleeping_guests) {
+    const explicitBedrooms: BedroomCount | null =
+      prefill.bedroom_count === "1" || prefill.bedroom_count === "2" || prefill.bedroom_count === "3"
+        ? prefill.bedroom_count
+        : null;
+    if (explicitBedrooms) {
+      setForm((current) => {
+        if (current.bedroomCount !== "1") return current;
+        return { ...current, bedroomCount: explicitBedrooms };
+      });
+    } else if (prefill.sleeping_guests) {
       const guestCount = parseInt(prefill.sleeping_guests, 10);
       const derivedBedrooms: BedroomCount =
         guestCount <= 2 ? "1" : guestCount <= 4 ? "2" : "3";

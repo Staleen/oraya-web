@@ -251,6 +251,8 @@ The rigid four-step intake (check-in → check-out → guests → villa) is repl
 }
 ```
 
+**`extracted_text` (additive, 2026-07-02):** the response also carries an `extracted_text` object mirroring `extracted` with **string-only** values — missing fields are the literal string `"null"` (e.g. `extracted_text.villa: "null"`). WhatChimp response mappings should bind `extracted_text.*` so every call deterministically overwrites the canonical custom fields; this is the stale-field-safety mechanism the v6 flow's `= "null"` missing-field conditions depend on. See [DECISIONS_LOG.md](DECISIONS_LOG.md) 2026-07-02 and [artifacts/whatchimp/V6_DEPENDENCIES.md](../../artifacts/whatchimp/V6_DEPENDENCIES.md).
+
 **Status semantics:**
 
 - `"clear"` — all four fields populated; the bot echoes `safe_message` and asks the guest to confirm (two buttons: ✅ Looks right / ✏️ Edit).
@@ -262,12 +264,16 @@ The rigid four-step intake (check-in → check-out → guests → villa) is repl
 | Missing field | Bot fallback |
 |---|---|
 | `villa` | Buttons only: **Villa Mechmech** / **Villa Byblos**. No "Other" option — there are only two villas. |
-| `guest_count` | Number buttons 1–8. (For larger groups, the guest can free-text after a "more than 8?" option.) |
+| `guest_count` | Exact-count choices 1–8 plus "More than 8" (the website's sleeping-guests input is min 1 / max 8). "More than 8" captures the exact number into `oraya_guest_followup` and routes to human review with a lead submitted — never silently accepted, and never re-asked as a range. |
 | `check_in` / `check_out` | Free text, then re-call `normalize-stay-intent` with the new reply concatenated to the prior `stay_text`. |
+
+**Bedroom step (always asked, 2026-07-02):** after a supported guest count the bot asks "How many bedrooms would you like?" with exactly three single-choice buttons (**1 bedroom / 2 bedrooms / 3 bedrooms**), saved to `oraya_bedroom_count`. Validation mirrors the website's `BEDROOM_CAPACITY` (1→2 guests, 2→4, 3→6; 7–8 guests need 3 bedrooms + extra bedding). Guests may choose more bedrooms than they need; an insufficient choice gets one explained re-ask, then human escalation. The confirmation summary must show check-in, check-out, villa, exact overnight guests, and bedrooms. Bedroom preference travels to the website through the Lead Submit payload (`oraya_bedroom_count` → `whatsapp_leads.raw_payload` → `/api/butler/prefill` `bedroom_count` → `/book` hydration).
 
 On confirmation the bot calls the existing `POST /api/butler/lead` with the now-complete normalized payload (`normalized_check_in`, `normalized_check_out`, `villa`, `guest_count`, plus the original `stay_text` inside `raw_payload` for audit). The response carries `prefill_url` as today; the bot offers "Continue on website" with that URL.
 
-**Operator wiring — technical gate passed 2026-06-05, production flow migration still pending** (endpoint callable, nested `extracted.*` field mapping verified; the steps below have not yet been confirmed as wired in the production tenant):
+**Operator wiring — use the validated v6 artifact (2026-07-02).** The hand-wiring steps below are retained for context, but the authoritative operator path is now: import `Oraya_natural_intake_v6.txt` (repo root) into a **test bot**, bind the real `oraya_bedroom_count` field id with `scripts/bind-whatchimp-field.mjs`, and follow [artifacts/whatchimp/V6_ROUNDTRIP_CHECKLIST.md](../../artifacts/whatchimp/V6_ROUNDTRIP_CHECKLIST.md). Re-validate any WhatChimp re-export with `node scripts/validate-whatchimp-flow.mjs <export> --strict-binding --bedroom-field-id <id>` before touching the production bot.
+
+**Original wiring notes — technical gate passed 2026-06-05, production flow migration still pending** (endpoint callable, nested `extracted.*` field mapping verified; the steps below have not yet been confirmed as wired in the production tenant):
 
 1. **New custom field:** `oraya_stay_text` (text).
 2. **New trigger** for the natural-intake flow:
