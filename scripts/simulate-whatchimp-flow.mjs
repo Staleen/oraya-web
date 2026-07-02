@@ -20,6 +20,17 @@
  *     (never on an API node, condition node, question wrapper, or "Got it.");
  *   - the step budget is not exhausted (no runaway loops).
  *
+ * VERIFICATION-LEVEL CONTRACT — what a passing scenario does and does not
+ * prove (see artifacts/whatchimp/V6_DEPENDENCIES.md "Payload-persistence
+ * contract"):
+ *   1. custom field captured  — modeled here (field state assertions);
+ *   2. API submission occurred — modeled here (the Lead Submit NODE fired);
+ *   3. exact field included in the external API request body — NOT modeled:
+ *      WhatChimp request bodies live outside the flow export, so e.g.
+ *      `oraya_guest_followup` reaching `whatsapp_leads.raw_payload` requires
+ *      the authenticated operator body edit plus the Supabase verification
+ *      in the round-trip checklist. This simulator never claims level 3.
+ *
  * Exit code 0 when all scenarios pass; 1 otherwise.
  */
 

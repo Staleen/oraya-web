@@ -12,12 +12,17 @@ The flow export carries only the integration **IDs**. Endpoint URLs, headers, re
 |---|---|---|---|---|
 | `7466` | Oraya Stay Intent - Production | #401 (initial), #498 (Edit — fresh attempt) | `{ "stay_text": "#oraya_stay_text#" }` | see mapping table below |
 | `8101` | Oraya Stay Intent Refine - Production | #422, #427, #435, #506, #653, #659 (after every date follow-up) | `{ "stay_text": "#oraya_stay_text# #oraya_stay_followup#" }` | see mapping table below |
-| `6961` | Oraya Lead Submit - Production | #9 (WhatsApp continue), #642 (escalation) | lead payload incl. `oraya_*` fields — **add** `oraya_bedroom_count: "#oraya_bedroom_count#"` | `message` (optional) |
-| `7459` | Oraya Lead Submit - Production (website handoff) | #84 | lead payload incl. `oraya_*` fields — **add** `oraya_bedroom_count: "#oraya_bedroom_count#"` | `prefill_url` → `oraya_prefill_url` |
+| `6961` | Oraya Lead Submit - Production (WhatsApp / escalation) | #9 (WhatsApp continue), #642 (escalation) | lead payload incl. `oraya_*` fields — **add** `oraya_bedroom_count: "#oraya_bedroom_count#"` and `oraya_guest_followup: "#oraya_guest_followup#"` | `message` (optional) |
+| `7459` | Oraya Lead Submit - Production (website handoff) | #84 | lead payload incl. `oraya_*` fields — **add** `oraya_bedroom_count: "#oraya_bedroom_count#"` and `oraya_guest_followup: "#oraya_guest_followup#"` | `prefill_url` → `oraya_prefill_url` |
 
 Both `7466` and `8101` POST to `https://stayoraya.com/api/butler/normalize-stay-intent` (canonical origin only — never `www.` or any `.lb` host) with the `X-Butler-Secret` header. Secret values are never present in the flow export, this manifest, or the repo.
 
-> **Shared-integration warning:** WhatChimp integrations are tenant-global. Before editing 7466/8101 mappings or the 6961/7459 bodies, audit which flows reference them (`V6_ROUNDTRIP_CHECKLIST.md` section A0). All pre-cutover testing uses **cloned TEST integrations** pointed at the PR's Vercel Preview deployment (section A1); re-exports of the test bot are validated with a copied profile whose API ids are replaced by the recorded TEST ids (`--profile <test-profile.json>`).
+> **Shared-integration warning:** WhatChimp integrations are tenant-global. Before editing 7466/8101 mappings or the 6961/7459 bodies, audit which flows reference them (`V6_ROUNDTRIP_CHECKLIST.md` section A0). All pre-cutover testing uses **four cloned TEST integrations** pointed at the PR's Vercel Preview deployment (section A1): Stay Intent, Stay Intent Refine, **Lead Submit WhatsApp** (replaces 6961 at both nodes), and **Lead Submit Website Handoff** (replaces 7459 and must preserve the `prefill_url` → `oraya_prefill_url` response mapping). Re-exports of the test bot are validated with a copied profile whose `apis.*` ids AND `apiFieldWrites` keys are replaced by the recorded TEST ids — `apis.leadSubmit.ids` lists **both** TEST lead ids, and the website-handoff TEST id keeps `{ "prefill_url": "oraya_prefill_url" }` (`--profile <test-profile.json>`; details in checklist A1.7).
+
+> **Payload-persistence contract (three distinct verification levels):**
+> 1. **Custom field captured** — the flow saves the guest's answer into a WhatChimp field (e.g. the exact above-capacity total "12" into `oraya_guest_followup`). Proven by the repo simulator.
+> 2. **API submission occurred** — the conversation reaches a Lead Submit node and fires it. Proven by the repo simulator (node-level only).
+> 3. **Exact field included in the external API body** — `oraya_guest_followup` / `oraya_bedroom_count` reach `whatsapp_leads.raw_payload` only if the operator adds them to the Lead Submit request bodies. The flow export does not contain request bodies, so the repo simulator **cannot** model this level; it requires the authenticated WhatChimp body edit plus the Supabase `raw_payload` verification in checklist C2/C5. The backend half is repo-verified: `POST /api/butler/lead` persists the full request body verbatim into `raw_payload`.
 
 ### Normalization response mapping (7466 and 8101)
 
@@ -64,7 +69,7 @@ No real WhatChimp field id for bedroom count exists in any supplied artifact or 
    node scripts/validate-whatchimp-flow.mjs Oraya_natural_intake_v6.txt --strict-binding --bedroom-field-id <REAL_ID>
    ```
    (20 placeholder occurrences: 4 bedroom questions + 16 condition-row entries.)
-4. Also add `oraya_bedroom_count: "#oraya_bedroom_count#"` to the Lead Submit request bodies so the bedroom preference reaches `whatsapp_leads.raw_payload` → `/api/butler/prefill` → `/book` — on the cloned TEST integration during testing, and on the production `6961`/`7459` only at cutover (checklist section D; additive and safe for other flows sharing them).
+4. Also add `oraya_bedroom_count: "#oraya_bedroom_count#"` and `oraya_guest_followup: "#oraya_guest_followup#"` to the Lead Submit request bodies so the bedroom preference reaches `whatsapp_leads.raw_payload` → `/api/butler/prefill` → `/book`, and the exact above-capacity guest total ("More than 8" → e.g. "12") is preserved on the lead for operators — on the two cloned TEST Lead Submit integrations during testing, and on the production `6961`/`7459` only at cutover (checklist section D; additive and safe for other flows sharing them).
 
 ## Verified vs. requires authenticated WhatChimp verification
 
