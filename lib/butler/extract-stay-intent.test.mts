@@ -276,3 +276,37 @@ test("'for 5 people' is consumed by guest count, not by date parser", () => {
   assert.equal(r.extracted.check_out, "2026-06-15");
   assert.equal(r.extracted.nights,    5);
 });
+
+// ─── extracted_text (stale-field-safe string mirror, Phase 16A v6 flow) ────
+
+test("extracted_text mirrors extracted with literal \"null\" strings for missing fields", () => {
+  const r = extractStayIntent({
+    stay_text: "Villa Byblos please",
+    reference_date: REF,
+  });
+  assert.equal(r.extracted_text.villa,       "Villa Byblos");
+  assert.equal(r.extracted_text.check_in,    "null");
+  assert.equal(r.extracted_text.check_out,   "null");
+  assert.equal(r.extracted_text.nights,      "null");
+  assert.equal(r.extracted_text.guest_count, "null");
+});
+
+test("extracted_text carries every populated field as a plain string", () => {
+  const r = extractStayIntent({
+    stay_text: "Mechmech June 10 to June 15 for 3 guests",
+    reference_date: REF,
+  });
+  assert.equal(r.extracted_text.check_in,    "2026-06-10");
+  assert.equal(r.extracted_text.check_out,   "2026-06-15");
+  assert.equal(r.extracted_text.nights,      "5");
+  assert.equal(r.extracted_text.villa,       "Villa Mechmech");
+  assert.equal(r.extracted_text.guest_count, "3");
+});
+
+test("extracted_text is never null-valued on the unclear path (overwrite guarantee)", () => {
+  const r = extractStayIntent({ stay_text: "?????", reference_date: REF });
+  for (const value of Object.values(r.extracted_text)) {
+    assert.equal(typeof value, "string");
+    assert.notEqual(value, "");
+  }
+});

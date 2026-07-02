@@ -141,6 +141,17 @@ Living list of bugs, gaps, and operational pitfalls that are **known** but **not
 
 ---
 
+### #10 — WhatChimp natural-intake v6: merge-node round-trip survival and response-mapping overwrite behavior are unverified platform semantics
+
+- **Severity:** 🟠 High (until the test-bot round trip passes) — both risks can silently break the imported flow even though the artifact validates clean in the repo.
+- **Area:** WhatsApp Butler / WhatChimp platform behavior / `Oraya_natural_intake_v6.txt`
+- **Description:** two WhatChimp behaviors that the v6 flow depends on cannot be verified from exports alone. (1) **Merge survival:** v6 uses multi-input merge nodes (guest gate, villa gate, shared escalation tail, shared large-group review). The live v4.3.3 production export proves multi-input nodes CAN survive export, but an earlier operator upload lost edges; whether a fresh import → save → re-export preserves every inbound arrow on this tenant is unproven. (2) **Mapping overwrite-on-missing:** stale-field safety requires that every normalization call overwrite `oraya_check_in`/`oraya_check_out`/`oraya_villa`/`oraya_guest_count`. The backend now guarantees string values via the additive `extracted_text.*` response object (literal `"null"` when missing), but the operator must rebind the 7466/8101 response mappings to `extracted_text.*`, and the write-always behavior still needs one live confirmation. A third, smaller unknown: rendering of the 9-option guest quick-reply question on the live WhatsApp channel.
+- **Status:** open — resolved only by the human round-trip + live checklist in [artifacts/whatchimp/V6_ROUNDTRIP_CHECKLIST.md](../../artifacts/whatchimp/V6_ROUNDTRIP_CHECKLIST.md) (validator re-run: `node scripts/validate-whatchimp-flow.mjs <re-export> --strict-binding --bedroom-field-id <id>`).
+- **Recommended fix path:** run checklist sections A/B on a test bot; if merges are dropped on save, a no-merge exploded rebuild of the affected tails is the fallback (documented trade-off: duplicated Lead Submit nodes).
+- **Discovered:** 2026-07-02 (Phase 16A v5.5 → v6 audit).
+
+---
+
 <!-- New entries go above this line, lowest # at the top. Closed entries can be moved to a "Closed" section below or stay in place with status: closed + date. -->
 
 ## Closed / wontfix

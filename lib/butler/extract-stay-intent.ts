@@ -35,6 +35,22 @@ export interface StayIntentResult {
     guest_count: number | null;
   };
   missing_fields: StayIntentMissingField[];
+  /**
+   * String-safe mirror of `extracted` for flow platforms (WhatChimp) whose
+   * HTTP-API response→custom-field mapping behavior on JSON `null` is
+   * undefined (may skip the write and leave a stale value from a previous
+   * attempt). Every key is always a non-null string; missing values are the
+   * literal string "null" so a mapped custom field is deterministically
+   * overwritten on every call — current-turn truth, stale-field safety.
+   * Additive: `extracted` is unchanged and remains the primary shape.
+   */
+  extracted_text: {
+    check_in:    string;
+    check_out:   string;
+    nights:      string;
+    villa:       string;
+    guest_count: string;
+  };
   human_readable: string;
   safe_message: string;
   confirm_prompt: string;
@@ -372,6 +388,13 @@ function buildResult(input: BuildResultInput): StayIntentResult {
       guest_count: input.guestCount,
     },
     missing_fields: missing,
+    extracted_text: {
+      check_in:    input.checkIn ?? "null",
+      check_out:   input.checkOut ?? "null",
+      nights:      input.nights === null ? "null" : String(input.nights),
+      villa:       input.villa ?? "null",
+      guest_count: input.guestCount === null ? "null" : String(input.guestCount),
+    },
     human_readable: human,
     safe_message:   composeSafeMessage(status, input, human, missing),
     confirm_prompt: "Please confirm before I share this with Oraya.",
