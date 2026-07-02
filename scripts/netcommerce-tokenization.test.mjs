@@ -24,3 +24,8 @@ test("NetCommerce payment authorization uses only transient payment tokens", () 
   assert.doesNotMatch(source, /instrumentIdentifier/);
   assert.doesNotMatch(source, /consumerPreference/);
 });
+
+test("NetCommerce checkout remains sandbox-only until production hardening is approved", () => {
+  assert.match(source, /const checkoutReady = configured && config\.environment === "sandbox"/);
+  assert.match(source, /Production checkout remains disabled until webhook\/MLE reconciliation/);
+});

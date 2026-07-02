@@ -143,20 +143,27 @@ export function getCreditLibanaisReadiness(): HostedCheckoutProviderReadiness {
   const sessionMissing = getSessionMissingRequirements(config);
   const webhookMissing = getWebhookMissingRequirements(config);
   const configured = sessionMissing.length === 0;
+  const checkoutReady = configured && config.environment === "sandbox";
+  const productionGate =
+    config.environment === "production"
+      ? ["Production checkout remains disabled until webhook/MLE reconciliation and live rollout controls are implemented and approved"]
+      : [];
 
   return {
     configured,
     implemented: true,
-    checkout_ready: configured,
+    checkout_ready: checkoutReady,
     environment: toHostedEnvironment(config.environment),
     guest_message:
       configured
         ? ""
         : "Secure online payment by Credit Libanais / NetCommerce is being prepared.",
-    admin_message: configured
-      ? "CyberSource Unified Checkout session creation and transient-token server authorization are configured. Webhook/MLE verification remains required for asynchronous reconciliation and production hardening."
+    admin_message: checkoutReady
+      ? "CyberSource Unified Checkout sandbox session creation and transient-token server authorization are configured. Webhook/MLE verification remains required for asynchronous reconciliation and production hardening."
+      : configured && config.environment === "production"
+        ? "CyberSource production credentials are configured, but live checkout remains disabled until webhook/MLE reconciliation and production rollout controls are implemented and approved."
       : "Credit Libanais / NetCommerce Unified Checkout is selected, but required CyberSource sandbox/production configuration is incomplete.",
-    missing_requirements: [...sessionMissing, ...webhookMissing],
+    missing_requirements: [...sessionMissing, ...webhookMissing, ...productionGate],
   };
 }
 
