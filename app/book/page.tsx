@@ -44,10 +44,6 @@ import {
   paymentModeAllowsPayNow,
   type PaymentPublicRuntimeSettings,
 } from "@/lib/payments/settings";
-import {
-  parseNetCommerceQaMode,
-  shouldBypassOrayaReviewBeforePaymentForNetCommerceQa,
-} from "@/lib/payments/netcommerce-qa-mode";
 
 // ─── Brand constants (theme tokens from globals.css) ─
 const GOLD      = "var(--oraya-gold)";
@@ -67,9 +63,6 @@ const OPT_BG    = "var(--oraya-book-option-bg)";
 const SUCCESS  = "#6fcf8a";
 const PLAYFAIR = "'Playfair Display', Georgia, serif";
 const LATO     = "'Lato', system-ui, sans-serif";
-const NETCOMMERCE_QA_REVIEW_BYPASS_ENABLED = shouldBypassOrayaReviewBeforePaymentForNetCommerceQa(
-  parseNetCommerceQaMode(process.env.NEXT_PUBLIC_NETCOMMERCE_QA_MODE),
-);
 /** Phase 12E Batch 5: discount applied to dead-gap extension offers (UI display only, not persisted). */
 const DEAD_DAY_DISCOUNT_PCT = 0.30;
 
@@ -1949,21 +1942,16 @@ function BookPageInner() {
         Boolean(form.villa && checkIn && checkOut && checkOut > checkIn) &&
         !dateConflict &&
         availabilityReadyForSelection;
-      const reviewAllowsOnlineCheckout =
-        NETCOMMERCE_QA_REVIEW_BYPASS_ENABLED ||
-        (
-          instantEligible &&
-          bookingTrustMode === "instant" &&
-          selectedAddons.length === 0 &&
-          !hasSpecialRequest &&
-          !hasManualReviewAddonSelection
-        );
       const attemptingOnlineCheckout =
         intent === "pay_now" &&
         hostedCheckoutReady &&
         paymentPurposeAvailable &&
         availabilityValid &&
-        reviewAllowsOnlineCheckout;
+        instantEligible &&
+        bookingTrustMode === "instant" &&
+        selectedAddons.length === 0 &&
+        !hasSpecialRequest &&
+        !hasManualReviewAddonSelection;
       if (intent === "pay_now" && !attemptingOnlineCheckout) {
         throw new Error(
           !hostedCheckoutReady
@@ -2168,8 +2156,7 @@ function BookPageInner() {
   const step3AmountTotal =
     step === 3 && bookingPath === "request" && estimatedTotal > 0 ? estimatedTotal : null;
   const hasAddonsOrSpecialRequestsForReview =
-    !NETCOMMERCE_QA_REVIEW_BYPASS_ENABLED &&
-    (selectedAddons.length > 0 || (form.message ?? "").trim().length > 0);
+    selectedAddons.length > 0 || (form.message ?? "").trim().length > 0;
 
   if (authStatus === "loading") {
     return (

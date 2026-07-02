@@ -16,6 +16,16 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-07-02 - PR #64 merged; temporary QA mode retired and live checkout remains fail-closed
+
+**Decision:** Merge the validated NetCommerce / CyberSource Unified Checkout sandbox foundation from PR #64, then remove its temporary Preview QA review bypass and booking auto-confirm exception from the production-bound codebase. The adapter reports checkout ready only in `sandbox`; selecting the production environment remains fail-closed until webhook/MLE reconciliation and explicit live rollout controls are implemented and approved.
+**Reason:** NetCommerce confirmed successful sandbox testing and requested only the saved-card omission, which is complete. The QA exception had served its one-time external testing purpose and must not become dormant production behavior. Production credentials are still pending, and payment operations are not hardened enough for live readiness.
+**Impact:** One-time Unified Checkout sandbox payments remain supported. Saved-card/tokenization remains disabled. Successful payment updates payment fields but leaves `bookings.status` unchanged for normal operational confirmation. Production payment remains unavailable even if credentials are added prematurely.
+**Reversible?:** yes - live readiness can be implemented later only through an explicit Phase 16B production-activation change with webhook/MLE, idempotency/reconciliation, controlled rollout, and human approval.
+**Supersedes:** the temporary runtime behavior in the 2026-06-22 PR #64 QA-mode decision; that historical entry remains below for traceability.
+
+---
+
 ## 2026-06-22 - Saved-card/tokenization disabled for NetCommerce launch
 
 **Decision:** PR #64 must omit CyberSource Unified Checkout saved-card consent for the NetCommerce launch. Oraya will support one-time Unified Checkout payments only and will not request TMS token creation, persist reusable customer/payment-instrument tokens, record saved-card consent, add token-management UI, or support credentials-on-file, recurring billing, or merchant-initiated payments in this launch.

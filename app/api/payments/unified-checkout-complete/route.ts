@@ -8,10 +8,6 @@ import {
 import { isPaymentLinkExpired } from "@/lib/payments/link-state";
 import { PaymentProviderConfigurationError } from "@/lib/payments/provider";
 import { resolvePaymentRequestOrigin } from "@/lib/payments/request-origin";
-import {
-  parseNetCommerceQaMode,
-  shouldConfirmBookingAfterNetCommerceQaPayment,
-} from "@/lib/payments/netcommerce-qa-mode";
 import { computeFoundationAmountDue, derivePaymentFoundationStage, getFoundationAmountTotal } from "@/lib/payment-foundation";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
@@ -91,7 +87,6 @@ export async function POST(request: Request) {
     const body = (await request.json()) as Record<string, unknown>;
     const token = readString(body.booking_token);
     const transientToken = readTransientToken(body);
-    const netCommerceQaModeEnabled = parseNetCommerceQaMode(process.env.NETCOMMERCE_QA_MODE);
 
     if (!token) {
       return NextResponse.json({ error: "booking_token is required." }, { status: 400 });
@@ -194,32 +189,20 @@ export async function POST(request: Request) {
     const nextAmountPaid = roundMoney(existingAmountPaid + chargeAmount);
     const nextStatus = amountTotal > 0 && nextAmountPaid >= amountTotal ? "paid_in_full" : "deposit_paid";
 
-    const paymentUpdatePayload: Record<string, unknown> = {
-      payment_status: nextStatus,
-      payment_stage: derivePaymentFoundationStage(nextAmountPaid, amountTotal),
-      payment_method: "card_manual",
-      amount_total: amountTotal,
-      amount_paid: nextAmountPaid,
-      amount_due: computeFoundationAmountDue(amountTotal, nextAmountPaid),
-      payment_received_at: nowIso,
-      payment_reference: payment.reference,
-      payment_link_status: "paid",
-      payment_last_at: nowIso,
-    };
-
-    if (
-      shouldConfirmBookingAfterNetCommerceQaPayment({
-        qaModeEnabled: netCommerceQaModeEnabled,
-        paymentApproved: payment.approved,
-        bookingStatus: booking.status,
-      })
-    ) {
-      paymentUpdatePayload.status = "confirmed";
-    }
-
     const { error: updateError } = await supabaseAdmin
       .from("bookings")
-      .update(paymentUpdatePayload)
+      .update({
+        payment_status: nextStatus,
+        payment_stage: derivePaymentFoundationStage(nextAmountPaid, amountTotal),
+        payment_method: "card_manual",
+        amount_total: amountTotal,
+        amount_paid: nextAmountPaid,
+        amount_due: computeFoundationAmountDue(amountTotal, nextAmountPaid),
+        payment_received_at: nowIso,
+        payment_reference: payment.reference,
+        payment_link_status: "paid",
+        payment_last_at: nowIso,
+      })
       .eq("id", booking.id)
       .eq("payment_link_status", "active")
       .eq("payment_provider_session_id", booking.payment_provider_session_id);

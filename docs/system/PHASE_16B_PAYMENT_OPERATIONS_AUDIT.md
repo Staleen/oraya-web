@@ -4,7 +4,7 @@
 **Scope:** docs-only audit and design roadmap for Oraya payment operations.
 **Branch audited:** `agent/phase-16b-cybersource-unified-checkout-test`
 **PR audited:** #64 - NetCommerce / CyberSource Unified Checkout sandbox implementation
-**Production status:** production payment remains disabled; `master` is unchanged.
+**Production status:** PR #64 merged to `master` on 2026-07-02, but production checkout remains disabled and the adapter is code-gated to sandbox readiness only.
 
 This document is an architecture audit. It is not an implementation plan approval, migration, production enablement, or merge decision.
 
@@ -15,6 +15,8 @@ This document is an architecture audit. It is not an implementation plan approva
 PR #64 is a credible first hosted-payment foundation: it creates a booking first, creates an Oraya-hosted Credit Libanais / NetCommerce / CyberSource Unified Checkout payment page, obtains a CyberSource capture context server-side, collects card details inside the bank/CyberSource-controlled UI, sends the transient token back to Oraya server-side, and updates booking payment fields only after server-side gateway authorization. Browser return URLs remain informational and `bookings.status` remains `PENDING`.
 
 **2026-06-22 Preview QA addendum:** PR #64 may temporarily enable `NEXT_PUBLIC_NETCOMMERCE_QA_MODE=true` and `NETCOMMERCE_QA_MODE=true` on the approved Vercel Preview so NetCommerce can complete external sandbox workflow testing. In that mode only, add-ons/special requests do not block pay-now and an authoritative approved CyberSource sandbox payment may mark the test booking `confirmed`. This does not supersede the production lifecycle guidance in this audit: production remains disabled, browser redirects remain informational, and production auto-confirmation is still not approved.
+
+**2026-07-02 closeout addendum:** NetCommerce completed sandbox testing, PR #64 merged, and the temporary QA bypass/auto-confirm code was removed from the production-bound codebase. Normal review-before-payment behavior is restored and successful payment does not change `bookings.status`. The adapter now reports checkout ready only for the sandbox environment; production remains fail-closed until webhook/MLE reconciliation and explicit live rollout controls are implemented and approved.
 
 **2026-06-22 saved-card addendum:** NetCommerce confirmed PR #64 sandbox testing was successful and requested omission of the "Save card for future payment" option before account activation. PR #64 now explicitly disables saved-card consent/tokenization for the launch while keeping one-time Unified Checkout payments. Oraya does not request TMS token creation, persist reusable customer/payment-instrument tokens, record saved-card consent, or support credentials-on-file / recurring / merchant-initiated payments. Remaining balances and approved add-ons require new payment links unless tokenization is later approved by NetCommerce with consent design and security review. Refunds do not require saved-card tokenization. Production credentials remain pending and production payment remains disabled.
 
