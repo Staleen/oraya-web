@@ -2,7 +2,29 @@
 
 Run this against a **non-production test bot**. Keep the current production bot untouched until every step passes. Steps reference visible node/question/API names, not node numbers.
 
-## A. Bind and import
+## A0. Shared-integration audit — do this BEFORE touching any HTTP API settings
+
+WhatChimp HTTP API integrations are tenant-level objects shared by every flow that references the same integration ID. **Do not edit `7466`, `8101`, `6961`, or `7459` until you have confirmed, in the WhatChimp UI, which flows currently reference each of them.**
+
+1. Open each integration (7466 "Oraya Stay Intent - Production", 8101 "…Refine - Production", 6961 and 7459 "Oraya Lead Submit - Production") and note every flow/bot that uses it.
+2. Expected per current system docs: the natural-intake flow is **not yet live** (the old four-step intake still runs in production), so 7466/8101 should have no live consumers — but this must be seen, not assumed. `6961`/`7459` **are expected to be used by the live booking-request flow — treat them as live-shared; never edit them for testing.**
+3. For all pre-merge / pre-cutover testing, use **cloned test integrations** (next section), not the production ones.
+
+## A1. Create cloned non-production test integrations
+
+The backend `extracted_text` field exists only on this PR's branch until it is merged and deployed. To test before (or independently of) the production deploy:
+
+1. In WhatChimp, **clone** the three integrations as new entries (WhatChimp will assign new numeric IDs — record them; never invent them):
+   - "Oraya Stay Intent - TEST" — same body `{ "stay_text": "#oraya_stay_text#" }`
+   - "Oraya Stay Intent Refine - TEST" — same body `{ "stay_text": "#oraya_stay_text# #oraya_stay_followup#" }`
+   - "Oraya Lead Submit - TEST" — same lead body **plus** `oraya_bedroom_count: "#oraya_bedroom_count#"`
+2. Point the two TEST Stay Intent integrations at the **Vercel Preview deployment** of this PR (`https://<preview-hash>.vercel.app/api/butler/normalize-stay-intent`) with the Preview environment's `X-Butler-Secret`. This requires `BUTLER_WEBHOOK_SECRET` to be set in Vercel Preview (see ENVIRONMENT_MAP.md). Alternative: merge the PR first — `extracted_text` is additive and harmless to existing consumers — and point the TEST integrations at `https://stayoraya.com` instead.
+3. Bind the TEST Stay Intent response mappings to `extracted_text.*` per `V6_DEPENDENCIES.md`.
+4. In the **test bot's imported workflow**, rebind the HTTP API nodes from the production integrations to the TEST ones (UI dropdown; the import will initially show the production names).
+5. Validator interaction: the dependency manifest pins the production IDs, so a re-export of the test bot must be validated with a **test profile**: copy `scripts/whatchimp/natural-intake-profile.json`, replace `apis.initialNormalize.id`, `apis.refine.id`, and `apis.leadSubmit.ids` with the recorded TEST IDs, then run
+   `node scripts/validate-whatchimp-flow.mjs <re-export> --profile <test-profile.json> --strict-binding --bedroom-field-id <REAL_ID>`.
+
+## A2. Bind and import
 
 1. Create custom field `oraya_bedroom_count` (Text). Run:
    `node scripts/bind-whatchimp-field.mjs Oraya_natural_intake_v6.txt <REAL_ID>`
@@ -14,14 +36,14 @@ Run this against a **non-production test bot**. Keep the current production bot 
    - "Oraya Stay Intent Refine - Production : POST" appears after **every** date follow-up question (six places).
    - "Oraya Lead Submit - Production : POST" appears after "May I have your full name for the request?", after the escalation name question ("So our team can follow up personally — may I have your full name?"), and on the "Finish on website" branch.
    - The multi-input merge points kept **all** their inbound arrows (the guest-count check fed by both date branches; the villa check fed by the bedroom validations; the escalation name step fed by the date-trouble, large-group, bedroom, and second-Edit messages). **This is the known platform risk — if arrows were dropped on save, stop and report.**
-5. In each of the two Stay Intent API settings, rebind response mappings to `extracted_text.*` per `artifacts/whatchimp/V6_DEPENDENCIES.md`, and add `oraya_bedroom_count` to both Lead Submit request bodies.
+5. Confirm the HTTP API nodes are bound to the **TEST** integrations (step A1.4) — production integrations stay untouched during testing.
 
 ## B. Round-trip export validation
 
 6. Re-export the saved workflow **without any manual JSON editing**.
-7. Run the same validator against the re-export:
+7. Run the validator against the re-export with the test profile from A1.5:
    ```
-   node scripts/validate-whatchimp-flow.mjs <re-exported-file> --strict-binding --bedroom-field-id <REAL_ID>
+   node scripts/validate-whatchimp-flow.mjs <re-exported-file> --profile <test-profile.json> --strict-binding --bedroom-field-id <REAL_ID>
    ```
    Required result: exit code 0, zero errors, zero warnings.
 
@@ -40,4 +62,12 @@ For each, message the test number and verify:
 9. **Returning-subscriber stale test** — complete a partial attempt with Villa Mechmech and abandon; new attempt "July 20 to July 25 for 4 guests" must ask which villa (no silent Mechmech reuse).
 10. **Wrong-domain guard** — every message that mentions the website says only `https://stayoraya.com`.
 
-Only after A+B+C pass may the flow be promoted toward the production bot, and only then may it be described as anything beyond an **import-ready v6 candidate**.
+## D. Production cutover (only after A+B+C pass AND the PR is merged/deployed)
+
+1. Re-run the A0 shared-integration audit for `7466`/`8101`. Only if no other live flow references them, rebind their response mappings to `extracted_text.*` (production endpoint `https://stayoraya.com/api/butler/normalize-stay-intent`). If any other live flow shares them, clone production-scoped integrations instead and rebind the flow's API nodes at import.
+2. Add `oraya_bedroom_count: "#oraya_bedroom_count#"` to the production Lead Submit bodies (`6961`, `7459`). This is additive and safe for other flows sharing those integrations: unknown/empty values land in `whatsapp_leads.raw_payload` and the prefill route only surfaces values that validate to 1/2/3.
+3. Import the bound v6 artifact into the production bot with the production integration bindings, save, re-export, and validate with the **production** profile:
+   `node scripts/validate-whatchimp-flow.mjs <production-re-export> --strict-binding --bedroom-field-id <REAL_ID>`
+4. Re-run checklist section C against the production number before retiring the old intake flow.
+
+Only after A+B+C pass may the flow be promoted toward the production bot, and only after D passes may it be described as anything beyond an **import-ready v6 candidate**.

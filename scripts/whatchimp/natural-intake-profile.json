@@ -50,6 +50,7 @@
     "passed your request to the Oraya team"
   ],
   "forbiddenTerminalTexts": ["Got it."],
+  "staleVersionLabels": ["v5.3", "v5.4", "v5.5"],
   "escalationSnippets": [
     "let me bring in our team",
     "confirm the details with you personally",

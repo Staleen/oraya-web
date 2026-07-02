@@ -473,6 +473,19 @@ export function validateFlow(flow, profile, opts = {}) {
     }
   }
 
+  // stale version labels: titles / campaign names must not advertise a
+  // superseded flow revision (e.g. "v5.5") in the shipped artifact.
+  for (const staleLabel of profile.staleVersionLabels ?? []) {
+    for (const id of ids) {
+      const d = nodes[id].data ?? {};
+      for (const key of ["title", "campaignName"]) {
+        if (typeof d[key] === "string" && d[key].includes(staleLabel)) {
+          err("stale-labels", `${nodeLabel(id, nodes[id])} ${key} still says "${d[key]}" — superseded revision label "${staleLabel}"`);
+        }
+      }
+    }
+  }
+
   // 29. secret scan
   const serialized = JSON.stringify(flow);
   for (const pattern of profile.secretPatterns ?? []) {

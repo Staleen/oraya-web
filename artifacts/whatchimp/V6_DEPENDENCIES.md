@@ -17,6 +17,8 @@ The flow export carries only the integration **IDs**. Endpoint URLs, headers, re
 
 Both `7466` and `8101` POST to `https://stayoraya.com/api/butler/normalize-stay-intent` (canonical origin only — never `www.` or any `.lb` host) with the `X-Butler-Secret` header. Secret values are never present in the flow export, this manifest, or the repo.
 
+> **Shared-integration warning:** WhatChimp integrations are tenant-global. Before editing 7466/8101 mappings or the 6961/7459 bodies, audit which flows reference them (`V6_ROUNDTRIP_CHECKLIST.md` section A0). All pre-cutover testing uses **cloned TEST integrations** pointed at the PR's Vercel Preview deployment (section A1); re-exports of the test bot are validated with a copied profile whose API ids are replaced by the recorded TEST ids (`--profile <test-profile.json>`).
+
 ### Normalization response mapping (7466 and 8101)
 
 The backend now returns an additive `extracted_text` object whose values are **always strings**, with the literal string `"null"` for any field the current message did not contain. Bind the mappings to `extracted_text.*` (recommended) so every call deterministically overwrites the canonical fields — this is the current-attempt mechanism that prevents a returning subscriber's stale villa/dates/guest count from leaking into a new attempt. (`extracted.*` carries the same data but uses JSON `null`, whose write-behavior on WhatChimp mapping is unverified.)
@@ -62,7 +64,7 @@ No real WhatChimp field id for bedroom count exists in any supplied artifact or 
    node scripts/validate-whatchimp-flow.mjs Oraya_natural_intake_v6.txt --strict-binding --bedroom-field-id <REAL_ID>
    ```
    (20 placeholder occurrences: 4 bedroom questions + 16 condition-row entries.)
-4. Also add `oraya_bedroom_count: "#oraya_bedroom_count#"` to the request bodies of Lead Submit integrations `6961` and `7459` so the bedroom preference reaches `whatsapp_leads.raw_payload` → `/api/butler/prefill` → `/book`.
+4. Also add `oraya_bedroom_count: "#oraya_bedroom_count#"` to the Lead Submit request bodies so the bedroom preference reaches `whatsapp_leads.raw_payload` → `/api/butler/prefill` → `/book` — on the cloned TEST integration during testing, and on the production `6961`/`7459` only at cutover (checklist section D; additive and safe for other flows sharing them).
 
 ## Verified vs. requires authenticated WhatChimp verification
 

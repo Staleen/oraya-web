@@ -420,8 +420,16 @@ function generateV6(flow) {
   connect(nodes, 697, "userInputFlowOutput", 70, "userInputFlowSingleInput");
   connect(nodes, 698, "textOutput", 640, "userInputFlowInput");
 
-  // Start-node title reflects the new revision.
+  // Start-node title and every inherited campaign label reflect the new
+  // revision — a re-imported flow must not advertise itself as v5.5.
+  // (campaignName is a display label on "User Input Flow" wrappers with
+  // userInputFlowIdValue "new"; renaming it has no binding side effects.)
   nodes["1"].data.title = "Oraya Natural Stay Intake v6 - Start";
+  for (const node of Object.values(nodes)) {
+    if (typeof node.data?.campaignName === "string") {
+      node.data.campaignName = node.data.campaignName.replace(/v5\.\d+/g, "v6");
+    }
+  }
 
   return flow;
 }
