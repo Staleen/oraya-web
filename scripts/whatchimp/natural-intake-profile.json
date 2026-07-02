@@ -50,6 +50,15 @@
     "passed your request to the Oraya team"
   ],
   "forbiddenTerminalTexts": ["Got it."],
+  "terminalMustIncludeAll": ["#oraya_prefill_url#", "https://stayoraya.com/book"],
+  "terminalNotConfirmedPattern": "not (yet )?(a )?confirmed",
+  "canonicalBookingUrl": "https://stayoraya.com/book",
+  "forbiddenDomainPatterns": [
+    "www\\.stayoraya\\.com",
+    "oraya\\.com\\.lb",
+    "(?<!stay)oraya\\.com",
+    "http://"
+  ],
   "staleVersionLabels": ["v5.3", "v5.4", "v5.5"],
   "escalationSnippets": [
     "let me bring in our team",
@@ -70,7 +79,7 @@
       "guest_count": "oraya_guest_count"
     },
     "7459": { "prefill_url": "oraya_prefill_url" },
-    "6961": {}
+    "6961": { "prefill_url": "oraya_prefill_url" }
   },
   "allowedConditionOperators": ["equal", "contains"],
   "secretPatterns": [

@@ -368,6 +368,32 @@ export function validateFlow(flow, profile, opts = {}) {
     if (!approved) {
       err("terminals", `${nodeLabel(id, node)} is an unapproved terminal message: "${text.replace(/\s+/g, " ").slice(0, 100)}"`);
     }
+    // actionable-outcome invariant: a terminal is valid only when it hands
+    // the guest a booking continuation — the secure prefill link AND the
+    // canonical fallback /book URL — and states the accurate not-confirmed
+    // status. A lead-submission or team-follow-up acknowledgement without a
+    // booking continuation is an invalid terminal.
+    for (const required of profile.terminalMustIncludeAll ?? []) {
+      if (!text.includes(required)) {
+        err("terminal-continuation", `${nodeLabel(id, node)} lacks the required continuation element "${required}" — guests must never be left without an actionable next step`);
+      }
+    }
+    if (profile.terminalNotConfirmedPattern && !new RegExp(profile.terminalNotConfirmedPattern, "i").test(text)) {
+      err("terminal-continuation", `${nodeLabel(id, node)} does not state the accurate not-confirmed booking status`);
+    }
+  }
+
+  // canonical-domain hygiene: every guest-facing text (messages + questions)
+  // may only reference https://stayoraya.com — never www., .lb variants,
+  // bare oraya.com, or plain http.
+  for (const id of ids) {
+    const d = nodes[id].data ?? {};
+    const guestText = `${d.textMessage ?? ""}\n${d.question ?? ""}`;
+    for (const pattern of profile.forbiddenDomainPatterns ?? []) {
+      if (new RegExp(pattern, "i").test(guestText)) {
+        err("canonical-domain", `${nodeLabel(id, nodes[id])} guest-facing text matches forbidden domain pattern "${pattern}" — the only Oraya web origin is https://stayoraya.com`);
+      }
+    }
   }
 
   // helper: does a path exist from a node to any node satisfying pred?

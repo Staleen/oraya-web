@@ -83,7 +83,8 @@ export function runScenario(flow, profile, scenario) {
   const asked = [];
   const messages = [];
   const apiCalls = [];
-  let leadSubmits = 0;
+  let leadSubmits = 0; // successful Lead Submit calls (fixture not failed)
+  let leadAttempts = 0; // Lead Submit nodes fired, success or failure
 
   const startId = Object.keys(nodes).find((id) => nodes[id].name === "Start Bot Flow");
   if (!startId) return { failures: ["no Start Bot Flow node"], asked, messages, fields, leadSubmits };
@@ -179,13 +180,21 @@ export function runScenario(flow, profile, scenario) {
       if (fixture.api !== apiId) {
         fail(`fixture order mismatch: expected api ${fixture.api}, flow called ${apiId} at node #${current}`);
       }
-      if (profile.apis.leadSubmit.ids.includes(apiId)) leadSubmits += 1;
-      const mapping = profile.apiFieldWrites?.[apiId] ?? {};
-      for (const [respKey, fieldName] of Object.entries(mapping)) {
-        if (respKey in (fixture.response ?? {})) {
-          fields.set(fieldName, String(fixture.response[respKey]));
-        } else if (apiId === profile.apis.initialNormalize.id || apiId === profile.apis.refine.id) {
-          fail(`fixture for api ${apiId} is missing "${respKey}" — extracted_text fixtures must carry every mapped key (use "null" for missing)`);
+      if (profile.apis.leadSubmit.ids.includes(apiId)) {
+        leadAttempts += 1;
+        if (!fixture.failed) leadSubmits += 1;
+      }
+      // fault injection: `failed: true` models an HTTP failure — WhatChimp
+      // cannot branch on HTTP status, so the walk continues along the same
+      // output edge but NO response mapping writes any field.
+      if (!fixture.failed) {
+        const mapping = profile.apiFieldWrites?.[apiId] ?? {};
+        for (const [respKey, fieldName] of Object.entries(mapping)) {
+          if (respKey in (fixture.response ?? {})) {
+            fields.set(fieldName, String(fixture.response[respKey]));
+          } else if (apiId === profile.apis.initialNormalize.id || apiId === profile.apis.refine.id) {
+            fail(`fixture for api ${apiId} is missing "${respKey}" — extracted_text fixtures must carry every mapped key (use "null" for missing)`);
+          }
         }
       }
       const next = firstOut(node);
@@ -223,6 +232,25 @@ export function runScenario(flow, profile, scenario) {
     const approved = (profile.approvedTerminalSnippets ?? []).some((s) => (terminalText ?? "").includes(s));
     if (!approved) fail(`terminal message is not approved: "${(terminalText ?? "").slice(0, 120)}"`);
     if ((terminalText ?? "").trim() === "Got it.") fail(`terminal is a dead-end "Got it." acknowledgement`);
+    // no-dead-end actionable-outcome invariant: the INTERPOLATED terminal
+    // (what the guest actually reads, with the current prefill-field state
+    // substituted) must always contain the canonical fallback booking link,
+    // and must state the accurate not-confirmed status. A lead-submission
+    // acknowledgement without a booking continuation is invalid.
+    if (profile.canonicalBookingUrl && !(terminalText ?? "").includes(profile.canonicalBookingUrl)) {
+      fail(`terminal does not deliver the canonical booking continuation ${profile.canonicalBookingUrl}: "${(terminalText ?? "").slice(0, 140)}"`);
+    }
+    if (profile.terminalNotConfirmedPattern && !new RegExp(profile.terminalNotConfirmedPattern, "i").test(terminalText ?? "")) {
+      fail(`terminal does not state the accurate not-confirmed status`);
+    }
+  }
+  // canonical-domain hygiene on everything the guest was shown (interpolated)
+  for (const shown of [...messages, ...asked]) {
+    for (const pattern of profile.forbiddenDomainPatterns ?? []) {
+      if (new RegExp(pattern, "i").test(shown)) {
+        fail(`guest-facing output matches forbidden domain pattern "${pattern}": "${shown.slice(0, 100)}"`);
+      }
+    }
   }
 
   // scenario expectations
@@ -234,6 +262,7 @@ export function runScenario(flow, profile, scenario) {
   }
   if (ex.leadSubmitted === true && leadSubmits < 1) fail("expected a lead submission, none happened");
   if (ex.leadSubmitted === false && leadSubmits > 0) fail(`expected no lead submission, got ${leadSubmits}`);
+  if (ex.leadAttempted === true && leadAttempts < 1) fail("expected a Lead Submit node to fire, none did");
   for (const s of ex.askedIncludes ?? []) {
     if (!asked.some((q) => q.toLowerCase().includes(s.toLowerCase()))) fail(`expected a question containing "${s}" to be asked`);
   }
@@ -249,7 +278,7 @@ export function runScenario(flow, profile, scenario) {
   if (inputs.length) fail(`${inputs.length} scripted answer(s) were never consumed`);
   if (fixtures.length) fail(`${fixtures.length} API fixture(s) were never consumed`);
 
-  return { failures, asked, messages, fields, leadSubmits, terminalText, apiCalls };
+  return { failures, asked, messages, fields, leadSubmits, leadAttempts, terminalText, terminalNodeId: current, apiCalls };
 }
 
 // ─── fixtures / scenario helpers ────────────────────────────────────────────
@@ -783,6 +812,147 @@ export function buildScenarios() {
         terminalIncludes: ESC_TERMINAL,
         messagesInclude: ["confirm the details with you personally"],
         fieldEquals: { oraya_guest_followup: "12" },
+      },
+    },
+    // ── fault-injection matrix (no-dead-end audit) ──────────────────────────
+    // These prove that repository-detectable failure modes cannot strand the
+    // guest: the walk always reaches an approved terminal whose interpolated
+    // text carries the canonical /book continuation. What they CANNOT prove
+    // (WhatChimp's live behavior when an HTTP call fails, real request
+    // bodies) is listed in V6_DEPENDENCIES.md and the round-trip checklist.
+    {
+      name: "F01 normalize API failure (fresh subscriber) → flow continues, lead submitted, continuation link",
+      inputs: [
+        stay("Villa Mechmech July 10 to 11 for 4 guests"),
+        { expect: "How many guests exactly", answer: "4" },
+        escName,
+      ],
+      fixtures: [
+        { api: "7466", failed: true, response: {} },
+        { api: "6961", response: {} },
+      ],
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: [...ESC_TERMINAL, "https://stayoraya.com/book"],
+        messagesInclude: ["confirm the details with you personally"],
+      },
+    },
+    {
+      name: "F02 refine API failure on both attempts → complete escalation with continuation link",
+      inputs: [
+        stay("Mechmech, 3 guests"),
+        { expect: "check-in and check-out dates", answer: "July 10 to 15" },
+        { expect: "check-in and check-out dates together", answer: "July 10 to July 15" },
+        escName,
+      ],
+      fixtures: [
+        { api: "7466", response: norm(null, null, "Villa Mechmech", "3") },
+        { api: "8101", failed: true, response: {} },
+        { api: "8101", failed: true, response: {} },
+        { api: "6961", response: {} },
+      ],
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: [...ESC_TERMINAL, "https://stayoraya.com/book"],
+        messagesInclude: ["trouble reading the dates"],
+      },
+    },
+    {
+      name: "F03 WhatsApp Lead Submit failure → guest still gets canonical booking continuation",
+      inputs: [stay("Mechmech July 10 to 11 for 2"), bedroom("1 bedroom"), confirmYes, ...whatsappTail],
+      fixtures: [
+        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "2") },
+        { api: "6961", failed: true, response: {} },
+      ],
+      expect: {
+        leadAttempted: true,
+        leadSubmitted: false,
+        terminalIncludes: [NOT_CONFIRMED, "https://stayoraya.com/book"],
+      },
+    },
+    {
+      name: "F04 website-handoff Lead Submit failure → no prefill written, canonical fallback still delivered",
+      inputs: [stay("Mechmech July 10 to 11 for 2"), bedroom("1 bedroom"), confirmYes, { expect: "How would you like to continue", answer: "Finish on website" }],
+      fixtures: [
+        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "2") },
+        { api: "7459", failed: true, response: {} },
+      ],
+      expect: {
+        leadAttempted: true,
+        leadSubmitted: false,
+        terminalIncludes: ["https://stayoraya.com/book", "not a confirmed booking"],
+      },
+    },
+    {
+      name: "F05 empty-string prefill_url → canonical fallback still delivered",
+      inputs: [stay("Mechmech July 10 to 11 for 2"), bedroom("1 bedroom"), confirmYes, { expect: "How would you like to continue", answer: "Finish on website" }],
+      fixtures: [
+        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "2") },
+        { api: "7459", response: { prefill_url: "" } },
+      ],
+      expect: { leadSubmitted: true, terminalIncludes: ["https://stayoraya.com/book", "not a confirmed booking"] },
+    },
+    {
+      name: "F06 malformed prefill_url → guest still holds the canonical fallback in the same message",
+      inputs: [stay("Mechmech July 10 to 11 for 2"), bedroom("1 bedroom"), confirmYes, { expect: "How would you like to continue", answer: "Finish on website" }],
+      fixtures: [
+        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "2") },
+        { api: "7459", response: { prefill_url: "book-now-please" } },
+      ],
+      expect: { leadSubmitted: true, terminalIncludes: ["https://stayoraya.com/book", "not a confirmed booking"] },
+    },
+    {
+      name: "F07 bedroom mismatch followed by another invalid choice → escalation with lead + continuation",
+      inputs: [stay("Byblos July 10 to 11, 5 guests"), bedroom("1 bedroom"), bedroom("2 bedrooms"), escName],
+      fixtures: [
+        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Byblos", "5") },
+        { api: "6961", response: {} },
+      ],
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: [...ESC_TERMINAL, "https://stayoraya.com/book"],
+        messagesInclude: ["have our team help arrange"],
+        fieldEquals: { oraya_guest_count: "5" },
+      },
+    },
+    {
+      name: "F08 repeated Edit (Edit → replacement → Edit again) → escalation with lead + continuation, no dead end",
+      inputs: [
+        stay("Mechmech July 10 to 11 for 3"),
+        bedroom("3 bedrooms"),
+        confirmEdit,
+        { expect: "Your updated stay details", answer: "Villa Byblos August 1 to August 3 for 2 guests" },
+        bedroom("1 bedroom"),
+        { expect: "Does this look right", answer: "Edit" },
+        escName,
+      ],
+      fixtures: [
+        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "3") },
+        { api: "7466", response: norm("2026-08-01", "2026-08-03", "Villa Byblos", "2") },
+        { api: "6961", response: {} },
+      ],
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: [...ESC_TERMINAL, "https://stayoraya.com/book"],
+        messagesInclude: ["fine-tune everything personally"],
+      },
+    },
+    {
+      name: "F09 stale guest-overflow value from an abandoned attempt cannot contaminate routing",
+      staleFields: { ...STALE_ALL, oraya_guest_followup: "12" },
+      inputs: [stay("Villa Mechmech August 5 to 7 for 2"), bedroom("1 bedroom"), confirmYes, ...whatsappTail],
+      fixtures: [
+        { api: "7466", response: norm("2026-08-05", "2026-08-07", "Villa Mechmech", "2") },
+        { api: "6961", response: {} },
+      ],
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: [NOT_CONFIRMED],
+        askedExcludes: ["How many guests exactly"],
+        // the stale overflow value stays in its field (no clear-field
+        // primitive exists in WhatChimp) — it is consumer-ignored because
+        // oraya_guest_count is not "More than 8"; routing is unaffected.
+        fieldEquals: { oraya_guest_count: "2", oraya_guest_followup: "12" },
       },
     },
   ];

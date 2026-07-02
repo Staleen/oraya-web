@@ -67,6 +67,12 @@ const COPY = {
   bedroomEscalation:
     "No trouble at all — let me have our team help arrange the right sleeping setup for your group personally. 😊",
   escalationName: "So our team can follow up personally — may I have your full name?",
+  // No-dead-end invariant: every terminal must hand the guest an actionable
+  // booking continuation — the secure prefill link when the Lead Submit
+  // response mapping populated it, and ALWAYS the canonical fallback
+  // https://stayoraya.com/book — plus an accurate not-confirmed status.
+  continuationBlock:
+    "\n\nYou can also continue your request online whenever you like:\n#oraya_prefill_url#\n\nIf that secure link is unavailable, please use:\nhttps://stayoraya.com/book",
   escalationFinal:
     "Thank you 😊 I’ve passed your request to the Oraya team — they’ll follow up with you right here on WhatsApp. Please note this is a request, not a confirmed booking yet.",
   editDatesQuestion:
@@ -322,7 +328,7 @@ function generateV6(flow) {
   wrapperNode(nodes, 640, "Oraya v6 - Escalation", [7300, -900]);
   questionNode(nodes, 641, { question: COPY.escalationName, field: FIELD.fullName }, [7560, -900]);
   apiNode(nodes, 642, API.leadSubmit, [7820, -900]);
-  textNode(nodes, 643, COPY.escalationFinal, [8080, -900]);
+  textNode(nodes, 643, COPY.escalationFinal + COPY.continuationBlock, [8080, -900]);
   connect(nodes, 640, "userInputFlowOutput", 641, "userInputFlowSingleInput");
   connect(nodes, 641, "userInputFlowSingleOutputFinalReply", 642, "httpApiInput");
   connect(nodes, 642, "httpApiOutput", 643, "textInput");
@@ -419,6 +425,13 @@ function generateV6(flow) {
   connect(nodes, 696, "conditionOutputFalse", 698, "textInput");
   connect(nodes, 697, "userInputFlowOutput", 70, "userInputFlowSingleInput");
   connect(nodes, 698, "textOutput", 640, "userInputFlowInput");
+
+  // No-dead-end invariant on the inherited WhatsApp-continuation terminal:
+  // the v5.5 lead acknowledgement (#7) ended with team-follow-up wording
+  // only. Append the same actionable continuation block the website-handoff
+  // terminal already carries, so a guest is never stranded even if the
+  // Lead Submit call failed or the team is slow to respond.
+  nodes["7"].data.textMessage = nodes["7"].data.textMessage + COPY.continuationBlock;
 
   // Start-node title and every inherited campaign label reflect the new
   // revision — a re-imported flow must not advertise itself as v5.5.

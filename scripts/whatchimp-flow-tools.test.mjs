@@ -76,10 +76,13 @@ function link(flow, fromId, outKey, toId, inKey) {
   flow.nodes[toId].inputs[inKey].connections.push({ node: Number(fromId), output: outKey, data: [] });
 }
 
+const VALID_TERMINAL_TEXT =
+  "You can continue your booking request on the Oraya website here: #oraya_prefill_url# — if that secure link is unavailable, please use: https://stayoraya.com/book — this is not a confirmed booking yet.";
+
 function baseFlow() {
   const flow = { id: "xitFB@0.0.1", nodes: {} };
   flow.nodes["1"] = startNode(1);
-  flow.nodes["2"] = textNode(2, "You can continue your booking request on the Oraya website here: x");
+  flow.nodes["2"] = textNode(2, VALID_TERMINAL_TEXT);
   link(flow, "1", "referenceOutput", "2", "textInput");
   return flow;
 }
@@ -141,6 +144,29 @@ test("validator: terminal \"Got it.\" acknowledgement is an error", () => {
   flow.nodes["2"].data.textMessage = "Got it.";
   const errors = errorsOf(flow);
   assert.ok(hasError(errors, "dead-end acknowledgement"), errors.join("\n"));
+});
+
+test("validator: team-follow-up-only terminal without a booking continuation is an error", () => {
+  const flow = baseFlow();
+  flow.nodes["2"].data.textMessage =
+    "I've passed your request to the Oraya team — they'll follow up with you here. This is not a confirmed booking yet.";
+  const errors = errorsOf(flow);
+  assert.ok(hasError(errors, "lacks the required continuation element"), errors.join("\n"));
+});
+
+test("validator: terminal missing the not-confirmed status is an error", () => {
+  const flow = baseFlow();
+  flow.nodes["2"].data.textMessage =
+    "You can continue your booking request on the Oraya website here: #oraya_prefill_url# or https://stayoraya.com/book — see you soon!";
+  const errors = errorsOf(flow);
+  assert.ok(hasError(errors, "not-confirmed booking status"), errors.join("\n"));
+});
+
+test("validator: wrong-domain guest-facing text is an error", () => {
+  const flow = baseFlow();
+  flow.nodes["2"].data.textMessage = VALID_TERMINAL_TEXT + " Also see www.stayoraya.com for photos.";
+  const errors = errorsOf(flow);
+  assert.ok(hasError(errors, "forbidden domain pattern"), errors.join("\n"));
 });
 
 test("validator: second destination on one condition output is an error", () => {
@@ -223,10 +249,26 @@ test("simulator: stale-villa scenario fails on a flow that skips the villa ask",
   assert.ok(result.failures.length > 0, "sabotaged flow must fail the stale-villa scenario");
 });
 
-test("simulator: all 30+ scenarios pass against the generated v6", { skip: !existsSync(v6Path) }, () => {
+test("simulator: all scenarios (incl. fault injection) pass against the generated v6", { skip: !existsSync(v6Path) }, () => {
   const flow = JSON.parse(readFileSync(v6Path, "utf8"));
   for (const scenario of buildScenarios()) {
     const result = runScenario(flow, profile, scenario);
     assert.deepEqual(result.failures, [], `${scenario.name}:\n${result.failures.join("\n")}`);
   }
+});
+
+test("simulator: scenario matrix covers every terminal node of the flow", { skip: !existsSync(v6Path) }, () => {
+  const flow = JSON.parse(readFileSync(v6Path, "utf8"));
+  const flowTerminals = new Set(
+    Object.keys(flow.nodes).filter((id) =>
+      Object.values(flow.nodes[id].outputs ?? {}).every((o) => (o.connections ?? []).length === 0),
+    ),
+  );
+  const visitedTerminals = new Set();
+  for (const scenario of buildScenarios()) {
+    const result = runScenario(flow, profile, scenario);
+    if (result.failures.length === 0) visitedTerminals.add(String(result.terminalNodeId));
+  }
+  assert.deepEqual([...flowTerminals].sort(), [...visitedTerminals].sort(),
+    `every reachable terminal must be exercised by at least one scenario (flow: ${[...flowTerminals]}, visited: ${[...visitedTerminals]})`);
 });
