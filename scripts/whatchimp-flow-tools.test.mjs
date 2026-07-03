@@ -18,6 +18,7 @@ import { fileURLToPath } from "node:url";
 
 import { validateFlow } from "./validate-whatchimp-flow.mjs";
 import { evalCondition, interpolate, runScenario, buildScenarios } from "./simulate-whatchimp-flow.mjs";
+import { compareFlows } from "./compare-whatchimp-roundtrip.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.join(here, "..");
@@ -211,10 +212,44 @@ test("validator: second destination on one condition output is an error", () => 
   assert.ok(hasError(errors, "ambiguous execution order"), errors.join("\n"));
 });
 
+test("validator: single-parent-contract rejects a second connection on one input socket", () => {
+  // Round trip #1 (2026-07-03): WhatChimp import keeps only the first
+  // serialized connection per input socket. Any convergence is an error.
+  const flow = baseFlow();
+  flow.nodes["3"] = conditionNode(3, [{ fid: "57699", name: "oraya_check_in", value: "null" }]);
+  flow.nodes["4"] = textNode(4, "passed your request to the Oraya team — not a confirmed booking");
+  flow.nodes["1"].outputs.referenceOutput.connections = [];
+  flow.nodes["2"].inputs.textInput.connections = [];
+  link(flow, "1", "referenceOutput", "3", "conditionInput");
+  link(flow, "3", "conditionOutputTrue", "2", "textInput");
+  link(flow, "3", "conditionOutputFalse", "4", "textInput");
+  link(flow, "4", "textOutput", "2", "textInput"); // second parent onto #2 — the convergence WhatChimp drops
+  const errors = errorsOf(flow);
+  assert.ok(hasError(errors, "single-parent-contract"), errors.join("\n"));
+  assert.ok(hasError(errors, "keeps only the first"), errors.join("\n"));
+});
+
+test("validator: single-parent-contract rejects one escalation tail shared by two branches", () => {
+  const flow = baseFlow();
+  flow.nodes["3"] = conditionNode(3, [{ fid: "57699", name: "oraya_check_in", value: "null" }]);
+  flow.nodes["4"] = textNode(4, "let me bring in our team — one branch");
+  flow.nodes["5"] = textNode(5, "let me bring in our team — another branch");
+  flow.nodes["1"].outputs.referenceOutput.connections = [];
+  flow.nodes["2"].inputs.textInput.connections = [];
+  link(flow, "1", "referenceOutput", "3", "conditionInput");
+  link(flow, "3", "conditionOutputTrue", "4", "textInput");
+  link(flow, "3", "conditionOutputFalse", "5", "textInput");
+  link(flow, "4", "textOutput", "2", "textInput");
+  link(flow, "5", "textOutput", "2", "textInput"); // shared terminal tail — two independent branches converge
+  const errors = errorsOf(flow);
+  assert.ok(errors.some((e) => e.includes("single-parent-contract") && e.includes("#2")), errors.join("\n"));
+});
+
 // ─── validator: real artifacts ──────────────────────────────────────────────
 
 const v55Path = path.join(repoRoot, "artifacts", "whatchimp", "Oraya_natural_intake_v5.5.input.txt");
 const v6Path = path.join(repoRoot, "Oraya_natural_intake_v6.txt");
+const roundtrip1Path = path.join(repoRoot, "artifacts", "whatchimp", "roundtrips", "Oraya_natural_intake_v6.roundtrip-1.saved-reexport.txt");
 
 test("validator: v5.5 operator export fails with semantic errors", { skip: !existsSync(v55Path) }, () => {
   const flow = JSON.parse(readFileSync(v55Path, "utf8"));
@@ -225,27 +260,40 @@ test("validator: v5.5 operator export fails with semantic errors", { skip: !exis
   assert.ok(hasError(errors, "no bedroom-selection question exists"));
 });
 
-test("validator: generated v6 passes with zero errors and zero warnings", { skip: !existsSync(v6Path) }, () => {
+// Round trip #1 (2026-07-03) proved the current canonical candidate is NOT
+// import-safe: its 16 convergence points are exactly what WhatChimp's import
+// normalization destroys. The validator now rejects them; these tests pin
+// that the ONLY defects are those 16 single-parent-contract violations —
+// every other contract still holds. The next candidate (structural direction
+// pending operator decision — see DECISIONS_LOG 2026-07-03 and KNOWN_BUGS
+// #10) must bring these counts to zero.
+const SINGLE_PARENT_VIOLATIONS_IN_CANDIDATE = 16;
+const onlySingleParentErrors = (errors) => errors.every((e) => e.startsWith("[single-parent-contract]"));
+
+test("validator: generated v6 has no defects besides the 16 single-parent-contract violations", { skip: !existsSync(v6Path) }, () => {
   const flow = JSON.parse(readFileSync(v6Path, "utf8"));
   const { errors, warnings } = validateFlow(flow, profile);
-  assert.deepEqual(errors, []);
+  assert.equal(errors.length, SINGLE_PARENT_VIOLATIONS_IN_CANDIDATE, errors.join("\n"));
+  assert.ok(onlySingleParentErrors(errors), errors.join("\n"));
   assert.deepEqual(warnings, [], warnings.join("\n"));
 });
 
-test("validator: canonical v6 passes strict binding (fully bound, no second binding step)", { skip: !existsSync(v6Path) }, () => {
+test("validator: canonical v6 under strict binding — fully bound; only the single-parent violations remain", { skip: !existsSync(v6Path) }, () => {
   const flow = JSON.parse(readFileSync(v6Path, "utf8"));
   const { errors, warnings } = validateFlow(flow, profile, { strictBinding: true });
-  assert.deepEqual(errors, [], errors.join("\n"));
+  assert.equal(errors.length, SINGLE_PARENT_VIOLATIONS_IN_CANDIDATE, errors.join("\n"));
+  assert.ok(onlySingleParentErrors(errors), errors.join("\n"));
   assert.deepEqual(warnings, [], warnings.join("\n"));
 });
 
-test("artifact: canonical v6 is fully bound — strict-clean, placeholder-free, exact bedroom bindings, export-proven question transitions", { skip: !existsSync(v6Path) }, () => {
+test("artifact: canonical v6 is fully bound — placeholder-free, exact bedroom bindings, export-proven question transitions (single-parent violations aside)", { skip: !existsSync(v6Path) }, () => {
   const raw = readFileSync(v6Path, "utf8");
   assert.ok(!raw.includes("__ORAYA_BEDROOM_COUNT_FIELD_ID__"), "placeholder string must not remain in the delivery file");
   assert.ok(!raw.includes("__ORAYA"), "no placeholder prefix may remain in the delivery file");
   const flow = JSON.parse(raw);
   const { errors, warnings } = validateFlow(flow, profile, { strictBinding: true });
-  assert.deepEqual(errors, [], errors.join("\n"));
+  assert.equal(errors.length, SINGLE_PARENT_VIOLATIONS_IN_CANDIDATE, errors.join("\n"));
+  assert.ok(onlySingleParentErrors(errors), errors.join("\n"));
   assert.deepEqual(warnings, [], warnings.join("\n"));
   // exact bedroom bindings: 4 questions on "69114", 8 condition rows on
   // "custom_69114" (each row serializes the id in both the variable and the
@@ -287,6 +335,72 @@ test("artifact: canonical v6 is fully bound — strict-clean, placeholder-free, 
     const result = runScenario(flow, profile, scenario);
     assert.deepEqual(result.failures, [], `${scenario.name}:\n${result.failures.join("\n")}`);
   }
+});
+
+// ─── round trip #1 regression fixtures (authenticated evidence, 2026-07-03) ──
+
+test("round trip #1: comparator detects the exact WhatChimp import normalization on the preserved evidence", { skip: !existsSync(v6Path) || !existsSync(roundtrip1Path) }, () => {
+  const candidate = JSON.parse(readFileSync(v6Path, "utf8"));
+  const reexport = JSON.parse(readFileSync(roundtrip1Path, "utf8"));
+  const r = compareFlows(candidate, reexport, { ignoreFields: profile.roundTripIgnoreFields });
+  // all nodes survived; nothing was semantically edited
+  assert.equal(r.counts.candidateNodes, 118);
+  assert.equal(r.counts.reexportNodes, 118);
+  assert.deepEqual(r.deletedNodes, []);
+  assert.deepEqual(r.addedNodes, []);
+  assert.deepEqual(r.changedNodes, [], JSON.stringify(r.changedNodes));
+  assert.deepEqual(r.customFieldChanges, []);
+  assert.deepEqual(r.apiIdChanges, []);
+  // exactly 32 complete reciprocal edges were silently removed, none added
+  assert.equal(r.counts.candidateEdges, 149);
+  assert.equal(r.counts.reexportEdges, 117);
+  assert.equal(r.lostEdges.length, 32);
+  assert.deepEqual(r.gainedEdges, []);
+  // single-parent normalization pattern: every lost edge targeted a
+  // multi-parent destination; all 16 multi-parent nodes were reduced to
+  // exactly one surviving parent — the first-listed serialized connection
+  assert.ok(r.lostEdges.every((e) => e.destCandidateParents.length > 1));
+  assert.equal(r.multiParent.candidate.length, 16);
+  assert.equal(r.multiParent.reexport.length, 0);
+  assert.equal(r.reducedToSingle.length, 16);
+  assert.ok(r.reducedToSingle.every((m) => m.kept === 1 && m.firstListedSurvived), JSON.stringify(r.reducedToSingle));
+  // the drops created exactly 16 unintended terminals
+  assert.equal(r.unexpectedTerminals.length, 16);
+  assert.equal(r.preserved, false);
+});
+
+test("round trip #1: comparator reports an identical re-export as preserved", { skip: !existsSync(v6Path) }, () => {
+  const candidate = JSON.parse(readFileSync(v6Path, "utf8"));
+  const clone = JSON.parse(readFileSync(v6Path, "utf8"));
+  // regenerated ids and moved nodes are approved normalization, not failures
+  clone.nodes["1"].data.xitFbpostbackId = "regenerated-by-whatchimp";
+  clone.nodes["1"].position = [999, 999];
+  const r = compareFlows(candidate, clone, { ignoreFields: profile.roundTripIgnoreFields });
+  assert.equal(r.preserved, true, JSON.stringify(r));
+  // but a genuinely dropped edge must flip the verdict
+  const damaged = JSON.parse(readFileSync(v6Path, "utf8"));
+  const anyOut = Object.values(damaged.nodes["440"].outputs).find((o) => o.connections.length);
+  const removed = anyOut.connections.pop();
+  for (const inp of Object.values(damaged.nodes[String(removed.node)].inputs)) {
+    inp.connections = inp.connections.filter((c) => String(c.node) !== "440");
+  }
+  const r2 = compareFlows(candidate, damaged, { ignoreFields: profile.roundTripIgnoreFields });
+  assert.equal(r2.preserved, false);
+  assert.ok(r2.lostEdges.length >= 1);
+});
+
+test("round trip #1: the authenticated re-export fails validation for the expected structural reasons", { skip: !existsSync(roundtrip1Path) }, () => {
+  const reexport = JSON.parse(readFileSync(roundtrip1Path, "utf8"));
+  const { errors } = validateFlow(reexport, profile, { strictBinding: true });
+  // the saved graph is a clean tree (no convergence survives an import) …
+  assert.ok(!errors.some((e) => e.startsWith("[single-parent-contract]")), errors.join("\n"));
+  // … but the dropped edges dangled condition branches, dead-ended an API
+  // node, and created unapproved terminals with no booking continuation
+  assert.ok(hasError(errors, "no destination on conditionOutputTrue") || hasError(errors, "no destination on conditionOutputFalse"));
+  assert.ok(hasError(errors, "dead-end API call"));
+  assert.ok(hasError(errors, "unapproved terminal message"));
+  assert.ok(hasError(errors, "lacks the required continuation element"));
+  assert.ok(errors.length >= 90, `expected the audited round-trip damage, got ${errors.length} errors`);
 });
 
 test("operator docs: production WhatChimp API endpoints use direct www host", () => {

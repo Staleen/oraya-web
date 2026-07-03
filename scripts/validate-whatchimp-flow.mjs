@@ -169,6 +169,44 @@ export function validateFlow(flow, profile, opts = {}) {
     }
   }
 
+  // single-parent import contract (profile `importGraphContract`).
+  // Authenticated round trip #1 (2026-07-03) proved WhatChimp's import keeps
+  // only the FIRST serialized connection per input socket and silently drops
+  // every other complete reciprocal edge: all 16 multi-parent nodes of the
+  // v6 candidate were reduced to exactly one parent (first-listed survived in
+  // 16/16), 32 edges were removed, and 16 unintended terminals appeared.
+  // Evidence: artifacts/whatchimp/roundtrips/ROUNDTRIP_1_FINDINGS.md.
+  // Any convergence in an import candidate is therefore a structural error.
+  const contract = profile.importGraphContract;
+  if (contract) {
+    const maxIn = contract.maxInboundPerNode ?? 1;
+    const rootName = contract.rootNodeName ?? "Start Bot Flow";
+    for (const id of ids) {
+      const node = nodes[id];
+      const campaign = typeof node.data?.campaignName === "string" && node.data.campaignName
+        ? ` [campaign "${node.data.campaignName}"]` : "";
+      let socketReported = false;
+      for (const [inKey, inp] of Object.entries(node.inputs ?? {})) {
+        const conns = inp.connections ?? [];
+        if (conns.length > 1) {
+          socketReported = true;
+          err("single-parent-contract", `${nodeLabel(id, node)}${campaign} input socket "${inKey}" has ${conns.length} connections [${conns.map((c) => `#${c.node}:${c.output}`).join(", ")}] — WhatChimp import keeps only the first and silently drops the rest (round trip #1, 2026-07-03)`);
+        }
+      }
+      const parents = inEdges(node);
+      if (node.name === rootName) {
+        if (parents.length !== 0) {
+          err("single-parent-contract", `${nodeLabel(id, node)} is the root node but has ${parents.length} inbound connection(s) [${parents.map((e) => `#${e.node}:${e.output}→${e.inKey}`).join(", ")}]`);
+        }
+      } else if (!socketReported && parents.length > maxIn) {
+        err("single-parent-contract", `${nodeLabel(id, node)}${campaign} has ${parents.length} inbound connections across sockets [${parents.map((e) => `#${e.node}:${e.output}→${e.inKey}`).join(", ")}] — exceeds the import contract maximum of ${maxIn}`);
+      }
+      // zero-inbound non-root nodes are reported by the start-node and
+      // reachability checks below; one-sided and invalid-port edges by the
+      // edge-integrity checks above. This rule adds the convergence ban.
+    }
+  }
+
   // 10. exactly one start node, and it is the trigger
   const startIds = ids.filter((id) => inEdges(nodes[id]).length === 0);
   if (startIds.length !== 1) {

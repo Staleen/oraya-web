@@ -16,6 +16,25 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-07-03 - Authenticated round trip #1: WhatChimp import keeps one parent per input socket; v6 candidate declared NOT import-safe; convergent import candidates now fail validation; structural direction awaits operator decision
+
+**Decision:** four findings/decisions from the first authenticated WhatChimp round trip (import canonical `Oraya_natural_intake_v6.txt` → save → close → reopen → export; evidence preserved byte-for-byte at [artifacts/whatchimp/roundtrips/Oraya_natural_intake_v6.roundtrip-1.saved-reexport.txt](../../artifacts/whatchimp/roundtrips/Oraya_natural_intake_v6.roundtrip-1.saved-reexport.txt), 91,657 bytes, SHA-256 `6ED2E190E876A9FE00D9F3E68111A86BA60159F4E1B3EBA630574B217C8F7C89`):
+
+1. **Platform contract (proven from the exact graph diff):** WhatChimp's import keeps only the **first serialized connection per input socket** and silently drops every other complete reciprocal edge on save. All 118 nodes survived semantically unchanged; exactly **32 edges were removed and 0 added**; all **16** multi-parent nodes were reduced to exactly one parent, and in 16/16 cases the survivor was the first-listed connection; 16 unintended terminals appeared. Complete machine-derived lost-edge table, business-impact grouping, and tooling evidence (validator on the re-export: 96 errors; simulator: 6/42): [artifacts/whatchimp/roundtrips/ROUNDTRIP_1_FINDINGS.md](../../artifacts/whatchimp/roundtrips/ROUNDTRIP_1_FINDINGS.md). Scope limit, also proven: this is an **import** normalization, not a saved-graph data-model rule — the operator's own v5.5 export carries a 5-parent node (`#440`) and the v4.3.3 production export carries multi-input nodes, so editor-drawn merges do survive save/export.
+2. **Status:** the canonical `Oraya_natural_intake_v6.txt` (SHA-256 `72578281…08A4`) is **not import-safe** and must not be promoted toward production import. Its artifact bytes are intentionally left unchanged pending the structural decision below; the validator's new `single-parent-contract` check (profile `importGraphContract`) now fails it with exactly the 16 convergence violations, so no one can re-validate it as import-ready.
+3. **Tooling contract:** round-trip verification is now machine-checked by `scripts/compare-whatchimp-roundtrip.mjs` (ignores only approved normalization — positions and regenerated `uniqueId`/`postbackId`/`newPostbackId`/`xitFbpostbackId`; nonzero exit on any node/edge/terminal/semantic loss), and the round-trip #1 outcome is pinned as a permanent regression fixture in `scripts/whatchimp-flow-tools.test.mjs` (0 deleted nodes, 32 lost edges, first-listed-survivor pattern, 16 unintended terminals).
+4. **Structural direction is an operator decision, not taken here.** A pure single-parent rebuild preserving the current gating behavior is quantifiably infeasible: the exact full unroll of the candidate DAG is **492,864 nodes** (the "ask only missing fields, then reconverge" contract multiplies date-recovery variants × guest-known/asked × bedroom-capacity exits × villa-known/asked, with the complete Edit subtree hanging off every confirmation clone). The two viable directions are: **(a)** hybrid — clone the small linear tails (escalation/handoff/large-group), keep a bounded set of hub merges, and have the operator re-draw those edges in the editor after import (editor-drawn merges are export-proven; a machine-generated redraw table + comparator verification would gate it), or **(b)** an approved reduction of the gating behavior so the flow fits a pure tree (regresses specific documented behaviors — e.g. skip-known-field gating or full Edit re-validation). Choosing (a) or (b) changes guest-visible behavior or introduces a manual operator step, so it requires explicit human approval before the generator is rebuilt.
+
+**Reason:** the round trip was the long-standing gate on KNOWN_BUGS #10 merge survival; it answered the question definitively and in the negative for imported merges. Re-adding the 32 links would recreate the same import-destroyed topology; rebuilding as a full tree is arithmetically impossible; the remaining options trade behavior or operator effort and belong to the operator.
+
+**Impact:** validator gains `single-parent-contract` (rejects >1 connection per input socket, >`maxInboundPerNode` parents, and a root with inbound edges; profile gains `importGraphContract` + `roundTripIgnoreFields`); new comparator script; tests updated to pin the candidate's exact 16 violations and the round-trip regression fixture (26 tests); KNOWN_BUGS #10 follow-up records the result; `V6_DEPENDENCIES.md` status downgraded from "import-ready candidate" to "not import-safe — rebuild direction pending"; round-trip checklist gains the round-trip #2 acceptance procedure (fresh disposable bot + comparator + zero loss). CURRENT_PHASE updated. No artifact regeneration, no application code, no schema, no dependency.
+
+**Reversible?:** the tooling and evidence are additive. The not-import-safe status can only be reversed by a future candidate passing an authenticated round trip verified with the comparator (zero semantic loss), recorded in a superseding entry.
+
+**Supersedes:** the "import-ready v6 candidate" status statements in the three entries below (2026-07-03 canonical-artifact entry, 2026-07-03 question-transition entry, 2026-07-02 natural-intake entry). Their bodies remain verbatim per the append-only rule.
+
+---
+
 ## 2026-07-03 - v6 ships as ONE canonical fully-bound artifact; export-survey evidence made exact; append-only log discipline restored
 
 **Decision:** three related corrections, recorded as a new entry because the first two had earlier been written into older entry bodies in place — violating this file's append-only rule — and those bodies are now restored verbatim to their state at commit `f356b15`:
@@ -31,6 +50,8 @@ Durable architectural and operational decisions. Append-only - never edit a past
 **Reversible?:** yes — but only via a further appended entry, never by editing this or older entries.
 
 **Supersedes:** the artifact-binding and evidence-wording statements inside the 2026-07-03 question-transition entry and the 2026-07-02 natural-intake entry below (both bodies preserved verbatim as historical record).
+
+> **Follow-up (2026-07-03):** authenticated round trip #1 subsequently proved this canonical artifact is **not import-safe** — WhatChimp's import silently removed its 32 convergence edges. See the "Authenticated round trip #1" entry above. This body is preserved verbatim per the append-only rule.
 
 ---
 

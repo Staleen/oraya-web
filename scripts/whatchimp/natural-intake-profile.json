@@ -20,6 +20,11 @@
     "oraya_bedroom_count": "69114"
   },
   "placeholderFieldIds": [],
+  "importGraphContract": {
+    "rootNodeName": "Start Bot Flow",
+    "maxInboundPerNode": 1
+  },
+  "roundTripIgnoreFields": ["uniqueId", "postbackId", "newPostbackId", "xitFbpostbackId"],
   "stayTextField": "oraya_stay_text",
   "followupField": "oraya_stay_followup",
   "guestFollowupField": "oraya_guest_followup",

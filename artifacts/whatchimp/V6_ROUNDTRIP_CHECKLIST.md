@@ -2,6 +2,18 @@
 
 Run this against a **non-production test bot**. Keep the current production bot untouched until every step passes. Steps reference visible node/question/API names, not node numbers.
 
+> **⚠️ Round trip #1 result (2026-07-03): FAILED structural preservation — the current `Oraya_natural_intake_v6.txt` is NOT import-safe.** Import/save/close/reopen/export succeeded mechanically, but WhatChimp kept only the first serialized connection per input socket and silently removed all 32 convergence edges (16 unintended terminals; every bedroom-capacity, escalation, Edit, and date-recovery merge broken). Evidence: [`roundtrips/ROUNDTRIP_1_FINDINGS.md`](roundtrips/ROUNDTRIP_1_FINDINGS.md). **Do not run sections A2/B/C/D against this candidate.** They apply to the NEXT candidate, once the structural direction is decided (DECISIONS_LOG 2026-07-03).
+
+## Round trip #2 — acceptance procedure for the next candidate (mandatory before any section C testing)
+
+1. Use a **fresh disposable test bot** (not the round-trip-#1 bot, not production).
+2. Import the new candidate → **Save** → close the editor completely → reopen → **export**.
+3. Compare mechanically — no visual inspection substitutes for this:
+   `node scripts/compare-whatchimp-roundtrip.mjs Oraya_natural_intake_v6.txt <re-export-file>`
+4. Required result, exit code 0 with: **zero** deleted/added nodes, **zero** semantic node changes, **zero** lost or gained edges, **zero** new unintended terminals, and `oraya_bedroom_count` = `69114` / `custom_69114` bindings intact (also run `node scripts/validate-whatchimp-flow.mjs <re-export> --strict-binding` → exit 0).
+5. TEST integrations only (sections A0/A1); **no production activation** and no production integration edits.
+6. Save compatibility may not be claimed until this passes; only then proceed to section C.
+
 ## A0. Shared-integration audit — do this BEFORE touching any HTTP API settings
 
 WhatChimp HTTP API integrations are tenant-level objects shared by every flow that references the same integration ID. **Do not edit `7466`, `8101`, `6961`, or `7459` until you have confirmed, in the WhatChimp UI, which flows currently reference each of them.**
