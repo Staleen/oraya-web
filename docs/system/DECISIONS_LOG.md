@@ -16,6 +16,26 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-07-03 - Corrected editor rule (at most one Condition-source parent per Condition) proven by live probes; Condition-clone-cascade candidate shipped (181 nodes, 34 proven-operation redraws); gate is round trip #3
+
+**Decision:** the operator ran the round-trip-#2 probe matrix on the authenticated editor (screenshots on record) and directed the rebuild; both are recorded here:
+
+1. **Corrected platform rule (supersedes the pair-level conclusion in the entry below):** a direct Condition → Condition connection **is accepted** when it is the destination's first/only Condition-source parent; the editor's *"This will make an infinite loop…"* warning fires only on a **second** Condition-source parent. Binding rule: *each destination Condition input may carry at most ONE inbound edge whose source node type is Condition.* Live-proven drawable operations: Condition→Condition (first Condition-source parent only), Condition→User Input Flow, Text→User Input Flow, Condition→Text, Text→Condition, HTTP API→Condition. Probe edges were evidence only, not design.
+2. **Architecture (operator-directed, no further human decision pending): the behavior-preserving Condition-clone cascade.** Every Condition that would receive an extra Condition-source parent gets a semantically identical, guest-invisible clone whose single serialized connection the import keeps automatically: `#440`→clones `750/752/754/756` (one per date-recovery branch) each chained to a paired `#602` clone `751/753/755/757`; `#470`→`758/759/760`; `#660`→`761` chained to `#663` clone `762`; `#690`→`763/764/765` — **16 clones**. Conditions that legally absorb their non-Condition parents stay merges (`#602`+Text ack, `#654`+second refine API, `#663`+Text ack), which is why the plan beats the provisional full-cascade estimate (39 draws / 186 nodes → **34 / 181**).
+3. **New canonical `Oraya_natural_intake_v6.txt`:** **181 nodes, 214 output connections, 14 terminals, 15 declared merge points** (`466:5, 480:4, 490:5, 600:5, 602:2, 610:5, 616:2, 654:2, 661:2, 663:2, 670:2, 676:2, 691:4, 694:5, 736:2`), **exactly 34 operator-drawn connections** (27 Condition→User Input Flow, 2 Text→User Input Flow, 2 Text→Condition, 2 Condition→Text, 1 HTTP API→Condition, **zero drawn Condition→Condition**), SHA-256 `AB456A895221A46DE289EDA054DB9142B4D3F7D0A1892A3FFBEAFF999346AB0C`. Un-repaired-import safety preserved (first-listed edges = complete happy path; opening-question `/book` link; no confirmation claims). Guest behavior byte-identical — every message, question, choice list, API call, field binding (incl. `69114`/`custom_69114`), and terminal is unchanged.
+4. **Rules encoded (generation + validation):** profile `importGraphContract.editorProvenDrawPairs` (the six ops), `editorRejectedDrawPairs: []` (the refusal is conditional), `maxConditionSourceParents: 1`, and the recomputed `approvedHubMerges`; validator `condition-parent-limit` (graph-wide, per-excess-edge errors) + `redraw-drawability` (unproven-pair warnings); the generator's `assertEditorContracts` refuses to emit an artifact whose redraw plan uses an unproven operation, contains a drawn Condition→Condition, or leaves any Condition with two Condition-source parents.
+5. **Evidence preserved:** the halted 18-redraw candidate is pinned byte-exact at [artifacts/whatchimp/roundtrips/Oraya_natural_intake_v6.roundtrip-2.halted-candidate.txt](../../artifacts/whatchimp/roundtrips/Oraya_natural_intake_v6.roundtrip-2.halted-candidate.txt) (121,537 bytes, SHA-256 `0066192D…3A39`, secret/guest-data scan clean) with a regression test proving it fails current validation with exactly the **11** beyond-limit Condition-source parents that made its plan unexecutable; round-trip-#1 fixtures untouched.
+
+**Reason:** the probes replaced an inferred blanket ban with the authenticated conditional rule, which restored a behavior-preserving repair path; the cascade is the operator-selected Option A direction with the merge-repair mechanism made executable under the corrected rule.
+
+**Impact:** generator rewritten (fragmentation section, proven-operation gates, corrected checklist rendering); profile, validator, simulator visit anchors (3 scenarios now pin the clone routing), and tests updated (32/32; simulator 50/50; validator 0 errors / 0 warnings strict); `V6_DEPENDENCIES.md` status → corrected-rule hybrid candidate; `V6_ROUNDTRIP_CHECKLIST.md` → round trip #3 procedure (34 draws); `ROUNDTRIP_2_FINDINGS.md` gains the Addendum; KNOWN_BUGS #10 follow-up appended; regenerated `V6_REDRAW_CHECKLIST.md` + artifact recopied to the operator folder. No application code, schema, or locked-system changes. PR #67 stays open and unmerged; production WhatChimp untouched.
+
+**Reversible?:** yes — deterministic generator, pinned fixtures. Import-safety is claimable only after round trip #3 (import → 34 redraws → save → close → reopen → export → comparator PRESERVED exit 0 + strict validator exit 0) passes on a fresh disposable bot, recorded in a superseding entry.
+
+**Supersedes:** the pair-level "editor refuses Condition → Condition" conclusion, the probe-gate next step, and the "human architecture decision pending" status in the round-trip-#2 entry below (body preserved verbatim per the append-only rule; the halt event itself remains accurate history).
+
+---
+
 ## 2026-07-03 - Round trip #2: the WhatChimp editor refuses Condition → Condition connections; the Option A hybrid redraw plan is not operator-executable; candidate halted pending a drawability probe gate and a human architecture decision
 
 **Decision:** four findings/decisions from the operator's round trip #2 attempt (fresh disposable bot, redraw item #1 attempted exactly as documented):
@@ -32,6 +52,8 @@ Durable architectural and operational decisions. Append-only - never edit a past
 **Reversible?:** the halt is reversed only by a future candidate whose entire redraw plan uses operator-**proven** drawable pairs and which passes the full round-trip procedure, recorded in a superseding entry.
 
 **Supersedes:** the "operator draws exactly 18 connections" execution plan and the "editor-drawn merges are export-proven (v5.5 `#440`)" drawability rationale in the Option A entry below (its body preserved verbatim per the append-only rule). The Option A architecture itself (tail clones + declared hubs) remains the operator-chosen direction; its merge-repair mechanism must be redesigned per point 4.
+
+> **Follow-up (2026-07-03):** the operator's probe matrix **corrected the pair-level conclusion recorded here** — the editor rejects only a *second* Condition-source parent, not Condition → Condition as such — and the Condition-clone-cascade candidate shipped the same day. See the "Corrected editor rule" entry above. This body is preserved verbatim per the append-only rule.
 
 ---
 

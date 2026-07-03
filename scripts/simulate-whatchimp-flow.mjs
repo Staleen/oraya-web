@@ -421,11 +421,12 @@ export function buildScenarios() {
         fieldEquals: { oraya_villa: "Villa Mechmech", oraya_guest_count: "4", oraya_bedroom_count: "2 bedrooms" },
         // full initial path, node by node: stay q → normalize → guest gate →
         // guest q → ack → supported gate → bedroom q → ack → capacity check →
-        // villa gate → villa q → ack → confirmation q → ack → Looks right →
+        // villa-gate clone #758 (2-bedrooms-fit exit; corrected-rule cascade) →
+        // villa q → ack → confirmation q → ack → Looks right →
         // handoff q → WhatsApp branch → name q → Lead Submit → terminal
         visitsInOrder: [[
           "400", "401", "440", "600", "601", "603", "602", "610", "611", "624", "612",
-          "470", "480", "481", "604", "490", "491", "492", "493", "494",
+          "758", "480", "481", "604", "490", "491", "492", "493", "494",
           "70", "71", "72", "74", "75", "8", "9", "7",
         ]],
       },
@@ -635,8 +636,9 @@ export function buildScenarios() {
         messagesInclude: ["won’t quite fit 3 overnight guests"],
         fieldEquals: { oraya_guest_count: "3", oraya_bedroom_count: "2 bedrooms" },
         // bedroom q → ack → capacity check → mismatch text → retry wrapper →
-        // retry q → ack → retry capacity check → villa gate → confirmation → terminal
-        visitsInOrder: [["611", "624", "612", "616", "617", "618", "625", "619", "470", "491", "7"]],
+        // retry q → ack → retry capacity check → villa-gate clone #760 (retry
+        // 2-bedrooms-fit exit; corrected-rule cascade) → confirmation → terminal
+        visitsInOrder: [["611", "624", "612", "616", "617", "618", "625", "619", "760", "491", "7"]],
       },
     },
     {
@@ -740,11 +742,12 @@ export function buildScenarios() {
         // "Edit" direction of the confirmation branch, then the rebuilt Edit
         // flow with a complete replacement: confirmation q → ack → branch
         // condition (False) → Edit prompt → Edit q → fresh normalize →
-        // date/guest gates (all satisfied) → Edit bedroom q → ack → capacity →
-        // Edit villa gate → Edit confirmation q → ack → second branch (True) →
-        // the Edit path's OWN branch-local handoff clone → its WhatsApp terminal
+        // date/guest gates (all satisfied; both-dates-known re-entry runs the
+        // corrected-rule clone chain #761 → #762) → Edit bedroom q → ack →
+        // capacity → Edit villa gate → Edit confirmation q → ack → second
+        // branch (True) → the Edit path's OWN handoff clone → WhatsApp terminal
         visitsInOrder: [[
-          "491", "492", "493", "495", "496", "497", "498", "650", "656", "660", "663",
+          "491", "492", "493", "495", "496", "497", "498", "650", "656", "761", "762",
           "670", "671", "684", "672", "690", "694", "695", "699", "696", "697", "740", "749",
         ]],
       },

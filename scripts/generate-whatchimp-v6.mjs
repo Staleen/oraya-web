@@ -36,15 +36,25 @@
  *     MUST be re-drawn by the operator in the WhatChimp editor after import.
  *     The exact machine-derived redraw list is emitted alongside the
  *     artifact (third CLI argument).
- *     ⛔ ROUND TRIP #2 (2026-07-03, roundtrips/ROUNDTRIP_2_FINDINGS.md): the
- *     editor REFUSES to draw Condition → Condition connections ("This will
- *     make an infinite loop…"). 11 of this architecture's 18 redraw edges
- *     are Condition → Condition, so THIS ARCHITECTURE IS NOT OPERATOR-
- *     REPAIRABLE and is halted. The v5.5 5-parent merge previously cited as
- *     drawability evidence is itself Condition → Condition ×5 — export
- *     survival does not prove present-editor drawability. Do not regenerate
- *     toward testing until the architecture removes every editor-rejected
- *     (and unproven, unless probed) drawn pair.
+ *
+ * CORRECTED EDITOR RULE (round trip #2 + operator probes, 2026-07-03 —
+ * roundtrips/ROUNDTRIP_2_FINDINGS.md): the editor's "This will make an
+ * infinite loop…" warning fires only when a connection would give a
+ * destination Condition a SECOND Condition-source parent. The binding rule:
+ *   each destination Condition may carry AT MOST ONE inbound edge whose
+ *   source node type is Condition.
+ * Live-proven manual operations: Condition→User Input Flow, Text→User Input
+ * Flow, Condition→Text, Text→Condition, HTTP API→Condition, and
+ * Condition→Condition when it is the destination's first/only
+ * Condition-source parent. This generator therefore applies the
+ * CONDITION-CLONE CASCADE: every Condition that would receive more than one
+ * Condition-source parent keeps its happy-path Condition parent (plus all
+ * non-Condition parents, drawn), and each extra Condition-source parent gets
+ * a semantically identical clone whose single serialized connection the
+ * import retains automatically. Conditions are guest-invisible, so guest
+ * behavior is byte-identical. Generation FAILS if any redraw edge uses an
+ * unproven operation or any Condition ends up with more than one
+ * Condition-source parent.
  *   - The first-listed connection of every hub is chosen so that the
  *     UN-REPAIRED import still runs the complete happy path (all fields
  *     extracted → bedroom OK → confirmation → handoff), never fabricates a
@@ -147,6 +157,29 @@ function hubEdge(nodes, fromId, outKey, toId, inKey) {
     throw new Error(`hubEdge: the kept edge into #${toId}:${inKey} must be wired before hub edges`);
   }
   connect(nodes, fromId, outKey, toId, inKey);
+}
+
+// Detach one existing edge (both reciprocal sides). Throws if absent, so a
+// refactor can never silently leave the graph in a half-wired state.
+function detachEdge(nodes, fromId, outKey, toId, inKey) {
+  const out = nodes[String(fromId)]?.outputs?.[outKey];
+  const inp = nodes[String(toId)]?.inputs?.[inKey];
+  const hadOut = (out?.connections ?? []).some((c) => String(c.node) === String(toId) && c.input === inKey);
+  const hadIn = (inp?.connections ?? []).some((c) => String(c.node) === String(fromId) && c.output === outKey);
+  if (!hadOut || !hadIn) throw new Error(`detachEdge: ${fromId}:${outKey} → ${toId}:${inKey} is not fully wired`);
+  out.connections = out.connections.filter((c) => !(String(c.node) === String(toId) && c.input === inKey));
+  inp.connections = inp.connections.filter((c) => !(String(c.node) === String(fromId) && c.output === outKey));
+}
+
+// Semantically identical Condition clone (same rows, operators, match type) —
+// guest-invisible by definition. Fresh deterministic uniqueId; caller wires
+// the single serialized parent and the (redrawn) successor edges.
+function cloneCondition(nodes, srcId, newId, position) {
+  const src = nodes[String(srcId)];
+  if (!src || src.name !== "Condition") throw new Error(`cloneCondition: #${srcId} is not a Condition`);
+  const data = JSON.parse(JSON.stringify(src.data));
+  data.uniqueId = uid();
+  addNode(nodes, newId, "Condition", data, position);
 }
 
 function removeNode(nodes, id) {
@@ -404,9 +437,9 @@ function generateV6(flow) {
 
   const primary = bedroomValidation(nodes, [612, 613, 614], [5720, -1600]);
   connect(nodes, 624, "textOutput", primary.c1, "conditionInput");
-  connect(nodes, primary.c1, "conditionOutputTrue", 470, "conditionInput"); // HUB 470 kept edge (happy path)
+  connect(nodes, primary.c1, "conditionOutputTrue", 470, "conditionInput"); // #470's ONLY parent (happy path; other capacity-OK exits use clones 758-760)
   connect(nodes, primary.c2, "conditionOutputTrue", 616, "textInput"); // HUB 616 kept edge
-  hubEdge(nodes, primary.c3, "conditionOutputTrue", 470, "conditionInput");
+  // primary.c3 True → villa check via clone #758 (corrected-rule fragmentation section)
   hubEdge(nodes, primary.c3, "conditionOutputFalse", 616, "textInput");
 
   connect(nodes, 616, "textOutput", 617, "userInputFlowInput");
@@ -415,10 +448,9 @@ function generateV6(flow) {
 
   const retry = bedroomValidation(nodes, [619, 620, 621], [5720, -1300]);
   connect(nodes, 625, "textOutput", retry.c1, "conditionInput");
-  hubEdge(nodes, retry.c1, "conditionOutputTrue", 470, "conditionInput");
+  // retry.c1 / retry.c3 True → villa check via clones #759 / #760 (fragmentation section)
   textNode(nodes, 626, COPY.bedroomEscalation, [6760, -1300]); // branch-local retry escalation A
   connect(nodes, retry.c2, "conditionOutputTrue", 626, "textInput");
-  hubEdge(nodes, retry.c3, "conditionOutputTrue", 470, "conditionInput");
   textNode(nodes, 627, COPY.bedroomEscalation, [6760, -1140]); // branch-local retry escalation B
   connect(nodes, retry.c3, "conditionOutputFalse", 627, "textInput");
 
@@ -462,9 +494,9 @@ function generateV6(flow) {
   connect(nodes, 652, "userInputFlowSingleOutputFinalReply", 653, "httpApiInput");
   connect(nodes, 653, "httpApiOutput", 654, "conditionInput"); // HUB 654 kept edge
   connect(nodes, 654, "conditionOutputTrue", 655, "textInput");
-  connect(nodes, 654, "conditionOutputFalse", 660, "conditionInput"); // HUB 660 kept edge
+  connect(nodes, 654, "conditionOutputFalse", 660, "conditionInput"); // #660's ONLY parent (656 False re-enters via clone chain 761/762)
   connect(nodes, 656, "conditionOutputTrue", 657, "userInputFlowInput");
-  hubEdge(nodes, 656, "conditionOutputFalse", 660, "conditionInput");
+  // 656 False (both dates already known) → guest check via clones #761/#762 (fragmentation section)
   connect(nodes, 657, "userInputFlowOutput", 658, "userInputFlowSingleInput");
   connect(nodes, 658, "userInputFlowSingleOutputFinalReply", 659, "httpApiInput");
   hubEdge(nodes, 659, "httpApiOutput", 654, "conditionInput");
@@ -504,9 +536,9 @@ function generateV6(flow) {
 
   const editVal = bedroomValidation(nodes, [672, 673, 674], [5320, -520]);
   connect(nodes, 684, "textOutput", editVal.c1, "conditionInput");
-  connect(nodes, editVal.c1, "conditionOutputTrue", 690, "conditionInput"); // HUB 690 kept edge
+  connect(nodes, editVal.c1, "conditionOutputTrue", 690, "conditionInput"); // #690's ONLY parent (other Edit capacity-OK exits use clones 763-765)
   connect(nodes, editVal.c2, "conditionOutputTrue", 676, "textInput"); // HUB 676 kept edge
-  hubEdge(nodes, editVal.c3, "conditionOutputTrue", 690, "conditionInput");
+  // editVal.c3 True → Edit villa check via clone #763 (fragmentation section)
   hubEdge(nodes, editVal.c3, "conditionOutputFalse", 676, "textInput");
 
   connect(nodes, 676, "textOutput", 677, "userInputFlowInput");
@@ -515,10 +547,9 @@ function generateV6(flow) {
 
   const editRetry = bedroomValidation(nodes, [679, 680, 681], [5320, -160]);
   connect(nodes, 685, "textOutput", editRetry.c1, "conditionInput");
-  hubEdge(nodes, editRetry.c1, "conditionOutputTrue", 690, "conditionInput");
+  // editRetry.c1 / editRetry.c3 True → Edit villa check via clones #764 / #765 (fragmentation section)
   textNode(nodes, 686, COPY.bedroomEscalation, [6280, -160]);
   connect(nodes, editRetry.c2, "conditionOutputTrue", 686, "textInput");
-  hubEdge(nodes, editRetry.c3, "conditionOutputTrue", 690, "conditionInput");
   textNode(nodes, 687, COPY.bedroomEscalation, [6280, -20]);
   connect(nodes, editRetry.c3, "conditionOutputFalse", 687, "textInput");
   escalationTail(nodes, [720, 721, 722, 723], "Oraya v6 Edit - Escalation: bedroom fit A", [6540, -160]);
@@ -559,6 +590,78 @@ function generateV6(flow) {
   });
   connect(nodes, 697, "userInputFlowOutput", 740, "userInputFlowSingleInput");
 
+  // ── corrected-rule fragmentation (round trip #2 probes, 2026-07-03) ───────
+  // Each destination Condition may carry at most ONE Condition-source parent
+  // (the editor rejects a second with the infinite-loop warning). Every extra
+  // Condition-source parent below gets a semantically identical clone whose
+  // single serialized connection the import keeps automatically; convergence
+  // then happens at guest-visible wrappers/Texts through live-proven draw
+  // operations. Conditions are invisible routing logic — guest behavior is
+  // byte-identical.
+
+  // #440 "guest known?" + #602 "supported count?": the four date-recovery
+  // exits (430/436/501/505 False) may not join #411's kept edge on #440, so
+  // each recovery branch gets its own 440-clone → 602-clone chain (both
+  // serialized single-parent, import-kept).
+  const dateRecoverySplits = [
+    { from: 430, g: 750, s: 751 },
+    { from: 436, g: 752, s: 753 },
+    { from: 501, g: 754, s: 755 },
+    { from: 505, g: 756, s: 757 },
+  ];
+  for (const { from, g, s } of dateRecoverySplits) {
+    const [px, py] = nodes[String(from)].position;
+    detachEdge(nodes, from, "conditionOutputFalse", 440, "conditionInput");
+    cloneCondition(nodes, 440, g, [px + 260, py + 120]);
+    cloneCondition(nodes, 602, s, [px + 520, py + 120]);
+    connect(nodes, from, "conditionOutputFalse", g, "conditionInput"); // sole connection — import keeps it
+    connect(nodes, g, "conditionOutputFalse", s, "conditionInput"); // sole connection — import keeps it
+    hubEdge(nodes, g, "conditionOutputTrue", 600, "userInputFlowInput");
+    hubEdge(nodes, s, "conditionOutputTrue", 610, "userInputFlowInput");
+    hubEdge(nodes, s, "conditionOutputFalse", 466, "userInputFlowInput");
+  }
+
+  // #470 "villa known?": capacity-OK exits beyond the kept #612 True.
+  const villaSplits = [
+    { from: primary.c3, clone: 758 },
+    { from: retry.c1, clone: 759 },
+    { from: retry.c3, clone: 760 },
+  ];
+  for (const { from, clone } of villaSplits) {
+    const [px, py] = nodes[String(from)].position;
+    cloneCondition(nodes, 470, clone, [px + 260, py + 120]);
+    connect(nodes, from, "conditionOutputTrue", clone, "conditionInput"); // sole connection — import keeps it
+    hubEdge(nodes, clone, "conditionOutputTrue", 480, "userInputFlowInput");
+    hubEdge(nodes, clone, "conditionOutputFalse", 490, "userInputFlowInput");
+  }
+
+  // Edit both-dates-known re-entry: #656 False may not join #654's kept edge
+  // on #660 — chain a 660-clone → 663-clone (both serialized single-parent).
+  {
+    const [px, py] = nodes["656"].position;
+    cloneCondition(nodes, 660, 761, [px + 260, py + 120]);
+    cloneCondition(nodes, 663, 762, [px + 520, py + 120]);
+    connect(nodes, 656, "conditionOutputFalse", 761, "conditionInput"); // sole connection — import keeps it
+    connect(nodes, 761, "conditionOutputFalse", 762, "conditionInput"); // sole connection — import keeps it
+    hubEdge(nodes, 761, "conditionOutputTrue", 661, "userInputFlowInput");
+    hubEdge(nodes, 762, "conditionOutputTrue", 670, "userInputFlowInput");
+    hubEdge(nodes, 762, "conditionOutputFalse", 736, "userInputFlowInput");
+  }
+
+  // Edit #690 "villa known?": Edit capacity-OK exits beyond the kept #672 True.
+  const editVillaSplits = [
+    { from: editVal.c3, clone: 763 },
+    { from: editRetry.c1, clone: 764 },
+    { from: editRetry.c3, clone: 765 },
+  ];
+  for (const { from, clone } of editVillaSplits) {
+    const [px, py] = nodes[String(from)].position;
+    cloneCondition(nodes, 690, clone, [px + 260, py + 120]);
+    connect(nodes, from, "conditionOutputTrue", clone, "conditionInput"); // sole connection — import keeps it
+    hubEdge(nodes, clone, "conditionOutputTrue", 691, "userInputFlowInput");
+    hubEdge(nodes, clone, "conditionOutputFalse", 694, "userInputFlowInput");
+  }
+
   // Start-node title and every inherited campaign label reflect the revision.
   nodes["1"].data.title = "Oraya Natural Stay Intake v6 - Start";
   for (const node of Object.values(nodes)) {
@@ -573,62 +676,102 @@ function generateV6(flow) {
 // ─── operator redraw plan (the hub edges the import will drop) ─────────────
 // Declarative and machine-verified: buildRedrawPlan() asserts the plan covers
 // EXACTLY every beyond-first connection in the generated graph — no more, no
-// less — so the checklist can never drift from the artifact.
+// less — so the checklist can never drift from the artifact. Every entry uses
+// a live-proven editor operation and NO entry is Condition → Condition
+// (assertEditorContracts enforces both, plus the one-Condition-parent rule).
 
 const REDRAW_PLAN = [
-  // hub #440 — "guest count known?" (this merge exists in the operator's own v5.5)
-  { from: 430, outKey: "conditionOutputFalse", to: 440, inKey: "conditionInput", purpose: "Dates recovered after the FIRST full-dates follow-up continue into guest validation." },
-  { from: 436, outKey: "conditionOutputFalse", to: 440, inKey: "conditionInput", purpose: "Dates recovered after the SECOND full-dates follow-up continue into guest validation." },
-  { from: 501, outKey: "conditionOutputFalse", to: 440, inKey: "conditionInput", purpose: "Check-out recovered after the FIRST check-out follow-up continues into guest validation." },
-  { from: 505, outKey: "conditionOutputFalse", to: 440, inKey: "conditionInput", purpose: "Check-out recovered after the SECOND check-out follow-up continues into guest validation." },
-  // hub #602 — supported-guest-count check
-  { from: 603, outKey: "textOutput", to: 602, inKey: "conditionInput", purpose: "Guest count the guest JUST answered continues into the supported-count check (the extracted-count path is kept automatically)." },
-  // hub #470 — villa-known check (bedroom-capacity OK exits)
-  { from: 614, outKey: "conditionOutputTrue", to: 470, inKey: "conditionInput", purpose: "Bedroom OK — 2 bedrooms fit 3–4 guests (first ask) — continues to the villa check." },
-  { from: 619, outKey: "conditionOutputTrue", to: 470, inKey: "conditionInput", purpose: "Bedroom OK — 3 bedrooms or 1–2 guests (retry ask) — continues to the villa check." },
-  { from: 621, outKey: "conditionOutputTrue", to: 470, inKey: "conditionInput", purpose: "Bedroom OK — 2 bedrooms fit 3–4 guests (retry ask) — continues to the villa check." },
+  // hub #600 — guest question (guest-unknown exits of the cloned "guest known?" checks)
+  { from: 750, outKey: "conditionOutputTrue", to: 600, inKey: "userInputFlowInput", purpose: "Dates recovered after the FIRST full-dates follow-up, guest count still unknown — asks the guest question." },
+  { from: 752, outKey: "conditionOutputTrue", to: 600, inKey: "userInputFlowInput", purpose: "Dates recovered after the SECOND full-dates follow-up, guest count still unknown — asks the guest question." },
+  { from: 754, outKey: "conditionOutputTrue", to: 600, inKey: "userInputFlowInput", purpose: "Check-out recovered after the FIRST check-out follow-up, guest count still unknown — asks the guest question." },
+  { from: 756, outKey: "conditionOutputTrue", to: 600, inKey: "userInputFlowInput", purpose: "Check-out recovered after the SECOND check-out follow-up, guest count still unknown — asks the guest question." },
+  // hub #602 — supported-guest-count check (extraction path kept automatically)
+  { from: 603, outKey: "textOutput", to: 602, inKey: "conditionInput", purpose: "Guest count the guest JUST answered continues into the supported-count check." },
+  // hub #610 — bedroom question (supported-count OK exits of the cloned checks)
+  { from: 751, outKey: "conditionOutputTrue", to: 610, inKey: "userInputFlowInput", purpose: "First full-dates recovery with a known, supported guest count — continues to the bedroom question." },
+  { from: 753, outKey: "conditionOutputTrue", to: 610, inKey: "userInputFlowInput", purpose: "Second full-dates recovery with a known, supported guest count — continues to the bedroom question." },
+  { from: 755, outKey: "conditionOutputTrue", to: 610, inKey: "userInputFlowInput", purpose: "First check-out recovery with a known, supported guest count — continues to the bedroom question." },
+  { from: 757, outKey: "conditionOutputTrue", to: 610, inKey: "userInputFlowInput", purpose: "Second check-out recovery with a known, supported guest count — continues to the bedroom question." },
+  // hub #466 — large-group exact-count review (More-than-8 exits of the cloned checks)
+  { from: 751, outKey: "conditionOutputFalse", to: 466, inKey: "userInputFlowInput", purpose: "First full-dates recovery with more than 8 guests — exact-count team review." },
+  { from: 753, outKey: "conditionOutputFalse", to: 466, inKey: "userInputFlowInput", purpose: "Second full-dates recovery with more than 8 guests — exact-count team review." },
+  { from: 755, outKey: "conditionOutputFalse", to: 466, inKey: "userInputFlowInput", purpose: "First check-out recovery with more than 8 guests — exact-count team review." },
+  { from: 757, outKey: "conditionOutputFalse", to: 466, inKey: "userInputFlowInput", purpose: "Second check-out recovery with more than 8 guests — exact-count team review." },
+  // hub #480 — villa question (capacity-OK, villa-unknown exits of the cloned villa checks)
+  { from: 758, outKey: "conditionOutputTrue", to: 480, inKey: "userInputFlowInput", purpose: "Bedroom OK — 2 bedrooms fit 3–4 guests (first ask) — villa still unknown, asks the villa question." },
+  { from: 759, outKey: "conditionOutputTrue", to: 480, inKey: "userInputFlowInput", purpose: "Bedroom OK — 3 bedrooms or 1–2 guests (retry ask) — villa still unknown, asks the villa question." },
+  { from: 760, outKey: "conditionOutputTrue", to: 480, inKey: "userInputFlowInput", purpose: "Bedroom OK — 2 bedrooms fit 3–4 guests (retry ask) — villa still unknown, asks the villa question." },
   // hub #616 — bedroom mismatch explanation
   { from: 614, outKey: "conditionOutputFalse", to: 616, inKey: "textInput", purpose: "Bedroom mismatch — 2 bedrooms with 5–8 guests (first ask) — shows the capacity explanation and re-ask." },
-  // hub #490 — confirmation entry
+  // hub #490 — confirmation entry (villa-known exits + villa just chosen)
+  { from: 758, outKey: "conditionOutputFalse", to: 490, inKey: "userInputFlowInput", purpose: "Bedroom OK (first ask), villa already known — continues to the confirmation summary." },
+  { from: 759, outKey: "conditionOutputFalse", to: 490, inKey: "userInputFlowInput", purpose: "Bedroom OK (retry, 3 bedrooms or 1–2 guests), villa already known — continues to the confirmation summary." },
+  { from: 760, outKey: "conditionOutputFalse", to: 490, inKey: "userInputFlowInput", purpose: "Bedroom OK (retry, 2 bedrooms fit 3–4), villa already known — continues to the confirmation summary." },
   { from: 604, outKey: "textOutput", to: 490, inKey: "userInputFlowInput", purpose: "Villa the guest JUST chose continues to the confirmation summary (the villa-already-known path is kept automatically)." },
-  // hub #654 — Edit dates-complete check
+  // hub #654 — Edit dates-complete check (first refine call kept automatically)
   { from: 659, outKey: "httpApiOutput", to: 654, inKey: "conditionInput", purpose: "Edit check-out refinement result continues into the dates-complete check." },
-  // hub #660 — Edit guest-known check
-  { from: 656, outKey: "conditionOutputFalse", to: 660, inKey: "conditionInput", purpose: "Edit attempt that already has BOTH dates continues to the guest check." },
+  // hub #661 — Edit guest question
+  { from: 761, outKey: "conditionOutputTrue", to: 661, inKey: "userInputFlowInput", purpose: "Edit attempt that already has BOTH dates, guest count unknown — asks the Edit guest question." },
   // hub #663 — Edit supported-guest-count check
   { from: 664, outKey: "textOutput", to: 663, inKey: "conditionInput", purpose: "Edit guest count the guest JUST answered continues into the supported-count check." },
-  // hub #690 — Edit villa-known check
-  { from: 674, outKey: "conditionOutputTrue", to: 690, inKey: "conditionInput", purpose: "Edit bedroom OK — 2 bedrooms fit 3–4 guests (first ask) — continues to the Edit villa check." },
-  { from: 679, outKey: "conditionOutputTrue", to: 690, inKey: "conditionInput", purpose: "Edit bedroom OK — 3 bedrooms or 1–2 guests (retry ask) — continues to the Edit villa check." },
-  { from: 681, outKey: "conditionOutputTrue", to: 690, inKey: "conditionInput", purpose: "Edit bedroom OK — 2 bedrooms fit 3–4 guests (retry ask) — continues to the Edit villa check." },
+  // hub #670 — Edit bedroom question
+  { from: 762, outKey: "conditionOutputTrue", to: 670, inKey: "userInputFlowInput", purpose: "Edit both-dates-known re-entry with a known, supported guest count — continues to the Edit bedroom question." },
+  // hub #736 — Edit large-group exact-count review
+  { from: 762, outKey: "conditionOutputFalse", to: 736, inKey: "userInputFlowInput", purpose: "Edit both-dates-known re-entry with more than 8 guests — Edit exact-count team review." },
+  // hub #691 — Edit villa question
+  { from: 763, outKey: "conditionOutputTrue", to: 691, inKey: "userInputFlowInput", purpose: "Edit bedroom OK — 2 bedrooms fit 3–4 guests (first ask) — villa still unknown, asks the Edit villa question." },
+  { from: 764, outKey: "conditionOutputTrue", to: 691, inKey: "userInputFlowInput", purpose: "Edit bedroom OK — 3 bedrooms or 1–2 guests (retry ask) — villa still unknown, asks the Edit villa question." },
+  { from: 765, outKey: "conditionOutputTrue", to: 691, inKey: "userInputFlowInput", purpose: "Edit bedroom OK — 2 bedrooms fit 3–4 guests (retry ask) — villa still unknown, asks the Edit villa question." },
   // hub #676 — Edit bedroom mismatch explanation
   { from: 674, outKey: "conditionOutputFalse", to: 676, inKey: "textInput", purpose: "Edit bedroom mismatch — 2 bedrooms with 5–8 guests (first ask) — shows the capacity explanation and re-ask." },
   // hub #694 — Edit confirmation entry
+  { from: 763, outKey: "conditionOutputFalse", to: 694, inKey: "userInputFlowInput", purpose: "Edit bedroom OK (first ask), villa already known — continues to the updated confirmation summary." },
+  { from: 764, outKey: "conditionOutputFalse", to: 694, inKey: "userInputFlowInput", purpose: "Edit bedroom OK (retry, 3 bedrooms or 1–2 guests), villa already known — continues to the updated confirmation summary." },
+  { from: 765, outKey: "conditionOutputFalse", to: 694, inKey: "userInputFlowInput", purpose: "Edit bedroom OK (retry, 2 bedrooms fit 3–4), villa already known — continues to the updated confirmation summary." },
   { from: 693, outKey: "textOutput", to: 694, inKey: "userInputFlowInput", purpose: "Edit villa the guest JUST chose continues to the updated confirmation summary." },
 ];
 
 const HUB_DESCRIPTIONS = {
-  440: "\"guest count known?\" check — merges every successful date-recovery path back into the flow (this exact merge exists in the operator's own v5.5)",
-  602: "supported-guest-count check (1–8 vs More than 8)",
-  470: "\"villa known?\" check — merges every bedroom-capacity-OK exit",
+  600: "guest-count question — merges the guest-unknown exits of the original and cloned \"guest known?\" checks",
+  602: "supported-guest-count check (1–8 vs More than 8) — extraction path kept; the just-answered path is drawn",
+  610: "bedroom question — merges every supported-guest-count OK exit",
+  466: "large-group exact-count team review — merges every More-than-8 exit",
+  480: "villa question — merges every capacity-OK, villa-unknown exit",
   616: "bedroom capacity explanation + re-ask",
-  490: "confirmation summary entry",
-  654: "Edit \"both dates known?\" check",
-  660: "Edit \"guest count known?\" check",
+  490: "confirmation summary entry — merges the villa-known exits and the villa-just-chosen path",
+  654: "Edit \"both dates known?\" check — fed by both Edit refine API calls",
+  661: "Edit guest-count question",
   663: "Edit supported-guest-count check",
+  670: "Edit bedroom question",
+  736: "Edit large-group exact-count team review",
+  691: "Edit villa question — merges every Edit capacity-OK, villa-unknown exit",
   676: "Edit bedroom capacity explanation + re-ask",
-  690: "Edit \"villa known?\" check — merges every Edit bedroom-capacity-OK exit",
   694: "Edit confirmation summary entry",
 };
 
-// Node-type pairs the live WhatChimp editor has REFUSED to draw (round trip #2,
-// 2026-07-03: attempting Condition FALSE output → Condition input produced
-// "This will make an infinite loop. Place a button/list/section/interactive
-// between these two nodes."). Kept in sync with the profile's
-// importGraphContract.editorRejectedDrawPairs (tested). Saved exports carrying
-// such merges (v5.5 #440 is a 5-parent Condition→Condition merge) prove the
-// edges can EXIST, not that the present editor permits DRAWING them.
-const EDITOR_REJECTED_DRAW_PAIRS = new Set(["Condition → Condition"]);
+// Live-proven manual connection operations (operator probes on the
+// authenticated editor, 2026-07-03 — roundtrips/ROUNDTRIP_2_FINDINGS.md
+// addendum). Kept in sync with the profile's
+// importGraphContract.editorProvenDrawPairs (tested). Generation FAILS if a
+// redraw edge uses any pair outside this set.
+const PROVEN_DRAW_PAIRS = new Set([
+  "Condition → User Input Flow",
+  "Text → User Input Flow",
+  "Condition → Text",
+  "Text → Condition",
+  "HTTP API → Condition",
+  // Condition → Condition is drawable ONLY when it creates the destination's
+  // first/only Condition-source parent. assertEditorContracts additionally
+  // enforces the structural one-Condition-parent rule AND the design target
+  // of ZERO manually drawn Condition → Condition edges.
+  "Condition → Condition",
+]);
+
+// Corrected editor rule (round trip #2, 2026-07-03): each destination
+// Condition may carry at most ONE inbound edge whose source is a Condition —
+// the editor rejects a second with "This will make an infinite loop…".
+const MAX_CONDITION_SOURCE_PARENTS = 1;
 
 function drawPairOf(nodes, e) {
   return `${nodes[String(e.from)].name} → ${nodes[String(e.to)].name}`;
@@ -636,6 +779,36 @@ function drawPairOf(nodes, e) {
 
 function edgeKeyOf(e) {
   return `${e.from}:${e.outKey} -> ${e.to}:${e.inKey}`;
+}
+
+// Hard generation gates for the corrected editor rule: (a) every redraw uses
+// a live-proven operation; (b) no redraw is Condition → Condition (fragment
+// the destination instead); (c) no Condition anywhere in the FINAL expected
+// graph (serialized + redrawn edges are the same set) carries more than one
+// Condition-source parent.
+function assertEditorContracts(flow, plan) {
+  const nodes = flow.nodes;
+  for (const e of plan) {
+    const pair = drawPairOf(nodes, e);
+    if (!PROVEN_DRAW_PAIRS.has(pair)) {
+      throw new Error(`redraw edge ${edgeKeyOf(e)} uses UNPROVEN editor operation "${pair}" — refuse to generate`);
+    }
+    if (pair === "Condition → Condition") {
+      throw new Error(`redraw edge ${edgeKeyOf(e)} is a manually drawn Condition → Condition — the plan targets zero of these; give the destination a per-parent clone instead`);
+    }
+  }
+  for (const [id, node] of Object.entries(nodes)) {
+    if (node.name !== "Condition") continue;
+    const condParents = [];
+    for (const inp of Object.values(node.inputs ?? {})) {
+      for (const c of inp.connections ?? []) {
+        if (nodes[String(c.node)]?.name === "Condition") condParents.push(`#${c.node}`);
+      }
+    }
+    if (condParents.length > MAX_CONDITION_SOURCE_PARENTS) {
+      throw new Error(`Condition #${id} has ${condParents.length} Condition-source parents [${condParents.join(", ")}] — the editor allows at most ${MAX_CONDITION_SOURCE_PARENTS}; refuse to generate`);
+    }
+  }
 }
 
 function buildRedrawPlan(flow) {
@@ -697,14 +870,7 @@ function renderRedrawChecklist(flow, plan, artifactSha256) {
   lines.push("");
   lines.push(`**Applies to exactly:** \`Oraya_natural_intake_v6.txt\` with SHA-256 \`${artifactSha256}\`. If your file's hash differs, regenerate this checklist.`);
   lines.push("");
-  const rejectedSeqs = plan
-    .map((e, i) => (EDITOR_REJECTED_DRAW_PAIRS.has(drawPairOf(nodes, e)) ? i + 1 : null))
-    .filter((n) => n !== null);
-  if (rejectedSeqs.length) {
-    lines.push(`> **⛔ HALTED — NOT APPROVED FOR HUMAN TESTING (2026-07-03, round trip #2).** The WhatChimp editor REFUSED to draw item #1 below (Condition → Condition) with: *"This will make an infinite loop. Place a button/list/section/interactive between these two nodes."* ${rejectedSeqs.length} of the ${plan.length} connections (items #${rejectedSeqs.join(", #")}) are Condition → Condition and are treated as not operator-drawable; the drawability of the remaining ${plan.length - rejectedSeqs.length} node-type pairs has never been proven in the current editor either. Do NOT attempt further drawing, do NOT insert interactive nodes to bypass the warning, and do NOT run any live testing with this candidate. Evidence + full re-audit: \`roundtrips/ROUNDTRIP_2_FINDINGS.md\`.`);
-    lines.push("");
-  }
-  lines.push("**Why this exists:** authenticated round trip #1 (2026-07-03) proved WhatChimp's import keeps only the FIRST serialized connection per input socket and silently drops the rest (evidence: `roundtrips/ROUNDTRIP_1_FINDINGS.md`). This candidate clones every small branch-local tail, but " + String(plan.length) + " central merge connections remain by design, to be re-drawn by the operator after import. NOTE (2026-07-03, round trip #2): the operator's own v5.5 carries a 5-parent merge, but that merge is itself Condition → Condition ×5 — its survival in a saved export does NOT prove the current editor can draw such connections, and the editor in fact refuses them (see the halt banner above).");
+  lines.push("**Why this exists:** authenticated round trip #1 (2026-07-03) proved WhatChimp's import keeps only the FIRST serialized connection per input socket and silently drops the rest (evidence: `roundtrips/ROUNDTRIP_1_FINDINGS.md`). This candidate clones every branch-local tail AND every Condition that would otherwise receive a second Condition-source parent (round trip #2's corrected editor rule: at most ONE Condition-source parent per Condition — evidence and live probe results: `roundtrips/ROUNDTRIP_2_FINDINGS.md`), so the " + String(plan.length) + " remaining merge connections below are exactly what you re-draw after import. **Every item uses only a live-proven editor operation** (Condition → question flow, Text → question flow, Condition → Text, Text → Condition, HTTP API → Condition); none is Condition → Condition, and the generator refuses to emit this file otherwise. If the editor rejects ANY connection below, stop and report — do not insert nodes to work around it.");
   lines.push("");
   lines.push("**When:** on a fresh disposable TEST bot, immediately after importing the artifact and BEFORE any testing: draw all connections below, then Save → close the editor → reopen → export → verify (commands at the bottom).");
   lines.push("");
@@ -722,9 +888,7 @@ function renderRedrawChecklist(flow, plan, artifactSha256) {
     lines.push(`      TO \`#${e.to}\` ${nodeDocLabel(nodes, e.to)} — input socket (\`${e.inKey}\`).`);
     lines.push(`      Purpose: ${e.purpose}`);
     lines.push(`      Where: source at canvas ≈ ${posOf(nodes, e.from)}; destination at ≈ ${posOf(nodes, e.to)} (${dir}).`);
-    if (EDITOR_REJECTED_DRAW_PAIRS.has(drawPairOf(nodes, e))) {
-      lines.push(`      ⛔ NOT OPERATOR-DRAWABLE (${drawPairOf(nodes, e)}) — the editor rejects this connection with the infinite-loop warning (round trip #2, 2026-07-03). Do not attempt; do not bypass with an interactive node.`);
-    }
+    lines.push(`      Operation: ${drawPairOf(nodes, e).replace(" → ", " output → ")} input — live-proven editor operation (2026-07-03).`);
   });
   lines.push("");
   lines.push("## Hub-by-hub visual map");
@@ -772,6 +936,7 @@ function main() {
   const flow = JSON.parse(readFileSync(input, "utf8"));
   const v6 = generateV6(flow);
   const plan = buildRedrawPlan(v6);
+  assertEditorContracts(v6, plan);
   const serialized = JSON.stringify(v6);
   writeFileSync(output, serialized, "utf8");
   const sha = createHash("sha256").update(serialized, "utf8").digest("hex").toUpperCase();

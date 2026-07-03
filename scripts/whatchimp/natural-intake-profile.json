@@ -24,20 +24,32 @@
     "rootNodeName": "Start Bot Flow",
     "maxInboundPerNode": 1,
     "approvedHubMerges": {
-      "440": 5,
-      "470": 4,
-      "490": 2,
+      "466": 5,
+      "480": 4,
+      "490": 5,
+      "600": 5,
       "602": 2,
+      "610": 5,
       "616": 2,
       "654": 2,
-      "660": 2,
+      "661": 2,
       "663": 2,
+      "670": 2,
       "676": 2,
-      "690": 4,
-      "694": 2
+      "691": 4,
+      "694": 5,
+      "736": 2
     },
-    "editorRejectedDrawPairs": [["Condition", "Condition"]],
-    "editorProvenDrawPairs": []
+    "maxConditionSourceParents": 1,
+    "editorRejectedDrawPairs": [],
+    "editorProvenDrawPairs": [
+      ["Condition", "User Input Flow"],
+      ["Text", "User Input Flow"],
+      ["Condition", "Text"],
+      ["Text", "Condition"],
+      ["HTTP API", "Condition"],
+      ["Condition", "Condition"]
+    ]
   },
   "roundTripIgnoreFields": ["uniqueId", "postbackId", "newPostbackId", "xitFbpostbackId"],
   "stayTextField": "oraya_stay_text",

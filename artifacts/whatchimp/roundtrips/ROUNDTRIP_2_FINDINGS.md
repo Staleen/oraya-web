@@ -1,8 +1,24 @@
 # Round trip #2 findings — the WhatChimp editor refuses Condition → Condition connections; the Option A hybrid redraw plan is not operator-executable
 
 **Date:** 2026-07-03 (operator-reported, live authenticated WhatChimp editor, fresh disposable test bot)
-**Candidate under test:** `Oraya_natural_intake_v6.txt`, SHA-256 `0066192D4487ED1AC8A95B00E22DEF8B754B1FB458E0025B178E8B125C913A39` (165 nodes / 182 output connections / 18-item redraw plan)
-**Status: ROUND TRIP #2 HALTED at redraw item #1 of 18. The candidate and `V6_REDRAW_CHECKLIST.md` are NOT approved for further human testing.**
+**Candidate under test:** the 18-redraw hybrid, SHA-256 `0066192D4487ED1AC8A95B00E22DEF8B754B1FB458E0025B178E8B125C913A39` (165 nodes / 182 output connections) — preserved byte-exact as [`Oraya_natural_intake_v6.roundtrip-2.halted-candidate.txt`](Oraya_natural_intake_v6.roundtrip-2.halted-candidate.txt) (121,537 bytes)
+**Status: round trip #2 halted at redraw item #1 of 18; the same-day operator probe matrix then CORRECTED the platform rule (see Addendum) and the candidate was superseded by the corrected-rule Condition-clone-cascade rebuild.**
+
+## ADDENDUM (2026-07-03, same day) — corrected rule from the operator's live probe matrix; §2 and §6 below are superseded
+
+The operator ran the probe matrix on the authenticated editor and **disproved the pair-level conclusion in §2**. Authenticated results (screenshots on record):
+
+1. **Condition → Condition is DRAWABLE when it is the destination's first/only Condition-source parent.** The editor's *"This will make an infinite loop…"* warning fires only when a connection would give a destination Condition a **second** Condition-source parent (the graph is a DAG in both cases — it is an editor multi-Condition-parent restriction, not a real cycle check).
+2. **Corrected binding rule:** *each destination Condition input may carry at most ONE inbound edge whose source node type is Condition.*
+3. **Live-proven drawable operations:** Condition → Condition (first/only Condition-source parent), Condition → User Input Flow, Text → User Input Flow, Condition → Text, Text → Condition, HTTP API → Condition. The probe edges were evidence only and are not part of any design.
+
+**Consequences (all implemented same day):**
+
+- The profile now encodes the corrected rule: `importGraphContract.editorProvenDrawPairs` lists the six proven operations, `editorRejectedDrawPairs` is empty (the Condition→Condition refusal is *conditional*), and `maxConditionSourceParents: 1` carries the structural rule; the validator enforces it graph-wide via the `condition-parent-limit` check, and the generator refuses to emit any artifact that violates it (`assertEditorContracts`).
+- The halted 165-node candidate is preserved byte-exact as the fixture named above and pinned by a regression test (it fails current validation with exactly the **11** beyond-limit Condition-source parents — `#440` +4, `#470` +3, `#660` +1, `#690` +3 — that made its redraw plan unexecutable).
+- The canonical `Oraya_natural_intake_v6.txt` was rebuilt with the **Condition-clone cascade** (operator-directed; behavior-preserving — Conditions are guest-invisible): every Condition that would receive an extra Condition-source parent got a per-parent clone whose single serialized connection the import keeps automatically (`#440`→4 clones `750/752/754/756` + paired `#602` clones `751/753/755/757`; `#470`→`758/759/760`; `#660`→`761`; `#663`→`762`; `#690`→`763/764/765` — **16 clones**). Result: **181 nodes, 214 output connections, 14 terminals, 15 merge points, 34 operator draws** (27 Condition→User Input Flow, 2 Text→User Input Flow, 2 Text→Condition, 2 Condition→Text, 1 HTTP API→Condition, **0 drawn Condition→Condition**), SHA-256 `AB456A895221A46DE289EDA054DB9142B4D3F7D0A1892A3FFBEAFF999346AB0C`. Every serialized-kept first edge preserves the un-repaired-import safety contract (full happy path, opening-question `/book` link, no confirmation claims).
+
+Sections 1 and 3 below remain accurate history (the rejection at item #1 really happened — its destination `#440` already had `#411` as a Condition-source parent). **§2's pair-level conclusions and §6's probe plan are superseded by this addendum.**
 
 ## 1. What happened
 
@@ -18,7 +34,7 @@ The nodes were located correctly. WhatChimp **rejected the connection** with thi
 
 The graph has no cycle through these nodes (the validator's `cycles` check proves the candidate is a DAG), so this is an editor-side rule about the node-type pair, not a real loop. This is a **platform rejection, not operator error**.
 
-## 2. Platform contract derived (and its limits)
+## 2. Platform contract derived (and its limits) — **SUPERSEDED by the Addendum above (same-day probes corrected the rule)**
 
 1. **Direct Condition → Condition connections cannot be drawn in the current WhatChimp editor.** Proven live 2026-07-03.
 2. **A merge existing in a saved export does NOT prove the present editor can draw it.** The operator's own v5.5 export carries the 5-parent merge at `#440` that this project has repeatedly cited as drawability evidence — and a type audit of the v5.5 bytes shows **all 5 of its inbound edges are Condition → Condition** (`#411`, `#430`, `#436`, `#501`, `#505`, each via `conditionOutputFalse` → `conditionInput`). Whatever created those edges (an older editor build, an import before the current normalization, or another mechanism), the present UI refuses to create them. Export survival ≠ drawability.
@@ -75,7 +91,7 @@ Trade-off: **guest behavior 100% preserved**, more manual draws (39 vs 18), mode
 - **Behavior reduction to eliminate merges:** each undrawable merge branch would have to stop re-joining the flow — practically, converting date-recovery and bedroom-capacity-OK re-entries into escalation endings. That degrades up to 14 self-service guest paths into "the team will follow up" endings. A full pure-tree unroll remains infeasible (492,864 nodes, round trip #1 findings).
 - **Do nothing / abandon v6:** the v5.5 production flow keeps running; the natural-intake upgrade stalls.
 
-## 6. The probe gate (must run before ANY rebuilt candidate)
+## 6. The probe gate — **COMPLETED (see Addendum for the authenticated results)**
 
 On the existing disposable bot (the current import is fine for this — the probes are drawn and then deleted; nothing is saved toward testing), attempt each connection and record accept/reject:
 
@@ -87,7 +103,7 @@ On the existing disposable bot (the current import is fine for this — the prob
 
 Delete every probe edge afterwards; do not save toward testing. Record results in this file and in `editorProvenDrawPairs` / `editorRejectedDrawPairs` in `scripts/whatchimp/natural-intake-profile.json`. **The generator is rebuilt only after the probes decide the target architecture, and only against pairs proven drawable.**
 
-## 7. Repository state after this finding
+## 7. Repository state after this finding — **intermediate halt state, superseded by the Addendum's same-day rebuild**
 
 - Validator `redraw-drawability` check added: the shipped candidate now fails validation **by design** with exactly **11 errors** (the Condition→Condition draws) + 7 unproven-pair warnings — it can no longer be validated as import-ready.
 - `V6_REDRAW_CHECKLIST.md` regenerated with a ⛔ halt banner and per-item NOT-OPERATOR-DRAWABLE markers (artifact bytes unchanged: SHA-256 `0066192D…3A39`).

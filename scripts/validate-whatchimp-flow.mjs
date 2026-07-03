@@ -224,18 +224,19 @@ export function validateFlow(flow, profile, opts = {}) {
     }
   }
 
-  // Operator-drawability of the declared hub redraws (round trip #2, 2026-07-03).
-  // The operator attempted redraw item #1 (Condition FALSE output → Condition
-  // input) in the live editor and WhatChimp REFUSED the connection: "This will
-  // make an infinite loop. Place a button/list/section/interactive between
-  // these two nodes." Evidence: artifacts/whatchimp/roundtrips/ROUNDTRIP_2_FINDINGS.md.
-  // Saved exports containing such merges (the operator's own v5.5 #440 is a
-  // 5-parent Condition→Condition merge) prove those edges can EXIST in a saved
-  // graph, NOT that the present editor permits DRAWING them. The profile carries:
-  //   editorRejectedDrawPairs — [sourceType, destType] pairs the editor has
-  //     refused live (error: the redraw plan is impossible for the operator);
-  //   editorProvenDrawPairs — pairs an operator has successfully drawn on this
-  //     tenant (anything else warns as unproven until probed in the editor).
+  // Operator-drawability of the declared hub redraws (round trip #2 +
+  // corrected live probes, 2026-07-03 — evidence:
+  // artifacts/whatchimp/roundtrips/ROUNDTRIP_2_FINDINGS.md). The editor's
+  // "This will make an infinite loop…" warning fires only when a connection
+  // would give a destination Condition a SECOND Condition-source parent, so:
+  //   editorProvenDrawPairs — [sourceType, destType] operations an operator
+  //     has successfully drawn live on this tenant (anything else warns as
+  //     unproven until probed);
+  //   editorRejectedDrawPairs — pairs the editor refused unconditionally
+  //     (currently none — the Condition→Condition refusal is conditional and
+  //     is enforced by the condition-parent-limit check below);
+  //   maxConditionSourceParents — each destination Condition may carry at
+  //     most this many inbound edges whose SOURCE is a Condition (default 1).
   if (contract?.approvedHubMerges) {
     const rejectedPairs = (contract.editorRejectedDrawPairs ?? []).map((p) => p.join(" → "));
     const provenPairs = (contract.editorProvenDrawPairs ?? []).map((p) => p.join(" → "));
@@ -246,9 +247,29 @@ export function validateFlow(flow, profile, opts = {}) {
         const src = nodes[e.node];
         const pair = `${src?.name} → ${node.name}`;
         if (rejectedPairs.includes(pair)) {
-          err("redraw-drawability", `hub ${nodeLabel(id, node)}: operator-drawn edge #${e.node}:${e.output} → #${id}:${e.inKey} is ${pair} — the WhatChimp editor REFUSES to draw this connection ("This will make an infinite loop…", round trip #2, 2026-07-03); the architecture must not require it (artifacts/whatchimp/roundtrips/ROUNDTRIP_2_FINDINGS.md)`);
+          err("redraw-drawability", `hub ${nodeLabel(id, node)}: operator-drawn edge #${e.node}:${e.output} → #${id}:${e.inKey} is ${pair} — the WhatChimp editor refuses this operation; the architecture must not require it (artifacts/whatchimp/roundtrips/ROUNDTRIP_2_FINDINGS.md)`);
         } else if (!provenPairs.includes(pair)) {
           warn("redraw-drawability", `hub ${nodeLabel(id, node)}: operator-drawn edge #${e.node}:${e.output} → #${id}:${e.inKey} is ${pair} — drawability of this node-type pair has never been proven in the current editor; probe it on a disposable bot before any candidate relies on it`);
+        }
+      }
+    }
+  }
+
+  // Corrected editor rule (round trip #2, 2026-07-03): a destination Condition
+  // may carry at most ONE inbound edge whose source node type is Condition —
+  // attempting to draw a second is rejected by the editor with the
+  // infinite-loop warning, so a graph that expects one is not
+  // operator-repairable after import. Applies to the FULL expected graph
+  // (serialized-kept and operator-drawn edges alike).
+  if (contract) {
+    const maxCondParents = contract.maxConditionSourceParents ?? 1;
+    for (const id of ids) {
+      const node = nodes[id];
+      if (node.name !== "Condition") continue;
+      const condParents = inEdges(node).filter((e) => nodes[e.node]?.name === "Condition");
+      if (condParents.length > maxCondParents) {
+        for (const e of condParents.slice(maxCondParents)) {
+          err("condition-parent-limit", `${nodeLabel(id, node)} carries ${condParents.length} Condition-source parents (edge #${e.node}:${e.output} → #${id}:${e.inKey} is beyond the editor limit of ${maxCondParents}) — the editor rejects drawing extra Condition parents ("This will make an infinite loop…"); give each extra Condition-source parent its own clone (see roundtrips/ROUNDTRIP_2_FINDINGS.md)`);
         }
       }
     }

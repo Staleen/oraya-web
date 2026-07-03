@@ -13,6 +13,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, existsSync } from "node:fs";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -254,6 +255,9 @@ const roundtrip1Path = path.join(repoRoot, "artifacts", "whatchimp", "roundtrips
 // the canonical Oraya_natural_intake_v6.txt has since moved to the hybrid
 // architecture, so the historical pair must stay pinned)
 const roundtrip1CandidatePath = path.join(repoRoot, "artifacts", "whatchimp", "roundtrips", "Oraya_natural_intake_v6.roundtrip-1.import-candidate.txt");
+// the exact candidate whose redraw plan round trip #2 halted on (byte-preserved
+// fixture; superseded by the corrected-rule Condition-clone-cascade candidate)
+const roundtrip2HaltedPath = path.join(repoRoot, "artifacts", "whatchimp", "roundtrips", "Oraya_natural_intake_v6.roundtrip-2.halted-candidate.txt");
 
 test("validator: v5.5 operator export fails with semantic errors", { skip: !existsSync(v55Path) }, () => {
   const flow = JSON.parse(readFileSync(v55Path, "utf8"));
@@ -264,51 +268,76 @@ test("validator: v5.5 operator export fails with semantic errors", { skip: !exis
   assert.ok(hasError(errors, "no bedroom-selection question exists"));
 });
 
-// Hybrid architecture (2026-07-03, Option A): the canonical candidate clones
-// every small branch-local tail and keeps exactly the profile-declared hub
-// merges (`importGraphContract.approvedHubMerges`), whose beyond-first edges
-// the operator re-draws after import per artifacts/whatchimp/V6_REDRAW_CHECKLIST.md.
-// ⛔ Round trip #2 (2026-07-03, roundtrips/ROUNDTRIP_2_FINDINGS.md): the live
-// editor REFUSED to draw a Condition → Condition connection ("This will make
-// an infinite loop…"). 11 of this candidate's 18 redraw edges are
-// Condition → Condition, so the candidate now fails validation BY DESIGN with
-// exactly those 11 `redraw-drawability` errors (plus 7 unproven-pair
-// warnings) and everything else clean — it can no longer be validated as
-// import-ready, mirroring the round-trip-#1 pattern.
+// Corrected-rule hybrid (2026-07-03, round trip #2 probes): the canonical
+// candidate clones every small branch-local tail AND every Condition that
+// would otherwise carry a second Condition-source parent (the editor rejects
+// those draws with the infinite-loop warning). The remaining merges are the
+// profile-declared hubs (`importGraphContract.approvedHubMerges`), whose
+// beyond-first edges the operator re-draws after import per
+// artifacts/whatchimp/V6_REDRAW_CHECKLIST.md — every one a live-proven editor
+// operation, never Condition → Condition. The candidate must validate
+// completely clean.
 
-test("validator: canonical v6 fails BY DESIGN with exactly the 11 editor-rejected Condition→Condition redraw edges and nothing else", { skip: !existsSync(v6Path) }, () => {
+test("validator: generated v6 passes with zero errors and zero warnings", { skip: !existsSync(v6Path) }, () => {
   const flow = JSON.parse(readFileSync(v6Path, "utf8"));
   const { errors, warnings } = validateFlow(flow, profile);
-  assert.equal(errors.length, 11, errors.join("\n"));
-  assert.ok(errors.every((e) => e.startsWith("[redraw-drawability]") && e.includes("Condition → Condition")), errors.join("\n"));
-  // the four hubs whose drawn edges the editor cannot create
-  for (const hub of ["#440", "#470", "#660", "#690"]) {
-    assert.ok(errors.some((e) => e.includes(`→ ${hub}:`)), `expected a rejected drawn edge into ${hub}\n${errors.join("\n")}`);
-  }
-  // every OTHER drawn edge is an unproven type pair until probed live
-  assert.equal(warnings.length, 7, warnings.join("\n"));
-  assert.ok(warnings.every((w) => w.startsWith("[redraw-drawability]") && w.includes("never been proven")), warnings.join("\n"));
+  assert.deepEqual(errors, [], errors.join("\n"));
+  assert.deepEqual(warnings, [], warnings.join("\n"));
 });
 
-test("validator: strict binding stays clean on the canonical v6 — the only errors are the redraw-drawability ones", { skip: !existsSync(v6Path) }, () => {
+test("validator: canonical v6 passes strict binding (fully bound, no second binding step)", { skip: !existsSync(v6Path) }, () => {
   const flow = JSON.parse(readFileSync(v6Path, "utf8"));
   const { errors, warnings } = validateFlow(flow, profile, { strictBinding: true });
-  assert.equal(errors.length, 11, errors.join("\n"));
-  assert.ok(errors.every((e) => e.startsWith("[redraw-drawability]")), errors.join("\n"));
-  assert.equal(warnings.length, 7, warnings.join("\n"));
+  assert.deepEqual(errors, [], errors.join("\n"));
+  assert.deepEqual(warnings, [], warnings.join("\n"));
 });
 
-test("redraw-drawability: generator halt markers, profile pairs, and validator findings all agree", { skip: !existsSync(v6Path) }, () => {
-  // single source of evidence, three encodings — they must never drift
-  assert.deepEqual(profile.importGraphContract.editorRejectedDrawPairs, [["Condition", "Condition"]]);
-  assert.deepEqual(profile.importGraphContract.editorProvenDrawPairs, []);
+test("corrected editor rule: redraw plan uses only live-proven operations, zero drawn Condition→Condition, one Condition-source parent everywhere", { skip: !existsSync(v6Path) }, () => {
+  const flow = JSON.parse(readFileSync(v6Path, "utf8"));
+  const nodes = flow.nodes;
+  // profile encodes the corrected 2026-07-03 probe results
+  assert.deepEqual(profile.importGraphContract.editorRejectedDrawPairs, []);
+  assert.deepEqual(profile.importGraphContract.editorProvenDrawPairs, [
+    ["Condition", "User Input Flow"],
+    ["Text", "User Input Flow"],
+    ["Condition", "Text"],
+    ["Text", "Condition"],
+    ["HTTP API", "Condition"],
+    ["Condition", "Condition"],
+  ]);
+  assert.equal(profile.importGraphContract.maxConditionSourceParents, 1);
+  const proven = new Set(profile.importGraphContract.editorProvenDrawPairs.map((p) => p.join(" → ")));
+  // every beyond-first (operator-drawn) edge uses a proven pair and none is C→C
+  let drawn = 0;
+  for (const [id, node] of Object.entries(nodes)) {
+    for (const inp of Object.values(node.inputs ?? {})) {
+      for (const c of (inp.connections ?? []).slice(1)) {
+        drawn += 1;
+        const pair = `${nodes[String(c.node)].name} → ${node.name}`;
+        assert.ok(proven.has(pair), `drawn edge #${c.node} → #${id} uses unproven pair ${pair}`);
+        assert.notEqual(pair, "Condition → Condition", `drawn edge #${c.node} → #${id} is a manual Condition→Condition — the plan targets zero`);
+      }
+    }
+  }
+  assert.equal(drawn, 34, "operator redraw workload must be exactly 34 connections");
+  // no Condition anywhere carries more than one Condition-source parent
+  for (const [id, node] of Object.entries(nodes)) {
+    if (node.name !== "Condition") continue;
+    let condParents = 0;
+    for (const inp of Object.values(node.inputs ?? {})) {
+      for (const c of inp.connections ?? []) {
+        if (nodes[String(c.node)]?.name === "Condition") condParents += 1;
+      }
+    }
+    assert.ok(condParents <= 1, `Condition #${id} has ${condParents} Condition-source parents`);
+  }
+  // checklist reflects the corrected rule: no halt banner, proven-operation
+  // stamp on every item, evidence pointer intact
   const checklist = readFileSync(path.join(repoRoot, "artifacts", "whatchimp", "V6_REDRAW_CHECKLIST.md"), "utf8");
-  assert.ok(checklist.includes("⛔ HALTED — NOT APPROVED FOR HUMAN TESTING"), "checklist must carry the halt banner");
-  assert.ok(checklist.includes("items #1, #2, #3, #4, #6, #7, #8, #12, #14, #15, #16"), "banner must name the 11 blocked items");
-  const markerCount = checklist.split("⛔ NOT OPERATOR-DRAWABLE (Condition → Condition)").length - 1;
-  assert.equal(markerCount, 11, "exactly the 11 Condition→Condition items must carry the per-item marker");
+  assert.ok(!checklist.includes("⛔"), "checklist must not carry halt markers anymore");
+  assert.equal(checklist.split("live-proven editor operation (2026-07-03)").length - 1, 34, "each of the 34 items carries its proven-operation stamp");
   assert.ok(checklist.includes("roundtrips/ROUNDTRIP_2_FINDINGS.md"), "checklist must point at the round-trip-#2 evidence");
-  assert.ok(!checklist.includes("the WhatChimp editor supports drawing them"), "the disproven drawability claim must not reappear");
+  assert.ok(!checklist.includes("the WhatChimp editor supports drawing them"), "the disproven blanket drawability claim must not reappear");
 });
 
 test("artifact: hub merges match the profile's approvedHubMerges exactly (no undeclared convergence)", { skip: !existsSync(v6Path) }, () => {
@@ -324,7 +353,7 @@ test("artifact: hub merges match the profile's approvedHubMerges exactly (no und
   assert.deepEqual(hubs, profile.importGraphContract.approvedHubMerges);
   // the operator redraw workload is the sum of beyond-first hub edges
   const redrawEdges = Object.values(hubs).reduce((sum, c) => sum + (c - 1), 0);
-  assert.equal(redrawEdges, 18, "operator redraw checklist must contain exactly 18 connections");
+  assert.equal(redrawEdges, 34, "operator redraw checklist must contain exactly 34 connections");
 });
 
 test("generator: a clean run reproduces the committed artifact AND redraw checklist byte-for-byte", { skip: !existsSync(v6Path) }, async () => {
@@ -372,14 +401,14 @@ test("mutation: replacing the real bedroom field id 69114 fails strict binding",
   assert.ok(hasError(errors, "is not in the dependency manifest"), errors.join("\n"));
 });
 
-test("artifact: canonical v6 is fully bound — placeholder-free, exact bedroom bindings, export-proven question transitions", { skip: !existsSync(v6Path) }, () => {
+test("artifact: canonical v6 is fully bound — strict-clean, placeholder-free, exact bedroom bindings, export-proven question transitions", { skip: !existsSync(v6Path) }, () => {
   const raw = readFileSync(v6Path, "utf8");
   assert.ok(!raw.includes("__ORAYA_BEDROOM_COUNT_FIELD_ID__"), "placeholder string must not remain in the delivery file");
   assert.ok(!raw.includes("__ORAYA"), "no placeholder prefix may remain in the delivery file");
   const flow = JSON.parse(raw);
-  const { errors } = validateFlow(flow, profile, { strictBinding: true });
-  // the only findings are the by-design redraw-drawability ones (round trip #2)
-  assert.ok(errors.every((e) => e.startsWith("[redraw-drawability]")), errors.join("\n"));
+  const { errors, warnings } = validateFlow(flow, profile, { strictBinding: true });
+  assert.deepEqual(errors, [], errors.join("\n"));
+  assert.deepEqual(warnings, [], warnings.join("\n"));
   // exact bedroom bindings: 4 questions on "69114", 8 condition rows on
   // "custom_69114" (each row serializes the id in both the variable and the
   // selected-values array — 16 array entries).
@@ -493,6 +522,31 @@ test("round trip #1: the authenticated re-export fails validation for the expect
   assert.ok(errors.length >= 90, `expected the audited round-trip damage, got ${errors.length} errors`);
 });
 
+// ─── round trip #2 regression fixture (halted 18-redraw candidate) ──────────
+
+test("round trip #2: the halted 165-node candidate is pinned as historical evidence and is NOT the canonical candidate", { skip: !existsSync(roundtrip2HaltedPath) || !existsSync(v6Path) }, () => {
+  const raw = readFileSync(roundtrip2HaltedPath);
+  // byte-exact preservation of the candidate whose redraw plan the editor
+  // refused at item #1 (11 of its 18 draws needed a second Condition-source
+  // parent on a Condition — see roundtrips/ROUNDTRIP_2_FINDINGS.md)
+  assert.equal(raw.length, 121537, "halted-candidate fixture byte size must not change");
+  assert.equal(
+    createHash("sha256").update(raw).digest("hex").toUpperCase(),
+    "0066192D4487ED1AC8A95B00E22DEF8B754B1FB458E0025B178E8B125C913A39",
+    "halted-candidate fixture bytes must not change",
+  );
+  assert.notEqual(raw.toString("utf8"), readFileSync(v6Path, "utf8"), "the halted candidate must never be the canonical import file");
+  const flow = JSON.parse(raw.toString("utf8"));
+  assert.equal(Object.keys(flow.nodes).length, 165);
+  // under the corrected editor rule it fails validation: exactly the 11
+  // beyond-limit Condition-source parents (#440: +4, #470: +3, #660: +1,
+  // #690: +3) that made its redraw plan impossible to execute
+  const { errors } = validateFlow(flow, profile, { strictBinding: true });
+  const condLimit = errors.filter((e) => e.startsWith("[condition-parent-limit]"));
+  assert.equal(condLimit.length, 11, errors.join("\n"));
+  assert.ok(errors.length > condLimit.length, "the halted candidate must also fail the current hub census");
+});
+
 test("operator docs: production WhatChimp API endpoints use direct www host", () => {
   // The bare production origin answers /api/butler/... POSTs with a 308
   // redirect that WhatChimp does not safely complete (operator-verified
@@ -572,11 +626,13 @@ test("simulator: hashtag interpolation uses current field state", () => {
 
 test("simulator: stale-villa scenario fails on a flow that skips the villa ask", { skip: !existsSync(v6Path) }, () => {
   const flow = JSON.parse(readFileSync(JSON.stringify(v6Path) && v6Path, "utf8"));
-  // sabotage: make the villa gate always take the "villa known" branch
-  const villaGate = Object.values(flow.nodes).find(
+  // sabotage: make every villa gate (original AND its corrected-rule clones)
+  // always take the "villa known" branch
+  const villaGates = Object.values(flow.nodes).filter(
     (n) => n.name === "Condition" && (n.data.custom_field_variable_selected_texts ?? []).includes("oraya_villa"),
   );
-  villaGate.data.custom_field_variable_value = ["__never__"];
+  assert.ok(villaGates.length >= 2, "expected the villa gate and its clones");
+  for (const gate of villaGates) gate.data.custom_field_variable_value = ["__never__"];
   const scenario = buildScenarios().find((s) => s.name.startsWith("S25"));
   const result = runScenario(flow, profile, scenario);
   assert.ok(result.failures.length > 0, "sabotaged flow must fail the stale-villa scenario");
