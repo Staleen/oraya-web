@@ -2,15 +2,15 @@
 
 Run this against a **non-production test bot**. Keep the current production bot untouched until every step passes. Steps reference visible node/question/API names, not node numbers.
 
-> **⚠️ Round trip #1 result (2026-07-03): FAILED structural preservation — the current `Oraya_natural_intake_v6.txt` is NOT import-safe.** Import/save/close/reopen/export succeeded mechanically, but WhatChimp kept only the first serialized connection per input socket and silently removed all 32 convergence edges (16 unintended terminals; every bedroom-capacity, escalation, Edit, and date-recovery merge broken). Evidence: [`roundtrips/ROUNDTRIP_1_FINDINGS.md`](roundtrips/ROUNDTRIP_1_FINDINGS.md). **Do not run sections A2/B/C/D against this candidate.** They apply to the NEXT candidate, once the structural direction is decided (DECISIONS_LOG 2026-07-03).
+> **⚠️ Current candidate (2026-07-03): Option A HYBRID — import alone is NOT sufficient.** Round trip #1 proved WhatChimp's import keeps only the first serialized connection per input socket (evidence: [`roundtrips/ROUNDTRIP_1_FINDINGS.md`](roundtrips/ROUNDTRIP_1_FINDINGS.md)), while editor-drawn merges survive save/export. The rebuilt `Oraya_natural_intake_v6.txt` (165 nodes, 182 connections, SHA-256 `0066192D…3A39`) therefore ships with 11 declared hub merges, and **after every import the operator must draw exactly 18 connections in the editor, following [`V6_REDRAW_CHECKLIST.md`](V6_REDRAW_CHECKLIST.md), before sections B/C/D apply.** The un-repaired import is safe by construction (happy path complete, opening-question safety link, no fake confirmations) but is missing every escalation/Edit/capacity merge beyond the first-listed edge — the validator detects that state as hub-count drift.
 
-## Round trip #2 — acceptance procedure for the next candidate (mandatory before any section C testing)
+## Round trip #2 — acceptance procedure for the hybrid candidate (mandatory before any section C testing)
 
 1. Use a **fresh disposable test bot** (not the round-trip-#1 bot, not production).
-2. Import the new candidate → **Save** → close the editor completely → reopen → **export**.
+2. Import `Oraya_natural_intake_v6.txt` → **draw the 18 connections** exactly as listed in [`V6_REDRAW_CHECKLIST.md`](V6_REDRAW_CHECKLIST.md) (only that list — no other edits) → **Save** → close the editor completely → reopen → **export**.
 3. Compare mechanically — no visual inspection substitutes for this:
    `node scripts/compare-whatchimp-roundtrip.mjs Oraya_natural_intake_v6.txt <re-export-file>`
-4. Required result, exit code 0 with: **zero** deleted/added nodes, **zero** semantic node changes, **zero** lost or gained edges, **zero** new unintended terminals, and `oraya_bedroom_count` = `69114` / `custom_69114` bindings intact (also run `node scripts/validate-whatchimp-flow.mjs <re-export> --strict-binding` → exit 0).
+4. Required result, PRESERVED / exit code 0 with: **zero** deleted/added nodes, **zero** semantic node changes, **zero** lost or gained edges, **zero** new unintended terminals, and `oraya_bedroom_count` = `69114` / `custom_69114` bindings intact (also run `node scripts/validate-whatchimp-flow.mjs <re-export> --strict-binding` → exit 0; a missed redraw shows up as `single-parent-contract` hub-count errors pointing back to the checklist).
 5. TEST integrations only (sections A0/A1); **no production activation** and no production integration edits.
 6. Save compatibility may not be claimed until this passes; only then proceed to section C.
 
@@ -58,7 +58,7 @@ Then:
    - The initial normalization integration appears twice (after the opening "please tell me what you already know about your stay" question, and after "Your updated stay details:").
    - The Refine integration appears after **every** date follow-up question (six places).
    - A Lead Submit integration appears after "May I have your full name for the request?", after the escalation name question ("So our team can follow up personally — may I have your full name?"), and on the "Finish on website" branch.
-   - The multi-input merge points kept **all** their inbound arrows (the guest-count check fed by both date branches; the villa check fed by the bedroom validations; the escalation name step fed by the date-trouble, large-group, bedroom, and second-Edit messages). **This is the known platform risk — if arrows were dropped on save, stop and report.**
+   - The multi-input merge points (guest-count check, villa check, confirmation, Edit merges, handoff choice) arrive from import with **only their first inbound arrow** — that is the expected hybrid state, not a failure. **Draw the 18 missing connections exactly per [`V6_REDRAW_CHECKLIST.md`](V6_REDRAW_CHECKLIST.md), then save → close → reopen and confirm every drawn arrow survived** (editor-drawn merges are export-proven; if a drawn arrow disappears after save, stop and report).
 4. **Rebind the API nodes to the TEST integrations** (UI dropdown per node):
    - both initial-normalization nodes → "Oraya Stay Intent - TEST"
    - all six refine nodes → "Oraya Stay Intent Refine - TEST"

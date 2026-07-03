@@ -617,8 +617,9 @@ export function buildScenarios() {
         messagesInclude: ["confirm the details with you personally"],
         fieldEquals: { oraya_guest_followup: "12" },
         // guest q → ack → supported gate (False) → exact-count q → team-review
-        // text → escalation wrapper → name q → Lead Submit → escalation terminal
-        visitsInOrder: [["600", "601", "603", "602", "466", "467", "468", "640", "641", "642", "643"]],
+        // text → BRANCH-LOCAL large-group escalation tail (name q → Lead
+        // Submit → terminal) — the initial path's own clone
+        visitsInOrder: [["600", "601", "603", "602", "466", "467", "468", "712", "713", "714", "715"]],
       },
     },
     {
@@ -649,9 +650,9 @@ export function buildScenarios() {
         leadSubmitted: true,
         terminalIncludes: [NOT_CONFIRMED],
         askedIncludes: ["Which villa", "Does this look right"],
-        // guest gate (known) → bedroom q → ack → capacity path → villa gate →
-        // villa q → ack → confirmation → terminal
-        visitsInOrder: [["440", "602", "611", "624", "612", "613", "470", "481", "604", "491", "7"]],
+        // guest gate (known) → bedroom q → ack → capacity C1 (2 guests → OK
+        // immediately) → villa gate → villa q → ack → confirmation → terminal
+        visitsInOrder: [["440", "602", "611", "624", "612", "470", "481", "604", "491", "7"]],
       },
     },
     {
@@ -741,10 +742,10 @@ export function buildScenarios() {
         // condition (False) → Edit prompt → Edit q → fresh normalize →
         // date/guest gates (all satisfied) → Edit bedroom q → ack → capacity →
         // Edit villa gate → Edit confirmation q → ack → second branch (True) →
-        // handoff wrapper → handoff q → terminal
+        // the Edit path's OWN branch-local handoff clone → its WhatsApp terminal
         visitsInOrder: [[
           "491", "492", "493", "495", "496", "497", "498", "650", "656", "660", "663",
-          "670", "671", "684", "672", "690", "694", "695", "699", "696", "697", "70", "7",
+          "670", "671", "684", "672", "690", "694", "695", "699", "696", "697", "740", "749",
         ]],
       },
     },
@@ -776,10 +777,11 @@ export function buildScenarios() {
         // dates gate (missing) → Edit dates q → refine → both-dates gate →
         // guests gate (missing) → Edit guest q → ack → supported gate →
         // Edit bedroom q → ack → capacity → Edit villa gate (known) →
-        // Edit confirmation q → ack → branch (True) → handoff → terminal
+        // Edit confirmation q → ack → branch (True) → the Edit path's OWN
+        // branch-local handoff clone → its WhatsApp terminal
         visitsInOrder: [[
           "497", "498", "650", "651", "652", "653", "654", "660", "661", "662", "664", "663",
-          "670", "671", "684", "672", "690", "694", "695", "699", "696", "697", "70", "7",
+          "670", "671", "684", "672", "690", "694", "695", "699", "696", "697", "740", "749",
         ]],
       },
     },
@@ -873,6 +875,8 @@ export function buildScenarios() {
         leadSubmitted: true,
         terminalIncludes: ESC_TERMINAL,
         messagesInclude: ["trouble reading the dates"],
+        // check-out escalation message → its OWN branch-local tail
+        visitsInOrder: [["504", "700", "701", "702", "703"]],
       },
     },
     {
@@ -891,6 +895,201 @@ export function buildScenarios() {
         terminalIncludes: ESC_TERMINAL,
         messagesInclude: ["confirm the details with you personally"],
         fieldEquals: { oraya_guest_followup: "12" },
+      },
+    },
+    // ── hybrid-architecture branch-local clones (2026-07-03, Option A) ──────
+    // Every duplicated tail is exercised on its own path, asserting the
+    // branch-local node ids — not merely that some terminal was reached.
+    {
+      name: "S31 Edit → Finish on website → the Edit path's OWN website ending (cloned 7459 Lead Submit)",
+      inputs: [
+        stay("Mechmech July 10 to 11 for 2"),
+        bedroom("1 bedroom"),
+        confirmEdit,
+        { expect: "Your updated stay details", answer: "Villa Byblos August 1 to August 3 for 2 guests" },
+        bedroom("1 bedroom"),
+        { expect: "Does this look right", answer: "Looks right" },
+        { expect: "How would you like to continue", answer: "Finish on website" },
+      ],
+      fixtures: [
+        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "2") },
+        { api: "7466", response: norm("2026-08-01", "2026-08-03", "Villa Byblos", "2") },
+        { api: "7459", response: { prefill_url: "https://stayoraya.com/book?h=EDITTOKEN42" } },
+      ],
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: ["EDITTOKEN42", "not a confirmed booking"],
+        // Edit confirmation (True) → Edit handoff clone → website branch →
+        // cloned 7459 Lead Submit → cloned website terminal
+        visitsInOrder: [["696", "697", "740", "741", "742", "743", "744"]],
+      },
+    },
+    {
+      name: "S32 Edit with check-out missing → Edit checkout follow-up → refine → continues to Edit confirmation",
+      inputs: [
+        stay("Mechmech July 10 to 11 for 2"),
+        bedroom("1 bedroom"),
+        confirmEdit,
+        { expect: "Your updated stay details", answer: "Villa Byblos from September 1 for 2" },
+        { expect: "check-out date", answer: "September 3" },
+        bedroom("1 bedroom"),
+        { expect: "Does this look right", answer: "Looks right" },
+        ...whatsappTail,
+      ],
+      fixtures: [
+        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "2") },
+        { api: "7466", response: norm("2026-09-01", null, "Villa Byblos", "2") },
+        { api: "8101", response: norm("2026-09-01", "2026-09-03", "Villa Byblos", "2") },
+        { api: "6961", response: {} },
+      ],
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: [NOT_CONFIRMED],
+        fieldEquals: { oraya_check_out: "2026-09-03" },
+        // Edit q → normalize → check-in known → checkout gate → checkout q →
+        // refine → both-dates gate → guest gate (known) → bedroom → villa
+        // gate (known) → Edit confirmation → Edit handoff clone → terminal
+        visitsInOrder: [[
+          "497", "498", "650", "656", "657", "658", "659", "654", "660", "663",
+          "670", "671", "684", "672", "690", "694", "695", "699", "696", "697", "740", "749",
+        ]],
+      },
+    },
+    {
+      name: "S33 Edit with villa missing → Edit villa question → continues to Edit confirmation",
+      inputs: [
+        stay("Mechmech July 10 to 11 for 2"),
+        bedroom("1 bedroom"),
+        confirmEdit,
+        { expect: "Your updated stay details", answer: "August 1 to August 3 for 2, not sure which villa" },
+        bedroom("1 bedroom"),
+        { expect: "Which villa", answer: "Villa Byblos" },
+        { expect: "Does this look right", answer: "Looks right" },
+        ...whatsappTail,
+      ],
+      fixtures: [
+        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "2") },
+        { api: "7466", response: norm("2026-08-01", "2026-08-03", null, "2") },
+        { api: "6961", response: {} },
+      ],
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: [NOT_CONFIRMED],
+        fieldEquals: { oraya_villa: "Villa Byblos" },
+        // Edit villa gate (missing) → Edit villa q → ack → Edit confirmation
+        visitsInOrder: [["672", "690", "691", "692", "693", "694", "695", "699", "696", "697", "740", "749"]],
+      },
+    },
+    {
+      name: "S34 Edit that becomes an above-capacity group → the Edit path's OWN large-group review + escalation tail",
+      inputs: [
+        stay("Mechmech July 10 to 11 for 2"),
+        bedroom("1 bedroom"),
+        confirmEdit,
+        { expect: "Your updated stay details", answer: "actually the whole family is coming now" },
+        guests("More than 8"),
+        { expect: "How many guests exactly", answer: "12" },
+        escName,
+      ],
+      fixtures: [
+        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "2") },
+        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", null) },
+        { api: "6961", response: {} },
+      ],
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: ESC_TERMINAL,
+        messagesInclude: ["confirm the details with you personally"],
+        fieldEquals: { oraya_guest_followup: "12" },
+        // Edit guest q → ack → supported gate (False) → CLONED Edit
+        // large-group review → its own escalation tail
+        visitsInOrder: [["661", "662", "664", "663", "736", "737", "738", "732", "733", "734", "735"]],
+      },
+    },
+    {
+      name: "S35 Edit with unreadable dates → Edit date follow-up fails → the Edit path's OWN date-escalation tail",
+      inputs: [
+        stay("Mechmech July 10 to 11 for 2"),
+        bedroom("1 bedroom"),
+        confirmEdit,
+        { expect: "Your updated stay details", answer: "sometime whenever works" },
+        { expect: "check-in and check-out dates", answer: "still whenever" },
+        escName,
+      ],
+      fixtures: [
+        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "2") },
+        { api: "7466", response: norm(null, null, "Villa Mechmech", "2") },
+        { api: "8101", response: norm(null, null, "Villa Mechmech", "2") },
+        { api: "6961", response: {} },
+      ],
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: ESC_TERMINAL,
+        messagesInclude: ["trouble reading the dates"],
+        visitsInOrder: [["650", "651", "652", "653", "654", "655", "716", "717", "718", "719"]],
+      },
+    },
+    {
+      name: "S36 initial bedroom mismatch then 1 bedroom AGAIN → the retry's OWN needs-more escalation tail",
+      inputs: [stay("Byblos July 10 to 11, 5 guests"), bedroom("1 bedroom"), bedroom("1 bedroom"), escName],
+      fixtures: [
+        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Byblos", "5") },
+        { api: "6961", response: {} },
+      ],
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: [...ESC_TERMINAL, "https://stayoraya.com/book"],
+        messagesInclude: ["have our team help arrange"],
+        fieldEquals: { oraya_guest_count: "5" },
+        // retry ask → ack → C1(F) → C2(1 bedroom → True) → escalation text A →
+        // its own tail
+        visitsInOrder: [["618", "625", "619", "620", "626", "704", "705", "706", "707"]],
+      },
+    },
+    {
+      name: "S37 Edit bedroom mismatch then 1 bedroom AGAIN → the Edit retry's OWN needs-more escalation tail",
+      inputs: [
+        stay("Mechmech July 10 to 11 for 2"),
+        bedroom("1 bedroom"),
+        confirmEdit,
+        { expect: "Your updated stay details", answer: "same dates but we are 5 now" },
+        bedroom("1 bedroom"),
+        bedroom("1 bedroom"),
+        escName,
+      ],
+      fixtures: [
+        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "2") },
+        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "5") },
+        { api: "6961", response: {} },
+      ],
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: [...ESC_TERMINAL, "https://stayoraya.com/book"],
+        messagesInclude: ["have our team help arrange"],
+        visitsInOrder: [["671", "684", "672", "673", "676", "677", "678", "685", "679", "680", "686", "720", "721", "722", "723"]],
+      },
+    },
+    {
+      name: "S38 Edit bedroom mismatch then 2 bedrooms for 5 guests → the Edit retry's OTHER escalation tail",
+      inputs: [
+        stay("Mechmech July 10 to 11 for 2"),
+        bedroom("1 bedroom"),
+        confirmEdit,
+        { expect: "Your updated stay details", answer: "same dates but we are 5 now" },
+        bedroom("1 bedroom"),
+        bedroom("2 bedrooms"),
+        escName,
+      ],
+      fixtures: [
+        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "2") },
+        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "5") },
+        { api: "6961", response: {} },
+      ],
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: [...ESC_TERMINAL, "https://stayoraya.com/book"],
+        messagesInclude: ["have our team help arrange"],
+        visitsInOrder: [["678", "685", "679", "680", "681", "687", "724", "725", "726", "727"]],
       },
     },
     // ── fault-injection matrix (no-dead-end audit) ──────────────────────────
@@ -992,6 +1191,9 @@ export function buildScenarios() {
         terminalIncludes: [...ESC_TERMINAL, "https://stayoraya.com/book"],
         messagesInclude: ["have our team help arrange"],
         fieldEquals: { oraya_guest_count: "5" },
+        // retry 2 bedrooms for 5 guests → C3 False → escalation text B → its
+        // own branch-local tail
+        visitsInOrder: [["618", "625", "619", "620", "621", "627", "708", "709", "710", "711"]],
       },
     },
     {
@@ -1014,6 +1216,8 @@ export function buildScenarios() {
         leadSubmitted: true,
         terminalIncludes: [...ESC_TERMINAL, "https://stayoraya.com/book"],
         messagesInclude: ["fine-tune everything personally"],
+        // second-Edit escalation text → its OWN branch-local tail
+        visitsInOrder: [["695", "699", "696", "698", "728", "729", "730", "731"]],
       },
     },
     {

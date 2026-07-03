@@ -177,28 +177,45 @@ export function validateFlow(flow, profile, opts = {}) {
   // 16/16), 32 edges were removed, and 16 unintended terminals appeared.
   // Evidence: artifacts/whatchimp/roundtrips/ROUNDTRIP_1_FINDINGS.md.
   // Any convergence in an import candidate is therefore a structural error.
+  // Hybrid architecture (2026-07-03, Option A): a bounded set of central hub
+  // merges is DECLARED in the profile (`approvedHubMerges`: node id → exact
+  // inbound count). The import drops their beyond-first edges; the operator
+  // re-draws them from the generated artifacts/whatchimp/V6_REDRAW_CHECKLIST.md.
+  // The validator therefore (a) rejects any UNdeclared convergence, and
+  // (b) rejects a declared hub whose inbound count differs from the declared
+  // one — which is exactly what an unrepaired WhatChimp re-export looks like.
   const contract = profile.importGraphContract;
   if (contract) {
     const maxIn = contract.maxInboundPerNode ?? 1;
     const rootName = contract.rootNodeName ?? "Start Bot Flow";
+    const approvedHubs = contract.approvedHubMerges ?? {};
     for (const id of ids) {
       const node = nodes[id];
       const campaign = typeof node.data?.campaignName === "string" && node.data.campaignName
         ? ` [campaign "${node.data.campaignName}"]` : "";
-      let socketReported = false;
-      for (const [inKey, inp] of Object.entries(node.inputs ?? {})) {
-        const conns = inp.connections ?? [];
-        if (conns.length > 1) {
-          socketReported = true;
-          err("single-parent-contract", `${nodeLabel(id, node)}${campaign} input socket "${inKey}" has ${conns.length} connections [${conns.map((c) => `#${c.node}:${c.output}`).join(", ")}] — WhatChimp import keeps only the first and silently drops the rest (round trip #1, 2026-07-03)`);
-        }
-      }
       const parents = inEdges(node);
       if (node.name === rootName) {
         if (parents.length !== 0) {
           err("single-parent-contract", `${nodeLabel(id, node)} is the root node but has ${parents.length} inbound connection(s) [${parents.map((e) => `#${e.node}:${e.output}→${e.inKey}`).join(", ")}]`);
         }
-      } else if (!socketReported && parents.length > maxIn) {
+        continue;
+      }
+      const declared = approvedHubs[id];
+      if (declared !== undefined) {
+        if (parents.length !== declared) {
+          err("single-parent-contract", `${nodeLabel(id, node)}${campaign} is a declared operator-redrawn hub with exactly ${declared} inbound connections but has ${parents.length} [${parents.map((e) => `#${e.node}:${e.output}→${e.inKey}`).join(", ")}] — if this is a WhatChimp re-export, the import dropped hub edges; re-draw them per artifacts/whatchimp/V6_REDRAW_CHECKLIST.md`);
+        }
+        continue;
+      }
+      let socketReported = false;
+      for (const [inKey, inp] of Object.entries(node.inputs ?? {})) {
+        const conns = inp.connections ?? [];
+        if (conns.length > 1) {
+          socketReported = true;
+          err("single-parent-contract", `${nodeLabel(id, node)}${campaign} input socket "${inKey}" has ${conns.length} connections [${conns.map((c) => `#${c.node}:${c.output}`).join(", ")}] — WhatChimp import keeps only the first and silently drops the rest (round trip #1, 2026-07-03); undeclared convergence must be cloned or added to approvedHubMerges + the redraw checklist`);
+        }
+      }
+      if (!socketReported && parents.length > maxIn) {
         err("single-parent-contract", `${nodeLabel(id, node)}${campaign} has ${parents.length} inbound connections across sockets [${parents.map((e) => `#${e.node}:${e.output}→${e.inKey}`).join(", ")}] — exceeds the import contract maximum of ${maxIn}`);
       }
       // zero-inbound non-root nodes are reported by the start-node and

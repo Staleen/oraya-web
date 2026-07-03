@@ -22,7 +22,20 @@
   "placeholderFieldIds": [],
   "importGraphContract": {
     "rootNodeName": "Start Bot Flow",
-    "maxInboundPerNode": 1
+    "maxInboundPerNode": 1,
+    "approvedHubMerges": {
+      "440": 5,
+      "470": 4,
+      "490": 2,
+      "602": 2,
+      "616": 2,
+      "654": 2,
+      "660": 2,
+      "663": 2,
+      "676": 2,
+      "690": 4,
+      "694": 2
+    }
   },
   "roundTripIgnoreFields": ["uniqueId", "postbackId", "newPostbackId", "xitFbpostbackId"],
   "stayTextField": "oraya_stay_text",

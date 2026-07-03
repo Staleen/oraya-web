@@ -250,6 +250,10 @@ test("validator: single-parent-contract rejects one escalation tail shared by tw
 const v55Path = path.join(repoRoot, "artifacts", "whatchimp", "Oraya_natural_intake_v5.5.input.txt");
 const v6Path = path.join(repoRoot, "Oraya_natural_intake_v6.txt");
 const roundtrip1Path = path.join(repoRoot, "artifacts", "whatchimp", "roundtrips", "Oraya_natural_intake_v6.roundtrip-1.saved-reexport.txt");
+// the exact candidate that round trip #1 imported (byte-preserved fixture;
+// the canonical Oraya_natural_intake_v6.txt has since moved to the hybrid
+// architecture, so the historical pair must stay pinned)
+const roundtrip1CandidatePath = path.join(repoRoot, "artifacts", "whatchimp", "roundtrips", "Oraya_natural_intake_v6.roundtrip-1.import-candidate.txt");
 
 test("validator: v5.5 operator export fails with semantic errors", { skip: !existsSync(v55Path) }, () => {
   const flow = JSON.parse(readFileSync(v55Path, "utf8"));
@@ -260,40 +264,95 @@ test("validator: v5.5 operator export fails with semantic errors", { skip: !exis
   assert.ok(hasError(errors, "no bedroom-selection question exists"));
 });
 
-// Round trip #1 (2026-07-03) proved the current canonical candidate is NOT
-// import-safe: its 16 convergence points are exactly what WhatChimp's import
-// normalization destroys. The validator now rejects them; these tests pin
-// that the ONLY defects are those 16 single-parent-contract violations —
-// every other contract still holds. The next candidate (structural direction
-// pending operator decision — see DECISIONS_LOG 2026-07-03 and KNOWN_BUGS
-// #10) must bring these counts to zero.
-const SINGLE_PARENT_VIOLATIONS_IN_CANDIDATE = 16;
-const onlySingleParentErrors = (errors) => errors.every((e) => e.startsWith("[single-parent-contract]"));
+// Hybrid architecture (2026-07-03, Option A): the canonical candidate clones
+// every small branch-local tail and keeps exactly the profile-declared hub
+// merges (`importGraphContract.approvedHubMerges`), whose beyond-first edges
+// the operator re-draws after import per artifacts/whatchimp/V6_REDRAW_CHECKLIST.md.
+// The candidate must validate completely clean; any UNdeclared convergence
+// or hub-count drift is an error.
 
-test("validator: generated v6 has no defects besides the 16 single-parent-contract violations", { skip: !existsSync(v6Path) }, () => {
+test("validator: generated v6 passes with zero errors and zero warnings", { skip: !existsSync(v6Path) }, () => {
   const flow = JSON.parse(readFileSync(v6Path, "utf8"));
   const { errors, warnings } = validateFlow(flow, profile);
-  assert.equal(errors.length, SINGLE_PARENT_VIOLATIONS_IN_CANDIDATE, errors.join("\n"));
-  assert.ok(onlySingleParentErrors(errors), errors.join("\n"));
+  assert.deepEqual(errors, [], errors.join("\n"));
   assert.deepEqual(warnings, [], warnings.join("\n"));
 });
 
-test("validator: canonical v6 under strict binding — fully bound; only the single-parent violations remain", { skip: !existsSync(v6Path) }, () => {
+test("validator: canonical v6 passes strict binding (fully bound, no second binding step)", { skip: !existsSync(v6Path) }, () => {
   const flow = JSON.parse(readFileSync(v6Path, "utf8"));
   const { errors, warnings } = validateFlow(flow, profile, { strictBinding: true });
-  assert.equal(errors.length, SINGLE_PARENT_VIOLATIONS_IN_CANDIDATE, errors.join("\n"));
-  assert.ok(onlySingleParentErrors(errors), errors.join("\n"));
+  assert.deepEqual(errors, [], errors.join("\n"));
   assert.deepEqual(warnings, [], warnings.join("\n"));
 });
 
-test("artifact: canonical v6 is fully bound — placeholder-free, exact bedroom bindings, export-proven question transitions (single-parent violations aside)", { skip: !existsSync(v6Path) }, () => {
+test("artifact: hub merges match the profile's approvedHubMerges exactly (no undeclared convergence)", { skip: !existsSync(v6Path) }, () => {
+  const flow = JSON.parse(readFileSync(v6Path, "utf8"));
+  const inbound = new Map(Object.keys(flow.nodes).map((id) => [id, 0]));
+  for (const node of Object.values(flow.nodes)) {
+    for (const out of Object.values(node.outputs ?? {})) {
+      for (const c of out.connections ?? []) inbound.set(String(c.node), (inbound.get(String(c.node)) ?? 0) + 1);
+    }
+  }
+  const hubs = {};
+  for (const [id, count] of inbound) if (count > 1) hubs[id] = count;
+  assert.deepEqual(hubs, profile.importGraphContract.approvedHubMerges);
+  // the operator redraw workload is the sum of beyond-first hub edges
+  const redrawEdges = Object.values(hubs).reduce((sum, c) => sum + (c - 1), 0);
+  assert.equal(redrawEdges, 18, "operator redraw checklist must contain exactly 18 connections");
+});
+
+test("generator: a clean run reproduces the committed artifact AND redraw checklist byte-for-byte", { skip: !existsSync(v6Path) }, async () => {
+  const { execFileSync } = await import("node:child_process");
+  const { mkdtempSync, rmSync } = await import("node:fs");
+  const os = await import("node:os");
+  const dir = mkdtempSync(path.join(os.tmpdir(), "oraya-v6-gen-"));
+  try {
+    const outFlow = path.join(dir, "v6.txt");
+    const outRedraw = path.join(dir, "redraw.md");
+    execFileSync(process.execPath, [
+      path.join(here, "generate-whatchimp-v6.mjs"),
+      path.join(repoRoot, "artifacts", "whatchimp", "Oraya_natural_intake_v5.5.input.txt"),
+      outFlow,
+      outRedraw,
+    ]);
+    assert.equal(readFileSync(outFlow, "utf8"), readFileSync(v6Path, "utf8"), "artifact bytes must be reproducible");
+    assert.equal(
+      readFileSync(outRedraw, "utf8"),
+      readFileSync(path.join(repoRoot, "artifacts", "whatchimp", "V6_REDRAW_CHECKLIST.md"), "utf8"),
+      "redraw checklist bytes must be reproducible",
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("mutation: removing a branch-local tail continuation creates an unintended-terminal failure", { skip: !existsSync(v6Path) }, () => {
+  const flow = JSON.parse(readFileSync(v6Path, "utf8"));
+  // sever an escalation tail's Lead Submit → final-message edge (#642 → #643)
+  flow.nodes["642"].outputs.httpApiOutput.connections = [];
+  flow.nodes["643"].inputs.textInput.connections = [];
+  const { errors } = validateFlow(flow, profile);
+  assert.ok(hasError(errors, "dead-end API call"), errors.join("\n"));
+  assert.ok(hasError(errors, "is not reachable from the start node"), errors.join("\n"));
+});
+
+test("mutation: replacing the real bedroom field id 69114 fails strict binding", { skip: !existsSync(v6Path) }, () => {
+  const flow = JSON.parse(readFileSync(v6Path, "utf8"));
+  const bedroomQ = Object.values(flow.nodes).find(
+    (n) => n.name === "User Input Flow Single" && n.data?.customFieldSelectedOptionText === "oraya_bedroom_count",
+  );
+  bedroomQ.data.customField = "99999";
+  const { errors } = validateFlow(flow, profile, { strictBinding: true });
+  assert.ok(hasError(errors, "is not in the dependency manifest"), errors.join("\n"));
+});
+
+test("artifact: canonical v6 is fully bound — strict-clean, placeholder-free, exact bedroom bindings, export-proven question transitions", { skip: !existsSync(v6Path) }, () => {
   const raw = readFileSync(v6Path, "utf8");
   assert.ok(!raw.includes("__ORAYA_BEDROOM_COUNT_FIELD_ID__"), "placeholder string must not remain in the delivery file");
   assert.ok(!raw.includes("__ORAYA"), "no placeholder prefix may remain in the delivery file");
   const flow = JSON.parse(raw);
   const { errors, warnings } = validateFlow(flow, profile, { strictBinding: true });
-  assert.equal(errors.length, SINGLE_PARENT_VIOLATIONS_IN_CANDIDATE, errors.join("\n"));
-  assert.ok(onlySingleParentErrors(errors), errors.join("\n"));
+  assert.deepEqual(errors, [], errors.join("\n"));
   assert.deepEqual(warnings, [], warnings.join("\n"));
   // exact bedroom bindings: 4 questions on "69114", 8 condition rows on
   // "custom_69114" (each row serializes the id in both the variable and the
@@ -339,8 +398,8 @@ test("artifact: canonical v6 is fully bound — placeholder-free, exact bedroom 
 
 // ─── round trip #1 regression fixtures (authenticated evidence, 2026-07-03) ──
 
-test("round trip #1: comparator detects the exact WhatChimp import normalization on the preserved evidence", { skip: !existsSync(v6Path) || !existsSync(roundtrip1Path) }, () => {
-  const candidate = JSON.parse(readFileSync(v6Path, "utf8"));
+test("round trip #1: comparator detects the exact WhatChimp import normalization on the preserved evidence", { skip: !existsSync(roundtrip1CandidatePath) || !existsSync(roundtrip1Path) }, () => {
+  const candidate = JSON.parse(readFileSync(roundtrip1CandidatePath, "utf8"));
   const reexport = JSON.parse(readFileSync(roundtrip1Path, "utf8"));
   const r = compareFlows(candidate, reexport, { ignoreFields: profile.roundTripIgnoreFields });
   // all nodes survived; nothing was semantically edited
@@ -392,9 +451,14 @@ test("round trip #1: comparator reports an identical re-export as preserved", { 
 test("round trip #1: the authenticated re-export fails validation for the expected structural reasons", { skip: !existsSync(roundtrip1Path) }, () => {
   const reexport = JSON.parse(readFileSync(roundtrip1Path, "utf8"));
   const { errors } = validateFlow(reexport, profile, { strictBinding: true });
-  // the saved graph is a clean tree (no convergence survives an import) …
-  assert.ok(!errors.some((e) => e.startsWith("[single-parent-contract]")), errors.join("\n"));
-  // … but the dropped edges dangled condition branches, dead-ended an API
+  // the import stripped the hub merges down to one parent each — with the
+  // hybrid contract declared in the profile, that reads as hub-count drift
+  // (the exact signature of an unrepaired import)
+  assert.ok(
+    errors.some((e) => e.startsWith("[single-parent-contract]") && e.includes("declared operator-redrawn hub")),
+    errors.join("\n"),
+  );
+  // … and the dropped edges dangled condition branches, dead-ended an API
   // node, and created unapproved terminals with no booking continuation
   assert.ok(hasError(errors, "no destination on conditionOutputTrue") || hasError(errors, "no destination on conditionOutputFalse"));
   assert.ok(hasError(errors, "dead-end API call"));
@@ -414,6 +478,7 @@ test("operator docs: production WhatChimp API endpoints use direct www host", ()
   const operatorDocs = [
     path.join("artifacts", "whatchimp", "V6_DEPENDENCIES.md"),
     path.join("artifacts", "whatchimp", "V6_ROUNDTRIP_CHECKLIST.md"),
+    path.join("artifacts", "whatchimp", "V6_REDRAW_CHECKLIST.md"),
     path.join("docs", "system", "BUTLER_PLAYBOOK.md"),
   ];
   const bareApiPrefix = "https://stayoraya.com/api/butler/";
