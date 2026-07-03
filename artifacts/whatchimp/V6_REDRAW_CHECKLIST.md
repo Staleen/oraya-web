@@ -4,7 +4,9 @@
 
 **Applies to exactly:** `Oraya_natural_intake_v6.txt` with SHA-256 `0066192D4487ED1AC8A95B00E22DEF8B754B1FB458E0025B178E8B125C913A39`. If your file's hash differs, regenerate this checklist.
 
-**Why this exists:** authenticated round trip #1 (2026-07-03) proved WhatChimp's import keeps only the FIRST serialized connection per input socket and silently drops the rest (evidence: `roundtrips/ROUNDTRIP_1_FINDINGS.md`). This candidate clones every small branch-local tail, but 18 central merge connections remain by design — the WhatChimp editor supports drawing them (the operator's own v5.5 carries a 5-parent merge), so you re-draw exactly these after import.
+> **⛔ HALTED — NOT APPROVED FOR HUMAN TESTING (2026-07-03, round trip #2).** The WhatChimp editor REFUSED to draw item #1 below (Condition → Condition) with: *"This will make an infinite loop. Place a button/list/section/interactive between these two nodes."* 11 of the 18 connections (items #1, #2, #3, #4, #6, #7, #8, #12, #14, #15, #16) are Condition → Condition and are treated as not operator-drawable; the drawability of the remaining 7 node-type pairs has never been proven in the current editor either. Do NOT attempt further drawing, do NOT insert interactive nodes to bypass the warning, and do NOT run any live testing with this candidate. Evidence + full re-audit: `roundtrips/ROUNDTRIP_2_FINDINGS.md`.
+
+**Why this exists:** authenticated round trip #1 (2026-07-03) proved WhatChimp's import keeps only the FIRST serialized connection per input socket and silently drops the rest (evidence: `roundtrips/ROUNDTRIP_1_FINDINGS.md`). This candidate clones every small branch-local tail, but 18 central merge connections remain by design, to be re-drawn by the operator after import. NOTE (2026-07-03, round trip #2): the operator's own v5.5 carries a 5-parent merge, but that merge is itself Condition → Condition ×5 — its survival in a saved export does NOT prove the current editor can draw such connections, and the editor in fact refuses them (see the halt banner above).
 
 **When:** on a fresh disposable TEST bot, immediately after importing the artifact and BEFORE any testing: draw all connections below, then Save → close the editor → reopen → export → verify (commands at the bottom).
 
@@ -18,18 +20,22 @@ Each item: drag a line from the stated OUTPUT of the source node to the (single)
       TO `#440` Condition diamond (oraya_guest_count = "null") — input socket (`conditionInput`).
       Purpose: Dates recovered after the FIRST full-dates follow-up continue into guest validation.
       Where: source at canvas ≈ (4085, -1653); destination at ≈ (4493, -1322) (below and right of the source).
+      ⛔ NOT OPERATOR-DRAWABLE (Condition → Condition) — the editor rejects this connection with the infinite-loop warning (round trip #2, 2026-07-03). Do not attempt; do not bypass with an interactive node.
 - [ ] **2.** FROM `#436` Condition diamond (oraya_check_in = "null" OR oraya_check_out = "null") — **FALSE output** (`conditionOutputFalse`)
       TO `#440` Condition diamond (oraya_guest_count = "null") — input socket (`conditionInput`).
       Purpose: Dates recovered after the SECOND full-dates follow-up continue into guest validation.
       Where: source at canvas ≈ (4462, -2742); destination at ≈ (4493, -1322) (below and near the source).
+      ⛔ NOT OPERATOR-DRAWABLE (Condition → Condition) — the editor rejects this connection with the infinite-loop warning (round trip #2, 2026-07-03). Do not attempt; do not bypass with an interactive node.
 - [ ] **3.** FROM `#501` Condition diamond (oraya_check_in = "null" OR oraya_check_out = "null") — **FALSE output** (`conditionOutputFalse`)
       TO `#440` Condition diamond (oraya_guest_count = "null") — input socket (`conditionInput`).
       Purpose: Check-out recovered after the FIRST check-out follow-up continues into guest validation.
       Where: source at canvas ≈ (4013, -1085); destination at ≈ (4493, -1322) (above and right of the source).
+      ⛔ NOT OPERATOR-DRAWABLE (Condition → Condition) — the editor rejects this connection with the infinite-loop warning (round trip #2, 2026-07-03). Do not attempt; do not bypass with an interactive node.
 - [ ] **4.** FROM `#505` Condition diamond (oraya_check_in = "null" OR oraya_check_out = "null") — **FALSE output** (`conditionOutputFalse`)
       TO `#440` Condition diamond (oraya_guest_count = "null") — input socket (`conditionInput`).
       Purpose: Check-out recovered after the SECOND check-out follow-up continues into guest validation.
       Where: source at canvas ≈ (4289, 455); destination at ≈ (4493, -1322) (above and right of the source).
+      ⛔ NOT OPERATOR-DRAWABLE (Condition → Condition) — the editor rejects this connection with the infinite-loop warning (round trip #2, 2026-07-03). Do not attempt; do not bypass with an interactive node.
 - [ ] **5.** FROM `#603` Message "Perfect, thank you 😊" — **output** (`textOutput`)
       TO `#602` Condition diamond (oraya_guest_count = "1" OR oraya_guest_count = "2" OR oraya_guest_count = "3" OR oraya_guest_count = "4" OR oraya_guest_count = "5" OR oraya_guest_count = "6" OR oraya_guest_count = "7" OR oraya_guest_count = "8") — input socket (`conditionInput`).
       Purpose: Guest count the guest JUST answered continues into the supported-count check (the extracted-count path is kept automatically).
@@ -38,14 +44,17 @@ Each item: drag a line from the stated OUTPUT of the source node to the (single)
       TO `#470` Condition diamond (oraya_villa = "null") — input socket (`conditionInput`).
       Purpose: Bedroom OK — 2 bedrooms fit 3–4 guests (first ask) — continues to the villa check.
       Where: source at canvas ≈ (6240, -1600); destination at ≈ (6552, -1277) (below and right of the source).
+      ⛔ NOT OPERATOR-DRAWABLE (Condition → Condition) — the editor rejects this connection with the infinite-loop warning (round trip #2, 2026-07-03). Do not attempt; do not bypass with an interactive node.
 - [ ] **7.** FROM `#619` Condition diamond (oraya_bedroom_count = "3 bedrooms" OR oraya_guest_count = "1" OR oraya_guest_count = "2") — **TRUE output** (`conditionOutputTrue`)
       TO `#470` Condition diamond (oraya_villa = "null") — input socket (`conditionInput`).
       Purpose: Bedroom OK — 3 bedrooms or 1–2 guests (retry ask) — continues to the villa check.
       Where: source at canvas ≈ (5720, -1300); destination at ≈ (6552, -1277) (level with and right of the source).
+      ⛔ NOT OPERATOR-DRAWABLE (Condition → Condition) — the editor rejects this connection with the infinite-loop warning (round trip #2, 2026-07-03). Do not attempt; do not bypass with an interactive node.
 - [ ] **8.** FROM `#621` Condition diamond (oraya_guest_count = "3" OR oraya_guest_count = "4") — **TRUE output** (`conditionOutputTrue`)
       TO `#470` Condition diamond (oraya_villa = "null") — input socket (`conditionInput`).
       Purpose: Bedroom OK — 2 bedrooms fit 3–4 guests (retry ask) — continues to the villa check.
       Where: source at canvas ≈ (6240, -1300); destination at ≈ (6552, -1277) (level with and right of the source).
+      ⛔ NOT OPERATOR-DRAWABLE (Condition → Condition) — the editor rejects this connection with the infinite-loop warning (round trip #2, 2026-07-03). Do not attempt; do not bypass with an interactive node.
 - [ ] **9.** FROM `#614` Condition diamond (oraya_guest_count = "3" OR oraya_guest_count = "4") — **FALSE output** (`conditionOutputFalse`)
       TO `#616` Message "That bedroom setup won’t quite fit #oraya_guest_count# overnight guest…" — input socket (`textInput`).
       Purpose: Bedroom mismatch — 2 bedrooms with 5–8 guests (first ask) — shows the capacity explanation and re-ask.
@@ -62,6 +71,7 @@ Each item: drag a line from the stated OUTPUT of the source node to the (single)
       TO `#660` Condition diamond (oraya_guest_count = "null") — input socket (`conditionInput`).
       Purpose: Edit attempt that already has BOTH dates continues to the guest check.
       Where: source at canvas ≈ (2460, -280); destination at ≈ (3760, -400) (above and right of the source).
+      ⛔ NOT OPERATOR-DRAWABLE (Condition → Condition) — the editor rejects this connection with the infinite-loop warning (round trip #2, 2026-07-03). Do not attempt; do not bypass with an interactive node.
 - [ ] **13.** FROM `#664` Message "Perfect, thank you 😊" — **output** (`textOutput`)
       TO `#663` Condition diamond (oraya_guest_count = "1" OR oraya_guest_count = "2" OR oraya_guest_count = "3" OR oraya_guest_count = "4" OR oraya_guest_count = "5" OR oraya_guest_count = "6" OR oraya_guest_count = "7" OR oraya_guest_count = "8") — input socket (`conditionInput`).
       Purpose: Edit guest count the guest JUST answered continues into the supported-count check.
@@ -70,14 +80,17 @@ Each item: drag a line from the stated OUTPUT of the source node to the (single)
       TO `#690` Condition diamond (oraya_villa = "null") — input socket (`conditionInput`).
       Purpose: Edit bedroom OK — 2 bedrooms fit 3–4 guests (first ask) — continues to the Edit villa check.
       Where: source at canvas ≈ (5840, -520); destination at ≈ (6540, -400) (below and right of the source).
+      ⛔ NOT OPERATOR-DRAWABLE (Condition → Condition) — the editor rejects this connection with the infinite-loop warning (round trip #2, 2026-07-03). Do not attempt; do not bypass with an interactive node.
 - [ ] **15.** FROM `#679` Condition diamond (oraya_bedroom_count = "3 bedrooms" OR oraya_guest_count = "1" OR oraya_guest_count = "2") — **TRUE output** (`conditionOutputTrue`)
       TO `#690` Condition diamond (oraya_villa = "null") — input socket (`conditionInput`).
       Purpose: Edit bedroom OK — 3 bedrooms or 1–2 guests (retry ask) — continues to the Edit villa check.
       Where: source at canvas ≈ (5320, -160); destination at ≈ (6540, -400) (above and right of the source).
+      ⛔ NOT OPERATOR-DRAWABLE (Condition → Condition) — the editor rejects this connection with the infinite-loop warning (round trip #2, 2026-07-03). Do not attempt; do not bypass with an interactive node.
 - [ ] **16.** FROM `#681` Condition diamond (oraya_guest_count = "3" OR oraya_guest_count = "4") — **TRUE output** (`conditionOutputTrue`)
       TO `#690` Condition diamond (oraya_villa = "null") — input socket (`conditionInput`).
       Purpose: Edit bedroom OK — 2 bedrooms fit 3–4 guests (retry ask) — continues to the Edit villa check.
       Where: source at canvas ≈ (5840, -160); destination at ≈ (6540, -400) (above and right of the source).
+      ⛔ NOT OPERATOR-DRAWABLE (Condition → Condition) — the editor rejects this connection with the infinite-loop warning (round trip #2, 2026-07-03). Do not attempt; do not bypass with an interactive node.
 - [ ] **17.** FROM `#674` Condition diamond (oraya_guest_count = "3" OR oraya_guest_count = "4") — **FALSE output** (`conditionOutputFalse`)
       TO `#676` Message "That bedroom setup won’t quite fit #oraya_guest_count# overnight guest…" — input socket (`textInput`).
       Purpose: Edit bedroom mismatch — 2 bedrooms with 5–8 guests (first ask) — shows the capacity explanation and re-ask.

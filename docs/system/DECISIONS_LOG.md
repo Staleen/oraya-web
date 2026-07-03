@@ -16,6 +16,25 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-07-03 - Round trip #2: the WhatChimp editor refuses Condition → Condition connections; the Option A hybrid redraw plan is not operator-executable; candidate halted pending a drawability probe gate and a human architecture decision
+
+**Decision:** four findings/decisions from the operator's round trip #2 attempt (fresh disposable bot, redraw item #1 attempted exactly as documented):
+
+1. **Platform contract (operator-proven live):** the current WhatChimp editor **refuses to draw a Condition → Condition connection**, rejecting it with *"This will make an infinite loop. Place a button/list/section/interactive between these two nodes."* — even though the graph is a DAG (no real loop). Corollary, now binding on all future work: **a merge existing in a saved export does NOT prove the present editor can draw it.** The operator's own v5.5 `#440` 5-parent merge — cited in the Option A entry below as drawability evidence — is itself Condition → Condition ×5 (type audit of the v5.5 bytes); whatever created those edges, the present UI refuses to create them.
+2. **Consequence for the shipped candidate:** the machine type-audit of the 18-edge redraw plan shows **11 edges are Condition → Condition** (items #1–4, #6–8, #12, #14–16; hubs `440`/`470`/`660`/`690` cannot receive their drawn edges at all) and the remaining 7 type pairs (Text→Condition ×2, Condition→Text ×2, Text→User Input Flow ×2, HTTP API→Condition ×1) are unproven. **The Option A hybrid as shipped is not operator-repairable; `Oraya_natural_intake_v6.txt` (SHA `0066192D…3A39`) and `V6_REDRAW_CHECKLIST.md` are HALTED — not approved for human testing.** No interactive node may be inserted to bypass the editor warning without explicit operator UX approval (it would add a guest-visible step at every merge).
+3. **Rules encoded before any regeneration (per the operator's directive):** the profile gains `importGraphContract.editorRejectedDrawPairs` (`[["Condition","Condition"]]`) and `editorProvenDrawPairs` (empty — round trip #2 produced one proven rejection and zero proven acceptances); the validator gains a `redraw-drawability` check (error on any operator-drawn hub edge using a rejected pair, warning on any unproven pair) — the shipped candidate now fails validation **by design** with exactly 11 errors + 7 warnings; the generator emits a ⛔ halt banner and per-item NOT-OPERATOR-DRAWABLE markers into the regenerated checklist (artifact bytes unchanged) and no longer states the disproven drawability claim.
+4. **Next steps are gated, in order:** (a) operator runs the 5-probe editor drawability matrix ([artifacts/whatchimp/roundtrips/ROUNDTRIP_2_FINDINGS.md](../../artifacts/whatchimp/roundtrips/ROUNDTRIP_2_FINDINGS.md) §6: Condition→User Input Flow, Text→User Input Flow, Condition→Text, Text→Condition, HTTP API→Condition), results recorded in the profile; (b) **human decision** picks the rebuild architecture. The behavior-preserving direction is quantified exactly in the findings: the **Condition-clone cascade** (Condition nodes are guest-invisible; splitting the 7 convergent condition hubs per-parent adds **21 nodes** (165→186) and relocates every merge onto interactive/Text nodes at the cost of **39 operator draws**, guest behavior byte-identical) — viable only if probe (a) passes for `Condition → User Input Flow`; otherwise the alternatives are an approved guest-visible UX change or a quantified behavior reduction (up to ~14 self-service re-entry paths degraded to escalation endings). A full pure-tree unroll stays infeasible (492,864 nodes, round trip #1).
+
+**Reason:** round trip #2 was the human gate on the Option A hybrid; it failed at the first drawn edge with a hard editor rejection, invalidating the plan's central assumption and the evidentiary use of saved-export merges for drawability.
+
+**Impact:** validator + profile + generator + tests updated as in point 3 (tooling tests 31/31; candidate pinned at 11 by-design errors); `ROUNDTRIP_2_FINDINGS.md` added (evidence, audit table, cascade quantification, probe plan); `V6_DEPENDENCIES.md` status → HALTED; `V6_ROUNDTRIP_CHECKLIST.md` top warning + round-trip procedure gated on the probes; KNOWN_BUGS #10 follow-up; regenerated `V6_REDRAW_CHECKLIST.md` (halt banner; artifact bytes unchanged) recopied to the operator folder. No flow-graph changes, no application code, no schema, no dependency. PR #67 stays open and unmerged; production WhatChimp untouched.
+
+**Reversible?:** the halt is reversed only by a future candidate whose entire redraw plan uses operator-**proven** drawable pairs and which passes the full round-trip procedure, recorded in a superseding entry.
+
+**Supersedes:** the "operator draws exactly 18 connections" execution plan and the "editor-drawn merges are export-proven (v5.5 `#440`)" drawability rationale in the Option A entry below (its body preserved verbatim per the append-only rule). The Option A architecture itself (tail clones + declared hubs) remains the operator-chosen direction; its merge-repair mechanism must be redesigned per point 4.
+
+---
+
 ## 2026-07-03 - Option A hybrid rebuild shipped: branch-local tail clones + 11 declared hub merges + an 18-edge operator redraw checklist
 
 **Decision:** the operator selected **Option A (hybrid)** from the round-trip-#1 entry below, and the v6 generator/artifact are rebuilt to it:
@@ -33,6 +52,8 @@ Durable architectural and operational decisions. Append-only - never edit a past
 **Reversible?:** yes — the generator is deterministic and the pre-hybrid candidate is pinned; but import-safety may only be claimed after round trip #2 (import → 18 redraws → save → close → reopen → export → `compare-whatchimp-roundtrip.mjs` PRESERVED exit 0 + validator exit 0) passes on a fresh disposable bot, recorded in a superseding entry.
 
 **Supersedes:** resolves the "structural direction awaits operator decision" item in the round-trip-#1 entry below (its body preserved verbatim per the append-only rule). The "not import-safe" status now applies to the pinned round-trip-#1 fixture; the canonical artifact's status is "hybrid candidate pending round trip #2".
+
+> **Follow-up (2026-07-03):** round trip #2 subsequently proved the 18-edge redraw plan is **not operator-executable** — the editor refuses Condition → Condition connections (11 of the 18), and the v5.5 `#440` drawability evidence cited here is itself Condition → Condition ×5. This candidate is HALTED. See the "Round trip #2" entry above. This body is preserved verbatim per the append-only rule.
 
 ---
 

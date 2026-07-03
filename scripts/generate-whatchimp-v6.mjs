@@ -33,10 +33,18 @@
  *     escalation texts), and
  *   - keeps the smallest irreducible set of central hub merges. Every hub
  *     edge beyond the first-listed one is silently dropped by the import and
- *     MUST be re-drawn by the operator in the WhatChimp editor after import
- *     (editor-drawn merges are export-proven: the operator's own v5.5
- *     carries a 5-parent node). The exact machine-derived redraw list is
- *     emitted alongside the artifact (third CLI argument).
+ *     MUST be re-drawn by the operator in the WhatChimp editor after import.
+ *     The exact machine-derived redraw list is emitted alongside the
+ *     artifact (third CLI argument).
+ *     ⛔ ROUND TRIP #2 (2026-07-03, roundtrips/ROUNDTRIP_2_FINDINGS.md): the
+ *     editor REFUSES to draw Condition → Condition connections ("This will
+ *     make an infinite loop…"). 11 of this architecture's 18 redraw edges
+ *     are Condition → Condition, so THIS ARCHITECTURE IS NOT OPERATOR-
+ *     REPAIRABLE and is halted. The v5.5 5-parent merge previously cited as
+ *     drawability evidence is itself Condition → Condition ×5 — export
+ *     survival does not prove present-editor drawability. Do not regenerate
+ *     toward testing until the architecture removes every editor-rejected
+ *     (and unproven, unless probed) drawn pair.
  *   - The first-listed connection of every hub is chosen so that the
  *     UN-REPAIRED import still runs the complete happy path (all fields
  *     extracted → bedroom OK → confirmation → handoff), never fabricates a
@@ -613,6 +621,19 @@ const HUB_DESCRIPTIONS = {
   694: "Edit confirmation summary entry",
 };
 
+// Node-type pairs the live WhatChimp editor has REFUSED to draw (round trip #2,
+// 2026-07-03: attempting Condition FALSE output → Condition input produced
+// "This will make an infinite loop. Place a button/list/section/interactive
+// between these two nodes."). Kept in sync with the profile's
+// importGraphContract.editorRejectedDrawPairs (tested). Saved exports carrying
+// such merges (v5.5 #440 is a 5-parent Condition→Condition merge) prove the
+// edges can EXIST, not that the present editor permits DRAWING them.
+const EDITOR_REJECTED_DRAW_PAIRS = new Set(["Condition → Condition"]);
+
+function drawPairOf(nodes, e) {
+  return `${nodes[String(e.from)].name} → ${nodes[String(e.to)].name}`;
+}
+
 function edgeKeyOf(e) {
   return `${e.from}:${e.outKey} -> ${e.to}:${e.inKey}`;
 }
@@ -676,7 +697,14 @@ function renderRedrawChecklist(flow, plan, artifactSha256) {
   lines.push("");
   lines.push(`**Applies to exactly:** \`Oraya_natural_intake_v6.txt\` with SHA-256 \`${artifactSha256}\`. If your file's hash differs, regenerate this checklist.`);
   lines.push("");
-  lines.push("**Why this exists:** authenticated round trip #1 (2026-07-03) proved WhatChimp's import keeps only the FIRST serialized connection per input socket and silently drops the rest (evidence: `roundtrips/ROUNDTRIP_1_FINDINGS.md`). This candidate clones every small branch-local tail, but " + String(plan.length) + " central merge connections remain by design — the WhatChimp editor supports drawing them (the operator's own v5.5 carries a 5-parent merge), so you re-draw exactly these after import.");
+  const rejectedSeqs = plan
+    .map((e, i) => (EDITOR_REJECTED_DRAW_PAIRS.has(drawPairOf(nodes, e)) ? i + 1 : null))
+    .filter((n) => n !== null);
+  if (rejectedSeqs.length) {
+    lines.push(`> **⛔ HALTED — NOT APPROVED FOR HUMAN TESTING (2026-07-03, round trip #2).** The WhatChimp editor REFUSED to draw item #1 below (Condition → Condition) with: *"This will make an infinite loop. Place a button/list/section/interactive between these two nodes."* ${rejectedSeqs.length} of the ${plan.length} connections (items #${rejectedSeqs.join(", #")}) are Condition → Condition and are treated as not operator-drawable; the drawability of the remaining ${plan.length - rejectedSeqs.length} node-type pairs has never been proven in the current editor either. Do NOT attempt further drawing, do NOT insert interactive nodes to bypass the warning, and do NOT run any live testing with this candidate. Evidence + full re-audit: \`roundtrips/ROUNDTRIP_2_FINDINGS.md\`.`);
+    lines.push("");
+  }
+  lines.push("**Why this exists:** authenticated round trip #1 (2026-07-03) proved WhatChimp's import keeps only the FIRST serialized connection per input socket and silently drops the rest (evidence: `roundtrips/ROUNDTRIP_1_FINDINGS.md`). This candidate clones every small branch-local tail, but " + String(plan.length) + " central merge connections remain by design, to be re-drawn by the operator after import. NOTE (2026-07-03, round trip #2): the operator's own v5.5 carries a 5-parent merge, but that merge is itself Condition → Condition ×5 — its survival in a saved export does NOT prove the current editor can draw such connections, and the editor in fact refuses them (see the halt banner above).");
   lines.push("");
   lines.push("**When:** on a fresh disposable TEST bot, immediately after importing the artifact and BEFORE any testing: draw all connections below, then Save → close the editor → reopen → export → verify (commands at the bottom).");
   lines.push("");
@@ -694,6 +722,9 @@ function renderRedrawChecklist(flow, plan, artifactSha256) {
     lines.push(`      TO \`#${e.to}\` ${nodeDocLabel(nodes, e.to)} — input socket (\`${e.inKey}\`).`);
     lines.push(`      Purpose: ${e.purpose}`);
     lines.push(`      Where: source at canvas ≈ ${posOf(nodes, e.from)}; destination at ≈ ${posOf(nodes, e.to)} (${dir}).`);
+    if (EDITOR_REJECTED_DRAW_PAIRS.has(drawPairOf(nodes, e))) {
+      lines.push(`      ⛔ NOT OPERATOR-DRAWABLE (${drawPairOf(nodes, e)}) — the editor rejects this connection with the infinite-loop warning (round trip #2, 2026-07-03). Do not attempt; do not bypass with an interactive node.`);
+    }
   });
   lines.push("");
   lines.push("## Hub-by-hub visual map");

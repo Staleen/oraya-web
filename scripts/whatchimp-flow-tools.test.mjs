@@ -268,21 +268,47 @@ test("validator: v5.5 operator export fails with semantic errors", { skip: !exis
 // every small branch-local tail and keeps exactly the profile-declared hub
 // merges (`importGraphContract.approvedHubMerges`), whose beyond-first edges
 // the operator re-draws after import per artifacts/whatchimp/V6_REDRAW_CHECKLIST.md.
-// The candidate must validate completely clean; any UNdeclared convergence
-// or hub-count drift is an error.
+// ⛔ Round trip #2 (2026-07-03, roundtrips/ROUNDTRIP_2_FINDINGS.md): the live
+// editor REFUSED to draw a Condition → Condition connection ("This will make
+// an infinite loop…"). 11 of this candidate's 18 redraw edges are
+// Condition → Condition, so the candidate now fails validation BY DESIGN with
+// exactly those 11 `redraw-drawability` errors (plus 7 unproven-pair
+// warnings) and everything else clean — it can no longer be validated as
+// import-ready, mirroring the round-trip-#1 pattern.
 
-test("validator: generated v6 passes with zero errors and zero warnings", { skip: !existsSync(v6Path) }, () => {
+test("validator: canonical v6 fails BY DESIGN with exactly the 11 editor-rejected Condition→Condition redraw edges and nothing else", { skip: !existsSync(v6Path) }, () => {
   const flow = JSON.parse(readFileSync(v6Path, "utf8"));
   const { errors, warnings } = validateFlow(flow, profile);
-  assert.deepEqual(errors, [], errors.join("\n"));
-  assert.deepEqual(warnings, [], warnings.join("\n"));
+  assert.equal(errors.length, 11, errors.join("\n"));
+  assert.ok(errors.every((e) => e.startsWith("[redraw-drawability]") && e.includes("Condition → Condition")), errors.join("\n"));
+  // the four hubs whose drawn edges the editor cannot create
+  for (const hub of ["#440", "#470", "#660", "#690"]) {
+    assert.ok(errors.some((e) => e.includes(`→ ${hub}:`)), `expected a rejected drawn edge into ${hub}\n${errors.join("\n")}`);
+  }
+  // every OTHER drawn edge is an unproven type pair until probed live
+  assert.equal(warnings.length, 7, warnings.join("\n"));
+  assert.ok(warnings.every((w) => w.startsWith("[redraw-drawability]") && w.includes("never been proven")), warnings.join("\n"));
 });
 
-test("validator: canonical v6 passes strict binding (fully bound, no second binding step)", { skip: !existsSync(v6Path) }, () => {
+test("validator: strict binding stays clean on the canonical v6 — the only errors are the redraw-drawability ones", { skip: !existsSync(v6Path) }, () => {
   const flow = JSON.parse(readFileSync(v6Path, "utf8"));
   const { errors, warnings } = validateFlow(flow, profile, { strictBinding: true });
-  assert.deepEqual(errors, [], errors.join("\n"));
-  assert.deepEqual(warnings, [], warnings.join("\n"));
+  assert.equal(errors.length, 11, errors.join("\n"));
+  assert.ok(errors.every((e) => e.startsWith("[redraw-drawability]")), errors.join("\n"));
+  assert.equal(warnings.length, 7, warnings.join("\n"));
+});
+
+test("redraw-drawability: generator halt markers, profile pairs, and validator findings all agree", { skip: !existsSync(v6Path) }, () => {
+  // single source of evidence, three encodings — they must never drift
+  assert.deepEqual(profile.importGraphContract.editorRejectedDrawPairs, [["Condition", "Condition"]]);
+  assert.deepEqual(profile.importGraphContract.editorProvenDrawPairs, []);
+  const checklist = readFileSync(path.join(repoRoot, "artifacts", "whatchimp", "V6_REDRAW_CHECKLIST.md"), "utf8");
+  assert.ok(checklist.includes("⛔ HALTED — NOT APPROVED FOR HUMAN TESTING"), "checklist must carry the halt banner");
+  assert.ok(checklist.includes("items #1, #2, #3, #4, #6, #7, #8, #12, #14, #15, #16"), "banner must name the 11 blocked items");
+  const markerCount = checklist.split("⛔ NOT OPERATOR-DRAWABLE (Condition → Condition)").length - 1;
+  assert.equal(markerCount, 11, "exactly the 11 Condition→Condition items must carry the per-item marker");
+  assert.ok(checklist.includes("roundtrips/ROUNDTRIP_2_FINDINGS.md"), "checklist must point at the round-trip-#2 evidence");
+  assert.ok(!checklist.includes("the WhatChimp editor supports drawing them"), "the disproven drawability claim must not reappear");
 });
 
 test("artifact: hub merges match the profile's approvedHubMerges exactly (no undeclared convergence)", { skip: !existsSync(v6Path) }, () => {
@@ -346,14 +372,14 @@ test("mutation: replacing the real bedroom field id 69114 fails strict binding",
   assert.ok(hasError(errors, "is not in the dependency manifest"), errors.join("\n"));
 });
 
-test("artifact: canonical v6 is fully bound — strict-clean, placeholder-free, exact bedroom bindings, export-proven question transitions", { skip: !existsSync(v6Path) }, () => {
+test("artifact: canonical v6 is fully bound — placeholder-free, exact bedroom bindings, export-proven question transitions", { skip: !existsSync(v6Path) }, () => {
   const raw = readFileSync(v6Path, "utf8");
   assert.ok(!raw.includes("__ORAYA_BEDROOM_COUNT_FIELD_ID__"), "placeholder string must not remain in the delivery file");
   assert.ok(!raw.includes("__ORAYA"), "no placeholder prefix may remain in the delivery file");
   const flow = JSON.parse(raw);
-  const { errors, warnings } = validateFlow(flow, profile, { strictBinding: true });
-  assert.deepEqual(errors, [], errors.join("\n"));
-  assert.deepEqual(warnings, [], warnings.join("\n"));
+  const { errors } = validateFlow(flow, profile, { strictBinding: true });
+  // the only findings are the by-design redraw-drawability ones (round trip #2)
+  assert.ok(errors.every((e) => e.startsWith("[redraw-drawability]")), errors.join("\n"));
   // exact bedroom bindings: 4 questions on "69114", 8 condition rows on
   // "custom_69114" (each row serializes the id in both the variable and the
   // selected-values array — 16 array entries).

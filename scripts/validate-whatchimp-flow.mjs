@@ -224,6 +224,36 @@ export function validateFlow(flow, profile, opts = {}) {
     }
   }
 
+  // Operator-drawability of the declared hub redraws (round trip #2, 2026-07-03).
+  // The operator attempted redraw item #1 (Condition FALSE output → Condition
+  // input) in the live editor and WhatChimp REFUSED the connection: "This will
+  // make an infinite loop. Place a button/list/section/interactive between
+  // these two nodes." Evidence: artifacts/whatchimp/roundtrips/ROUNDTRIP_2_FINDINGS.md.
+  // Saved exports containing such merges (the operator's own v5.5 #440 is a
+  // 5-parent Condition→Condition merge) prove those edges can EXIST in a saved
+  // graph, NOT that the present editor permits DRAWING them. The profile carries:
+  //   editorRejectedDrawPairs — [sourceType, destType] pairs the editor has
+  //     refused live (error: the redraw plan is impossible for the operator);
+  //   editorProvenDrawPairs — pairs an operator has successfully drawn on this
+  //     tenant (anything else warns as unproven until probed in the editor).
+  if (contract?.approvedHubMerges) {
+    const rejectedPairs = (contract.editorRejectedDrawPairs ?? []).map((p) => p.join(" → "));
+    const provenPairs = (contract.editorProvenDrawPairs ?? []).map((p) => p.join(" → "));
+    for (const id of Object.keys(contract.approvedHubMerges)) {
+      const node = nodes[id];
+      if (!node) continue;
+      for (const e of inEdges(node).slice(1)) {
+        const src = nodes[e.node];
+        const pair = `${src?.name} → ${node.name}`;
+        if (rejectedPairs.includes(pair)) {
+          err("redraw-drawability", `hub ${nodeLabel(id, node)}: operator-drawn edge #${e.node}:${e.output} → #${id}:${e.inKey} is ${pair} — the WhatChimp editor REFUSES to draw this connection ("This will make an infinite loop…", round trip #2, 2026-07-03); the architecture must not require it (artifacts/whatchimp/roundtrips/ROUNDTRIP_2_FINDINGS.md)`);
+        } else if (!provenPairs.includes(pair)) {
+          warn("redraw-drawability", `hub ${nodeLabel(id, node)}: operator-drawn edge #${e.node}:${e.output} → #${id}:${e.inKey} is ${pair} — drawability of this node-type pair has never been proven in the current editor; probe it on a disposable bot before any candidate relies on it`);
+        }
+      }
+    }
+  }
+
   // 10. exactly one start node, and it is the trigger
   const startIds = ids.filter((id) => inEdges(nodes[id]).length === 0);
   if (startIds.length !== 1) {

@@ -35,7 +35,9 @@
       "676": 2,
       "690": 4,
       "694": 2
-    }
+    },
+    "editorRejectedDrawPairs": [["Condition", "Condition"]],
+    "editorProvenDrawPairs": []
   },
   "roundTripIgnoreFields": ["uniqueId", "postbackId", "newPostbackId", "xitFbpostbackId"],
   "stayTextField": "oraya_stay_text",
