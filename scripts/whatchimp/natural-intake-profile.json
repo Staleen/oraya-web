@@ -70,13 +70,15 @@
       "check_in": "oraya_check_in",
       "check_out": "oraya_check_out",
       "villa": "oraya_villa",
-      "guest_count": "oraya_guest_count"
+      "guest_count": "oraya_guest_count",
+      "guest_followup": "oraya_guest_followup"
     },
     "8101": {
       "check_in": "oraya_check_in",
       "check_out": "oraya_check_out",
       "villa": "oraya_villa",
-      "guest_count": "oraya_guest_count"
+      "guest_count": "oraya_guest_count",
+      "guest_followup": "oraya_guest_followup"
     },
     "7459": { "prefill_url": "oraya_prefill_url" },
     "6961": { "prefill_url": "oraya_prefill_url" }

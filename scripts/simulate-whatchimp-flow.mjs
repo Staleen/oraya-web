@@ -85,6 +85,13 @@ export function runScenario(flow, profile, scenario) {
   const apiCalls = [];
   let leadSubmits = 0; // successful Lead Submit calls (fixture not failed)
   let leadAttempts = 0; // Lead Submit nodes fired, success or failure
+  // pre-API safety-link ordering: the guest must already HOLD the canonical
+  // booking URL before any external call can fire (a platform halt on a
+  // failed HTTP call must never leave the guest link-less).
+  let canonicalShown = false;
+  const noteShown = (text) => {
+    if (profile.canonicalBookingUrl && text.includes(profile.canonicalBookingUrl)) canonicalShown = true;
+  };
 
   const startId = Object.keys(nodes).find((id) => nodes[id].name === "Start Bot Flow");
   if (!startId) return { failures: ["no Start Bot Flow node"], asked, messages, fields, leadSubmits };
@@ -116,6 +123,7 @@ export function runScenario(flow, profile, scenario) {
     if (name === "Text") {
       const text = interpolate(node.data?.textMessage ?? "", fields);
       messages.push(text);
+      noteShown(text);
       const next = firstOut(node);
       if (!next) {
         terminalText = text;
@@ -129,6 +137,7 @@ export function runScenario(flow, profile, scenario) {
     if (name === "User Input Flow Single") {
       const question = interpolate(node.data?.question ?? "", fields);
       asked.push(question);
+      noteShown(question);
       const input = inputs.shift();
       if (!input) {
         fail(`ran out of scripted answers at question "${question.slice(0, 80)}"`);
@@ -172,6 +181,9 @@ export function runScenario(flow, profile, scenario) {
     if (name === "HTTP API") {
       const apiId = node.data?.httpApiId ?? "";
       apiCalls.push(apiId);
+      if (profile.canonicalBookingUrl && !canonicalShown) {
+        fail(`HTTP API ${apiId} (node #${current}) fired before the guest was shown ${profile.canonicalBookingUrl} — a platform halt here would strand the guest`);
+      }
       const fixture = fixtures.shift();
       if (!fixture) {
         fail(`ran out of API fixtures at HTTP API #${current} (api ${apiId})`);
@@ -283,12 +295,16 @@ export function runScenario(flow, profile, scenario) {
 
 // ─── fixtures / scenario helpers ────────────────────────────────────────────
 
-/** extracted_text-style normalization fixture: every key present, "null" when missing. */
+/** extracted_text-style normalization fixture: every key present, "null" when
+ * missing. `guest_followup` is ALWAYS "null" — the backend never extracts an
+ * overflow count; the mapping exists purely as the deterministic
+ * current-attempt reset of `oraya_guest_followup`. */
 const norm = (checkIn, checkOut, villa, guests) => ({
   check_in: checkIn ?? "null",
   check_out: checkOut ?? "null",
   villa: villa ?? "null",
   guest_count: guests ?? "null",
+  guest_followup: "null",
 });
 
 const stay = (answer) => ({ expect: "tell me what you already know", answer });
@@ -938,7 +954,7 @@ export function buildScenarios() {
       },
     },
     {
-      name: "F09 stale guest-overflow value from an abandoned attempt cannot contaminate routing",
+      name: "F09 stale guest-overflow \"12\" is RESET to \"null\" by the current attempt's normalization — a supported-count lead cannot carry it",
       staleFields: { ...STALE_ALL, oraya_guest_followup: "12" },
       inputs: [stay("Villa Mechmech August 5 to 7 for 2"), bedroom("1 bedroom"), confirmYes, ...whatsappTail],
       fixtures: [
@@ -949,10 +965,32 @@ export function buildScenarios() {
         leadSubmitted: true,
         terminalIncludes: [NOT_CONFIRMED],
         askedExcludes: ["How many guests exactly"],
-        // the stale overflow value stays in its field (no clear-field
-        // primitive exists in WhatChimp) — it is consumer-ignored because
-        // oraya_guest_count is not "More than 8"; routing is unaffected.
-        fieldEquals: { oraya_guest_count: "2", oraya_guest_followup: "12" },
+        // the extracted_text.guest_followup → oraya_guest_followup mapping
+        // deterministically overwrites the stale "12" with the literal
+        // "null" on the current attempt's 7466 call, BEFORE any Lead Submit
+        // node can fire — the submitted lead body reads "null", never "12".
+        fieldEquals: { oraya_guest_count: "2", oraya_guest_followup: "null" },
+      },
+    },
+    {
+      name: "F11 escalation Lead Submit failure at the escalation API node → #643 still delivers the booking links",
+      inputs: [
+        stay("Mechmech, 3 guests"),
+        { expect: "check-in and check-out dates", answer: "whenever" },
+        { expect: "check-in and check-out dates together", answer: "still whenever" },
+        escName,
+      ],
+      fixtures: [
+        { api: "7466", response: norm(null, null, "Villa Mechmech", "3") },
+        { api: "8101", response: norm(null, null, "Villa Mechmech", "3") },
+        { api: "8101", response: norm(null, null, "Villa Mechmech", "3") },
+        { api: "6961", failed: true, response: {} },
+      ],
+      expect: {
+        leadAttempted: true,
+        leadSubmitted: false,
+        terminalIncludes: ["https://stayoraya.com/book", "not a confirmed booking"],
+        messagesInclude: ["trouble reading the dates"],
       },
     },
     {

@@ -310,3 +310,14 @@ test("extracted_text is never null-valued on the unclear path (overwrite guarant
     assert.notEqual(value, "");
   }
 });
+
+test("extracted_text.guest_followup is always the literal \"null\" reset value", () => {
+  for (const text of [
+    "Villa Mechmech June 10 to June 15 for 3 guests",
+    "we are 12 people",
+    "?????",
+  ]) {
+    const r = extractStayIntent({ stay_text: text, reference_date: REF });
+    assert.equal(r.extracted_text.guest_followup, "null");
+  }
+});

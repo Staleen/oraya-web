@@ -281,6 +281,14 @@ function generateV6(flow) {
   // 3. Edit question binds the real oraya_stay_text field id.
   nodes["497"].data.customField = FIELD.stayText.id;
 
+  // 3b. Pre-API safety link: the opening intake question hands the guest the
+  // canonical booking URL BEFORE the first HTTP API call can fire, so even
+  // if the WhatChimp runtime halts on an HTTP failure (unverified platform
+  // behavior), the guest already holds an actionable booking continuation.
+  nodes["400"].data.question =
+    nodes["400"].data.question +
+    "\n\n(You can also complete your booking online at any time: https://stayoraya.com/book)";
+
   // 4. Confirmation shows exact overnight guests + bedrooms.
   nodes["491"].data.question = COPY.confirmation;
 

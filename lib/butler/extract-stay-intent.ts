@@ -50,6 +50,18 @@ export interface StayIntentResult {
     nights:      string;
     villa:       string;
     guest_count: string;
+    /**
+     * Always the literal string "null" — the extractor never parses an
+     * above-capacity overflow count from free text. The key exists as a
+     * deterministic current-attempt RESET: mapping it to the WhatChimp
+     * `oraya_guest_followup` field on every initial/Edit normalization and
+     * refinement call clears any stale exact-overflow value from an earlier
+     * abandoned attempt, so a later supported-count lead can never carry a
+     * contradictory leftover (e.g. a stale "12" next to guest_count "2").
+     * All normalization calls happen before the current attempt's guest
+     * question, so a genuinely captured overflow value is never clobbered.
+     */
+    guest_followup: string;
   };
   human_readable: string;
   safe_message: string;
@@ -394,6 +406,7 @@ function buildResult(input: BuildResultInput): StayIntentResult {
       nights:      input.nights === null ? "null" : String(input.nights),
       villa:       input.villa ?? "null",
       guest_count: input.guestCount === null ? "null" : String(input.guestCount),
+      guest_followup: "null",
     },
     human_readable: human,
     safe_message:   composeSafeMessage(status, input, human, missing),

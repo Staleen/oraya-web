@@ -383,6 +383,35 @@ export function validateFlow(flow, profile, opts = {}) {
     }
   }
 
+  // pre-API safety-link invariant: from the start node, the guest must be
+  // shown the canonical booking URL BEFORE any HTTP API node can be reached.
+  // Traverse from start, treating any node whose guest-facing text contains
+  // the canonical URL as a barrier (the guest holds the link once it is
+  // reached); if an HTTP API node is reachable without crossing a barrier,
+  // a platform halt on that call would strand a guest with no link.
+  if (profile.canonicalBookingUrl && startId) {
+    const showsLink = (n) =>
+      `${n?.data?.textMessage ?? ""}\n${n?.data?.question ?? ""}`.includes(profile.canonicalBookingUrl);
+    const seen = new Set([String(startId)]);
+    const queue = [String(startId)];
+    while (queue.length) {
+      const id = queue.shift();
+      const node = nodes[id];
+      if (showsLink(node)) continue; // guest received the link here — stop expanding
+      if (node?.name === "HTTP API") {
+        err("pre-api-safety-link", `${nodeLabel(id, node)} is reachable from the start before the guest has been shown ${profile.canonicalBookingUrl}`);
+        continue;
+      }
+      for (const edge of outEdges(node ?? {})) {
+        const next = String(edge.node);
+        if (!seen.has(next)) {
+          seen.add(next);
+          queue.push(next);
+        }
+      }
+    }
+  }
+
   // canonical-domain hygiene: every guest-facing text (messages + questions)
   // may only reference https://stayoraya.com — never www., .lb variants,
   // bare oraya.com, or plain http.
