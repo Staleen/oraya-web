@@ -27,7 +27,7 @@ Then:
    - `apis.initialNormalize.id` → TEST Stay Intent id
    - `apis.refine.id` → TEST Refine id
    - `apis.leadSubmit.ids` → **both** TEST lead ids, e.g. `["<whatsapp-test-id>", "<website-handoff-test-id>"]`
-   - `apiFieldWrites`: rename the `"7466"`/`"8101"` keys to the TEST Stay Intent / Refine ids (same mapping objects), rename `"6961"` → `<whatsapp-test-id>` (`{}`), and rename `"7459"` → `<website-handoff-test-id>` keeping `{ "prefill_url": "oraya_prefill_url" }` so the simulator/validator still model the handoff URL write.
+   - `apiFieldWrites`: rename the `"7466"`/`"8101"` keys to the TEST Stay Intent / Refine ids (same mapping objects, including `guest_followup`), rename `"6961"` → `<whatsapp-test-id>` **preserving** `{ "prefill_url": "oraya_prefill_url" }` (matches A1.3 — the WhatsApp lead-acknowledgement and escalation endings display the secure link), and rename `"7459"` → `<website-handoff-test-id>` **preserving** `{ "prefill_url": "oraya_prefill_url" }`. Both TEST Lead Submit entries keep the prefill mapping; the canonical `/book` fallback in the terminal texts is complementary, never a replacement.
    Then validate re-exports with:
    `node scripts/validate-whatchimp-flow.mjs <re-export> --profile <test-profile.json> --strict-binding --bedroom-field-id <REAL_ID>`.
 

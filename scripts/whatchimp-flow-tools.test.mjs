@@ -210,6 +210,25 @@ test("validator: v6 fails strict-binding until the real bedroom field id is boun
   assert.ok(errors.length > 0);
 });
 
+test("profile: every leadSubmit id maps prefill_url → oraya_prefill_url", () => {
+  // Both Lead Submit integrations (WhatsApp/escalation 6961 and website-handoff
+  // 7459, and any TEST clone that replaces them in a TEST profile) must write
+  // the secure prefill URL into oraya_prefill_url, or the terminal messages'
+  // #oraya_prefill_url# slot goes blank and only the canonical fallback
+  // remains. The mapping and the canonical fallback are complementary — this
+  // test guards the mapping; the validator's terminal-continuation and
+  // canonical-domain checks guard the fallback.
+  const ids = profile.apis.leadSubmit.ids;
+  assert.ok(Array.isArray(ids) && ids.length >= 2, "leadSubmit must list both Lead Submit integration ids");
+  for (const id of ids) {
+    assert.equal(
+      profile.apiFieldWrites?.[id]?.prefill_url,
+      "oraya_prefill_url",
+      `leadSubmit id ${id} must map prefill_url → oraya_prefill_url in apiFieldWrites`,
+    );
+  }
+});
+
 // ─── simulator engine ───────────────────────────────────────────────────────
 
 test("simulator: condition evaluation (equal / contains / any / all)", () => {
