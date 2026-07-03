@@ -224,52 +224,56 @@ export function validateFlow(flow, profile, opts = {}) {
     }
   }
 
-  // Operator-drawability of the declared hub redraws (round trip #2 +
-  // corrected live probes, 2026-07-03 — evidence:
-  // artifacts/whatchimp/roundtrips/ROUNDTRIP_2_FINDINGS.md). The editor's
-  // "This will make an infinite loop…" warning fires only when a connection
-  // would give a destination Condition a SECOND Condition-source parent, so:
-  //   editorProvenDrawPairs — [sourceType, destType] operations an operator
-  //     has successfully drawn live on this tenant (anything else warns as
+  // Operator-drawability of the declared hub redraws (round trips #2 + #3,
+  // 2026-07-03 — evidence: artifacts/whatchimp/roundtrips/
+  // ROUNDTRIP_2_FINDINGS.md and ROUNDTRIP_3_FINDINGS.md). Round trip #3
+  // proved a destination Condition accepts ONE inbound connection TOTAL of
+  // any source type (the editor rejects a second with "This will make an
+  // infinite loop…"), so NO operator redraw may target a Condition; earlier
+  // probe results for Text→Condition / HTTP API→Condition applied only to
+  // otherwise-unused Condition inputs. The profile carries:
+  //   editorProvenDrawPairs — [sourceType, destType] operations proven live
+  //     against already-connected destinations (anything else warns as
   //     unproven until probed);
-  //   editorRejectedDrawPairs — pairs the editor refused unconditionally
-  //     (currently none — the Condition→Condition refusal is conditional and
-  //     is enforced by the condition-parent-limit check below);
-  //   maxConditionSourceParents — each destination Condition may carry at
-  //     most this many inbound edges whose SOURCE is a Condition (default 1).
+  //   editorRejectedDrawPairs — pairs the editor refused unconditionally;
+  //   maxInboundPerCondition — the total-inbound cap per Condition (1).
   if (contract?.approvedHubMerges) {
     const rejectedPairs = (contract.editorRejectedDrawPairs ?? []).map((p) => p.join(" → "));
     const provenPairs = (contract.editorProvenDrawPairs ?? []).map((p) => p.join(" → "));
     for (const id of Object.keys(contract.approvedHubMerges)) {
       const node = nodes[id];
       if (!node) continue;
+      if (node.name === "Condition") {
+        err("redraw-drawability", `hub ${nodeLabel(id, node)} is a Condition declared as an operator-redrawn merge — Conditions accept one inbound connection TOTAL (round trip #3), so a redraw can never target one; clone the Condition per parent instead`);
+        continue;
+      }
       for (const e of inEdges(node).slice(1)) {
         const src = nodes[e.node];
         const pair = `${src?.name} → ${node.name}`;
         if (rejectedPairs.includes(pair)) {
-          err("redraw-drawability", `hub ${nodeLabel(id, node)}: operator-drawn edge #${e.node}:${e.output} → #${id}:${e.inKey} is ${pair} — the WhatChimp editor refuses this operation; the architecture must not require it (artifacts/whatchimp/roundtrips/ROUNDTRIP_2_FINDINGS.md)`);
+          err("redraw-drawability", `hub ${nodeLabel(id, node)}: operator-drawn edge #${e.node}:${e.output} → #${id}:${e.inKey} is ${pair} — the WhatChimp editor refuses this operation; the architecture must not require it`);
         } else if (!provenPairs.includes(pair)) {
-          warn("redraw-drawability", `hub ${nodeLabel(id, node)}: operator-drawn edge #${e.node}:${e.output} → #${id}:${e.inKey} is ${pair} — drawability of this node-type pair has never been proven in the current editor; probe it on a disposable bot before any candidate relies on it`);
+          warn("redraw-drawability", `hub ${nodeLabel(id, node)}: operator-drawn edge #${e.node}:${e.output} → #${id}:${e.inKey} is ${pair} — drawability of this node-type pair has never been proven against an already-connected destination; probe it on a disposable bot before any candidate relies on it`);
         }
       }
     }
   }
 
-  // Corrected editor rule (round trip #2, 2026-07-03): a destination Condition
-  // may carry at most ONE inbound edge whose source node type is Condition —
-  // attempting to draw a second is rejected by the editor with the
+  // Editor invariant (round trip #3, 2026-07-03): a destination Condition may
+  // carry at most ONE inbound connection TOTAL, regardless of source node
+  // type — attempting to draw a second is rejected by the editor with the
   // infinite-loop warning, so a graph that expects one is not
   // operator-repairable after import. Applies to the FULL expected graph
   // (serialized-kept and operator-drawn edges alike).
   if (contract) {
-    const maxCondParents = contract.maxConditionSourceParents ?? 1;
+    const maxInbound = contract.maxInboundPerCondition ?? 1;
     for (const id of ids) {
       const node = nodes[id];
       if (node.name !== "Condition") continue;
-      const condParents = inEdges(node).filter((e) => nodes[e.node]?.name === "Condition");
-      if (condParents.length > maxCondParents) {
-        for (const e of condParents.slice(maxCondParents)) {
-          err("condition-parent-limit", `${nodeLabel(id, node)} carries ${condParents.length} Condition-source parents (edge #${e.node}:${e.output} → #${id}:${e.inKey} is beyond the editor limit of ${maxCondParents}) — the editor rejects drawing extra Condition parents ("This will make an infinite loop…"); give each extra Condition-source parent its own clone (see roundtrips/ROUNDTRIP_2_FINDINGS.md)`);
+      const parents = inEdges(node);
+      if (parents.length > maxInbound) {
+        for (const e of parents.slice(maxInbound)) {
+          err("condition-inbound-limit", `${nodeLabel(id, node)} carries ${parents.length} inbound connections (edge #${e.node}:${e.output} → #${id}:${e.inKey} is beyond the editor limit of ${maxInbound} TOTAL, any source type) — the editor rejects extra connections into a Condition ("This will make an infinite loop…"); give each extra parent its own clone (see roundtrips/ROUNDTRIP_3_FINDINGS.md)`);
         }
       }
     }

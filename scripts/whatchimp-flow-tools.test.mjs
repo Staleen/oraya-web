@@ -258,6 +258,10 @@ const roundtrip1CandidatePath = path.join(repoRoot, "artifacts", "whatchimp", "r
 // the exact candidate whose redraw plan round trip #2 halted on (byte-preserved
 // fixture; superseded by the corrected-rule Condition-clone-cascade candidate)
 const roundtrip2HaltedPath = path.join(repoRoot, "artifacts", "whatchimp", "roundtrips", "Oraya_natural_intake_v6.roundtrip-2.halted-candidate.txt");
+// the exact 181-node candidate whose redraw plan round trip #3 proved
+// unexecutable (items #5/#22/#24 targeted already-connected Condition inputs;
+// byte-preserved fixture — see roundtrips/ROUNDTRIP_3_FINDINGS.md)
+const roundtrip3FailedPath = path.join(repoRoot, "artifacts", "whatchimp", "roundtrips", "Oraya_natural_intake_v6.roundtrip-3.failed-candidate.txt");
 
 test("validator: v5.5 operator export fails with semantic errors", { skip: !existsSync(v55Path) }, () => {
   const flow = JSON.parse(readFileSync(v55Path, "utf8"));
@@ -292,51 +296,46 @@ test("validator: canonical v6 passes strict binding (fully bound, no second bind
   assert.deepEqual(warnings, [], warnings.join("\n"));
 });
 
-test("corrected editor rule: redraw plan uses only live-proven operations, zero drawn Condition→Condition, one Condition-source parent everywhere", { skip: !existsSync(v6Path) }, () => {
+test("editor invariant: no redraw targets a Condition, only live-proven operations, one inbound TOTAL per Condition everywhere", { skip: !existsSync(v6Path) }, () => {
   const flow = JSON.parse(readFileSync(v6Path, "utf8"));
   const nodes = flow.nodes;
-  // profile encodes the corrected 2026-07-03 probe results
+  // profile encodes the corrected 2026-07-03 round-trip-#3 evidence
   assert.deepEqual(profile.importGraphContract.editorRejectedDrawPairs, []);
   assert.deepEqual(profile.importGraphContract.editorProvenDrawPairs, [
     ["Condition", "User Input Flow"],
     ["Text", "User Input Flow"],
     ["Condition", "Text"],
-    ["Text", "Condition"],
-    ["HTTP API", "Condition"],
-    ["Condition", "Condition"],
   ]);
-  assert.equal(profile.importGraphContract.maxConditionSourceParents, 1);
+  assert.equal(profile.importGraphContract.maxInboundPerCondition, 1);
   const proven = new Set(profile.importGraphContract.editorProvenDrawPairs.map((p) => p.join(" → ")));
-  // every beyond-first (operator-drawn) edge uses a proven pair and none is C→C
+  // every beyond-first (operator-drawn) edge uses a proven pair and NEVER
+  // targets a Condition (round trip #3: one inbound TOTAL per Condition)
   let drawn = 0;
   for (const [id, node] of Object.entries(nodes)) {
     for (const inp of Object.values(node.inputs ?? {})) {
       for (const c of (inp.connections ?? []).slice(1)) {
         drawn += 1;
+        assert.notEqual(node.name, "Condition", `drawn edge #${c.node} → #${id} targets a Condition — never executable`);
         const pair = `${nodes[String(c.node)].name} → ${node.name}`;
         assert.ok(proven.has(pair), `drawn edge #${c.node} → #${id} uses unproven pair ${pair}`);
-        assert.notEqual(pair, "Condition → Condition", `drawn edge #${c.node} → #${id} is a manual Condition→Condition — the plan targets zero`);
       }
     }
   }
-  assert.equal(drawn, 34, "operator redraw workload must be exactly 34 connections");
-  // no Condition anywhere carries more than one Condition-source parent
+  assert.equal(drawn, 39, "operator redraw workload must be exactly 39 connections");
+  // no Condition anywhere carries more than one inbound connection of ANY type
   for (const [id, node] of Object.entries(nodes)) {
     if (node.name !== "Condition") continue;
-    let condParents = 0;
-    for (const inp of Object.values(node.inputs ?? {})) {
-      for (const c of inp.connections ?? []) {
-        if (nodes[String(c.node)]?.name === "Condition") condParents += 1;
-      }
-    }
-    assert.ok(condParents <= 1, `Condition #${id} has ${condParents} Condition-source parents`);
+    let inbound = 0;
+    for (const inp of Object.values(node.inputs ?? {})) inbound += (inp.connections ?? []).length;
+    assert.ok(inbound <= 1, `Condition #${id} has ${inbound} inbound connections (editor limit: 1 TOTAL)`);
   }
-  // checklist reflects the corrected rule: no halt banner, proven-operation
-  // stamp on every item, evidence pointer intact
+  // checklist reflects the invariant: no halt banner, proven-operation stamp
+  // on every item, zero Condition destinations, evidence pointer intact
   const checklist = readFileSync(path.join(repoRoot, "artifacts", "whatchimp", "V6_REDRAW_CHECKLIST.md"), "utf8");
   assert.ok(!checklist.includes("⛔"), "checklist must not carry halt markers anymore");
-  assert.equal(checklist.split("live-proven editor operation (2026-07-03)").length - 1, 34, "each of the 34 items carries its proven-operation stamp");
-  assert.ok(checklist.includes("roundtrips/ROUNDTRIP_2_FINDINGS.md"), "checklist must point at the round-trip-#2 evidence");
+  assert.equal(checklist.split("live-proven editor operation (2026-07-03)").length - 1, 39, "each of the 39 items carries its proven-operation stamp");
+  assert.ok(!checklist.includes("input socket (`conditionInput`)"), "no checklist item may target a Condition input");
+  assert.ok(checklist.includes("roundtrips/ROUNDTRIP_3_FINDINGS.md"), "checklist must point at the round-trip-#3 evidence");
   assert.ok(!checklist.includes("the WhatChimp editor supports drawing them"), "the disproven blanket drawability claim must not reappear");
 });
 
@@ -353,7 +352,7 @@ test("artifact: hub merges match the profile's approvedHubMerges exactly (no und
   assert.deepEqual(hubs, profile.importGraphContract.approvedHubMerges);
   // the operator redraw workload is the sum of beyond-first hub edges
   const redrawEdges = Object.values(hubs).reduce((sum, c) => sum + (c - 1), 0);
-  assert.equal(redrawEdges, 34, "operator redraw checklist must contain exactly 34 connections");
+  assert.equal(redrawEdges, 39, "operator redraw checklist must contain exactly 39 connections");
 });
 
 test("generator: a clean run reproduces the committed artifact AND redraw checklist byte-for-byte", { skip: !existsSync(v6Path) }, async () => {
@@ -538,13 +537,44 @@ test("round trip #2: the halted 165-node candidate is pinned as historical evide
   assert.notEqual(raw.toString("utf8"), readFileSync(v6Path, "utf8"), "the halted candidate must never be the canonical import file");
   const flow = JSON.parse(raw.toString("utf8"));
   assert.equal(Object.keys(flow.nodes).length, 165);
-  // under the corrected editor rule it fails validation: exactly the 11
-  // beyond-limit Condition-source parents (#440: +4, #470: +3, #660: +1,
-  // #690: +3) that made its redraw plan impossible to execute
+  // under the corrected round-trip-#3 editor rule (one inbound TOTAL per
+  // Condition, any source type) it fails validation: exactly the 14
+  // beyond-limit inbound edges (#440: +4, #470: +3, #602: +1, #654: +1,
+  // #660: +1, #663: +1, #690: +3) that made its redraw plan impossible
   const { errors } = validateFlow(flow, profile, { strictBinding: true });
-  const condLimit = errors.filter((e) => e.startsWith("[condition-parent-limit]"));
-  assert.equal(condLimit.length, 11, errors.join("\n"));
+  const condLimit = errors.filter((e) => e.startsWith("[condition-inbound-limit]"));
+  assert.equal(condLimit.length, 14, errors.join("\n"));
   assert.ok(errors.length > condLimit.length, "the halted candidate must also fail the current hub census");
+});
+
+// ─── round trip #3 regression fixture (failed 181-node candidate) ────────────
+
+test("round trip #3: the failed 181-node candidate is pinned as historical evidence and is NOT the canonical candidate", { skip: !existsSync(roundtrip3FailedPath) || !existsSync(v6Path) }, () => {
+  const raw = readFileSync(roundtrip3FailedPath);
+  // byte-exact preservation of the candidate whose import raised the
+  // infinite-loop warning and whose redraw items #5/#22/#24 the editor
+  // refused: each needed a second inbound connection on a Condition that
+  // already carried its serialized parent (#602, #654, #663) — see
+  // roundtrips/ROUNDTRIP_3_FINDINGS.md
+  assert.equal(raw.length, 141728, "failed-candidate fixture byte size must not change");
+  assert.equal(
+    createHash("sha256").update(raw).digest("hex").toUpperCase(),
+    "AB456A895221A46DE289EDA054DB9142B4D3F7D0A1892A3FFBEAFF999346AB0C",
+    "failed-candidate fixture bytes must not change",
+  );
+  assert.notEqual(raw.toString("utf8"), readFileSync(v6Path, "utf8"), "the failed candidate must never be the canonical import file");
+  const flow = JSON.parse(raw.toString("utf8"));
+  assert.equal(Object.keys(flow.nodes).length, 181);
+  // under the corrected one-inbound-TOTAL rule it fails validation: exactly
+  // the 3 beyond-limit inbound edges on Conditions (#602, #654, #663 — the
+  // three hub draws round trip #3 could not execute)
+  const { errors } = validateFlow(flow, profile, { strictBinding: true });
+  const condLimit = errors.filter((e) => e.startsWith("[condition-inbound-limit]"));
+  assert.equal(condLimit.length, 3, errors.join("\n"));
+  for (const id of ["602", "654", "663"]) {
+    assert.ok(condLimit.some((e) => e.includes(`#${id}`)), `expected a condition-inbound-limit error for Condition #${id}:\n${condLimit.join("\n")}`);
+  }
+  assert.ok(errors.length > condLimit.length, "the failed candidate must also fail the current hub census");
 });
 
 test("operator docs: production WhatChimp API endpoints use direct www host", () => {

@@ -24,31 +24,26 @@
     "rootNodeName": "Start Bot Flow",
     "maxInboundPerNode": 1,
     "approvedHubMerges": {
-      "466": 5,
+      "466": 6,
       "480": 4,
       "490": 5,
       "600": 5,
-      "602": 2,
-      "610": 5,
+      "610": 6,
       "616": 2,
-      "654": 2,
-      "661": 2,
-      "663": 2,
-      "670": 2,
+      "655": 2,
+      "661": 3,
+      "670": 4,
       "676": 2,
       "691": 4,
       "694": 5,
-      "736": 2
+      "736": 4
     },
-    "maxConditionSourceParents": 1,
+    "maxInboundPerCondition": 1,
     "editorRejectedDrawPairs": [],
     "editorProvenDrawPairs": [
       ["Condition", "User Input Flow"],
       ["Text", "User Input Flow"],
-      ["Condition", "Text"],
-      ["Text", "Condition"],
-      ["HTTP API", "Condition"],
-      ["Condition", "Condition"]
+      ["Condition", "Text"]
     ]
   },
   "roundTripIgnoreFields": ["uniqueId", "postbackId", "newPostbackId", "xitFbpostbackId"],

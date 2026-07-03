@@ -425,7 +425,7 @@ export function buildScenarios() {
         // villa q → ack → confirmation q → ack → Looks right →
         // handoff q → WhatsApp branch → name q → Lead Submit → terminal
         visitsInOrder: [[
-          "400", "401", "440", "600", "601", "603", "602", "610", "611", "624", "612",
+          "400", "401", "440", "600", "601", "603", "766", "610", "611", "624", "612",
           "758", "480", "481", "604", "490", "491", "492", "493", "494",
           "70", "71", "72", "74", "75", "8", "9", "7",
         ]],
@@ -620,7 +620,7 @@ export function buildScenarios() {
         // guest q → ack → supported gate (False) → exact-count q → team-review
         // text → BRANCH-LOCAL large-group escalation tail (name q → Lead
         // Submit → terminal) — the initial path's own clone
-        visitsInOrder: [["600", "601", "603", "602", "466", "467", "468", "712", "713", "714", "715"]],
+        visitsInOrder: [["600", "601", "603", "766", "466", "467", "468", "712", "713", "714", "715"]],
       },
     },
     {
@@ -749,7 +749,7 @@ export function buildScenarios() {
         visitsInOrder: [[
           "491", "492", "493", "495", "496", "497", "498", "650", "656", "761", "762",
           "670", "671", "684", "672", "690", "694", "695", "699", "696", "697", "740", "749",
-        ]],
+        ]], // S23: both-dates-known re-entry via clones #761 → #762
       },
     },
     {
@@ -783,9 +783,9 @@ export function buildScenarios() {
         // Edit confirmation q → ack → branch (True) → the Edit path's OWN
         // branch-local handoff clone → its WhatsApp terminal
         visitsInOrder: [[
-          "497", "498", "650", "651", "652", "653", "654", "660", "661", "662", "664", "663",
+          "497", "498", "650", "651", "652", "653", "654", "660", "661", "662", "664", "770",
           "670", "671", "684", "672", "690", "694", "695", "699", "696", "697", "740", "749",
-        ]],
+        ]], // guest-just-answered supported check runs on clone #770
       },
     },
     {
@@ -953,9 +953,9 @@ export function buildScenarios() {
         // refine → both-dates gate → guest gate (known) → bedroom → villa
         // gate (known) → Edit confirmation → Edit handoff clone → terminal
         visitsInOrder: [[
-          "497", "498", "650", "656", "657", "658", "659", "654", "660", "663",
+          "497", "498", "650", "656", "657", "658", "659", "767", "768", "769",
           "670", "671", "684", "672", "690", "694", "695", "699", "696", "697", "740", "749",
-        ]],
+        ]], // second refine call re-enters via clone chain #767 → #768 → #769
       },
     },
     {
@@ -1006,7 +1006,7 @@ export function buildScenarios() {
         fieldEquals: { oraya_guest_followup: "12" },
         // Edit guest q → ack → supported gate (False) → CLONED Edit
         // large-group review → its own escalation tail
-        visitsInOrder: [["661", "662", "664", "663", "736", "737", "738", "732", "733", "734", "735"]],
+        visitsInOrder: [["661", "662", "664", "770", "736", "737", "738", "732", "733", "734", "735"]],
       },
     },
     {

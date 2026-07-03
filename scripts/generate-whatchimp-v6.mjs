@@ -37,24 +37,26 @@
  *     The exact machine-derived redraw list is emitted alongside the
  *     artifact (third CLI argument).
  *
- * CORRECTED EDITOR RULE (round trip #2 + operator probes, 2026-07-03 —
- * roundtrips/ROUNDTRIP_2_FINDINGS.md): the editor's "This will make an
- * infinite loop…" warning fires only when a connection would give a
- * destination Condition a SECOND Condition-source parent. The binding rule:
- *   each destination Condition may carry AT MOST ONE inbound edge whose
- *   source node type is Condition.
- * Live-proven manual operations: Condition→User Input Flow, Text→User Input
- * Flow, Condition→Text, Text→Condition, HTTP API→Condition, and
- * Condition→Condition when it is the destination's first/only
- * Condition-source parent. This generator therefore applies the
- * CONDITION-CLONE CASCADE: every Condition that would receive more than one
- * Condition-source parent keeps its happy-path Condition parent (plus all
- * non-Condition parents, drawn), and each extra Condition-source parent gets
- * a semantically identical clone whose single serialized connection the
- * import retains automatically. Conditions are guest-invisible, so guest
- * behavior is byte-identical. Generation FAILS if any redraw edge uses an
- * unproven operation or any Condition ends up with more than one
- * Condition-source parent.
+ * EDITOR INVARIANT (round trips #2 + #3, 2026-07-03 —
+ * roundtrips/ROUNDTRIP_2_FINDINGS.md + ROUNDTRIP_3_FINDINGS.md): the
+ * editor's "This will make an infinite loop…" warning fires whenever a
+ * connection would give a destination Condition a SECOND inbound connection
+ * of ANY source type (round trip #3 proved Text #603 → Condition #602 is
+ * rejected once #602 already holds the imported #440 edge; the earlier
+ * probes only proved pairs against otherwise-unused Condition inputs).
+ * Binding rule:
+ *   each destination Condition may carry AT MOST ONE inbound connection
+ *   TOTAL (maxInboundPerCondition: 1).
+ * This generator therefore applies the FULL CONDITION-CLONE CASCADE: every
+ * Condition that would receive more than one inbound connection — regardless
+ * of source types — keeps exactly one serialized parent, and every other
+ * parent gets a semantically identical clone whose single serialized
+ * connection the import retains automatically. All remaining convergence
+ * lands on non-Condition destinations (User Input Flow wrappers and Texts),
+ * so NO operator redraw ever targets a Condition. Conditions are
+ * guest-invisible, so guest behavior is byte-identical. Generation FAILS if
+ * any redraw edge targets a Condition, uses an unproven operation, or any
+ * Condition ends up with more than one inbound connection.
  *   - The first-listed connection of every hub is chosen so that the
  *     UN-REPAIRED import still runs the complete happy path (all fields
  *     extracted → bedroom OK → confirmation → handoff), never fabricates a
@@ -416,10 +418,10 @@ function generateV6(flow) {
   disconnectOutput(nodes, 440, "conditionOutputTrue");
   disconnectOutput(nodes, 440, "conditionOutputFalse");
   connect(nodes, 440, "conditionOutputTrue", 600, "userInputFlowInput");
-  connect(nodes, 440, "conditionOutputFalse", 602, "conditionInput"); // HUB 602 kept edge (guest already extracted)
+  connect(nodes, 440, "conditionOutputFalse", 602, "conditionInput"); // #602's ONLY inbound (guest already extracted; just-answered path via clone #766)
   connect(nodes, 600, "userInputFlowOutput", 601, "userInputFlowSingleInput");
   connect(nodes, 601, "userInputFlowSingleOutputFinalReply", 603, "textInput");
-  hubEdge(nodes, 603, "textOutput", 602, "conditionInput"); // redraw: guest just answered
+  // 603 (guest just answered) → supported check via clone #766 (fragmentation section)
 
   // ── primary bedroom path (always asked; never condition-skipped) ──────────
   wrapperNode(nodes, 610, "Oraya v6 - Bedrooms", [5200, -1600]);
@@ -492,14 +494,14 @@ function generateV6(flow) {
   connect(nodes, 650, "conditionOutputFalse", 656, "conditionInput");
   connect(nodes, 651, "userInputFlowOutput", 652, "userInputFlowSingleInput");
   connect(nodes, 652, "userInputFlowSingleOutputFinalReply", 653, "httpApiInput");
-  connect(nodes, 653, "httpApiOutput", 654, "conditionInput"); // HUB 654 kept edge
+  connect(nodes, 653, "httpApiOutput", 654, "conditionInput"); // #654's ONLY inbound (second refine call re-enters via clone chain 767/768/769)
   connect(nodes, 654, "conditionOutputTrue", 655, "textInput");
   connect(nodes, 654, "conditionOutputFalse", 660, "conditionInput"); // #660's ONLY parent (656 False re-enters via clone chain 761/762)
   connect(nodes, 656, "conditionOutputTrue", 657, "userInputFlowInput");
   // 656 False (both dates already known) → guest check via clones #761/#762 (fragmentation section)
   connect(nodes, 657, "userInputFlowOutput", 658, "userInputFlowSingleInput");
   connect(nodes, 658, "userInputFlowSingleOutputFinalReply", 659, "httpApiInput");
-  hubEdge(nodes, 659, "httpApiOutput", 654, "conditionInput");
+  // 659 (Edit check-out refine result) → dates-complete check via clone chain #767/#768/#769 (fragmentation section)
   escalationTail(nodes, [716, 717, 718, 719], "Oraya v6 Edit - Escalation: dates", [3760, -700]);
   connect(nodes, 655, "textOutput", 716, "userInputFlowInput");
 
@@ -509,10 +511,10 @@ function generateV6(flow) {
   conditionNode(nodes, 663, GUEST_CHOICES.slice(0, 8).map((v) => ({ field: FIELD.guestCount, value: v })), [4540, -400]);
   textNode(nodes, 664, COPY.guestAck, [4410, -520]);
   connect(nodes, 660, "conditionOutputTrue", 661, "userInputFlowInput");
-  connect(nodes, 660, "conditionOutputFalse", 663, "conditionInput"); // HUB 663 kept edge
+  connect(nodes, 660, "conditionOutputFalse", 663, "conditionInput"); // #663's ONLY inbound (just-answered path via clone #770)
   connect(nodes, 661, "userInputFlowOutput", 662, "userInputFlowSingleInput");
   connect(nodes, 662, "userInputFlowSingleOutputFinalReply", 664, "textInput");
-  hubEdge(nodes, 664, "textOutput", 663, "conditionInput");
+  // 664 (Edit guest just answered) → supported check via clone #770 (fragmentation section)
 
   // Edit large group — branch-local clone of the initial 466/467/468 subtree
   cloneSubgraph(nodes, { 466: 736, 467: 737, 468: 738 }, { offset: [-910, 2817], campaignSuffix: " (Edit)" });
@@ -621,6 +623,17 @@ function generateV6(flow) {
     hubEdge(nodes, s, "conditionOutputFalse", 466, "userInputFlowInput");
   }
 
+  // #602's just-answered path: round trip #3 proved a Condition accepts ONE
+  // inbound connection TOTAL, so Text #603 may not join #440's kept edge on
+  // #602 — it gets its own supported-count clone.
+  {
+    const [px, py] = nodes["603"].position;
+    cloneCondition(nodes, 602, 766, [px + 260, py + 120]);
+    connect(nodes, 603, "textOutput", 766, "conditionInput"); // sole connection — import keeps it
+    hubEdge(nodes, 766, "conditionOutputTrue", 610, "userInputFlowInput");
+    hubEdge(nodes, 766, "conditionOutputFalse", 466, "userInputFlowInput");
+  }
+
   // #470 "villa known?": capacity-OK exits beyond the kept #612 True.
   const villaSplits = [
     { from: primary.c3, clone: 758 },
@@ -646,6 +659,33 @@ function generateV6(flow) {
     hubEdge(nodes, 761, "conditionOutputTrue", 661, "userInputFlowInput");
     hubEdge(nodes, 762, "conditionOutputTrue", 670, "userInputFlowInput");
     hubEdge(nodes, 762, "conditionOutputFalse", 736, "userInputFlowInput");
+  }
+
+  // Edit second refine call: HTTP API #659 may not join #653's kept edge on
+  // #654 (one inbound TOTAL per Condition) — it re-enters through its own
+  // dates-complete → guest-known → supported-count clone chain, all
+  // serialized single-parent so the import keeps every link.
+  {
+    const [px, py] = nodes["659"].position;
+    cloneCondition(nodes, 654, 767, [px + 260, py + 120]);
+    cloneCondition(nodes, 660, 768, [px + 520, py + 120]);
+    cloneCondition(nodes, 663, 769, [px + 780, py + 120]);
+    connect(nodes, 659, "httpApiOutput", 767, "conditionInput"); // sole connection — import keeps it
+    connect(nodes, 767, "conditionOutputFalse", 768, "conditionInput"); // sole connection — import keeps it
+    connect(nodes, 768, "conditionOutputFalse", 769, "conditionInput"); // sole connection — import keeps it
+    hubEdge(nodes, 767, "conditionOutputTrue", 655, "textInput");
+    hubEdge(nodes, 768, "conditionOutputTrue", 661, "userInputFlowInput");
+    hubEdge(nodes, 769, "conditionOutputTrue", 670, "userInputFlowInput");
+    hubEdge(nodes, 769, "conditionOutputFalse", 736, "userInputFlowInput");
+  }
+
+  // Edit #663's just-answered path: Text #664 gets its own supported-count clone.
+  {
+    const [px, py] = nodes["664"].position;
+    cloneCondition(nodes, 663, 770, [px + 260, py + 120]);
+    connect(nodes, 664, "textOutput", 770, "conditionInput"); // sole connection — import keeps it
+    hubEdge(nodes, 770, "conditionOutputTrue", 670, "userInputFlowInput");
+    hubEdge(nodes, 770, "conditionOutputFalse", 736, "userInputFlowInput");
   }
 
   // Edit #690 "villa known?": Edit capacity-OK exits beyond the kept #672 True.
@@ -686,18 +726,18 @@ const REDRAW_PLAN = [
   { from: 752, outKey: "conditionOutputTrue", to: 600, inKey: "userInputFlowInput", purpose: "Dates recovered after the SECOND full-dates follow-up, guest count still unknown — asks the guest question." },
   { from: 754, outKey: "conditionOutputTrue", to: 600, inKey: "userInputFlowInput", purpose: "Check-out recovered after the FIRST check-out follow-up, guest count still unknown — asks the guest question." },
   { from: 756, outKey: "conditionOutputTrue", to: 600, inKey: "userInputFlowInput", purpose: "Check-out recovered after the SECOND check-out follow-up, guest count still unknown — asks the guest question." },
-  // hub #602 — supported-guest-count check (extraction path kept automatically)
-  { from: 603, outKey: "textOutput", to: 602, inKey: "conditionInput", purpose: "Guest count the guest JUST answered continues into the supported-count check." },
   // hub #610 — bedroom question (supported-count OK exits of the cloned checks)
   { from: 751, outKey: "conditionOutputTrue", to: 610, inKey: "userInputFlowInput", purpose: "First full-dates recovery with a known, supported guest count — continues to the bedroom question." },
   { from: 753, outKey: "conditionOutputTrue", to: 610, inKey: "userInputFlowInput", purpose: "Second full-dates recovery with a known, supported guest count — continues to the bedroom question." },
   { from: 755, outKey: "conditionOutputTrue", to: 610, inKey: "userInputFlowInput", purpose: "First check-out recovery with a known, supported guest count — continues to the bedroom question." },
   { from: 757, outKey: "conditionOutputTrue", to: 610, inKey: "userInputFlowInput", purpose: "Second check-out recovery with a known, supported guest count — continues to the bedroom question." },
+  { from: 766, outKey: "conditionOutputTrue", to: 610, inKey: "userInputFlowInput", purpose: "Guest count the guest JUST answered is supported (1–8) — continues to the bedroom question." },
   // hub #466 — large-group exact-count review (More-than-8 exits of the cloned checks)
   { from: 751, outKey: "conditionOutputFalse", to: 466, inKey: "userInputFlowInput", purpose: "First full-dates recovery with more than 8 guests — exact-count team review." },
   { from: 753, outKey: "conditionOutputFalse", to: 466, inKey: "userInputFlowInput", purpose: "Second full-dates recovery with more than 8 guests — exact-count team review." },
   { from: 755, outKey: "conditionOutputFalse", to: 466, inKey: "userInputFlowInput", purpose: "First check-out recovery with more than 8 guests — exact-count team review." },
   { from: 757, outKey: "conditionOutputFalse", to: 466, inKey: "userInputFlowInput", purpose: "Second check-out recovery with more than 8 guests — exact-count team review." },
+  { from: 766, outKey: "conditionOutputFalse", to: 466, inKey: "userInputFlowInput", purpose: "Guest count the guest JUST answered is more than 8 — exact-count team review." },
   // hub #480 — villa question (capacity-OK, villa-unknown exits of the cloned villa checks)
   { from: 758, outKey: "conditionOutputTrue", to: 480, inKey: "userInputFlowInput", purpose: "Bedroom OK — 2 bedrooms fit 3–4 guests (first ask) — villa still unknown, asks the villa question." },
   { from: 759, outKey: "conditionOutputTrue", to: 480, inKey: "userInputFlowInput", purpose: "Bedroom OK — 3 bedrooms or 1–2 guests (retry ask) — villa still unknown, asks the villa question." },
@@ -709,16 +749,19 @@ const REDRAW_PLAN = [
   { from: 759, outKey: "conditionOutputFalse", to: 490, inKey: "userInputFlowInput", purpose: "Bedroom OK (retry, 3 bedrooms or 1–2 guests), villa already known — continues to the confirmation summary." },
   { from: 760, outKey: "conditionOutputFalse", to: 490, inKey: "userInputFlowInput", purpose: "Bedroom OK (retry, 2 bedrooms fit 3–4), villa already known — continues to the confirmation summary." },
   { from: 604, outKey: "textOutput", to: 490, inKey: "userInputFlowInput", purpose: "Villa the guest JUST chose continues to the confirmation summary (the villa-already-known path is kept automatically)." },
-  // hub #654 — Edit dates-complete check (first refine call kept automatically)
-  { from: 659, outKey: "httpApiOutput", to: 654, inKey: "conditionInput", purpose: "Edit check-out refinement result continues into the dates-complete check." },
+  // hub #655 — Edit date-trouble escalation message (first refine failure kept automatically)
+  { from: 767, outKey: "conditionOutputTrue", to: 655, inKey: "textInput", purpose: "Edit check-out refinement still left dates incomplete — date-trouble escalation message." },
   // hub #661 — Edit guest question
   { from: 761, outKey: "conditionOutputTrue", to: 661, inKey: "userInputFlowInput", purpose: "Edit attempt that already has BOTH dates, guest count unknown — asks the Edit guest question." },
-  // hub #663 — Edit supported-guest-count check
-  { from: 664, outKey: "textOutput", to: 663, inKey: "conditionInput", purpose: "Edit guest count the guest JUST answered continues into the supported-count check." },
+  { from: 768, outKey: "conditionOutputTrue", to: 661, inKey: "userInputFlowInput", purpose: "Edit check-out refinement recovered the dates, guest count unknown — asks the Edit guest question." },
   // hub #670 — Edit bedroom question
   { from: 762, outKey: "conditionOutputTrue", to: 670, inKey: "userInputFlowInput", purpose: "Edit both-dates-known re-entry with a known, supported guest count — continues to the Edit bedroom question." },
+  { from: 769, outKey: "conditionOutputTrue", to: 670, inKey: "userInputFlowInput", purpose: "Edit check-out recovery with a known, supported guest count — continues to the Edit bedroom question." },
+  { from: 770, outKey: "conditionOutputTrue", to: 670, inKey: "userInputFlowInput", purpose: "Edit guest count the guest JUST answered is supported (1–8) — continues to the Edit bedroom question." },
   // hub #736 — Edit large-group exact-count review
   { from: 762, outKey: "conditionOutputFalse", to: 736, inKey: "userInputFlowInput", purpose: "Edit both-dates-known re-entry with more than 8 guests — Edit exact-count team review." },
+  { from: 769, outKey: "conditionOutputFalse", to: 736, inKey: "userInputFlowInput", purpose: "Edit check-out recovery with more than 8 guests — Edit exact-count team review." },
+  { from: 770, outKey: "conditionOutputFalse", to: 736, inKey: "userInputFlowInput", purpose: "Edit guest count the guest JUST answered is more than 8 — Edit exact-count team review." },
   // hub #691 — Edit villa question
   { from: 763, outKey: "conditionOutputTrue", to: 691, inKey: "userInputFlowInput", purpose: "Edit bedroom OK — 2 bedrooms fit 3–4 guests (first ask) — villa still unknown, asks the Edit villa question." },
   { from: 764, outKey: "conditionOutputTrue", to: 691, inKey: "userInputFlowInput", purpose: "Edit bedroom OK — 3 bedrooms or 1–2 guests (retry ask) — villa still unknown, asks the Edit villa question." },
@@ -734,44 +777,37 @@ const REDRAW_PLAN = [
 
 const HUB_DESCRIPTIONS = {
   600: "guest-count question — merges the guest-unknown exits of the original and cloned \"guest known?\" checks",
-  602: "supported-guest-count check (1–8 vs More than 8) — extraction path kept; the just-answered path is drawn",
   610: "bedroom question — merges every supported-guest-count OK exit",
   466: "large-group exact-count team review — merges every More-than-8 exit",
   480: "villa question — merges every capacity-OK, villa-unknown exit",
   616: "bedroom capacity explanation + re-ask",
   490: "confirmation summary entry — merges the villa-known exits and the villa-just-chosen path",
-  654: "Edit \"both dates known?\" check — fed by both Edit refine API calls",
-  661: "Edit guest-count question",
-  663: "Edit supported-guest-count check",
-  670: "Edit bedroom question",
-  736: "Edit large-group exact-count team review",
+  655: "Edit date-trouble escalation message — merges both refine-failure exits",
+  661: "Edit guest-count question — merges every Edit guest-unknown exit",
+  670: "Edit bedroom question — merges every Edit supported-guest-count OK exit",
+  736: "Edit large-group exact-count team review — merges every Edit More-than-8 exit",
   691: "Edit villa question — merges every Edit capacity-OK, villa-unknown exit",
   676: "Edit bedroom capacity explanation + re-ask",
   694: "Edit confirmation summary entry",
 };
 
-// Live-proven manual connection operations (operator probes on the
-// authenticated editor, 2026-07-03 — roundtrips/ROUNDTRIP_2_FINDINGS.md
-// addendum). Kept in sync with the profile's
-// importGraphContract.editorProvenDrawPairs (tested). Generation FAILS if a
-// redraw edge uses any pair outside this set.
+// Manual connection operations proven against ALREADY-CONNECTED destinations
+// (the only kind a redraw ever targets). Round trip #3 (2026-07-03) proved
+// the earlier Text→Condition / HTTP API→Condition probe results applied only
+// to otherwise-unused Condition inputs — a Condition accepts ONE inbound
+// connection TOTAL, so no redraw may target a Condition at all. Kept in sync
+// with the profile's importGraphContract.editorProvenDrawPairs (tested).
+// Generation FAILS if a redraw edge uses any pair outside this set.
 const PROVEN_DRAW_PAIRS = new Set([
   "Condition → User Input Flow",
   "Text → User Input Flow",
   "Condition → Text",
-  "Text → Condition",
-  "HTTP API → Condition",
-  // Condition → Condition is drawable ONLY when it creates the destination's
-  // first/only Condition-source parent. assertEditorContracts additionally
-  // enforces the structural one-Condition-parent rule AND the design target
-  // of ZERO manually drawn Condition → Condition edges.
-  "Condition → Condition",
 ]);
 
-// Corrected editor rule (round trip #2, 2026-07-03): each destination
-// Condition may carry at most ONE inbound edge whose source is a Condition —
-// the editor rejects a second with "This will make an infinite loop…".
-const MAX_CONDITION_SOURCE_PARENTS = 1;
+// Editor invariant (round trip #3, 2026-07-03): each destination Condition
+// may carry at most ONE inbound connection TOTAL, regardless of source node
+// type — the editor rejects a second with "This will make an infinite loop…".
+const MAX_INBOUND_PER_CONDITION = 1;
 
 function drawPairOf(nodes, e) {
   return `${nodes[String(e.from)].name} → ${nodes[String(e.to)].name}`;
@@ -781,32 +817,30 @@ function edgeKeyOf(e) {
   return `${e.from}:${e.outKey} -> ${e.to}:${e.inKey}`;
 }
 
-// Hard generation gates for the corrected editor rule: (a) every redraw uses
-// a live-proven operation; (b) no redraw is Condition → Condition (fragment
-// the destination instead); (c) no Condition anywhere in the FINAL expected
-// graph (serialized + redrawn edges are the same set) carries more than one
-// Condition-source parent.
+// Hard generation gates for the editor invariant: (a) no redraw may target a
+// Condition (give every extra parent its own clone instead); (b) every
+// redraw uses a live-proven operation; (c) no Condition anywhere in the
+// FINAL expected graph (serialized + redrawn edges are the same set) carries
+// more than one inbound connection of any type.
 function assertEditorContracts(flow, plan) {
   const nodes = flow.nodes;
   for (const e of plan) {
+    if (nodes[String(e.to)].name === "Condition") {
+      throw new Error(`redraw edge ${edgeKeyOf(e)} targets a Condition — Conditions accept one inbound connection TOTAL (round trip #3); give this parent its own clone instead`);
+    }
     const pair = drawPairOf(nodes, e);
     if (!PROVEN_DRAW_PAIRS.has(pair)) {
       throw new Error(`redraw edge ${edgeKeyOf(e)} uses UNPROVEN editor operation "${pair}" — refuse to generate`);
     }
-    if (pair === "Condition → Condition") {
-      throw new Error(`redraw edge ${edgeKeyOf(e)} is a manually drawn Condition → Condition — the plan targets zero of these; give the destination a per-parent clone instead`);
-    }
   }
   for (const [id, node] of Object.entries(nodes)) {
     if (node.name !== "Condition") continue;
-    const condParents = [];
+    const parents = [];
     for (const inp of Object.values(node.inputs ?? {})) {
-      for (const c of inp.connections ?? []) {
-        if (nodes[String(c.node)]?.name === "Condition") condParents.push(`#${c.node}`);
-      }
+      for (const c of inp.connections ?? []) parents.push(`#${c.node}`);
     }
-    if (condParents.length > MAX_CONDITION_SOURCE_PARENTS) {
-      throw new Error(`Condition #${id} has ${condParents.length} Condition-source parents [${condParents.join(", ")}] — the editor allows at most ${MAX_CONDITION_SOURCE_PARENTS}; refuse to generate`);
+    if (parents.length > MAX_INBOUND_PER_CONDITION) {
+      throw new Error(`Condition #${id} has ${parents.length} inbound connections [${parents.join(", ")}] — the editor allows at most ${MAX_INBOUND_PER_CONDITION} of any type; refuse to generate`);
     }
   }
 }
@@ -870,7 +904,7 @@ function renderRedrawChecklist(flow, plan, artifactSha256) {
   lines.push("");
   lines.push(`**Applies to exactly:** \`Oraya_natural_intake_v6.txt\` with SHA-256 \`${artifactSha256}\`. If your file's hash differs, regenerate this checklist.`);
   lines.push("");
-  lines.push("**Why this exists:** authenticated round trip #1 (2026-07-03) proved WhatChimp's import keeps only the FIRST serialized connection per input socket and silently drops the rest (evidence: `roundtrips/ROUNDTRIP_1_FINDINGS.md`). This candidate clones every branch-local tail AND every Condition that would otherwise receive a second Condition-source parent (round trip #2's corrected editor rule: at most ONE Condition-source parent per Condition — evidence and live probe results: `roundtrips/ROUNDTRIP_2_FINDINGS.md`), so the " + String(plan.length) + " remaining merge connections below are exactly what you re-draw after import. **Every item uses only a live-proven editor operation** (Condition → question flow, Text → question flow, Condition → Text, Text → Condition, HTTP API → Condition); none is Condition → Condition, and the generator refuses to emit this file otherwise. If the editor rejects ANY connection below, stop and report — do not insert nodes to work around it.");
+  lines.push("**Why this exists:** authenticated round trip #1 (2026-07-03) proved WhatChimp's import keeps only the FIRST serialized connection per input socket and silently drops the rest (evidence: `roundtrips/ROUNDTRIP_1_FINDINGS.md`). Round trip #3 proved a Condition accepts **one inbound connection TOTAL, of any source type** (evidence: `roundtrips/ROUNDTRIP_3_FINDINGS.md`), so this candidate clones every branch-local tail AND every Condition that would otherwise receive a second inbound connection — the " + String(plan.length) + " remaining merge connections below are exactly what you re-draw after import, and **none of them targets a Condition**. Every item uses only a live-proven editor operation (Condition → question flow, Text → question flow, Condition → Text); the generator refuses to emit this file otherwise. If the editor rejects ANY connection below, stop and report — do not insert nodes to work around it.");
   lines.push("");
   lines.push("**When:** on a fresh disposable TEST bot, immediately after importing the artifact and BEFORE any testing: draw all connections below, then Save → close the editor → reopen → export → verify (commands at the bottom).");
   lines.push("");

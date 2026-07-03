@@ -4,6 +4,8 @@
 **Candidate under test:** the 18-redraw hybrid, SHA-256 `0066192D4487ED1AC8A95B00E22DEF8B754B1FB458E0025B178E8B125C913A39` (165 nodes / 182 output connections) — preserved byte-exact as [`Oraya_natural_intake_v6.roundtrip-2.halted-candidate.txt`](Oraya_natural_intake_v6.roundtrip-2.halted-candidate.txt) (121,537 bytes)
 **Status: round trip #2 halted at redraw item #1 of 18; the same-day operator probe matrix then CORRECTED the platform rule (see Addendum) and the candidate was superseded by the corrected-rule Condition-clone-cascade rebuild.**
 
+> **SUPERSEDED (2026-07-03, round trip #3):** the Addendum's rule below ("at most ONE Condition-**source** parent per Condition") is itself too narrow. Round trip #3 proved the editor refuses **any second inbound connection on a Condition, regardless of source type** (`maxInboundPerCondition: 1`), and that probes against unused Condition inputs do not prove drawability against already-connected destinations. See [`ROUNDTRIP_3_FINDINGS.md`](ROUNDTRIP_3_FINDINGS.md). The Addendum's bodies below are kept verbatim as history.
+
 ## ADDENDUM (2026-07-03, same day) — corrected rule from the operator's live probe matrix; §2 and §6 below are superseded
 
 The operator ran the probe matrix on the authenticated editor and **disproved the pair-level conclusion in §2**. Authenticated results (screenshots on record):
