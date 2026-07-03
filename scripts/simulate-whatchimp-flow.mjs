@@ -955,6 +955,31 @@ export function buildScenarios() {
         fieldEquals: { oraya_guest_count: "2", oraya_guest_followup: "12" },
       },
     },
+    {
+      name: "F10 free-text answers at every choice point (confirmation / handoff) never strand the guest",
+      inputs: [
+        stay("Mechmech July 10 to 11 for 2"),
+        bedroom("1 bedroom"),
+        // free text instead of "Looks right"/"Edit" → routes to the Edit path
+        { expect: "Does this look right", answer: "hmm, can you repeat that?" },
+        { expect: "Your updated stay details", answer: "Villa Mechmech July 10 to July 11 for 2 guests" },
+        bedroom("1 bedroom"),
+        { expect: "Does this look right", answer: "Looks right" },
+        // free text instead of a handoff button → WhatsApp continuation branch
+        { expect: "How would you like to continue", answer: "just keep chatting here please" },
+        { expect: "full name", answer: "David Guest" },
+      ],
+      fixtures: [
+        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "2") },
+        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "2") },
+        { api: "6961", response: {} },
+      ],
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: [NOT_CONFIRMED, "https://stayoraya.com/book"],
+        askedIncludes: ["Your updated stay details"],
+      },
+    },
   ];
 }
 
