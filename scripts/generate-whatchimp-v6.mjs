@@ -26,9 +26,11 @@
  *      date / guest / bedroom / villa steps, returns to a cloned
  *      confirmation, and either proceeds to the existing handoff choice
  *      (node 70) or escalates on a second Edit.
- *   7. Export-proven question transitions ONLY — in every genuine WhatChimp
- *      export on record (operator's v5.5 + 20+ platform exports), a
- *      question's final-reply output feeds a Text or HTTP API node, never a
+ *   7. Export-proven question transitions ONLY — in all 22 genuine WhatChimp
+ *      exports surveyed (the operator's v5.5 + 21 platform-named exports;
+ *      exact filenames, hashes, and per-file transition censuses in
+ *      artifacts/whatchimp/V6_TRANSITION_EVIDENCE.md), a question's
+ *      final-reply output feeds a Text or HTTP API node, never a
  *      Condition or a User Input Flow wrapper. Direct Question → Condition /
  *      Question → User Input Flow edges were operator-observed rendering as
  *      loose/disconnected lines after import (2026-07-03). Every such edge

@@ -258,10 +258,11 @@ export function validateFlow(flow, profile, opts = {}) {
   }
 
   // 13b. question transitions must match genuine WhatChimp exports.
-  // Every genuine export on record (operator's v5.5 + 20+ platform exports)
-  // shows exactly two question continuations: final-reply → Text and
-  // final-reply → HTTP API (plus the chained-question port → another
-  // question). Direct Question → Condition / Question → User Input Flow
+  // All 22 genuine exports surveyed (operator's v5.5 + 21 platform-named
+  // exports; evidence table with hashes and per-file censuses in
+  // artifacts/whatchimp/V6_TRANSITION_EVIDENCE.md) show exactly two question
+  // continuations: final-reply → Text and final-reply → HTTP API (plus the
+  // chained-question port → another question). Direct Question → Condition / Question → User Input Flow
   // edges were operator-observed rendering as loose or disconnected lines
   // after import (2026-07-03) — rebuild them as Question → Text → next.
   for (const id of questionNodes) {
