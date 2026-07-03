@@ -12,10 +12,11 @@
  *      one exact-count question (1–8 + "More than 8"), mirroring the
  *      website's supported sleeping-guests range (min 1 / max 8).
  *   3. Bedroom path — new three-button bedroom question saved to
- *      oraya_bedroom_count (placeholder id — bind with
- *      scripts/bind-whatchimp-field.mjs), validated with the website's
- *      BEDROOM_CAPACITY rules (1→2, 2→4, 3→6; 7–8 guests need 3 bedrooms +
- *      extra bedding), one forward-cloned retry, then escalation.
+ *      oraya_bedroom_count (real WhatChimp field id 69114, operator-created;
+ *      question nodes carry customField "69114", condition rows
+ *      "custom_69114"), validated with the website's BEDROOM_CAPACITY rules
+ *      (1→2, 2→4, 3→6; 7–8 guests need 3 bedrooms + extra bedding), one
+ *      forward-cloned retry, then escalation.
  *   4. Villa / guest branches converge into confirmation; no "Got it."
  *      dead-ends remain.
  *   5. Complete human escalation — every escalation message flows into a
@@ -44,7 +45,10 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 
-const BEDROOM_FIELD_PLACEHOLDER = "__ORAYA_BEDROOM_COUNT_FIELD_ID__";
+// Real WhatChimp custom-field id for oraya_bedroom_count, created by the
+// operator and confirmed 2026-07-03. The generated artifact is fully bound —
+// no placeholder remains and no second binding step is required.
+const BEDROOM_FIELD_ID = "69114";
 
 const FIELD = {
   stayText: { id: "67692", name: "oraya_stay_text" },
@@ -56,7 +60,7 @@ const FIELD = {
   villa: { id: "57698", name: "oraya_villa" },
   confirm: { id: "58532", name: "oraya_dates_confirmed_text" },
   fullName: { id: "57759", name: "oraya_full_name" },
-  bedroom: { id: BEDROOM_FIELD_PLACEHOLDER, name: "oraya_bedroom_count" },
+  bedroom: { id: BEDROOM_FIELD_ID, name: "oraya_bedroom_count" },
 };
 
 const API = {

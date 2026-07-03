@@ -225,23 +225,22 @@ test("validator: v5.5 operator export fails with semantic errors", { skip: !exis
   assert.ok(hasError(errors, "no bedroom-selection question exists"));
 });
 
-test("validator: generated v6 passes with zero errors (placeholder warnings only)", { skip: !existsSync(v6Path) }, () => {
+test("validator: generated v6 passes with zero errors and zero warnings", { skip: !existsSync(v6Path) }, () => {
   const flow = JSON.parse(readFileSync(v6Path, "utf8"));
   const { errors, warnings } = validateFlow(flow, profile);
   assert.deepEqual(errors, []);
-  assert.ok(warnings.every((w) => w.includes("__ORAYA_BEDROOM_COUNT_FIELD_ID__")));
+  assert.deepEqual(warnings, [], warnings.join("\n"));
 });
 
-test("validator: v6 fails strict-binding until the real bedroom field id is bound", { skip: !existsSync(v6Path) }, () => {
+test("validator: canonical v6 passes strict binding (fully bound, no second binding step)", { skip: !existsSync(v6Path) }, () => {
   const flow = JSON.parse(readFileSync(v6Path, "utf8"));
-  const { errors } = validateFlow(flow, profile, { strictBinding: true });
-  assert.ok(errors.length > 0);
+  const { errors, warnings } = validateFlow(flow, profile, { strictBinding: true });
+  assert.deepEqual(errors, [], errors.join("\n"));
+  assert.deepEqual(warnings, [], warnings.join("\n"));
 });
 
-const boundPath = path.join(repoRoot, "Oraya_natural_intake_v6_bound_69114.txt");
-
-test("artifact: bound 69114 delivery file — strict-clean, placeholder-free, exact bedroom bindings, export-proven question transitions", { skip: !existsSync(boundPath) }, () => {
-  const raw = readFileSync(boundPath, "utf8");
+test("artifact: canonical v6 is fully bound — strict-clean, placeholder-free, exact bedroom bindings, export-proven question transitions", { skip: !existsSync(v6Path) }, () => {
+  const raw = readFileSync(v6Path, "utf8");
   assert.ok(!raw.includes("__ORAYA_BEDROOM_COUNT_FIELD_ID__"), "placeholder string must not remain in the delivery file");
   assert.ok(!raw.includes("__ORAYA"), "no placeholder prefix may remain in the delivery file");
   const flow = JSON.parse(raw);
@@ -283,7 +282,7 @@ test("artifact: bound 69114 delivery file — strict-clean, placeholder-free, ex
       `question #${id} continues into ${dst?.name} — only Text / HTTP API are export-proven`);
   }
   // the full scenario suite (incl. node-level visitation assertions) passes
-  // against the bound delivery file, not only the placeholder artifact.
+  // against the canonical fully-bound artifact.
   for (const scenario of buildScenarios()) {
     const result = runScenario(flow, profile, scenario);
     assert.deepEqual(result.failures, [], `${scenario.name}:\n${result.failures.join("\n")}`);

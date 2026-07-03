@@ -16,8 +16,10 @@
  * guest→bedroom→villa→confirmation path completeness, Edit re-entry, and
  * human-escalation completeness (name capture + lead submit + safe ending).
  *
- * `--strict-binding` turns the documented bedroom-field placeholder into an
- * error — use it for the post-binding / WhatChimp round-trip validation.
+ * `--strict-binding` turns any profile-listed placeholder field id into an
+ * error — use it for WhatChimp round-trip validation. The canonical v6
+ * artifact is generated fully bound (oraya_bedroom_count = 69114), so it
+ * passes strict validation with no extra flags.
  *
  * Node standard library only. No new dependencies.
  */

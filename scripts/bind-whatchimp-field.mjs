@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 /**
- * Phase 16A — deterministic finalization step for the Oraya Natural Stay
- * Intake v6 flow: binds the real WhatChimp custom-field id for
- * `oraya_bedroom_count` into every node that currently carries the documented
- * placeholder (`__ORAYA_BEDROOM_COUNT_FIELD_ID__`), i.e. the four bedroom
- * questions and the eight bedroom-capacity condition rows.
+ * Phase 16A — generic placeholder-binding tool for WhatChimp flow artifacts:
+ * replaces every occurrence of the documented placeholder
+ * (`__ORAYA_BEDROOM_COUNT_FIELD_ID__`) with a real numeric field id.
  *
- * The real id is created by the operator in the WhatChimp UI
- * (Custom Fields → New → name: oraya_bedroom_count, type: Text or Number)
- * and passed here — this script never invents an id.
+ * NOTE (2026-07-03): the canonical `Oraya_natural_intake_v6.txt` no longer
+ * needs this step — the generator emits the real `oraya_bedroom_count` id
+ * (69114) directly, so the artifact ships fully bound. This script is
+ * retained only for older placeholder-carrying artifacts or future external
+ * field dependencies. It never invents an id — the real id comes from the
+ * operator's WhatChimp UI (Custom Fields → New).
  *
  * Usage:
  *   node scripts/bind-whatchimp-field.mjs <flow-file> <numeric-field-id> [-o <output-file>]

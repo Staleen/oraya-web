@@ -1,6 +1,6 @@
 # Oraya Natural Stay Intake v6 — WhatChimp dependency manifest
 
-**Artifacts:** `Oraya_natural_intake_v6.txt` (generated, bedroom-field placeholder) and **`Oraya_natural_intake_v6_bound_69114.txt`** (operator-delivery file — real bedroom field `69114` bound, zero placeholders; copy also delivered next to the operator's v5.5 export). Both at repo root.
+**Artifact:** **`Oraya_natural_intake_v6.txt`** (repo root; copy also delivered next to the operator's v5.5 export) — the single canonical WhatChimp import file. It is generated **fully bound**: the real bedroom field `69114` is emitted directly by the generator, zero placeholders remain, and no second binding step exists.
 **Machine-readable profile:** `scripts/whatchimp/natural-intake-profile.json`.
 **Status: import-ready v6 candidate.** Repository validation is complete; the authenticated WhatChimp import → save → close → reopen → re-export round trip and the live WhatsApp checklist are still required before this may be called production-bound or save-compatible.
 
@@ -65,18 +65,19 @@ Every missing-field condition in v6 compares against the literal string `"null"`
 | `oraya_dates_confirmed_text` | `58532` | v5.5 export (#491) |
 | `oraya_handoff_required` | `57696` | v5.5 export (#70) |
 | `oraya_full_name` | `57759` | v5.5 export (#8) |
-| `oraya_bedroom_count` | **`69114`** (operator-created; supplied 2026-07-03) | bound in `Oraya_natural_intake_v6_bound_69114.txt`; the generator output keeps the documented placeholder — see below |
+| `oraya_bedroom_count` | **`69114`** (operator-created; confirmed 2026-07-03) | emitted directly by the generator into the canonical `Oraya_natural_intake_v6.txt` — see below |
 | `oraya_nights`, `oraya_date_status`, `safe_message`, `oraya_prefill_url` | not referenced by flow nodes | exist only in API mappings (authenticated verification required) |
 
-### Bedroom field binding: `oraya_bedroom_count` = `69114` (resolved 2026-07-03)
+### Bedroom field binding: `oraya_bedroom_count` = `69114` (resolved 2026-07-03; no binding step)
 
-The operator created the field and supplied the real id `69114`; the delivery artifact `Oraya_natural_intake_v6_bound_69114.txt` carries it bound (4 bedroom questions use exactly `"69114"`, the 8 bedroom condition rows use exactly `"custom_69114"` — 20 replaced placeholder occurrences, zero remaining). The generator output `Oraya_natural_intake_v6.txt` intentionally keeps the documented placeholder so regeneration stays id-agnostic; the binding is reproduced deterministically with:
+The operator created the field and confirmed the real id `69114`. The generator emits it directly, so the canonical `Oraya_natural_intake_v6.txt` ships fully bound: the 4 bedroom question nodes carry exactly `"customField": "69114"` with `"customFieldSelectedOptionText": "oraya_bedroom_count"`, and the 8 bedroom condition rows carry exactly `"custom_69114"`. There is no placeholder and no second binding step — the file is regenerated deterministically with:
 
 ```
 node scripts/generate-whatchimp-v6.mjs artifacts/whatchimp/Oraya_natural_intake_v5.5.input.txt Oraya_natural_intake_v6.txt
-node scripts/bind-whatchimp-field.mjs Oraya_natural_intake_v6.txt 69114 -o Oraya_natural_intake_v6_bound_69114.txt
-node scripts/validate-whatchimp-flow.mjs Oraya_natural_intake_v6_bound_69114.txt --strict-binding
+node scripts/validate-whatchimp-flow.mjs Oraya_natural_intake_v6.txt --strict-binding
 ```
+
+(`scripts/bind-whatchimp-field.mjs` is retained only as a generic placeholder-binding tool for older artifacts or future external field dependencies; the canonical v6 no longer uses it.)
 
 Operator step that still remains (WhatChimp-side, not in the export): add `oraya_bedroom_count: "#oraya_bedroom_count#"` and `oraya_guest_followup: "#oraya_guest_followup#"` to the Lead Submit request bodies so the bedroom preference reaches `whatsapp_leads.raw_payload` → `/api/butler/prefill` → `/book`, and the exact above-capacity guest total ("More than 8" → e.g. "12") is preserved on the lead for operators — on the two cloned TEST Lead Submit integrations during testing, and on the production `6961`/`7459` only at cutover (checklist section D; additive and safe for other flows sharing them).
 

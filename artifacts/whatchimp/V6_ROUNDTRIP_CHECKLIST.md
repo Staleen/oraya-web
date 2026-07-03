@@ -38,8 +38,8 @@ Then:
 
 ## A2. Import, verify, rebind
 
-1. The bedroom custom field exists (`oraya_bedroom_count` = `69114`, operator-created 2026-07-03) and the delivery artifact is pre-bound: import **`Oraya_natural_intake_v6_bound_69114.txt`** (repo root; copy delivered in the operator's Oraya folder). Only if regenerating from source: `node scripts/bind-whatchimp-field.mjs Oraya_natural_intake_v6.txt 69114 -o Oraya_natural_intake_v6_bound_69114.txt`.
-2. Import the bound file into the test bot. **Save** the workflow, close the editor completely, then reopen it.
+1. The bedroom custom field exists (`oraya_bedroom_count` = `69114`, operator-created 2026-07-03) and the canonical artifact is fully bound — there is exactly **one** import file: **`Oraya_natural_intake_v6.txt`** (repo root; copy delivered in the operator's Oraya folder). No binding step is required. To regenerate from source: `node scripts/generate-whatchimp-v6.mjs artifacts/whatchimp/Oraya_natural_intake_v5.5.input.txt Oraya_natural_intake_v6.txt`.
+2. Import `Oraya_natural_intake_v6.txt` into the test bot. **Save** the workflow, close the editor completely, then reopen it.
 3. Confirm the import persisted structurally. At this point the API nodes still display the **Production** integration names carried in the export — that is expected before rebinding:
    - The four "How many bedrooms would you like?" questions save to `oraya_bedroom_count`.
    - **No loose or disconnected lines around any question** — every question (guest count, bedrooms, bedroom retry, villa, confirmation "Here's what I have…", the Edit-path clones of each, "Your updated stay details:", both full-name questions, the date follow-ups, and "How would you like to continue?") must connect forward through exactly one line into either a short acknowledgement message ("Perfect, thank you 😊" / "Noted 😊" / "Lovely choice 😊" / "Got it.") or an HTTP API node. The 2026-07-03 import showed loose links here because the earlier build wired questions directly into condition diamonds; that construction is removed. **If any question still shows a dangling or missing line after save → close → reopen, stop and report.**
