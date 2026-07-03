@@ -255,6 +255,30 @@ export function validateFlow(flow, profile, opts = {}) {
     }
   }
 
+  // 13b. question transitions must match genuine WhatChimp exports.
+  // Every genuine export on record (operator's v5.5 + 20+ platform exports)
+  // shows exactly two question continuations: final-reply → Text and
+  // final-reply → HTTP API (plus the chained-question port → another
+  // question). Direct Question → Condition / Question → User Input Flow
+  // edges were operator-observed rendering as loose or disconnected lines
+  // after import (2026-07-03) — rebuild them as Question → Text → next.
+  for (const id of questionNodes) {
+    const node = nodes[id];
+    const edges = outEdges(node);
+    if (edges.length > 1) {
+      err("question-transition", `${nodeLabel(id, node)} has ${edges.length} outgoing connections — a question must have exactly one continuation path`);
+    }
+    for (const e of edges) {
+      const dst = nodes[String(e.node)];
+      const supported =
+        (e.outKey === "userInputFlowSingleOutputFinalReply" && (dst?.name === "Text" || dst?.name === "HTTP API")) ||
+        (e.outKey === "userInputFlowSingleOutput" && dst?.name === "User Input Flow Single");
+      if (!supported) {
+        err("question-transition", `${nodeLabel(id, node)} continues ${e.outKey} → ${nodeLabel(e.node, dst)} — unsupported direct question transition (genuine WhatChimp exports only show Question → Text / Question → HTTP API; insert an acknowledgement Text node)`);
+      }
+    }
+  }
+
   // 14. HTTP API nodes: bound + connected on both sides
   for (const id of apiNodes) {
     const node = nodes[id];

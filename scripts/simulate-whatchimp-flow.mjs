@@ -100,6 +100,7 @@ export function runScenario(flow, profile, scenario) {
   let terminalText = null;
   let terminalNodeName = null;
   let steps = 0;
+  const visited = []; // every node id the walk enters, in order
 
   while (current) {
     if (++steps > MAX_STEPS) {
@@ -111,6 +112,7 @@ export function runScenario(flow, profile, scenario) {
       fail(`walked onto missing node #${current}`);
       break;
     }
+    visited.push(String(current));
     const name = node.name;
 
     if (name === "Start Bot Flow" || name === "User Input Flow") {
@@ -289,8 +291,21 @@ export function runScenario(flow, profile, scenario) {
   }
   if (inputs.length) fail(`${inputs.length} scripted answer(s) were never consumed`);
   if (fixtures.length) fail(`${fixtures.length} API fixture(s) were never consumed`);
+  // node-level path assertion: every id in each sequence must be visited IN
+  // ORDER (ordered subsequence of the walk). This proves the expected
+  // question nodes and their downstream nodes were actually entered — not
+  // merely that some terminal was eventually reached.
+  for (const seq of ex.visitsInOrder ?? []) {
+    let idx = 0;
+    for (const v of visited) {
+      if (idx < seq.length && String(seq[idx]) === v) idx += 1;
+    }
+    if (idx < seq.length) {
+      fail(`expected visit sequence [${seq.join(" → ")}] — node #${seq[idx]} was not visited in order (walk: ${visited.join(",")})`);
+    }
+  }
 
-  return { failures, asked, messages, fields, leadSubmits, leadAttempts, terminalText, terminalNodeId: current, apiCalls };
+  return { failures, asked, messages, fields, leadSubmits, leadAttempts, terminalText, terminalNodeId: current, apiCalls, visited };
 }
 
 // ─── fixtures / scenario helpers ────────────────────────────────────────────
@@ -404,6 +419,15 @@ export function buildScenarios() {
         terminalIncludes: [NOT_CONFIRMED],
         askedIncludes: ["Which villa", "How many guests will be staying overnight", "How many bedrooms"],
         fieldEquals: { oraya_villa: "Villa Mechmech", oraya_guest_count: "4", oraya_bedroom_count: "2 bedrooms" },
+        // full initial path, node by node: stay q → normalize → guest gate →
+        // guest q → ack → supported gate → bedroom q → ack → capacity check →
+        // villa gate → villa q → ack → confirmation q → ack → Looks right →
+        // handoff q → WhatsApp branch → name q → Lead Submit → terminal
+        visitsInOrder: [[
+          "400", "401", "440", "600", "601", "603", "602", "610", "611", "624", "612",
+          "470", "480", "481", "604", "490", "491", "492", "493", "494",
+          "70", "71", "72", "74", "75", "8", "9", "7",
+        ]],
       },
     },
     {
@@ -592,6 +616,9 @@ export function buildScenarios() {
         terminalIncludes: ESC_TERMINAL,
         messagesInclude: ["confirm the details with you personally"],
         fieldEquals: { oraya_guest_followup: "12" },
+        // guest q → ack → supported gate (False) → exact-count q → team-review
+        // text → escalation wrapper → name q → Lead Submit → escalation terminal
+        visitsInOrder: [["600", "601", "603", "602", "466", "467", "468", "640", "641", "642", "643"]],
       },
     },
     {
@@ -606,6 +633,9 @@ export function buildScenarios() {
         terminalIncludes: [NOT_CONFIRMED],
         messagesInclude: ["won’t quite fit 3 overnight guests"],
         fieldEquals: { oraya_guest_count: "3", oraya_bedroom_count: "2 bedrooms" },
+        // bedroom q → ack → capacity check → mismatch text → retry wrapper →
+        // retry q → ack → retry capacity check → villa gate → confirmation → terminal
+        visitsInOrder: [["611", "624", "612", "616", "617", "618", "625", "619", "470", "491", "7"]],
       },
     },
     {
@@ -615,7 +645,14 @@ export function buildScenarios() {
         { api: "7466", response: norm("2026-07-10", "2026-07-11", null, "2") },
         { api: "6961", response: {} },
       ],
-      expect: { leadSubmitted: true, terminalIncludes: [NOT_CONFIRMED], askedIncludes: ["Which villa", "Does this look right"] },
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: [NOT_CONFIRMED],
+        askedIncludes: ["Which villa", "Does this look right"],
+        // guest gate (known) → bedroom q → ack → capacity path → villa gate →
+        // villa q → ack → confirmation → terminal
+        visitsInOrder: [["440", "602", "611", "624", "612", "613", "470", "481", "604", "491", "7"]],
+      },
     },
     {
       name: "S19 villa selected → does not stop at \"Got it.\" → reaches confirmation",
@@ -637,7 +674,14 @@ export function buildScenarios() {
         { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "2") },
         { api: "6961", response: {} },
       ],
-      expect: { leadSubmitted: true, askedIncludes: ["How would you like to continue"] },
+      expect: {
+        leadSubmitted: true,
+        askedIncludes: ["How would you like to continue"],
+        // "Looks right" direction of the confirmation branch: confirmation q →
+        // ack → branch condition (True) → handoff wrapper → handoff q →
+        // WhatsApp branch → name q → Lead Submit → terminal
+        visitsInOrder: [["491", "492", "493", "494", "70", "71", "72", "74", "75", "8", "9", "7"]],
+      },
     },
     {
       name: "S21 Continue on WhatsApp → collects name, calls lead submit, ends not-confirmed",
@@ -692,6 +736,16 @@ export function buildScenarios() {
         terminalIncludes: [NOT_CONFIRMED],
         askedIncludes: ["Check-in: 2026-08-01", "Villa: Villa Byblos"],
         fieldEquals: { oraya_check_in: "2026-08-01", oraya_villa: "Villa Byblos", oraya_guest_count: "2" },
+        // "Edit" direction of the confirmation branch, then the rebuilt Edit
+        // flow with a complete replacement: confirmation q → ack → branch
+        // condition (False) → Edit prompt → Edit q → fresh normalize →
+        // date/guest gates (all satisfied) → Edit bedroom q → ack → capacity →
+        // Edit villa gate → Edit confirmation q → ack → second branch (True) →
+        // handoff wrapper → handoff q → terminal
+        visitsInOrder: [[
+          "491", "492", "493", "495", "496", "497", "498", "650", "656", "660", "663",
+          "670", "671", "684", "672", "690", "694", "695", "699", "696", "697", "70", "7",
+        ]],
       },
     },
     {
@@ -718,6 +772,15 @@ export function buildScenarios() {
         terminalIncludes: [NOT_CONFIRMED],
         askedIncludes: ["Check-in: 2026-09-01", "Villa: Villa Byblos", "Overnight guests: 2"],
         fieldEquals: { oraya_check_in: "2026-09-01", oraya_villa: "Villa Byblos", oraya_guest_count: "2" },
+        // full Edit re-validation, node by node: Edit q → fresh normalize →
+        // dates gate (missing) → Edit dates q → refine → both-dates gate →
+        // guests gate (missing) → Edit guest q → ack → supported gate →
+        // Edit bedroom q → ack → capacity → Edit villa gate (known) →
+        // Edit confirmation q → ack → branch (True) → handoff → terminal
+        visitsInOrder: [[
+          "497", "498", "650", "651", "652", "653", "654", "660", "661", "662", "664", "663",
+          "670", "671", "684", "672", "690", "694", "695", "699", "696", "697", "70", "7",
+        ]],
       },
     },
     {

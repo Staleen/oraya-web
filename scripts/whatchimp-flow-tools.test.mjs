@@ -169,6 +169,34 @@ test("validator: wrong-domain guest-facing text is an error", () => {
   assert.ok(hasError(errors, "forbidden domain pattern"), errors.join("\n"));
 });
 
+test("validator: direct Question → Condition transition is an error (loose-link guard)", () => {
+  // Genuine WhatChimp exports only ever continue a question's final reply
+  // into a Text or HTTP API node; a direct Question → Condition edge was
+  // operator-observed rendering as a loose/disconnected line after import.
+  const flow = baseFlow();
+  flow.nodes["3"] = {
+    id: 3,
+    data: {
+      uniqueId: "q3", question: "How many bedrooms would you like?", replyType: "Text",
+      customField: "57699", customFieldSelectedOptionText: "oraya_check_in",
+    },
+    inputs: { userInputFlowSingleInput: { connections: [] } },
+    outputs: { userInputFlowSingleOutputFinalReply: { connections: [] } },
+    position: [0, 0],
+    name: "User Input Flow Single",
+  };
+  flow.nodes["4"] = conditionNode(4, [{ fid: "57699", name: "oraya_check_in", value: "null" }]);
+  flow.nodes["5"] = textNode(5, "passed your request to the Oraya team — not a confirmed booking");
+  flow.nodes["1"].outputs.referenceOutput.connections = [];
+  flow.nodes["2"].inputs.textInput.connections = [];
+  link(flow, "1", "referenceOutput", "3", "userInputFlowSingleInput");
+  link(flow, "3", "userInputFlowSingleOutputFinalReply", "4", "conditionInput");
+  link(flow, "4", "conditionOutputTrue", "2", "textInput");
+  link(flow, "4", "conditionOutputFalse", "5", "textInput");
+  const errors = errorsOf(flow);
+  assert.ok(hasError(errors, "unsupported direct question transition"), errors.join("\n"));
+});
+
 test("validator: second destination on one condition output is an error", () => {
   const flow = baseFlow();
   flow.nodes["3"] = conditionNode(3, [{ fid: "57699", name: "oraya_check_in", value: "null" }]);
@@ -208,6 +236,58 @@ test("validator: v6 fails strict-binding until the real bedroom field id is boun
   const flow = JSON.parse(readFileSync(v6Path, "utf8"));
   const { errors } = validateFlow(flow, profile, { strictBinding: true });
   assert.ok(errors.length > 0);
+});
+
+const boundPath = path.join(repoRoot, "Oraya_natural_intake_v6_bound_69114.txt");
+
+test("artifact: bound 69114 delivery file — strict-clean, placeholder-free, exact bedroom bindings, export-proven question transitions", { skip: !existsSync(boundPath) }, () => {
+  const raw = readFileSync(boundPath, "utf8");
+  assert.ok(!raw.includes("__ORAYA_BEDROOM_COUNT_FIELD_ID__"), "placeholder string must not remain in the delivery file");
+  assert.ok(!raw.includes("__ORAYA"), "no placeholder prefix may remain in the delivery file");
+  const flow = JSON.parse(raw);
+  const { errors, warnings } = validateFlow(flow, profile, { strictBinding: true });
+  assert.deepEqual(errors, [], errors.join("\n"));
+  assert.deepEqual(warnings, [], warnings.join("\n"));
+  // exact bedroom bindings: 4 questions on "69114", 8 condition rows on
+  // "custom_69114" (each row serializes the id in both the variable and the
+  // selected-values array — 16 array entries).
+  let bedroomQuestions = 0;
+  let bedroomRowEntries = 0;
+  for (const n of Object.values(flow.nodes)) {
+    if (n.name === "User Input Flow Single" && n.data?.customFieldSelectedOptionText === "oraya_bedroom_count") {
+      assert.equal(n.data.customField, "69114", "bedroom question customField must be exactly 69114");
+      bedroomQuestions += 1;
+    }
+    if (n.name === "Condition") {
+      for (const arr of [n.data?.custom_field_variable ?? [], n.data?.custom_field_variable_selected_values ?? []]) {
+        arr.forEach((f, i) => {
+          if ((n.data?.custom_field_variable_selected_texts ?? [])[i] === "oraya_bedroom_count") {
+            assert.equal(f, "custom_69114", "bedroom condition rows must reference exactly custom_69114");
+            bedroomRowEntries += 1;
+          }
+        });
+      }
+    }
+  }
+  assert.equal(bedroomQuestions, 4, "expected the 4 bedroom questions (initial/retry × initial/Edit)");
+  assert.equal(bedroomRowEntries, 16, "expected 16 bedroom condition-row id entries (8 rows × 2 serialized arrays)");
+  // every question node continues into exactly one Text or HTTP API node —
+  // the only transitions genuine WhatChimp exports contain.
+  for (const [id, n] of Object.entries(flow.nodes)) {
+    if (n.name !== "User Input Flow Single") continue;
+    const edges = [];
+    for (const out of Object.values(n.outputs ?? {})) for (const c of out.connections ?? []) edges.push(c);
+    assert.equal(edges.length, 1, `question #${id} must have exactly one continuation`);
+    const dst = flow.nodes[String(edges[0].node)];
+    assert.ok(dst?.name === "Text" || dst?.name === "HTTP API",
+      `question #${id} continues into ${dst?.name} — only Text / HTTP API are export-proven`);
+  }
+  // the full scenario suite (incl. node-level visitation assertions) passes
+  // against the bound delivery file, not only the placeholder artifact.
+  for (const scenario of buildScenarios()) {
+    const result = runScenario(flow, profile, scenario);
+    assert.deepEqual(result.failures, [], `${scenario.name}:\n${result.failures.join("\n")}`);
+  }
 });
 
 test("operator docs: production WhatChimp API endpoints use direct www host", () => {

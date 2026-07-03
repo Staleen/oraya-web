@@ -25,6 +25,15 @@
  *      date / guest / bedroom / villa steps, returns to a cloned
  *      confirmation, and either proceeds to the existing handoff choice
  *      (node 70) or escalates on a second Edit.
+ *   7. Export-proven question transitions ONLY — in every genuine WhatChimp
+ *      export on record (operator's v5.5 + 20+ platform exports), a
+ *      question's final-reply output feeds a Text or HTTP API node, never a
+ *      Condition or a User Input Flow wrapper. Direct Question → Condition /
+ *      Question → User Input Flow edges were operator-observed rendering as
+ *      loose/disconnected lines after import (2026-07-03). Every such edge
+ *      is therefore built as Question → acknowledgement Text → next node —
+ *      the same device the operator's own v5.5 uses (#491 → #492 "Got it."
+ *      → #493). Enforced by the validator's question-transition check.
  *
  * Usage:
  *   node scripts/generate-whatchimp-v6.mjs <v5.5-input> <v6-output>
@@ -85,6 +94,14 @@ const COPY = {
     "No problem — let me bring in our team so we can fine-tune everything personally. 😊",
   confirmation:
     "Here’s what I have for your stay so far 😊\n\n📅 Check-in: #oraya_check_in#\n📅 Check-out: #oraya_check_out#\n🏡 Villa: #oraya_villa#\n👥 Overnight guests: #oraya_guest_count#\n🛏 Bedrooms: #oraya_bedroom_count#\n\nDoes this look right?",
+  // Acknowledgement texts inserted between a question and its Condition /
+  // wrapper successor — the only question continuations genuine WhatChimp
+  // exports contain are Question → Text and Question → HTTP API (the
+  // operator's v5.5 uses the same device: #491 → #492 "Got it." → #493).
+  guestAck: "Perfect, thank you 😊",
+  bedroomAck: "Noted 😊",
+  villaAck: "Lovely choice 😊",
+  confirmAck: "Got it.",
 };
 
 // ─── deterministic id factory ───────────────────────────────────────────────
@@ -302,7 +319,9 @@ function generateV6(flow) {
   connect(nodes, 440, "conditionOutputTrue", 600, "userInputFlowInput");
   connect(nodes, 440, "conditionOutputFalse", 602, "conditionInput");
   connect(nodes, 600, "userInputFlowOutput", 601, "userInputFlowSingleInput");
-  connect(nodes, 601, "userInputFlowSingleOutputFinalReply", 602, "conditionInput");
+  textNode(nodes, 603, COPY.guestAck, [5590, -1900]); // Question → Text → Condition (export-proven)
+  connect(nodes, 601, "userInputFlowSingleOutputFinalReply", 603, "textInput");
+  connect(nodes, 603, "textOutput", 602, "conditionInput");
 
   // ── primary bedroom path (always asked; never condition-skipped) ──────────
   wrapperNode(nodes, 610, "Oraya v6 - Bedrooms", [5200, -1600]);
@@ -322,15 +341,21 @@ function generateV6(flow) {
     okTarget: { id: 470, inKey: "conditionInput" },
     mismatchTarget: { id: 616, inKey: "textInput" },
   }, [5720, -1600]);
-  connect(nodes, 611, "userInputFlowSingleOutputFinalReply", primaryValidation, "conditionInput");
+  textNode(nodes, 624, COPY.bedroomAck, [5590, -1600]); // Question → Text → Condition (export-proven)
+  connect(nodes, 611, "userInputFlowSingleOutputFinalReply", 624, "textInput");
+  connect(nodes, 624, "textOutput", primaryValidation, "conditionInput");
   const retryValidation = bedroomValidation(nodes, 619, {
     okTarget: { id: 470, inKey: "conditionInput" },
     mismatchTarget: { id: 623, inKey: "textInput" },
   }, [5720, -1300]);
-  connect(nodes, 618, "userInputFlowSingleOutputFinalReply", retryValidation, "conditionInput");
+  textNode(nodes, 625, COPY.bedroomAck, [5590, -1300]); // Question → Text → Condition (export-proven)
+  connect(nodes, 618, "userInputFlowSingleOutputFinalReply", 625, "textInput");
+  connect(nodes, 625, "textOutput", retryValidation, "conditionInput");
 
   // ── villa converges into confirmation ─────────────────────────────────────
-  connect(nodes, 481, "userInputFlowSingleOutputFinalReply", 490, "userInputFlowInput");
+  textNode(nodes, 604, COPY.villaAck, [7190, -1750]); // Question → Text → wrapper (export-proven)
+  connect(nodes, 481, "userInputFlowSingleOutputFinalReply", 604, "textInput");
+  connect(nodes, 604, "textOutput", 490, "userInputFlowInput");
 
   // ── shared human-escalation tail: name → Lead Submit → safe final ─────────
   wrapperNode(nodes, 640, "Oraya v6 - Escalation", [7300, -900]);
@@ -386,7 +411,9 @@ function generateV6(flow) {
   connect(nodes, 660, "conditionOutputTrue", 661, "userInputFlowInput");
   connect(nodes, 660, "conditionOutputFalse", 663, "conditionInput");
   connect(nodes, 661, "userInputFlowOutput", 662, "userInputFlowSingleInput");
-  connect(nodes, 662, "userInputFlowSingleOutputFinalReply", 663, "conditionInput");
+  textNode(nodes, 664, COPY.guestAck, [4410, -520]); // Question → Text → Condition (export-proven)
+  connect(nodes, 662, "userInputFlowSingleOutputFinalReply", 664, "textInput");
+  connect(nodes, 664, "textOutput", 663, "conditionInput");
   connect(nodes, 663, "conditionOutputFalse", 466, "userInputFlowInput"); // shared large-group review
 
   // bedrooms (Edit) — same always-ask + capacity validation + one retry
@@ -416,19 +443,27 @@ function generateV6(flow) {
     okTarget: { id: 690, inKey: "conditionInput" },
     mismatchTarget: { id: 676, inKey: "textInput" },
   }, [5320, -520]);
-  connect(nodes, 671, "userInputFlowSingleOutputFinalReply", editBedroomOk, "conditionInput");
+  textNode(nodes, 684, COPY.bedroomAck, [5190, -520]); // Question → Text → Condition (export-proven)
+  connect(nodes, 671, "userInputFlowSingleOutputFinalReply", 684, "textInput");
+  connect(nodes, 684, "textOutput", editBedroomOk, "conditionInput");
   const editBedroomRetryOk = bedroomValidation(nodes, 679, {
     okTarget: { id: 690, inKey: "conditionInput" },
     mismatchTarget: { id: 683, inKey: "textInput" },
   }, [5320, -160]);
-  connect(nodes, 678, "userInputFlowSingleOutputFinalReply", editBedroomRetryOk, "conditionInput");
+  textNode(nodes, 685, COPY.bedroomAck, [5190, -160]); // Question → Text → Condition (export-proven)
+  connect(nodes, 678, "userInputFlowSingleOutputFinalReply", 685, "textInput");
+  connect(nodes, 685, "textOutput", editBedroomRetryOk, "conditionInput");
 
   connect(nodes, 690, "conditionOutputTrue", 691, "userInputFlowInput");
   connect(nodes, 690, "conditionOutputFalse", 694, "userInputFlowInput");
   connect(nodes, 691, "userInputFlowOutput", 692, "userInputFlowSingleInput");
-  connect(nodes, 692, "userInputFlowSingleOutputFinalReply", 694, "userInputFlowInput");
+  textNode(nodes, 693, COPY.villaAck, [7190, -520]); // Question → Text → wrapper (export-proven)
+  connect(nodes, 692, "userInputFlowSingleOutputFinalReply", 693, "textInput");
+  connect(nodes, 693, "textOutput", 694, "userInputFlowInput");
   connect(nodes, 694, "userInputFlowOutput", 695, "userInputFlowSingleInput");
-  connect(nodes, 695, "userInputFlowSingleOutputFinalReply", 696, "conditionInput");
+  textNode(nodes, 699, COPY.confirmAck, [7710, -400]); // Question → Text → Condition (mirrors v5.5's #491→#492→#493)
+  connect(nodes, 695, "userInputFlowSingleOutputFinalReply", 699, "textInput");
+  connect(nodes, 699, "textOutput", 696, "conditionInput");
   connect(nodes, 696, "conditionOutputTrue", 697, "userInputFlowInput");
   connect(nodes, 696, "conditionOutputFalse", 698, "textInput");
   connect(nodes, 697, "userInputFlowOutput", 70, "userInputFlowSingleInput");

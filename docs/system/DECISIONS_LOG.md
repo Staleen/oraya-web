@@ -16,6 +16,18 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-07-03 - Generated WhatChimp flows may only use export-proven node transitions; v6 question edges rebuilt through acknowledgement Texts and bedroom field 69114 bound
+
+**Decision:** a generated WhatChimp flow artifact may only contain node-to-node transition patterns that appear in genuine WhatChimp exports. For question nodes (`User Input Flow Single`) the proven continuations are exactly: final reply → Text, final reply → HTTP API (and the chained-question port → another question). Direct Question → Condition and Question → User Input Flow edges are prohibited — the validator's `question-transition` check errors on them, and every question must have exactly one outgoing continuation. The v6 artifact's 9 offending edges (guest count, bedrooms, bedroom retry ×2 paths; villa ×2 paths; Edit confirmation) are rebuilt as `Question → acknowledgement Text → next` ("Perfect, thank you 😊" / "Noted 😊" / "Lovely choice 😊" / "Got it."), mirroring the operator's own v5.5 construction (`#491 → #492 "Got it." → #493`). The operator-created bedroom field id `69114` is bound into the delivery artifact `Oraya_natural_intake_v6_bound_69114.txt` (4 questions on `69114`, 8 condition rows on `custom_69114`, zero placeholders); the generator keeps emitting the documented placeholder so regeneration stays id-agnostic.
+
+**Reason:** the operator imported the earlier v6 build (2026-07-03) and observed loose/disconnected links around exactly the business steps whose edges used the unproven transitions — the WhatChimp editor does not render or accept them, even though the JSON parses and passes reachability checks. A survey of every genuine export on record (the operator's v5.5 plus 20+ platform exports) shows question outputs feeding only Text or HTTP API nodes; the only files containing Question → Condition edges were earlier agent-hand-built flows, and the operator's repaired re-export of one of them had eliminated precisely that edge.
+
+**Impact:** `scripts/generate-whatchimp-v6.mjs` inserts the 9 acknowledgement Text nodes (118 nodes / 149 edges); `scripts/validate-whatchimp-flow.mjs` gains the `question-transition` check; `scripts/simulate-whatchimp-flow.mjs` gains node-level `visitsInOrder` path assertions (six required scenarios now prove each expected question and downstream node is entered in order, not merely that a terminal is reached); `scripts/whatchimp/natural-intake-profile.json` records `oraya_bedroom_count: 69114`; new delivery artifact at repo root + operator folder; checklist A2 now verifies no loose question links after save → close → reopen. Save compatibility remains a WhatChimp-side gate (KNOWN_BUGS #10) — repository validation cannot prove it.
+
+**Reversible?:** yes — regenerating without the ack nodes is one generator change, but doing so requires a superseding entry proving WhatChimp accepts the direct transitions.
+
+---
+
 ## 2026-07-03 - WhatChimp server-to-server HTTP APIs call the direct `www.stayoraya.com` API host; guest-facing links stay on the bare canonical origin
 
 **Decision:** production WhatChimp HTTP API integrations (Stay Intent `7466`, Stay Intent Refine `8101`, Lead Submit `6961`/`7459`, and their TEST clones when not pointed at a Vercel Preview URL) must POST to the direct API host `https://www.stayoraya.com/api/butler/...`. Guest-facing URLs are unchanged: `https://stayoraya.com` remains the only canonical Oraya web origin, `https://stayoraya.com/book` remains the booking continuation link, and generated prefill links keep their existing origin. Every HTTP API verification in the round-trip checklist now explicitly rejects any `3xx` response as success.

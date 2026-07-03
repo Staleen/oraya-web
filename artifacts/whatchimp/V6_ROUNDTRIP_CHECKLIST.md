@@ -29,20 +29,20 @@ Then:
    - `apis.leadSubmit.ids` → **both** TEST lead ids, e.g. `["<whatsapp-test-id>", "<website-handoff-test-id>"]`
    - `apiFieldWrites`: rename the `"7466"`/`"8101"` keys to the TEST Stay Intent / Refine ids (same mapping objects, including `guest_followup`), rename `"6961"` → `<whatsapp-test-id>` **preserving** `{ "prefill_url": "oraya_prefill_url" }` (matches A1.3 — the WhatsApp lead-acknowledgement and escalation endings display the secure link), and rename `"7459"` → `<website-handoff-test-id>` **preserving** `{ "prefill_url": "oraya_prefill_url" }`. Both TEST Lead Submit entries keep the prefill mapping; the canonical `/book` fallback in the terminal texts is complementary, never a replacement.
    Then validate re-exports with:
-   `node scripts/validate-whatchimp-flow.mjs <re-export> --profile <test-profile.json> --strict-binding --bedroom-field-id <REAL_ID>`.
+   `node scripts/validate-whatchimp-flow.mjs <re-export> --profile <test-profile.json> --strict-binding --bedroom-field-id 69114`.
 8. **Endpoint-verification rule (applies to EVERY production or TEST HTTP API check in this checklist):** a verification counts as successful only when the integration receives a direct `2xx` response from the configured URL. **Any `3xx` response is a failure**, even if WhatChimp reports the request as sent — an authenticated test (2026-07-03) showed the bare `https://stayoraya.com` origin answers `/api/butler/...` POSTs with a `308` redirect that WhatChimp does not safely complete, leaving response mappings (e.g. `prefill_url` → `oraya_prefill_url`) unpopulated. Production integrations must use the direct `https://www.stayoraya.com/api/butler/...` host; guest-facing links stay on `https://stayoraya.com` (e.g. `https://stayoraya.com/book`). For Lead Submit, a complete successful endpoint response is expected to include:
    ```json
    { "ok": true, "lead_id": "...", "message": "...", "prefill_url": "https://stayoraya.com/book?h=..." }
    ```
    The exact `h=` token is a short-lived credential — never commit it, paste it into docs/PRs, or share it outside the test.
 
-## A2. Bind, import, verify, rebind
+## A2. Import, verify, rebind
 
-1. Create custom field `oraya_bedroom_count` (Text). Run:
-   `node scripts/bind-whatchimp-field.mjs Oraya_natural_intake_v6.txt <REAL_ID>`
-2. Import the bound `Oraya_natural_intake_v6.txt` into the test bot. **Save** the workflow, close the editor completely, then reopen it.
+1. The bedroom custom field exists (`oraya_bedroom_count` = `69114`, operator-created 2026-07-03) and the delivery artifact is pre-bound: import **`Oraya_natural_intake_v6_bound_69114.txt`** (repo root; copy delivered in the operator's Oraya folder). Only if regenerating from source: `node scripts/bind-whatchimp-field.mjs Oraya_natural_intake_v6.txt 69114 -o Oraya_natural_intake_v6_bound_69114.txt`.
+2. Import the bound file into the test bot. **Save** the workflow, close the editor completely, then reopen it.
 3. Confirm the import persisted structurally. At this point the API nodes still display the **Production** integration names carried in the export — that is expected before rebinding:
    - The four "How many bedrooms would you like?" questions save to `oraya_bedroom_count`.
+   - **No loose or disconnected lines around any question** — every question (guest count, bedrooms, bedroom retry, villa, confirmation "Here's what I have…", the Edit-path clones of each, "Your updated stay details:", both full-name questions, the date follow-ups, and "How would you like to continue?") must connect forward through exactly one line into either a short acknowledgement message ("Perfect, thank you 😊" / "Noted 😊" / "Lovely choice 😊" / "Got it.") or an HTTP API node. The 2026-07-03 import showed loose links here because the earlier build wired questions directly into condition diamonds; that construction is removed. **If any question still shows a dangling or missing line after save → close → reopen, stop and report.**
    - The initial normalization integration appears twice (after the opening "please tell me what you already know about your stay" question, and after "Your updated stay details:").
    - The Refine integration appears after **every** date follow-up question (six places).
    - A Lead Submit integration appears after "May I have your full name for the request?", after the escalation name question ("So our team can follow up personally — may I have your full name?"), and on the "Finish on website" branch.
@@ -59,7 +59,7 @@ Then:
 6. Re-export the saved workflow **without any manual JSON editing**.
 7. Run the validator against the re-export with the test profile from A1.7:
    ```
-   node scripts/validate-whatchimp-flow.mjs <re-exported-file> --profile <test-profile.json> --strict-binding --bedroom-field-id <REAL_ID>
+   node scripts/validate-whatchimp-flow.mjs <re-exported-file> --profile <test-profile.json> --strict-binding --bedroom-field-id 69114
    ```
    Required result: exit code 0, zero errors, zero warnings.
 
@@ -92,7 +92,7 @@ For each, message the test number and verify:
 2. **Audit the endpoint host of ALL FOUR production integrations** (`7466`, `8101`, `6961`, `7459`): each must POST to the direct `https://www.stayoraya.com/api/butler/...` host. One Lead Submit integration was already corrected and verified on the direct host (2026-07-03: HTTP `200` in Vercel, prefill secret present, `lead_id` / `message` / `prefill_url` → `oraya_prefill_url` mappings visible); that does **not** prove the other three — verify each individually against the A1.8 rule (any `3xx` = failure).
 3. Add `oraya_bedroom_count: "#oraya_bedroom_count#"` **and** `oraya_guest_followup: "#oraya_guest_followup#"` to the production Lead Submit bodies (`6961` and `7459`), and confirm both carry the `prefill_url` → `oraya_prefill_url` response mapping. This is additive and safe for other flows sharing those integrations: unknown/empty values land in `whatsapp_leads.raw_payload`, the prefill route only surfaces bedroom values that validate to 1/2/3, and `oraya_guest_followup` is audit data for operators (the exact above-capacity guest total).
 4. Import the bound v6 artifact into the production bot with the production integration bindings, save, re-export, and validate with the **production** profile:
-   `node scripts/validate-whatchimp-flow.mjs <production-re-export> --strict-binding --bedroom-field-id <REAL_ID>`
+   `node scripts/validate-whatchimp-flow.mjs <production-re-export> --strict-binding --bedroom-field-id 69114`
 5. Re-run checklist section C against the production number before retiring the old intake flow.
 
 Only after A+B+C pass may the flow be promoted toward the production bot, and only after D passes may it be described as anything beyond an **import-ready v6 candidate**.

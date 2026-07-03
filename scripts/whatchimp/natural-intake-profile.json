@@ -1,6 +1,6 @@
 {
   "profile": "oraya-natural-stay-intake",
-  "description": "Semantic contract for the Oraya Natural Stay Intake WhatChimp flow (Phase 16A). Consumed by scripts/validate-whatchimp-flow.mjs and scripts/simulate-whatchimp-flow.mjs. IDs are the real WhatChimp tenant IDs verified from the operator's v5.5 export; the bedroom field ID is an external binding dependency (see placeholderFieldIds).",
+  "description": "Semantic contract for the Oraya Natural Stay Intake WhatChimp flow (Phase 16A). Consumed by scripts/validate-whatchimp-flow.mjs and scripts/simulate-whatchimp-flow.mjs. IDs are the real WhatChimp tenant IDs verified from the operator's v5.5 export; oraya_bedroom_count is the operator-created field 69114 (supplied 2026-07-03). The generator still emits the documented placeholder (see placeholderFieldIds); scripts/bind-whatchimp-field.mjs produces the bound delivery artifact.",
   "apis": {
     "initialNormalize": { "id": "7466", "label": "Oraya Stay Intent - Production" },
     "refine": { "id": "8101", "label": "Oraya Stay Intent Refine - Production" },
@@ -17,7 +17,7 @@
     "oraya_dates_confirmed_text": "58532",
     "oraya_handoff_required": "57696",
     "oraya_full_name": "57759",
-    "oraya_bedroom_count": "__ORAYA_BEDROOM_COUNT_FIELD_ID__"
+    "oraya_bedroom_count": "69114"
   },
   "placeholderFieldIds": ["__ORAYA_BEDROOM_COUNT_FIELD_ID__"],
   "stayTextField": "oraya_stay_text",
