@@ -210,6 +210,36 @@ test("validator: v6 fails strict-binding until the real bedroom field id is boun
   assert.ok(errors.length > 0);
 });
 
+test("operator docs: production WhatChimp API endpoints use direct www host", () => {
+  // The bare production origin answers /api/butler/... POSTs with a 308
+  // redirect that WhatChimp does not safely complete (operator-verified
+  // 2026-07-03), so no current operator instruction may tell a WhatChimp
+  // integration to POST to the bare API prefix. The direct
+  // https://www.stayoraya.com/api/butler/... host, guest-facing
+  // https://stayoraya.com/book links, and Vercel Preview API URLs all remain
+  // allowed — only the exact bare API prefix is forbidden.
+  const operatorDocs = [
+    path.join("artifacts", "whatchimp", "V6_DEPENDENCIES.md"),
+    path.join("artifacts", "whatchimp", "V6_ROUNDTRIP_CHECKLIST.md"),
+    path.join("docs", "system", "BUTLER_PLAYBOOK.md"),
+  ];
+  const bareApiPrefix = "https://stayoraya.com/api/butler/";
+  const offenders = [];
+  for (const doc of operatorDocs) {
+    const lines = readFileSync(path.join(repoRoot, doc), "utf8").split("\n");
+    lines.forEach((line, i) => {
+      if (line.includes(bareApiPrefix)) offenders.push(`${doc}:${i + 1}: ${line.trim()}`);
+    });
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    "redirecting bare API prefix reintroduced in operator docs — the bare host returns 308 and WhatChimp does not " +
+      "safely complete redirected POSTs; instruct https://www.stayoraya.com/api/butler/... instead:\n" +
+      offenders.join("\n"),
+  );
+});
+
 test("profile: every leadSubmit id maps prefill_url → oraya_prefill_url", () => {
   // Both Lead Submit integrations (WhatsApp/escalation 6961 and website-handoff
   // 7459, and any TEST clone that replaces them in a TEST profile) must write

@@ -1,6 +1,6 @@
 # Known Bugs & Open Issues
 
-**Updated:** 2026-06-17
+**Updated:** 2026-07-03
 
 Living list of bugs, gaps, and operational pitfalls that are **known** but **not yet fixed** (or accepted as a permanent trade-off). New AI sessions: read this before assuming production is in a clean state.
 
@@ -149,6 +149,20 @@ Living list of bugs, gaps, and operational pitfalls that are **known** but **not
 - **Status:** open — resolved only by the human round-trip + live checklist in [artifacts/whatchimp/V6_ROUNDTRIP_CHECKLIST.md](../../artifacts/whatchimp/V6_ROUNDTRIP_CHECKLIST.md) (validator re-run: `node scripts/validate-whatchimp-flow.mjs <re-export> --strict-binding --bedroom-field-id <id>`).
 - **Recommended fix path:** run checklist sections A/B on a test bot; if merges are dropped on save, a no-merge exploded rebuild of the affected tails is the fallback (documented trade-off: duplicated Lead Submit nodes).
 - **Discovered:** 2026-07-02 (Phase 16A v5.5 → v6 audit).
+
+---
+
+### #11 — Bare production API host answers WhatChimp POSTs with a 308 redirect that WhatChimp does not safely follow; production integrations must use the direct `www` API host
+
+- **Severity:** 🟠 High until every production WhatChimp HTTP API integration is individually audited for the direct host.
+- **Area:** WhatChimp HTTP API integrations / domain routing (tenant-level configuration, outside this repo)
+- **Description:** operator-verified 2026-07-03 during an authenticated WhatChimp test. A production Lead Submit integration pointed at the bare `https://stayoraya.com` origin's `/api/butler/lead` path received an HTTP `308` redirect instead of the real endpoint response, and WhatChimp did not safely complete the redirected POST — the flow never received response fields such as `prefill_url`, so the secure website-handoff link stayed unavailable. After the operator switched the integration to the direct host `https://www.stayoraya.com/api/butler/lead`, WhatChimp reported success, Vercel recorded `POST /api/butler/lead` with HTTP `200`, the prefill secret was present, no prefill-token-generation failure was logged, and the response mapping visibly included `lead_id`, `message`, and `prefill_url` → `oraya_prefill_url`. **Contract:** production WhatChimp server-to-server HTTP API calls use `https://www.stayoraya.com/api/butler/...`; guest-facing links remain `https://stayoraya.com/...` (no change to canonical guest origin, prefill-link generation, website routing, or domain configuration). Any HTTP API verification receiving a `3xx` must be treated as a failure.
+- **Status:** open — one Lead Submit integration corrected and verified; the other three production integrations (Stay Intent `7466`, Refine `8101`, and the remaining Lead Submit of `6961`/`7459`) must each be audited before production cutover (checklist D.2 in [artifacts/whatchimp/V6_ROUNDTRIP_CHECKLIST.md](../../artifacts/whatchimp/V6_ROUNDTRIP_CHECKLIST.md)). A tooling regression test now blocks operator docs from reinstructing the bare API prefix. Note the direct-host behavior depends on current domain routing; if routing/redirect configuration changes later, re-verify.
+- **Recommended fix path:**
+  1. Audit all four production integrations' endpoint hosts in the WhatChimp UI (A1.8 rule: only a direct `2xx` counts as success).
+  2. Keep guest-facing copy and prefill links on `https://stayoraya.com` — this is not a domain migration.
+  3. Optional future hardening (separate approved task): make the bare-host API paths answer directly instead of redirecting; until then the `www` host is the required WhatChimp target.
+- **Discovered:** 2026-07-03 (authenticated WhatChimp Lead Submit test + Vercel logs).
 
 ---
 

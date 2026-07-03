@@ -16,6 +16,18 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-07-03 - WhatChimp server-to-server HTTP APIs call the direct `www.stayoraya.com` API host; guest-facing links stay on the bare canonical origin
+
+**Decision:** production WhatChimp HTTP API integrations (Stay Intent `7466`, Stay Intent Refine `8101`, Lead Submit `6961`/`7459`, and their TEST clones when not pointed at a Vercel Preview URL) must POST to the direct API host `https://www.stayoraya.com/api/butler/...`. Guest-facing URLs are unchanged: `https://stayoraya.com` remains the only canonical Oraya web origin, `https://stayoraya.com/book` remains the booking continuation link, and generated prefill links keep their existing origin. Every HTTP API verification in the round-trip checklist now explicitly rejects any `3xx` response as success.
+
+**Reason:** operator-verified 2026-07-03 during an authenticated WhatChimp test: the bare origin answered a Lead Submit POST on `/api/butler/lead` with an HTTP `308` redirect, and WhatChimp did not safely complete the redirected POST — the flow never received the endpoint response, so `prefill_url` (and the secure website handoff it powers) stayed unavailable. On the direct host the same integration succeeded: Vercel recorded HTTP `200`, the prefill secret was present, no prefill-token-generation failure was logged, and the `lead_id` / `message` / `prefill_url` → `oraya_prefill_url` response mappings were visible. This is a WhatChimp client behavior around redirects, not a domain migration; no Vercel routing, application logic, or guest-facing URL changes.
+
+**Impact:** endpoint instructions corrected in `artifacts/whatchimp/V6_DEPENDENCIES.md` and `artifacts/whatchimp/V6_ROUNDTRIP_CHECKLIST.md` (new A1.8 endpoint-verification rule incl. the expected Lead Submit success shape, D.2 four-integration host audit); BUTLER_PLAYBOOK canonical-origin section gains the server-to-server exception; new [KNOWN_BUGS.md](KNOWN_BUGS.md) #11; new tooling regression test ("operator docs: production WhatChimp API endpoints use direct www host") fails if any current operator doc reintroduces the bare API prefix. Fixing one tenant-level integration does not prove the other three — each is audited at cutover. Real-subscriber persistence and final WhatsApp rendering remain human checklist checks. The generated flow artifact is untouched (endpoint URLs live in tenant-level WhatChimp settings, not in the export).
+
+**Reversible?:** yes — if domain routing later makes the bare API paths answer directly, a superseding entry can relax the requirement; until then the direct host is mandatory for WhatChimp POSTs.
+
+---
+
 ## 2026-07-02 - Natural stay intake v6: validated WhatChimp artifact, deterministic flow tooling, `extracted_text` stale-field contract, WhatsApp bedroom capture
 
 **Decision:** the WhatChimp Natural Stay Intake flow is rebuilt as a generated, machine-validated artifact (`Oraya_natural_intake_v6.txt`) produced from the operator's v5.5 export by `scripts/generate-whatchimp-v6.mjs`, and no flow revision may again be reported complete on parse/reachability evidence alone — `scripts/validate-whatchimp-flow.mjs` (semantic validator driven by `scripts/whatchimp/natural-intake-profile.json`) must exit 0 and `scripts/simulate-whatchimp-flow.mjs` (deterministic conversation simulator with stubbed API fixtures; its full scenario suite includes the fault-injection matrix and stands at 42/42 passing at this head) must pass before an artifact is called import-ready. Three durable contracts land with it:

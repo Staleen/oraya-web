@@ -21,7 +21,7 @@ The backend `extracted_text` field exists only on this PR's branch until it is m
 
 Then:
 
-5. Point the two TEST Stay Intent integrations at the **Vercel Preview deployment** of this PR (`https://<preview-hash>.vercel.app/api/butler/normalize-stay-intent`) with the Preview environment's `X-Butler-Secret`. This requires `BUTLER_WEBHOOK_SECRET` to be set in Vercel Preview (see ENVIRONMENT_MAP.md). Point the two TEST Lead Submit integrations at the Preview `/api/butler/lead` the same way (Preview writes to the same Supabase `whatsapp_leads` table — expect test rows). Alternative: merge the PR first — `extracted_text` and the two additive body fields are harmless to existing consumers — and point the TEST integrations at `https://stayoraya.com` instead.
+5. Point the two TEST Stay Intent integrations at the **Vercel Preview deployment** of this PR (`https://<preview-hash>.vercel.app/api/butler/normalize-stay-intent`) with the Preview environment's `X-Butler-Secret`. This requires `BUTLER_WEBHOOK_SECRET` to be set in Vercel Preview (see ENVIRONMENT_MAP.md). Point the two TEST Lead Submit integrations at the Preview `/api/butler/lead` the same way (Preview writes to the same Supabase `whatsapp_leads` table — expect test rows). Alternative: merge the PR first — `extracted_text` and the two additive body fields are harmless to existing consumers — and point the TEST integrations at the direct production API host `https://www.stayoraya.com` instead (never the bare host: see the endpoint-verification rule in A1.8). Vercel Preview deployment URLs are already direct and non-redirecting; use them as-is.
 6. Bind the TEST Stay Intent response mappings to `extracted_text.*` per `V6_DEPENDENCIES.md`.
 7. **Test profile for the validator:** the shipped manifest pins the production IDs, so re-exports of the test bot are validated with a copied profile. Copy `scripts/whatchimp/natural-intake-profile.json` and edit:
    - `apis.initialNormalize.id` → TEST Stay Intent id
@@ -30,6 +30,11 @@ Then:
    - `apiFieldWrites`: rename the `"7466"`/`"8101"` keys to the TEST Stay Intent / Refine ids (same mapping objects, including `guest_followup`), rename `"6961"` → `<whatsapp-test-id>` **preserving** `{ "prefill_url": "oraya_prefill_url" }` (matches A1.3 — the WhatsApp lead-acknowledgement and escalation endings display the secure link), and rename `"7459"` → `<website-handoff-test-id>` **preserving** `{ "prefill_url": "oraya_prefill_url" }`. Both TEST Lead Submit entries keep the prefill mapping; the canonical `/book` fallback in the terminal texts is complementary, never a replacement.
    Then validate re-exports with:
    `node scripts/validate-whatchimp-flow.mjs <re-export> --profile <test-profile.json> --strict-binding --bedroom-field-id <REAL_ID>`.
+8. **Endpoint-verification rule (applies to EVERY production or TEST HTTP API check in this checklist):** a verification counts as successful only when the integration receives a direct `2xx` response from the configured URL. **Any `3xx` response is a failure**, even if WhatChimp reports the request as sent — an authenticated test (2026-07-03) showed the bare `https://stayoraya.com` origin answers `/api/butler/...` POSTs with a `308` redirect that WhatChimp does not safely complete, leaving response mappings (e.g. `prefill_url` → `oraya_prefill_url`) unpopulated. Production integrations must use the direct `https://www.stayoraya.com/api/butler/...` host; guest-facing links stay on `https://stayoraya.com` (e.g. `https://stayoraya.com/book`). For Lead Submit, a complete successful endpoint response is expected to include:
+   ```json
+   { "ok": true, "lead_id": "...", "message": "...", "prefill_url": "https://stayoraya.com/book?h=..." }
+   ```
+   The exact `h=` token is a short-lived credential — never commit it, paste it into docs/PRs, or share it outside the test.
 
 ## A2. Bind, import, verify, rebind
 
@@ -83,10 +88,11 @@ For each, message the test number and verify:
 
 ## D. Production cutover (only after A+B+C pass AND the PR is merged/deployed)
 
-1. Re-run the A0 shared-integration audit for `7466`/`8101`. Only if no other live flow references them, rebind their response mappings to `extracted_text.*` (production endpoint `https://stayoraya.com/api/butler/normalize-stay-intent`). If any other live flow shares them, clone production-scoped integrations instead and rebind the flow's API nodes at import.
-2. Add `oraya_bedroom_count: "#oraya_bedroom_count#"` **and** `oraya_guest_followup: "#oraya_guest_followup#"` to the production Lead Submit bodies (`6961` and `7459`), and add the `prefill_url` → `oraya_prefill_url` response mapping to `6961` (7459 already has it). This is additive and safe for other flows sharing those integrations: unknown/empty values land in `whatsapp_leads.raw_payload`, the prefill route only surfaces bedroom values that validate to 1/2/3, and `oraya_guest_followup` is audit data for operators (the exact above-capacity guest total).
-3. Import the bound v6 artifact into the production bot with the production integration bindings, save, re-export, and validate with the **production** profile:
+1. Re-run the A0 shared-integration audit for `7466`/`8101`. Only if no other live flow references them, rebind their response mappings to `extracted_text.*` (production endpoint `https://www.stayoraya.com/api/butler/normalize-stay-intent` — direct host per A1.8). If any other live flow shares them, clone production-scoped integrations instead and rebind the flow's API nodes at import.
+2. **Audit the endpoint host of ALL FOUR production integrations** (`7466`, `8101`, `6961`, `7459`): each must POST to the direct `https://www.stayoraya.com/api/butler/...` host. One Lead Submit integration was already corrected and verified on the direct host (2026-07-03: HTTP `200` in Vercel, prefill secret present, `lead_id` / `message` / `prefill_url` → `oraya_prefill_url` mappings visible); that does **not** prove the other three — verify each individually against the A1.8 rule (any `3xx` = failure).
+3. Add `oraya_bedroom_count: "#oraya_bedroom_count#"` **and** `oraya_guest_followup: "#oraya_guest_followup#"` to the production Lead Submit bodies (`6961` and `7459`), and confirm both carry the `prefill_url` → `oraya_prefill_url` response mapping. This is additive and safe for other flows sharing those integrations: unknown/empty values land in `whatsapp_leads.raw_payload`, the prefill route only surfaces bedroom values that validate to 1/2/3, and `oraya_guest_followup` is audit data for operators (the exact above-capacity guest total).
+4. Import the bound v6 artifact into the production bot with the production integration bindings, save, re-export, and validate with the **production** profile:
    `node scripts/validate-whatchimp-flow.mjs <production-re-export> --strict-binding --bedroom-field-id <REAL_ID>`
-4. Re-run checklist section C against the production number before retiring the old intake flow.
+5. Re-run checklist section C against the production number before retiring the old intake flow.
 
 Only after A+B+C pass may the flow be promoted toward the production bot, and only after D passes may it be described as anything beyond an **import-ready v6 candidate**.

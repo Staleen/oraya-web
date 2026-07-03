@@ -66,6 +66,8 @@ The single canonical Oraya web origin is **`https://stayoraya.com`** and only `h
 
 When asked "what is the Oraya website?" the only correct answer the Butler may give is `https://stayoraya.com`. This is not a domain migration in either direction; it is a wrong-domain bug whenever a different host appears. See [KNOWN_BUGS.md](KNOWN_BUGS.md) #8 and [DECISIONS_LOG.md](DECISIONS_LOG.md) "Canonical Oraya web origin is `https://stayoraya.com`" (2026-06-03).
 
+> **Server-to-server exception — WhatChimp HTTP API integrations (2026-07-03).** The canonical-origin rule above governs guest-facing links and AI replies only. WhatChimp's server-to-server HTTP API integrations must call the **direct API host `https://www.stayoraya.com/api/butler/...`**: an authenticated WhatChimp test showed the bare origin answers `/api/butler/...` POSTs with an HTTP `308` redirect that WhatChimp does not safely complete, so response fields such as `prefill_url` never reach the flow. Guest-facing links remain `https://stayoraya.com/...` (e.g. `https://stayoraya.com/book`) — never give a guest a `www.` URL. See [artifacts/whatchimp/V6_DEPENDENCIES.md](../../artifacts/whatchimp/V6_DEPENDENCIES.md), [KNOWN_BUGS.md](KNOWN_BUGS.md) #11, and [DECISIONS_LOG.md](DECISIONS_LOG.md) 2026-07-03.
+
 ## Knowledge source-of-truth
 
 The Butler derives knowledge from:
