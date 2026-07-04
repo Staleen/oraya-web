@@ -1,10 +1,10 @@
 {
   "profile": "oraya-natural-stay-intake",
-  "description": "Semantic contract for the Oraya Natural Stay Intake WhatChimp flow (Phase 16A). Consumed by scripts/validate-whatchimp-flow.mjs and scripts/simulate-whatchimp-flow.mjs. IDs are the real WhatChimp tenant IDs verified from the operator's v5.5 export; oraya_bedroom_count is the operator-created field 69114 (confirmed 2026-07-03) and the generator emits it directly — the canonical Oraya_natural_intake_v6.txt is fully bound with no placeholder and no second binding step.",
+  "description": "Semantic contract for the Oraya Natural Stay Intake WhatChimp flow (Phase 16A, interactive-controls candidate). Consumed by scripts/validate-whatchimp-flow.mjs and scripts/simulate-whatchimp-flow.mjs. IDs are the real WhatChimp tenant IDs verified from the operator's v5.5 export; oraya_bedroom_count is the operator-created field 69114 (confirmed 2026-07-03) and the generator emits it directly on the bedroom Inline Buttons — the canonical Oraya_natural_intake_v6.txt is fully bound with no placeholder and no second binding step. Missing structured values (guest count / bedrooms / villa) are collected with Interactive controls whose buttons/rows save directly to the custom field (stored value = visible label; schema evidence: operator's 2026-07-04 saved/reopened export, fixture roundtrips/Oraya_natural_intake_v6.button-evidence.saved-reexport.txt).",
   "apis": {
     "initialNormalize": { "id": "7466", "label": "Oraya Stay Intent - Production" },
     "refine": { "id": "8101", "label": "Oraya Stay Intent Refine - Production" },
-    "leadSubmit": { "ids": ["6961", "7459"], "label": "Oraya Lead Submit - Production" }
+    "leadSubmit": { "ids": ["6961"], "label": "Oraya Lead Submit - Production" }
   },
   "fields": {
     "oraya_stay_text": "67692",
@@ -23,21 +23,13 @@
   "importGraphContract": {
     "rootNodeName": "Start Bot Flow",
     "maxInboundPerNode": 1,
-    "approvedHubMerges": {
-      "466": 6,
-      "480": 4,
-      "490": 5,
-      "600": 5,
-      "610": 6,
-      "616": 2,
-      "655": 2,
-      "661": 3,
-      "670": 4,
-      "676": 2,
-      "691": 4,
-      "694": 5,
-      "736": 4
+    "approvedPostbackMerges": {
+      "466": 5,
+      "860": 30,
+      "930": 18,
+      "938": 2
     },
+    "postbackSourceNames": ["Inline Button", "Rows"],
     "maxInboundPerCondition": 1,
     "editorRejectedDrawPairs": [],
     "editorProvenDrawPairs": [
@@ -45,6 +37,11 @@
       ["Text", "User Input Flow"],
       ["Condition", "Text"]
     ]
+  },
+  "interactiveControls": {
+    "oraya_guest_count": { "controlType": "Rows", "labels": ["1", "2", "3", "4", "5", "6", "More than 6"] },
+    "oraya_bedroom_count": { "controlType": "Inline Button", "labels": ["1 bedroom", "2 bedrooms", "3 bedrooms"] },
+    "oraya_villa": { "controlType": "Inline Button", "labels": ["Villa Mechmech", "Villa Byblos"] }
   },
   "roundTripIgnoreFields": ["uniqueId", "postbackId", "newPostbackId", "xitFbpostbackId"],
   "stayTextField": "oraya_stay_text",
@@ -55,25 +52,21 @@
   "villaField": "oraya_villa",
   "checkInField": "oraya_check_in",
   "checkOutField": "oraya_check_out",
-  "confirmField": "oraya_dates_confirmed_text",
-  "handoffField": "oraya_handoff_required",
   "fullNameField": "oraya_full_name",
-  "supportedGuestValues": ["1", "2", "3", "4", "5", "6", "7", "8"],
-  "guestOverflowChoice": "More than 8",
+  "supportedGuestValues": ["1", "2", "3", "4", "5", "6"],
+  "guestOverflowChoice": "More than 6",
   "bedroomChoices": ["1 bedroom", "2 bedrooms", "3 bedrooms"],
-  "bedroomCapacity": { "1 bedroom": 2, "2 bedrooms": 4, "3 bedrooms": 6 },
   "villaChoices": ["Villa Mechmech", "Villa Byblos"],
-  "confirmChoices": ["Looks right", "Edit"],
-  "confirmationMustInclude": [
+  "summaryMustInclude": [
     "#oraya_check_in#",
     "#oraya_check_out#",
     "#oraya_villa#",
     "#oraya_guest_count#",
     "#oraya_bedroom_count#"
   ],
+  "summaryTerminalSnippet": "team will review availability and follow up",
   "approvedTerminalSnippets": [
-    "The Oraya team will review availability and follow up here",
-    "You can continue your booking request on the Oraya website",
+    "team will review availability and follow up",
     "passed your request to the Oraya team"
   ],
   "forbiddenTerminalTexts": ["Got it."],
@@ -89,8 +82,7 @@
   "staleVersionLabels": ["v5.3", "v5.4", "v5.5"],
   "escalationSnippets": [
     "let me bring in our team",
-    "confirm the details with you personally",
-    "have our team help arrange"
+    "confirm the details with you personally"
   ],
   "apiFieldWrites": {
     "7466": {
@@ -107,7 +99,6 @@
       "guest_count": "oraya_guest_count",
       "guest_followup": "oraya_guest_followup"
     },
-    "7459": { "prefill_url": "oraya_prefill_url" },
     "6961": { "prefill_url": "oraya_prefill_url" }
   },
   "allowedConditionOperators": ["equal", "contains"],

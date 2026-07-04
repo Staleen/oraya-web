@@ -262,6 +262,9 @@ const roundtrip2HaltedPath = path.join(repoRoot, "artifacts", "whatchimp", "roun
 // unexecutable (items #5/#22/#24 targeted already-connected Condition inputs;
 // byte-preserved fixture — see roundtrips/ROUNDTRIP_3_FINDINGS.md)
 const roundtrip3FailedPath = path.join(repoRoot, "artifacts", "whatchimp", "roundtrips", "Oraya_natural_intake_v6.roundtrip-3.failed-candidate.txt");
+// the operator's authenticated saved/reopened export proving Interactive
+// button schema + forward button convergence persistence (2026-07-04)
+const buttonEvidencePath = path.join(repoRoot, "artifacts", "whatchimp", "roundtrips", "Oraya_natural_intake_v6.button-evidence.saved-reexport.txt");
 
 test("validator: v5.5 operator export fails with semantic errors", { skip: !existsSync(v55Path) }, () => {
   const flow = JSON.parse(readFileSync(v55Path, "utf8"));
@@ -269,18 +272,17 @@ test("validator: v5.5 operator export fails with semantic errors", { skip: !exis
   assert.ok(errors.length >= 30, `expected the audited v5.5 defects, got ${errors.length} errors`);
   assert.ok(hasError(errors, "empty customField id"));
   assert.ok(hasError(errors, "dead-end API call"));
-  assert.ok(hasError(errors, "no bedroom-selection question exists"));
+  assert.ok(hasError(errors, "no bedroom-selection control exists"));
 });
 
-// Corrected-rule hybrid (2026-07-03, round trip #2 probes): the canonical
-// candidate clones every small branch-local tail AND every Condition that
-// would otherwise carry a second Condition-source parent (the editor rejects
-// those draws with the infinite-loop warning). The remaining merges are the
-// profile-declared hubs (`importGraphContract.approvedHubMerges`), whose
-// beyond-first edges the operator re-draws after import per
-// artifacts/whatchimp/V6_REDRAW_CHECKLIST.md — every one a live-proven editor
-// operation, never Condition → Condition. The candidate must validate
-// completely clean.
+// Interactive-controls candidate (2026-07-04, operator button evidence): the
+// canonical candidate collects missing guest count / bedrooms / villa through
+// Interactive controls whose buttons/rows save directly to the custom field
+// (stored value = visible label) and route forward on the press. The ONLY
+// serialized convergence is postback convergence — input sockets whose
+// parents are ALL Inline Button / Rows nodes — declared exactly in the
+// profile's `importGraphContract.approvedPostbackMerges`. There are ZERO
+// operator redraws. The candidate must validate completely clean.
 
 test("validator: generated v6 passes with zero errors and zero warnings", { skip: !existsSync(v6Path) }, () => {
   const flow = JSON.parse(readFileSync(v6Path, "utf8"));
@@ -296,32 +298,27 @@ test("validator: canonical v6 passes strict binding (fully bound, no second bind
   assert.deepEqual(warnings, [], warnings.join("\n"));
 });
 
-test("editor invariant: no redraw targets a Condition, only live-proven operations, one inbound TOTAL per Condition everywhere", { skip: !existsSync(v6Path) }, () => {
+test("editor invariant: zero redraws, postback-only convergence, one inbound TOTAL per Condition, no Start-a-Flow controls", { skip: !existsSync(v6Path) }, () => {
   const flow = JSON.parse(readFileSync(v6Path, "utf8"));
   const nodes = flow.nodes;
-  // profile encodes the corrected 2026-07-03 round-trip-#3 evidence
-  assert.deepEqual(profile.importGraphContract.editorRejectedDrawPairs, []);
-  assert.deepEqual(profile.importGraphContract.editorProvenDrawPairs, [
-    ["Condition", "User Input Flow"],
-    ["Text", "User Input Flow"],
-    ["Condition", "Text"],
-  ]);
+  // profile encodes the corrected 2026-07-03/04 evidence
   assert.equal(profile.importGraphContract.maxInboundPerCondition, 1);
-  const proven = new Set(profile.importGraphContract.editorProvenDrawPairs.map((p) => p.join(" → ")));
-  // every beyond-first (operator-drawn) edge uses a proven pair and NEVER
-  // targets a Condition (round trip #3: one inbound TOTAL per Condition)
-  let drawn = 0;
+  assert.deepEqual(profile.importGraphContract.postbackSourceNames, ["Inline Button", "Rows"]);
+  const postback = new Set(profile.importGraphContract.postbackSourceNames);
+  // every beyond-first serialized edge comes from a postback control (the
+  // operator-proven convergence class) — there is NOTHING for an operator to
+  // redraw after import
   for (const [id, node] of Object.entries(nodes)) {
-    for (const inp of Object.values(node.inputs ?? {})) {
-      for (const c of (inp.connections ?? []).slice(1)) {
-        drawn += 1;
-        assert.notEqual(node.name, "Condition", `drawn edge #${c.node} → #${id} targets a Condition — never executable`);
-        const pair = `${nodes[String(c.node)].name} → ${node.name}`;
-        assert.ok(proven.has(pair), `drawn edge #${c.node} → #${id} uses unproven pair ${pair}`);
+    for (const [inKey, inp] of Object.entries(node.inputs ?? {})) {
+      const conns = inp.connections ?? [];
+      if (conns.length <= 1) continue;
+      assert.notEqual(node.name, "Condition", `convergence on Condition #${id} — never allowed (one inbound TOTAL)`);
+      for (const c of conns) {
+        const srcName = nodes[String(c.node)].name;
+        assert.ok(postback.has(srcName), `merge edge #${c.node} (${srcName}) → #${id}:${inKey} is not postback convergence — would be silently dropped by the import with no redraw plan to repair it`);
       }
     }
   }
-  assert.equal(drawn, 39, "operator redraw workload must be exactly 39 connections");
   // no Condition anywhere carries more than one inbound connection of ANY type
   for (const [id, node] of Object.entries(nodes)) {
     if (node.name !== "Condition") continue;
@@ -329,17 +326,28 @@ test("editor invariant: no redraw targets a Condition, only live-proven operatio
     for (const inp of Object.values(node.inputs ?? {})) inbound += (inp.connections ?? []).length;
     assert.ok(inbound <= 1, `Condition #${id} has ${inbound} inbound connections (editor limit: 1 TOTAL)`);
   }
-  // checklist reflects the invariant: no halt banner, proven-operation stamp
-  // on every item, zero Condition destinations, evidence pointer intact
+  // no control anywhere carries Start-a-Flow metadata, and every control has
+  // exactly one forward transition (one press = one assignment = one step)
+  for (const [id, node] of Object.entries(nodes)) {
+    if (node.name !== "Inline Button" && node.name !== "Rows") continue;
+    assert.ok(!("value" in node.data) && !("postback_text" in node.data), `control #${id} carries Start-a-Flow metadata (value/postback_text)`);
+    const fwdKey = node.name === "Rows" ? "rowOutput" : "buttonOutput";
+    assert.equal((node.outputs?.[fwdKey]?.connections ?? []).length, 1, `control #${id} must have exactly one forward connection`);
+  }
+  // no Interactive carries a default-output connection (duplicate execution)
+  for (const [id, node] of Object.entries(nodes)) {
+    if (node.name !== "Interactive") continue;
+    assert.equal((node.outputs?.interactiveOutput?.connections ?? []).length, 0, `Interactive #${id} default output must stay empty`);
+  }
+  // checklist reflects the architecture: zero redraws, click-through matrix,
+  // button-evidence pointer intact
   const checklist = readFileSync(path.join(repoRoot, "artifacts", "whatchimp", "V6_REDRAW_CHECKLIST.md"), "utf8");
-  assert.ok(!checklist.includes("⛔"), "checklist must not carry halt markers anymore");
-  assert.equal(checklist.split("live-proven editor operation (2026-07-03)").length - 1, 39, "each of the 39 items carries its proven-operation stamp");
+  assert.ok(checklist.includes("ZERO connections to draw"), "checklist must state there is nothing to redraw");
+  assert.ok(checklist.includes("button-evidence.saved-reexport.txt"), "checklist must point at the button-convergence evidence fixture");
   assert.ok(!checklist.includes("input socket (`conditionInput`)"), "no checklist item may target a Condition input");
-  assert.ok(checklist.includes("roundtrips/ROUNDTRIP_3_FINDINGS.md"), "checklist must point at the round-trip-#3 evidence");
-  assert.ok(!checklist.includes("the WhatChimp editor supports drawing them"), "the disproven blanket drawability claim must not reappear");
 });
 
-test("artifact: hub merges match the profile's approvedHubMerges exactly (no undeclared convergence)", { skip: !existsSync(v6Path) }, () => {
+test("artifact: postback merges match the profile's approvedPostbackMerges exactly (no undeclared convergence)", { skip: !existsSync(v6Path) }, () => {
   const flow = JSON.parse(readFileSync(v6Path, "utf8"));
   const inbound = new Map(Object.keys(flow.nodes).map((id) => [id, 0]));
   for (const node of Object.values(flow.nodes)) {
@@ -349,10 +357,16 @@ test("artifact: hub merges match the profile's approvedHubMerges exactly (no und
   }
   const hubs = {};
   for (const [id, count] of inbound) if (count > 1) hubs[id] = count;
-  assert.deepEqual(hubs, profile.importGraphContract.approvedHubMerges);
-  // the operator redraw workload is the sum of beyond-first hub edges
-  const redrawEdges = Object.values(hubs).reduce((sum, c) => sum + (c - 1), 0);
-  assert.equal(redrawEdges, 39, "operator redraw checklist must contain exactly 39 connections");
+  assert.deepEqual(hubs, profile.importGraphContract.approvedPostbackMerges);
+  // every merge parent is an Inline Button / Rows control
+  for (const id of Object.keys(hubs)) {
+    for (const inp of Object.values(flow.nodes[id].inputs ?? {})) {
+      for (const c of inp.connections ?? []) {
+        const src = flow.nodes[String(c.node)];
+        assert.ok(src.name === "Inline Button" || src.name === "Rows", `hub #${id} parent #${c.node} is a ${src.name}`);
+      }
+    }
+  }
 });
 
 test("generator: a clean run reproduces the committed artifact AND redraw checklist byte-for-byte", { skip: !existsSync(v6Path) }, async () => {
@@ -390,12 +404,12 @@ test("mutation: removing a branch-local tail continuation creates an unintended-
   assert.ok(hasError(errors, "is not reachable from the start node"), errors.join("\n"));
 });
 
-test("mutation: replacing the real bedroom field id 69114 fails strict binding", { skip: !existsSync(v6Path) }, () => {
+test("mutation: replacing the real bedroom field id 69114 on a bedroom button fails validation", { skip: !existsSync(v6Path) }, () => {
   const flow = JSON.parse(readFileSync(v6Path, "utf8"));
-  const bedroomQ = Object.values(flow.nodes).find(
-    (n) => n.name === "User Input Flow Single" && n.data?.customFieldSelectedOptionText === "oraya_bedroom_count",
+  const bedroomBtn = Object.values(flow.nodes).find(
+    (n) => n.name === "Inline Button" && n.data?.customFieldSelectedOptionText === "oraya_bedroom_count",
   );
-  bedroomQ.data.customField = "99999";
+  bedroomBtn.data.customFieldId = "custom_99999";
   const { errors } = validateFlow(flow, profile, { strictBinding: true });
   assert.ok(hasError(errors, "is not in the dependency manifest"), errors.join("\n"));
 });
@@ -408,31 +422,41 @@ test("artifact: canonical v6 is fully bound — strict-clean, placeholder-free, 
   const { errors, warnings } = validateFlow(flow, profile, { strictBinding: true });
   assert.deepEqual(errors, [], errors.join("\n"));
   assert.deepEqual(warnings, [], warnings.join("\n"));
-  // exact bedroom bindings: 4 questions on "69114", 8 condition rows on
-  // "custom_69114" (each row serializes the id in both the variable and the
-  // selected-values array — 16 array entries).
-  let bedroomQuestions = 0;
-  let bedroomRowEntries = 0;
+  // exact interactive-control bindings (the stored value IS the label):
+  //   - 18 bedroom Inline Buttons on custom_69114 (3 buttons × 6 stages);
+  //   - 2 villa Inline Buttons on custom_57698 with exact canonical labels;
+  //   - 35 guest Rows on custom_57693 (7 rows × 5 list stages);
+  //   - zero bedroom UIF questions and zero bedroom condition rows remain
+  //     (no WhatsApp-side capacity validation — the website validates).
+  const controls = Object.values(flow.nodes).filter((n) => n.name === "Inline Button" || n.name === "Rows");
+  const byField = (f) => controls.filter((n) => n.data?.customFieldSelectedOptionText === f);
+  const bedroomButtons = byField("oraya_bedroom_count");
+  assert.equal(bedroomButtons.length, 18, "expected 18 bedroom buttons (3 × 6 stages)");
+  for (const b of bedroomButtons) {
+    assert.equal(b.data.customFieldId, "custom_69114", "bedroom buttons must reference exactly custom_69114");
+    assert.ok(["1 bedroom", "2 bedrooms", "3 bedrooms"].includes(b.data.buttonText), `unexpected bedroom label "${b.data.buttonText}"`);
+  }
+  const villaButtons = byField("oraya_villa");
+  assert.equal(villaButtons.length, 2, "expected exactly 2 villa buttons");
+  assert.deepEqual(villaButtons.map((b) => b.data.buttonText).sort(), ["Villa Byblos", "Villa Mechmech"], "villa buttons must carry the exact canonical values");
+  for (const b of villaButtons) assert.equal(b.data.customFieldId, "custom_57698");
+  const guestRows = byField("oraya_guest_count");
+  assert.equal(guestRows.length, 35, "expected 35 guest rows (7 × 5 list stages)");
+  for (const r of guestRows) {
+    assert.equal(r.name, "Rows", "guest choices must be list rows (WhatsApp caps reply buttons at 3)");
+    assert.equal(r.data.customFieldId, "custom_57693");
+    assert.ok(["1", "2", "3", "4", "5", "6", "More than 6"].includes(r.data.title), `unexpected guest label "${r.data.title}"`);
+  }
   for (const n of Object.values(flow.nodes)) {
-    if (n.name === "User Input Flow Single" && n.data?.customFieldSelectedOptionText === "oraya_bedroom_count") {
-      assert.equal(n.data.customField, "69114", "bedroom question customField must be exactly 69114");
-      bedroomQuestions += 1;
+    if (n.name === "User Input Flow Single") {
+      assert.notEqual(n.data?.customFieldSelectedOptionText, "oraya_bedroom_count", "no bedroom UIF question may remain");
     }
     if (n.name === "Condition") {
-      for (const arr of [n.data?.custom_field_variable ?? [], n.data?.custom_field_variable_selected_values ?? []]) {
-        arr.forEach((f, i) => {
-          if ((n.data?.custom_field_variable_selected_texts ?? [])[i] === "oraya_bedroom_count") {
-            assert.equal(f, "custom_69114", "bedroom condition rows must reference exactly custom_69114");
-            bedroomRowEntries += 1;
-          }
-        });
-      }
+      assert.ok(!(n.data?.custom_field_variable_selected_texts ?? []).includes("oraya_bedroom_count"), "no Condition may reference the bedroom field (no WhatsApp capacity validation)");
     }
   }
-  assert.equal(bedroomQuestions, 4, "expected the 4 bedroom questions (initial/retry × initial/Edit)");
-  assert.equal(bedroomRowEntries, 16, "expected 16 bedroom condition-row id entries (8 rows × 2 serialized arrays)");
-  // every question node continues into exactly one Text or HTTP API node —
-  // the only transitions genuine WhatChimp exports contain.
+  // every remaining question node continues into exactly one Text or HTTP API
+  // node — the only transitions genuine WhatChimp exports contain.
   for (const [id, n] of Object.entries(flow.nodes)) {
     if (n.name !== "User Input Flow Single") continue;
     const edges = [];
@@ -441,6 +465,13 @@ test("artifact: canonical v6 is fully bound — strict-clean, placeholder-free, 
     const dst = flow.nodes[String(edges[0].node)];
     assert.ok(dst?.name === "Text" || dst?.name === "HTTP API",
       `question #${id} continues into ${dst?.name} — only Text / HTTP API are export-proven`);
+  }
+  // the removed stages stay removed: no confirmation question, no handoff
+  // choice, no Edit re-capture, and no full-name ask outside escalation tails
+  for (const n of Object.values(flow.nodes)) {
+    if (n.name !== "User Input Flow Single") continue;
+    const f = n.data?.customFieldSelectedOptionText;
+    assert.ok(f !== "oraya_dates_confirmed_text" && f !== "oraya_handoff_required", `removed stage question still present (${f})`);
   }
   // the full scenario suite (incl. node-level visitation assertions) passes
   // against the canonical fully-bound artifact.
@@ -505,11 +536,11 @@ test("round trip #1: comparator reports an identical re-export as preserved", { 
 test("round trip #1: the authenticated re-export fails validation for the expected structural reasons", { skip: !existsSync(roundtrip1Path) }, () => {
   const reexport = JSON.parse(readFileSync(roundtrip1Path, "utf8"));
   const { errors } = validateFlow(reexport, profile, { strictBinding: true });
-  // the import stripped the hub merges down to one parent each — with the
-  // hybrid contract declared in the profile, that reads as hub-count drift
-  // (the exact signature of an unrepaired import)
+  // the import stripped every merge down to one parent — under the current
+  // postback-convergence contract that reads as hub-count drift (the exact
+  // signature of an import that dropped convergence edges)
   assert.ok(
-    errors.some((e) => e.startsWith("[single-parent-contract]") && e.includes("declared operator-redrawn hub")),
+    errors.some((e) => e.startsWith("[single-parent-contract]") && e.includes("declared postback-convergence hub")),
     errors.join("\n"),
   );
   // … and the dropped edges dangled condition branches, dead-ended an API
@@ -577,6 +608,78 @@ test("round trip #3: the failed 181-node candidate is pinned as historical evide
   assert.ok(errors.length > condLimit.length, "the failed candidate must also fail the current hub census");
 });
 
+// ─── button-convergence evidence fixture (authenticated, 2026-07-04) ─────────
+
+test("button evidence: the operator's saved/reopened export is pinned and carries the exact Interactive schema this candidate is built on", { skip: !existsSync(buttonEvidencePath) }, () => {
+  const raw = readFileSync(buttonEvidencePath);
+  assert.equal(raw.length, 148882, "button-evidence fixture byte size must not change");
+  assert.equal(
+    createHash("sha256").update(raw).digest("hex").toUpperCase(),
+    "1D4A5E3DFC096F540037296D4E34551248D50F1F12BE64546B3F7E3B8A2C11EB",
+    "button-evidence fixture bytes must not change",
+  );
+  const flow = JSON.parse(raw.toString("utf8"));
+  // Interactive #775 with Inline Buttons #776/#783, both linked to
+  // custom_57693/oraya_guest_count, both persisting after save/close/reopen,
+  // both converging forward into User Input Flow #610
+  const inter = flow.nodes["775"];
+  assert.equal(inter.name, "Interactive");
+  const btnIds = inter.outputs.interactiveOutputButton.connections.map((c) => String(c.node)).sort();
+  assert.deepEqual(btnIds, ["776", "783"]);
+  for (const id of ["776", "783"]) {
+    const b = flow.nodes[id];
+    assert.equal(b.name, "Inline Button");
+    assert.equal(b.data.buttonType, "new_post_back");
+    assert.equal(b.data.customFieldId, "custom_57693");
+    assert.equal(b.data.customFieldSelectedOptionText, "oraya_guest_count");
+    assert.deepEqual(b.outputs.buttonOutput.connections.map((c) => `${c.node}:${c.input}`), ["610:userInputFlowInput"]);
+  }
+  // #776 additionally demonstrates the BANNED construction this candidate's
+  // contracts exist to prevent: Start-a-Flow metadata pointing at the parent
+  // intake flow COMBINED with a direct connector (self-restart + duplicate
+  // execution). #783 is the clean reference schema.
+  assert.equal(flow.nodes["776"].data.postback_text, "Oraya Natural Stay Intake v6 - Start");
+  assert.ok(typeof flow.nodes["776"].data.value === "string" && flow.nodes["776"].data.value.length > 0);
+  assert.ok(!("value" in flow.nodes["783"].data) && !("postback_text" in flow.nodes["783"].data));
+  // the fixture is evidence, not a candidate
+  assert.notEqual(raw.toString("utf8"), readFileSync(v6Path, "utf8"), "the evidence export must never be the canonical import file");
+});
+
+// ─── simulator control coverage ──────────────────────────────────────────────
+
+test("simulator: the scenario matrix clicks every control label and enters every Interactive stage", { skip: !existsSync(v6Path) }, () => {
+  const flow = JSON.parse(readFileSync(v6Path, "utf8"));
+  const clickedNodes = new Set();
+  const clickedLabelsByField = new Map();
+  for (const scenario of buildScenarios()) {
+    const result = runScenario(flow, profile, scenario);
+    assert.deepEqual(result.failures, [], `${scenario.name}:\n${result.failures.join("\n")}`);
+    for (const c of result.clicks) {
+      clickedNodes.add(c.node);
+      if (!clickedLabelsByField.has(c.field)) clickedLabelsByField.set(c.field, new Set());
+      clickedLabelsByField.get(c.field).add(c.label);
+    }
+  }
+  // every approved label of every interactive control field is clicked
+  for (const [field, spec] of Object.entries(profile.interactiveControls)) {
+    for (const label of spec.labels) {
+      assert.ok(clickedLabelsByField.get(field)?.has(label), `label "${label}" of ${field} is never clicked by any scenario`);
+    }
+  }
+  // every Interactive stage is entered (at least one of its controls clicked)
+  for (const [id, n] of Object.entries(flow.nodes)) {
+    if (n.name !== "Interactive") continue;
+    const controls = [];
+    for (const c of n.outputs?.interactiveOutputButton?.connections ?? []) controls.push(String(c.node));
+    for (const kb of n.outputs?.interactiveOutputListMessage?.connections ?? []) {
+      for (const sec of flow.nodes[String(kb.node)].outputs?.quickReplyOutput?.connections ?? []) {
+        for (const row of flow.nodes[String(sec.node)].outputs?.sectionOutputRows?.connections ?? []) controls.push(String(row.node));
+      }
+    }
+    assert.ok(controls.some((cid) => clickedNodes.has(cid)), `Interactive stage #${id} is never entered by any scenario`);
+  }
+});
+
 test("operator docs: production WhatChimp API endpoints use direct www host", () => {
   // The bare production origin answers /api/butler/... POSTs with a 308
   // redirect that WhatChimp does not safely complete (operator-verified
@@ -609,15 +712,16 @@ test("operator docs: production WhatChimp API endpoints use direct www host", ()
 });
 
 test("profile: every leadSubmit id maps prefill_url → oraya_prefill_url", () => {
-  // Both Lead Submit integrations (WhatsApp/escalation 6961 and website-handoff
-  // 7459, and any TEST clone that replaces them in a TEST profile) must write
+  // Every Lead Submit integration the flow references (WhatsApp/escalation
+  // 6961 today — the website-handoff 7459 is no longer referenced by this
+  // flow — and any TEST clone that replaces it in a TEST profile) must write
   // the secure prefill URL into oraya_prefill_url, or the terminal messages'
   // #oraya_prefill_url# slot goes blank and only the canonical fallback
   // remains. The mapping and the canonical fallback are complementary — this
   // test guards the mapping; the validator's terminal-continuation and
   // canonical-domain checks guard the fallback.
   const ids = profile.apis.leadSubmit.ids;
-  assert.ok(Array.isArray(ids) && ids.length >= 2, "leadSubmit must list both Lead Submit integration ids");
+  assert.ok(Array.isArray(ids) && ids.length >= 1, "leadSubmit must list the Lead Submit integration id(s)");
   for (const id of ids) {
     assert.equal(
       profile.apiFieldWrites?.[id]?.prefill_url,
@@ -655,15 +759,14 @@ test("simulator: hashtag interpolation uses current field state", () => {
 });
 
 test("simulator: stale-villa scenario fails on a flow that skips the villa ask", { skip: !existsSync(v6Path) }, () => {
-  const flow = JSON.parse(readFileSync(JSON.stringify(v6Path) && v6Path, "utf8"));
-  // sabotage: make every villa gate (original AND its corrected-rule clones)
-  // always take the "villa known" branch
+  const flow = JSON.parse(readFileSync(v6Path, "utf8"));
+  // sabotage: make the villa gate always take the "villa known" branch
   const villaGates = Object.values(flow.nodes).filter(
     (n) => n.name === "Condition" && (n.data.custom_field_variable_selected_texts ?? []).includes("oraya_villa"),
   );
-  assert.ok(villaGates.length >= 2, "expected the villa gate and its clones");
+  assert.ok(villaGates.length >= 1, "expected the villa gate");
   for (const gate of villaGates) gate.data.custom_field_variable_value = ["__never__"];
-  const scenario = buildScenarios().find((s) => s.name.startsWith("S25"));
+  const scenario = buildScenarios().find((s) => s.name.startsWith("T01"));
   const result = runScenario(flow, profile, scenario);
   assert.ok(result.failures.length > 0, "sabotaged flow must fail the stale-villa scenario");
 });

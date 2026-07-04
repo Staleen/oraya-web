@@ -1,71 +1,85 @@
 #!/usr/bin/env node
 /**
  * Phase 16A — deterministic generator for the Oraya Natural Stay Intake v6
- * WhatChimp flow (HYBRID single-parent architecture, round trip #2 candidate).
+ * WhatChimp flow (INTERACTIVE-CONTROLS architecture, zero operator redraws).
  *
  * Reads the operator's v5.5 export (byte-preserved input artifact) and applies
- * the approved Phase 16A repairs:
+ * the approved Phase 16A behavior:
  *
- *   1. Condition hygiene — removes blank comparison values and duplicated
- *      identical rows; every missing-field check is `field equal "null"`.
- *   2. Guest path — one exact-count question (1–8 + "More than 8").
- *   3. Bedroom path — three-button bedroom question saved to
- *      oraya_bedroom_count (real field id 69114), validated with the
- *      website's BEDROOM_CAPACITY rules (1→2, 2→4, 3→6; 7–8 guests need
- *      3 bedrooms + extra bedding), one forward-cloned retry, then
- *      escalation. The capacity check is a 3-condition chain
- *      (OK / needs-more / 2-bedrooms-fit) with exactly two OK exits.
- *   4. Complete human escalation — every escalation message flows into its
- *      OWN branch-local name-capture → Lead Submit → final-message tail.
- *   5. Complete Edit path — fresh 7466 attempt, forward-cloned
- *      re-validation, its own confirmation, its OWN handoff subtree clone
- *      (website + WhatsApp endings), second Edit escalates.
- *   6. Export-proven question transitions only (Question → Text / HTTP API;
- *      see artifacts/whatchimp/V6_TRANSITION_EVIDENCE.md).
+ *   1. Natural-language intake + date conversation PRESERVED verbatim from
+ *      the earlier candidates: opening stay-text question (with the pre-API
+ *      https://stayoraya.com/book safety link), one initial normalization
+ *      call, the full date follow-up / refine / retry / escalation
+ *      conversation, and the Condition-clone cascade that keeps every
+ *      Condition at exactly ONE inbound connection (round trip #3).
+ *   2. Missing STRUCTURED values are collected with WhatChimp Interactive
+ *      controls whose buttons/rows save DIRECTLY to the custom field and
+ *      route forward on the press (schema reference: the operator's
+ *      authenticated saved/reopened export of 2026-07-04 — Interactive #775
+ *      with Inline Buttons #776/#783 linked to custom_57693 /
+ *      oraya_guest_count, both persisting and both converging forward into
+ *      User Input Flow #610; fixture:
+ *      roundtrips/Oraya_natural_intake_v6.button-evidence.saved-reexport.txt).
+ *        - guest count: Interactive LIST (Keyboard → Sections → 7 Rows:
+ *          1,2,3,4,5,6,More than 6 → custom_57693/oraya_guest_count).
+ *          WhatsApp caps reply buttons at 3 per message, so the list is the
+ *          smallest one-click control that presents the complete choice set
+ *          (list-row schema reference: the operator's authenticated
+ *          whatsapp-bot_1825051 exports, whose Rows carry the same
+ *          customFieldId linkage — including custom_57698/oraya_villa).
+ *        - bedrooms: Interactive + 3 Inline Buttons (1/2/3 bedrooms →
+ *          custom_69114/oraya_bedroom_count).
+ *        - villa: Interactive + 2 Inline Buttons (exact canonical
+ *          "Villa Mechmech" / "Villa Byblos" → custom_57698/oraya_villa).
+ *      The stored value is the control's visible label (buttonText / row
+ *      title) — the exported schema carries NO separate value field — so
+ *      every label below IS the exact downstream value; human verification
+ *      must click every control and inspect the field (see the generated
+ *      checklist).
+ *   3. Values already extracted by normalization SKIP their Interactive
+ *      question (guest/villa null-gates; bedrooms are never extracted and
+ *      are always asked).
+ *   4. "More than 6" (clicked) routes to the existing large-group
+ *      exact-count → team review → escalation outcome; an EXTRACTED
+ *      unsupported count (7, 8, 12, …) routes to a per-branch team-review
+ *      escalation directly (we already hold the exact number). Neither asks
+ *      villa or bedrooms, and nothing implies an event or booking is
+ *      confirmed.
+ *   5. Completion: once guest count (1–6), villa, and bedrooms are resolved,
+ *      the flow submits the existing Lead Submit integration and shows ONE
+ *      summary terminal (dates, guests, bedrooms, villa) that says the Oraya
+ *      team will review availability and follow up, states the accurate
+ *      not-confirmed status, and carries the secure #oraya_prefill_url# slot
+ *      plus the canonical fallback link. There is NO full-name question, NO
+ *      "Continue on WhatsApp / Finish on website" choice, NO stay-summary
+ *      confirmation question, and NO Edit loop. No bedroom-capacity
+ *      validation happens in WhatsApp — the website's /book form remains the
+ *      validation authority.
  *
- * HYBRID IMPORT CONTRACT (authenticated round trip #1, 2026-07-03 —
- * artifacts/whatchimp/roundtrips/ROUNDTRIP_1_FINDINGS.md): WhatChimp's
- * import keeps only the FIRST serialized connection per input socket and
- * silently drops the rest. A pure single-parent tree preserving this flow's
- * behavior is exactly 492,864 nodes, so the artifact instead:
- *   - clones every small branch-local tail (10 escalation tails, the Edit
- *     handoff endings, the Edit large-group subtree, per-exit bedroom-retry
- *     escalation texts), and
- *   - keeps the smallest irreducible set of central hub merges. Every hub
- *     edge beyond the first-listed one is silently dropped by the import and
- *     MUST be re-drawn by the operator in the WhatChimp editor after import.
- *     The exact machine-derived redraw list is emitted alongside the
- *     artifact (third CLI argument).
- *
- * EDITOR INVARIANT (round trips #2 + #3, 2026-07-03 —
- * roundtrips/ROUNDTRIP_2_FINDINGS.md + ROUNDTRIP_3_FINDINGS.md): the
- * editor's "This will make an infinite loop…" warning fires whenever a
- * connection would give a destination Condition a SECOND inbound connection
- * of ANY source type (round trip #3 proved Text #603 → Condition #602 is
- * rejected once #602 already holds the imported #440 edge; the earlier
- * probes only proved pairs against otherwise-unused Condition inputs).
- * Binding rule:
- *   each destination Condition may carry AT MOST ONE inbound connection
- *   TOTAL (maxInboundPerCondition: 1).
- * This generator therefore applies the FULL CONDITION-CLONE CASCADE: every
- * Condition that would receive more than one inbound connection — regardless
- * of source types — keeps exactly one serialized parent, and every other
- * parent gets a semantically identical clone whose single serialized
- * connection the import retains automatically. All remaining convergence
- * lands on non-Condition destinations (User Input Flow wrappers and Texts),
- * so NO operator redraw ever targets a Condition. Conditions are
- * guest-invisible, so guest behavior is byte-identical. Generation FAILS if
- * any redraw edge targets a Condition, uses an unproven operation, or any
- * Condition ends up with more than one inbound connection.
- *   - The first-listed connection of every hub is chosen so that the
- *     UN-REPAIRED import still runs the complete happy path (all fields
- *     extracted → bedroom OK → confirmation → handoff), never fabricates a
- *     confirmation, and every conversation is shown the canonical
- *     https://stayoraya.com/book link in the opening question BEFORE any
- *     branch can dead-end.
+ * IMPORT / EDITOR CONTRACTS enforced at generation time:
+ *   - Round trip #1: WhatChimp's import keeps only the FIRST serialized
+ *     connection per input socket (roundtrips/ROUNDTRIP_1_FINDINGS.md).
+ *     The ONLY convergence this artifact serializes is postback convergence —
+ *     input sockets whose parents are ALL Inline Button / Rows nodes —
+ *     matching the operator evidence that normal forward button convergence
+ *     persists. Import survival of SERIALIZED postback convergence is the
+ *     remaining platform gate: the human checklist requires a fresh import
+ *     with NO warning and NO loose connectors before any live testing.
+ *     There are ZERO operator redraws.
+ *   - Round trip #3: every Condition carries at most ONE inbound connection
+ *     TOTAL (roundtrips/ROUNDTRIP_3_FINDINGS.md); the date-recovery
+ *     Condition-clone cascade is kept.
+ *   - Start-a-Flow ban: no button/row may carry Start-a-Flow metadata
+ *     (`value` / `postback_text` — the operator evidence shows Inline Button
+ *     #776 carrying BOTH a Start-a-Flow target for the parent flow AND a
+ *     direct connector, which is exactly the self-restart + double-execution
+ *     hazard). Every control here uses buttonType "new_post_back", ONE
+ *     custom-field assignment, and exactly ONE forward connection; every
+ *     Interactive's default `interactiveOutput` stays EMPTY so a press can
+ *     never execute the next stage twice.
  *
  * Usage:
- *   node scripts/generate-whatchimp-v6.mjs <v5.5-input> <v6-output> [<redraw-checklist.md>]
+ *   node scripts/generate-whatchimp-v6.mjs <v5.5-input> <v6-output> [<import-checklist.md>]
  *
  * Node standard library only. Deterministic output (stable ids, stable
  * ordering) so re-runs produce identical bytes for artifact AND checklist.
@@ -86,7 +100,6 @@ const FIELD = {
   checkOut: { id: "57692", name: "oraya_check_out" },
   guestCount: { id: "57693", name: "oraya_guest_count" },
   villa: { id: "57698", name: "oraya_villa" },
-  confirm: { id: "58532", name: "oraya_dates_confirmed_text" },
   fullName: { id: "57759", name: "oraya_full_name" },
   bedroom: { id: BEDROOM_FIELD_ID, name: "oraya_bedroom_count" },
 };
@@ -97,35 +110,29 @@ const API = {
   leadSubmit: { id: "6961", text: "Oraya Lead Submit - Production : POST" },
 };
 
-const GUEST_CHOICES = ["1", "2", "3", "4", "5", "6", "7", "8", "More than 8"];
+// The stored value IS the visible label (see docblock §2). These labels are
+// therefore the exact values downstream Conditions and the lead payload see.
+const GUEST_STAY_CHOICES = ["1", "2", "3", "4", "5", "6"];
+const GUEST_OVERFLOW_CHOICE = "More than 6";
 const BEDROOM_CHOICES = ["1 bedroom", "2 bedrooms", "3 bedrooms"];
+const VILLA_CHOICES = ["Villa Mechmech", "Villa Byblos"];
 
 const COPY = {
   guestQuestion: "How many guests will be staying overnight?",
+  guestListButton: "Choose guests",
+  guestListSection: "Overnight guests",
   bedroomQuestion: "How many bedrooms would you like?",
-  bedroomMismatch:
-    "That bedroom setup won’t quite fit #oraya_guest_count# overnight guests — 1 bedroom sleeps up to 2, 2 bedrooms up to 4, and 3 bedrooms up to 6 (for 7–8 guests we prepare 3 bedrooms plus extra bedding). Which would you like? You’re always welcome to choose more bedrooms than you need. 😊",
-  bedroomEscalation:
-    "No trouble at all — let me have our team help arrange the right sleeping setup for your group personally. 😊",
+  villaQuestion: "Which villa would you prefer?",
+  guestAck: "Perfect, thank you 😊",
   escalationName: "So our team can follow up personally — may I have your full name?",
   continuationBlock:
     "\n\nYou can also continue your request online whenever you like:\n#oraya_prefill_url#\n\nIf that secure link is unavailable, please use:\nhttps://stayoraya.com/book",
   escalationFinal:
     "Thank you 😊 I’ve passed your request to the Oraya team — they’ll follow up with you right here on WhatsApp. Please note this is a request, not a confirmed booking yet.",
-  editDatesQuestion:
-    "What are your check-in and check-out dates? You can write them naturally, e.g. “June 10 to June 15”.",
-  editCheckoutQuestion: "And what check-out date would you like? e.g. “June 15”.",
-  dateEscalation:
-    "I’m having a little trouble reading the dates — let me bring in our team so nothing gets lost. 😊",
-  villaQuestion: "Which villa would you prefer?",
-  secondEditEscalation:
-    "No problem — let me bring in our team so we can fine-tune everything personally. 😊",
-  confirmation:
-    "Here’s what I have for your stay so far 😊\n\n📅 Check-in: #oraya_check_in#\n📅 Check-out: #oraya_check_out#\n🏡 Villa: #oraya_villa#\n👥 Overnight guests: #oraya_guest_count#\n🛏 Bedrooms: #oraya_bedroom_count#\n\nDoes this look right?",
-  guestAck: "Perfect, thank you 😊",
-  bedroomAck: "Noted 😊",
-  villaAck: "Lovely choice 😊",
-  confirmAck: "Got it.",
+  extractedOverflowPreface:
+    "For a group of #oraya_guest_count# I’ll have our team confirm the details with you personally 😊 — larger stays and events deserve a personal touch.",
+  summary:
+    "Thank you 😊 Here’s your stay request:\n\n📅 Check-in: #oraya_check_in#\n📅 Check-out: #oraya_check_out#\n🏡 Villa: #oraya_villa#\n👥 Overnight guests: #oraya_guest_count#\n🛏 Bedrooms: #oraya_bedroom_count#\n\nThe Oraya team will review availability and follow up with you right here on WhatsApp. Please note this is a request — not a confirmed booking yet.",
 };
 
 // ─── deterministic id factory ───────────────────────────────────────────────
@@ -150,17 +157,6 @@ function connect(nodes, fromId, outKey, toId, inKey) {
   to.inputs[inKey].connections.push({ node: Number(fromId), output: outKey, data: [] });
 }
 
-// Hub edge: a merge connection BEYOND the destination's first-listed one.
-// WhatChimp's import silently drops it; the operator re-draws it from the
-// generated checklist. The kept (first) edge must already be wired.
-function hubEdge(nodes, fromId, outKey, toId, inKey) {
-  const existing = nodes[String(toId)]?.inputs?.[inKey]?.connections ?? [];
-  if (existing.length === 0) {
-    throw new Error(`hubEdge: the kept edge into #${toId}:${inKey} must be wired before hub edges`);
-  }
-  connect(nodes, fromId, outKey, toId, inKey);
-}
-
 // Detach one existing edge (both reciprocal sides). Throws if absent, so a
 // refactor can never silently leave the graph in a half-wired state.
 function detachEdge(nodes, fromId, outKey, toId, inKey) {
@@ -175,7 +171,7 @@ function detachEdge(nodes, fromId, outKey, toId, inKey) {
 
 // Semantically identical Condition clone (same rows, operators, match type) —
 // guest-invisible by definition. Fresh deterministic uniqueId; caller wires
-// the single serialized parent and the (redrawn) successor edges.
+// the single serialized parent and the successor edges.
 function cloneCondition(nodes, srcId, newId, position) {
   const src = nodes[String(srcId)];
   if (!src || src.name !== "Condition") throw new Error(`cloneCondition: #${srcId} is not a Condition`);
@@ -219,7 +215,7 @@ function disconnectOutput(nodes, id, outKey) {
   out.connections = [];
 }
 
-// ─── node factories (data shapes mirror the v5.5 export) ───────────────────
+// ─── node factories (data shapes mirror the operator's authenticated exports) ─
 
 function addNode(nodes, id, name, data, position) {
   if (nodes[String(id)]) throw new Error(`addNode: id ${id} already exists`);
@@ -276,6 +272,183 @@ function apiNode(nodes, id, api, position) {
   }, position);
 }
 
+// Interactive message node — exact data shape of the operator's authenticated
+// #775 (2026-07-04 saved/reopened export). The default `interactiveOutput`
+// stays EMPTY by contract: continuation happens only on a button/row press,
+// so one press can never execute the next stage twice.
+function interactiveNode(nodes, id, textMessage, position) {
+  addNode(nodes, id, "Interactive", {
+    uniqueId: uid(),
+    headerType: "text",
+    headerText: "",
+    mediaType: "",
+    headerMediaUrl: "",
+    headerMediaID: "",
+    textMessage,
+    footerText: "",
+    original_file_name: "",
+    delayReplyFor: 0,
+    delaySec: 0,
+    delayMin: 0,
+    delayHour: 0,
+    IsTypingOnDisplayChecked: false,
+  }, position);
+  const node = nodes[String(id)];
+  node.inputs = { interactiveInput: { connections: [] } };
+  node.outputs = {
+    interactiveOutput: { connections: [] },
+    interactiveOutputButton: { connections: [] },
+    interactiveOutputListMessage: { connections: [] },
+    interactiveOutputEcommerce: { connections: [] },
+  };
+}
+
+// Inline Button — exact data shape of the operator's authenticated #783
+// (plain postback button with a custom-field assignment and a single forward
+// connector). Deliberately NO `value` / `postback_text` keys: those are the
+// Start-a-Flow metadata (#776 evidence) and are banned in this artifact.
+function inlineButtonNode(nodes, id, { label, field }, position) {
+  addNode(nodes, id, "Inline Button", {
+    postbackId: uid(),
+    buttonText: label,
+    buttonWebhookUrl: "",
+    buttonType: "new_post_back",
+    text: "Send Message",
+    rowType: "static",
+    customFieldIndex: "",
+    customFieldIndexTitle: "",
+    labelIds: [],
+    labelIdTextsArray: [],
+    labelIdsRemove: [],
+    labelIdTextsArrayRemove: [],
+    googleSheets: [],
+    googleSheetsArray: [],
+    sequenceIdValue: "",
+    sequenceIdText: "Select a Sequence",
+    sequenceIdValueRemove: "",
+    sequenceIdTextRemove: "Select a Sequence",
+    conversationGroupId: "",
+    conversationGroupText: "Select Team Role",
+    conversationUserId: "",
+    conversationUserText: "Select Team Member",
+    customFieldId: `custom_${field.id}`,
+    customFieldSelectedOptionText: field.name,
+    appointment_id: "",
+    appointment_text: "Select",
+    googleCalendar: "",
+    saveGoogleMeetToCustomField: false,
+    googleMeetCustomField: "",
+    googleMeetCustomFieldSelectedOptionText: "Select",
+    newPostbackId: uid(),
+  }, position);
+  const node = nodes[String(id)];
+  node.inputs = { buttonInput: { connections: [] } };
+  node.outputs = { buttonOutput: { connections: [] }, buttonOutputSequence: { connections: [] } };
+}
+
+// List-message chain nodes — exact data shapes of the operator's
+// authenticated whatsapp-bot_1825051 export (Interactive → Keyboard →
+// Sections → Rows; Rows carry the same custom-field linkage block, proven on
+// this tenant with custom_57698/oraya_villa).
+function keyboardNode(nodes, id, buttonText, position) {
+  addNode(nodes, id, "Keyboard", { uniqueId: uid(), buttonText }, position);
+  const node = nodes[String(id)];
+  node.inputs = { quickReplyInput: { connections: [] } };
+  node.outputs = { quickReplyOutput: { connections: [] } };
+}
+
+function sectionsNode(nodes, id, title, position) {
+  addNode(nodes, id, "Sections", { title }, position);
+  const node = nodes[String(id)];
+  node.inputs = { sectionInput: { connections: [] } };
+  node.outputs = { sectionOutputRows: { connections: [] } };
+}
+
+function rowNode(nodes, id, { label, field }, position) {
+  addNode(nodes, id, "Rows", {
+    postbackId: uid(),
+    title: label,
+    description: "",
+    buttonWebhookUrl: "",
+    labelIds: [],
+    labelIdTextsArray: [],
+    rowType: "static",
+    customFieldIndex: "",
+    customFieldIndexTitle: "",
+    googleSheets: [],
+    googleSheetsArray: [],
+    labelIdsRemove: [],
+    labelIdTextsArrayRemove: [],
+    customFieldId: `custom_${field.id}`,
+    customFieldSelectedOptionText: field.name,
+    sequenceIdValue: "",
+    sequenceIdText: "Select a Sequence",
+    sequenceIdValueRemove: "",
+    sequenceIdTextRemove: "Select a Sequence",
+    conversationGroupId: "",
+    conversationGroupText: "Select Team Role",
+    conversationUserId: "",
+    conversationUserText: "Select Team Member",
+    googleCalendar: "",
+    saveGoogleMeetToCustomField: false,
+    googleMeetCustomField: "",
+    googleMeetCustomFieldSelectedOptionText: "Select",
+  }, position);
+  const node = nodes[String(id)];
+  node.inputs = { rowInput: { connections: [] } };
+  node.outputs = { rowOutput: { connections: [] } };
+}
+
+// Guest-count list stage: Interactive → Keyboard → Sections → 7 Rows.
+// Rows "1".."6" converge forward on `stayTargetId` (postback convergence);
+// row "More than 6" routes to `overflowTargetId`. Occupies ids base..base+9.
+function guestListStage(nodes, base, { stayTargetId, stayTargetInput, overflowTargetId, overflowTargetInput }, pos) {
+  interactiveNode(nodes, base, COPY.guestQuestion, [pos[0], pos[1]]);
+  keyboardNode(nodes, base + 1, COPY.guestListButton, [pos[0] + 230, pos[1]]);
+  sectionsNode(nodes, base + 2, COPY.guestListSection, [pos[0] + 430, pos[1]]);
+  connect(nodes, base, "interactiveOutputListMessage", base + 1, "quickReplyInput");
+  connect(nodes, base + 1, "quickReplyOutput", base + 2, "sectionInput");
+  GUEST_STAY_CHOICES.forEach((label, i) => {
+    const rowId = base + 3 + i;
+    rowNode(nodes, rowId, { label, field: FIELD.guestCount }, [pos[0] + 650, pos[1] - 300 + i * 100]);
+    connect(nodes, base + 2, "sectionOutputRows", rowId, "rowInput");
+    connect(nodes, rowId, "rowOutput", stayTargetId, stayTargetInput);
+  });
+  const overflowId = base + 9;
+  rowNode(nodes, overflowId, { label: GUEST_OVERFLOW_CHOICE, field: FIELD.guestCount }, [pos[0] + 650, pos[1] + 320]);
+  connect(nodes, base + 2, "sectionOutputRows", overflowId, "rowInput");
+  connect(nodes, overflowId, "rowOutput", overflowTargetId, overflowTargetInput);
+  return base;
+}
+
+// Bedroom button stage: Interactive → 3 Inline Buttons, all converging
+// forward on `ackTargetId` (postback convergence). Occupies ids base..base+3.
+function bedroomStage(nodes, base, { ackTargetId, ackTargetInput }, pos) {
+  interactiveNode(nodes, base, COPY.bedroomQuestion, [pos[0], pos[1]]);
+  BEDROOM_CHOICES.forEach((label, i) => {
+    const btnId = base + 1 + i;
+    inlineButtonNode(nodes, btnId, { label, field: FIELD.bedroom }, [pos[0] + 260, pos[1] - 130 + i * 130]);
+    connect(nodes, base, "interactiveOutputButton", btnId, "buttonInput");
+    connect(nodes, btnId, "buttonOutput", ackTargetId, ackTargetInput);
+  });
+  return base;
+}
+
+// Branch-local human-escalation tail: name capture → Lead Submit → final
+// message with the secure prefill slot + canonical fallback. Cloned per
+// escalation source (single-parent import contract; duplicated Lead Submit
+// nodes are the documented trade-off).
+function escalationTail(nodes, [w, q, a, t], campaignName, pos) {
+  wrapperNode(nodes, w, campaignName, [pos[0], pos[1]]);
+  questionNode(nodes, q, { question: COPY.escalationName, field: FIELD.fullName }, [pos[0] + 260, pos[1]]);
+  apiNode(nodes, a, API.leadSubmit, [pos[0] + 520, pos[1]]);
+  textNode(nodes, t, COPY.escalationFinal + COPY.continuationBlock, [pos[0] + 780, pos[1]]);
+  connect(nodes, w, "userInputFlowOutput", q, "userInputFlowSingleInput");
+  connect(nodes, q, "userInputFlowSingleOutputFinalReply", a, "httpApiInput");
+  connect(nodes, a, "httpApiOutput", t, "textInput");
+  return w;
+}
+
 function conditionRowsData(rows, { anyMatch }) {
   return {
     all_match: !anyMatch,
@@ -308,76 +481,24 @@ function setConditionRows(nodes, id, rows, { anyMatch = true } = {}) {
   node.data = { ...node.data, ...conditionRowsData(rows, { anyMatch }), uniqueId: keep };
 }
 
-// Bedroom-capacity check (website BEDROOM_CAPACITY: 1→2, 2→4, 3→6; 7–8
-// guests need 3 bedrooms + extra bedding). Three chained conditions with
-// exactly TWO capacity-OK exits and TWO mismatch exits:
-//   C1 any[bedroom=3 bedrooms, guests=1, guests=2] — True → OK
-//   C2 [bedroom=1 bedroom]                         — True → mismatch (needs more)
-//   C3 any[guests=3, guests=4]                     — True → OK (2 bedrooms fit)
-//                                                    False → mismatch (2 bedrooms, 5–8)
-function bedroomValidation(nodes, [c1, c2, c3], pos) {
-  conditionNode(nodes, c1, [
-    { field: FIELD.bedroom, value: "3 bedrooms" },
-    { field: FIELD.guestCount, value: "1" },
-    { field: FIELD.guestCount, value: "2" },
-  ], [pos[0], pos[1]]);
-  conditionNode(nodes, c2, [{ field: FIELD.bedroom, value: "1 bedroom" }], [pos[0] + 260, pos[1]]);
-  conditionNode(nodes, c3, [
-    { field: FIELD.guestCount, value: "3" },
-    { field: FIELD.guestCount, value: "4" },
-  ], [pos[0] + 520, pos[1]]);
-  connect(nodes, c1, "conditionOutputFalse", c2, "conditionInput");
-  connect(nodes, c2, "conditionOutputFalse", c3, "conditionInput");
-  return { c1, c2, c3 };
-}
-
-// Branch-local human-escalation tail: name capture → Lead Submit → final
-// message with the secure prefill slot + canonical fallback. Cloned per
-// escalation source (single-parent import contract; duplicated Lead Submit
-// nodes are the documented trade-off).
-function escalationTail(nodes, [w, q, a, t], campaignName, pos) {
-  wrapperNode(nodes, w, campaignName, [pos[0], pos[1]]);
-  questionNode(nodes, q, { question: COPY.escalationName, field: FIELD.fullName }, [pos[0] + 260, pos[1]]);
-  apiNode(nodes, a, API.leadSubmit, [pos[0] + 520, pos[1]]);
-  textNode(nodes, t, COPY.escalationFinal + COPY.continuationBlock, [pos[0] + 780, pos[1]]);
-  connect(nodes, w, "userInputFlowOutput", q, "userInputFlowSingleInput");
-  connect(nodes, q, "userInputFlowSingleOutputFinalReply", a, "httpApiInput");
-  connect(nodes, a, "httpApiOutput", t, "textInput");
-  return w;
-}
-
-// Deep-clone a self-contained subgraph under new ids. Internal edges are
-// remapped; edges to nodes outside the map are dropped (the caller wires the
-// clone's entry). uniqueId/newPostbackId are regenerated deterministically.
-function cloneSubgraph(nodes, idMap, { offset = [0, 0], campaignSuffix = "" } = {}) {
-  for (const [srcId, newId] of Object.entries(idMap)) {
-    const src = nodes[String(srcId)];
-    if (!src) throw new Error(`cloneSubgraph: missing source #${srcId}`);
-    if (nodes[String(newId)]) throw new Error(`cloneSubgraph: id ${newId} already exists`);
-    const copy = JSON.parse(JSON.stringify(src));
-    copy.id = Number(newId);
-    copy.position = [src.position[0] + offset[0], src.position[1] + offset[1]];
-    if (typeof copy.data.uniqueId === "string") copy.data.uniqueId = uid();
-    if (typeof copy.data.newPostbackId === "string") copy.data.newPostbackId = uid();
-    if (campaignSuffix && typeof copy.data.campaignName === "string") copy.data.campaignName += campaignSuffix;
-    for (const side of ["inputs", "outputs"]) {
-      for (const socket of Object.values(copy[side] ?? {})) {
-        socket.connections = (socket.connections ?? [])
-          .filter((c) => idMap[String(c.node)] !== undefined)
-          .map((c) => ({ ...c, node: Number(idMap[String(c.node)]) }));
-      }
-    }
-    nodes[String(newId)] = copy;
-  }
-}
-
 // ─── main transform ─────────────────────────────────────────────────────────
 
 function generateV6(flow) {
   const nodes = flow.nodes;
 
-  // 1. Remove the nested guest-range structure and the villa "Got it." dead end.
-  for (const id of [450, 451, 452, 453, 454, 455, 456, 457, 458, 459, 460, 461, 462, 463, 464, 465, 482]) {
+  // 1. Remove the v5.5 structures this behavior replaces:
+  //    - the nested guest-range Interactive tree (450–465);
+  //    - the free-text villa question + its dead end (480–482) — replaced by
+  //      the villa Interactive with exact-canonical buttons;
+  //    - the confirmation / Edit loop (490–498);
+  //    - the handoff choice, full-name questions, and both endings
+  //      (70–75, 84, 7, 8, 9).
+  for (const id of [
+    450, 451, 452, 453, 454, 455, 456, 457, 458, 459, 460, 461, 462, 463, 464, 465,
+    480, 481, 482,
+    490, 491, 492, 493, 494, 495, 496, 497, 498,
+    70, 71, 72, 73, 74, 75, 84, 7, 8, 9,
+  ]) {
     removeNode(nodes, id);
   }
 
@@ -390,221 +511,59 @@ function generateV6(flow) {
     { field: FIELD.checkOut, value: "null" },
   ]);
 
-  // 3. Edit question binds the real oraya_stay_text field id.
-  nodes["497"].data.customField = FIELD.stayText.id;
-
-  // 3b. Pre-API safety link: the opening intake question hands the guest the
-  // canonical booking URL BEFORE the first HTTP API call can fire — and,
-  // under the hybrid import contract, BEFORE any temporarily-unrepaired
-  // branch can dead-end. This is the structural website fallback that keeps
-  // the un-repaired import guest-safe on a test bot.
+  // 3. Pre-API safety link: the opening intake question hands the guest the
+  // canonical booking URL BEFORE the first HTTP API call can fire, so a
+  // platform halt can never leave a conversation link-less.
   nodes["400"].data.question =
     nodes["400"].data.question +
     "\n\n(You can also complete your booking online at any time: https://stayoraya.com/book)";
 
-  // 4. Confirmation shows exact overnight guests + bedrooms.
-  nodes["491"].data.question = COPY.confirmation;
-
-  // 5. No-dead-end invariant on the WhatsApp-continuation terminal (#7) —
-  // appended BEFORE the Edit handoff subtree is cloned so both copies carry it.
-  nodes["7"].data.textMessage = nodes["7"].data.textMessage + COPY.continuationBlock;
-
-  // ── primary guest path: one exact-count question ──────────────────────────
-  wrapperNode(nodes, 600, "Oraya v6 - Guests", [5200, -1900]);
-  questionNode(nodes, 601, { question: COPY.guestQuestion, field: FIELD.guestCount, choices: GUEST_CHOICES }, [5460, -1900]);
-  conditionNode(nodes, 602, GUEST_CHOICES.slice(0, 8).map((v) => ({ field: FIELD.guestCount, value: v })), [5720, -1900]);
-  textNode(nodes, 603, COPY.guestAck, [5590, -1900]);
+  // ── supported-count gate for EXTRACTED guest counts ───────────────────────
+  // Rows compare the exact stored values ("1".."6"); an extracted 7/8/12
+  // lands on False. Clicked values never pass through this gate — the rows
+  // route directly (see guestListStage).
+  conditionNode(nodes, 602, GUEST_STAY_CHOICES.map((v) => ({ field: FIELD.guestCount, value: v })), [5720, -1900]);
 
   disconnectOutput(nodes, 440, "conditionOutputTrue");
   disconnectOutput(nodes, 440, "conditionOutputFalse");
-  connect(nodes, 440, "conditionOutputTrue", 600, "userInputFlowInput");
-  connect(nodes, 440, "conditionOutputFalse", 602, "conditionInput"); // #602's ONLY inbound (guest already extracted; just-answered path via clone #766)
-  connect(nodes, 600, "userInputFlowOutput", 601, "userInputFlowSingleInput");
-  connect(nodes, 601, "userInputFlowSingleOutputFinalReply", 603, "textInput");
-  // 603 (guest just answered) → supported check via clone #766 (fragmentation section)
+  connect(nodes, 440, "conditionOutputFalse", 602, "conditionInput"); // #602's ONLY inbound
 
-  // ── primary bedroom path (always asked; never condition-skipped) ──────────
-  wrapperNode(nodes, 610, "Oraya v6 - Bedrooms", [5200, -1600]);
-  questionNode(nodes, 611, { question: COPY.bedroomQuestion, field: FIELD.bedroom, choices: BEDROOM_CHOICES }, [5460, -1600]);
-  textNode(nodes, 624, COPY.bedroomAck, [5590, -1600]);
-  textNode(nodes, 616, COPY.bedroomMismatch, [6760, -1600]);
-  wrapperNode(nodes, 617, "Oraya v6 - Bedrooms retry", [5200, -1300]);
-  questionNode(nodes, 618, { question: COPY.bedroomQuestion, field: FIELD.bedroom, choices: BEDROOM_CHOICES }, [5460, -1300]);
-  textNode(nodes, 625, COPY.bedroomAck, [5590, -1300]);
+  // ── shared post-answer spine (postback-convergence targets) ───────────────
+  // guest-ack Text: every stay-value row (1–6) of every guest list stage
+  // converges here, then continues into the always-asked bedroom question.
+  textNode(nodes, 860, COPY.guestAck, [6650, -1900]);
+  // bedroom-ack → villa gate: every bedroom button of every bedroom stage
+  // converges here; the villa gate is a Condition and keeps ONE inbound.
+  textNode(nodes, 930, "Noted 😊", [7400, -1700]);
+  connect(nodes, 930, "textOutput", 470, "conditionInput");
 
-  connect(nodes, 602, "conditionOutputTrue", 610, "userInputFlowInput");
-  connect(nodes, 602, "conditionOutputFalse", 466, "userInputFlowInput"); // initial large group (branch-local)
-  connect(nodes, 610, "userInputFlowOutput", 611, "userInputFlowSingleInput");
-  connect(nodes, 611, "userInputFlowSingleOutputFinalReply", 624, "textInput");
-
-  const primary = bedroomValidation(nodes, [612, 613, 614], [5720, -1600]);
-  connect(nodes, 624, "textOutput", primary.c1, "conditionInput");
-  connect(nodes, primary.c1, "conditionOutputTrue", 470, "conditionInput"); // #470's ONLY parent (happy path; other capacity-OK exits use clones 758-760)
-  connect(nodes, primary.c2, "conditionOutputTrue", 616, "textInput"); // HUB 616 kept edge
-  // primary.c3 True → villa check via clone #758 (corrected-rule fragmentation section)
-  hubEdge(nodes, primary.c3, "conditionOutputFalse", 616, "textInput");
-
-  connect(nodes, 616, "textOutput", 617, "userInputFlowInput");
-  connect(nodes, 617, "userInputFlowOutput", 618, "userInputFlowSingleInput");
-  connect(nodes, 618, "userInputFlowSingleOutputFinalReply", 625, "textInput");
-
-  const retry = bedroomValidation(nodes, [619, 620, 621], [5720, -1300]);
-  connect(nodes, 625, "textOutput", retry.c1, "conditionInput");
-  // retry.c1 / retry.c3 True → villa check via clones #759 / #760 (fragmentation section)
-  textNode(nodes, 626, COPY.bedroomEscalation, [6760, -1300]); // branch-local retry escalation A
-  connect(nodes, retry.c2, "conditionOutputTrue", 626, "textInput");
-  textNode(nodes, 627, COPY.bedroomEscalation, [6760, -1140]); // branch-local retry escalation B
-  connect(nodes, retry.c3, "conditionOutputFalse", 627, "textInput");
-
-  // ── villa converges into confirmation (hub) ───────────────────────────────
-  textNode(nodes, 604, COPY.villaAck, [7190, -1750]);
-  connect(nodes, 481, "userInputFlowSingleOutputFinalReply", 604, "textInput");
-  hubEdge(nodes, 604, "textOutput", 490, "userInputFlowInput"); // 490's kept edge is v5.5's 470-False
-
-  // ── branch-local escalation tails (initial paths) ─────────────────────────
-  escalationTail(nodes, [640, 641, 642, 643], "Oraya v6 - Escalation: dates", [5100, -2560]);
-  connect(nodes, 438, "textOutput", 640, "userInputFlowInput");
-  escalationTail(nodes, [700, 701, 702, 703], "Oraya v6 - Escalation: dates (check-out path)", [4900, 636]);
-  connect(nodes, 504, "textOutput", 700, "userInputFlowInput");
-  escalationTail(nodes, [704, 705, 706, 707], "Oraya v6 - Escalation: bedroom fit A", [7020, -1300]);
-  connect(nodes, 626, "textOutput", 704, "userInputFlowInput");
-  escalationTail(nodes, [708, 709, 710, 711], "Oraya v6 - Escalation: bedroom fit B", [7020, -1140]);
-  connect(nodes, 627, "textOutput", 708, "userInputFlowInput");
-  escalationTail(nodes, [712, 713, 714, 715], "Oraya v6 - Escalation: large group", [5760, -3600]);
-  connect(nodes, 468, "textOutput", 712, "userInputFlowInput");
-
-  // ── Edit path: fresh attempt → forward-cloned re-validation ───────────────
-  conditionNode(nodes, 650, [{ field: FIELD.checkIn, value: "null" }], [2200, -400]);
-  wrapperNode(nodes, 651, "Oraya v6 Edit - Dates", [2460, -520]);
-  questionNode(nodes, 652, { question: COPY.editDatesQuestion, field: FIELD.followup }, [2720, -520]);
-  apiNode(nodes, 653, API.refine, [2980, -520]);
-  conditionNode(nodes, 654, [
-    { field: FIELD.checkIn, value: "null" },
-    { field: FIELD.checkOut, value: "null" },
-  ], [3240, -400]);
-  textNode(nodes, 655, COPY.dateEscalation, [3500, -520]);
-  conditionNode(nodes, 656, [{ field: FIELD.checkOut, value: "null" }], [2460, -280]);
-  wrapperNode(nodes, 657, "Oraya v6 Edit - Checkout", [2720, -280]);
-  questionNode(nodes, 658, { question: COPY.editCheckoutQuestion, field: FIELD.followup }, [2980, -280]);
-  apiNode(nodes, 659, API.refine, [3240, -280]);
-  conditionNode(nodes, 660, [{ field: FIELD.guestCount, value: "null" }], [3760, -400]);
-
-  connect(nodes, 498, "httpApiOutput", 650, "conditionInput");
-  connect(nodes, 650, "conditionOutputTrue", 651, "userInputFlowInput");
-  connect(nodes, 650, "conditionOutputFalse", 656, "conditionInput");
-  connect(nodes, 651, "userInputFlowOutput", 652, "userInputFlowSingleInput");
-  connect(nodes, 652, "userInputFlowSingleOutputFinalReply", 653, "httpApiInput");
-  connect(nodes, 653, "httpApiOutput", 654, "conditionInput"); // #654's ONLY inbound (second refine call re-enters via clone chain 767/768/769)
-  connect(nodes, 654, "conditionOutputTrue", 655, "textInput");
-  connect(nodes, 654, "conditionOutputFalse", 660, "conditionInput"); // #660's ONLY parent (656 False re-enters via clone chain 761/762)
-  connect(nodes, 656, "conditionOutputTrue", 657, "userInputFlowInput");
-  // 656 False (both dates already known) → guest check via clones #761/#762 (fragmentation section)
-  connect(nodes, 657, "userInputFlowOutput", 658, "userInputFlowSingleInput");
-  connect(nodes, 658, "userInputFlowSingleOutputFinalReply", 659, "httpApiInput");
-  // 659 (Edit check-out refine result) → dates-complete check via clone chain #767/#768/#769 (fragmentation section)
-  escalationTail(nodes, [716, 717, 718, 719], "Oraya v6 Edit - Escalation: dates", [3760, -700]);
-  connect(nodes, 655, "textOutput", 716, "userInputFlowInput");
-
-  // guests (Edit)
-  wrapperNode(nodes, 661, "Oraya v6 Edit - Guests", [4020, -520]);
-  questionNode(nodes, 662, { question: COPY.guestQuestion, field: FIELD.guestCount, choices: GUEST_CHOICES }, [4280, -520]);
-  conditionNode(nodes, 663, GUEST_CHOICES.slice(0, 8).map((v) => ({ field: FIELD.guestCount, value: v })), [4540, -400]);
-  textNode(nodes, 664, COPY.guestAck, [4410, -520]);
-  connect(nodes, 660, "conditionOutputTrue", 661, "userInputFlowInput");
-  connect(nodes, 660, "conditionOutputFalse", 663, "conditionInput"); // #663's ONLY inbound (just-answered path via clone #770)
-  connect(nodes, 661, "userInputFlowOutput", 662, "userInputFlowSingleInput");
-  connect(nodes, 662, "userInputFlowSingleOutputFinalReply", 664, "textInput");
-  // 664 (Edit guest just answered) → supported check via clone #770 (fragmentation section)
-
-  // Edit large group — branch-local clone of the initial 466/467/468 subtree
-  cloneSubgraph(nodes, { 466: 736, 467: 737, 468: 738 }, { offset: [-910, 2817], campaignSuffix: " (Edit)" });
-  connect(nodes, 663, "conditionOutputFalse", 736, "userInputFlowInput");
-  escalationTail(nodes, [732, 733, 734, 735], "Oraya v6 Edit - Escalation: large group", [5320, 140]);
-  connect(nodes, 738, "textOutput", 732, "userInputFlowInput");
-
-  // bedrooms (Edit) — same always-ask + capacity validation + one retry
-  wrapperNode(nodes, 670, "Oraya v6 Edit - Bedrooms", [4800, -520]);
-  questionNode(nodes, 671, { question: COPY.bedroomQuestion, field: FIELD.bedroom, choices: BEDROOM_CHOICES }, [5060, -520]);
-  textNode(nodes, 684, COPY.bedroomAck, [5190, -520]);
-  textNode(nodes, 676, COPY.bedroomMismatch, [6280, -520]);
-  wrapperNode(nodes, 677, "Oraya v6 Edit - Bedrooms retry", [4800, -160]);
-  questionNode(nodes, 678, { question: COPY.bedroomQuestion, field: FIELD.bedroom, choices: BEDROOM_CHOICES }, [5060, -160]);
-  textNode(nodes, 685, COPY.bedroomAck, [5190, -160]);
-  conditionNode(nodes, 690, [{ field: FIELD.villa, value: "null" }], [6540, -400]);
-
-  connect(nodes, 663, "conditionOutputTrue", 670, "userInputFlowInput");
-  connect(nodes, 670, "userInputFlowOutput", 671, "userInputFlowSingleInput");
-  connect(nodes, 671, "userInputFlowSingleOutputFinalReply", 684, "textInput");
-
-  const editVal = bedroomValidation(nodes, [672, 673, 674], [5320, -520]);
-  connect(nodes, 684, "textOutput", editVal.c1, "conditionInput");
-  connect(nodes, editVal.c1, "conditionOutputTrue", 690, "conditionInput"); // #690's ONLY parent (other Edit capacity-OK exits use clones 763-765)
-  connect(nodes, editVal.c2, "conditionOutputTrue", 676, "textInput"); // HUB 676 kept edge
-  // editVal.c3 True → Edit villa check via clone #763 (fragmentation section)
-  hubEdge(nodes, editVal.c3, "conditionOutputFalse", 676, "textInput");
-
-  connect(nodes, 676, "textOutput", 677, "userInputFlowInput");
-  connect(nodes, 677, "userInputFlowOutput", 678, "userInputFlowSingleInput");
-  connect(nodes, 678, "userInputFlowSingleOutputFinalReply", 685, "textInput");
-
-  const editRetry = bedroomValidation(nodes, [679, 680, 681], [5320, -160]);
-  connect(nodes, 685, "textOutput", editRetry.c1, "conditionInput");
-  // editRetry.c1 / editRetry.c3 True → Edit villa check via clones #764 / #765 (fragmentation section)
-  textNode(nodes, 686, COPY.bedroomEscalation, [6280, -160]);
-  connect(nodes, editRetry.c2, "conditionOutputTrue", 686, "textInput");
-  textNode(nodes, 687, COPY.bedroomEscalation, [6280, -20]);
-  connect(nodes, editRetry.c3, "conditionOutputFalse", 687, "textInput");
-  escalationTail(nodes, [720, 721, 722, 723], "Oraya v6 Edit - Escalation: bedroom fit A", [6540, -160]);
-  connect(nodes, 686, "textOutput", 720, "userInputFlowInput");
-  escalationTail(nodes, [724, 725, 726, 727], "Oraya v6 Edit - Escalation: bedroom fit B", [6540, -20]);
-  connect(nodes, 687, "textOutput", 724, "userInputFlowInput");
-
-  // villa + confirmation (Edit)
-  wrapperNode(nodes, 691, "Oraya v6 Edit - Villa", [6800, -520]);
-  questionNode(nodes, 692, { question: COPY.villaQuestion, field: FIELD.villa, choices: ["Villa Mechmech", "Villa Byblos"] }, [7060, -520]);
-  textNode(nodes, 693, COPY.villaAck, [7190, -520]);
-  wrapperNode(nodes, 694, "Oraya v6 Edit - Confirm", [7320, -400]);
-  questionNode(nodes, 695, { question: COPY.confirmation, field: FIELD.confirm, choices: ["Looks right", "Edit"] }, [7580, -400]);
-  textNode(nodes, 699, COPY.confirmAck, [7710, -400]);
-  conditionNode(nodes, 696, [{ field: FIELD.confirm, op: "contains", value: "Looks right" }], [7840, -400]);
-  wrapperNode(nodes, 697, "Oraya v6 Edit - Continue to handoff", [8100, -520]);
-  textNode(nodes, 698, COPY.secondEditEscalation, [8100, -280]);
-
-  connect(nodes, 690, "conditionOutputTrue", 691, "userInputFlowInput");
-  connect(nodes, 690, "conditionOutputFalse", 694, "userInputFlowInput"); // HUB 694 kept edge
-  connect(nodes, 691, "userInputFlowOutput", 692, "userInputFlowSingleInput");
-  connect(nodes, 692, "userInputFlowSingleOutputFinalReply", 693, "textInput");
-  hubEdge(nodes, 693, "textOutput", 694, "userInputFlowInput");
-  connect(nodes, 694, "userInputFlowOutput", 695, "userInputFlowSingleInput");
-  connect(nodes, 695, "userInputFlowSingleOutputFinalReply", 699, "textInput");
-  connect(nodes, 699, "textOutput", 696, "conditionInput");
-  connect(nodes, 696, "conditionOutputTrue", 697, "userInputFlowInput");
-  connect(nodes, 696, "conditionOutputFalse", 698, "textInput");
-  escalationTail(nodes, [728, 729, 730, 731], "Oraya v6 Edit - Escalation: second edit", [8360, -280]);
-  connect(nodes, 698, "textOutput", 728, "userInputFlowInput");
-
-  // Edit handoff — branch-local clone of the complete initial handoff subtree
-  // (choice question, WhatsApp ending with its own Lead Submit, website
-  // ending with its own 7459 Lead Submit) so #70 keeps a single parent per path.
-  cloneSubgraph(nodes, { 70: 740, 71: 741, 72: 742, 84: 743, 73: 744, 74: 745, 75: 746, 8: 747, 9: 748, 7: 749 }, {
-    offset: [0, 1400],
-    campaignSuffix: " (Edit)",
+  // villa question (asked only when normalization left oraya_villa = "null")
+  interactiveNode(nodes, 935, COPY.villaQuestion, [7900, -1950]);
+  VILLA_CHOICES.forEach((label, i) => {
+    inlineButtonNode(nodes, 936 + i, { label, field: FIELD.villa }, [8160, -2020 + i * 140]);
+    connect(nodes, 935, "interactiveOutputButton", 936 + i, "buttonInput");
   });
-  connect(nodes, 697, "userInputFlowOutput", 740, "userInputFlowSingleInput");
+  textNode(nodes, 938, "Lovely choice 😊", [8420, -1950]);
+  connect(nodes, 936, "buttonOutput", 938, "textInput");
+  connect(nodes, 937, "buttonOutput", 938, "textInput");
 
-  // ── corrected-rule fragmentation (round trip #2 probes, 2026-07-03) ───────
-  // Each destination Condition may carry at most ONE Condition-source parent
-  // (the editor rejects a second with the infinite-loop warning). Every extra
-  // Condition-source parent below gets a semantically identical clone whose
-  // single serialized connection the import keeps automatically; convergence
-  // then happens at guest-visible wrappers/Texts through live-proven draw
-  // operations. Conditions are invisible routing logic — guest behavior is
-  // byte-identical.
+  // completion A: villa just chosen → Lead Submit → summary terminal
+  apiNode(nodes, 939, API.leadSubmit, [8680, -1950]);
+  textNode(nodes, 940, COPY.summary + COPY.continuationBlock, [8940, -1950]);
+  connect(nodes, 938, "textOutput", 939, "httpApiInput");
+  connect(nodes, 939, "httpApiOutput", 940, "textInput");
 
-  // #440 "guest known?" + #602 "supported count?": the four date-recovery
-  // exits (430/436/501/505 False) may not join #411's kept edge on #440, so
-  // each recovery branch gets its own 440-clone → 602-clone chain (both
-  // serialized single-parent, import-kept).
+  // completion B: villa already known → Lead Submit → summary terminal
+  apiNode(nodes, 941, API.leadSubmit, [8680, -1650]);
+  textNode(nodes, 942, COPY.summary + COPY.continuationBlock, [8940, -1650]);
+  connect(nodes, 470, "conditionOutputTrue", 935, "interactiveInput");
+  connect(nodes, 470, "conditionOutputFalse", 941, "httpApiInput");
+  connect(nodes, 941, "httpApiOutput", 942, "textInput");
+
+  // ── date-recovery Condition-clone cascade (round trip #3 invariant) ───────
+  // Each of the four date-recovery exits keeps its own "guest known?" clone
+  // (440) chained to its own "supported count?" clone (602), all serialized
+  // single-parent so the import keeps every link.
   const dateRecoverySplits = [
     { from: 430, g: 750, s: 751 },
     { from: 436, g: 752, s: 753 },
@@ -618,89 +577,68 @@ function generateV6(flow) {
     cloneCondition(nodes, 602, s, [px + 520, py + 120]);
     connect(nodes, from, "conditionOutputFalse", g, "conditionInput"); // sole connection — import keeps it
     connect(nodes, g, "conditionOutputFalse", s, "conditionInput"); // sole connection — import keeps it
-    hubEdge(nodes, g, "conditionOutputTrue", 600, "userInputFlowInput");
-    hubEdge(nodes, s, "conditionOutputTrue", 610, "userInputFlowInput");
-    hubEdge(nodes, s, "conditionOutputFalse", 466, "userInputFlowInput");
   }
 
-  // #602's just-answered path: round trip #3 proved a Condition accepts ONE
-  // inbound connection TOTAL, so Text #603 may not join #440's kept edge on
-  // #602 — it gets its own supported-count clone.
-  {
-    const [px, py] = nodes["603"].position;
-    cloneCondition(nodes, 602, 766, [px + 260, py + 120]);
-    connect(nodes, 603, "textOutput", 766, "conditionInput"); // sole connection — import keeps it
-    hubEdge(nodes, 766, "conditionOutputTrue", 610, "userInputFlowInput");
-    hubEdge(nodes, 766, "conditionOutputFalse", 466, "userInputFlowInput");
-  }
-
-  // #470 "villa known?": capacity-OK exits beyond the kept #612 True.
-  const villaSplits = [
-    { from: primary.c3, clone: 758 },
-    { from: retry.c1, clone: 759 },
-    { from: retry.c3, clone: 760 },
+  // ── guest list stages (one per guest-unknown entry; Conditions keep ONE
+  // inbound, so each entry owns its stage; the stages' rows converge on the
+  // shared spine via postback convergence) ──────────────────────────────────
+  const guestStages = [
+    { base: 800, entry: { id: 440, outKey: "conditionOutputTrue" }, pos: [5200, -2200] },
+    { base: 810, entry: { id: 750, outKey: "conditionOutputTrue" }, pos: [4700, -3000] },
+    { base: 820, entry: { id: 752, outKey: "conditionOutputTrue" }, pos: [5200, -3300] },
+    { base: 830, entry: { id: 754, outKey: "conditionOutputTrue" }, pos: [4200, 900] },
+    { base: 840, entry: { id: 756, outKey: "conditionOutputTrue" }, pos: [4700, 1200] },
   ];
-  for (const { from, clone } of villaSplits) {
-    const [px, py] = nodes[String(from)].position;
-    cloneCondition(nodes, 470, clone, [px + 260, py + 120]);
-    connect(nodes, from, "conditionOutputTrue", clone, "conditionInput"); // sole connection — import keeps it
-    hubEdge(nodes, clone, "conditionOutputTrue", 480, "userInputFlowInput");
-    hubEdge(nodes, clone, "conditionOutputFalse", 490, "userInputFlowInput");
+  for (const { base, entry, pos } of guestStages) {
+    guestListStage(nodes, base, {
+      stayTargetId: 860, stayTargetInput: "textInput",
+      overflowTargetId: 466, overflowTargetInput: "userInputFlowInput",
+    }, pos);
+    connect(nodes, entry.id, entry.outKey, base, "interactiveInput");
   }
 
-  // Edit both-dates-known re-entry: #656 False may not join #654's kept edge
-  // on #660 — chain a 660-clone → 663-clone (both serialized single-parent).
-  {
-    const [px, py] = nodes["656"].position;
-    cloneCondition(nodes, 660, 761, [px + 260, py + 120]);
-    cloneCondition(nodes, 663, 762, [px + 520, py + 120]);
-    connect(nodes, 656, "conditionOutputFalse", 761, "conditionInput"); // sole connection — import keeps it
-    connect(nodes, 761, "conditionOutputFalse", 762, "conditionInput"); // sole connection — import keeps it
-    hubEdge(nodes, 761, "conditionOutputTrue", 661, "userInputFlowInput");
-    hubEdge(nodes, 762, "conditionOutputTrue", 670, "userInputFlowInput");
-    hubEdge(nodes, 762, "conditionOutputFalse", 736, "userInputFlowInput");
-  }
-
-  // Edit second refine call: HTTP API #659 may not join #653's kept edge on
-  // #654 (one inbound TOTAL per Condition) — it re-enters through its own
-  // dates-complete → guest-known → supported-count clone chain, all
-  // serialized single-parent so the import keeps every link.
-  {
-    const [px, py] = nodes["659"].position;
-    cloneCondition(nodes, 654, 767, [px + 260, py + 120]);
-    cloneCondition(nodes, 660, 768, [px + 520, py + 120]);
-    cloneCondition(nodes, 663, 769, [px + 780, py + 120]);
-    connect(nodes, 659, "httpApiOutput", 767, "conditionInput"); // sole connection — import keeps it
-    connect(nodes, 767, "conditionOutputFalse", 768, "conditionInput"); // sole connection — import keeps it
-    connect(nodes, 768, "conditionOutputFalse", 769, "conditionInput"); // sole connection — import keeps it
-    hubEdge(nodes, 767, "conditionOutputTrue", 655, "textInput");
-    hubEdge(nodes, 768, "conditionOutputTrue", 661, "userInputFlowInput");
-    hubEdge(nodes, 769, "conditionOutputTrue", 670, "userInputFlowInput");
-    hubEdge(nodes, 769, "conditionOutputFalse", 736, "userInputFlowInput");
-  }
-
-  // Edit #663's just-answered path: Text #664 gets its own supported-count clone.
-  {
-    const [px, py] = nodes["664"].position;
-    cloneCondition(nodes, 663, 770, [px + 260, py + 120]);
-    connect(nodes, 664, "textOutput", 770, "conditionInput"); // sole connection — import keeps it
-    hubEdge(nodes, 770, "conditionOutputTrue", 670, "userInputFlowInput");
-    hubEdge(nodes, 770, "conditionOutputFalse", 736, "userInputFlowInput");
-  }
-
-  // Edit #690 "villa known?": Edit capacity-OK exits beyond the kept #672 True.
-  const editVillaSplits = [
-    { from: editVal.c3, clone: 763 },
-    { from: editRetry.c1, clone: 764 },
-    { from: editRetry.c3, clone: 765 },
+  // ── bedroom stages (always asked — bedrooms are never extracted) ──────────
+  // b0: after a clicked guest count (shared guest-ack); b1–b5: after an
+  // extracted, supported guest count (one per supported-gate clone).
+  const bedroomStages = [
+    { base: 870, entry: { id: 860, outKey: "textOutput" }, pos: [6900, -1900] },
+    { base: 875, entry: { id: 602, outKey: "conditionOutputTrue" }, pos: [6900, -2200] },
+    { base: 880, entry: { id: 751, outKey: "conditionOutputTrue" }, pos: [6900, -2500] },
+    { base: 885, entry: { id: 753, outKey: "conditionOutputTrue" }, pos: [6900, -2800] },
+    { base: 890, entry: { id: 755, outKey: "conditionOutputTrue" }, pos: [6900, 900] },
+    { base: 895, entry: { id: 757, outKey: "conditionOutputTrue" }, pos: [6900, 1200] },
   ];
-  for (const { from, clone } of editVillaSplits) {
-    const [px, py] = nodes[String(from)].position;
-    cloneCondition(nodes, 690, clone, [px + 260, py + 120]);
-    connect(nodes, from, "conditionOutputTrue", clone, "conditionInput"); // sole connection — import keeps it
-    hubEdge(nodes, clone, "conditionOutputTrue", 691, "userInputFlowInput");
-    hubEdge(nodes, clone, "conditionOutputFalse", 694, "userInputFlowInput");
+  for (const { base, entry, pos } of bedroomStages) {
+    bedroomStage(nodes, base, { ackTargetId: 930, ackTargetInput: "textInput" }, pos);
+    connect(nodes, entry.id, entry.outKey, base, "interactiveInput");
   }
+
+  // ── extracted unsupported counts (7, 8, 12, …): per-branch team review ────
+  // We already hold the exact extracted number, so there is no exact-count
+  // re-ask — a review message leads straight into a branch-local escalation
+  // tail (name → Lead Submit → safe ending).
+  const overflowBranches = [
+    { from: 602, preface: 963, tail: [970, 971, 972, 973], label: "initial" },
+    { from: 751, preface: 964, tail: [974, 975, 976, 977], label: "dates recovery A" },
+    { from: 753, preface: 965, tail: [978, 979, 980, 981], label: "dates recovery B" },
+    { from: 755, preface: 966, tail: [982, 983, 984, 985], label: "check-out recovery A" },
+    { from: 757, preface: 967, tail: [986, 987, 988, 989], label: "check-out recovery B" },
+  ];
+  for (const { from, preface, tail, label } of overflowBranches) {
+    const [px, py] = nodes[String(from)].position;
+    textNode(nodes, preface, COPY.extractedOverflowPreface, [px + 260, py + 260]);
+    connect(nodes, from, "conditionOutputFalse", preface, "textInput");
+    escalationTail(nodes, tail, `Oraya v6 - Escalation: extracted large group (${label})`, [px + 520, py + 260]);
+    connect(nodes, preface, "textOutput", tail[0], "userInputFlowInput");
+  }
+
+  // ── date-trouble + clicked-large-group escalation tails (existing outcome) ─
+  escalationTail(nodes, [640, 641, 642, 643], "Oraya v6 - Escalation: dates", [5100, -2560]);
+  connect(nodes, 438, "textOutput", 640, "userInputFlowInput");
+  escalationTail(nodes, [700, 701, 702, 703], "Oraya v6 - Escalation: dates (check-out path)", [4900, 636]);
+  connect(nodes, 504, "textOutput", 700, "userInputFlowInput");
+  escalationTail(nodes, [712, 713, 714, 715], "Oraya v6 - Escalation: large group", [5760, -3600]);
+  connect(nodes, 468, "textOutput", 712, "userInputFlowInput");
 
   // Start-node title and every inherited campaign label reflect the revision.
   nodes["1"].data.title = "Oraya Natural Stay Intake v6 - Start";
@@ -713,248 +651,172 @@ function generateV6(flow) {
   return flow;
 }
 
-// ─── operator redraw plan (the hub edges the import will drop) ─────────────
-// Declarative and machine-verified: buildRedrawPlan() asserts the plan covers
-// EXACTLY every beyond-first connection in the generated graph — no more, no
-// less — so the checklist can never drift from the artifact. Every entry uses
-// a live-proven editor operation and NO entry is Condition → Condition
-// (assertEditorContracts enforces both, plus the one-Condition-parent rule).
+// ─── generation gates ───────────────────────────────────────────────────────
 
-const REDRAW_PLAN = [
-  // hub #600 — guest question (guest-unknown exits of the cloned "guest known?" checks)
-  { from: 750, outKey: "conditionOutputTrue", to: 600, inKey: "userInputFlowInput", purpose: "Dates recovered after the FIRST full-dates follow-up, guest count still unknown — asks the guest question." },
-  { from: 752, outKey: "conditionOutputTrue", to: 600, inKey: "userInputFlowInput", purpose: "Dates recovered after the SECOND full-dates follow-up, guest count still unknown — asks the guest question." },
-  { from: 754, outKey: "conditionOutputTrue", to: 600, inKey: "userInputFlowInput", purpose: "Check-out recovered after the FIRST check-out follow-up, guest count still unknown — asks the guest question." },
-  { from: 756, outKey: "conditionOutputTrue", to: 600, inKey: "userInputFlowInput", purpose: "Check-out recovered after the SECOND check-out follow-up, guest count still unknown — asks the guest question." },
-  // hub #610 — bedroom question (supported-count OK exits of the cloned checks)
-  { from: 751, outKey: "conditionOutputTrue", to: 610, inKey: "userInputFlowInput", purpose: "First full-dates recovery with a known, supported guest count — continues to the bedroom question." },
-  { from: 753, outKey: "conditionOutputTrue", to: 610, inKey: "userInputFlowInput", purpose: "Second full-dates recovery with a known, supported guest count — continues to the bedroom question." },
-  { from: 755, outKey: "conditionOutputTrue", to: 610, inKey: "userInputFlowInput", purpose: "First check-out recovery with a known, supported guest count — continues to the bedroom question." },
-  { from: 757, outKey: "conditionOutputTrue", to: 610, inKey: "userInputFlowInput", purpose: "Second check-out recovery with a known, supported guest count — continues to the bedroom question." },
-  { from: 766, outKey: "conditionOutputTrue", to: 610, inKey: "userInputFlowInput", purpose: "Guest count the guest JUST answered is supported (1–8) — continues to the bedroom question." },
-  // hub #466 — large-group exact-count review (More-than-8 exits of the cloned checks)
-  { from: 751, outKey: "conditionOutputFalse", to: 466, inKey: "userInputFlowInput", purpose: "First full-dates recovery with more than 8 guests — exact-count team review." },
-  { from: 753, outKey: "conditionOutputFalse", to: 466, inKey: "userInputFlowInput", purpose: "Second full-dates recovery with more than 8 guests — exact-count team review." },
-  { from: 755, outKey: "conditionOutputFalse", to: 466, inKey: "userInputFlowInput", purpose: "First check-out recovery with more than 8 guests — exact-count team review." },
-  { from: 757, outKey: "conditionOutputFalse", to: 466, inKey: "userInputFlowInput", purpose: "Second check-out recovery with more than 8 guests — exact-count team review." },
-  { from: 766, outKey: "conditionOutputFalse", to: 466, inKey: "userInputFlowInput", purpose: "Guest count the guest JUST answered is more than 8 — exact-count team review." },
-  // hub #480 — villa question (capacity-OK, villa-unknown exits of the cloned villa checks)
-  { from: 758, outKey: "conditionOutputTrue", to: 480, inKey: "userInputFlowInput", purpose: "Bedroom OK — 2 bedrooms fit 3–4 guests (first ask) — villa still unknown, asks the villa question." },
-  { from: 759, outKey: "conditionOutputTrue", to: 480, inKey: "userInputFlowInput", purpose: "Bedroom OK — 3 bedrooms or 1–2 guests (retry ask) — villa still unknown, asks the villa question." },
-  { from: 760, outKey: "conditionOutputTrue", to: 480, inKey: "userInputFlowInput", purpose: "Bedroom OK — 2 bedrooms fit 3–4 guests (retry ask) — villa still unknown, asks the villa question." },
-  // hub #616 — bedroom mismatch explanation
-  { from: 614, outKey: "conditionOutputFalse", to: 616, inKey: "textInput", purpose: "Bedroom mismatch — 2 bedrooms with 5–8 guests (first ask) — shows the capacity explanation and re-ask." },
-  // hub #490 — confirmation entry (villa-known exits + villa just chosen)
-  { from: 758, outKey: "conditionOutputFalse", to: 490, inKey: "userInputFlowInput", purpose: "Bedroom OK (first ask), villa already known — continues to the confirmation summary." },
-  { from: 759, outKey: "conditionOutputFalse", to: 490, inKey: "userInputFlowInput", purpose: "Bedroom OK (retry, 3 bedrooms or 1–2 guests), villa already known — continues to the confirmation summary." },
-  { from: 760, outKey: "conditionOutputFalse", to: 490, inKey: "userInputFlowInput", purpose: "Bedroom OK (retry, 2 bedrooms fit 3–4), villa already known — continues to the confirmation summary." },
-  { from: 604, outKey: "textOutput", to: 490, inKey: "userInputFlowInput", purpose: "Villa the guest JUST chose continues to the confirmation summary (the villa-already-known path is kept automatically)." },
-  // hub #655 — Edit date-trouble escalation message (first refine failure kept automatically)
-  { from: 767, outKey: "conditionOutputTrue", to: 655, inKey: "textInput", purpose: "Edit check-out refinement still left dates incomplete — date-trouble escalation message." },
-  // hub #661 — Edit guest question
-  { from: 761, outKey: "conditionOutputTrue", to: 661, inKey: "userInputFlowInput", purpose: "Edit attempt that already has BOTH dates, guest count unknown — asks the Edit guest question." },
-  { from: 768, outKey: "conditionOutputTrue", to: 661, inKey: "userInputFlowInput", purpose: "Edit check-out refinement recovered the dates, guest count unknown — asks the Edit guest question." },
-  // hub #670 — Edit bedroom question
-  { from: 762, outKey: "conditionOutputTrue", to: 670, inKey: "userInputFlowInput", purpose: "Edit both-dates-known re-entry with a known, supported guest count — continues to the Edit bedroom question." },
-  { from: 769, outKey: "conditionOutputTrue", to: 670, inKey: "userInputFlowInput", purpose: "Edit check-out recovery with a known, supported guest count — continues to the Edit bedroom question." },
-  { from: 770, outKey: "conditionOutputTrue", to: 670, inKey: "userInputFlowInput", purpose: "Edit guest count the guest JUST answered is supported (1–8) — continues to the Edit bedroom question." },
-  // hub #736 — Edit large-group exact-count review
-  { from: 762, outKey: "conditionOutputFalse", to: 736, inKey: "userInputFlowInput", purpose: "Edit both-dates-known re-entry with more than 8 guests — Edit exact-count team review." },
-  { from: 769, outKey: "conditionOutputFalse", to: 736, inKey: "userInputFlowInput", purpose: "Edit check-out recovery with more than 8 guests — Edit exact-count team review." },
-  { from: 770, outKey: "conditionOutputFalse", to: 736, inKey: "userInputFlowInput", purpose: "Edit guest count the guest JUST answered is more than 8 — Edit exact-count team review." },
-  // hub #691 — Edit villa question
-  { from: 763, outKey: "conditionOutputTrue", to: 691, inKey: "userInputFlowInput", purpose: "Edit bedroom OK — 2 bedrooms fit 3–4 guests (first ask) — villa still unknown, asks the Edit villa question." },
-  { from: 764, outKey: "conditionOutputTrue", to: 691, inKey: "userInputFlowInput", purpose: "Edit bedroom OK — 3 bedrooms or 1–2 guests (retry ask) — villa still unknown, asks the Edit villa question." },
-  { from: 765, outKey: "conditionOutputTrue", to: 691, inKey: "userInputFlowInput", purpose: "Edit bedroom OK — 2 bedrooms fit 3–4 guests (retry ask) — villa still unknown, asks the Edit villa question." },
-  // hub #676 — Edit bedroom mismatch explanation
-  { from: 674, outKey: "conditionOutputFalse", to: 676, inKey: "textInput", purpose: "Edit bedroom mismatch — 2 bedrooms with 5–8 guests (first ask) — shows the capacity explanation and re-ask." },
-  // hub #694 — Edit confirmation entry
-  { from: 763, outKey: "conditionOutputFalse", to: 694, inKey: "userInputFlowInput", purpose: "Edit bedroom OK (first ask), villa already known — continues to the updated confirmation summary." },
-  { from: 764, outKey: "conditionOutputFalse", to: 694, inKey: "userInputFlowInput", purpose: "Edit bedroom OK (retry, 3 bedrooms or 1–2 guests), villa already known — continues to the updated confirmation summary." },
-  { from: 765, outKey: "conditionOutputFalse", to: 694, inKey: "userInputFlowInput", purpose: "Edit bedroom OK (retry, 2 bedrooms fit 3–4), villa already known — continues to the updated confirmation summary." },
-  { from: 693, outKey: "textOutput", to: 694, inKey: "userInputFlowInput", purpose: "Edit villa the guest JUST chose continues to the updated confirmation summary." },
-];
-
-const HUB_DESCRIPTIONS = {
-  600: "guest-count question — merges the guest-unknown exits of the original and cloned \"guest known?\" checks",
-  610: "bedroom question — merges every supported-guest-count OK exit",
-  466: "large-group exact-count team review — merges every More-than-8 exit",
-  480: "villa question — merges every capacity-OK, villa-unknown exit",
-  616: "bedroom capacity explanation + re-ask",
-  490: "confirmation summary entry — merges the villa-known exits and the villa-just-chosen path",
-  655: "Edit date-trouble escalation message — merges both refine-failure exits",
-  661: "Edit guest-count question — merges every Edit guest-unknown exit",
-  670: "Edit bedroom question — merges every Edit supported-guest-count OK exit",
-  736: "Edit large-group exact-count team review — merges every Edit More-than-8 exit",
-  691: "Edit villa question — merges every Edit capacity-OK, villa-unknown exit",
-  676: "Edit bedroom capacity explanation + re-ask",
-  694: "Edit confirmation summary entry",
+// Postback convergence: the ONLY multi-parent input sockets allowed are those
+// whose parents are ALL Inline Button / Rows nodes (operator evidence,
+// 2026-07-04: editor-drawn button convergence into #610 persisted through
+// save/close/reopen/export). Everything else is single-parent (round trip #1).
+// The exact expected merge map is asserted so the artifact can never drift.
+const APPROVED_POSTBACK_MERGES = {
+  466: 5,  // large-group exact-count review ← the 5 "More than 6" rows
+  860: 30, // guest-ack ← 6 stay rows × 5 guest list stages
+  930: 18, // bedroom-ack ← 3 buttons × 6 bedroom stages
+  938: 2,  // villa-ack ← both villa buttons
 };
 
-// Manual connection operations proven against ALREADY-CONNECTED destinations
-// (the only kind a redraw ever targets). Round trip #3 (2026-07-03) proved
-// the earlier Text→Condition / HTTP API→Condition probe results applied only
-// to otherwise-unused Condition inputs — a Condition accepts ONE inbound
-// connection TOTAL, so no redraw may target a Condition at all. Kept in sync
-// with the profile's importGraphContract.editorProvenDrawPairs (tested).
-// Generation FAILS if a redraw edge uses any pair outside this set.
-const PROVEN_DRAW_PAIRS = new Set([
-  "Condition → User Input Flow",
-  "Text → User Input Flow",
-  "Condition → Text",
-]);
+const POSTBACK_SOURCE_NAMES = new Set(["Inline Button", "Rows"]);
 
 // Editor invariant (round trip #3, 2026-07-03): each destination Condition
-// may carry at most ONE inbound connection TOTAL, regardless of source node
-// type — the editor rejects a second with "This will make an infinite loop…".
+// may carry at most ONE inbound connection TOTAL, regardless of source type.
 const MAX_INBOUND_PER_CONDITION = 1;
 
-function drawPairOf(nodes, e) {
-  return `${nodes[String(e.from)].name} → ${nodes[String(e.to)].name}`;
-}
+// Approved control labels per field (the stored value IS the label).
+const APPROVED_CONTROL_LABELS = {
+  [FIELD.guestCount.name]: [...GUEST_STAY_CHOICES, GUEST_OVERFLOW_CHOICE],
+  [FIELD.bedroom.name]: BEDROOM_CHOICES,
+  [FIELD.villa.name]: VILLA_CHOICES,
+};
 
-function edgeKeyOf(e) {
-  return `${e.from}:${e.outKey} -> ${e.to}:${e.inKey}`;
-}
-
-// Hard generation gates for the editor invariant: (a) no redraw may target a
-// Condition (give every extra parent its own clone instead); (b) every
-// redraw uses a live-proven operation; (c) no Condition anywhere in the
-// FINAL expected graph (serialized + redrawn edges are the same set) carries
-// more than one inbound connection of any type.
-function assertEditorContracts(flow, plan) {
+function assertGraphContracts(flow) {
   const nodes = flow.nodes;
-  for (const e of plan) {
-    if (nodes[String(e.to)].name === "Condition") {
-      throw new Error(`redraw edge ${edgeKeyOf(e)} targets a Condition — Conditions accept one inbound connection TOTAL (round trip #3); give this parent its own clone instead`);
-    }
-    const pair = drawPairOf(nodes, e);
-    if (!PROVEN_DRAW_PAIRS.has(pair)) {
-      throw new Error(`redraw edge ${edgeKeyOf(e)} uses UNPROVEN editor operation "${pair}" — refuse to generate`);
-    }
-  }
-  for (const [id, node] of Object.entries(nodes)) {
-    if (node.name !== "Condition") continue;
-    const parents = [];
-    for (const inp of Object.values(node.inputs ?? {})) {
-      for (const c of inp.connections ?? []) parents.push(`#${c.node}`);
-    }
-    if (parents.length > MAX_INBOUND_PER_CONDITION) {
-      throw new Error(`Condition #${id} has ${parents.length} inbound connections [${parents.join(", ")}] — the editor allows at most ${MAX_INBOUND_PER_CONDITION} of any type; refuse to generate`);
-    }
-  }
-}
+  const problems = [];
 
-function buildRedrawPlan(flow) {
-  // every beyond-first connection per input socket, straight from the graph
-  const dropped = [];
-  for (const [id, node] of Object.entries(flow.nodes)) {
+  // (a) convergence census: postback-only, exact approved map
+  const merges = {};
+  for (const [id, node] of Object.entries(nodes)) {
     for (const [inKey, inp] of Object.entries(node.inputs ?? {})) {
-      for (const c of (inp.connections ?? []).slice(1)) {
-        dropped.push({ from: Number(c.node), outKey: c.output, to: Number(id), inKey });
+      const conns = inp.connections ?? [];
+      if (conns.length <= 1) continue;
+      merges[id] = conns.length;
+      for (const c of conns) {
+        const src = nodes[String(c.node)];
+        if (!POSTBACK_SOURCE_NAMES.has(src?.name)) {
+          problems.push(`input #${id}:${inKey} has ${conns.length} parents but #${c.node} is a ${src?.name} — only Inline Button / Rows convergence is evidence-approved; everything else must stay single-parent`);
+        }
       }
     }
   }
-  const graphSet = new Set(dropped.map(edgeKeyOf));
-  const planSet = new Set(REDRAW_PLAN.map(edgeKeyOf));
-  const missing = [...graphSet].filter((k) => !planSet.has(k));
-  const extra = [...planSet].filter((k) => !graphSet.has(k));
-  if (missing.length || extra.length) {
-    throw new Error(
-      `redraw plan drift — beyond-first edges not in plan: [${missing.join(" | ")}]; plan edges not beyond-first in graph: [${extra.join(" | ")}]`,
-    );
+  const expected = Object.fromEntries(Object.entries(APPROVED_POSTBACK_MERGES).map(([k, v]) => [String(k), v]));
+  if (JSON.stringify(Object.fromEntries(Object.entries(merges).sort())) !== JSON.stringify(Object.fromEntries(Object.entries(expected).sort()))) {
+    problems.push(`postback-merge census drift — graph ${JSON.stringify(merges)} vs approved ${JSON.stringify(expected)}`);
   }
-  return REDRAW_PLAN;
-}
 
-function nodeDocLabel(nodes, id) {
-  const n = nodes[String(id)];
-  const d = n?.data ?? {};
-  if (n.name === "Condition") {
-    const rows = (d.custom_field_variable_selected_texts ?? []).map(
-      (name, i) => `${name} ${d.custom_field_operator[i] === "equal" ? "=" : "contains"} "${d.custom_field_variable_value[i]}"`,
-    );
-    return `Condition diamond (${rows.join(d.any_match ? " OR " : " AND ")})`;
+  // (b) Conditions: one inbound TOTAL
+  for (const [id, node] of Object.entries(nodes)) {
+    if (node.name !== "Condition") continue;
+    let inbound = 0;
+    for (const inp of Object.values(node.inputs ?? {})) inbound += (inp.connections ?? []).length;
+    if (inbound > MAX_INBOUND_PER_CONDITION) {
+      problems.push(`Condition #${id} has ${inbound} inbound connections — the editor allows at most ${MAX_INBOUND_PER_CONDITION} of any type (round trip #3)`);
+    }
   }
-  const text = (d.textMessage ?? d.question ?? d.httpApiText ?? d.campaignName ?? "").toString().replace(/\s+/g, " ");
-  const kind = { "Text": "Message", "User Input Flow Single": "Question", "User Input Flow": "Flow wrapper", "HTTP API": "HTTP API" }[n.name] ?? n.name;
-  return `${kind} "${text.slice(0, 70)}${text.length > 70 ? "…" : ""}"`;
+
+  // (c) interactive-control contract
+  for (const [id, node] of Object.entries(nodes)) {
+    if (node.name === "Interactive") {
+      const def = node.outputs?.interactiveOutput?.connections ?? [];
+      if (def.length) problems.push(`Interactive #${id} has ${def.length} default interactiveOutput connection(s) — a press would execute the next stage twice`);
+      const btn = node.outputs?.interactiveOutputButton?.connections ?? [];
+      const list = node.outputs?.interactiveOutputListMessage?.connections ?? [];
+      if ((btn.length > 0) === (list.length > 0)) {
+        problems.push(`Interactive #${id} must use exactly one control family (buttons XOR list) — has ${btn.length} buttons, ${list.length} list connections`);
+      }
+    }
+    if (node.name === "Inline Button" || node.name === "Rows") {
+      const d = node.data ?? {};
+      if ("value" in d || "postback_text" in d) {
+        problems.push(`${node.name} #${id} carries Start-a-Flow metadata (value/postback_text) — banned: a flow may never be started from an intake answer control`);
+      }
+      if (node.name === "Inline Button" && d.buttonType !== "new_post_back") {
+        problems.push(`Inline Button #${id} buttonType "${d.buttonType}" — expected "new_post_back"`);
+      }
+      const fieldName = d.customFieldSelectedOptionText ?? "";
+      const allowed = APPROVED_CONTROL_LABELS[fieldName];
+      if (!allowed) {
+        problems.push(`${node.name} #${id} is bound to unexpected field "${fieldName}"`);
+      } else {
+        const label = node.name === "Rows" ? d.title : d.buttonText;
+        if (!allowed.includes(label)) {
+          problems.push(`${node.name} #${id} label "${label}" is not an approved value for ${fieldName} [${allowed.join(", ")}]`);
+        }
+      }
+      const fwdKey = node.name === "Rows" ? "rowOutput" : "buttonOutput";
+      const fwd = node.outputs?.[fwdKey]?.connections ?? [];
+      if (fwd.length !== 1) {
+        problems.push(`${node.name} #${id} has ${fwd.length} forward connection(s) on ${fwdKey} — exactly one is required (one press = one field assignment = one transition)`);
+      }
+      const fwdTarget = fwd[0] ? nodes[String(fwd[0].node)] : null;
+      if (fwdTarget?.name === "Condition") {
+        problems.push(`${node.name} #${id} routes into Condition #${fwd[0].node} — Conditions accept one inbound TOTAL; route through a Text/wrapper instead`);
+      }
+    }
+  }
+
+  if (problems.length) {
+    throw new Error(`graph contract violation(s):\n  - ${problems.join("\n  - ")}`);
+  }
 }
 
-const PORT_HUMAN = {
-  conditionOutputTrue: "TRUE output",
-  conditionOutputFalse: "FALSE output",
-  textOutput: "output",
-  userInputFlowOutput: "output",
-  httpApiOutput: "output",
-  userInputFlowSingleOutputFinalReply: "final-reply output",
-};
+// ─── post-import verification checklist (replaces the redraw checklist) ─────
 
-function posOf(nodes, id) {
-  const [x, y] = nodes[String(id)].position;
-  return `(${Math.round(x)}, ${Math.round(y)})`;
+function controlsOf(nodes, interactiveId) {
+  const node = nodes[String(interactiveId)];
+  const buttons = (node.outputs?.interactiveOutputButton?.connections ?? []).map((c) => nodes[String(c.node)]);
+  const rows = [];
+  for (const kb of (node.outputs?.interactiveOutputListMessage?.connections ?? []).map((c) => nodes[String(c.node)])) {
+    for (const sec of (kb.outputs?.quickReplyOutput?.connections ?? []).map((c) => nodes[String(c.node)])) {
+      for (const row of (sec.outputs?.sectionOutputRows?.connections ?? []).map((c) => nodes[String(c.node)])) rows.push(row);
+    }
+  }
+  return [...buttons, ...rows];
 }
 
-function renderRedrawChecklist(flow, plan, artifactSha256) {
+function renderImportChecklist(flow, artifactSha256) {
   const nodes = flow.nodes;
   const lines = [];
-  lines.push("# Oraya Natural Stay Intake v6 — operator redraw checklist (hybrid import repair)");
+  lines.push("# Oraya Natural Stay Intake v6 — post-import verification checklist (interactive candidate)");
   lines.push("");
-  lines.push("**Machine-generated by `scripts/generate-whatchimp-v6.mjs` — do not edit by hand; it is regenerated with the artifact and verified against it by an exact set-equality assertion.**");
+  lines.push("**Machine-generated by `scripts/generate-whatchimp-v6.mjs` — do not edit by hand; it is regenerated with the artifact.**");
   lines.push("");
   lines.push(`**Applies to exactly:** \`Oraya_natural_intake_v6.txt\` with SHA-256 \`${artifactSha256}\`. If your file's hash differs, regenerate this checklist.`);
   lines.push("");
-  lines.push("**Why this exists:** authenticated round trip #1 (2026-07-03) proved WhatChimp's import keeps only the FIRST serialized connection per input socket and silently drops the rest (evidence: `roundtrips/ROUNDTRIP_1_FINDINGS.md`). Round trip #3 proved a Condition accepts **one inbound connection TOTAL, of any source type** (evidence: `roundtrips/ROUNDTRIP_3_FINDINGS.md`), so this candidate clones every branch-local tail AND every Condition that would otherwise receive a second inbound connection — the " + String(plan.length) + " remaining merge connections below are exactly what you re-draw after import, and **none of them targets a Condition**. Every item uses only a live-proven editor operation (Condition → question flow, Text → question flow, Condition → Text); the generator refuses to emit this file otherwise. If the editor rejects ANY connection below, stop and report — do not insert nodes to work around it.");
+  lines.push("**There are ZERO connections to draw.** This candidate serializes convergence ONLY where every parent is an Inline Button / list Row — the class the operator proved persists (2026-07-04 saved/reopened export: two Inline Buttons linked to `custom_57693`/`oraya_guest_count` converging into the next stage; fixture `roundtrips/Oraya_natural_intake_v6.button-evidence.saved-reexport.txt`). Whether a fresh IMPORT preserves serialized postback convergence is exactly what step 1 verifies — if anything arrives loose, STOP and report; do not draw around it.");
   lines.push("");
-  lines.push("**When:** on a fresh disposable TEST bot, immediately after importing the artifact and BEFORE any testing: draw all connections below, then Save → close the editor → reopen → export → verify (commands at the bottom).");
+  lines.push("## 1. Import verification (fresh disposable bot)");
   lines.push("");
-  lines.push("**Safety of the un-repaired import** (until you finish drawing): the complete happy path already works (all details extracted → bedroom OK → confirmation → handoff); no message ever claims a confirmed booking; the opening question always shows `https://stayoraya.com/book` before anything else, so no conversation is ever link-less. But the not-yet-drawn branches stop silently — never expose the bot to guests before the redraw + verification below. Production stays untouched.");
+  lines.push("- [ ] Import `Oraya_natural_intake_v6.txt` into a **fresh disposable test bot** — the import and the first open must show **no warning** (any \"infinite loop\" or similar message = stop and report).");
+  lines.push("- [ ] Visually confirm **no loose connectors**: every Interactive's buttons/rows carry a forward line, the shared acknowledgement Texts receive all their inbound lines, and no node dangles.");
   lines.push("");
-  lines.push(`## The ${plan.length} connections to draw`);
+  lines.push("## 2. Click-through — every control writes its exact value and advances exactly once");
   lines.push("");
-  lines.push("Each item: drag a line from the stated OUTPUT of the source node to the (single) INPUT socket of the destination node. Canvas coordinates are from the import file — nodes may shift slightly, so match by the quoted title/text.");
+  lines.push("For each control below: tap it in a test conversation, then open the subscriber's custom fields and confirm the stated field holds the EXACT stated value (the stored value must equal the visible label — the export schema carries no separate value field, so this is the platform behavior being verified). Each press must advance the conversation exactly once (no duplicate next message, no restart of the intake flow).");
   lines.push("");
-  plan.forEach((e, i) => {
-    const dx = nodes[String(e.to)].position[0] - nodes[String(e.from)].position[0];
-    const dy = nodes[String(e.to)].position[1] - nodes[String(e.from)].position[1];
-    const dir = `${dy < -40 ? "above" : dy > 40 ? "below" : "level with"} and ${dx < -40 ? "left of" : dx > 40 ? "right of" : "near"} the source`;
-    lines.push(`- [ ] **${i + 1}.** FROM \`#${e.from}\` ${nodeDocLabel(nodes, e.from)} — **${PORT_HUMAN[e.outKey] ?? e.outKey}** (\`${e.outKey}\`)`);
-    lines.push(`      TO \`#${e.to}\` ${nodeDocLabel(nodes, e.to)} — input socket (\`${e.inKey}\`).`);
-    lines.push(`      Purpose: ${e.purpose}`);
-    lines.push(`      Where: source at canvas ≈ ${posOf(nodes, e.from)}; destination at ≈ ${posOf(nodes, e.to)} (${dir}).`);
-    lines.push(`      Operation: ${drawPairOf(nodes, e).replace(" → ", " output → ")} input — live-proven editor operation (2026-07-03).`);
-  });
-  lines.push("");
-  lines.push("## Hub-by-hub visual map");
-  lines.push("");
-  lines.push("One block per remaining merge point. The first line is the connection the import keeps automatically; every `draw #N` line is an item from the list above.");
-  lines.push("");
-  const byHub = new Map();
-  plan.forEach((e, i) => {
-    if (!byHub.has(e.to)) byHub.set(e.to, []);
-    byHub.get(e.to).push({ ...e, seq: i + 1 });
-  });
-  for (const [hubId, items] of byHub) {
-    const kept = Object.values(flow.nodes[String(hubId)].inputs)[0].connections[0];
-    lines.push(`### Hub \`#${hubId}\` — ${HUB_DESCRIPTIONS[hubId] ?? nodeDocLabel(nodes, hubId)} ≈ ${posOf(nodes, hubId)}`);
-    lines.push("```");
-    lines.push(`  #${kept.node} ${PORT_HUMAN[kept.output] ?? kept.output}  ──────────────►  #${hubId}   (kept automatically by the import)`);
-    for (const it of items) {
-      lines.push(`  #${it.from} ${PORT_HUMAN[it.outKey] ?? it.outKey}  ── draw #${it.seq} ──►  #${hubId}`);
+  const interactives = Object.entries(nodes).filter(([, n]) => n.name === "Interactive");
+  for (const [id, n] of interactives) {
+    lines.push(`### Interactive \`#${id}\` — "${(n.data?.textMessage ?? "").toString().replace(/\s+/g, " ").slice(0, 70)}"`);
+    for (const control of controlsOf(nodes, id)) {
+      const d = control.data ?? {};
+      const label = control.name === "Rows" ? d.title : d.buttonText;
+      const fwd = control.name === "Rows" ? control.outputs?.rowOutput?.connections?.[0] : control.outputs?.buttonOutput?.connections?.[0];
+      const dst = fwd ? nodes[String(fwd.node)] : null;
+      lines.push(`- [ ] \`#${control.id}\` ${control.name} **"${label}"** → writes \`${d.customFieldSelectedOptionText}\` (\`${d.customFieldId}\`) = \`${label}\`; advances once into #${fwd?.node} ${dst?.name ?? "?"}.`);
     }
-    lines.push("```");
     lines.push("");
   }
-  lines.push(`## Verify after drawing all ${plan.length}`);
+  lines.push("## 3. Persistence + export verification");
   lines.push("");
-  lines.push("Save → close the editor completely → reopen → export, then run BOTH (each must succeed):");
+  lines.push("- [ ] Save → close the editor completely → reopen: every connection from steps 1–2 must still be present; re-click at least one control per Interactive.");
+  lines.push("- [ ] Export the flow and verify mechanically (both must succeed):");
   lines.push("");
   lines.push("```");
   lines.push("node scripts/compare-whatchimp-roundtrip.mjs Oraya_natural_intake_v6.txt <re-export>   # must print PRESERVED, exit 0");
   lines.push("node scripts/validate-whatchimp-flow.mjs <re-export> --strict-binding                  # must report 0 errors, exit 0");
   lines.push("```");
   lines.push("");
-  lines.push("If the comparator reports ANY lost edge or unexpected terminal, or the validator reports a `single-parent-contract` hub mismatch, a drawn connection is missing or wrong — fix it in the editor and re-export before any live testing (checklist section C).");
+  lines.push("- [ ] Run one complete conversation to the final summary and confirm the saved lead (dates, guests, bedrooms, villa) in `/admin/leads` + Supabase `whatsapp_leads.raw_payload`.");
+  lines.push("");
+  lines.push("If ANY control is refused, mis-writes its field, double-advances, restarts the flow, or loses its line after save/reopen — **stop and report immediately**; that is new platform evidence. Do not insert nodes or draw around it. Production stays untouched.");
   lines.push("");
   return lines.join("\n");
 }
@@ -962,27 +824,30 @@ function renderRedrawChecklist(flow, plan, artifactSha256) {
 // ─── CLI ────────────────────────────────────────────────────────────────────
 
 function main() {
-  const [input, output, redrawOut] = process.argv.slice(2);
+  const [input, output, checklistOut] = process.argv.slice(2);
   if (!input || !output) {
-    console.error("usage: node scripts/generate-whatchimp-v6.mjs <v5.5-input> <v6-output> [<redraw-checklist.md>]");
+    console.error("usage: node scripts/generate-whatchimp-v6.mjs <v5.5-input> <v6-output> [<import-checklist.md>]");
     process.exit(2);
   }
   const flow = JSON.parse(readFileSync(input, "utf8"));
   const v6 = generateV6(flow);
-  const plan = buildRedrawPlan(v6);
-  assertEditorContracts(v6, plan);
+  assertGraphContracts(v6);
   const serialized = JSON.stringify(v6);
   writeFileSync(output, serialized, "utf8");
   const sha = createHash("sha256").update(serialized, "utf8").digest("hex").toUpperCase();
-  if (redrawOut) {
-    writeFileSync(redrawOut, renderRedrawChecklist(v6, plan, sha), "utf8");
+  if (checklistOut) {
+    writeFileSync(checklistOut, renderImportChecklist(v6, sha), "utf8");
   }
   const nodeCount = Object.keys(v6.nodes).length;
   let edges = 0;
+  let interactives = 0;
+  let controls = 0;
   for (const n of Object.values(v6.nodes)) {
+    if (n.name === "Interactive") interactives += 1;
+    if (n.name === "Inline Button" || n.name === "Rows") controls += 1;
     for (const o of Object.values(n.outputs ?? {})) edges += (o.connections ?? []).length;
   }
-  console.log(`wrote ${output}: ${nodeCount} nodes, ${edges} output connections, ${plan.length} operator-redrawn hub edges${redrawOut ? `, checklist ${redrawOut}` : ""}`);
+  console.log(`wrote ${output}: ${nodeCount} nodes, ${edges} output connections, ${interactives} Interactive, ${controls} buttons/rows, 0 operator redraws${checklistOut ? `, checklist ${checklistOut}` : ""}`);
   console.log(`artifact sha256: ${sha}`);
 }
 

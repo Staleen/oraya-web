@@ -1,24 +1,34 @@
 #!/usr/bin/env node
 /**
  * Phase 16A — deterministic conversation simulator for the Oraya Natural Stay
- * Intake WhatChimp flow. Abstract-interprets the exported graph against
- * scripted guest answers and stubbed HTTP-API fixture responses — it NEVER
- * calls production Butler endpoints and requires no secrets.
- *
- * Usage:
- *   node scripts/simulate-whatchimp-flow.mjs <flow-file> [--profile <profile.json>]
+ * Intake WhatChimp flow (interactive-controls candidate). Abstract-interprets
+ * the exported graph against scripted guest answers and stubbed HTTP-API
+ * fixture responses — it NEVER calls production Butler endpoints and requires
+ * no secrets.
  *
  * Models: custom-field state (including stale values from abandoned
- * attempts), question answers, quick-reply choices, HTTP-API fixture
- * responses applied through the documented response→field mappings
- * (`extracted_text.*` writes the literal string "null" for missing fields —
- * the current-attempt mechanism that prevents stale-field leakage),
- * condition evaluation, visited nodes, and terminal outcomes.
+ * attempts), question answers, Interactive controls (Inline Buttons and list
+ * Keyboard → Sections → Rows chains — a click writes the control's linked
+ * custom field with the control's LABEL, exactly like the operator's
+ * authenticated schema, then follows the control's single forward
+ * connection), HTTP-API fixture responses applied through the documented
+ * response→field mappings (`extracted_text.*` writes the literal string
+ * "null" for missing fields — the current-attempt mechanism that prevents
+ * stale-field leakage), condition evaluation, visited nodes, clicked
+ * controls, and terminal outcomes.
  *
- * Every scenario additionally auto-asserts the two global invariants:
+ * Every scenario additionally auto-asserts the global invariants:
  *   - the conversation terminates on a guest-safe approved Text message
  *     (never on an API node, condition node, question wrapper, or "Got it.");
+ *   - every clicked control writes its exact label, has NO Start-a-Flow
+ *     metadata, and has exactly ONE forward transition (one press = one
+ *     field assignment = one downstream step — no duplicate execution);
+ *   - no Interactive carries a default-output connection (double execution);
  *   - the step budget is not exhausted (no runaway loops).
+ *
+ * KNOWN PLATFORM LIMIT (documented, not simulated): an Interactive waits for
+ * a control press — a free-typed reply does not advance the flow. The
+ * date-conversation questions remain free-text User Input Flow questions.
  *
  * VERIFICATION-LEVEL CONTRACT — what a passing scenario does and does not
  * prove (see artifacts/whatchimp/V6_DEPENDENCIES.md "Payload-persistence
@@ -26,10 +36,13 @@
  *   1. custom field captured  — modeled here (field state assertions);
  *   2. API submission occurred — modeled here (the Lead Submit NODE fired);
  *   3. exact field included in the external API request body — NOT modeled:
- *      WhatChimp request bodies live outside the flow export, so e.g.
- *      `oraya_guest_followup` reaching `whatsapp_leads.raw_payload` requires
- *      the authenticated operator body edit plus the Supabase verification
- *      in the round-trip checklist. This simulator never claims level 3.
+ *      WhatChimp request bodies live outside the flow export. This simulator
+ *      never claims level 3, and it cannot prove the live platform stores a
+ *      control's label into its linked field — that is the human click-through
+ *      checklist (artifacts/whatchimp/V6_REDRAW_CHECKLIST.md).
+ *
+ * Usage:
+ *   node scripts/simulate-whatchimp-flow.mjs <flow-file> [--profile <profile.json>]
  *
  * Exit code 0 when all scenarios pass; 1 otherwise.
  */
@@ -72,6 +85,31 @@ export function evalCondition(data, fields) {
   return data.any_match ? results.some(Boolean) : results.every(Boolean);
 }
 
+/** All controls of an Interactive: Inline Buttons on interactiveOutputButton
+ * plus list Rows reached through Keyboard → Sections → sectionOutputRows. */
+export function controlsOfInteractive(nodes, node) {
+  const controls = [];
+  for (const c of outConnections(node, "interactiveOutputButton")) {
+    const b = nodes[String(c.node)];
+    if (b) controls.push(b);
+  }
+  for (const c of outConnections(node, "interactiveOutputListMessage")) {
+    const kb = nodes[String(c.node)];
+    for (const s of outConnections(kb ?? {}, "quickReplyOutput")) {
+      const sec = nodes[String(s.node)];
+      for (const r of outConnections(sec ?? {}, "sectionOutputRows")) {
+        const row = nodes[String(r.node)];
+        if (row) controls.push(row);
+      }
+    }
+  }
+  return controls;
+}
+
+export function controlLabel(control) {
+  return (control.name === "Rows" ? control.data?.title : control.data?.buttonText) ?? "";
+}
+
 export function runScenario(flow, profile, scenario) {
   const nodes = flow.nodes;
   const failures = [];
@@ -83,6 +121,7 @@ export function runScenario(flow, profile, scenario) {
   const asked = [];
   const messages = [];
   const apiCalls = [];
+  const clicks = []; // { node, label, field } — every control press
   let leadSubmits = 0; // successful Lead Submit calls (fixture not failed)
   let leadAttempts = 0; // Lead Submit nodes fired, success or failure
   // pre-API safety-link ordering: the guest must already HOLD the canonical
@@ -148,12 +187,6 @@ export function runScenario(flow, profile, scenario) {
       if (input.expect && !question.toLowerCase().includes(input.expect.toLowerCase())) {
         fail(`expected question containing "${input.expect}" but got "${question.slice(0, 120)}"`);
       }
-      if (input.expectChoicesInclude) {
-        const choices = node.data?.multipleChoices ?? [];
-        for (const c of input.expectChoicesInclude) {
-          if (!choices.includes(c)) fail(`question "${question.slice(0, 60)}" is missing expected choice "${c}" (has: ${choices.join(", ")})`);
-        }
-      }
       const fieldName = (node.data?.customFieldSelectedOptionText ?? "").trim();
       if (fieldName && fieldName !== "Please select") fields.set(fieldName, input.answer);
       const next = firstOut(node);
@@ -218,20 +251,56 @@ export function runScenario(flow, profile, scenario) {
     }
 
     if (name === "Interactive") {
-      messages.push(interpolate(node.data?.textMessage ?? "", fields));
-      const input = inputs.shift();
-      if (!input) { fail(`ran out of scripted answers at interactive #${current}`); break; }
-      const buttons = outConnections(node, "interactiveOutputButton")
-        .map((c) => nodes[String(c.node)])
-        .filter(Boolean);
-      const chosen = buttons.find((b) => (b.data?.buttonText ?? "") === input.answer);
-      if (!chosen) {
-        fail(`interactive #${current} has no button "${input.answer}" (has: ${buttons.map((b) => b.data?.buttonText).join(", ")})`);
+      const text = interpolate(node.data?.textMessage ?? "", fields);
+      messages.push(text);
+      noteShown(text);
+      // duplicate-execution guard: the default output must stay empty — the
+      // press-driven control transition is the ONLY continuation.
+      const defaultOut = outConnections(node, "interactiveOutput");
+      if (defaultOut.length) {
+        fail(`interactive #${current} has ${defaultOut.length} default interactiveOutput connection(s) — a press would execute the next stage twice`);
+      }
+      const controls = controlsOfInteractive(nodes, node);
+      if (!controls.length) {
+        fail(`interactive #${current} has no controls`);
         break;
       }
-      const next = firstOut(chosen);
-      if (!next) { fail(`button "${input.answer}" has no destination`); break; }
-      current = String(next.node);
+      const input = inputs.shift();
+      if (!input) {
+        fail(`ran out of scripted answers at interactive "${text.slice(0, 60)}"`);
+        break;
+      }
+      if (input.expect && !text.toLowerCase().includes(input.expect.toLowerCase())) {
+        fail(`expected interactive containing "${input.expect}" but got "${text.slice(0, 120)}"`);
+      }
+      if (input.expectChoicesInclude) {
+        for (const c of input.expectChoicesInclude) {
+          if (!controls.some((b) => controlLabel(b) === c)) {
+            fail(`interactive "${text.slice(0, 60)}" is missing expected choice "${c}" (has: ${controls.map(controlLabel).join(", ")})`);
+          }
+        }
+      }
+      const chosen = controls.find((b) => controlLabel(b) === input.answer);
+      if (!chosen) {
+        fail(`interactive #${current} has no control "${input.answer}" (has: ${controls.map(controlLabel).join(", ")})`);
+        break;
+      }
+      const d = chosen.data ?? {};
+      if ("value" in d || "postback_text" in d) {
+        fail(`control "${input.answer}" (#${chosen.id}) carries Start-a-Flow metadata — an intake answer control must never start a flow`);
+      }
+      // the click writes the control's linked field with the control's LABEL
+      const fieldName = (d.customFieldSelectedOptionText ?? "").trim();
+      if (fieldName && fieldName !== "Select") fields.set(fieldName, controlLabel(chosen));
+      clicks.push({ node: String(chosen.id), label: controlLabel(chosen), field: fieldName });
+      visited.push(String(chosen.id));
+      const fwdKey = chosen.name === "Rows" ? "rowOutput" : "buttonOutput";
+      const fwd = outConnections(chosen, fwdKey);
+      if (fwd.length !== 1) {
+        fail(`control "${input.answer}" (#${chosen.id}) has ${fwd.length} forward connection(s) on ${fwdKey} — exactly one press-driven transition is required`);
+        break;
+      }
+      current = String(fwd[0].node);
       continue;
     }
 
@@ -239,7 +308,7 @@ export function runScenario(flow, profile, scenario) {
     break;
   }
 
-  // global invariants (scenarios 29 & 30 of the required list)
+  // global invariants
   if (terminalNodeName !== "Text") {
     fail(`conversation ended on a ${terminalNodeName ?? "missing"} node — must end on an approved guest-facing Text message`);
   } else {
@@ -286,6 +355,9 @@ export function runScenario(flow, profile, scenario) {
   for (const s of ex.messagesInclude ?? []) {
     if (!messages.some((m) => m.toLowerCase().includes(s.toLowerCase()))) fail(`expected a bot message containing "${s}"`);
   }
+  for (const s of ex.messagesExclude ?? []) {
+    if (messages.some((m) => m.toLowerCase().includes(s.toLowerCase()))) fail(`bot message containing "${s}" must NOT be shown in this scenario`);
+  }
   for (const [fieldName, value] of Object.entries(ex.fieldEquals ?? {})) {
     if ((fields.get(fieldName) ?? "") !== value) fail(`field ${fieldName} = "${fields.get(fieldName) ?? ""}", expected "${value}"`);
   }
@@ -293,7 +365,7 @@ export function runScenario(flow, profile, scenario) {
   if (fixtures.length) fail(`${fixtures.length} API fixture(s) were never consumed`);
   // node-level path assertion: every id in each sequence must be visited IN
   // ORDER (ordered subsequence of the walk). This proves the expected
-  // question nodes and their downstream nodes were actually entered — not
+  // control nodes and their downstream nodes were actually entered — not
   // merely that some terminal was eventually reached.
   for (const seq of ex.visitsInOrder ?? []) {
     let idx = 0;
@@ -305,7 +377,7 @@ export function runScenario(flow, profile, scenario) {
     }
   }
 
-  return { failures, asked, messages, fields, leadSubmits, leadAttempts, terminalText, terminalNodeId: current, apiCalls, visited };
+  return { failures, asked, messages, fields, leadSubmits, leadAttempts, terminalText, terminalNodeId: current, apiCalls, visited, clicks };
 }
 
 // ─── fixtures / scenario helpers ────────────────────────────────────────────
@@ -323,17 +395,13 @@ const norm = (checkIn, checkOut, villa, guests) => ({
 });
 
 const stay = (answer) => ({ expect: "tell me what you already know", answer });
-const bedroom = (answer) => ({ expect: "How many bedrooms would you like", answer });
-const guests = (answer) => ({ expect: "How many guests will be staying overnight", answer });
-const confirmYes = { expect: "Does this look right", answer: "Looks right" };
-const confirmEdit = { expect: "Does this look right", answer: "Edit" };
-const whatsappTail = [
-  { expect: "How would you like to continue", answer: "Continue on WhatsApp" },
-  { expect: "full name", answer: "David Guest" },
-];
+const guestClick = (answer) => ({ expect: "How many guests will be staying overnight", answer });
+const bedroomClick = (answer) => ({ expect: "How many bedrooms would you like", answer });
+const villaClick = (answer) => ({ expect: "Which villa would you prefer", answer });
 const escName = { expect: "full name", answer: "David Guest" };
-const NOT_CONFIRMED = "not confirmed yet";
+const NOT_CONFIRMED = "not a confirmed booking";
 const ESC_TERMINAL = ["passed your request to the Oraya team", "not a confirmed booking yet"];
+const SUMMARY_TERMINAL = ["team will review availability and follow up", "not a confirmed booking yet"];
 
 const STALE_ALL = {
   oraya_check_in: "2026-07-10",
@@ -342,184 +410,389 @@ const STALE_ALL = {
   oraya_guest_count: "3",
   oraya_bedroom_count: "3 bedrooms",
   oraya_stay_followup: "july 10 to july 11",
-  oraya_dates_confirmed_text: "Looks right",
+  oraya_guest_followup: "12",
 };
 
-// ─── the 30 required scenarios ──────────────────────────────────────────────
+// ─── the scenario matrix ────────────────────────────────────────────────────
 
 export function buildScenarios() {
   return [
+    // ── extraction skips the corresponding Interactive question ─────────────
     {
-      name: "S01 complete request: Mechmech, valid dates, 3 guests, 3 bedrooms → confirmation → lead",
-      inputs: [stay("Villa Mechmech July 10 to July 11 for 3 guests"), bedroom("3 bedrooms"), confirmYes, ...whatsappTail],
+      name: "S01 everything extracted (villa+dates+3 guests) → only bedrooms asked → lead → summary",
+      inputs: [stay("Villa Mechmech July 10 to July 11 for 3 guests"), bedroomClick("2 bedrooms")],
       fixtures: [
         { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "3") },
+        { api: "6961", response: { prefill_url: "https://stayoraya.com/book?h=TESTTOKEN123" } },
+      ],
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: [...SUMMARY_TERMINAL, "Check-in: 2026-07-10", "Check-out: 2026-07-11", "Villa: Villa Mechmech", "Overnight guests: 3", "Bedrooms: 2 bedrooms", "TESTTOKEN123"],
+        askedExcludes: ["full name", "How would you like to continue"],
+        messagesExclude: ["How many guests will be staying overnight", "Which villa would you prefer", "Does this look right"],
+        fieldEquals: { oraya_guest_count: "3", oraya_bedroom_count: "2 bedrooms" },
+        // stay q → normalize → date gates → guest gate (known) → supported
+        // gate (True) → bedroom stage b1 → bedroom-ack → villa gate (known)
+        // → Lead Submit B → summary B
+        visitsInOrder: [["400", "401", "410", "411", "440", "602", "875", "877", "930", "470", "941", "942"]],
+      },
+    },
+    {
+      name: "S02 everything extracted → bedroom \"1 bedroom\" writes the exact label",
+      inputs: [stay("Byblos July 10 to 11, 2 guests"), { ...bedroomClick("1 bedroom"), expectChoicesInclude: ["1 bedroom", "2 bedrooms", "3 bedrooms"] }],
+      fixtures: [
+        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Byblos", "2") },
+        { api: "6961", response: {} },
+      ],
+      expect: { leadSubmitted: true, terminalIncludes: SUMMARY_TERMINAL, fieldEquals: { oraya_bedroom_count: "1 bedroom" } },
+    },
+    {
+      name: "S03 everything extracted → bedroom \"3 bedrooms\" writes the exact label (no capacity re-ask for 2 guests)",
+      inputs: [stay("Mechmech July 10 to 11 for 2"), bedroomClick("3 bedrooms")],
+      fixtures: [
+        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "2") },
+        { api: "6961", response: {} },
+      ],
+      expect: { leadSubmitted: true, terminalIncludes: SUMMARY_TERMINAL, fieldEquals: { oraya_bedroom_count: "3 bedrooms" }, messagesExclude: ["won’t quite fit"] },
+    },
+    {
+      name: "S04 villa missing → villa Interactive asked → \"Villa Mechmech\" button writes the exact canonical value",
+      inputs: [stay("July 10 to July 12 for 4 guests"), bedroomClick("2 bedrooms"), { ...villaClick("Villa Mechmech"), expectChoicesInclude: ["Villa Mechmech", "Villa Byblos"] }],
+      fixtures: [
+        { api: "7466", response: norm("2026-07-10", "2026-07-12", null, "4") },
         { api: "6961", response: {} },
       ],
       expect: {
         leadSubmitted: true,
-        terminalIncludes: [NOT_CONFIRMED],
-        askedIncludes: ["Overnight guests: 3", "Bedrooms: 3 bedrooms"],
-        askedExcludes: ["How many guests will be staying overnight", "Which villa"],
-        fieldEquals: { oraya_guest_count: "3", oraya_bedroom_count: "3 bedrooms" },
+        terminalIncludes: [...SUMMARY_TERMINAL, "Villa: Villa Mechmech"],
+        fieldEquals: { oraya_villa: "Villa Mechmech" },
+        // bedroom b1 → ack → villa gate (missing) → villa Interactive → button
+        // #936 → villa-ack → Lead Submit A → summary A
+        visitsInOrder: [["602", "875", "930", "470", "935", "936", "938", "939", "940"]],
       },
     },
     {
-      name: "S02 3 guests: bedroom options include 2 and 3; selecting 3 succeeds (website handoff w/ prefill)",
-      inputs: [
-        stay("Mechmech July 10 to 11, 3 guests"),
-        { expect: "How many bedrooms would you like", expectChoicesInclude: ["1 bedroom", "2 bedrooms", "3 bedrooms"], answer: "3 bedrooms" },
-        confirmYes,
-        { expect: "How would you like to continue", answer: "Finish on website" },
-      ],
+      name: "S05 villa missing → \"Villa Byblos\" button writes the exact canonical value",
+      inputs: [stay("July 10 to July 12 for 4 guests"), bedroomClick("3 bedrooms"), villaClick("Villa Byblos")],
       fixtures: [
-        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "3") },
-        { api: "7459", response: { prefill_url: "https://stayoraya.com/book?h=TESTTOKEN123" } },
-      ],
-      expect: { leadSubmitted: true, terminalIncludes: ["TESTTOKEN123", "not a confirmed booking"] },
-    },
-    {
-      name: "S03 villa only → asks dates, exact guests, bedrooms → confirmation",
-      inputs: [
-        stay("Villa Byblos please"),
-        { expect: "check-in and check-out dates", answer: "July 10 to July 12" },
-        guests("2"),
-        bedroom("1 bedroom"),
-        confirmYes,
-        ...whatsappTail,
-      ],
-      fixtures: [
-        { api: "7466", response: norm(null, null, "Villa Byblos", null) },
-        { api: "8101", response: norm("2026-07-10", "2026-07-12", "Villa Byblos", null) },
+        { api: "7466", response: norm("2026-07-10", "2026-07-12", null, "4") },
         { api: "6961", response: {} },
       ],
       expect: {
         leadSubmitted: true,
-        terminalIncludes: [NOT_CONFIRMED],
-        askedExcludes: ["Which villa"],
-        fieldEquals: { oraya_villa: "Villa Byblos", oraya_guest_count: "2" },
+        terminalIncludes: [...SUMMARY_TERMINAL, "Villa: Villa Byblos"],
+        fieldEquals: { oraya_villa: "Villa Byblos" },
+        visitsInOrder: [["935", "937", "938", "939", "940"]],
       },
     },
+
+    // ── guest list: every row of the initial stage writes its exact value ───
     {
-      name: "S04 dates only → asks exact guests, bedrooms, villa → confirmation",
-      inputs: [
-        stay("July 10 to July 12"),
-        guests("4"),
-        bedroom("2 bedrooms"),
-        { expect: "Which villa", answer: "Villa Mechmech" },
-        confirmYes,
-        ...whatsappTail,
-      ],
+      name: "S06 guests missing → list row \"1\" writes 1 and advances once",
+      inputs: [stay("Mechmech July 10 to 11"), { ...guestClick("1"), expectChoicesInclude: ["1", "2", "3", "4", "5", "6", "More than 6"] }, bedroomClick("1 bedroom")],
       fixtures: [
-        { api: "7466", response: norm("2026-07-10", "2026-07-12", null, null) },
+        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", null) },
         { api: "6961", response: {} },
       ],
       expect: {
         leadSubmitted: true,
-        terminalIncludes: [NOT_CONFIRMED],
-        askedIncludes: ["Which villa", "How many guests will be staying overnight", "How many bedrooms"],
-        fieldEquals: { oraya_villa: "Villa Mechmech", oraya_guest_count: "4", oraya_bedroom_count: "2 bedrooms" },
-        // full initial path, node by node: stay q → normalize → guest gate →
-        // guest q → ack → supported gate → bedroom q → ack → capacity check →
-        // villa-gate clone #758 (2-bedrooms-fit exit; corrected-rule cascade) →
-        // villa q → ack → confirmation q → ack → Looks right →
-        // handoff q → WhatsApp branch → name q → Lead Submit → terminal
-        visitsInOrder: [[
-          "400", "401", "440", "600", "601", "603", "766", "610", "611", "624", "612",
-          "758", "480", "481", "604", "490", "491", "492", "493", "494",
-          "70", "71", "72", "74", "75", "8", "9", "7",
-        ]],
+        terminalIncludes: [...SUMMARY_TERMINAL, "Overnight guests: 1"],
+        fieldEquals: { oraya_guest_count: "1" },
+        // guest gate (missing) → guest list stage g0 → row #803 → guest-ack →
+        // bedroom stage b0 → bedroom-ack → villa gate (known) → completion B
+        visitsInOrder: [["440", "800", "803", "860", "870", "871", "930", "470", "941", "942"]],
       },
     },
     {
-      name: "S05 check-in only → asks checkout; valid checkout continues",
-      inputs: [
-        stay("Villa Mechmech from July 10, 2 of us"),
-        { expect: "check-out date", answer: "July 12" },
-        bedroom("1 bedroom"),
-        confirmYes,
-        ...whatsappTail,
-      ],
+      name: "S07 guest row \"2\" → bedroom b0 \"2 bedrooms\" → villa asked",
+      inputs: [stay("July 10 to 11"), guestClick("2"), bedroomClick("2 bedrooms"), villaClick("Villa Mechmech")],
       fixtures: [
-        { api: "7466", response: norm("2026-07-10", null, "Villa Mechmech", "2") },
-        { api: "8101", response: norm("2026-07-10", "2026-07-12", "Villa Mechmech", "2") },
+        { api: "7466", response: norm("2026-07-10", "2026-07-11", null, null) },
         { api: "6961", response: {} },
       ],
-      expect: { leadSubmitted: true, terminalIncludes: [NOT_CONFIRMED], fieldEquals: { oraya_check_out: "2026-07-12" } },
+      expect: { leadSubmitted: true, terminalIncludes: SUMMARY_TERMINAL, fieldEquals: { oraya_guest_count: "2", oraya_villa: "Villa Mechmech" }, visitsInOrder: [["800", "804", "860", "870", "872", "930", "470", "935"]] },
     },
     {
-      name: "S06 checkout missing → asks checkout and continues after valid answer (5 guests, 3 bedrooms)",
-      inputs: [
-        stay("Byblos July 20, five guests"),
-        { expect: "check-out date", answer: "July 23" },
-        bedroom("3 bedrooms"),
-        confirmYes,
-        ...whatsappTail,
-      ],
+      name: "S08 guest row \"3\" → bedroom b0 \"3 bedrooms\"",
+      inputs: [stay("Byblos July 10 to 11"), guestClick("3"), bedroomClick("3 bedrooms")],
       fixtures: [
-        { api: "7466", response: norm("2026-07-20", null, "Villa Byblos", "5") },
-        { api: "8101", response: norm("2026-07-20", "2026-07-23", "Villa Byblos", "5") },
+        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Byblos", null) },
         { api: "6961", response: {} },
       ],
-      expect: { leadSubmitted: true, terminalIncludes: [NOT_CONFIRMED] },
+      expect: { leadSubmitted: true, terminalIncludes: SUMMARY_TERMINAL, fieldEquals: { oraya_guest_count: "3" }, visitsInOrder: [["805", "860", "873", "930"]] },
     },
     {
-      name: "S07 check-in missing (checkout supplied) → asks for the missing date state correctly",
-      inputs: [
-        stay("Villa Byblos until July 12 for 2"),
-        { expect: "check-in and check-out dates", answer: "July 10 to July 12" },
-        bedroom("2 bedrooms"),
-        confirmYes,
-        ...whatsappTail,
-      ],
+      name: "S09 guest row \"4\" writes 4",
+      inputs: [stay("Mechmech July 10 to 11"), guestClick("4"), bedroomClick("2 bedrooms")],
       fixtures: [
-        { api: "7466", response: norm(null, "2026-07-12", "Villa Byblos", "2") },
-        { api: "8101", response: norm("2026-07-10", "2026-07-12", "Villa Byblos", "2") },
+        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", null) },
         { api: "6961", response: {} },
       ],
-      expect: { leadSubmitted: true, terminalIncludes: [NOT_CONFIRMED], fieldEquals: { oraya_check_in: "2026-07-10" } },
+      expect: { leadSubmitted: true, terminalIncludes: SUMMARY_TERMINAL, fieldEquals: { oraya_guest_count: "4" }, visitsInOrder: [["806", "860"]] },
     },
     {
-      name: "S08 both dates missing → asks for dates and refines",
-      inputs: [
-        stay("Mechmech for 2 guests"),
-        { expect: "check-in and check-out dates", answer: "July 10 to July 12" },
-        bedroom("1 bedroom"),
-        confirmYes,
-        ...whatsappTail,
-      ],
+      name: "S10 guest row \"5\" writes 5",
+      inputs: [stay("Mechmech July 10 to 11"), guestClick("5"), bedroomClick("3 bedrooms")],
       fixtures: [
-        { api: "7466", response: norm(null, null, "Villa Mechmech", "2") },
-        { api: "8101", response: norm("2026-07-10", "2026-07-12", "Villa Mechmech", "2") },
+        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", null) },
         { api: "6961", response: {} },
       ],
-      expect: { leadSubmitted: true, terminalIncludes: [NOT_CONFIRMED] },
+      expect: { leadSubmitted: true, terminalIncludes: SUMMARY_TERMINAL, fieldEquals: { oraya_guest_count: "5" }, visitsInOrder: [["807", "860"]] },
     },
     {
-      name: "S09 unreadable date once → retries; valid second response continues",
+      name: "S11 guest row \"6\" writes 6 — no bedroom-capacity re-ask exists in WhatsApp",
+      inputs: [stay("Mechmech July 10 to 11"), guestClick("6"), bedroomClick("1 bedroom")],
+      fixtures: [
+        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", null) },
+        { api: "6961", response: {} },
+      ],
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: [...SUMMARY_TERMINAL, "Overnight guests: 6", "Bedrooms: 1 bedroom"],
+        fieldEquals: { oraya_guest_count: "6", oraya_bedroom_count: "1 bedroom" },
+        messagesExclude: ["won’t quite fit"],
+        visitsInOrder: [["808", "860", "870", "871", "930"]],
+      },
+    },
+
+    // ── More than 6 exits the stay path ──────────────────────────────────────
+    {
+      name: "S12 guest row \"More than 6\" → exact-count ask → team review → escalation lead; no villa/bedroom questions",
+      inputs: [stay("Mechmech July 10 to 11, big group"), guestClick("More than 6"), { expect: "How many guests exactly", answer: "12" }, escName],
+      fixtures: [
+        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", null) },
+        { api: "6961", response: {} },
+      ],
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: ESC_TERMINAL,
+        messagesExclude: ["How many bedrooms would you like", "Which villa would you prefer"],
+        fieldEquals: { oraya_guest_count: "More than 6", oraya_guest_followup: "12" },
+        // overflow row → large-group review subtree → its escalation tail
+        visitsInOrder: [["800", "809", "466", "467", "468", "712", "713", "714", "715"]],
+      },
+    },
+    {
+      name: "S13 EXTRACTED unsupported count (7) → per-branch team review → escalation lead; no stay questions",
+      inputs: [stay("Mechmech July 10 to 11 for 7 guests"), escName],
+      fixtures: [
+        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "7") },
+        { api: "6961", response: {} },
+      ],
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: ESC_TERMINAL,
+        messagesInclude: ["group of 7", "confirm the details with you personally"],
+        messagesExclude: ["How many guests will be staying overnight", "How many bedrooms", "Which villa"],
+        fieldEquals: { oraya_guest_count: "7" },
+        // supported gate (False) → initial extracted-overflow preface → tail
+        visitsInOrder: [["440", "602", "963", "970", "971", "972", "973"]],
+      },
+    },
+    {
+      name: "S14 EXTRACTED unsupported count (12) → same event/human-support outcome",
+      inputs: [stay("a villa for 12 people July 10 to 11"), escName],
+      fixtures: [
+        { api: "7466", response: norm("2026-07-10", "2026-07-11", null, "12") },
+        { api: "6961", response: {} },
+      ],
+      expect: { leadSubmitted: true, terminalIncludes: ESC_TERMINAL, fieldEquals: { oraya_guest_count: "12" }, visitsInOrder: [["602", "963", "973"]] },
+    },
+
+    // ── date-recovery branches: guest stage / bedroom stage / overflow ───────
+    {
+      name: "R01 both dates missing → recovered on follow-up → guest stage g1 row \"2\"",
+      inputs: [stay("Mechmech for us"), { expect: "check-in and check-out dates", answer: "July 10 to July 12" }, guestClick("2"), bedroomClick("1 bedroom")],
+      fixtures: [
+        { api: "7466", response: norm(null, null, "Villa Mechmech", null) },
+        { api: "8101", response: norm("2026-07-10", "2026-07-12", "Villa Mechmech", null) },
+        { api: "6961", response: {} },
+      ],
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: SUMMARY_TERMINAL,
+        fieldEquals: { oraya_check_in: "2026-07-10", oraya_guest_count: "2" },
+        // follow-up → refine → recovered gate (False) → guest-known clone 750
+        // (True: missing) → guest stage g1 → row → shared guest-ack → b0
+        visitsInOrder: [["420", "421", "422", "430", "750", "810", "814", "860", "870"]],
+      },
+    },
+    {
+      name: "R02 dates recovered on follow-up, guests extracted (5) → bedroom stage b2 directly",
+      inputs: [stay("Mechmech for 5 guests"), { expect: "check-in and check-out dates", answer: "July 10 to July 12" }, bedroomClick("2 bedrooms")],
+      fixtures: [
+        { api: "7466", response: norm(null, null, "Villa Mechmech", "5") },
+        { api: "8101", response: norm("2026-07-10", "2026-07-12", "Villa Mechmech", "5") },
+        { api: "6961", response: {} },
+      ],
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: SUMMARY_TERMINAL,
+        messagesExclude: ["How many guests will be staying overnight"],
+        // 750 False → supported clone 751 True → bedroom stage b2
+        visitsInOrder: [["430", "750", "751", "880", "882", "930"]],
+      },
+    },
+    {
+      name: "R03 dates recovered on follow-up, guests extracted UNSUPPORTED (9) → overflow tail e2",
+      inputs: [stay("Mechmech for 9 guests"), { expect: "check-in and check-out dates", answer: "July 10 to July 12" }, escName],
+      fixtures: [
+        { api: "7466", response: norm(null, null, "Villa Mechmech", "9") },
+        { api: "8101", response: norm("2026-07-10", "2026-07-12", "Villa Mechmech", "9") },
+        { api: "6961", response: {} },
+      ],
+      expect: { leadSubmitted: true, terminalIncludes: ESC_TERMINAL, visitsInOrder: [["750", "751", "964", "974", "977"]] },
+    },
+    {
+      name: "R04 dates unreadable once → retry recovers → guest stage g2 row \"More than 6\"",
       inputs: [
-        stay("Mechmech, 3 guests"),
+        stay("Mechmech please"),
         { expect: "check-in and check-out dates", answer: "whenever is fine" },
         { expect: "check-in and check-out dates together", answer: "July 10 to July 15" },
-        bedroom("2 bedrooms"),
-        confirmYes,
-        ...whatsappTail,
+        guestClick("More than 6"),
+        { expect: "How many guests exactly", answer: "10" },
+        escName,
       ],
       fixtures: [
-        { api: "7466", response: norm(null, null, "Villa Mechmech", "3") },
-        { api: "8101", response: norm(null, null, "Villa Mechmech", "3") },
-        { api: "8101", response: norm("2026-07-10", "2026-07-15", "Villa Mechmech", "3") },
+        { api: "7466", response: norm(null, null, "Villa Mechmech", null) },
+        { api: "8101", response: norm(null, null, "Villa Mechmech", null) },
+        { api: "8101", response: norm("2026-07-10", "2026-07-15", "Villa Mechmech", null) },
         { api: "6961", response: {} },
       ],
       expect: {
         leadSubmitted: true,
-        terminalIncludes: [NOT_CONFIRMED],
+        terminalIncludes: ESC_TERMINAL,
         messagesInclude: ["couldn’t read those dates clearly"],
-        fieldEquals: { oraya_check_in: "2026-07-10" },
+        fieldEquals: { oraya_guest_followup: "10", oraya_guest_count: "More than 6" },
+        // retry refine → recovered gate 436 (False) → clone 752 → g2 → overflow row → 466
+        visitsInOrder: [["432", "434", "435", "436", "752", "820", "829", "466", "467", "468", "712"]],
       },
     },
     {
-      name: "S10 unreadable dates twice → complete human escalation (name + lead + not-confirmed)",
+      name: "R05 retry recovers, guests extracted (4) → bedroom stage b3 directly",
+      inputs: [
+        stay("Mechmech, 4 guests"),
+        { expect: "check-in and check-out dates", answer: "whenever" },
+        { expect: "check-in and check-out dates together", answer: "July 10 to July 15" },
+        bedroomClick("3 bedrooms"),
+      ],
+      fixtures: [
+        { api: "7466", response: norm(null, null, "Villa Mechmech", "4") },
+        { api: "8101", response: norm(null, null, "Villa Mechmech", "4") },
+        { api: "8101", response: norm("2026-07-10", "2026-07-15", "Villa Mechmech", "4") },
+        { api: "6961", response: {} },
+      ],
+      expect: { leadSubmitted: true, terminalIncludes: SUMMARY_TERMINAL, visitsInOrder: [["436", "752", "753", "885", "888", "930"]] },
+    },
+    {
+      name: "R06 retry recovers, guests extracted UNSUPPORTED (8) → overflow tail e3",
+      inputs: [
+        stay("Mechmech, 8 of us"),
+        { expect: "check-in and check-out dates", answer: "whenever" },
+        { expect: "check-in and check-out dates together", answer: "July 10 to July 15" },
+        escName,
+      ],
+      fixtures: [
+        { api: "7466", response: norm(null, null, "Villa Mechmech", "8") },
+        { api: "8101", response: norm(null, null, "Villa Mechmech", "8") },
+        { api: "8101", response: norm("2026-07-10", "2026-07-15", "Villa Mechmech", "8") },
+        { api: "6961", response: {} },
+      ],
+      expect: { leadSubmitted: true, terminalIncludes: ESC_TERMINAL, fieldEquals: { oraya_guest_count: "8" }, visitsInOrder: [["753", "965", "978", "981"]] },
+    },
+    {
+      name: "R07 check-out missing → recovered on follow-up → guest stage g3 row \"6\"",
+      inputs: [stay("Mechmech from July 10"), { expect: "check-out date", answer: "July 12" }, guestClick("6"), bedroomClick("3 bedrooms")],
+      fixtures: [
+        { api: "7466", response: norm("2026-07-10", null, "Villa Mechmech", null) },
+        { api: "8101", response: norm("2026-07-10", "2026-07-12", "Villa Mechmech", null) },
+        { api: "6961", response: {} },
+      ],
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: SUMMARY_TERMINAL,
+        fieldEquals: { oraya_check_out: "2026-07-12", oraya_guest_count: "6" },
+        visitsInOrder: [["425", "426", "427", "501", "754", "830", "838", "860", "870"]],
+      },
+    },
+    {
+      name: "R08 check-out recovered, guests extracted (3) → bedroom stage b4 directly",
+      inputs: [stay("Byblos from July 20 for 3"), { expect: "check-out date", answer: "July 23" }, bedroomClick("1 bedroom")],
+      fixtures: [
+        { api: "7466", response: norm("2026-07-20", null, "Villa Byblos", "3") },
+        { api: "8101", response: norm("2026-07-20", "2026-07-23", "Villa Byblos", "3") },
+        { api: "6961", response: {} },
+      ],
+      expect: { leadSubmitted: true, terminalIncludes: SUMMARY_TERMINAL, visitsInOrder: [["501", "754", "755", "890", "891", "930"]] },
+    },
+    {
+      name: "R09 check-out recovered, guests extracted UNSUPPORTED (8) → overflow tail e4",
+      inputs: [stay("Byblos from July 20, 8 guests"), { expect: "check-out date", answer: "July 23" }, escName],
+      fixtures: [
+        { api: "7466", response: norm("2026-07-20", null, "Villa Byblos", "8") },
+        { api: "8101", response: norm("2026-07-20", "2026-07-23", "Villa Byblos", "8") },
+        { api: "6961", response: {} },
+      ],
+      expect: { leadSubmitted: true, terminalIncludes: ESC_TERMINAL, visitsInOrder: [["755", "966", "982", "985"]] },
+    },
+    {
+      name: "R10 check-out unreadable once → retry recovers → guest stage g4 row \"5\"",
+      inputs: [
+        stay("Byblos from July 20"),
+        { expect: "check-out date", answer: "soonish" },
+        { expect: "check-in and check-out dates together", answer: "July 20 to July 23" },
+        guestClick("5"),
+        bedroomClick("2 bedrooms"),
+      ],
+      fixtures: [
+        { api: "7466", response: norm("2026-07-20", null, "Villa Byblos", null) },
+        { api: "8101", response: norm("2026-07-20", null, "Villa Byblos", null) },
+        { api: "8101", response: norm("2026-07-20", "2026-07-23", "Villa Byblos", null) },
+        { api: "6961", response: {} },
+      ],
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: SUMMARY_TERMINAL,
+        fieldEquals: { oraya_guest_count: "5" },
+        visitsInOrder: [["503", "507", "506", "505", "756", "840", "847", "860", "870"]],
+      },
+    },
+    {
+      name: "R11 check-out retry recovers, guests extracted (1) → bedroom stage b5 directly",
+      inputs: [
+        stay("Byblos from July 20, just me"),
+        { expect: "check-out date", answer: "soonish" },
+        { expect: "check-in and check-out dates together", answer: "July 20 to July 23" },
+        bedroomClick("2 bedrooms"),
+      ],
+      fixtures: [
+        { api: "7466", response: norm("2026-07-20", null, "Villa Byblos", "1") },
+        { api: "8101", response: norm("2026-07-20", null, "Villa Byblos", "1") },
+        { api: "8101", response: norm("2026-07-20", "2026-07-23", "Villa Byblos", "1") },
+        { api: "6961", response: {} },
+      ],
+      expect: { leadSubmitted: true, terminalIncludes: SUMMARY_TERMINAL, visitsInOrder: [["505", "756", "757", "895", "897", "930"]] },
+    },
+    {
+      name: "R12 check-out retry recovers, guests extracted UNSUPPORTED (11) → overflow tail e5",
+      inputs: [
+        stay("Byblos from July 20 for 11"),
+        { expect: "check-out date", answer: "soonish" },
+        { expect: "check-in and check-out dates together", answer: "July 20 to July 23" },
+        escName,
+      ],
+      fixtures: [
+        { api: "7466", response: norm("2026-07-20", null, "Villa Byblos", "11") },
+        { api: "8101", response: norm("2026-07-20", null, "Villa Byblos", "11") },
+        { api: "8101", response: norm("2026-07-20", "2026-07-23", "Villa Byblos", "11") },
+        { api: "6961", response: {} },
+      ],
+      expect: { leadSubmitted: true, terminalIncludes: ESC_TERMINAL, visitsInOrder: [["757", "967", "986", "989"]] },
+    },
+
+    // ── date escalations (existing outcome, preserved) ───────────────────────
+    {
+      name: "E01 unreadable dates twice → complete human escalation (name + lead + not-confirmed)",
       inputs: [
         stay("Mechmech, 3 guests"),
         { expect: "check-in and check-out dates", answer: "whenever" },
@@ -537,713 +810,110 @@ export function buildScenarios() {
         terminalIncludes: ESC_TERMINAL,
         messagesInclude: ["trouble reading the dates"],
         fieldEquals: { oraya_full_name: "David Guest" },
+        visitsInOrder: [["436", "438", "640", "641", "642", "643"]],
       },
     },
     {
-      name: "S11 one supported guest → asks bedroom preference; valid selection continues",
-      inputs: [stay("July 10 to 11"), guests("1"), bedroom("1 bedroom"), { expect: "Which villa", answer: "Villa Byblos" }, confirmYes, ...whatsappTail],
-      fixtures: [
-        { api: "7466", response: norm("2026-07-10", "2026-07-11", null, null) },
-        { api: "6961", response: {} },
-      ],
-      expect: { leadSubmitted: true, terminalIncludes: [NOT_CONFIRMED], fieldEquals: { oraya_guest_count: "1", oraya_bedroom_count: "1 bedroom" } },
-    },
-    {
-      name: "S12 two guests → same valid bedroom choices as the website (1/2/3 all offered)",
+      name: "E02 unreadable check-out twice → complete human escalation on the check-out path",
       inputs: [
-        stay("July 10 to 11 Mechmech"),
-        guests("2"),
-        { expect: "How many bedrooms would you like", expectChoicesInclude: ["1 bedroom", "2 bedrooms", "3 bedrooms"], answer: "2 bedrooms" },
-        confirmYes,
-        ...whatsappTail,
-      ],
-      fixtures: [
-        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", null) },
-        { api: "6961", response: {} },
-      ],
-      expect: { leadSubmitted: true, terminalIncludes: [NOT_CONFIRMED], fieldEquals: { oraya_bedroom_count: "2 bedrooms" } },
-    },
-    {
-      name: "S13 three guests → permits 3 bedrooms (not forced into 2)",
-      inputs: [stay("July 10 to 11 Mechmech for 3"), bedroom("3 bedrooms"), confirmYes, ...whatsappTail],
-      fixtures: [
-        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "3") },
-        { api: "6961", response: {} },
-      ],
-      expect: { leadSubmitted: true, terminalIncludes: [NOT_CONFIRMED], fieldEquals: { oraya_bedroom_count: "3 bedrooms" } },
-    },
-    {
-      name: "S14 four guests → website capacity rules (1 bedroom rejected, 2 accepted)",
-      inputs: [stay("July 10 to 11 Mechmech, 4 guests"), bedroom("1 bedroom"), bedroom("2 bedrooms"), confirmYes, ...whatsappTail],
-      fixtures: [
-        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "4") },
-        { api: "6961", response: {} },
-      ],
-      expect: {
-        leadSubmitted: true,
-        terminalIncludes: [NOT_CONFIRMED],
-        messagesInclude: ["won’t quite fit 4 overnight guests"],
-        fieldEquals: { oraya_guest_count: "4", oraya_bedroom_count: "2 bedrooms" },
-      },
-    },
-    {
-      name: "S15 six guests → website capacity rules (2 bedrooms rejected, 3 accepted)",
-      inputs: [stay("July 10 to 11 Byblos, 6 guests"), bedroom("2 bedrooms"), bedroom("3 bedrooms"), confirmYes, ...whatsappTail],
-      fixtures: [
-        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Byblos", "6") },
-        { api: "6961", response: {} },
-      ],
-      expect: {
-        leadSubmitted: true,
-        terminalIncludes: [NOT_CONFIRMED],
-        messagesInclude: ["won’t quite fit 6 overnight guests"],
-        fieldEquals: { oraya_bedroom_count: "3 bedrooms" },
-      },
-    },
-    {
-      name: "S16 unsupported guest count (More than 8) → captures exact total → escalation submits lead",
-      inputs: [
-        stay("July 10 to 11 Mechmech, big group"),
-        guests("More than 8"),
-        { expect: "How many guests exactly", answer: "12" },
+        stay("Mechmech from July 10, 3 guests"),
+        { expect: "check-out date", answer: "soonish" },
+        { expect: "check-in and check-out dates together", answer: "still soonish" },
         escName,
       ],
       fixtures: [
-        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", null) },
+        { api: "7466", response: norm("2026-07-10", null, "Villa Mechmech", "3") },
+        { api: "8101", response: norm("2026-07-10", null, "Villa Mechmech", "3") },
+        { api: "8101", response: norm("2026-07-10", null, "Villa Mechmech", "3") },
         { api: "6961", response: {} },
       ],
       expect: {
         leadSubmitted: true,
         terminalIncludes: ESC_TERMINAL,
-        messagesInclude: ["confirm the details with you personally"],
-        fieldEquals: { oraya_guest_followup: "12" },
-        // guest q → ack → supported gate (False) → exact-count q → team-review
-        // text → BRANCH-LOCAL large-group escalation tail (name q → Lead
-        // Submit → terminal) — the initial path's own clone
-        visitsInOrder: [["600", "601", "603", "766", "466", "467", "468", "712", "713", "714", "715"]],
+        messagesInclude: ["trouble reading the dates"],
+        visitsInOrder: [["505", "504", "700", "701", "702", "703"]],
       },
     },
+
+    // ── stale-field safety (returning subscriber) ────────────────────────────
     {
-      name: "S17 insufficient bedroom selection → explains mismatch, re-asks, preserves exact guest count",
-      inputs: [stay("July 10 to 11 Mechmech, 3 guests"), bedroom("1 bedroom"), bedroom("2 bedrooms"), confirmYes, ...whatsappTail],
-      fixtures: [
-        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "3") },
-        { api: "6961", response: {} },
-      ],
-      expect: {
-        leadSubmitted: true,
-        terminalIncludes: [NOT_CONFIRMED],
-        messagesInclude: ["won’t quite fit 3 overnight guests"],
-        fieldEquals: { oraya_guest_count: "3", oraya_bedroom_count: "2 bedrooms" },
-        // bedroom q → ack → capacity check → mismatch text → retry wrapper →
-        // retry q → ack → retry capacity check → villa-gate clone #760 (retry
-        // 2-bedrooms-fit exit; corrected-rule cascade) → confirmation → terminal
-        visitsInOrder: [["611", "624", "612", "616", "617", "618", "625", "619", "760", "491", "7"]],
-      },
-    },
-    {
-      name: "S18 villa missing → asks villa before confirmation",
-      inputs: [stay("July 10 to 11, 2 guests"), bedroom("1 bedroom"), { expect: "Which villa", answer: "Villa Byblos" }, confirmYes, ...whatsappTail],
-      fixtures: [
-        { api: "7466", response: norm("2026-07-10", "2026-07-11", null, "2") },
-        { api: "6961", response: {} },
-      ],
-      expect: {
-        leadSubmitted: true,
-        terminalIncludes: [NOT_CONFIRMED],
-        askedIncludes: ["Which villa", "Does this look right"],
-        // guest gate (known) → bedroom q → ack → capacity C1 (2 guests → OK
-        // immediately) → villa gate → villa q → ack → confirmation → terminal
-        visitsInOrder: [["440", "602", "611", "624", "612", "470", "481", "604", "491", "7"]],
-      },
-    },
-    {
-      name: "S19 villa selected → does not stop at \"Got it.\" → reaches confirmation",
-      inputs: [stay("July 10 to 11, 2 guests"), bedroom("1 bedroom"), { expect: "Which villa", answer: "Villa Mechmech" }, confirmYes, ...whatsappTail],
-      fixtures: [
-        { api: "7466", response: norm("2026-07-10", "2026-07-11", null, "2") },
-        { api: "6961", response: {} },
-      ],
-      expect: {
-        leadSubmitted: true,
-        terminalIncludes: [NOT_CONFIRMED],
-        askedIncludes: ["Villa: Villa Mechmech"],
-      },
-    },
-    {
-      name: "S20 Looks right → reaches handoff choice",
-      inputs: [stay("Mechmech July 10 to 11 for 2"), bedroom("1 bedroom"), confirmYes, ...whatsappTail],
-      fixtures: [
-        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "2") },
-        { api: "6961", response: {} },
-      ],
-      expect: {
-        leadSubmitted: true,
-        askedIncludes: ["How would you like to continue"],
-        // "Looks right" direction of the confirmation branch: confirmation q →
-        // ack → branch condition (True) → handoff wrapper → handoff q →
-        // WhatsApp branch → name q → Lead Submit → terminal
-        visitsInOrder: [["491", "492", "493", "494", "70", "71", "72", "74", "75", "8", "9", "7"]],
-      },
-    },
-    {
-      name: "S21 Continue on WhatsApp → collects name, calls lead submit, ends not-confirmed",
-      inputs: [stay("Mechmech July 10 to 11 for 2"), bedroom("1 bedroom"), confirmYes, ...whatsappTail],
-      fixtures: [
-        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "2") },
-        { api: "6961", response: {} },
-      ],
-      expect: {
-        leadSubmitted: true,
-        terminalIncludes: [NOT_CONFIRMED],
-        askedIncludes: ["full name"],
-        fieldEquals: { oraya_full_name: "David Guest" },
-      },
-    },
-    {
-      name: "S22a Finish on website → lead API called; prefill_url used when fixture provides it",
-      inputs: [stay("Mechmech July 10 to 11 for 2"), bedroom("1 bedroom"), confirmYes, { expect: "How would you like to continue", answer: "Finish on website" }],
-      fixtures: [
-        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "2") },
-        { api: "7459", response: { prefill_url: "https://stayoraya.com/book?h=SAFETOKEN99" } },
-      ],
-      expect: { leadSubmitted: true, terminalIncludes: ["SAFETOKEN99", "not a confirmed booking"] },
-    },
-    {
-      name: "S22b Finish on website → safe fallback when fixture provides no prefill_url",
-      inputs: [stay("Mechmech July 10 to 11 for 2"), bedroom("1 bedroom"), confirmYes, { expect: "How would you like to continue", answer: "Finish on website" }],
-      fixtures: [
-        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "2") },
-        { api: "7459", response: {} },
-      ],
-      expect: { leadSubmitted: true, terminalIncludes: ["https://stayoraya.com/book", "not a confirmed booking"] },
-    },
-    {
-      name: "S23 Edit with complete replacement → resets attempt, re-normalizes, returns to confirmation",
-      inputs: [
-        stay("Mechmech July 10 to 11 for 3"),
-        bedroom("3 bedrooms"),
-        confirmEdit,
-        { expect: "Your updated stay details", answer: "Villa Byblos August 1 to August 3 for 2 guests" },
-        bedroom("1 bedroom"),
-        { expect: "Does this look right", answer: "Looks right" },
-        ...whatsappTail,
-      ],
-      fixtures: [
-        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "3") },
-        { api: "7466", response: norm("2026-08-01", "2026-08-03", "Villa Byblos", "2") },
-        { api: "6961", response: {} },
-      ],
-      expect: {
-        leadSubmitted: true,
-        terminalIncludes: [NOT_CONFIRMED],
-        askedIncludes: ["Check-in: 2026-08-01", "Villa: Villa Byblos"],
-        fieldEquals: { oraya_check_in: "2026-08-01", oraya_villa: "Villa Byblos", oraya_guest_count: "2" },
-        // "Edit" direction of the confirmation branch, then the rebuilt Edit
-        // flow with a complete replacement: confirmation q → ack → branch
-        // condition (False) → Edit prompt → Edit q → fresh normalize →
-        // date/guest gates (all satisfied; both-dates-known re-entry runs the
-        // corrected-rule clone chain #761 → #762) → Edit bedroom q → ack →
-        // capacity → Edit villa gate → Edit confirmation q → ack → second
-        // branch (True) → the Edit path's OWN handoff clone → WhatsApp terminal
-        visitsInOrder: [[
-          "491", "492", "493", "495", "496", "497", "498", "650", "656", "761", "762",
-          "670", "671", "684", "672", "690", "694", "695", "699", "696", "697", "740", "749",
-        ]], // S23: both-dates-known re-entry via clones #761 → #762
-      },
-    },
-    {
-      name: "S24 Edit with only \"Villa Byblos\" → no stale mixing; asks for missing details",
-      inputs: [
-        stay("Mechmech July 10 to 11 for 3"),
-        bedroom("3 bedrooms"),
-        confirmEdit,
-        { expect: "Your updated stay details", answer: "Villa Byblos" },
-        { expect: "check-in and check-out dates", answer: "September 1 to September 3" },
-        guests("2"),
-        bedroom("1 bedroom"),
-        { expect: "Does this look right", answer: "Looks right" },
-        ...whatsappTail,
-      ],
-      fixtures: [
-        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "3") },
-        { api: "7466", response: norm(null, null, "Villa Byblos", null) },
-        { api: "8101", response: norm("2026-09-01", "2026-09-03", "Villa Byblos", null) },
-        { api: "6961", response: {} },
-      ],
-      expect: {
-        leadSubmitted: true,
-        terminalIncludes: [NOT_CONFIRMED],
-        askedIncludes: ["Check-in: 2026-09-01", "Villa: Villa Byblos", "Overnight guests: 2"],
-        fieldEquals: { oraya_check_in: "2026-09-01", oraya_villa: "Villa Byblos", oraya_guest_count: "2" },
-        // full Edit re-validation, node by node: Edit q → fresh normalize →
-        // dates gate (missing) → Edit dates q → refine → both-dates gate →
-        // guests gate (missing) → Edit guest q → ack → supported gate →
-        // Edit bedroom q → ack → capacity → Edit villa gate (known) →
-        // Edit confirmation q → ack → branch (True) → the Edit path's OWN
-        // branch-local handoff clone → its WhatsApp terminal
-        visitsInOrder: [[
-          "497", "498", "650", "651", "652", "653", "654", "660", "661", "662", "664", "770",
-          "670", "671", "684", "672", "690", "694", "695", "699", "696", "697", "740", "749",
-        ]], // guest-just-answered supported check runs on clone #770
-      },
-    },
-    {
-      name: "S25 returning subscriber, stale villa → second attempt omitting villa must ask villa",
+      name: "T01 returning subscriber, stale villa/dates/guests → new attempt overwrites via extracted_text and asks only what is missing",
       staleFields: STALE_ALL,
-      inputs: [stay("July 20 to July 25 for 4 guests"), bedroom("2 bedrooms"), { expect: "Which villa", answer: "Villa Byblos" }, confirmYes, ...whatsappTail],
+      inputs: [stay("July 20 to July 25 for 4 guests"), bedroomClick("2 bedrooms"), villaClick("Villa Byblos")],
       fixtures: [
         { api: "7466", response: norm("2026-07-20", "2026-07-25", null, "4") },
         { api: "6961", response: {} },
       ],
       expect: {
         leadSubmitted: true,
-        terminalIncludes: [NOT_CONFIRMED],
-        askedIncludes: ["Which villa"],
-        fieldEquals: { oraya_villa: "Villa Byblos" },
+        terminalIncludes: [...SUMMARY_TERMINAL, "Check-in: 2026-07-20", "Villa: Villa Byblos", "Overnight guests: 4"],
+        fieldEquals: { oraya_villa: "Villa Byblos", oraya_guest_followup: "null" },
       },
     },
     {
-      name: "S26 returning subscriber, stale dates → second attempt omitting dates must ask dates",
+      name: "T02 stale guest overflow (12) from an abandoned attempt → deterministically reset to \"null\" on the new attempt",
       staleFields: STALE_ALL,
-      inputs: [
-        stay("Villa Mechmech for 2 guests"),
-        { expect: "check-in and check-out dates", answer: "August 5 to August 7" },
-        bedroom("1 bedroom"),
-        confirmYes,
-        ...whatsappTail,
-      ],
-      fixtures: [
-        { api: "7466", response: norm(null, null, "Villa Mechmech", "2") },
-        { api: "8101", response: norm("2026-08-05", "2026-08-07", "Villa Mechmech", "2") },
-        { api: "6961", response: {} },
-      ],
-      expect: {
-        leadSubmitted: true,
-        terminalIncludes: [NOT_CONFIRMED],
-        askedIncludes: ["check-in and check-out dates"],
-        fieldEquals: { oraya_check_in: "2026-08-05" },
-      },
-    },
-    {
-      name: "S27 returning subscriber, stale guest count → second attempt omitting guests must ask guests",
-      staleFields: STALE_ALL,
-      inputs: [
-        stay("Villa Mechmech August 5 to 7"),
-        { expect: "How many guests will be staying overnight", expectChoicesInclude: ["1", "2", "3", "4", "5", "6", "7", "8", "More than 8"], answer: "2" },
-        bedroom("1 bedroom"),
-        confirmYes,
-        ...whatsappTail,
-      ],
-      fixtures: [
-        { api: "7466", response: norm("2026-08-05", "2026-08-07", "Villa Mechmech", null) },
-        { api: "6961", response: {} },
-      ],
-      expect: {
-        leadSubmitted: true,
-        terminalIncludes: [NOT_CONFIRMED],
-        fieldEquals: { oraya_guest_count: "2" },
-      },
-    },
-    {
-      name: "S28 returning subscriber, stale bedroom → bedroom is always re-asked; stale value never reused",
-      staleFields: STALE_ALL,
-      inputs: [stay("Villa Mechmech August 5 to 7 for 2"), bedroom("1 bedroom"), confirmYes, ...whatsappTail],
+      inputs: [stay("Villa Mechmech August 5 to August 7 for 2"), bedroomClick("1 bedroom")],
       fixtures: [
         { api: "7466", response: norm("2026-08-05", "2026-08-07", "Villa Mechmech", "2") },
         { api: "6961", response: {} },
       ],
       expect: {
         leadSubmitted: true,
-        terminalIncludes: [NOT_CONFIRMED],
-        askedIncludes: ["How many bedrooms"],
-        fieldEquals: { oraya_bedroom_count: "1 bedroom" },
+        terminalIncludes: SUMMARY_TERMINAL,
+        messagesExclude: ["How many guests exactly"],
+        fieldEquals: { oraya_guest_count: "2", oraya_guest_followup: "null" },
       },
     },
+
+    // ── fault injection (HTTP failures write no fields; walk continues) ──────
     {
-      name: "S29 checkout-branch double failure → complete escalation (second date-escalation path)",
-      inputs: [
-        stay("Villa Mechmech from July 10 for 2"),
-        { expect: "check-out date", answer: "hmm not sure" },
-        { expect: "check-in and check-out dates together", answer: "still not sure" },
-        escName,
-      ],
-      fixtures: [
-        { api: "7466", response: norm("2026-07-10", null, "Villa Mechmech", "2") },
-        { api: "8101", response: norm("2026-07-10", null, "Villa Mechmech", "2") },
-        { api: "8101", response: norm("2026-07-10", null, "Villa Mechmech", "2") },
-        { api: "6961", response: {} },
-      ],
-      expect: {
-        leadSubmitted: true,
-        terminalIncludes: ESC_TERMINAL,
-        messagesInclude: ["trouble reading the dates"],
-        // check-out escalation message → its OWN branch-local tail
-        visitsInOrder: [["504", "700", "701", "702", "703"]],
-      },
-    },
-    {
-      name: "S30 extracted oversize group (12 guests) → team review escalation, never silently accepted",
-      inputs: [
-        stay("we are 12 guests July 10 to 11 Mechmech"),
-        { expect: "How many guests exactly", answer: "12" },
-        escName,
-      ],
-      fixtures: [
-        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "12") },
-        { api: "6961", response: {} },
-      ],
-      expect: {
-        leadSubmitted: true,
-        terminalIncludes: ESC_TERMINAL,
-        messagesInclude: ["confirm the details with you personally"],
-        fieldEquals: { oraya_guest_followup: "12" },
-      },
-    },
-    // ── hybrid-architecture branch-local clones (2026-07-03, Option A) ──────
-    // Every duplicated tail is exercised on its own path, asserting the
-    // branch-local node ids — not merely that some terminal was reached.
-    {
-      name: "S31 Edit → Finish on website → the Edit path's OWN website ending (cloned 7459 Lead Submit)",
-      inputs: [
-        stay("Mechmech July 10 to 11 for 2"),
-        bedroom("1 bedroom"),
-        confirmEdit,
-        { expect: "Your updated stay details", answer: "Villa Byblos August 1 to August 3 for 2 guests" },
-        bedroom("1 bedroom"),
-        { expect: "Does this look right", answer: "Looks right" },
-        { expect: "How would you like to continue", answer: "Finish on website" },
-      ],
-      fixtures: [
-        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "2") },
-        { api: "7466", response: norm("2026-08-01", "2026-08-03", "Villa Byblos", "2") },
-        { api: "7459", response: { prefill_url: "https://stayoraya.com/book?h=EDITTOKEN42" } },
-      ],
-      expect: {
-        leadSubmitted: true,
-        terminalIncludes: ["EDITTOKEN42", "not a confirmed booking"],
-        // Edit confirmation (True) → Edit handoff clone → website branch →
-        // cloned 7459 Lead Submit → cloned website terminal
-        visitsInOrder: [["696", "697", "740", "741", "742", "743", "744"]],
-      },
-    },
-    {
-      name: "S32 Edit with check-out missing → Edit checkout follow-up → refine → continues to Edit confirmation",
-      inputs: [
-        stay("Mechmech July 10 to 11 for 2"),
-        bedroom("1 bedroom"),
-        confirmEdit,
-        { expect: "Your updated stay details", answer: "Villa Byblos from September 1 for 2" },
-        { expect: "check-out date", answer: "September 3" },
-        bedroom("1 bedroom"),
-        { expect: "Does this look right", answer: "Looks right" },
-        ...whatsappTail,
-      ],
-      fixtures: [
-        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "2") },
-        { api: "7466", response: norm("2026-09-01", null, "Villa Byblos", "2") },
-        { api: "8101", response: norm("2026-09-01", "2026-09-03", "Villa Byblos", "2") },
-        { api: "6961", response: {} },
-      ],
-      expect: {
-        leadSubmitted: true,
-        terminalIncludes: [NOT_CONFIRMED],
-        fieldEquals: { oraya_check_out: "2026-09-03" },
-        // Edit q → normalize → check-in known → checkout gate → checkout q →
-        // refine → both-dates gate → guest gate (known) → bedroom → villa
-        // gate (known) → Edit confirmation → Edit handoff clone → terminal
-        visitsInOrder: [[
-          "497", "498", "650", "656", "657", "658", "659", "767", "768", "769",
-          "670", "671", "684", "672", "690", "694", "695", "699", "696", "697", "740", "749",
-        ]], // second refine call re-enters via clone chain #767 → #768 → #769
-      },
-    },
-    {
-      name: "S33 Edit with villa missing → Edit villa question → continues to Edit confirmation",
-      inputs: [
-        stay("Mechmech July 10 to 11 for 2"),
-        bedroom("1 bedroom"),
-        confirmEdit,
-        { expect: "Your updated stay details", answer: "August 1 to August 3 for 2, not sure which villa" },
-        bedroom("1 bedroom"),
-        { expect: "Which villa", answer: "Villa Byblos" },
-        { expect: "Does this look right", answer: "Looks right" },
-        ...whatsappTail,
-      ],
-      fixtures: [
-        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "2") },
-        { api: "7466", response: norm("2026-08-01", "2026-08-03", null, "2") },
-        { api: "6961", response: {} },
-      ],
-      expect: {
-        leadSubmitted: true,
-        terminalIncludes: [NOT_CONFIRMED],
-        fieldEquals: { oraya_villa: "Villa Byblos" },
-        // Edit villa gate (missing) → Edit villa q → ack → Edit confirmation
-        visitsInOrder: [["672", "690", "691", "692", "693", "694", "695", "699", "696", "697", "740", "749"]],
-      },
-    },
-    {
-      name: "S34 Edit that becomes an above-capacity group → the Edit path's OWN large-group review + escalation tail",
-      inputs: [
-        stay("Mechmech July 10 to 11 for 2"),
-        bedroom("1 bedroom"),
-        confirmEdit,
-        { expect: "Your updated stay details", answer: "actually the whole family is coming now" },
-        guests("More than 8"),
-        { expect: "How many guests exactly", answer: "12" },
-        escName,
-      ],
-      fixtures: [
-        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "2") },
-        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", null) },
-        { api: "6961", response: {} },
-      ],
-      expect: {
-        leadSubmitted: true,
-        terminalIncludes: ESC_TERMINAL,
-        messagesInclude: ["confirm the details with you personally"],
-        fieldEquals: { oraya_guest_followup: "12" },
-        // Edit guest q → ack → supported gate (False) → CLONED Edit
-        // large-group review → its own escalation tail
-        visitsInOrder: [["661", "662", "664", "770", "736", "737", "738", "732", "733", "734", "735"]],
-      },
-    },
-    {
-      name: "S35 Edit with unreadable dates → Edit date follow-up fails → the Edit path's OWN date-escalation tail",
-      inputs: [
-        stay("Mechmech July 10 to 11 for 2"),
-        bedroom("1 bedroom"),
-        confirmEdit,
-        { expect: "Your updated stay details", answer: "sometime whenever works" },
-        { expect: "check-in and check-out dates", answer: "still whenever" },
-        escName,
-      ],
-      fixtures: [
-        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "2") },
-        { api: "7466", response: norm(null, null, "Villa Mechmech", "2") },
-        { api: "8101", response: norm(null, null, "Villa Mechmech", "2") },
-        { api: "6961", response: {} },
-      ],
-      expect: {
-        leadSubmitted: true,
-        terminalIncludes: ESC_TERMINAL,
-        messagesInclude: ["trouble reading the dates"],
-        visitsInOrder: [["650", "651", "652", "653", "654", "655", "716", "717", "718", "719"]],
-      },
-    },
-    {
-      name: "S36 initial bedroom mismatch then 1 bedroom AGAIN → the retry's OWN needs-more escalation tail",
-      inputs: [stay("Byblos July 10 to 11, 5 guests"), bedroom("1 bedroom"), bedroom("1 bedroom"), escName],
-      fixtures: [
-        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Byblos", "5") },
-        { api: "6961", response: {} },
-      ],
-      expect: {
-        leadSubmitted: true,
-        terminalIncludes: [...ESC_TERMINAL, "https://stayoraya.com/book"],
-        messagesInclude: ["have our team help arrange"],
-        fieldEquals: { oraya_guest_count: "5" },
-        // retry ask → ack → C1(F) → C2(1 bedroom → True) → escalation text A →
-        // its own tail
-        visitsInOrder: [["618", "625", "619", "620", "626", "704", "705", "706", "707"]],
-      },
-    },
-    {
-      name: "S37 Edit bedroom mismatch then 1 bedroom AGAIN → the Edit retry's OWN needs-more escalation tail",
-      inputs: [
-        stay("Mechmech July 10 to 11 for 2"),
-        bedroom("1 bedroom"),
-        confirmEdit,
-        { expect: "Your updated stay details", answer: "same dates but we are 5 now" },
-        bedroom("1 bedroom"),
-        bedroom("1 bedroom"),
-        escName,
-      ],
-      fixtures: [
-        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "2") },
-        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "5") },
-        { api: "6961", response: {} },
-      ],
-      expect: {
-        leadSubmitted: true,
-        terminalIncludes: [...ESC_TERMINAL, "https://stayoraya.com/book"],
-        messagesInclude: ["have our team help arrange"],
-        visitsInOrder: [["671", "684", "672", "673", "676", "677", "678", "685", "679", "680", "686", "720", "721", "722", "723"]],
-      },
-    },
-    {
-      name: "S38 Edit bedroom mismatch then 2 bedrooms for 5 guests → the Edit retry's OTHER escalation tail",
-      inputs: [
-        stay("Mechmech July 10 to 11 for 2"),
-        bedroom("1 bedroom"),
-        confirmEdit,
-        { expect: "Your updated stay details", answer: "same dates but we are 5 now" },
-        bedroom("1 bedroom"),
-        bedroom("2 bedrooms"),
-        escName,
-      ],
-      fixtures: [
-        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "2") },
-        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "5") },
-        { api: "6961", response: {} },
-      ],
-      expect: {
-        leadSubmitted: true,
-        terminalIncludes: [...ESC_TERMINAL, "https://stayoraya.com/book"],
-        messagesInclude: ["have our team help arrange"],
-        visitsInOrder: [["678", "685", "679", "680", "681", "687", "724", "725", "726", "727"]],
-      },
-    },
-    // ── fault-injection matrix (no-dead-end audit) ──────────────────────────
-    // These prove that repository-detectable failure modes cannot strand the
-    // guest: the walk always reaches an approved terminal whose interpolated
-    // text carries the canonical /book continuation. What they CANNOT prove
-    // (WhatChimp's live behavior when an HTTP call fails, real request
-    // bodies) is listed in V6_DEPENDENCIES.md and the round-trip checklist.
-    {
-      name: "F01 normalize API failure (fresh subscriber) → flow continues, lead submitted, continuation link",
-      inputs: [
-        stay("Villa Mechmech July 10 to 11 for 4 guests"),
-        { expect: "How many guests exactly", answer: "4" },
-        escName,
-      ],
+      name: "F01 initial normalization fails → no field writes → safe team-review escalation, safety link already shown",
+      inputs: [stay("Villa Mechmech July 10 to 11 for 3"), escName],
       fixtures: [
         { api: "7466", failed: true, response: {} },
         { api: "6961", response: {} },
       ],
       expect: {
         leadSubmitted: true,
-        terminalIncludes: [...ESC_TERMINAL, "https://stayoraya.com/book"],
-        messagesInclude: ["confirm the details with you personally"],
+        terminalIncludes: ESC_TERMINAL,
+        // unwritten fields ("") fail every "null"/supported comparison →
+        // initial extracted-overflow review tail; the opening question already
+        // delivered https://stayoraya.com/book (pre-API safety invariant)
+        visitsInOrder: [["400", "401", "410", "411", "440", "602", "963", "970", "973"]],
       },
     },
     {
-      name: "F02 refine API failure on both attempts → complete escalation with continuation link",
+      name: "F02 refine fails once → retry ask still recovers on the second refine",
       inputs: [
-        stay("Mechmech, 3 guests"),
-        { expect: "check-in and check-out dates", answer: "July 10 to 15" },
-        { expect: "check-in and check-out dates together", answer: "July 10 to July 15" },
-        escName,
+        stay("Mechmech, 2 guests"),
+        { expect: "check-in and check-out dates", answer: "July 10 to July 12" },
+        { expect: "check-in and check-out dates together", answer: "July 10 to July 12" },
+        bedroomClick("1 bedroom"),
       ],
       fixtures: [
-        { api: "7466", response: norm(null, null, "Villa Mechmech", "3") },
+        { api: "7466", response: norm(null, null, "Villa Mechmech", "2") },
         { api: "8101", failed: true, response: {} },
-        { api: "8101", failed: true, response: {} },
+        { api: "8101", response: norm("2026-07-10", "2026-07-12", "Villa Mechmech", "2") },
         { api: "6961", response: {} },
       ],
-      expect: {
-        leadSubmitted: true,
-        terminalIncludes: [...ESC_TERMINAL, "https://stayoraya.com/book"],
-        messagesInclude: ["trouble reading the dates"],
-      },
+      expect: { leadSubmitted: true, terminalIncludes: SUMMARY_TERMINAL, fieldEquals: { oraya_check_in: "2026-07-10" } },
     },
     {
-      name: "F03 WhatsApp Lead Submit failure → guest still gets canonical booking continuation",
-      inputs: [stay("Mechmech July 10 to 11 for 2"), bedroom("1 bedroom"), confirmYes, ...whatsappTail],
+      name: "F03 completion Lead Submit fails → summary still delivers the canonical fallback link (prefill slot empty)",
+      inputs: [stay("Villa Mechmech July 10 to July 11 for 3 guests"), bedroomClick("2 bedrooms")],
       fixtures: [
-        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "2") },
+        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "3") },
         { api: "6961", failed: true, response: {} },
       ],
       expect: {
         leadAttempted: true,
         leadSubmitted: false,
-        terminalIncludes: [NOT_CONFIRMED, "https://stayoraya.com/book"],
+        terminalIncludes: ["https://stayoraya.com/book", ...SUMMARY_TERMINAL],
       },
     },
     {
-      name: "F04 website-handoff Lead Submit failure → no prefill written, canonical fallback still delivered",
-      inputs: [stay("Mechmech July 10 to 11 for 2"), bedroom("1 bedroom"), confirmYes, { expect: "How would you like to continue", answer: "Finish on website" }],
-      fixtures: [
-        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "2") },
-        { api: "7459", failed: true, response: {} },
-      ],
-      expect: {
-        leadAttempted: true,
-        leadSubmitted: false,
-        terminalIncludes: ["https://stayoraya.com/book", "not a confirmed booking"],
-      },
-    },
-    {
-      name: "F05 empty-string prefill_url → canonical fallback still delivered",
-      inputs: [stay("Mechmech July 10 to 11 for 2"), bedroom("1 bedroom"), confirmYes, { expect: "How would you like to continue", answer: "Finish on website" }],
-      fixtures: [
-        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "2") },
-        { api: "7459", response: { prefill_url: "" } },
-      ],
-      expect: { leadSubmitted: true, terminalIncludes: ["https://stayoraya.com/book", "not a confirmed booking"] },
-    },
-    {
-      name: "F06 malformed prefill_url → guest still holds the canonical fallback in the same message",
-      inputs: [stay("Mechmech July 10 to 11 for 2"), bedroom("1 bedroom"), confirmYes, { expect: "How would you like to continue", answer: "Finish on website" }],
-      fixtures: [
-        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "2") },
-        { api: "7459", response: { prefill_url: "book-now-please" } },
-      ],
-      expect: { leadSubmitted: true, terminalIncludes: ["https://stayoraya.com/book", "not a confirmed booking"] },
-    },
-    {
-      name: "F07 bedroom mismatch followed by another invalid choice → escalation with lead + continuation",
-      inputs: [stay("Byblos July 10 to 11, 5 guests"), bedroom("1 bedroom"), bedroom("2 bedrooms"), escName],
-      fixtures: [
-        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Byblos", "5") },
-        { api: "6961", response: {} },
-      ],
-      expect: {
-        leadSubmitted: true,
-        terminalIncludes: [...ESC_TERMINAL, "https://stayoraya.com/book"],
-        messagesInclude: ["have our team help arrange"],
-        fieldEquals: { oraya_guest_count: "5" },
-        // retry 2 bedrooms for 5 guests → C3 False → escalation text B → its
-        // own branch-local tail
-        visitsInOrder: [["618", "625", "619", "620", "621", "627", "708", "709", "710", "711"]],
-      },
-    },
-    {
-      name: "F08 repeated Edit (Edit → replacement → Edit again) → escalation with lead + continuation, no dead end",
-      inputs: [
-        stay("Mechmech July 10 to 11 for 3"),
-        bedroom("3 bedrooms"),
-        confirmEdit,
-        { expect: "Your updated stay details", answer: "Villa Byblos August 1 to August 3 for 2 guests" },
-        bedroom("1 bedroom"),
-        { expect: "Does this look right", answer: "Edit" },
-        escName,
-      ],
-      fixtures: [
-        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "3") },
-        { api: "7466", response: norm("2026-08-01", "2026-08-03", "Villa Byblos", "2") },
-        { api: "6961", response: {} },
-      ],
-      expect: {
-        leadSubmitted: true,
-        terminalIncludes: [...ESC_TERMINAL, "https://stayoraya.com/book"],
-        messagesInclude: ["fine-tune everything personally"],
-        // second-Edit escalation text → its OWN branch-local tail
-        visitsInOrder: [["695", "699", "696", "698", "728", "729", "730", "731"]],
-      },
-    },
-    {
-      name: "F09 stale guest-overflow \"12\" is RESET to \"null\" by the current attempt's normalization — a supported-count lead cannot carry it",
-      staleFields: { ...STALE_ALL, oraya_guest_followup: "12" },
-      inputs: [stay("Villa Mechmech August 5 to 7 for 2"), bedroom("1 bedroom"), confirmYes, ...whatsappTail],
-      fixtures: [
-        { api: "7466", response: norm("2026-08-05", "2026-08-07", "Villa Mechmech", "2") },
-        { api: "6961", response: {} },
-      ],
-      expect: {
-        leadSubmitted: true,
-        terminalIncludes: [NOT_CONFIRMED],
-        askedExcludes: ["How many guests exactly"],
-        // the extracted_text.guest_followup → oraya_guest_followup mapping
-        // deterministically overwrites the stale "12" with the literal
-        // "null" on the current attempt's 7466 call, BEFORE any Lead Submit
-        // node can fire — the submitted lead body reads "null", never "12".
-        fieldEquals: { oraya_guest_count: "2", oraya_guest_followup: "null" },
-      },
-    },
-    {
-      name: "F11 escalation Lead Submit failure at the escalation API node → #643 still delivers the booking links",
+      name: "F04 escalation Lead Submit fails → escalation terminal still delivers the booking links",
       inputs: [
         stay("Mechmech, 3 guests"),
         { expect: "check-in and check-out dates", answer: "whenever" },
@@ -1261,31 +931,6 @@ export function buildScenarios() {
         leadSubmitted: false,
         terminalIncludes: ["https://stayoraya.com/book", "not a confirmed booking"],
         messagesInclude: ["trouble reading the dates"],
-      },
-    },
-    {
-      name: "F10 free-text answers at every choice point (confirmation / handoff) never strand the guest",
-      inputs: [
-        stay("Mechmech July 10 to 11 for 2"),
-        bedroom("1 bedroom"),
-        // free text instead of "Looks right"/"Edit" → routes to the Edit path
-        { expect: "Does this look right", answer: "hmm, can you repeat that?" },
-        { expect: "Your updated stay details", answer: "Villa Mechmech July 10 to July 11 for 2 guests" },
-        bedroom("1 bedroom"),
-        { expect: "Does this look right", answer: "Looks right" },
-        // free text instead of a handoff button → WhatsApp continuation branch
-        { expect: "How would you like to continue", answer: "just keep chatting here please" },
-        { expect: "full name", answer: "David Guest" },
-      ],
-      fixtures: [
-        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "2") },
-        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "2") },
-        { api: "6961", response: {} },
-      ],
-      expect: {
-        leadSubmitted: true,
-        terminalIncludes: [NOT_CONFIRMED, "https://stayoraya.com/book"],
-        askedIncludes: ["Your updated stay details"],
       },
     },
   ];
@@ -1304,25 +949,30 @@ function main() {
   }
   const scriptDir = path.dirname(fileURLToPath(import.meta.url));
   const profilePath = profileIdx !== -1 ? args[profileIdx + 1] : path.join(scriptDir, "whatchimp", "natural-intake-profile.json");
-  const profile = JSON.parse(readFileSync(profilePath, "utf8"));
-  const flow = JSON.parse(readFileSync(flowPath, "utf8"));
+
+  let flow, profile;
+  try {
+    profile = JSON.parse(readFileSync(profilePath, "utf8"));
+    flow = JSON.parse(readFileSync(flowPath, "utf8"));
+  } catch (e) {
+    console.error(`cannot read input: ${e.message}`);
+    process.exit(2);
+  }
 
   const scenarios = buildScenarios();
   let passed = 0;
-  let failed = 0;
   for (const scenario of scenarios) {
     const result = runScenario(flow, profile, scenario);
     if (result.failures.length === 0) {
       passed += 1;
       console.log(`PASS  ${scenario.name}`);
     } else {
-      failed += 1;
       console.log(`FAIL  ${scenario.name}`);
       for (const f of result.failures) console.log(`      - ${f}`);
     }
   }
-  console.log(`\n${passed} passed, ${failed} failed (of ${scenarios.length})`);
-  process.exit(failed ? 1 : 0);
+  console.log(`\n${passed} passed, ${scenarios.length - passed} failed (of ${scenarios.length})`);
+  process.exit(passed === scenarios.length ? 0 : 1);
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {

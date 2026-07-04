@@ -12,8 +12,12 @@
  * The checks go far beyond "JSON parses and nodes are reachable" — they
  * enforce the natural-intake semantic contract described by the profile
  * manifest (scripts/whatchimp/natural-intake-profile.json): question/field
- * bindings, API placement, condition-row hygiene, terminal-message policy,
- * guest→bedroom→villa→confirmation path completeness, Edit re-entry, and
+ * bindings, the interactive-control contract (buttons/rows save directly to
+ * the correct custom field with approved labels, exactly one forward
+ * transition per press, no Start-a-Flow metadata, no default-output
+ * double execution — 2026-07-04 operator schema evidence), postback-only
+ * convergence, API placement, condition-row hygiene, terminal-message
+ * policy, guest→bedroom→villa→lead→summary path completeness, and
  * human-escalation completeness (name capture + lead submit + safe ending).
  *
  * `--strict-binding` turns any profile-listed placeholder field id into an
@@ -155,13 +159,14 @@ export function validateFlow(flow, profile, opts = {}) {
     }
   }
 
-  // single destination per output socket (Interactive button fan-out is the
-  // only WhatChimp node that legitimately drives multiple targets from one
-  // output) — a second connection on a Condition/Text/question output makes
-  // the executed branch ambiguous and silently bypasses inserted steps.
+  // single destination per output socket (Interactive button/list fan-out and
+  // Sections row fan-out are the only WhatChimp constructs that legitimately
+  // drive multiple targets from one output) — a second connection on a
+  // Condition/Text/question output makes the executed branch ambiguous and
+  // silently bypasses inserted steps.
   for (const id of ids) {
     const node = nodes[id];
-    if (node.name === "Interactive") continue;
+    if (node.name === "Interactive" || node.name === "Sections") continue;
     for (const [outKey, out] of Object.entries(node.outputs ?? {})) {
       if ((out.connections ?? []).length > 1) {
         err("edges", `${nodeLabel(id, node)} output "${outKey}" has ${out.connections.length} destinations — ambiguous execution order`);
@@ -177,18 +182,25 @@ export function validateFlow(flow, profile, opts = {}) {
   // 16/16), 32 edges were removed, and 16 unintended terminals appeared.
   // Evidence: artifacts/whatchimp/roundtrips/ROUNDTRIP_1_FINDINGS.md.
   // Any convergence in an import candidate is therefore a structural error.
-  // Hybrid architecture (2026-07-03, Option A): a bounded set of central hub
-  // merges is DECLARED in the profile (`approvedHubMerges`: node id → exact
-  // inbound count). The import drops their beyond-first edges; the operator
-  // re-draws them from the generated artifacts/whatchimp/V6_REDRAW_CHECKLIST.md.
-  // The validator therefore (a) rejects any UNdeclared convergence, and
-  // (b) rejects a declared hub whose inbound count differs from the declared
-  // one — which is exactly what an unrepaired WhatChimp re-export looks like.
+  // Interactive-controls architecture (2026-07-04): the ONLY convergence an
+  // import candidate may serialize is POSTBACK convergence — input sockets
+  // whose parents are ALL Inline Button / Rows nodes. Operator evidence
+  // (2026-07-04 saved/reopened export, fixture
+  // roundtrips/Oraya_natural_intake_v6.button-evidence.saved-reexport.txt):
+  // editor-created Inline Buttons linked to custom_57693/oraya_guest_count
+  // persisted through save → close → reopen → export while BOTH converging
+  // forward into the same next node. The approved merge map
+  // (`approvedPostbackMerges`: node id → exact inbound count) is declared in
+  // the profile; the validator (a) rejects any UNdeclared convergence,
+  // (b) rejects a declared postback hub whose inbound count differs (exactly
+  // what an import that dropped button edges looks like), and (c) rejects a
+  // declared hub with any NON-postback parent.
   const contract = profile.importGraphContract;
   if (contract) {
     const maxIn = contract.maxInboundPerNode ?? 1;
     const rootName = contract.rootNodeName ?? "Start Bot Flow";
-    const approvedHubs = contract.approvedHubMerges ?? {};
+    const approvedPostbackHubs = contract.approvedPostbackMerges ?? {};
+    const postbackNames = new Set(contract.postbackSourceNames ?? ["Inline Button", "Rows"]);
     for (const id of ids) {
       const node = nodes[id];
       const campaign = typeof node.data?.campaignName === "string" && node.data.campaignName
@@ -200,10 +212,16 @@ export function validateFlow(flow, profile, opts = {}) {
         }
         continue;
       }
-      const declared = approvedHubs[id];
+      const declared = approvedPostbackHubs[id];
       if (declared !== undefined) {
         if (parents.length !== declared) {
-          err("single-parent-contract", `${nodeLabel(id, node)}${campaign} is a declared operator-redrawn hub with exactly ${declared} inbound connections but has ${parents.length} [${parents.map((e) => `#${e.node}:${e.output}→${e.inKey}`).join(", ")}] — if this is a WhatChimp re-export, the import dropped hub edges; re-draw them per artifacts/whatchimp/V6_REDRAW_CHECKLIST.md`);
+          err("single-parent-contract", `${nodeLabel(id, node)}${campaign} is a declared postback-convergence hub with exactly ${declared} inbound connections but has ${parents.length} [${parents.map((e) => `#${e.node}:${e.output}→${e.inKey}`).join(", ")}] — if this is a WhatChimp re-export, the platform dropped button/row edges; stop and report (see artifacts/whatchimp/V6_REDRAW_CHECKLIST.md)`);
+        }
+        for (const e of parents) {
+          const src = nodes[String(e.node)];
+          if (!postbackNames.has(src?.name)) {
+            err("single-parent-contract", `${nodeLabel(id, node)}${campaign} is a declared postback-convergence hub but parent #${e.node} is a ${src?.name} — only Inline Button / Rows convergence is evidence-approved`);
+          }
         }
         continue;
       }
@@ -212,7 +230,7 @@ export function validateFlow(flow, profile, opts = {}) {
         const conns = inp.connections ?? [];
         if (conns.length > 1) {
           socketReported = true;
-          err("single-parent-contract", `${nodeLabel(id, node)}${campaign} input socket "${inKey}" has ${conns.length} connections [${conns.map((c) => `#${c.node}:${c.output}`).join(", ")}] — WhatChimp import keeps only the first and silently drops the rest (round trip #1, 2026-07-03); undeclared convergence must be cloned or added to approvedHubMerges + the redraw checklist`);
+          err("single-parent-contract", `${nodeLabel(id, node)}${campaign} input socket "${inKey}" has ${conns.length} connections [${conns.map((c) => `#${c.node}:${c.output}`).join(", ")}] — WhatChimp import keeps only the first serialized connection per input socket (round trip #1, 2026-07-03); undeclared convergence must be cloned away or, when every parent is an Inline Button / Rows control, declared in approvedPostbackMerges`);
         }
       }
       if (!socketReported && parents.length > maxIn) {
@@ -392,6 +410,80 @@ export function validateFlow(flow, profile, opts = {}) {
     }
   }
 
+  // 13c. interactive-control contract (2026-07-04 operator schema evidence:
+  // Interactive #775 + Inline Buttons #776/#783 — buttons carry the
+  // custom-field assignment themselves and route forward on the press; the
+  // stored value is the visible label; #776 additionally demonstrated the
+  // Start-a-Flow metadata (`value`/`postback_text`) COMBINED with a direct
+  // connector, which is the self-restart + double-execution hazard this
+  // check bans outright).
+  const interactiveNodes = ids.filter((id) => nodes[id].name === "Interactive");
+  const controlNodes = ids.filter((id) => nodes[id].name === "Inline Button" || nodes[id].name === "Rows");
+  for (const id of interactiveNodes) {
+    const node = nodes[id];
+    const def = node.outputs?.interactiveOutput?.connections ?? [];
+    if (def.length) {
+      err("interactive-contract", `${nodeLabel(id, node)} has ${def.length} default interactiveOutput connection(s) alongside its controls — one press would execute the next stage twice`);
+    }
+    const btn = node.outputs?.interactiveOutputButton?.connections ?? [];
+    const list = node.outputs?.interactiveOutputListMessage?.connections ?? [];
+    if ((btn.length > 0) === (list.length > 0)) {
+      err("interactive-contract", `${nodeLabel(id, node)} must use exactly one control family (buttons XOR list message) — has ${btn.length} button connection(s) and ${list.length} list connection(s)`);
+    }
+    for (const e of btn) {
+      if (nodes[String(e.node)]?.name !== "Inline Button") {
+        err("interactive-contract", `${nodeLabel(id, node)} interactiveOutputButton targets ${nodeLabel(e.node, nodes[String(e.node)])} — expected an Inline Button`);
+      }
+    }
+    for (const e of list) {
+      if (nodes[String(e.node)]?.name !== "Keyboard") {
+        err("interactive-contract", `${nodeLabel(id, node)} interactiveOutputListMessage targets ${nodeLabel(e.node, nodes[String(e.node)])} — expected a Keyboard (list) node`);
+      }
+    }
+  }
+  for (const id of controlNodes) {
+    const node = nodes[id];
+    const d = node.data ?? {};
+    const label = node.name === "Rows" ? (d.title ?? "") : (d.buttonText ?? "");
+    if ("value" in d || "postback_text" in d) {
+      err("interactive-contract", `${nodeLabel(id, node)} "${label}" carries Start-a-Flow metadata (value/postback_text) — an intake answer control must never start a flow (self-restart / recursion / double-execution hazard)`);
+    }
+    if (node.name === "Inline Button" && d.buttonType !== "new_post_back") {
+      err("interactive-contract", `${nodeLabel(id, node)} "${label}" buttonType is "${d.buttonType}" — expected "new_post_back"`);
+    }
+    const cfId = (d.customFieldId ?? "").toString();
+    const cfName = (d.customFieldSelectedOptionText ?? "").toString();
+    const m = /^custom_(\d+)$/.exec(cfId);
+    if (!m) {
+      err("interactive-contract", `${nodeLabel(id, node)} "${label}" customFieldId "${cfId}" is not a custom_<id> field reference — the control must save its value directly`);
+    } else if (!fieldIdToName.has(m[1])) {
+      err("interactive-contract", `${nodeLabel(id, node)} "${label}" customFieldId "${cfId}" is not in the dependency manifest`);
+    } else if (fieldIdToName.get(m[1]) !== cfName) {
+      err("interactive-contract", `${nodeLabel(id, node)} "${label}" customFieldId ${cfId} is "${fieldIdToName.get(m[1])}" in the manifest but the control's selected field name is "${cfName}" (silent field reuse)`);
+    }
+    const controlSpec = (profile.interactiveControls ?? {})[cfName];
+    if (controlSpec) {
+      if (controlSpec.controlType && controlSpec.controlType !== node.name) {
+        err("interactive-contract", `${nodeLabel(id, node)} "${label}" collects ${cfName} as a ${node.name} — the approved control type is ${controlSpec.controlType}`);
+      }
+      if (!controlSpec.labels.includes(label)) {
+        err("interactive-contract", `${nodeLabel(id, node)} label "${label}" is not an approved ${cfName} value [${controlSpec.labels.join(", ")}] — the stored value IS the label, so an unapproved label writes an unapproved value`);
+      }
+    }
+    const fwdKey = node.name === "Rows" ? "rowOutput" : "buttonOutput";
+    const fwd = node.outputs?.[fwdKey]?.connections ?? [];
+    if (fwd.length !== 1) {
+      err("interactive-contract", `${nodeLabel(id, node)} "${label}" has ${fwd.length} forward connection(s) on ${fwdKey} — exactly one is required (one press = one field assignment = one downstream transition)`);
+    } else if (nodes[String(fwd[0].node)]?.name === "Condition") {
+      err("interactive-contract", `${nodeLabel(id, node)} "${label}" routes directly into Condition #${fwd[0].node} — Conditions accept one inbound connection TOTAL (round trip #3); route through a Text/wrapper`);
+    }
+    const inbound = inEdges(node);
+    const attached = inbound.some((e) => e.output === "interactiveOutputButton" || e.output === "sectionOutputRows");
+    if (!attached) {
+      err("interactive-contract", `${nodeLabel(id, node)} "${label}" is not attached to an Interactive control fan (no interactiveOutputButton / sectionOutputRows parent)`);
+    }
+  }
+
   // 14. HTTP API nodes: bound + connected on both sides
   for (const id of apiNodes) {
     const node = nodes[id];
@@ -568,72 +660,101 @@ export function validateFlow(flow, profile, opts = {}) {
     for (const id of seen) if (pred(id, nodes[id])) return true;
     return false;
   };
-  const isBedroomQuestion = (id, n) => n?.name === "User Input Flow Single" && fieldNameOf(n) === profile.bedroomField;
-  const isConfirmQuestion = (id, n) => n?.name === "User Input Flow Single" && fieldNameOf(n) === profile.confirmField;
-  const isVillaGate = (id, n) =>
-    (n?.name === "Condition" && (n.data?.custom_field_variable_selected_texts ?? []).includes(profile.villaField)) ||
-    (n?.name === "User Input Flow Single" && fieldNameOf(n) === profile.villaField);
+  const controlField = (n) => (n?.data?.customFieldSelectedOptionText ?? "").toString();
+  const controlLabel = (n) => (n?.name === "Rows" ? n?.data?.title : n?.data?.buttonText) ?? "";
+  const isControl = (n) => n?.name === "Inline Button" || n?.name === "Rows";
+  const isBedroomControl = (id, n) =>
+    (isControl(n) && controlField(n) === profile.bedroomField) ||
+    (n?.name === "User Input Flow Single" && fieldNameOf(n) === profile.bedroomField);
   const isLeadSubmit = (id, n) => n?.name === "HTTP API" && profile.apis.leadSubmit.ids.includes(n.data?.httpApiId ?? "");
   const isNameQuestion = (id, n) => n?.name === "User Input Flow Single" && fieldNameOf(n) === profile.fullNameField;
+  const isSummaryTerminal = (id, n) =>
+    n?.name === "Text" && outEdges(n).length === 0 &&
+    (n.data?.textMessage ?? "").includes(profile.summaryTerminalSnippet ?? " ");
 
-  // 22. every supported guest-count path reaches bedroom selection
-  const guestQuestions = questionNodes.filter((id) => fieldNameOf(nodes[id]) === profile.guestCountField);
-  if (guestQuestions.length === 0) err("guest-path", "no question saving to the exact guest-count field exists");
-  for (const id of guestQuestions) {
-    if (!reachesPred(id, isBedroomQuestion)) {
-      err("guest-path", `guest-count question ${nodeLabel(id, nodes[id])} never reaches a bedroom-selection question`);
+  // 22. guest-count controls: complete choice set, exact values, correct routing
+  const guestControls = controlNodes.filter((id) => controlField(nodes[id]) === profile.guestCountField);
+  if (guestControls.length === 0) err("guest-path", "no interactive control saving to the exact guest-count field exists");
+  const guestStayValues = new Set(profile.supportedGuestValues);
+  for (const id of guestControls) {
+    const label = controlLabel(nodes[id]);
+    if (/\d\s*-\s*\d|or more/i.test(label)) {
+      err("guest-path", `guest-count control ${nodeLabel(id, nodes[id])} offers a range choice ("${label}") instead of an exact value`);
     }
-    const choices = nodes[id].data?.multipleChoices ?? [];
-    if (choices.length) {
-      const expected = [...profile.supportedGuestValues, profile.guestOverflowChoice];
-      const missing = expected.filter((c) => !choices.includes(c));
-      const rangeLike = choices.filter((c) => /\d\s*-\s*\d|or more/i.test(c));
-      if (rangeLike.length) err("guest-path", `guest-count question ${nodeLabel(id, nodes[id])} offers range choices (${rangeLike.join(", ")}) instead of exact values`);
-      if (missing.length && !rangeLike.length) err("guest-path", `guest-count question ${nodeLabel(id, nodes[id])} is missing expected choices: ${missing.join(", ")}`);
+    if (guestStayValues.has(label)) {
+      // a supported count continues toward the bedroom question
+      if (!reachesPred(id, isBedroomControl)) {
+        err("guest-path", `guest-count control "${label}" (${nodeLabel(id, nodes[id])}) never reaches a bedroom-selection control`);
+      }
+    } else if (label === profile.guestOverflowChoice) {
+      // "More than 6" exits the stay-completion path into the human outcome
+      if (!reachesPred(id, isLeadSubmit)) {
+        err("guest-path", `overflow control "${label}" (${nodeLabel(id, nodes[id])}) never reaches lead-submitting escalation`);
+      }
+      if (reachesPred(id, isSummaryTerminal)) {
+        err("guest-path", `overflow control "${label}" (${nodeLabel(id, nodes[id])}) reaches the stay-completion summary — More than 6 must route away from stay completion`);
+      }
+      if (reachesPred(id, (nid, n) => isControl(n) && (controlField(n) === profile.bedroomField || controlField(n) === profile.villaField))) {
+        err("guest-path", `overflow control "${label}" (${nodeLabel(id, nodes[id])}) still reaches a bedroom/villa question — More than 6 must not continue the stay questions`);
+      }
+    }
+  }
+  // conditions on the guest field only compare supported values or "null"
+  const allowedGuestConditionValues = new Set([...profile.supportedGuestValues, "null"]);
+  for (const id of conditionNodes) {
+    const d = nodes[id].data ?? {};
+    (d.custom_field_variable_selected_texts ?? []).forEach((name, i) => {
+      const value = (d.custom_field_variable_value ?? [])[i];
+      if (name === profile.guestCountField && !allowedGuestConditionValues.has(value)) {
+        err("guest-path", `${nodeLabel(id, nodes[id])} row ${i + 1} compares ${profile.guestCountField} to "${value}" — only supported values or "null" are meaningful (the stored value is the control label)`);
+      }
+    });
+  }
+
+  // 23. bedroom controls: three approved options, each completing the request
+  const bedroomControls = controlNodes.filter((id) => controlField(nodes[id]) === profile.bedroomField);
+  if (bedroomControls.length === 0 && questionNodes.every((id) => fieldNameOf(nodes[id]) !== profile.bedroomField)) {
+    err("bedroom-path", "no bedroom-selection control exists");
+  }
+  for (const id of bedroomControls) {
+    if (!reachesPred(id, isLeadSubmit)) {
+      err("bedroom-path", `bedroom control ${nodeLabel(id, nodes[id])} "${controlLabel(nodes[id])}" never reaches lead submission`);
+    }
+    if (!reachesPred(id, isSummaryTerminal)) {
+      err("bedroom-path", `bedroom control ${nodeLabel(id, nodes[id])} "${controlLabel(nodes[id])}" never reaches the request-summary terminal`);
     }
   }
 
-  // 23. every bedroom path reaches villa validation and confirmation
-  const bedroomQuestions = questionNodes.filter((id) => isBedroomQuestion(id, nodes[id]));
-  if (bedroomQuestions.length === 0) err("bedroom-path", "no bedroom-selection question exists");
-  for (const id of bedroomQuestions) {
-    const choices = nodes[id].data?.multipleChoices ?? [];
-    const expected = profile.bedroomChoices;
-    if (choices.length !== expected.length || expected.some((c, i) => choices[i] !== c)) {
-      err("bedroom-path", `bedroom question ${nodeLabel(id, nodes[id])} choices [${choices.join(", ")}] do not match the approved three options [${expected.join(", ")}]`);
-    }
-    if (!reachesPred(id, isVillaGate)) err("bedroom-path", `bedroom question ${nodeLabel(id, nodes[id])} never reaches villa validation`);
-    if (!reachesPred(id, isConfirmQuestion)) err("bedroom-path", `bedroom question ${nodeLabel(id, nodes[id])} never reaches confirmation`);
+  // 24. villa controls: exact canonical values, each completing the request
+  const villaControls = controlNodes.filter((id) => controlField(nodes[id]) === profile.villaField);
+  if (villaControls.length === 0 && questionNodes.every((id) => fieldNameOf(nodes[id]) !== profile.villaField)) {
+    err("villa-path", "no villa-selection control exists");
   }
-
-  // 24. every villa-selection path reaches confirmation
-  const villaQuestions = questionNodes.filter((id) => fieldNameOf(nodes[id]) === profile.villaField);
-  if (villaQuestions.length === 0) err("villa-path", "no villa-selection question exists");
-  for (const id of villaQuestions) {
-    if (!reachesPred(id, isConfirmQuestion)) {
-      err("villa-path", `villa question ${nodeLabel(id, nodes[id])} never reaches confirmation`);
+  for (const id of villaControls) {
+    if (!reachesPred(id, isLeadSubmit)) {
+      err("villa-path", `villa control ${nodeLabel(id, nodes[id])} "${controlLabel(nodes[id])}" never reaches lead submission`);
     }
   }
 
-  // 25. Edit returns to normalization and eventually confirmation
-  const confirmQuestions = questionNodes.filter((id) => isConfirmQuestion(id, nodes[id]));
-  if (confirmQuestions.length === 0) err("confirmation", "no confirmation question exists");
-  const editStayTextQuestions = questionNodes.filter((id) => {
-    if (fieldNameOf(nodes[id]) !== profile.stayTextField && nodes[id].data?.customField !== profile.fields[profile.stayTextField]) return false;
-    // an Edit question is a stay-text question reachable FROM a confirmation question
-    return confirmQuestions.some((cid) => reachableFrom(nodes, cid).has(id));
-  });
-  if (editStayTextQuestions.length === 0) err("edit-path", "no Edit path re-captures the full stay description into the stay-text field");
-  for (const id of editStayTextQuestions) {
-    const reachesNormalize = reachesPred(id, (nid, n) => n?.name === "HTTP API" && n.data?.httpApiId === profile.apis.initialNormalize.id);
-    if (!reachesNormalize) err("edit-path", `Edit question ${nodeLabel(id, nodes[id])} never calls the initial normalization API`);
-    if (!reachesPred(id, isConfirmQuestion)) err("edit-path", `Edit question ${nodeLabel(id, nodes[id])} never returns to a confirmation step`);
+  // 25. request-summary terminals: at least one exists; every one displays the
+  // complete stay details (dates, villa, guests, bedrooms)
+  const summaryTerminals = terminalIds.filter((id) => isSummaryTerminal(id, nodes[id]));
+  if (summaryTerminals.length === 0) err("summary", "no request-summary terminal exists (lead submission must end on the summary message)");
+  for (const id of summaryTerminals) {
+    const text = (nodes[id].data?.textMessage ?? "").toString();
+    for (const token of profile.summaryMustInclude ?? []) {
+      if (!text.includes(token)) err("summary", `summary terminal ${nodeLabel(id, nodes[id])} does not display ${token}`);
+    }
+    const feeder = inEdges(nodes[id]);
+    if (!feeder.some((e) => isLeadSubmit(e.node, nodes[String(e.node)]))) {
+      err("summary", `summary terminal ${nodeLabel(id, nodes[id])} is not fed by a Lead Submit API node — the request must be saved before the summary is shown`);
+    }
   }
 
   // 26. date retries recover or reach complete escalation
   for (const id of apiNodes) {
     if ((nodes[id].data?.httpApiId ?? "") !== profile.apis.refine.id) continue;
-    const recovers = reachesPred(id, (nid, n) => isBedroomQuestion(nid, n) || isConfirmQuestion(nid, n));
+    const recovers = reachesPred(id, isBedroomControl);
     const escalates = reachesPred(id, isLeadSubmit);
     if (!recovers && !escalates) {
       err("date-retry", `refine API ${nodeLabel(id, nodes[id])} neither recovers into the flow nor reaches lead-submitting escalation`);
@@ -651,18 +772,6 @@ export function validateFlow(flow, profile, opts = {}) {
       return (profile.approvedTerminalSnippets ?? []).some((s) => (n.data?.textMessage ?? "").includes(s));
     });
     if (!reachesApprovedTerminal) err("escalation", `escalation message ${nodeLabel(id, nodes[id])} never reaches an approved final message`);
-  }
-
-  // 28. confirmation content
-  for (const id of confirmQuestions) {
-    const q = (nodes[id].data?.question ?? "").toString();
-    for (const token of profile.confirmationMustInclude ?? []) {
-      if (!q.includes(token)) err("confirmation", `confirmation question ${nodeLabel(id, nodes[id])} does not display ${token}`);
-    }
-    const choices = nodes[id].data?.multipleChoices ?? [];
-    for (const c of profile.confirmChoices ?? []) {
-      if (!choices.includes(c)) err("confirmation", `confirmation question ${nodeLabel(id, nodes[id])} is missing the "${c}" choice`);
-    }
   }
 
   // stale version labels: titles / campaign names must not advertise a
