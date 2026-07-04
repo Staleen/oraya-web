@@ -24,13 +24,14 @@
     "rootNodeName": "Start Bot Flow",
     "maxInboundPerNode": 1,
     "approvedPostbackMerges": {
-      "466": 5,
       "860": 30,
+      "865": 5,
       "930": 18,
       "938": 2
     },
     "postbackSourceNames": ["Inline Button", "Rows"],
     "maxInboundPerCondition": 1,
+    "importDroppedControlTargets": ["User Input Flow", "User Input Flow Single"],
     "editorRejectedDrawPairs": [],
     "editorProvenDrawPairs": [
       ["Condition", "User Input Flow"],

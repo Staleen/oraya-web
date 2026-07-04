@@ -16,6 +16,26 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-07-04 - Round trip #4: the import DROPS direct Rows → User Input Flow connections and PRESERVES control → Text convergence at full fan-in; the five "More than 6" routes repaired via one shared acknowledgement Text (#865); gate remains the interactive acceptance procedure
+
+**Decision:** the operator's authenticated round trip on the 161-node interactive candidate failed narrowly; the finding and the smallest repair are recorded here:
+
+1. **Platform finding (operator-proven, pinned byte-exact):** the saved re-export ([artifacts/whatchimp/roundtrips/Oraya_natural_intake_v6.roundtrip-4.saved-reexport.txt](../../artifacts/whatchimp/roundtrips/Oraya_natural_intake_v6.roundtrip-4.saved-reexport.txt), 140,217 bytes, SHA-256 `9C9EAD4C6D72B1B13193026ACF85182794ABFE3571FA17CB6E0ECEE788CFC031`) carries all 161 nodes but only 206 of the 211 connections. **The five dropped edges are exactly the five "More than 6" `rowOutput → #466 userInputFlowInput` connections** — one per guest list stage (`#809/#819/#829/#839/#849`), re-exported with empty outputs and stranding `#466/#467/#468/#712–#715`. **All three control → Text postback hubs survived at full fan-in (30-way `#860`, 18-way `#930`, 2-way `#938`), and no edge was added.** The evidence therefore isolates direct `Rows → User Input Flow` as an import-dropped class and simultaneously PROVES import survival of serialized control → Text convergence — it is NOT a ban on postback merges.
+2. **Repair (smallest structural change, business behavior unchanged):** all five "More than 6" rows converge on ONE new shared acknowledgement Text `#865` ("Got it 😊" — the flow's existing acknowledgement device), which carries the single serialized connection into the existing large-group wrapper `#466`. The exact-count question, team-review message, lead submission, and final messaging are byte-preserved; no subtree duplication (the shared Text is generated and validated safely, so the duplication fallback was not needed).
+3. **New canonical `Oraya_natural_intake_v6.txt`:** **162 nodes, 212 output connections, 12 Interactive, 55 controls, 10 terminals, ZERO operator redraws**, SHA-256 `F846CBFA51FBA0452DB17376123C205FC6D73DFC1F553EA3CC40CC5B2974CB47`. Approved postback merges are now `{860:30, 865:5, 930:18, 938:2}` — every hub a Text.
+4. **Rules encoded:** the generator's `assertGraphContracts` and the validator's `interactive-contract` check reject ANY control forward edge targeting a User Input Flow (profile `importGraphContract.importDroppedControlTargets`); the validator additionally errors when a declared postback hub is missing from a graph (the re-export's exact signature); regression tests pin the fixture bytes/SHA, the 5-edge loss signature, the surviving 30/18/2 hubs, the unreachable set, the repaired routing (five rows → `#865`, `#865` → `#466` exactly once, every "More than 6" reaching terminal `#715`), unchanged 1–6/bedroom/villa control classes, zero unreachable nodes, and the ten intended terminals. Tooling: validator strict **0 errors / 0 warnings**, simulator **34/34**, tests **37/37**.
+5. **Human gate (unchanged in shape):** the interactive acceptance procedure in [V6_ROUNDTRIP_CHECKLIST.md](../../artifacts/whatchimp/V6_ROUNDTRIP_CHECKLIST.md) on a fresh disposable bot, now with an explicit inspection of the five repaired "More than 6" connectors, ending in a NEW export that passes the comparator (PRESERVED, exit 0) and the strict validator (exit 0). Round-trip compatibility may not be claimed until that new export passes.
+
+**Reason:** round trip #4 was the acceptance gate on the interactive candidate; it failed on a single, precisely-isolated connection class. Routing the overflow rows through a Text moves them into the import-surviving class proven by the same round trip, with no change to guest-visible behavior beyond one acknowledgement line.
+
+**Impact:** generator (overflow-ack Text + control→UIF gate + checklist banner), profile (`approvedPostbackMerges`, `importDroppedControlTargets`), validator (control→UIF error + missing-declared-hub error), tests (37/37 incl. the two new round-trip-4 tests), `V6_DEPENDENCIES.md` / `V6_ROUNDTRIP_CHECKLIST.md` / regenerated `V6_REDRAW_CHECKLIST.md` updated; KNOWN_BUGS #10 follow-up appended; artifact + click matrix recopied to the operator folder. No application code, schema, or locked-system changes. PR #67 stays open and unmerged; production WhatChimp untouched.
+
+**Reversible?:** yes — deterministic generator, pinned fixtures. Compatibility is claimable only after the repeated acceptance procedure passes on a fresh import, recorded in a superseding entry.
+
+**Supersedes:** the 161-node totals/SHA and the `{466:5}` hub declaration in the "Interactive-controls rebuild" entry below (body preserved verbatim per the append-only rule); its architecture, removed-steps decisions, and Start-a-Flow ban all remain in force.
+
+---
+
 ## 2026-07-04 - Interactive-controls rebuild: buttons/rows save custom fields directly per operator evidence; ZERO operator redraws; confirmation/Edit/handoff/happy-path-name-ask removed; gate is the interactive acceptance procedure
 
 **Decision:** the operator supplied authenticated evidence that WhatChimp Interactive controls bind directly to custom fields, and directed the rebuild of the natural-stay intake onto them; the following are recorded:
@@ -34,6 +54,8 @@ Durable architectural and operational decisions. Append-only - never edit a past
 **Reversible?:** yes — deterministic generator, pinned fixtures. Compatibility is claimable only after the interactive acceptance procedure passes on a fresh disposable bot, recorded in a superseding entry.
 
 **Supersedes:** the redraw-based repair mechanism (39 operator draws), the 186-node canonical totals/SHA, and the round-trip-#4 gate in the "Round trip #3" entry below (body preserved verbatim per the append-only rule; its Condition-inbound rule `maxInboundPerCondition: 1` remains binding and encoded). Also supersedes the confirmation/Edit/handoff/name-ask conversation design carried since the 2026-07-02 v6 entry.
+
+> **Follow-up (2026-07-04):** the acceptance import (round trip #4) dropped exactly the five "More than 6" `Rows → #466 User Input Flow` edges while preserving every control → Text merge; the repair (shared acknowledgement Text `#865`) superseded this entry's 161-node totals/SHA and its `{466:5}` hub declaration. See the "Round trip #4" entry above. This body is preserved verbatim per the append-only rule.
 
 ---
 

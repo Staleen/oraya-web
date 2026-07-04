@@ -201,6 +201,11 @@ export function validateFlow(flow, profile, opts = {}) {
     const rootName = contract.rootNodeName ?? "Start Bot Flow";
     const approvedPostbackHubs = contract.approvedPostbackMerges ?? {};
     const postbackNames = new Set(contract.postbackSourceNames ?? ["Inline Button", "Rows"]);
+    for (const hubId of Object.keys(approvedPostbackHubs)) {
+      if (!nodes[hubId]) {
+        err("single-parent-contract", `declared postback-convergence hub #${hubId} (expected ${approvedPostbackHubs[hubId]} inbound connections) is missing from the graph — a re-export must carry every declared hub; stop and report`);
+      }
+    }
     for (const id of ids) {
       const node = nodes[id];
       const campaign = typeof node.data?.campaignName === "string" && node.data.campaignName
@@ -476,6 +481,8 @@ export function validateFlow(flow, profile, opts = {}) {
       err("interactive-contract", `${nodeLabel(id, node)} "${label}" has ${fwd.length} forward connection(s) on ${fwdKey} — exactly one is required (one press = one field assignment = one downstream transition)`);
     } else if (nodes[String(fwd[0].node)]?.name === "Condition") {
       err("interactive-contract", `${nodeLabel(id, node)} "${label}" routes directly into Condition #${fwd[0].node} — Conditions accept one inbound connection TOTAL (round trip #3); route through a Text/wrapper`);
+    } else if ((profile.importGraphContract?.importDroppedControlTargets ?? ["User Input Flow", "User Input Flow Single"]).includes(nodes[String(fwd[0].node)]?.name)) {
+      err("interactive-contract", `${nodeLabel(id, node)} "${label}" routes directly into ${nodes[String(fwd[0].node)].name} #${fwd[0].node} — WhatChimp import silently DROPS serialized Rows/Inline Button → User Input Flow connections (round trip #4, 2026-07-04: exactly the five "More than 6" rowOutput → #466 userInputFlowInput edges were lost while every control → Text merge survived); route through a shared acknowledgement Text`);
     }
     const inbound = inEdges(node);
     const attached = inbound.some((e) => e.output === "interactiveOutputButton" || e.output === "sectionOutputRows");
@@ -670,7 +677,7 @@ export function validateFlow(flow, profile, opts = {}) {
   const isNameQuestion = (id, n) => n?.name === "User Input Flow Single" && fieldNameOf(n) === profile.fullNameField;
   const isSummaryTerminal = (id, n) =>
     n?.name === "Text" && outEdges(n).length === 0 &&
-    (n.data?.textMessage ?? "").includes(profile.summaryTerminalSnippet ?? " ");
+    (n.data?.textMessage ?? "").includes(profile.summaryTerminalSnippet ?? "\u0000");
 
   // 22. guest-count controls: complete choice set, exact values, correct routing
   const guestControls = controlNodes.filter((id) => controlField(nodes[id]) === profile.guestCountField);

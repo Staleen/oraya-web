@@ -39,12 +39,15 @@
  *   3. Values already extracted by normalization SKIP their Interactive
  *      question (guest/villa null-gates; bedrooms are never extracted and
  *      are always asked).
- *   4. "More than 6" (clicked) routes to the existing large-group
- *      exact-count → team review → escalation outcome; an EXTRACTED
- *      unsupported count (7, 8, 12, …) routes to a per-branch team-review
- *      escalation directly (we already hold the exact number). Neither asks
- *      villa or bedrooms, and nothing implies an event or booking is
- *      confirmed.
+ *   4. "More than 6" (clicked) routes through ONE shared acknowledgement
+ *      Text (#865) into the existing large-group exact-count → team review →
+ *      escalation outcome. Round trip #4 (2026-07-04) proved the import
+ *      silently DROPS direct Rows → User Input Flow connections while every
+ *      control → Text merge (30/18/2-way) survives, so no control may target
+ *      a User Input Flow directly. An EXTRACTED unsupported count
+ *      (7, 8, 12, …) routes to a per-branch team-review escalation directly
+ *      (we already hold the exact number). Neither asks villa or bedrooms,
+ *      and nothing implies an event or booking is confirmed.
  *   5. Completion: once guest count (1–6), villa, and bedrooms are resolved,
  *      the flow submits the existing Lead Submit integration and shows ONE
  *      summary terminal (dates, guests, bedrooms, villa) that says the Oraya
@@ -124,6 +127,7 @@ const COPY = {
   bedroomQuestion: "How many bedrooms would you like?",
   villaQuestion: "Which villa would you prefer?",
   guestAck: "Perfect, thank you 😊",
+  overflowAck: "Got it 😊",
   escalationName: "So our team can follow up personally — may I have your full name?",
   continuationBlock:
     "\n\nYou can also continue your request online whenever you like:\n#oraya_prefill_url#\n\nIf that secure link is unavailable, please use:\nhttps://stayoraya.com/book",
@@ -532,6 +536,12 @@ function generateV6(flow) {
   // guest-ack Text: every stay-value row (1–6) of every guest list stage
   // converges here, then continues into the always-asked bedroom question.
   textNode(nodes, 860, COPY.guestAck, [6650, -1900]);
+  // overflow-ack Text: every "More than 6" row converges HERE (control → Text
+  // is the import-surviving merge class), then ONE serialized connection
+  // continues into the large-group exact-count wrapper #466. Round trip #4
+  // proved direct Rows → User Input Flow edges are dropped on import.
+  textNode(nodes, 865, COPY.overflowAck, [5760, -3350]);
+  connect(nodes, 865, "textOutput", 466, "userInputFlowInput");
   // bedroom-ack → villa gate: every bedroom button of every bedroom stage
   // converges here; the villa gate is a Condition and keeps ONE inbound.
   textNode(nodes, 930, "Noted 😊", [7400, -1700]);
@@ -592,7 +602,7 @@ function generateV6(flow) {
   for (const { base, entry, pos } of guestStages) {
     guestListStage(nodes, base, {
       stayTargetId: 860, stayTargetInput: "textInput",
-      overflowTargetId: 466, overflowTargetInput: "userInputFlowInput",
+      overflowTargetId: 865, overflowTargetInput: "textInput",
     }, pos);
     connect(nodes, entry.id, entry.outKey, base, "interactiveInput");
   }
@@ -659,8 +669,10 @@ function generateV6(flow) {
 // save/close/reopen/export). Everything else is single-parent (round trip #1).
 // The exact expected merge map is asserted so the artifact can never drift.
 const APPROVED_POSTBACK_MERGES = {
-  466: 5,  // large-group exact-count review ← the 5 "More than 6" rows
   860: 30, // guest-ack ← 6 stay rows × 5 guest list stages
+  865: 5,  // overflow-ack ← the 5 "More than 6" rows (round trip #4: direct
+           //   Rows → User Input Flow #466 was dropped on import; the shared
+           //   Text carries the single serialized edge into #466 instead)
   930: 18, // bedroom-ack ← 3 buttons × 6 bedroom stages
   938: 2,  // villa-ack ← both villa buttons
 };
@@ -750,6 +762,9 @@ function assertGraphContracts(flow) {
       if (fwdTarget?.name === "Condition") {
         problems.push(`${node.name} #${id} routes into Condition #${fwd[0].node} — Conditions accept one inbound TOTAL; route through a Text/wrapper instead`);
       }
+      if (fwdTarget?.name === "User Input Flow" || fwdTarget?.name === "User Input Flow Single") {
+        problems.push(`${node.name} #${id} routes into ${fwdTarget.name} #${fwd[0].node} — WhatChimp import DROPS serialized Rows/Inline Button → User Input Flow connections (round trip #4, 2026-07-04); route through a shared acknowledgement Text`);
+      }
     }
   }
 
@@ -781,7 +796,7 @@ function renderImportChecklist(flow, artifactSha256) {
   lines.push("");
   lines.push(`**Applies to exactly:** \`Oraya_natural_intake_v6.txt\` with SHA-256 \`${artifactSha256}\`. If your file's hash differs, regenerate this checklist.`);
   lines.push("");
-  lines.push("**There are ZERO connections to draw.** This candidate serializes convergence ONLY where every parent is an Inline Button / list Row — the class the operator proved persists (2026-07-04 saved/reopened export: two Inline Buttons linked to `custom_57693`/`oraya_guest_count` converging into the next stage; fixture `roundtrips/Oraya_natural_intake_v6.button-evidence.saved-reexport.txt`). Whether a fresh IMPORT preserves serialized postback convergence is exactly what step 1 verifies — if anything arrives loose, STOP and report; do not draw around it.");
+  lines.push("**There are ZERO connections to draw.** This candidate serializes convergence ONLY where every parent is an Inline Button / list Row AND the target is a Text (field-binding schema evidence: `roundtrips/Oraya_natural_intake_v6.button-evidence.saved-reexport.txt`). Round trip #4 (2026-07-04, fixture `roundtrips/Oraya_natural_intake_v6.roundtrip-4.saved-reexport.txt`) proved a fresh import PRESERVES serialized control → Text convergence at 30-way, 18-way, and 2-way fan-in but silently DROPS direct Rows → User Input Flow connections — which is why every \"More than 6\" row now routes through the shared acknowledgement Text before the large-group wrapper. **Inspect the five \"More than 6\" connectors explicitly** — they are the repaired class; if anything arrives loose, STOP and report; do not draw around it.");
   lines.push("");
   lines.push("## 1. Import verification (fresh disposable bot)");
   lines.push("");

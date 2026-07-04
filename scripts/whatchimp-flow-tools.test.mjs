@@ -265,6 +265,11 @@ const roundtrip3FailedPath = path.join(repoRoot, "artifacts", "whatchimp", "roun
 // the operator's authenticated saved/reopened export proving Interactive
 // button schema + forward button convergence persistence (2026-07-04)
 const buttonEvidencePath = path.join(repoRoot, "artifacts", "whatchimp", "roundtrips", "Oraya_natural_intake_v6.button-evidence.saved-reexport.txt");
+// round trip #4 (2026-07-04): the operator's saved re-export of the 161-node
+// interactive candidate — the import dropped EXACTLY the five direct
+// Rows → User Input Flow edges ("More than 6" → #466) while every
+// control → Text merge (30/18/2-way) survived (byte-preserved fixture)
+const roundtrip4Path = path.join(repoRoot, "artifacts", "whatchimp", "roundtrips", "Oraya_natural_intake_v6.roundtrip-4.saved-reexport.txt");
 
 test("validator: v5.5 operator export fails with semantic errors", { skip: !existsSync(v55Path) }, () => {
   const flow = JSON.parse(readFileSync(v55Path, "utf8"));
@@ -643,6 +648,156 @@ test("button evidence: the operator's saved/reopened export is pinned and carrie
   assert.ok(!("value" in flow.nodes["783"].data) && !("postback_text" in flow.nodes["783"].data));
   // the fixture is evidence, not a candidate
   assert.notEqual(raw.toString("utf8"), readFileSync(v6Path, "utf8"), "the evidence export must never be the canonical import file");
+});
+
+// ─── round trip #4 evidence fixture (dropped Rows → User Input Flow edges) ───
+
+test("round trip #4: the saved re-export is pinned and isolates the dropped Rows → User Input Flow class", { skip: !existsSync(roundtrip4Path) || !existsSync(v6Path) }, () => {
+  const raw = readFileSync(roundtrip4Path);
+  assert.equal(raw.length, 140217, "round-trip-4 fixture byte size must not change");
+  assert.equal(
+    createHash("sha256").update(raw).digest("hex").toUpperCase(),
+    "9C9EAD4C6D72B1B13193026ACF85182794ABFE3571FA17CB6E0ECEE788CFC031",
+    "round-trip-4 fixture bytes must not change",
+  );
+  const flow = JSON.parse(raw.toString("utf8"));
+  const nodes = flow.nodes;
+  assert.equal(Object.keys(nodes).length, 161, "all 161 nodes of the imported candidate survived");
+  let edges = 0;
+  for (const n of Object.values(nodes)) for (const o of Object.values(n.outputs ?? {})) edges += (o.connections ?? []).length;
+  assert.equal(edges, 206, "exactly 5 of the 211 serialized connections were dropped");
+  // the five dropped edges are EXACTLY the "More than 6" rowOutput → #466
+  // userInputFlowInput connections — each of those rows re-exported with an
+  // empty forward output
+  for (const id of ["809", "819", "829", "839", "849"]) {
+    const row = nodes[id];
+    assert.equal(row.name, "Rows");
+    assert.equal(row.data.title, "More than 6");
+    assert.deepEqual(row.outputs.rowOutput.connections, [], `row #${id} must show the dropped forward edge`);
+  }
+  assert.deepEqual((nodes["466"].inputs.userInputFlowInput?.connections ?? []), [], "#466 lost every inbound edge");
+  // every control → Text merge SURVIVED the import at full fan-in — the
+  // evidence isolates the target type, not postback convergence in general
+  const inbound = new Map();
+  for (const n of Object.values(nodes)) {
+    for (const o of Object.values(n.outputs ?? {})) {
+      for (const c of o.connections ?? []) inbound.set(String(c.node), (inbound.get(String(c.node)) ?? 0) + 1);
+    }
+  }
+  const hubs = {};
+  for (const [id, count] of inbound) if (count > 1) hubs[id] = count;
+  assert.deepEqual(hubs, { 860: 30, 930: 18, 938: 2 }, "the three control → Text hubs survived intact");
+  // the loss stranded the whole large-group subtree
+  const reachable = new Set(["1"]);
+  const queue = ["1"];
+  while (queue.length) {
+    const cur = queue.shift();
+    for (const o of Object.values(nodes[cur]?.outputs ?? {})) {
+      for (const c of o.connections ?? []) {
+        if (!reachable.has(String(c.node))) { reachable.add(String(c.node)); queue.push(String(c.node)); }
+      }
+    }
+  }
+  const unreachable = Object.keys(nodes).filter((id) => !reachable.has(id)).sort((a, b) => a - b);
+  assert.deepEqual(unreachable, ["466", "467", "468", "712", "713", "714", "715"]);
+  // the damaged re-export fails current validation (missing overflow-ack hub,
+  // loose row outputs, unreachable subtree)
+  const { errors } = validateFlow(flow, profile, { strictBinding: true });
+  assert.ok(errors.length >= 5, `expected the audited round-trip-4 damage, got ${errors.length} errors`);
+  assert.ok(errors.some((e) => e.startsWith("[single-parent-contract]") && e.includes("missing from the graph")), errors.join("\n"));
+  // the fixture is evidence, not a candidate
+  assert.notEqual(raw.toString("utf8"), readFileSync(v6Path, "utf8"), "the round-trip-4 re-export must never be the canonical import file");
+});
+
+test("round trip #4 repair: overflow rows converge on the shared ack Text; no control targets a User Input Flow", { skip: !existsSync(v6Path) }, () => {
+  const flow = JSON.parse(readFileSync(v6Path, "utf8"));
+  const nodes = flow.nodes;
+  // (a) graph-wide: no Rows / Inline Button forward edge targets a User Input
+  // Flow of either type (the import-dropped class)
+  for (const [id, node] of Object.entries(nodes)) {
+    if (node.name !== "Rows" && node.name !== "Inline Button") continue;
+    const fwdKey = node.name === "Rows" ? "rowOutput" : "buttonOutput";
+    const fwd = node.outputs?.[fwdKey]?.connections ?? [];
+    assert.equal(fwd.length, 1, `control #${id} must have exactly one forward connection (zero loose outputs)`);
+    const dst = nodes[String(fwd[0].node)];
+    assert.ok(dst.name !== "User Input Flow" && dst.name !== "User Input Flow Single",
+      `control #${id} routes into ${dst.name} #${fwd[0].node} — round trip #4 proved the import drops this class`);
+  }
+  // (b) the five "More than 6" rows all converge on the shared ack Text #865
+  const overflowRows = Object.entries(nodes)
+    .filter(([, n]) => n.name === "Rows" && n.data?.title === profile.guestOverflowChoice)
+    .map(([id]) => id)
+    .sort((a, b) => a - b);
+  assert.deepEqual(overflowRows, ["809", "819", "829", "839", "849"]);
+  for (const id of overflowRows) {
+    assert.deepEqual(
+      nodes[id].outputs.rowOutput.connections.map((c) => `${c.node}:${c.input}`),
+      ["865:textInput"],
+      `overflow row #${id} must route into the shared ack Text`,
+    );
+  }
+  // (c) the shared Text has exactly the five row parents and exactly ONE
+  // forward connection into the large-group wrapper #466
+  const ack = nodes["865"];
+  assert.equal(ack.name, "Text");
+  assert.equal((ack.inputs.textInput?.connections ?? []).length, 5);
+  for (const c of ack.inputs.textInput.connections) {
+    assert.equal(nodes[String(c.node)].name, "Rows", `ack parent #${c.node} must be a Rows control`);
+  }
+  assert.deepEqual(
+    ack.outputs.textOutput.connections.map((c) => `${c.node}:${c.input}`),
+    ["466:userInputFlowInput"],
+    "the shared ack Text carries the single serialized edge into #466",
+  );
+  // (d) every "More than 6" option reaches the large-group terminal #715
+  const reachesTerminal = (fromId) => {
+    const seen = new Set([fromId]);
+    const queue = [fromId];
+    while (queue.length) {
+      const cur = queue.shift();
+      if (cur === "715") return true;
+      for (const o of Object.values(nodes[cur]?.outputs ?? {})) {
+        for (const c of o.connections ?? []) {
+          if (!seen.has(String(c.node))) { seen.add(String(c.node)); queue.push(String(c.node)); }
+        }
+      }
+    }
+    return false;
+  };
+  for (const id of overflowRows) {
+    assert.ok(reachesTerminal(id), `overflow row #${id} must reach the large-group terminal #715`);
+  }
+  // (e) the surviving control classes are unchanged: 1–6 rows → #860,
+  // bedroom buttons → #930, villa buttons → #938
+  const targetsOf = (pred) => {
+    const t = new Set();
+    for (const [, n] of Object.entries(nodes).filter(([, n]) => pred(n))) {
+      const fwdKey = n.name === "Rows" ? "rowOutput" : "buttonOutput";
+      for (const c of n.outputs?.[fwdKey]?.connections ?? []) t.add(`${c.node}:${c.input}`);
+    }
+    return [...t];
+  };
+  const fieldOf = (n) => n.data?.customFieldSelectedOptionText;
+  assert.deepEqual(targetsOf((n) => n.name === "Rows" && fieldOf(n) === profile.guestCountField && n.data?.title !== profile.guestOverflowChoice), ["860:textInput"]);
+  assert.deepEqual(targetsOf((n) => n.name === "Inline Button" && fieldOf(n) === profile.bedroomField), ["930:textInput"]);
+  assert.deepEqual(targetsOf((n) => n.name === "Inline Button" && fieldOf(n) === profile.villaField), ["938:textInput"]);
+  // (f) zero unreachable nodes, and exactly the ten intended terminals
+  const reachable = new Set(["1"]);
+  const queue = ["1"];
+  while (queue.length) {
+    const cur = queue.shift();
+    for (const o of Object.values(nodes[cur]?.outputs ?? {})) {
+      for (const c of o.connections ?? []) {
+        if (!reachable.has(String(c.node))) { reachable.add(String(c.node)); queue.push(String(c.node)); }
+      }
+    }
+  }
+  assert.deepEqual(Object.keys(nodes).filter((id) => !reachable.has(id)), [], "zero unreachable nodes");
+  const terminals = Object.entries(nodes)
+    .filter(([, n]) => Object.values(n.outputs ?? {}).every((o) => (o.connections ?? []).length === 0))
+    .map(([id]) => id)
+    .sort((a, b) => a - b);
+  assert.deepEqual(terminals, ["643", "703", "715", "940", "942", "973", "977", "981", "985", "989"], "exactly the ten intended terminals");
 });
 
 // ─── simulator control coverage ──────────────────────────────────────────────
