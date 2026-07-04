@@ -6,12 +6,16 @@
  * Reads the operator's v5.5 export (byte-preserved input artifact) and applies
  * the approved Phase 16A behavior:
  *
- *   1. Natural-language intake + date conversation PRESERVED verbatim from
- *      the earlier candidates: opening stay-text question (with the pre-API
- *      https://stayoraya.com/book safety link), one initial normalization
- *      call, the full date follow-up / refine / retry / escalation
- *      conversation, and the Condition-clone cascade that keeps every
- *      Condition at exactly ONE inbound connection (round trip #3).
+ *   1. Natural-language intake + date conversation: opening stay-text
+ *      question (with the pre-API https://stayoraya.com/book safety link),
+ *      one initial normalization call, ONE date follow-up (both dates, or
+ *      check-out only when check-in exists) + ONE final retry through the
+ *      refine API, and the Condition-clone cascade that keeps every
+ *      Condition at exactly ONE inbound connection (round trip #3). A failed
+ *      FINAL retry no longer escalates: the flow stops asking about dates
+ *      and continues into the normal interactive intake with dates pending
+ *      (no name question, no date-escalation tail); the guest picks dates on
+ *      /book via the secure link in the undated summary.
  *   2. Missing STRUCTURED values are collected with WhatChimp Interactive
  *      controls whose buttons/rows save DIRECTLY to the custom field and
  *      route forward on the press (schema reference: the operator's
@@ -49,15 +53,18 @@
  *      (we already hold the exact number). Neither asks villa or bedrooms,
  *      and nothing implies an event or booking is confirmed.
  *   5. Completion: once guest count (1–6), villa, and bedrooms are resolved,
- *      the flow submits the existing Lead Submit integration and shows ONE
- *      summary terminal (dates, guests, bedrooms, villa) that says the Oraya
- *      team will review availability and follow up, states the accurate
- *      not-confirmed status, and carries the secure #oraya_prefill_url# slot
- *      plus the canonical fallback link. There is NO full-name question, NO
- *      "Continue on WhatsApp / Finish on website" choice, NO stay-summary
- *      confirmation question, and NO Edit loop. No bedroom-capacity
- *      validation happens in WhatsApp — the website's /book form remains the
- *      validation authority.
+ *      the flow submits the existing Lead Submit integration and shows a
+ *      DATE-AWARE summary terminal: when both dates are resolved it displays
+ *      them; when either is still "null" (failed final retry) the undated
+ *      variant shows "Dates: Please choose them using the secure link
+ *      below." instead — the literal "null" and misleading partial dates
+ *      never render. Both variants say the Oraya team will review
+ *      availability and follow up, state the accurate not-confirmed status,
+ *      and carry the secure #oraya_prefill_url# slot plus the canonical
+ *      fallback link. There is NO full-name question, NO "Continue on
+ *      WhatsApp / Finish on website" choice, NO stay-summary confirmation
+ *      question, and NO Edit loop. No bedroom-capacity validation happens in
+ *      WhatsApp — the website's /book form remains the validation authority.
  *
  * IMPORT / EDITOR CONTRACTS enforced at generation time:
  *   - Round trip #1: WhatChimp's import keeps only the FIRST serialized
@@ -128,6 +135,8 @@ const COPY = {
   villaQuestion: "Which villa would you prefer?",
   guestAck: "Perfect, thank you 😊",
   overflowAck: "Got it 😊",
+  datesPendingContinue:
+    "No problem at all 😊 You can pick your exact dates on our secure booking page in a moment — let me get the rest of the details first.",
   escalationName: "So our team can follow up personally — may I have your full name?",
   continuationBlock:
     "\n\nYou can also continue your request online whenever you like:\n#oraya_prefill_url#\n\nIf that secure link is unavailable, please use:\nhttps://stayoraya.com/book",
@@ -137,6 +146,11 @@ const COPY = {
     "For a group of #oraya_guest_count# I’ll have our team confirm the details with you personally 😊 — larger stays and events deserve a personal touch.",
   summary:
     "Thank you 😊 Here’s your stay request:\n\n📅 Check-in: #oraya_check_in#\n📅 Check-out: #oraya_check_out#\n🏡 Villa: #oraya_villa#\n👥 Overnight guests: #oraya_guest_count#\n🛏 Bedrooms: #oraya_bedroom_count#\n\nThe Oraya team will review availability and follow up with you right here on WhatsApp. Please note this is a request — not a confirmed booking yet.",
+  // Shown when either date is still unresolved after the follow-up + retry:
+  // no date hashtag may render (the fields hold the literal "null"), so the
+  // dates line points at the secure link instead of showing captured values.
+  summaryUndated:
+    "Thank you 😊 Here’s your stay request:\n\n📅 Dates: Please choose them using the secure link below.\n🏡 Villa: #oraya_villa#\n👥 Overnight guests: #oraya_guest_count#\n🛏 Bedrooms: #oraya_bedroom_count#\n\nThe Oraya team will review availability and follow up with you right here on WhatsApp. Please note this is a request — not a confirmed booking yet.",
 };
 
 // ─── deterministic id factory ───────────────────────────────────────────────
@@ -557,18 +571,36 @@ function generateV6(flow) {
   connect(nodes, 936, "buttonOutput", 938, "textInput");
   connect(nodes, 937, "buttonOutput", 938, "textInput");
 
-  // completion A: villa just chosen → Lead Submit → summary terminal
-  apiNode(nodes, 939, API.leadSubmit, [8680, -1950]);
-  textNode(nodes, 940, COPY.summary + COPY.continuationBlock, [8940, -1950]);
-  connect(nodes, 938, "textOutput", 939, "httpApiInput");
-  connect(nodes, 939, "httpApiOutput", 940, "textInput");
+  // Date-aware summaries: after Lead Submit, a single-inbound Condition picks
+  // the dated or undated variant. When either date is still "null" (failed
+  // final retry), the undated summary shows the choose-dates line instead of
+  // rendering "null" through the date hashtags; /book (via the secure link)
+  // is where the guest picks the dates.
+  const DATES_UNRESOLVED = [
+    { field: FIELD.checkIn, value: "null" },
+    { field: FIELD.checkOut, value: "null" },
+  ];
 
-  // completion B: villa already known → Lead Submit → summary terminal
+  // completion A: villa just chosen → Lead Submit → date branch → summary
+  apiNode(nodes, 939, API.leadSubmit, [8680, -1950]);
+  conditionNode(nodes, 943, DATES_UNRESOLVED, [8810, -1950]);
+  textNode(nodes, 940, COPY.summary + COPY.continuationBlock, [9070, -2080]);
+  textNode(nodes, 945, COPY.summaryUndated + COPY.continuationBlock, [9070, -1850]);
+  connect(nodes, 938, "textOutput", 939, "httpApiInput");
+  connect(nodes, 939, "httpApiOutput", 943, "conditionInput"); // #943's ONLY inbound
+  connect(nodes, 943, "conditionOutputTrue", 945, "textInput");
+  connect(nodes, 943, "conditionOutputFalse", 940, "textInput");
+
+  // completion B: villa already known → Lead Submit → date branch → summary
   apiNode(nodes, 941, API.leadSubmit, [8680, -1650]);
-  textNode(nodes, 942, COPY.summary + COPY.continuationBlock, [8940, -1650]);
+  conditionNode(nodes, 944, DATES_UNRESOLVED, [8810, -1650]);
+  textNode(nodes, 942, COPY.summary + COPY.continuationBlock, [9070, -1620]);
+  textNode(nodes, 946, COPY.summaryUndated + COPY.continuationBlock, [9070, -1420]);
   connect(nodes, 470, "conditionOutputTrue", 935, "interactiveInput");
   connect(nodes, 470, "conditionOutputFalse", 941, "httpApiInput");
-  connect(nodes, 941, "httpApiOutput", 942, "textInput");
+  connect(nodes, 941, "httpApiOutput", 944, "conditionInput"); // #944's ONLY inbound
+  connect(nodes, 944, "conditionOutputTrue", 946, "textInput");
+  connect(nodes, 944, "conditionOutputFalse", 942, "textInput");
 
   // ── date-recovery Condition-clone cascade (round trip #3 invariant) ───────
   // Each of the four date-recovery exits keeps its own "guest known?" clone
@@ -589,6 +621,27 @@ function generateV6(flow) {
     connect(nodes, g, "conditionOutputFalse", s, "conditionInput"); // sole connection — import keeps it
   }
 
+  // ── failed FINAL date retry: continue the intake with dates pending ───────
+  // Behavior decision 2026-07-04: after the one follow-up + one retry the
+  // flow STOPS asking about dates — no name question, no date-escalation
+  // tail. The transitional Text (#438 / #504, rewritten in place) hands off
+  // into its own guest-known/supported-count clone chain, the normal
+  // Interactive intake continues, and the summary switches to the undated
+  // variant whose secure link lets the guest pick dates on /book.
+  const datesPendingBranches = [
+    { from: 438, g: 758, s: 759 }, // both-dates path (436 True)
+    { from: 504, g: 760, s: 761 }, // check-out path (505 True)
+  ];
+  for (const { from, g, s } of datesPendingBranches) {
+    const [px, py] = nodes[String(from)].position;
+    nodes[String(from)].data.textMessage = COPY.datesPendingContinue;
+    disconnectOutput(nodes, from, "textOutput");
+    cloneCondition(nodes, 440, g, [px + 260, py + 120]);
+    cloneCondition(nodes, 602, s, [px + 520, py + 120]);
+    connect(nodes, from, "textOutput", g, "conditionInput"); // sole connection — import keeps it
+    connect(nodes, g, "conditionOutputFalse", s, "conditionInput"); // sole connection — import keeps it
+  }
+
   // ── guest list stages (one per guest-unknown entry; Conditions keep ONE
   // inbound, so each entry owns its stage; the stages' rows converge on the
   // shared spine via postback convergence) ──────────────────────────────────
@@ -598,6 +651,8 @@ function generateV6(flow) {
     { base: 820, entry: { id: 752, outKey: "conditionOutputTrue" }, pos: [5200, -3300] },
     { base: 830, entry: { id: 754, outKey: "conditionOutputTrue" }, pos: [4200, 900] },
     { base: 840, entry: { id: 756, outKey: "conditionOutputTrue" }, pos: [4700, 1200] },
+    { base: 900, entry: { id: 758, outKey: "conditionOutputTrue" }, pos: [5400, -2700] }, // dates pending A
+    { base: 910, entry: { id: 760, outKey: "conditionOutputTrue" }, pos: [5400, 1500] }, // dates pending B
   ];
   for (const { base, entry, pos } of guestStages) {
     guestListStage(nodes, base, {
@@ -617,6 +672,8 @@ function generateV6(flow) {
     { base: 885, entry: { id: 753, outKey: "conditionOutputTrue" }, pos: [6900, -2800] },
     { base: 890, entry: { id: 755, outKey: "conditionOutputTrue" }, pos: [6900, 900] },
     { base: 895, entry: { id: 757, outKey: "conditionOutputTrue" }, pos: [6900, 1200] },
+    { base: 920, entry: { id: 759, outKey: "conditionOutputTrue" }, pos: [6900, -3100] }, // dates pending A
+    { base: 925, entry: { id: 761, outKey: "conditionOutputTrue" }, pos: [6900, 1500] }, // dates pending B
   ];
   for (const { base, entry, pos } of bedroomStages) {
     bedroomStage(nodes, base, { ackTargetId: 930, ackTargetInput: "textInput" }, pos);
@@ -633,6 +690,8 @@ function generateV6(flow) {
     { from: 753, preface: 965, tail: [978, 979, 980, 981], label: "dates recovery B" },
     { from: 755, preface: 966, tail: [982, 983, 984, 985], label: "check-out recovery A" },
     { from: 757, preface: 967, tail: [986, 987, 988, 989], label: "check-out recovery B" },
+    { from: 759, preface: 968, tail: [990, 991, 992, 993], label: "dates pending A" },
+    { from: 761, preface: 969, tail: [994, 995, 996, 997], label: "dates pending B" },
   ];
   for (const { from, preface, tail, label } of overflowBranches) {
     const [px, py] = nodes[String(from)].position;
@@ -642,11 +701,9 @@ function generateV6(flow) {
     connect(nodes, preface, "textOutput", tail[0], "userInputFlowInput");
   }
 
-  // ── date-trouble + clicked-large-group escalation tails (existing outcome) ─
-  escalationTail(nodes, [640, 641, 642, 643], "Oraya v6 - Escalation: dates", [5100, -2560]);
-  connect(nodes, 438, "textOutput", 640, "userInputFlowInput");
-  escalationTail(nodes, [700, 701, 702, 703], "Oraya v6 - Escalation: dates (check-out path)", [4900, 636]);
-  connect(nodes, 504, "textOutput", 700, "userInputFlowInput");
+  // ── clicked-large-group escalation tail (existing outcome, preserved) ─────
+  // The date-escalation tails (640–643 / 700–703) are GONE: a failed final
+  // date retry continues the intake with dates pending instead of escalating.
   escalationTail(nodes, [712, 713, 714, 715], "Oraya v6 - Escalation: large group", [5760, -3600]);
   connect(nodes, 468, "textOutput", 712, "userInputFlowInput");
 
@@ -669,11 +726,11 @@ function generateV6(flow) {
 // save/close/reopen/export). Everything else is single-parent (round trip #1).
 // The exact expected merge map is asserted so the artifact can never drift.
 const APPROVED_POSTBACK_MERGES = {
-  860: 30, // guest-ack ← 6 stay rows × 5 guest list stages
-  865: 5,  // overflow-ack ← the 5 "More than 6" rows (round trip #4: direct
+  860: 42, // guest-ack ← 6 stay rows × 7 guest list stages
+  865: 7,  // overflow-ack ← the 7 "More than 6" rows (round trip #4: direct
            //   Rows → User Input Flow #466 was dropped on import; the shared
            //   Text carries the single serialized edge into #466 instead)
-  930: 18, // bedroom-ack ← 3 buttons × 6 bedroom stages
+  930: 24, // bedroom-ack ← 3 buttons × 8 bedroom stages
   938: 2,  // villa-ack ← both villa buttons
 };
 

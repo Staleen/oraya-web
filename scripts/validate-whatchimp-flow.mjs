@@ -743,28 +743,56 @@ export function validateFlow(flow, profile, opts = {}) {
     }
   }
 
-  // 25. request-summary terminals: at least one exists; every one displays the
-  // complete stay details (dates, villa, guests, bedrooms)
+  // 25. request-summary terminals: DATED summaries display the complete stay
+  // details; UNDATED summaries (failed final date retry) display the
+  // choose-dates wording and never leak the literal "null" or a raw date
+  // hashtag; every summary is fed by Lead Submit — directly or through the
+  // single-inbound date-branch Condition that selects the variant
   const summaryTerminals = terminalIds.filter((id) => isSummaryTerminal(id, nodes[id]));
   if (summaryTerminals.length === 0) err("summary", "no request-summary terminal exists (lead submission must end on the summary message)");
+  const undatedSnippet = profile.undatedSummarySnippet;
+  let datedCount = 0;
+  let undatedCount = 0;
   for (const id of summaryTerminals) {
     const text = (nodes[id].data?.textMessage ?? "").toString();
-    for (const token of profile.summaryMustInclude ?? []) {
+    const isUndated = undatedSnippet ? text.includes(undatedSnippet) : false;
+    if (isUndated) undatedCount += 1; else datedCount += 1;
+    const mustInclude = isUndated ? (profile.undatedSummaryMustInclude ?? []) : (profile.summaryMustInclude ?? []);
+    for (const token of mustInclude) {
       if (!text.includes(token)) err("summary", `summary terminal ${nodeLabel(id, nodes[id])} does not display ${token}`);
     }
+    if (isUndated) {
+      for (const banned of [`#${profile.checkInField}#`, `#${profile.checkOutField}#`]) {
+        if (text.includes(banned)) err("summary", `undated summary terminal ${nodeLabel(id, nodes[id])} displays ${banned} — unresolved dates hold the literal "null" and must never render`);
+      }
+      if (/\bnull\b/i.test(text)) err("summary", `undated summary terminal ${nodeLabel(id, nodes[id])} contains the literal "null"`);
+    }
     const feeder = inEdges(nodes[id]);
-    if (!feeder.some((e) => isLeadSubmit(e.node, nodes[String(e.node)]))) {
-      err("summary", `summary terminal ${nodeLabel(id, nodes[id])} is not fed by a Lead Submit API node — the request must be saved before the summary is shown`);
+    const fedByLead = (e) => isLeadSubmit(e.node, nodes[String(e.node)]);
+    const fedViaDateBranch = (e) => {
+      const src = nodes[String(e.node)];
+      return src?.name === "Condition" && inEdges(src).some(fedByLead);
+    };
+    if (!feeder.some((e) => fedByLead(e) || fedViaDateBranch(e))) {
+      err("summary", `summary terminal ${nodeLabel(id, nodes[id])} is not fed by a Lead Submit API node (directly or via the date-branch Condition) — the request must be saved before the summary is shown`);
     }
   }
+  if (undatedSnippet && summaryTerminals.length > 0) {
+    if (undatedCount === 0) err("summary", "no undated summary terminal exists — the failed-final-date-retry path must end on the choose-dates summary");
+    if (datedCount === 0) err("summary", "no dated summary terminal exists — resolved dates must be displayed");
+  }
 
-  // 26. date retries recover or reach complete escalation
+  // 26. every date refine API continues into the interactive intake: it must
+  // reach a bedroom-selection control AND a summary terminal (recovery or the
+  // dates-pending continuation) — a failed final retry may no longer dead-end
+  // into a date-escalation tail (removed 2026-07-04)
   for (const id of apiNodes) {
     if ((nodes[id].data?.httpApiId ?? "") !== profile.apis.refine.id) continue;
-    const recovers = reachesPred(id, isBedroomControl);
-    const escalates = reachesPred(id, isLeadSubmit);
-    if (!recovers && !escalates) {
-      err("date-retry", `refine API ${nodeLabel(id, nodes[id])} neither recovers into the flow nor reaches lead-submitting escalation`);
+    if (!reachesPred(id, isBedroomControl)) {
+      err("date-retry", `refine API ${nodeLabel(id, nodes[id])} never continues into the interactive intake (no bedroom-selection control reachable)`);
+    }
+    if (!reachesPred(id, isSummaryTerminal)) {
+      err("date-retry", `refine API ${nodeLabel(id, nodes[id])} never reaches a request-summary terminal — the dates-pending continuation must complete the request`);
     }
   }
 

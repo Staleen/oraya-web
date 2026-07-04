@@ -343,6 +343,9 @@ export function runScenario(flow, profile, scenario) {
       if (!(terminalText ?? "").includes(s)) fail(`terminal message missing "${s}" (got: "${(terminalText ?? "").slice(0, 140)}")`);
     }
   }
+  for (const s of ex.terminalExcludes ?? []) {
+    if ((terminalText ?? "").includes(s)) fail(`terminal message must NOT contain "${s}" (got: "${(terminalText ?? "").slice(0, 140)}")`);
+  }
   if (ex.leadSubmitted === true && leadSubmits < 1) fail("expected a lead submission, none happened");
   if (ex.leadSubmitted === false && leadSubmits > 0) fail(`expected no lead submission, got ${leadSubmits}`);
   if (ex.leadAttempted === true && leadAttempts < 1) fail("expected a Lead Submit node to fire, none did");
@@ -790,36 +793,46 @@ export function buildScenarios() {
       expect: { leadSubmitted: true, terminalIncludes: ESC_TERMINAL, visitsInOrder: [["757", "967", "986", "989"]] },
     },
 
-    // ── date escalations (existing outcome, preserved) ───────────────────────
+    // ── failed FINAL date retry: the intake continues with dates pending ─────
+    // (the date-escalation tails are gone — no name question, no escalation;
+    // the guest picks dates on /book via the secure link in the undated summary)
     {
-      name: "E01 unreadable dates twice → complete human escalation (name + lead + not-confirmed)",
+      name: "D01 unreadable dates twice → intake continues (guest row \"2\" → bedrooms → villa) → UNDATED summary, no name ask",
       inputs: [
-        stay("Mechmech, 3 guests"),
+        stay("a villa please"),
         { expect: "check-in and check-out dates", answer: "whenever" },
         { expect: "check-in and check-out dates together", answer: "still whenever" },
-        escName,
+        guestClick("2"),
+        bedroomClick("1 bedroom"),
+        villaClick("Villa Byblos"),
       ],
       fixtures: [
-        { api: "7466", response: norm(null, null, "Villa Mechmech", "3") },
-        { api: "8101", response: norm(null, null, "Villa Mechmech", "3") },
-        { api: "8101", response: norm(null, null, "Villa Mechmech", "3") },
-        { api: "6961", response: {} },
+        { api: "7466", response: norm(null, null, null, null) },
+        { api: "8101", response: norm(null, null, null, null) },
+        { api: "8101", response: norm(null, null, null, null) },
+        { api: "6961", response: { prefill_url: "https://stayoraya.com/book?h=TESTTOKEN123" } },
       ],
       expect: {
         leadSubmitted: true,
-        terminalIncludes: ESC_TERMINAL,
-        messagesInclude: ["trouble reading the dates"],
-        fieldEquals: { oraya_full_name: "David Guest" },
-        visitsInOrder: [["436", "438", "640", "641", "642", "643"]],
+        terminalIncludes: [...SUMMARY_TERMINAL, "Dates: Please choose them using the secure link below", "Villa: Villa Byblos", "Overnight guests: 2", "TESTTOKEN123"],
+        terminalExcludes: ["null", "Check-in:", "Check-out:"],
+        askedExcludes: ["full name"],
+        messagesInclude: ["pick your exact dates on our secure booking page"],
+        messagesExclude: ["trouble reading the dates", "passed your request"],
+        fieldEquals: { oraya_guest_count: "2", oraya_bedroom_count: "1 bedroom", oraya_villa: "Villa Byblos" },
+        // final retry fails → transitional #438 → dates-pending guest gate 758
+        // (missing) → guest stage 900 → row "2" → shared spine → villa asked →
+        // Lead Submit A → date branch 943 (True: unresolved) → undated summary
+        visitsInOrder: [["435", "436", "438", "758", "900", "904", "860", "870", "871", "930", "470", "935", "937", "938", "939", "943", "945"]],
       },
     },
     {
-      name: "E02 unreadable check-out twice → complete human escalation on the check-out path",
+      name: "D02 unreadable check-out twice (check-in WAS captured) → bedroom stage → UNDATED summary shows neither date",
       inputs: [
-        stay("Mechmech from July 10, 3 guests"),
+        stay("Mechmech from July 10 for 3"),
         { expect: "check-out date", answer: "soonish" },
         { expect: "check-in and check-out dates together", answer: "still soonish" },
-        escName,
+        bedroomClick("2 bedrooms"),
       ],
       fixtures: [
         { api: "7466", response: norm("2026-07-10", null, "Villa Mechmech", "3") },
@@ -829,9 +842,127 @@ export function buildScenarios() {
       ],
       expect: {
         leadSubmitted: true,
+        terminalIncludes: [...SUMMARY_TERMINAL, "Dates: Please choose them using the secure link below", "Overnight guests: 3"],
+        // the captured check-in must NOT render on its own — a half-date pair
+        // is misleading; the guest sets both dates on /book
+        terminalExcludes: ["2026-07-10", "null", "Check-in:", "Check-out:"],
+        askedExcludes: ["full name", "check-in and check-out dates together?"],
+        // 505 True → transitional #504 → gate 760 (guests known) → supported
+        // clone 761 (True) → bedroom stage 925 → completion B → undated summary
+        visitsInOrder: [["506", "505", "504", "760", "761", "925", "927", "930", "470", "941", "944", "946"]],
+      },
+    },
+    {
+      name: "D03 check-out fails twice, guests missing → guest stage on the dates-pending path → UNDATED summary",
+      inputs: [
+        stay("Mechmech from July 10"),
+        { expect: "check-out date", answer: "no idea" },
+        { expect: "check-in and check-out dates together", answer: "really no idea" },
+        guestClick("5"),
+        bedroomClick("3 bedrooms"),
+      ],
+      fixtures: [
+        { api: "7466", response: norm("2026-07-10", null, "Villa Mechmech", null) },
+        { api: "8101", response: norm("2026-07-10", null, "Villa Mechmech", null) },
+        { api: "8101", response: norm("2026-07-10", null, "Villa Mechmech", null) },
+        { api: "6961", response: {} },
+      ],
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: [...SUMMARY_TERMINAL, "Dates: Please choose them using the secure link below", "Overnight guests: 5"],
+        terminalExcludes: ["null", "2026-07-10"],
+        askedExcludes: ["full name"],
+        fieldEquals: { oraya_guest_count: "5" },
+        visitsInOrder: [["504", "760", "910", "917", "860", "870", "873", "930", "470", "941", "944", "946"]],
+      },
+    },
+    {
+      name: "D04 both dates fail, guests extracted (4) → bedroom stage on the dates-pending path → UNDATED summary",
+      inputs: [
+        stay("Mechmech for 4 of us"),
+        { expect: "check-in and check-out dates", answer: "whenever" },
+        { expect: "check-in and check-out dates together", answer: "still whenever" },
+        bedroomClick("3 bedrooms"),
+      ],
+      fixtures: [
+        { api: "7466", response: norm(null, null, "Villa Mechmech", "4") },
+        { api: "8101", response: norm(null, null, "Villa Mechmech", "4") },
+        { api: "8101", response: norm(null, null, "Villa Mechmech", "4") },
+        { api: "6961", response: {} },
+      ],
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: [...SUMMARY_TERMINAL, "Dates: Please choose them using the secure link below", "Overnight guests: 4"],
+        terminalExcludes: ["null"],
+        askedExcludes: ["full name", "How many guests will be staying overnight"],
+        // gate 758 (guests known: False) → supported clone 759 (True) →
+        // bedroom stage 920 → completion B → undated summary
+        visitsInOrder: [["436", "438", "758", "759", "920", "923", "930", "470", "941", "944", "946"]],
+      },
+    },
+    {
+      name: "D05 both dates fail + extracted UNSUPPORTED count (12) → large-group review tail (existing human outcome)",
+      inputs: [
+        stay("a villa for 12 people"),
+        { expect: "check-in and check-out dates", answer: "whenever" },
+        { expect: "check-in and check-out dates together", answer: "still whenever" },
+        escName,
+      ],
+      fixtures: [
+        { api: "7466", response: norm(null, null, null, "12") },
+        { api: "8101", response: norm(null, null, null, "12") },
+        { api: "8101", response: norm(null, null, null, "12") },
+        { api: "6961", response: {} },
+      ],
+      expect: {
+        leadSubmitted: true,
         terminalIncludes: ESC_TERMINAL,
-        messagesInclude: ["trouble reading the dates"],
-        visitsInOrder: [["505", "504", "700", "701", "702", "703"]],
+        fieldEquals: { oraya_guest_count: "12" },
+        visitsInOrder: [["438", "758", "759", "968", "990", "991", "992", "993"]],
+      },
+    },
+    {
+      name: "D06 check-out fails + extracted UNSUPPORTED count (7) → large-group review tail on the check-out path",
+      inputs: [
+        stay("Mechmech from July 10 for 7"),
+        { expect: "check-out date", answer: "dunno" },
+        { expect: "check-in and check-out dates together", answer: "still dunno" },
+        escName,
+      ],
+      fixtures: [
+        { api: "7466", response: norm("2026-07-10", null, "Villa Mechmech", "7") },
+        { api: "8101", response: norm("2026-07-10", null, "Villa Mechmech", "7") },
+        { api: "8101", response: norm("2026-07-10", null, "Villa Mechmech", "7") },
+        { api: "6961", response: {} },
+      ],
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: ESC_TERMINAL,
+        fieldEquals: { oraya_guest_count: "7" },
+        visitsInOrder: [["504", "760", "761", "969", "994", "995", "996", "997"]],
+      },
+    },
+    {
+      name: "D07 dates pending + clicked \"More than 6\" → shared overflow ack → exact-count → large-group tail",
+      inputs: [
+        stay("a villa please"),
+        { expect: "check-in and check-out dates", answer: "whenever" },
+        { expect: "check-in and check-out dates together", answer: "still whenever" },
+        guestClick("More than 6"),
+        { expect: "How many guests exactly", answer: "10" },
+        escName,
+      ],
+      fixtures: [
+        { api: "7466", response: norm(null, null, null, null) },
+        { api: "8101", response: norm(null, null, null, null) },
+        { api: "8101", response: norm(null, null, null, null) },
+        { api: "6961", response: {} },
+      ],
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: ESC_TERMINAL,
+        fieldEquals: { oraya_guest_followup: "10", oraya_guest_count: "More than 6" },
+        visitsInOrder: [["758", "900", "909", "865", "466", "467", "468", "712", "715"]],
       },
     },
 
@@ -914,23 +1045,38 @@ export function buildScenarios() {
     },
     {
       name: "F04 escalation Lead Submit fails → escalation terminal still delivers the booking links",
-      inputs: [
-        stay("Mechmech, 3 guests"),
-        { expect: "check-in and check-out dates", answer: "whenever" },
-        { expect: "check-in and check-out dates together", answer: "still whenever" },
-        escName,
-      ],
+      inputs: [stay("a villa for 7 people July 10 to 11"), escName],
       fixtures: [
-        { api: "7466", response: norm(null, null, "Villa Mechmech", "3") },
-        { api: "8101", response: norm(null, null, "Villa Mechmech", "3") },
-        { api: "8101", response: norm(null, null, "Villa Mechmech", "3") },
+        { api: "7466", response: norm("2026-07-10", "2026-07-11", null, "7") },
         { api: "6961", failed: true, response: {} },
       ],
       expect: {
         leadAttempted: true,
         leadSubmitted: false,
         terminalIncludes: ["https://stayoraya.com/book", "not a confirmed booking"],
-        messagesInclude: ["trouble reading the dates"],
+        messagesInclude: ["confirm the details with you personally"],
+      },
+    },
+    {
+      name: "F05 dates-pending Lead Submit fails → undated summary still delivers the canonical fallback link",
+      inputs: [
+        stay("Mechmech for 4 of us"),
+        { expect: "check-in and check-out dates", answer: "whenever" },
+        { expect: "check-in and check-out dates together", answer: "still whenever" },
+        bedroomClick("2 bedrooms"),
+      ],
+      fixtures: [
+        { api: "7466", response: norm(null, null, "Villa Mechmech", "4") },
+        { api: "8101", response: norm(null, null, "Villa Mechmech", "4") },
+        { api: "8101", response: norm(null, null, "Villa Mechmech", "4") },
+        { api: "6961", failed: true, response: {} },
+      ],
+      expect: {
+        leadAttempted: true,
+        leadSubmitted: false,
+        terminalIncludes: ["https://stayoraya.com/book", "Dates: Please choose them using the secure link below", "not a confirmed booking"],
+        terminalExcludes: ["null"],
+        askedExcludes: ["full name"],
       },
     },
   ];

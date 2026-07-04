@@ -16,6 +16,26 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-07-04 - Dates-pending continuation: a failed final date retry continues the interactive intake and the secure website handoff; date-escalation tails deleted; date-aware summaries (dated / undated variants)
+
+**Decision:** the operator directed that date failure must not end in a team escalation; the following behavior and structure are recorded:
+
+1. **Date behavior:** the natural-language message is the initial extraction attempt. If dates are missing, the flow asks the appropriate follow-up (both dates, or check-out only when check-in exists) → refine API → exactly ONE final retry → refine API. **A failed final retry stops asking about dates and continues into the correct guest-count missing/extracted branch** (transitional message: "You can pick your exact dates on our secure booking page in a moment"), then collects missing bedrooms/villa with the existing Interactive controls, submits the lead through the existing Lead Submit contract (date fields carry the literal `"null"`), and mints the secure prefill URL with dates absent — the guest chooses dates on `/book`. **No name question; the date-escalation tails (640–643 / 700–703) are deleted from the canonical graph.** Large-group escalation behavior (clicked "More than 6" → exact-count → review tail; extracted 7+ → per-branch review tail, incl. on the dates-pending branches) is unchanged.
+2. **Summary behavior:** each completion Lead Submit (#939/#941) feeds a single-inbound date-branch Condition (#943/#944, `check_in = "null" OR check_out = "null"`, anyMatch) selecting the **dated** summary (#940/#942 — both dates displayed) or the **undated** summary (#945/#946 — "📅 Dates: Please choose them using the secure link below." plus villa/guests/bedrooms; the literal `null`, blank hashtags, and half-captured dates never render). Both variants keep the team-review wording, the not-confirmed status, the secure `#oraya_prefill_url#` slot, and the canonical `/book` fallback.
+3. **Structure:** each failed-retry exit (#438 both-dates / #504 check-out, texts rewritten in place) hands off into its own guest-known/supported-count Condition-clone chain (758/759, 760/761 — `maxInboundPerCondition: 1` upheld), its own guest list stage (900, 910) and bedroom stage (920, 925) reusing the shared postback spine, and its own extracted-overflow preface + tail (968→990–993, 969→994–997). New canonical `Oraya_natural_intake_v6.txt`: **200 nodes, 270 output connections, 16 Interactive (7 guest + 8 bedroom + 1 villa), 75 controls (49 Rows + 26 buttons), 12 terminals, ZERO operator redraws**, SHA-256 `4D032FEC5209EF6685BD84BDA0980EBAAD7AB8BF8031AD9B8DD96BCB9BE1E46B`; postback hubs `{860:42, 865:7, 930:24, 938:2}` (all Texts; 42-way guest-ack fan-in exceeds the 30-way scale round trip #4 proved — same class, human-gated). The repaired `Rows → #865 → #466` overflow path, all custom-field bindings, extraction-skip behavior, stale-field clearing, and all historical fixtures are untouched.
+4. **Backend contract (proven, no code change):** `normalizeLeadInput` stores NO date for the literal `"null"` strings (never the string), keeps guest/bedroom/villa intact, and the prefill token is minted from the lead id alone — new focused suite `lib/butler/leads-absent-dates.test.mts` (4/4).
+5. **Rules encoded:** validator check 25 rewritten (dated summaries display all 5 tokens; undated summaries display the choose-dates wording + 3 tokens, never a date hashtag or the literal `null`; both variants must exist; summaries fed by Lead Submit directly or via the date-branch Condition); check 26 rewritten (every refine API must reach a bedroom control AND a summary terminal — a date path may no longer dead-end into escalation); profile gains `undatedSummarySnippet` / `undatedSummaryMustInclude` + updated `approvedPostbackMerges`; simulator gains the D01–D07 dates-pending matrix + `terminalExcludes` (proving no `null`, no captured half-date, no name ask) — **40/40**; tooling tests gain the dates-pending continuation test (escalation nodes absent, transitional handoffs, mainline never reaches a name question, undated summaries reachable, date-branch contract) — **38/38**.
+
+**Reason:** a guest whose dates the bot cannot read is a qualified lead, not an escalation case — the website's date picker is the reliable instrument; sending the guest there through the existing secure handoff preserves the lead and removes two dead-end conversations and a needless name question.
+
+**Impact:** generator (transitional handoffs, dates-pending clone chains + stages, date-branch summaries, tails removed), profile, validator, simulator, tests, new `lib/butler/leads-absent-dates.test.mts`; `V6_DEPENDENCIES.md` / `V6_ROUNDTRIP_CHECKLIST.md` (C4 rewritten to the dates-pending scenario; twelve terminals) / regenerated `V6_REDRAW_CHECKLIST.md`; KNOWN_BUGS #10 follow-up; artifact + click matrix recopied to the operator folder. No schema, dependency, production WhatChimp, or locked-booking changes. PR #67 stays open and unmerged.
+
+**Reversible?:** yes — deterministic generator, pinned fixtures. The gate remains the interactive acceptance procedure (now incl. the dates-pending scenario C4) on a fresh disposable bot.
+
+**Supersedes:** the date-escalation outcome ("unreadable dates twice → name → lead → passed to the team") carried since the 2026-07-02 v6 entry, and the 162-node totals/SHA + `{865:5}` hub counts in the "Round trip #4" entry below (body preserved verbatim per the append-only rule; its platform findings and the shared-ack-Text repair remain in force).
+
+---
+
 ## 2026-07-04 - Round trip #4: the import DROPS direct Rows → User Input Flow connections and PRESERVES control → Text convergence at full fan-in; the five "More than 6" routes repaired via one shared acknowledgement Text (#865); gate remains the interactive acceptance procedure
 
 **Decision:** the operator's authenticated round trip on the 161-node interactive candidate failed narrowly; the finding and the smallest repair are recorded here:
@@ -33,6 +53,8 @@ Durable architectural and operational decisions. Append-only - never edit a past
 **Reversible?:** yes — deterministic generator, pinned fixtures. Compatibility is claimable only after the repeated acceptance procedure passes on a fresh import, recorded in a superseding entry.
 
 **Supersedes:** the 161-node totals/SHA and the `{466:5}` hub declaration in the "Interactive-controls rebuild" entry below (body preserved verbatim per the append-only rule); its architecture, removed-steps decisions, and Start-a-Flow ban all remain in force.
+
+> **Follow-up (2026-07-04):** the dates-pending continuation rebuild superseded this entry's 162-node totals/SHA and `{865:5}` hub count the same day (the overflow-ack Text now receives 7 rows; date-escalation tails deleted; date-aware summaries added). The platform findings and the shared-ack-Text repair recorded here remain in force. See the "Dates-pending continuation" entry above. This body is preserved verbatim per the append-only rule.
 
 ---
 
