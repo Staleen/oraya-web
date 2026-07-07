@@ -14,6 +14,7 @@ type LeadPrefillRow = {
   guest_count: string | null;
   name: string | null;
   source: string | null;
+  raw_payload: Record<string, unknown> | null;
 };
 
 function invalidToken() {
@@ -60,6 +61,26 @@ function sanitizeSleepingGuests(value: string | null): string | null {
   return trimmed ? trimmed : null;
 }
 
+/**
+ * Phase 16A natural intake: surface the guest's explicit bedroom preference
+ * from the lead's raw WhatChimp payload when — and only when — it resolves to
+ * one of the three website-supported values. Accepts "2" and "2 bedrooms"
+ * shapes; anything else (including the literal "null" written by the
+ * stale-field-safe flow mapping) hydrates nothing. Additive and advisory
+ * only: `/book` still runs its own validation and the locked booking
+ * pipeline is untouched.
+ */
+function sanitizeBedroomCount(rawPayload: Record<string, unknown> | null): string | null {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) return null;
+  for (const key of ["oraya_bedroom_count", "bedroom_count", "bedrooms"]) {
+    const value = rawPayload[key];
+    if (typeof value !== "string" && typeof value !== "number") continue;
+    const match = String(value).trim().match(/^([123])(\s*bedrooms?)?$/i);
+    if (match) return match[1];
+  }
+  return null;
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const token = searchParams.get("h");
@@ -73,7 +94,7 @@ export async function GET(request: Request) {
   try {
     const { data, error } = await supabaseAdmin
       .from("whatsapp_leads")
-      .select("villa, normalized_check_in, normalized_check_out, guest_count, name, source")
+      .select("villa, normalized_check_in, normalized_check_out, guest_count, name, source, raw_payload")
       .eq("id", verification.claims.lead_id)
       .maybeSingle<LeadPrefillRow>();
 
@@ -96,6 +117,7 @@ export async function GET(request: Request) {
           check_in: dates.check_in,
           check_out: dates.check_out,
           sleeping_guests: sanitizeSleepingGuests(data.guest_count),
+          bedroom_count: sanitizeBedroomCount(data.raw_payload),
           full_name: data.name ?? null,
           source: data.source ?? null,
         },

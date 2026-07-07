@@ -276,3 +276,120 @@ test("'for 5 people' is consumed by guest count, not by date parser", () => {
   assert.equal(r.extracted.check_out, "2026-06-15");
   assert.equal(r.extracted.nights,    5);
 });
+
+// ─── extracted_text (stale-field-safe string mirror, Phase 16A v6 flow) ────
+
+test("extracted_text mirrors extracted with literal \"null\" strings for missing fields", () => {
+  const r = extractStayIntent({
+    stay_text: "Villa Byblos please",
+    reference_date: REF,
+  });
+  assert.equal(r.extracted_text.villa,       "Villa Byblos");
+  assert.equal(r.extracted_text.check_in,    "null");
+  assert.equal(r.extracted_text.check_out,   "null");
+  assert.equal(r.extracted_text.nights,      "null");
+  assert.equal(r.extracted_text.guest_count, "null");
+});
+
+test("extracted_text carries every populated field as a plain string", () => {
+  const r = extractStayIntent({
+    stay_text: "Mechmech June 10 to June 15 for 3 guests",
+    reference_date: REF,
+  });
+  assert.equal(r.extracted_text.check_in,    "2026-06-10");
+  assert.equal(r.extracted_text.check_out,   "2026-06-15");
+  assert.equal(r.extracted_text.nights,      "5");
+  assert.equal(r.extracted_text.villa,       "Villa Mechmech");
+  assert.equal(r.extracted_text.guest_count, "3");
+});
+
+test("extracted_text is never null-valued on the unclear path (overwrite guarantee)", () => {
+  const r = extractStayIntent({ stay_text: "?????", reference_date: REF });
+  for (const value of Object.values(r.extracted_text)) {
+    assert.equal(typeof value, "string");
+    assert.notEqual(value, "");
+  }
+});
+
+test("extracted_text.guest_followup is always the literal \"null\" reset value", () => {
+  for (const text of [
+    "Villa Mechmech June 10 to June 15 for 3 guests",
+    "we are 12 people",
+    "?????",
+  ]) {
+    const r = extractStayIntent({ stay_text: text, reference_date: REF });
+    assert.equal(r.extracted_text.guest_followup, "null");
+  }
+});
+
+
+// ─── live regression 2026-07-04: trailing bedroom phrase must never corrupt
+// the date fragments, and the volunteered bedroom count must extract ────────
+
+test("live regression: \"mechmech july 10 to july 11 for 4 people 2 bedrooms\" extracts BOTH dates + bedrooms", () => {
+  const r = extractStayIntent({
+    stay_text: "mechmech july 10 to july 11 for 4 people 2 bedrooms",
+    reference_date: REF,
+  });
+  assert.equal(r.extracted.check_in,  "2026-07-10");
+  assert.equal(r.extracted.check_out, "2026-07-11");
+  assert.equal(r.extracted.villa, "Villa Mechmech");
+  assert.equal(r.extracted.guest_count, 4);
+  assert.equal(r.extracted.bedroom_count, 2);
+  assert.equal(r.extracted_text.check_out, "2026-07-11");
+  assert.equal(r.extracted_text.bedroom_count, "2 bedrooms");
+});
+
+test("half-date with trailing bedrooms: check-in survives, check-out is the literal \"null\" (never blank)", () => {
+  const r = extractStayIntent({
+    stay_text: "mechmech july 10 for 4 people 2 bedrooms",
+    reference_date: REF,
+  });
+  assert.equal(r.extracted.check_in, "2026-07-10");
+  assert.equal(r.extracted.check_out, null);
+  assert.equal(r.extracted_text.check_out, "null");
+  assert.equal(r.extracted_text.bedroom_count, "2 bedrooms");
+});
+
+test("no dates with trailing bedrooms: both dates are the literal \"null\"; villa/guests/bedrooms survive", () => {
+  const r = extractStayIntent({
+    stay_text: "mechmech for 4 people 2 bedrooms",
+    reference_date: REF,
+  });
+  assert.equal(r.extracted_text.check_in,  "null");
+  assert.equal(r.extracted_text.check_out, "null");
+  assert.equal(r.extracted.villa, "Villa Mechmech");
+  assert.equal(r.extracted.guest_count, 4);
+  assert.equal(r.extracted_text.bedroom_count, "2 bedrooms");
+});
+
+test("bedroom labels are the exact approved control values (1 bedroom / 2 bedrooms / 3 bedrooms)", () => {
+  const one = extractStayIntent({ stay_text: "byblos june 10 to 15, two people, one bedroom", reference_date: REF });
+  assert.equal(one.extracted.bedroom_count, 1);
+  assert.equal(one.extracted_text.bedroom_count, "1 bedroom");
+  const three = extractStayIntent({ stay_text: "3 bedrooms please", reference_date: REF });
+  assert.equal(three.extracted_text.bedroom_count, "3 bedrooms");
+});
+
+test("out-of-range bedroom counts are stripped from the text but extract as the literal \"null\"", () => {
+  const r = extractStayIntent({
+    stay_text: "mechmech july 10 to july 11 for 4 people 5 bedrooms",
+    reference_date: REF,
+  });
+  // the phrase no longer corrupts the dates …
+  assert.equal(r.extracted.check_in,  "2026-07-10");
+  assert.equal(r.extracted.check_out, "2026-07-11");
+  // … and no unapproved bedroom value is emitted
+  assert.equal(r.extracted.bedroom_count, null);
+  assert.equal(r.extracted_text.bedroom_count, "null");
+});
+
+test("bedroom_count is absent from missing_fields and never blocks status (bedrooms are asked in-flow)", () => {
+  const r = extractStayIntent({
+    stay_text: "Villa Mechmech June 10 to June 15 for 3 guests",
+    reference_date: REF,
+  });
+  assert.equal(r.status, "clear");
+  assert.equal(r.extracted.bedroom_count, null);
+  assert.equal(r.extracted_text.bedroom_count, "null");
+});

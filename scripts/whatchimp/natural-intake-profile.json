@@ -1,0 +1,123 @@
+{
+  "profile": "oraya-natural-stay-intake",
+  "description": "Semantic contract for the Oraya Natural Stay Intake WhatChimp flow (Phase 16A, interactive-controls candidate). Consumed by scripts/validate-whatchimp-flow.mjs and scripts/simulate-whatchimp-flow.mjs. IDs are the real WhatChimp tenant IDs verified from the operator's v5.5 export; oraya_bedroom_count is the operator-created field 69114 (confirmed 2026-07-03) and the generator emits it directly on the bedroom Inline Buttons — the canonical Oraya_natural_intake_v6.txt is fully bound with no placeholder and no second binding step. Missing structured values (guest count / bedrooms / villa) are collected with Interactive controls whose buttons/rows save directly to the custom field (stored value = visible label; schema evidence: operator's 2026-07-04 saved/reopened export, fixture roundtrips/Oraya_natural_intake_v6.button-evidence.saved-reexport.txt).",
+  "apis": {
+    "initialNormalize": { "id": "7466", "label": "Oraya Stay Intent - Production" },
+    "refine": { "id": "8101", "label": "Oraya Stay Intent Refine - Production" },
+    "leadSubmit": { "ids": ["6961"], "label": "Oraya Lead Submit - Production" }
+  },
+  "fields": {
+    "oraya_stay_text": "67692",
+    "oraya_stay_followup": "69090",
+    "oraya_guest_followup": "69091",
+    "oraya_check_in": "57699",
+    "oraya_check_out": "57692",
+    "oraya_guest_count": "57693",
+    "oraya_villa": "57698",
+    "oraya_dates_confirmed_text": "58532",
+    "oraya_handoff_required": "57696",
+    "oraya_full_name": "57759",
+    "oraya_bedroom_count": "69114"
+  },
+  "placeholderFieldIds": [],
+  "importGraphContract": {
+    "rootNodeName": "Start Bot Flow",
+    "maxInboundPerNode": 1,
+    "approvedPostbackMerges": {
+      "860": 42,
+      "865": 7,
+      "930": 24,
+      "938": 2
+    },
+    "postbackSourceNames": ["Inline Button", "Rows"],
+    "maxInboundPerCondition": 1,
+    "importDroppedControlTargets": ["User Input Flow", "User Input Flow Single"],
+    "editorRejectedDrawPairs": [],
+    "editorProvenDrawPairs": [
+      ["Condition", "User Input Flow"],
+      ["Text", "User Input Flow"],
+      ["Condition", "Text"]
+    ]
+  },
+  "interactiveControls": {
+    "oraya_guest_count": { "controlType": "Rows", "labels": ["1", "2", "3", "4", "5", "6", "More than 6"] },
+    "oraya_bedroom_count": { "controlType": "Inline Button", "labels": ["1 bedroom", "2 bedrooms", "3 bedrooms"] },
+    "oraya_villa": { "controlType": "Inline Button", "labels": ["Villa Mechmech", "Villa Byblos"] }
+  },
+  "roundTripIgnoreFields": ["uniqueId", "postbackId", "newPostbackId", "xitFbpostbackId"],
+  "stayTextField": "oraya_stay_text",
+  "followupField": "oraya_stay_followup",
+  "guestFollowupField": "oraya_guest_followup",
+  "guestCountField": "oraya_guest_count",
+  "bedroomField": "oraya_bedroom_count",
+  "villaField": "oraya_villa",
+  "checkInField": "oraya_check_in",
+  "checkOutField": "oraya_check_out",
+  "fullNameField": "oraya_full_name",
+  "supportedGuestValues": ["1", "2", "3", "4", "5", "6"],
+  "guestOverflowChoice": "More than 6",
+  "bedroomChoices": ["1 bedroom", "2 bedrooms", "3 bedrooms"],
+  "villaChoices": ["Villa Mechmech", "Villa Byblos"],
+  "summaryMustInclude": [
+    "#oraya_check_in#",
+    "#oraya_check_out#",
+    "#oraya_villa#",
+    "#oraya_guest_count#",
+    "#oraya_bedroom_count#"
+  ],
+  "undatedSummarySnippet": "Please choose them using the secure link below",
+  "undatedSummaryMustInclude": [
+    "#oraya_villa#",
+    "#oraya_guest_count#",
+    "#oraya_bedroom_count#"
+  ],
+  "summaryTerminalSnippet": "team will review availability and follow up",
+  "approvedTerminalSnippets": [
+    "team will review availability and follow up",
+    "passed your request to the Oraya team"
+  ],
+  "forbiddenTerminalTexts": ["Got it."],
+  "terminalMustIncludeAll": ["#oraya_prefill_url#", "https://stayoraya.com/book"],
+  "terminalNotConfirmedPattern": "not (yet )?(a )?confirmed",
+  "canonicalBookingUrl": "https://stayoraya.com/book",
+  "forbiddenDomainPatterns": [
+    "www\\.stayoraya\\.com",
+    "oraya\\.com\\.lb",
+    "(?<!stay)oraya\\.com",
+    "http://"
+  ],
+  "staleVersionLabels": ["v5.3", "v5.4", "v5.5"],
+  "escalationSnippets": [
+    "let me bring in our team",
+    "confirm the details with you personally"
+  ],
+  "apiFieldWrites": {
+    "7466": {
+      "check_in": "oraya_check_in",
+      "check_out": "oraya_check_out",
+      "villa": "oraya_villa",
+      "guest_count": "oraya_guest_count",
+      "guest_followup": "oraya_guest_followup",
+      "bedroom_count": "oraya_bedroom_count"
+    },
+    "8101": {
+      "check_in": "oraya_check_in",
+      "check_out": "oraya_check_out",
+      "villa": "oraya_villa",
+      "guest_count": "oraya_guest_count",
+      "guest_followup": "oraya_guest_followup",
+      "bedroom_count": "oraya_bedroom_count"
+    },
+    "6961": { "prefill_url": "oraya_prefill_url" }
+  },
+  "allowedConditionOperators": ["equal", "contains"],
+  "secretPatterns": [
+    "X-Butler-Secret",
+    "BUTLER_WEBHOOK_SECRET",
+    "BUTLER_PREFILL_SECRET",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "service_role",
+    "sk_live",
+    "Bearer "
+  ]
+}
