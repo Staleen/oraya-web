@@ -97,6 +97,8 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 // Real WhatChimp custom-field id for oraya_bedroom_count (operator-created,
 // confirmed 2026-07-03). Emitted directly — no placeholder, no binding step.
@@ -185,6 +187,31 @@ function detachEdge(nodes, fromId, outKey, toId, inKey) {
   if (!hadOut || !hadIn) throw new Error(`detachEdge: ${fromId}:${outKey} → ${toId}:${inKey} is not fully wired`);
   out.connections = out.connections.filter((c) => !(String(c.node) === String(toId) && c.input === inKey));
   inp.connections = inp.connections.filter((c) => !(String(c.node) === String(fromId) && c.output === outKey));
+}
+
+// Swap a Condition's True/False outputs IN PLACE, fixing every reciprocal
+// input entry on the targets. Used when a condition's comparison polarity is
+// inverted (missing-check → presence-check) so the inherited edge targets
+// keep their meaning.
+function swapConditionOutputs(nodes, id) {
+  const node = nodes[String(id)];
+  if (!node || node.name !== "Condition") throw new Error(`swapConditionOutputs: #${id} is not a Condition`);
+  node.outputs ??= {};
+  const t = node.outputs.conditionOutputTrue ?? { connections: [] };
+  const f = node.outputs.conditionOutputFalse ?? { connections: [] };
+  const trueTargets = (t.connections ?? []).map((c) => String(c.node));
+  const falseTargets = (f.connections ?? []).map((c) => String(c.node));
+  node.outputs.conditionOutputTrue = f;
+  node.outputs.conditionOutputFalse = t;
+  const fixReciprocal = (targetId, fromKey, toKey) => {
+    for (const socket of Object.values(nodes[targetId]?.inputs ?? {})) {
+      for (const e of socket.connections ?? []) {
+        if (String(e.node) === String(id) && e.output === fromKey) e.output = toKey;
+      }
+    }
+  };
+  for (const tid of trueTargets) fixReciprocal(tid, "conditionOutputTrue", "conditionOutputFalse");
+  for (const tid of falseTargets) fixReciprocal(tid, "conditionOutputFalse", "conditionOutputTrue");
 }
 
 // Semantically identical Condition clone (same rows, operators, match type) —
@@ -520,14 +547,27 @@ function generateV6(flow) {
     removeNode(nodes, id);
   }
 
-  // 2. Condition hygiene (blank values / duplicated rows → literal "null" checks).
-  setConditionRows(nodes, 410, [{ field: FIELD.checkIn, value: "null" }]);
-  setConditionRows(nodes, 411, [{ field: FIELD.checkOut, value: "null" }]);
-  setConditionRows(nodes, 470, [{ field: FIELD.villa, value: "null" }]);
-  setConditionRows(nodes, 501, [
-    { field: FIELD.checkIn, value: "null" },
-    { field: FIELD.checkOut, value: "null" },
-  ]);
+  // 2. Condition hygiene → PRESENCE contract (live runtime finding
+  // 2026-07-04): a misbound response mapping can deliver "" instead of the
+  // literal "null", and "" passes every `= "null"` missing-check as if a
+  // value existed — the observed blank dated summary. All date and villa
+  // routing therefore tests PRESENCE: an ISO date always contains "-" and a
+  // canonical villa always contains "Villa", while "", "null", whitespace,
+  // and absent values never do. True = present.
+  const CHECK_IN_PRESENT  = { field: FIELD.checkIn,  value: "-", op: "contains" };
+  const CHECK_OUT_PRESENT = { field: FIELD.checkOut, value: "-", op: "contains" };
+  const VILLA_PRESENT     = { field: FIELD.villa, value: "Villa", op: "contains" };
+  // 410/411 carry inherited v5.5 edges wired for missing-check polarity —
+  // flip the rows AND swap the outputs so the targets keep their meaning:
+  // 410 True: check-in present → check-out gate; False → ask both dates.
+  // 411 True: check-out present → guest gate;   False → ask check-out.
+  setConditionRows(nodes, 410, [CHECK_IN_PRESENT]);
+  swapConditionOutputs(nodes, 410);
+  setConditionRows(nodes, 411, [CHECK_OUT_PRESENT]);
+  swapConditionOutputs(nodes, 411);
+  // 430/436/501/505 are flipped after the date-recovery cascade wires their
+  // recovery edges (see the date-presence section below); 470 is built with
+  // presence polarity directly in the completion section.
 
   // 3. Pre-API safety link: the opening intake question hands the guest the
   // canonical booking URL BEFORE the first HTTP API call can fire, so a
@@ -572,35 +612,35 @@ function generateV6(flow) {
   connect(nodes, 937, "buttonOutput", 938, "textInput");
 
   // Date-aware summaries: after Lead Submit, a single-inbound Condition picks
-  // the dated or undated variant. When either date is still "null" (failed
-  // final retry), the undated summary shows the choose-dates line instead of
-  // rendering "null" through the date hashtags; /book (via the secure link)
+  // the dated or undated variant with PRESENCE semantics — a dated summary is
+  // allowed ONLY when BOTH date fields hold a real ISO date (contain "-");
+  // "", "null", and whitespace all select the undated summary, whose
+  // choose-dates line replaces the date hashtags; /book (via the secure link)
   // is where the guest picks the dates.
-  const DATES_UNRESOLVED = [
-    { field: FIELD.checkIn, value: "null" },
-    { field: FIELD.checkOut, value: "null" },
-  ];
+  const BOTH_DATES_PRESENT = [CHECK_IN_PRESENT, CHECK_OUT_PRESENT];
 
   // completion A: villa just chosen → Lead Submit → date branch → summary
   apiNode(nodes, 939, API.leadSubmit, [8680, -1950]);
-  conditionNode(nodes, 943, DATES_UNRESOLVED, [8810, -1950]);
+  conditionNode(nodes, 943, BOTH_DATES_PRESENT, [8810, -1950], { anyMatch: false });
   textNode(nodes, 940, COPY.summary + COPY.continuationBlock, [9070, -2080]);
   textNode(nodes, 945, COPY.summaryUndated + COPY.continuationBlock, [9070, -1850]);
   connect(nodes, 938, "textOutput", 939, "httpApiInput");
   connect(nodes, 939, "httpApiOutput", 943, "conditionInput"); // #943's ONLY inbound
-  connect(nodes, 943, "conditionOutputTrue", 945, "textInput");
-  connect(nodes, 943, "conditionOutputFalse", 940, "textInput");
+  connect(nodes, 943, "conditionOutputTrue", 940, "textInput"); // both dates real → dated
+  connect(nodes, 943, "conditionOutputFalse", 945, "textInput"); // anything else → undated
 
-  // completion B: villa already known → Lead Submit → date branch → summary
+  // completion B: villa already known → Lead Submit → date branch → summary.
+  // The villa gate #470 also uses presence polarity (contains "Villa").
+  setConditionRows(nodes, 470, [VILLA_PRESENT]);
   apiNode(nodes, 941, API.leadSubmit, [8680, -1650]);
-  conditionNode(nodes, 944, DATES_UNRESOLVED, [8810, -1650]);
+  conditionNode(nodes, 944, BOTH_DATES_PRESENT, [8810, -1650], { anyMatch: false });
   textNode(nodes, 942, COPY.summary + COPY.continuationBlock, [9070, -1620]);
   textNode(nodes, 946, COPY.summaryUndated + COPY.continuationBlock, [9070, -1420]);
-  connect(nodes, 470, "conditionOutputTrue", 935, "interactiveInput");
-  connect(nodes, 470, "conditionOutputFalse", 941, "httpApiInput");
+  connect(nodes, 470, "conditionOutputTrue", 941, "httpApiInput"); // villa present → completion B
+  connect(nodes, 470, "conditionOutputFalse", 935, "interactiveInput"); // villa missing → ask
   connect(nodes, 941, "httpApiOutput", 944, "conditionInput"); // #944's ONLY inbound
-  connect(nodes, 944, "conditionOutputTrue", 946, "textInput");
-  connect(nodes, 944, "conditionOutputFalse", 942, "textInput");
+  connect(nodes, 944, "conditionOutputTrue", 942, "textInput"); // both dates real → dated
+  connect(nodes, 944, "conditionOutputFalse", 946, "textInput"); // anything else → undated
 
   // ── date-recovery Condition-clone cascade (round trip #3 invariant) ───────
   // Each of the four date-recovery exits keeps its own "guest known?" clone
@@ -619,6 +659,17 @@ function generateV6(flow) {
     cloneCondition(nodes, 602, s, [px + 520, py + 120]);
     connect(nodes, from, "conditionOutputFalse", g, "conditionInput"); // sole connection — import keeps it
     connect(nodes, g, "conditionOutputFalse", s, "conditionInput"); // sole connection — import keeps it
+  }
+
+  // ── date-presence flip for the follow-up / retry gates ────────────────────
+  // 430/436/501/505 carried missing-check polarity (True = still missing →
+  // retry or dates-pending; False = recovered → cascade clone, wired just
+  // above). With PRESENCE rows (both dates contain "-") the branches swap:
+  // True = recovered; False = retry / dates-pending — and "", "null", or
+  // whitespace in EITHER field can never masquerade as a captured date.
+  for (const id of [430, 436, 501, 505]) {
+    setConditionRows(nodes, id, [CHECK_IN_PRESENT, CHECK_OUT_PRESENT], { anyMatch: false });
+    swapConditionOutputs(nodes, id);
   }
 
   // ── failed FINAL date retry: continue the intake with dates pending ───────
@@ -903,6 +954,16 @@ function main() {
   }
   const flow = JSON.parse(readFileSync(input, "utf8"));
   const v6 = generateV6(flow);
+  // Operator-preferred visual layout (the 2026-07-04 hand-tuned export,
+  // pinned at roundtrips/Oraya_natural_intake_v6.roundtrip-5.layout-baseline.txt):
+  // every node present in the committed layout map adopts that position.
+  // Positions are cosmetic — logic, bindings, and edges come from this
+  // generator alone; nodes absent from the map keep their computed position.
+  const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+  const layout = JSON.parse(readFileSync(path.join(scriptDir, "whatchimp", "v6-layout.json"), "utf8"));
+  for (const [id, position] of Object.entries(layout)) {
+    if (v6.nodes[id]) v6.nodes[id].position = position;
+  }
   assertGraphContracts(v6);
   const serialized = JSON.stringify(v6);
   writeFileSync(output, serialized, "utf8");

@@ -880,13 +880,50 @@ test("dates-pending continuation: a failed final retry reaches the interactive i
     assert.ok(text.includes("#oraya_check_in#") && text.includes("#oraya_check_out#"), `#${id} must display both dates`);
   }
   // (e) each completion Lead Submit feeds its single-inbound date-branch
-  // Condition, which selects the dated vs undated variant
+  // Condition, which selects the variant with PRESENCE semantics: True =
+  // BOTH dates contain "-" → dated summary; anything else ("", "null",
+  // whitespace) → undated summary (live runtime finding 2026-07-04)
   for (const [lead, cond, undated, dated] of [["939", "943", "945", "940"], ["941", "944", "946", "942"]]) {
     assert.deepEqual(nodes[lead].outputs.httpApiOutput.connections.map((c) => `${c.node}:${c.input}`), [`${cond}:conditionInput`]);
     assert.equal(nodes[cond].name, "Condition");
     assert.equal((nodes[cond].inputs.conditionInput?.connections ?? []).length, 1, `date-branch Condition #${cond} must keep ONE inbound`);
-    assert.deepEqual(nodes[cond].outputs.conditionOutputTrue.connections.map((c) => String(c.node)), [undated]);
-    assert.deepEqual(nodes[cond].outputs.conditionOutputFalse.connections.map((c) => String(c.node)), [dated]);
+    assert.deepEqual(nodes[cond].outputs.conditionOutputTrue.connections.map((c) => String(c.node)), [dated]);
+    assert.deepEqual(nodes[cond].outputs.conditionOutputFalse.connections.map((c) => String(c.node)), [undated]);
+    assert.equal(nodes[cond].data.all_match, true, `date-branch Condition #${cond} must require BOTH dates present`);
+    assert.deepEqual(nodes[cond].data.custom_field_operator, ["contains", "contains"], `date-branch Condition #${cond} must use presence semantics`);
+    assert.deepEqual(nodes[cond].data.custom_field_variable_value, ["-", "-"], `date-branch Condition #${cond} must test for the ISO "-"`);
+  }
+});
+
+// ─── operator layout baseline (positions adopted; logic NOT adopted) ─────────
+
+const layoutBaselinePath = path.join(repoRoot, "artifacts", "whatchimp", "roundtrips", "Oraya_natural_intake_v6.roundtrip-5.layout-baseline.txt");
+
+test("layout baseline: operator positions are adopted; the export's API rebinds and text drift are NOT", { skip: !existsSync(layoutBaselinePath) || !existsSync(v6Path) }, () => {
+  const raw = readFileSync(layoutBaselinePath);
+  assert.equal(raw.length, 180790, "layout-baseline fixture byte size must not change");
+  assert.equal(
+    createHash("sha256").update(raw).digest("hex").toUpperCase(),
+    "7DDF81E4C2DA5EF9DA475D64E62B7989B0FEF1AEB154465D8050EACC2ADD3156",
+    "layout-baseline fixture bytes must not change",
+  );
+  const baseline = JSON.parse(raw.toString("utf8"));
+  const flow = JSON.parse(readFileSync(v6Path, "utf8"));
+  // every canonical node adopts the operator's hand-tuned position
+  for (const [id, node] of Object.entries(flow.nodes)) {
+    const b = baseline.nodes[id];
+    assert.ok(b, `layout baseline is missing node #${id}`);
+    assert.deepEqual(node.position, b.position, `node #${id} must carry the operator's position`);
+  }
+  // …but the export's tenant-side drift is NOT adopted: every Lead Submit in
+  // the canonical artifact stays on the production WhatsApp lead integration
+  for (const [id, node] of Object.entries(flow.nodes)) {
+    if (node.name !== "HTTP API") continue;
+    const apiId = node.data?.httpApiId ?? "";
+    assert.ok(
+      [profile.apis.initialNormalize.id, profile.apis.refine.id, ...profile.apis.leadSubmit.ids].includes(apiId),
+      `HTTP API #${id} is bound to "${apiId}" — the operator export's rebinds (7459/7460) must never reach the canonical artifact`,
+    );
   }
 });
 
@@ -1010,7 +1047,13 @@ test("simulator: stale-villa scenario fails on a flow that skips the villa ask",
     (n) => n.name === "Condition" && (n.data.custom_field_variable_selected_texts ?? []).includes("oraya_villa"),
   );
   assert.ok(villaGates.length >= 1, "expected the villa gate");
-  for (const gate of villaGates) gate.data.custom_field_variable_value = ["__never__"];
+  // presence semantics: True = villa present → completion. `contains ""` is
+  // always true, so this forces the "villa known" branch and skips the ask.
+  for (const gate of villaGates) {
+    gate.data.custom_field_operator = ["contains"];
+    gate.data.custom_field_operator_selected_texts = ["Contains"];
+    gate.data.custom_field_variable_value = [""];
+  }
   const scenario = buildScenarios().find((s) => s.name.startsWith("T01"));
   const result = runScenario(flow, profile, scenario);
   assert.ok(result.failures.length > 0, "sabotaged flow must fail the stale-villa scenario");

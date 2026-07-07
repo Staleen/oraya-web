@@ -33,6 +33,16 @@ export interface StayIntentResult {
     nights:      number | null;
     villa:       StayIntentVilla | null;
     guest_count: number | null;
+    /**
+     * Bedroom preference when the guest volunteers it in free text
+     * ("2 bedrooms"). Only 1–3 are meaningful (the villa maximum and the
+     * only approved downstream values); anything else extracts as null.
+     * The phrase is ALWAYS stripped from the text before date parsing —
+     * a trailing "2 bedrooms" must never corrupt the check-out fragment
+     * (live regression 2026-07-04: "july 10 to july 11 for 4 people
+     * 2 bedrooms" lost its check-out).
+     */
+    bedroom_count: number | null;
   };
   missing_fields: StayIntentMissingField[];
   /**
@@ -50,6 +60,13 @@ export interface StayIntentResult {
     nights:      string;
     villa:       string;
     guest_count: string;
+    /**
+     * The exact approved control label ("1 bedroom" / "2 bedrooms" /
+     * "3 bedrooms") or the literal "null" — the same value set the bedroom
+     * Inline Buttons write, so a mapped `oraya_bedroom_count` field always
+     * holds a value the website prefill validates.
+     */
+    bedroom_count: string;
     /**
      * Always the literal string "null" — the extractor never parses an
      * above-capacity overflow count from free text. The key exists as a
@@ -103,6 +120,16 @@ const NUMBER_WORDS: Record<string, number> = {
   one: 1, two: 2, three: 3, four: 4, five: 5,
   six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
 };
+
+// ─── bedroom detection ─────────────────────────────────────────────────────
+// Runs FIRST and always strips the phrase, even for out-of-range counts:
+// a bedroom phrase left in the residue pollutes the date fragments
+// ("july 10 to july 11 for 4 people 2 bedrooms" → check-out fragment
+// "july 11 2 bedrooms" → unparseable → silent half-date).
+const BEDROOM_PATTERN =
+  /\b(a|\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten)\s*(?:-\s*)?(?:bed\s?rooms?|bdrm?s?)\b/i;
+
+const MAX_BEDROOM_COUNT = 3;
 
 // ─── connectives the splitter recognizes ───────────────────────────────────
 const CONNECTIVE_PATTERNS: RegExp[] = [
@@ -169,12 +196,13 @@ export function extractStayIntent(input: ExtractStayIntentInput): StayIntentResu
   if (!stayText) {
     return buildResult({
       checkIn: null, checkOut: null, nights: null,
-      villa: null, guestCount: null,
+      villa: null, guestCount: null, bedroomCount: null,
       empty: true,
     });
   }
 
-  const { guestCount, withoutGuestCount } = extractGuestCount(stayText);
+  const { bedroomCount, withoutBedrooms } = extractBedroomCount(stayText);
+  const { guestCount, withoutGuestCount } = extractGuestCount(withoutBedrooms);
   const { villa, withoutVilla } = extractVilla(withoutGuestCount);
   const cleaned = cleanResidue(withoutVilla);
 
@@ -218,12 +246,28 @@ export function extractStayIntent(input: ExtractStayIntentInput): StayIntentResu
 
   return buildResult({
     checkIn, checkOut, nights,
-    villa, guestCount,
+    villa, guestCount, bedroomCount,
     empty: false,
   });
 }
 
 // ─── helpers ───────────────────────────────────────────────────────────────
+
+function extractBedroomCount(text: string): {
+  bedroomCount: number | null;
+  withoutBedrooms: string;
+} {
+  const m = BEDROOM_PATTERN.exec(text);
+  if (!m) return { bedroomCount: null, withoutBedrooms: text };
+  const token = m[1].toLowerCase();
+  const n = token === "a" ? 1 : (NUMBER_WORDS[token] ?? Number(token));
+  const withoutBedrooms = spliceOut(text, m.index, m[0].length);
+  // The phrase is stripped regardless; only 1–3 are meaningful values.
+  if (!Number.isFinite(n) || n < 1 || n > MAX_BEDROOM_COUNT) {
+    return { bedroomCount: null, withoutBedrooms };
+  }
+  return { bedroomCount: n, withoutBedrooms };
+}
 
 function extractGuestCount(text: string): {
   guestCount: number | null;
@@ -369,7 +413,13 @@ interface BuildResultInput {
   nights: number | null;
   villa: StayIntentVilla | null;
   guestCount: number | null;
+  bedroomCount: number | null;
   empty: boolean;
+}
+
+function bedroomLabel(n: number | null): string {
+  if (n === null || n < 1 || n > MAX_BEDROOM_COUNT) return "null";
+  return n === 1 ? "1 bedroom" : `${n} bedrooms`;
 }
 
 function buildResult(input: BuildResultInput): StayIntentResult {
@@ -398,6 +448,7 @@ function buildResult(input: BuildResultInput): StayIntentResult {
       nights:      input.nights,
       villa:       input.villa,
       guest_count: input.guestCount,
+      bedroom_count: input.bedroomCount,
     },
     missing_fields: missing,
     extracted_text: {
@@ -406,6 +457,7 @@ function buildResult(input: BuildResultInput): StayIntentResult {
       nights:      input.nights === null ? "null" : String(input.nights),
       villa:       input.villa ?? "null",
       guest_count: input.guestCount === null ? "null" : String(input.guestCount),
+      bedroom_count: bedroomLabel(input.bedroomCount),
       guest_followup: "null",
     },
     human_readable: human,

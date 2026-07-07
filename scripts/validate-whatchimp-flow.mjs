@@ -718,6 +718,27 @@ export function validateFlow(flow, profile, opts = {}) {
     });
   }
 
+  // 22b. date/villa PRESENCE contract (live runtime finding 2026-07-04): a
+  // misbound response mapping can deliver "" instead of the literal "null",
+  // and "" passes an equality missing-check as if a real value existed — the
+  // observed blank dated summary. Conditions on the date fields must test
+  // presence via `contains "-"` (an ISO date always contains "-"; "", "null",
+  // and whitespace never do); conditions on the villa field via
+  // `contains "Villa"`.
+  for (const id of conditionNodes) {
+    const d = nodes[id].data ?? {};
+    (d.custom_field_variable_selected_texts ?? []).forEach((name, i) => {
+      const op = (d.custom_field_operator ?? [])[i];
+      const value = (d.custom_field_variable_value ?? [])[i];
+      if ((name === profile.checkInField || name === profile.checkOutField) && !(op === "contains" && value === "-")) {
+        err("date-presence", `${nodeLabel(id, nodes[id])} row ${i + 1} tests ${name} with ${op ?? "?"} "${value}" — date routing must use presence (contains "-") so "", "null", and whitespace all read as MISSING`);
+      }
+      if (name === profile.villaField && !(op === "contains" && value === "Villa")) {
+        err("date-presence", `${nodeLabel(id, nodes[id])} row ${i + 1} tests ${name} with ${op ?? "?"} "${value}" — villa routing must use presence (contains "Villa") so a blank value can never skip the villa question`);
+      }
+    });
+  }
+
   // 23. bedroom controls: three approved options, each completing the request
   const bedroomControls = controlNodes.filter((id) => controlField(nodes[id]) === profile.bedroomField);
   if (bedroomControls.length === 0 && questionNodes.every((id) => fieldNameOf(nodes[id]) !== profile.bedroomField)) {

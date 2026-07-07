@@ -389,12 +389,13 @@ export function runScenario(flow, profile, scenario) {
  * missing. `guest_followup` is ALWAYS "null" — the backend never extracts an
  * overflow count; the mapping exists purely as the deterministic
  * current-attempt reset of `oraya_guest_followup`. */
-const norm = (checkIn, checkOut, villa, guests) => ({
+const norm = (checkIn, checkOut, villa, guests, bedrooms) => ({
   check_in: checkIn ?? "null",
   check_out: checkOut ?? "null",
   villa: villa ?? "null",
   guest_count: guests ?? "null",
   guest_followup: "null",
+  bedroom_count: bedrooms ?? "null",
 });
 
 const stay = (answer) => ({ expect: "tell me what you already know", answer });
@@ -966,6 +967,83 @@ export function buildScenarios() {
       },
     },
 
+    // ── live acceptance + blank-value robustness (runtime finding 2026-07-04:
+    // a misbound response mapping delivered "" instead of "null", slipping
+    // past the missing-checks into a dated summary with a blank check-out) ───
+    {
+      name: "L01 live acceptance: \"mechmech july 10 to july 11 for 4 people 2 bedrooms\" → both dates + guests + bedrooms + villa + secure link",
+      inputs: [stay("mechmech july 10 to july 11 for 4 people 2 bedrooms"), bedroomClick("2 bedrooms")],
+      fixtures: [
+        // exactly what the FIXED extractor returns for the live message
+        { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "4", "2 bedrooms") },
+        { api: "6961", response: { prefill_url: "https://stayoraya.com/book?h=TESTTOKEN123" } },
+      ],
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: [...SUMMARY_TERMINAL, "Check-in: 2026-07-10", "Check-out: 2026-07-11", "Villa: Villa Mechmech", "Overnight guests: 4", "Bedrooms: 2 bedrooms", "TESTTOKEN123"],
+        askedExcludes: ["full name", "check-out date"],
+        fieldEquals: { oraya_check_out: "2026-07-11", oraya_bedroom_count: "2 bedrooms" },
+        visitsInOrder: [["400", "401", "410", "411", "440", "602", "875", "877", "930", "470", "941", "944", "942"]],
+      },
+    },
+    {
+      name: "B01 misbound mapping writes \"\" for check-out → read as MISSING → check-out follow-up → recovered dated summary",
+      inputs: [stay("mechmech july 10 for 4 people 2 bedrooms"), { expect: "check-out date", answer: "july 11" }, bedroomClick("2 bedrooms")],
+      fixtures: [
+        { api: "7466", response: { ...norm("2026-07-10", null, "Villa Mechmech", "4", "2 bedrooms"), check_out: "" } },
+        { api: "8101", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "4", "2 bedrooms") },
+        { api: "6961", response: { prefill_url: "https://stayoraya.com/book?h=TESTTOKEN123" } },
+      ],
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: [...SUMMARY_TERMINAL, "Check-in: 2026-07-10", "Check-out: 2026-07-11", "TESTTOKEN123"],
+        askedIncludes: ["check-out date"],
+        askedExcludes: ["full name"],
+        visitsInOrder: [["401", "410", "411", "425", "426", "427", "501", "754", "755", "890", "892", "930", "470", "941", "944", "942"]],
+      },
+    },
+    {
+      name: "B02 \"\" check-out persists through follow-up + retry → UNDATED summary; captured check-in never renders alone",
+      inputs: [
+        stay("mechmech july 10 to july 11 for 4 people 2 bedrooms"),
+        { expect: "check-out date", answer: "july 11" },
+        { expect: "check-in and check-out dates together", answer: "july 10 to july 11" },
+        bedroomClick("2 bedrooms"),
+      ],
+      fixtures: [
+        { api: "7466", response: { ...norm("2026-07-10", null, "Villa Mechmech", "4", "2 bedrooms"), check_out: "" } },
+        { api: "8101", response: { ...norm("2026-07-10", null, "Villa Mechmech", "4", "2 bedrooms"), check_out: "" } },
+        { api: "8101", response: { ...norm("2026-07-10", null, "Villa Mechmech", "4", "2 bedrooms"), check_out: "" } },
+        { api: "6961", response: { prefill_url: "https://stayoraya.com/book?h=TESTTOKEN123" } },
+      ],
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: [...SUMMARY_TERMINAL, "Dates: Please choose them using the secure link below", "TESTTOKEN123"],
+        terminalExcludes: ["2026-07-10", "null", "Check-in:", "Check-out:"],
+        askedExcludes: ["full name"],
+        visitsInOrder: [["506", "505", "504", "760", "761", "925", "927", "930", "470", "941", "944", "946"]],
+      },
+    },
+    {
+      name: "B03 whitespace-only date values → read as MISSING → both-dates follow-up → recovered dated summary",
+      inputs: [
+        stay("mechmech for 4 people"),
+        { expect: "check-in and check-out dates", answer: "july 10 to july 12" },
+        bedroomClick("1 bedroom"),
+      ],
+      fixtures: [
+        { api: "7466", response: { ...norm(null, null, "Villa Mechmech", "4"), check_in: " ", check_out: " " } },
+        { api: "8101", response: norm("2026-07-10", "2026-07-12", "Villa Mechmech", "4") },
+        { api: "6961", response: {} },
+      ],
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: [...SUMMARY_TERMINAL, "Check-in: 2026-07-10", "Check-out: 2026-07-12"],
+        askedExcludes: ["full name"],
+        visitsInOrder: [["401", "410", "420", "421", "422", "430", "750", "751", "880", "881", "930", "470", "941", "944", "942"]],
+      },
+    },
+
     // ── stale-field safety (returning subscriber) ────────────────────────────
     {
       name: "T01 returning subscriber, stale villa/dates/guests → new attempt overwrites via extracted_text and asks only what is missing",
@@ -999,19 +1077,30 @@ export function buildScenarios() {
 
     // ── fault injection (HTTP failures write no fields; walk continues) ──────
     {
-      name: "F01 initial normalization fails → no field writes → safe team-review escalation, safety link already shown",
-      inputs: [stay("Villa Mechmech July 10 to 11 for 3"), escName],
+      name: "F01 initial normalization fails → BLANK fields read as MISSING → date follow-up + retry, then the safe human outcome",
+      inputs: [
+        stay("Villa Mechmech July 10 to 11 for 3"),
+        { expect: "check-in and check-out dates", answer: "July 10 to July 11" },
+        { expect: "check-in and check-out dates together", answer: "July 10 to July 11" },
+        escName,
+      ],
       fixtures: [
         { api: "7466", failed: true, response: {} },
+        { api: "8101", failed: true, response: {} },
+        { api: "8101", failed: true, response: {} },
         { api: "6961", response: {} },
       ],
       expect: {
         leadSubmitted: true,
         terminalIncludes: ESC_TERMINAL,
-        // unwritten fields ("") fail every "null"/supported comparison →
-        // initial extracted-overflow review tail; the opening question already
-        // delivered https://stayoraya.com/book (pre-API safety invariant)
-        visitsInOrder: [["400", "401", "410", "411", "440", "602", "963", "970", "973"]],
+        // presence contract: unwritten fields ("") contain no "-" and are
+        // MISSING, so total API failure now asks the date follow-up + retry
+        // (previously "" slipped past the "null" checks as a phantom date),
+        // then continues the dates-pending branch; the blank guest field
+        // fails the supported-count gate → large-group review tail (name +
+        // lead + booking links). The opening question already delivered
+        // https://stayoraya.com/book (pre-API safety invariant).
+        visitsInOrder: [["400", "401", "410", "420", "421", "422", "430", "432", "434", "435", "436", "438", "758", "759", "968", "990", "991", "992", "993"]],
       },
     },
     {
