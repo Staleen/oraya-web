@@ -743,15 +743,19 @@ function generateV6(flow) {
   // control → Text postback convergence, the import-surviving class.
 
   // PATH A — the combined follow-up + refine still left a date missing
-  // (#430 False). One check-in presence gate picks the shorter ladder:
-  conditionNode(nodes, 1100, [CHECK_IN_PRESENT], [3000, 2200]);
+  // (#430 False). One check-in presence gate picks the shorter ladder.
+  // LAYOUT: the whole ladder reuses the coordinate footprint vacated by the
+  // removed v5.5 retry layer (operator-tuned in v6-layout.json), so the
+  // operator's visual skeleton is preserved. Path A lands in the old
+  // "send both dates" retry row (432→438, x≈2500–4130, y≈-1300).
+  conditionNode(nodes, 1100, [CHECK_IN_PRESENT], [2513, -1305]);
   connect(nodes, 430, "conditionOutputFalse", 1100, "conditionInput"); // #1100's ONLY inbound
 
   // A-recovered check-in: ask ONLY the check-out (one question), normalize.
-  wrapperNode(nodes, 1103, "Oraya v6 - Dates: structured check-out", [3300, 2000]);
-  questionNode(nodes, 1104, { question: COPY.askCheckOutSolo, field: FIELD.checkOutText }, [3560, 2000]);
-  apiNode(nodes, 1105, API.normalizeDates, [3820, 2000]);
-  conditionNode(nodes, 1106, BOTH_DATES_PRESENT, [4080, 2000], { anyMatch: false });
+  wrapperNode(nodes, 1103, "Oraya v6 - Dates: structured check-out", [2800, -1550]);
+  questionNode(nodes, 1104, { question: COPY.askCheckOutSolo, field: FIELD.checkOutText }, [3060, -1550]);
+  apiNode(nodes, 1105, API.normalizeDates, [3320, -1550]);
+  conditionNode(nodes, 1106, BOTH_DATES_PRESENT, [3580, -1550], { anyMatch: false });
   connect(nodes, 1100, "conditionOutputTrue", 1103, "userInputFlowInput");
   connect(nodes, 1103, "userInputFlowOutput", 1104, "userInputFlowSingleInput");
   connect(nodes, 1104, "userInputFlowSingleOutputFinalReply", 1105, "httpApiInput");
@@ -760,11 +764,11 @@ function generateV6(flow) {
   // A-no check-in: take the dates one by one — two CHAINED single-date
   // questions (operator-proven v4.3.3 schema: question → question via
   // userInputFlowSingleOutput, final reply → HTTP API), then normalize once.
-  wrapperNode(nodes, 1107, "Oraya v6 - Dates: one by one", [3300, 2400]);
-  questionNode(nodes, 1108, { question: COPY.askCheckInSolo, field: FIELD.checkInText }, [3560, 2400]);
-  questionNode(nodes, 1109, { question: COPY.askCheckOutSolo, field: FIELD.checkOutText }, [3820, 2400]);
-  apiNode(nodes, 1110, API.normalizeDates, [4080, 2400]);
-  conditionNode(nodes, 1111, BOTH_DATES_PRESENT, [4340, 2400], { anyMatch: false });
+  wrapperNode(nodes, 1107, "Oraya v6 - Dates: one by one", [2800, -1050]);
+  questionNode(nodes, 1108, { question: COPY.askCheckInSolo, field: FIELD.checkInText }, [3060, -1050]);
+  questionNode(nodes, 1109, { question: COPY.askCheckOutSolo, field: FIELD.checkOutText }, [3320, -1050]);
+  apiNode(nodes, 1110, API.normalizeDates, [3580, -1050]);
+  conditionNode(nodes, 1111, BOTH_DATES_PRESENT, [3840, -1050], { anyMatch: false });
   connect(nodes, 1100, "conditionOutputFalse", 1107, "userInputFlowInput");
   connect(nodes, 1107, "userInputFlowOutput", 1108, "userInputFlowSingleInput");
   connect(nodes, 1108, "userInputFlowSingleOutput", 1109, "userInputFlowSingleInput");
@@ -777,16 +781,18 @@ function generateV6(flow) {
   // Dates FIRST (v5.5 fed refine here, which re-extracted over the WHOLE
   // followup text and clobbered a good check-in on a bare "11 july" reply —
   // the live gap this ladder fixes). One structured re-ask on failure.
+  // LAYOUT: path B sits just right of #426 (its parent, at ~[1999,1687]),
+  // reusing the vacated recovery-gate column (750/752/754, x≈3700, y≈630–2640).
   nodes["426"].data.customField = FIELD.checkOutText.id;
   nodes["426"].data.customFieldSelectedOptionText = FIELD.checkOutText.name;
-  apiNode(nodes, 1120, API.normalizeDates, [3000, 2800]);
-  conditionNode(nodes, 1121, BOTH_DATES_PRESENT, [3260, 2800], { anyMatch: false });
+  apiNode(nodes, 1120, API.normalizeDates, [2400, 1687]);
+  conditionNode(nodes, 1121, BOTH_DATES_PRESENT, [2660, 1687], { anyMatch: false });
   connect(nodes, 426, "userInputFlowSingleOutputFinalReply", 1120, "httpApiInput");
   connect(nodes, 1120, "httpApiOutput", 1121, "conditionInput"); // #1121's ONLY inbound
-  wrapperNode(nodes, 1122, "Oraya v6 - Dates: check-out retry", [3520, 2900]);
-  questionNode(nodes, 1123, { question: COPY.askCheckOutRetry, field: FIELD.checkOutText }, [3780, 2900]);
-  apiNode(nodes, 1124, API.normalizeDates, [4040, 2900]);
-  conditionNode(nodes, 1125, BOTH_DATES_PRESENT, [4300, 2900], { anyMatch: false });
+  wrapperNode(nodes, 1122, "Oraya v6 - Dates: check-out retry", [2920, 1900]);
+  questionNode(nodes, 1123, { question: COPY.askCheckOutRetry, field: FIELD.checkOutText }, [3180, 1900]);
+  apiNode(nodes, 1124, API.normalizeDates, [3440, 1900]);
+  conditionNode(nodes, 1125, BOTH_DATES_PRESENT, [3700, 1900], { anyMatch: false });
   connect(nodes, 1121, "conditionOutputFalse", 1122, "userInputFlowInput");
   connect(nodes, 1122, "userInputFlowOutput", 1123, "userInputFlowSingleInput");
   connect(nodes, 1123, "userInputFlowSingleOutputFinalReply", 1124, "httpApiInput");
@@ -797,33 +803,36 @@ function generateV6(flow) {
   // no date-writing API runs afterwards → its whole subtree emits the DATED
   // summary. H_P (#1200) is reachable only with a date still missing → its
   // subtree emits the UNDATED summary (secure /book link picks the dates).
-  textNode(nodes, 1150, COPY.datesResolvedAck, [5100, 2200]);
-  textNode(nodes, 1200, COPY.datesPendingAck, [5100, 3400]);
-  resumePair(nodes, [1130, 1131], COPY.datesResolvedInteractive, 1150, [4340, 1900]);
+  // LAYOUT: the recovered hub sits in the upper band (with path A), the
+  // pending hub in the lower band; each resume pair is placed just right of
+  // its gate so the "Continue" wires stay short.
+  textNode(nodes, 1150, COPY.datesResolvedAck, [4600, -800]);
+  textNode(nodes, 1200, COPY.datesPendingAck, [4600, 900]);
+  resumePair(nodes, [1130, 1131], COPY.datesResolvedInteractive, 1150, [3840, -1650]);
   connect(nodes, 1106, "conditionOutputTrue", 1130, "interactiveInput");
-  resumePair(nodes, [1134, 1135], COPY.datesResolvedInteractive, 1150, [4600, 2300]);
+  resumePair(nodes, [1134, 1135], COPY.datesResolvedInteractive, 1150, [4100, -1050]);
   connect(nodes, 1111, "conditionOutputTrue", 1134, "interactiveInput");
-  resumePair(nodes, [1136, 1137], COPY.datesPendingContinue, 1200, [4340, 2100]);
+  resumePair(nodes, [1136, 1137], COPY.datesPendingContinue, 1200, [3840, -1450]);
   connect(nodes, 1106, "conditionOutputFalse", 1136, "interactiveInput");
-  resumePair(nodes, [1138, 1139], COPY.datesPendingContinue, 1200, [4600, 2500]);
+  resumePair(nodes, [1138, 1139], COPY.datesPendingContinue, 1200, [4100, -900]);
   connect(nodes, 1111, "conditionOutputFalse", 1138, "interactiveInput");
-  resumePair(nodes, [1140, 1141], COPY.datesResolvedInteractive, 1150, [3520, 2700]);
+  resumePair(nodes, [1140, 1141], COPY.datesResolvedInteractive, 1150, [2920, 1550]);
   connect(nodes, 1121, "conditionOutputTrue", 1140, "interactiveInput");
-  resumePair(nodes, [1142, 1143], COPY.datesResolvedInteractive, 1150, [4560, 2800]);
+  resumePair(nodes, [1142, 1143], COPY.datesResolvedInteractive, 1150, [3960, 1750]);
   connect(nodes, 1125, "conditionOutputTrue", 1142, "interactiveInput");
-  resumePair(nodes, [1144, 1145], COPY.datesPendingContinue, 1200, [4560, 3000]);
+  resumePair(nodes, [1144, 1145], COPY.datesPendingContinue, 1200, [3960, 2050]);
   connect(nodes, 1125, "conditionOutputFalse", 1144, "interactiveInput");
 
   // Each hub continues into its own guest-known/supported-count clone chain
   // (single-parent, round trip #3), feeding the hub's guest list stage,
   // bedroom stage, and overflow branch wired in the tables below.
-  cloneCondition(nodes, 440, 1151, [5360, 2200]);
+  cloneCondition(nodes, 440, 1151, [4860, -800]);
   connect(nodes, 1150, "textOutput", 1151, "conditionInput"); // sole connection — import keeps it
-  cloneCondition(nodes, 602, 1152, [5360, 2350]);
+  cloneCondition(nodes, 602, 1152, [5120, -800]);
   connect(nodes, 1151, "conditionOutputFalse", 1152, "conditionInput"); // sole connection — import keeps it
-  cloneCondition(nodes, 440, 1201, [5360, 3400]);
+  cloneCondition(nodes, 440, 1201, [4860, 900]);
   connect(nodes, 1200, "textOutput", 1201, "conditionInput"); // sole connection — import keeps it
-  cloneCondition(nodes, 602, 1202, [5360, 3550]);
+  cloneCondition(nodes, 602, 1202, [5120, 900]);
   connect(nodes, 1201, "conditionOutputFalse", 1202, "conditionInput"); // sole connection — import keeps it
 
   // ── guest list stages (one per guest-unknown entry; Conditions keep ONE
@@ -832,8 +841,8 @@ function generateV6(flow) {
   const guestStages = [
     { base: 800, entry: { id: 440, outKey: "conditionOutputTrue" }, pos: [5200, -2200] },
     { base: 810, entry: { id: 750, outKey: "conditionOutputTrue" }, pos: [4700, -3000] },
-    { base: 1160, entry: { id: 1151, outKey: "conditionOutputTrue" }, pos: [5700, 2000] }, // dates recovered (ladder)
-    { base: 1210, entry: { id: 1201, outKey: "conditionOutputTrue" }, pos: [5700, 3300] }, // dates pending (ladder)
+    { base: 1160, entry: { id: 1151, outKey: "conditionOutputTrue" }, pos: [5500, -1500] }, // dates recovered (ladder) — reuses vacated recovery-guest spot; rows converge to #860
+    { base: 1210, entry: { id: 1201, outKey: "conditionOutputTrue" }, pos: [5500, -2500] }, // dates pending (ladder) — vacated #900 region, clear of the surviving guest rows
   ];
   for (const { base, entry, pos } of guestStages) {
     guestListStage(nodes, base, {
@@ -862,8 +871,8 @@ function generateV6(flow) {
     { base: 870, entry: { id: 860, outKey: "textOutput" }, skipBase: 1000, dateState: "mixed", pos: [6900, -1900] },
     { base: 875, entry: { id: 602, outKey: "conditionOutputTrue" }, skipBase: 1010, dateState: "dated", pos: [6900, -2200] },
     { base: 880, entry: { id: 751, outKey: "conditionOutputTrue" }, skipBase: 1020, dateState: "dated", pos: [6900, -2500] },
-    { base: 1170, entry: { id: 1152, outKey: "conditionOutputTrue" }, skipBase: 1180, dateState: "dated", pos: [6900, 2200] }, // dates recovered (ladder)
-    { base: 1220, entry: { id: 1202, outKey: "conditionOutputTrue" }, skipBase: 1230, dateState: "undated", pos: [6900, 3500] }, // dates pending (ladder)
+    { base: 1170, entry: { id: 1152, outKey: "conditionOutputTrue" }, skipBase: 1180, dateState: "dated", pos: [7400, -300] }, // dates recovered (ladder) — reuses vacated #885 bedroom spot
+    { base: 1220, entry: { id: 1202, outKey: "conditionOutputTrue" }, skipBase: 1230, dateState: "undated", pos: [7400, 800] }, // dates pending (ladder) — vacated #887/#888 region, clear of surviving #870 buttons
   ];
   for (const { base, entry, skipBase, dateState, pos } of bedroomStages) {
     bedroomStage(nodes, base, { ackTargetId: 930, ackTargetInput: "textInput" }, pos);

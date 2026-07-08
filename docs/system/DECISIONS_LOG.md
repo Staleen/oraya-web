@@ -34,6 +34,8 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 **Supersedes:** the "send both dates together" retry layer and the 258-node totals/SHA `8A356B6F…B1A6D` in the 2026-07-08 "Bedroom-skip routing" entry below (body preserved verbatim per the append-only rule; the bedroom-skip gate design remains in force, now on 5 stages).
 
+> **Follow-up (2026-07-08, layout-only revision):** the operator imported PR #69 into a TEST bot and the new date-ladder nodes read as scattered — they had been emitted at cramped computed positions in a positive-y block overlapping the guest/bedroom acknowledgement region. The generator's ladder positions were revised to reuse the coordinate footprint vacated by the removed v5.5 retry layer (which the operator had hand-tuned in `scripts/whatchimp/v6-layout.json`): path A in the old "send both dates" retry row (x≈2500–4130, y≈-1300), path B just right of #426, the recovered/pending guest stages stacked in the vacated #900/#903–909 guest column, the recovered/pending bedroom stages in the vacated #885/#887–888 bedroom column. **Positions only — node count, edges, bindings, and topology are byte-identical; all 104 surviving <1000 nodes stay exactly on the operator baseline (0 moved), verified against master `72f045a`.** New canonical SHA-256 `4383A12F4EEE2E1E721F94BB03DA584B0383D3F47A69BC77C48F659C2E841659` supersedes `3DC80B3D…3600` above. Validator strict 0/0, simulator 53/53, tooling 42/42 unchanged (position-independent). This body is preserved verbatim per the append-only rule.
+
 ---
 
 ## 2026-07-08 - Bedroom-skip routing: an extracted bedroom label skips the bedroom question; per-branch skip tails; villa clones rejoin the shared villa-ack (hotfix on merged PR #67)
