@@ -16,6 +16,25 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-07-08 - Bedroom-skip routing: an extracted bedroom label skips the bedroom question; per-branch skip tails; villa clones rejoin the shared villa-ack (hotfix on merged PR #67)
+
+**Decision:** PR #67 merged and deployed (merge `7ee01a4e`, 2026-07-07); the live test confirmed dates/villa/guests/lead/prefill all work, with one remaining UX gap — the bedroom question was still asked even when the guest volunteered the count in free text (the 2026-07-04 entry deliberately kept "bedrooms always asked"). This hotfix (branch `claude/v6-bedroom-skip`) supersedes that with skip-when-known:
+
+1. **Bedroom-known gate per stage:** each of the 8 bedroom-stage entries now feeds a Condition testing `oraya_bedroom_count` **equality any-match against the three approved labels exactly** (`1 bedroom` / `2 bedrooms` / `3 bedrooms`). Stricter than presence by design: `""`, `"null"`, whitespace, and any invalid value fail → the bedroom Interactive is asked exactly as before. The stale-bedroom reset (`extracted_text.bedroom_count` → `"null"` on every normalization/refine call) is what makes the gate current-attempt-accurate.
+2. **Per-branch skip tails (import contracts upheld):** Conditions accept ONE inbound and only postback (control → Text) convergence survives import, so the skip side of every gate carries its own villa-gate clone of #470 (`contains "Villa"`) and — villa known — its own Lead Submit (`6961`) + summary. Branches reachable only with both dates proven present (602/751/753/755/757 chains) hard-wire the dated summary; the dates-pending branches (759/761) the undated one; only the clicked-guest branch (860, reachable both ways) keeps a date-branch Condition. Villa missing → a branch-local villa Interactive whose 2 canonical buttons rejoin the shared villa-ack `#938` (postback convergence, 2-way → **18-way**; same proven class, larger fan-in — human-gated). Id scheme per branch: skipBase+0 gate, +1 villa gate, +2 villa Interactive, +3/+4 buttons, +5 lead, +6 date branch (mixed only), +7/+8 dated/undated summary; skipBases 1000–1070.
+3. **Backend: no code change needed.** The extractor already normalizes singular "2 bedroom" to the approved plural label (new regression test pins it — acceptance #3).
+4. **New canonical `Oraya_natural_intake_v6.txt`:** **258 nodes, 344 output connections, 24 Interactive, 91 controls, 21 terminals** (12 existing + 9 bedroom-skip branch summaries), **ZERO redraws**, SHA-256 `8A356B6F508AF158274576521958F98FA2992A06560E23A65CB1558FBBB51A6D`; hubs `{860:42, 865:7, 930:24, 938:18}`. The 200 pre-existing nodes keep the operator layout baseline positions; the 1000-range skip nodes carry computed positions (the only nodes outside the baseline). Validator strict **0/0**; simulator **62/62** (L01 rewritten: the exact live message now completes with ZERO questions; B01/B02 skip bedrooms; new K01–K17 skip matrix covering every branch × villa known/missing + T03 stale-bedroom re-ask); tooling tests **40/40** (new bedroom-skip structural test; the "no bedroom Condition" rule is narrowed to "only the 8 gate-shaped bedroom Conditions"); extractor **42/42**.
+
+**Reason:** asking for a value the guest already gave is the kind of friction this intake exists to remove; the gate-equality design keeps the "invalid → ask" guarantee and the stale-field safety intact, and the per-branch tails are the only structure the proven import contracts permit.
+
+**Impact:** generator (bedroom-skip section + `APPROVED_POSTBACK_MERGES` 938: 2→18), profile (`approvedPostbackMerges`), simulator (L01/B01/B02 rewrites, K-matrix, T03), tooling tests (villa buttons 2→18, 21 terminals, dates-pending continuation via the gates, layout test tolerates 1000-range, bedroom-skip structural test), extractor test (singular label), `V6_DEPENDENCIES.md` / `V6_ROUNDTRIP_CHECKLIST.md` (18 Lead Submit nodes, 23 API rebinds, C1 zero-questions acceptance + C1a skip/ask matrix, 21 terminals), regenerated `V6_REDRAW_CHECKLIST.md`; KNOWN_BUGS #10 follow-up. No schema, dependency, endpoint, or production WhatChimp changes; `/api/butler/lead` untouched.
+
+**Reversible?:** yes — deterministic generator, pinned fixtures. Gate: the interactive acceptance procedure on a fresh disposable TEST bot, incl. C1 (zero questions on the exact live message), C1a (singular phrasing skip; villa-missing + bedroom-known; stale-bedroom re-ask), and explicit inspection of the 18-way `#938` fan-in after import.
+
+**Supersedes:** the "bedroom Interactive is still ALWAYS asked" behavior and the 200-node totals/SHA `5D39B658…6B64` in the 2026-07-04 "Live runtime repair" entry below (body preserved verbatim per the append-only rule; everything else in it remains in force).
+
+---
+
 ## 2026-07-04 - Live runtime repair: presence-based date/villa routing, bedroom-phrase extraction, operator layout baseline (data-contract fixes; graph design and import/export repair unchanged)
 
 **Decision:** the first live conversation on the fresh imported bot failed on a runtime data contract while the structural round trip passed (200 nodes / 270 connections survived). Live transcript: "mechmech july 10 to july 11 for 4 people 2 bedrooms" → dated summary with a BLANK check-out line and a BLANK secure-link line. Three repairs are recorded:
@@ -33,6 +52,8 @@ Durable architectural and operational decisions. Append-only - never edit a past
 **Reversible?:** yes — deterministic generator, pinned fixtures. Gate: re-run the interactive acceptance procedure incl. the rewritten C1 (exact live message → both dates + non-empty link) and C4 (half-date ask; dates-pending).
 
 **Supersedes:** the `= "null"` condition style for date/villa fields carried since the 2026-07-02 v6 entry (guest-count conditions keep it), and the 4D032FEC…E46B artifact SHA in the "Dates-pending continuation" entry below (body preserved verbatim per the append-only rule; everything else in it remains in force).
+
+> **Follow-up (2026-07-08):** PR #67 merged and deployed; the live test passed except that the bedroom question was still asked when the guest had volunteered it. The "Bedroom-skip routing" entry above superseded this entry's "bedroom Interactive is still ALWAYS asked" behavior and its artifact SHA (`5D39B658…6B64` → `8A356B6F…B1A6D`). Everything else here remains in force. This body is preserved verbatim per the append-only rule.
 
 ---
 

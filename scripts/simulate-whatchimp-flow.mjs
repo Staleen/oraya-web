@@ -420,6 +420,155 @@ const STALE_ALL = {
 // ─── the scenario matrix ────────────────────────────────────────────────────
 
 export function buildScenarios() {
+  // ── bedroom-skip matrix (hotfix 2026-07-08) ───────────────────────────────
+  // `extracted_text.bedroom_count` (PR #67) can pre-fill oraya_bedroom_count;
+  // every bedroom-stage entry now passes a bedroom-known gate that skips the
+  // bedroom Interactive when the field already holds one of the three
+  // approved labels EXACTLY ("", "null", whitespace, or anything else → ask
+  // as before). Per branch the matrix runs a villa-known scenario (exercises
+  // the branch's own Lead Submit → summary tail) and a villa-missing scenario
+  // (enters the branch's villa Interactive clone, whose buttons rejoin the
+  // shared villa-ack #938 → completion A with its date branch #943).
+  // `reach(villa)` yields the inputs + fixtures that arrive at the branch's
+  // gate with bedrooms extracted; note the refine mapping (8101) also writes
+  // bedroom_count, so every refine fixture must carry the label too.
+  const D_IN = "2026-07-10";
+  const D_OUT = "2026-07-12";
+  const followupBothDates = { expect: "check-in and check-out dates", answer: "july 10 to july 12" };
+  const retryDates = { expect: "check-in and check-out dates together", answer: "july 10 to july 12" };
+  const followupCheckOut = { expect: "check-out date", answer: "july 12" };
+  const skipBranches = [
+    { key: "b0 clicked guests, dates resolved", skipBase: 1000, tail: "mixed-dated", bedrooms: "2 bedrooms", clickVilla: "Villa Mechmech",
+      reach: (villa) => ({
+        inputs: [stay("july 10 to july 12 for us, 2 bedrooms"), guestClick("4")],
+        fixtures: [{ api: "7466", response: norm(D_IN, D_OUT, villa, null, "2 bedrooms") }],
+        prefix: ["400", "401", "410", "411", "440", "800", "806", "860"],
+      }) },
+    { key: "b0 clicked guests, dates pending", skipBase: 1000, tail: "mixed-undated", bedrooms: "2 bedrooms", clickVilla: null,
+      reach: (villa) => ({
+        inputs: [stay("a villa for a couple, 2 bedrooms"), followupBothDates, retryDates, guestClick("3")],
+        fixtures: [
+          { api: "7466", response: norm(null, null, villa, null, "2 bedrooms") },
+          { api: "8101", response: norm(null, null, villa, null, "2 bedrooms") },
+          { api: "8101", response: norm(null, null, villa, null, "2 bedrooms") },
+        ],
+        prefix: ["436", "438", "758", "900", "905", "860"],
+      }) },
+    { key: "b1 everything extracted", skipBase: 1010, tail: "dated", bedrooms: "2 bedrooms", clickVilla: "Villa Byblos",
+      reach: (villa) => ({
+        inputs: [stay("july 10 to july 12 for 4 people, 2 bedrooms")],
+        fixtures: [{ api: "7466", response: norm(D_IN, D_OUT, villa, "4", "2 bedrooms") }],
+        prefix: ["400", "401", "410", "411", "440", "602"],
+      }) },
+    { key: "b2 dates recovered on follow-up", skipBase: 1020, tail: "dated", bedrooms: "1 bedroom", clickVilla: "Villa Mechmech",
+      reach: (villa) => ({
+        inputs: [stay("5 guests, 1 bedroom"), followupBothDates],
+        fixtures: [
+          { api: "7466", response: norm(null, null, villa, "5", "1 bedroom") },
+          { api: "8101", response: norm(D_IN, D_OUT, villa, "5", "1 bedroom") },
+        ],
+        prefix: ["420", "421", "422", "430", "750", "751"],
+      }) },
+    { key: "b3 dates recovered on retry", skipBase: 1030, tail: "dated", bedrooms: "3 bedrooms", clickVilla: "Villa Byblos",
+      reach: (villa) => ({
+        inputs: [stay("4 guests, 3 bedrooms"), followupBothDates, retryDates],
+        fixtures: [
+          { api: "7466", response: norm(null, null, villa, "4", "3 bedrooms") },
+          { api: "8101", response: norm(null, null, villa, "4", "3 bedrooms") },
+          { api: "8101", response: norm(D_IN, D_OUT, villa, "4", "3 bedrooms") },
+        ],
+        prefix: ["432", "434", "435", "436", "752", "753"],
+      }) },
+    { key: "b4 check-out recovered on follow-up", skipBase: 1040, tail: "dated", bedrooms: "1 bedroom", clickVilla: "Villa Mechmech",
+      reach: (villa) => ({
+        inputs: [stay("from july 10 for 3, 1 bedroom"), followupCheckOut],
+        fixtures: [
+          { api: "7466", response: norm(D_IN, null, villa, "3", "1 bedroom") },
+          { api: "8101", response: norm(D_IN, D_OUT, villa, "3", "1 bedroom") },
+        ],
+        prefix: ["425", "426", "427", "501", "754", "755"],
+      }) },
+    { key: "b5 check-out recovered on retry", skipBase: 1050, tail: "dated", bedrooms: "3 bedrooms", clickVilla: "Villa Byblos",
+      reach: (villa) => ({
+        inputs: [stay("from july 10 for 2, 3 bedrooms"), followupCheckOut, retryDates],
+        fixtures: [
+          { api: "7466", response: norm(D_IN, null, villa, "2", "3 bedrooms") },
+          { api: "8101", response: norm(D_IN, null, villa, "2", "3 bedrooms") },
+          { api: "8101", response: norm(D_IN, D_OUT, villa, "2", "3 bedrooms") },
+        ],
+        prefix: ["503", "507", "506", "505", "756", "757"],
+      }) },
+    { key: "b6 both dates pending", skipBase: 1060, tail: "undated", bedrooms: "2 bedrooms", clickVilla: "Villa Mechmech",
+      reach: (villa) => ({
+        inputs: [stay("4 of us, 2 bedrooms"), followupBothDates, retryDates],
+        fixtures: [
+          { api: "7466", response: norm(null, null, villa, "4", "2 bedrooms") },
+          { api: "8101", response: norm(null, null, villa, "4", "2 bedrooms") },
+          { api: "8101", response: norm(null, null, villa, "4", "2 bedrooms") },
+        ],
+        prefix: ["436", "438", "758", "759"],
+      }) },
+    { key: "b7 check-out pending", skipBase: 1070, tail: "undated", bedrooms: "1 bedroom", clickVilla: "Villa Byblos",
+      reach: (villa) => ({
+        inputs: [stay("from july 10 for 3, 1 bedroom"), followupCheckOut, retryDates],
+        fixtures: [
+          { api: "7466", response: norm(D_IN, null, villa, "3", "1 bedroom") },
+          { api: "8101", response: norm(D_IN, null, villa, "3", "1 bedroom") },
+          { api: "8101", response: norm(D_IN, null, villa, "3", "1 bedroom") },
+        ],
+        prefix: ["506", "505", "504", "760", "761"],
+      }) },
+  ];
+  const DATED_LINES = ["Check-in: 2026-07-10", "Check-out: 2026-07-12"];
+  const UNDATED_LINE = "Dates: Please choose them using the secure link below";
+  const LEAD_OK = { api: "6961", response: { prefill_url: "https://stayoraya.com/book?h=TESTTOKEN123" } };
+  const bedroomSkip = [];
+  let k = 0;
+  for (const b of skipBranches) {
+    const gate = b.skipBase;
+    const dated = b.tail === "dated" || b.tail === "mixed-dated";
+    // branch tail: +5 lead, then (+6 date branch on the mixed branch only)
+    // → +7 dated / +8 undated summary
+    const tailIds = b.tail === "dated" ? [gate + 7]
+      : b.tail === "undated" ? [gate + 8]
+      : [gate + 6, b.tail === "mixed-dated" ? gate + 7 : gate + 8];
+    const known = b.reach("Villa Mechmech");
+    k += 1;
+    bedroomSkip.push({
+      name: `K${String(k).padStart(2, "0")} bedroom-skip ${b.key}, villa known → NO bedroom/villa ask → ${dated ? "dated" : "undated"} branch summary #${tailIds[tailIds.length - 1]}`,
+      inputs: known.inputs,
+      fixtures: [...known.fixtures, LEAD_OK],
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: [...SUMMARY_TERMINAL, ...(dated ? DATED_LINES : [UNDATED_LINE]), `Bedrooms: ${b.bedrooms}`, "TESTTOKEN123"],
+        terminalExcludes: ["null"],
+        askedExcludes: ["full name"],
+        messagesExclude: ["How many bedrooms would you like", "Which villa would you prefer"],
+        fieldEquals: { oraya_bedroom_count: b.bedrooms },
+        visitsInOrder: [[...known.prefix, String(gate), String(gate + 1), String(gate + 5), ...tailIds.map(String)]],
+      },
+    });
+    if (b.clickVilla) {
+      const missing = b.reach(null);
+      const buttonId = b.clickVilla === "Villa Mechmech" ? gate + 3 : gate + 4;
+      k += 1;
+      bedroomSkip.push({
+        name: `K${String(k).padStart(2, "0")} bedroom-skip ${b.key}, villa MISSING → branch villa clone #${gate + 2} → shared villa-ack → completion A`,
+        inputs: [...missing.inputs, villaClick(b.clickVilla)],
+        fixtures: [...missing.fixtures, LEAD_OK],
+        expect: {
+          leadSubmitted: true,
+          terminalIncludes: [...SUMMARY_TERMINAL, ...(dated ? DATED_LINES : [UNDATED_LINE]), `Villa: ${b.clickVilla}`, `Bedrooms: ${b.bedrooms}`, "TESTTOKEN123"],
+          terminalExcludes: ["null"],
+          askedExcludes: ["full name"],
+          messagesExclude: ["How many bedrooms would you like"],
+          fieldEquals: { oraya_bedroom_count: b.bedrooms, oraya_villa: b.clickVilla },
+          visitsInOrder: [[...missing.prefix, String(gate), String(gate + 1), String(gate + 2), String(buttonId), "938", "939", "943", dated ? "940" : "945"]],
+        },
+      });
+    }
+  }
+
   return [
     // ── extraction skips the corresponding Interactive question ─────────────
     {
@@ -971,10 +1120,12 @@ export function buildScenarios() {
     // a misbound response mapping delivered "" instead of "null", slipping
     // past the missing-checks into a dated summary with a blank check-out) ───
     {
-      name: "L01 live acceptance: \"mechmech july 10 to july 11 for 4 people 2 bedrooms\" → both dates + guests + bedrooms + villa + secure link",
-      inputs: [stay("mechmech july 10 to july 11 for 4 people 2 bedrooms"), bedroomClick("2 bedrooms")],
+      name: "L01 live acceptance: \"mechmech july 10 to july 11 for 4 people 2 bedrooms\" → NO questions at all → dated summary + secure link (bedroom-skip)",
+      inputs: [stay("mechmech july 10 to july 11 for 4 people 2 bedrooms")],
       fixtures: [
-        // exactly what the FIXED extractor returns for the live message
+        // exactly what the FIXED extractor returns for the live message —
+        // bedroom_count now arrives extracted and the bedroom-known gate
+        // skips the bedroom Interactive entirely (hotfix 2026-07-08)
         { api: "7466", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "4", "2 bedrooms") },
         { api: "6961", response: { prefill_url: "https://stayoraya.com/book?h=TESTTOKEN123" } },
       ],
@@ -982,13 +1133,16 @@ export function buildScenarios() {
         leadSubmitted: true,
         terminalIncludes: [...SUMMARY_TERMINAL, "Check-in: 2026-07-10", "Check-out: 2026-07-11", "Villa: Villa Mechmech", "Overnight guests: 4", "Bedrooms: 2 bedrooms", "TESTTOKEN123"],
         askedExcludes: ["full name", "check-out date"],
+        messagesExclude: ["How many bedrooms would you like", "Which villa would you prefer", "How many guests will be staying overnight"],
         fieldEquals: { oraya_check_out: "2026-07-11", oraya_bedroom_count: "2 bedrooms" },
-        visitsInOrder: [["400", "401", "410", "411", "440", "602", "875", "877", "930", "470", "941", "944", "942"]],
+        // supported gate True → bedroom-known gate 1010 (skip) → villa-gate
+        // clone 1011 (known) → branch Lead Submit → branch dated summary
+        visitsInOrder: [["400", "401", "410", "411", "440", "602", "1010", "1011", "1015", "1017"]],
       },
     },
     {
-      name: "B01 misbound mapping writes \"\" for check-out → read as MISSING → check-out follow-up → recovered dated summary",
-      inputs: [stay("mechmech july 10 for 4 people 2 bedrooms"), { expect: "check-out date", answer: "july 11" }, bedroomClick("2 bedrooms")],
+      name: "B01 misbound mapping writes \"\" for check-out → read as MISSING → check-out follow-up → recovered dated summary (bedrooms extracted → skipped)",
+      inputs: [stay("mechmech july 10 for 4 people 2 bedrooms"), { expect: "check-out date", answer: "july 11" }],
       fixtures: [
         { api: "7466", response: { ...norm("2026-07-10", null, "Villa Mechmech", "4", "2 bedrooms"), check_out: "" } },
         { api: "8101", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "4", "2 bedrooms") },
@@ -999,16 +1153,16 @@ export function buildScenarios() {
         terminalIncludes: [...SUMMARY_TERMINAL, "Check-in: 2026-07-10", "Check-out: 2026-07-11", "TESTTOKEN123"],
         askedIncludes: ["check-out date"],
         askedExcludes: ["full name"],
-        visitsInOrder: [["401", "410", "411", "425", "426", "427", "501", "754", "755", "890", "892", "930", "470", "941", "944", "942"]],
+        messagesExclude: ["How many bedrooms would you like"],
+        visitsInOrder: [["401", "410", "411", "425", "426", "427", "501", "754", "755", "1040", "1041", "1045", "1047"]],
       },
     },
     {
-      name: "B02 \"\" check-out persists through follow-up + retry → UNDATED summary; captured check-in never renders alone",
+      name: "B02 \"\" check-out persists through follow-up + retry → UNDATED summary; captured check-in never renders alone (bedrooms extracted → skipped)",
       inputs: [
         stay("mechmech july 10 to july 11 for 4 people 2 bedrooms"),
         { expect: "check-out date", answer: "july 11" },
         { expect: "check-in and check-out dates together", answer: "july 10 to july 11" },
-        bedroomClick("2 bedrooms"),
       ],
       fixtures: [
         { api: "7466", response: { ...norm("2026-07-10", null, "Villa Mechmech", "4", "2 bedrooms"), check_out: "" } },
@@ -1021,7 +1175,8 @@ export function buildScenarios() {
         terminalIncludes: [...SUMMARY_TERMINAL, "Dates: Please choose them using the secure link below", "TESTTOKEN123"],
         terminalExcludes: ["2026-07-10", "null", "Check-in:", "Check-out:"],
         askedExcludes: ["full name"],
-        visitsInOrder: [["506", "505", "504", "760", "761", "925", "927", "930", "470", "941", "944", "946"]],
+        messagesExclude: ["How many bedrooms would you like"],
+        visitsInOrder: [["506", "505", "504", "760", "761", "1070", "1071", "1075", "1078"]],
       },
     },
     {
@@ -1043,6 +1198,11 @@ export function buildScenarios() {
         visitsInOrder: [["401", "410", "420", "421", "422", "430", "750", "751", "880", "881", "930", "470", "941", "944", "942"]],
       },
     },
+
+    // ── bedroom-skip matrix (see the table above): every branch, villa known
+    // and villa missing — the bedroom question never renders when a valid
+    // extracted label is already held ─────────────────────────────────────────
+    ...bedroomSkip,
 
     // ── stale-field safety (returning subscriber) ────────────────────────────
     {
@@ -1072,6 +1232,25 @@ export function buildScenarios() {
         terminalIncludes: SUMMARY_TERMINAL,
         messagesExclude: ["How many guests exactly"],
         fieldEquals: { oraya_guest_count: "2", oraya_guest_followup: "null" },
+      },
+    },
+    {
+      name: "T03 stale bedroom label from an abandoned attempt → reset to \"null\" by the new attempt's mapping → bedroom question IS asked",
+      staleFields: STALE_ALL, // includes oraya_bedroom_count: "3 bedrooms"
+      inputs: [stay("Villa Mechmech August 5 to August 7 for 2"), bedroomClick("2 bedrooms")],
+      fixtures: [
+        { api: "7466", response: norm("2026-08-05", "2026-08-07", "Villa Mechmech", "2") },
+        { api: "6961", response: {} },
+      ],
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: [...SUMMARY_TERMINAL, "Bedrooms: 2 bedrooms"],
+        messagesInclude: ["How many bedrooms would you like"],
+        fieldEquals: { oraya_bedroom_count: "2 bedrooms" },
+        // the stale "3 bedrooms" would pass the bedroom-known gate — the
+        // extracted_text reset writes the literal "null" first, so the gate
+        // takes False and the question renders (#1010 → #875)
+        visitsInOrder: [["602", "1010", "875", "877", "930", "470", "941", "944", "942"]],
       },
     },
 
