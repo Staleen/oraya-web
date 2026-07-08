@@ -406,3 +406,81 @@ test("bedroom_count is absent from missing_fields and never blocks status (bedro
   assert.equal(r.extracted.bedroom_count, null);
   assert.equal(r.extracted_text.bedroom_count, "null");
 });
+
+// ─── Verb-particle lead-in stranding (full-phrase date-overwrite bug) ───────
+// Regression for the "i want to book … from july 10 to july 15" family: the
+// "to" in "want to" is a range connective, not a filler word, so it survived
+// filler-stripping as a stranded leading token. That either corrupted the
+// check-in fragment or made the range splitter split at the WRONG "to"
+// ("to july 10 to july 15" → ci="to july 10"), returning status=unclear with
+// BOTH dates null — which let the flow's presence gate pass STALE dates to the
+// summary. Fix: `cleanResidue` now drops leading lead-in tokens up to the
+// first date-anchoring token. Reference date pinned to 2026-07-08.
+
+const REF_JUL = "2026-07-08"; // Wednesday, July 8, 2026
+
+test("lead-in 'i want to book': stranded 'to' no longer clobbers the dates", () => {
+  const r = extractStayIntent({
+    stay_text: "i want to book mechmech from july 10 to july 15 for 4 people",
+    reference_date: REF_JUL,
+  });
+  assert.equal(r.extracted.check_in,    "2026-07-10");
+  assert.equal(r.extracted.check_out,   "2026-07-15");
+  assert.equal(r.extracted.nights,      5);
+  assert.equal(r.extracted.villa,       "Villa Mechmech");
+  assert.equal(r.extracted.guest_count, 4);
+  assert.equal(r.status, "clear");
+});
+
+test("lead-in 'i want to book' with NO villa/guests still parses both dates", () => {
+  const r = extractStayIntent({
+    stay_text: "i want to book july 10 to july 15",
+    reference_date: REF_JUL,
+  });
+  assert.equal(r.extracted.check_in,  "2026-07-10");
+  assert.equal(r.extracted.check_out, "2026-07-15");
+  assert.equal(r.extracted.nights,    5);
+  // dates present ⇒ the literal "null" mirrors must NOT be emitted
+  assert.equal(r.extracted_text.check_in,  "2026-07-10");
+  assert.equal(r.extracted_text.check_out, "2026-07-15");
+});
+
+test("lead-in \"i'd like to book\": contraction verb + stranded 'to'", () => {
+  const r = extractStayIntent({
+    stay_text: "i'd like to book mechmech from july 10 to july 15",
+    reference_date: REF_JUL,
+  });
+  assert.equal(r.extracted.check_in,  "2026-07-10");
+  assert.equal(r.extracted.check_out, "2026-07-15");
+  assert.equal(r.extracted.villa,     "Villa Mechmech");
+});
+
+test("lead-in 'i want to stay at': stranded 'to' with a different verb", () => {
+  const r = extractStayIntent({
+    stay_text: "i want to stay at mechmech july 10 to july 15",
+    reference_date: REF_JUL,
+  });
+  assert.equal(r.extracted.check_in,  "2026-07-10");
+  assert.equal(r.extracted.check_out, "2026-07-15");
+  assert.equal(r.extracted.villa,     "Villa Mechmech");
+});
+
+test("lead-in 'can i book': non-filler lead-in word is dropped before the dates", () => {
+  const r = extractStayIntent({
+    stay_text: "can i book mechmech july 10 to july 15",
+    reference_date: REF_JUL,
+  });
+  assert.equal(r.extracted.check_in,  "2026-07-10");
+  assert.equal(r.extracted.check_out, "2026-07-15");
+  assert.equal(r.extracted.villa,     "Villa Mechmech");
+});
+
+test("date-anchor trim keeps a spelled-number duration ('three nights') intact", () => {
+  const r = extractStayIntent({
+    stay_text: "i want to book mechmech july 10 for three nights",
+    reference_date: REF_JUL,
+  });
+  assert.equal(r.extracted.check_in,  "2026-07-10");
+  assert.equal(r.extracted.check_out, "2026-07-13");
+  assert.equal(r.extracted.nights,    3);
+});

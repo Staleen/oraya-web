@@ -146,6 +146,16 @@ const DURATION_PATTERN =
 const MONTH_TOKEN_RE =
   /^(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)$/i;
 
+// ─── date-anchoring tokens (first meaningful token of a cleaned residue) ────
+// A residue's date content always begins at a month name, day number/ordinal,
+// ISO date, spelled number (for durations like "three nights"), weekday, or
+// relative-date keyword. Everything before the first such token is lead-in
+// noise. Used by `cleanResidue` to drop stranded verb-particle remnants
+// ("want to" → leading "to", "can i book" → leading "can") that would
+// otherwise corrupt the check-in fragment or steal the range connective.
+const DATE_ANCHOR_RE =
+  /^(?:\d{1,2}(?:st|nd|rd|th)?|\d{4}-\d{2}-\d{2}|one|two|three|four|five|six|seven|eight|nine|ten|jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december|mon|monday|tue|tues|tuesday|wed|weds|wednesday|thu|thur|thurs|thursday|fri|friday|sat|saturday|sun|sunday|today|tonight|tomorrow|tmrw|tmr|next|this|coming|following|weekend|week|fortnight)$/i;
+
 // Filler words stripped from the residue before splitting. Kept short and
 // intentionally excludes month names, weekday names, and duration units.
 // Guest-count and villa extraction run BEFORE this filter, so removing
@@ -318,14 +328,26 @@ function cleanResidue(text: string): string {
     /(?<![\d-])(\d{1,2})\s*-\s*(\d{1,2})(?![\d-])/g,
     "$1 to $2",
   );
-  out = out
+  const tokens = out
     .replace(/\s+/g, " ")
     .trim()
     .split(/\s+/)
-    .filter((tok) => !FILLER_WORDS.has(tok.toLowerCase()))
-    .join(" ")
-    .trim();
-  return out;
+    .filter((tok) => tok && !FILLER_WORDS.has(tok.toLowerCase()));
+  // Drop leading lead-in noise up to the first date-anchoring token. Villa and
+  // guest-count are already extracted, so a residue's meaningful content begins
+  // at its first month / day-number / weekday / relative-date token. Anything
+  // before that is verb-particle residue: "i want to book …" strands a leading
+  // "to" (a range connective, so it is not a filler word), and "can i book …"
+  // strands a leading "can". Left in place, that leading token corrupts the
+  // check-in fragment or makes `splitStayResidue` split at the WRONG "to"
+  // ("to july 10 to july 15" → ci="to july 10"), which fails to parse and
+  // returns unclear. Interior tokens — including the real "to" separator — are
+  // untouched, so ranges still split correctly.
+  let start = 0;
+  while (start < tokens.length && !DATE_ANCHOR_RE.test(tokens[start])) {
+    start++;
+  }
+  return tokens.slice(start).join(" ").trim();
 }
 
 function splitStayResidue(text: string): {

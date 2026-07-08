@@ -236,9 +236,15 @@ export function runScenario(flow, profile, scenario) {
       // output edge but NO response mapping writes any field.
       if (!fixture.failed) {
         const mapping = profile.apiFieldWrites?.[apiId] ?? {};
-        for (const [respKey, fieldName] of Object.entries(mapping)) {
+        for (const [respKey, fieldNames] of Object.entries(mapping)) {
+          // a mapping value may be ONE field name or an ARRAY of them — the
+          // tenant can mirror one response key into several fields (the
+          // 7466/8101 extracted_text.check_in/check_out rows also feed the
+          // raw oraya_check_in_text/oraya_check_out_text fields that the
+          // Normalize Dates integration's fixed body reads)
+          const targets = Array.isArray(fieldNames) ? fieldNames : [fieldNames];
           if (respKey in (fixture.response ?? {})) {
-            fields.set(fieldName, String(fixture.response[respKey]));
+            for (const t of targets) fields.set(t, String(fixture.response[respKey]));
           } else if (apiId === profile.apis.initialNormalize.id || apiId === profile.apis.refine.id) {
             fail(`fixture for api ${apiId} is missing "${respKey}" — extracted_text fixtures must carry every mapped key (use "null" for missing)`);
           }
@@ -435,8 +441,22 @@ export function buildScenarios() {
   const D_IN = "2026-07-10";
   const D_OUT = "2026-07-12";
   const followupBothDates = { expect: "check-in and check-out dates", answer: "july 10 to july 12" };
-  const retryDates = { expect: "check-in and check-out dates together", answer: "july 10 to july 12" };
   const followupCheckOut = { expect: "check-out date", answer: "july 12" };
+  // structured Normalize Dates ladder inputs (2026-07-08)
+  const askCheckInSolo = (answer) => ({ expect: "What is your check-in date", answer });
+  const askCheckOutSolo = (answer) => ({ expect: "what is your check-out date", answer });
+  const askCheckOutRetry = (answer) => ({ expect: "just your check-out date", answer });
+  // resume-pair clicks: every ladder outcome ends on a one-button Interactive
+  const continueResolved = { expect: "I have your dates as", answer: "Continue" };
+  const continuePending = { expect: "pick your exact dates", answer: "Continue" };
+  // Normalize Dates fixtures (integration 7458; its response mapping only
+  // writes keys the backend returned — BOTH null semantics are exercised:
+  // omitted keys (skip) and "" values (blank write); neither contains "-",
+  // so neither can satisfy the presence contract)
+  const ndOk = (ci, co) => ({ api: "7458", response: { check_in: ci, check_out: co, nights: "1", status: "resolved", safe_message: "Here are your dates" } });
+  const ndCheckInOnly = (ci) => ({ api: "7458", response: { check_in: ci, status: "needs_clarification" } }); // check_out OMITTED (skip semantics)
+  const ndNone = { api: "7458", response: {} }; // nothing usable — every key omitted
+  const ndBlankOut = (ci) => ({ api: "7458", response: { check_in: ci, check_out: "", status: "needs_clarification" } }); // "" write semantics
   const skipBranches = [
     { key: "b0 clicked guests, dates resolved", skipBase: 1000, tail: "mixed-dated", bedrooms: "2 bedrooms", clickVilla: "Villa Mechmech",
       reach: (villa) => ({
@@ -444,15 +464,15 @@ export function buildScenarios() {
         fixtures: [{ api: "7466", response: norm(D_IN, D_OUT, villa, null, "2 bedrooms") }],
         prefix: ["400", "401", "410", "411", "440", "800", "806", "860"],
       }) },
-    { key: "b0 clicked guests, dates pending", skipBase: 1000, tail: "mixed-undated", bedrooms: "2 bedrooms", clickVilla: null,
+    { key: "b0 clicked guests, dates pending", skipBase: 1000, tail: "mixed-undated", bedrooms: "2 bedrooms", clickVilla: "Villa Byblos",
       reach: (villa) => ({
-        inputs: [stay("a villa for a couple, 2 bedrooms"), followupBothDates, retryDates, guestClick("3")],
+        inputs: [stay("a villa for a couple, 2 bedrooms"), followupBothDates, askCheckInSolo("whenever"), askCheckOutSolo("still whenever"), continuePending, guestClick("3")],
         fixtures: [
           { api: "7466", response: norm(null, null, villa, null, "2 bedrooms") },
           { api: "8101", response: norm(null, null, villa, null, "2 bedrooms") },
-          { api: "8101", response: norm(null, null, villa, null, "2 bedrooms") },
+          ndNone,
         ],
-        prefix: ["436", "438", "758", "900", "905", "860"],
+        prefix: ["430", "1100", "1107", "1108", "1109", "1110", "1111", "1138", "1139", "1200", "1201", "1210", "1215", "860"],
       }) },
     { key: "b1 everything extracted", skipBase: 1010, tail: "dated", bedrooms: "2 bedrooms", clickVilla: "Villa Byblos",
       reach: (villa) => ({
@@ -469,54 +489,24 @@ export function buildScenarios() {
         ],
         prefix: ["420", "421", "422", "430", "750", "751"],
       }) },
-    { key: "b3 dates recovered on retry", skipBase: 1030, tail: "dated", bedrooms: "3 bedrooms", clickVilla: "Villa Byblos",
+    { key: "bR dates recovered by the ladder", skipBase: 1180, tail: "dated", bedrooms: "3 bedrooms", clickVilla: "Villa Mechmech",
       reach: (villa) => ({
-        inputs: [stay("4 guests, 3 bedrooms"), followupBothDates, retryDates],
+        inputs: [stay("from july 10 for 4, 3 bedrooms"), followupCheckOut, continueResolved],
         fixtures: [
-          { api: "7466", response: norm(null, null, villa, "4", "3 bedrooms") },
-          { api: "8101", response: norm(null, null, villa, "4", "3 bedrooms") },
-          { api: "8101", response: norm(D_IN, D_OUT, villa, "4", "3 bedrooms") },
+          { api: "7466", response: norm(D_IN, null, villa, "4", "3 bedrooms") },
+          ndOk(D_IN, D_OUT),
         ],
-        prefix: ["432", "434", "435", "436", "752", "753"],
+        prefix: ["425", "426", "1120", "1121", "1140", "1141", "1150", "1151", "1152"],
       }) },
-    { key: "b4 check-out recovered on follow-up", skipBase: 1040, tail: "dated", bedrooms: "1 bedroom", clickVilla: "Villa Mechmech",
+    { key: "bP dates pending after the ladder", skipBase: 1230, tail: "undated", bedrooms: "1 bedroom", clickVilla: "Villa Byblos",
       reach: (villa) => ({
-        inputs: [stay("from july 10 for 3, 1 bedroom"), followupCheckOut],
+        inputs: [stay("from july 10 for 3, 1 bedroom"), followupCheckOut, askCheckOutRetry("still no idea"), continuePending],
         fixtures: [
           { api: "7466", response: norm(D_IN, null, villa, "3", "1 bedroom") },
-          { api: "8101", response: norm(D_IN, D_OUT, villa, "3", "1 bedroom") },
+          ndCheckInOnly(D_IN),
+          ndBlankOut(D_IN),
         ],
-        prefix: ["425", "426", "427", "501", "754", "755"],
-      }) },
-    { key: "b5 check-out recovered on retry", skipBase: 1050, tail: "dated", bedrooms: "3 bedrooms", clickVilla: "Villa Byblos",
-      reach: (villa) => ({
-        inputs: [stay("from july 10 for 2, 3 bedrooms"), followupCheckOut, retryDates],
-        fixtures: [
-          { api: "7466", response: norm(D_IN, null, villa, "2", "3 bedrooms") },
-          { api: "8101", response: norm(D_IN, null, villa, "2", "3 bedrooms") },
-          { api: "8101", response: norm(D_IN, D_OUT, villa, "2", "3 bedrooms") },
-        ],
-        prefix: ["503", "507", "506", "505", "756", "757"],
-      }) },
-    { key: "b6 both dates pending", skipBase: 1060, tail: "undated", bedrooms: "2 bedrooms", clickVilla: "Villa Mechmech",
-      reach: (villa) => ({
-        inputs: [stay("4 of us, 2 bedrooms"), followupBothDates, retryDates],
-        fixtures: [
-          { api: "7466", response: norm(null, null, villa, "4", "2 bedrooms") },
-          { api: "8101", response: norm(null, null, villa, "4", "2 bedrooms") },
-          { api: "8101", response: norm(null, null, villa, "4", "2 bedrooms") },
-        ],
-        prefix: ["436", "438", "758", "759"],
-      }) },
-    { key: "b7 check-out pending", skipBase: 1070, tail: "undated", bedrooms: "1 bedroom", clickVilla: "Villa Byblos",
-      reach: (villa) => ({
-        inputs: [stay("from july 10 for 3, 1 bedroom"), followupCheckOut, retryDates],
-        fixtures: [
-          { api: "7466", response: norm(D_IN, null, villa, "3", "1 bedroom") },
-          { api: "8101", response: norm(D_IN, null, villa, "3", "1 bedroom") },
-          { api: "8101", response: norm(D_IN, null, villa, "3", "1 bedroom") },
-        ],
-        prefix: ["506", "505", "504", "760", "761"],
+        prefix: ["425", "426", "1120", "1121", "1122", "1123", "1124", "1125", "1144", "1145", "1200", "1201", "1202"],
       }) },
   ];
   const DATED_LINES = ["Check-in: 2026-07-10", "Check-out: 2026-07-12"];
@@ -796,162 +786,149 @@ export function buildScenarios() {
       ],
       expect: { leadSubmitted: true, terminalIncludes: ESC_TERMINAL, visitsInOrder: [["750", "751", "964", "974", "977"]] },
     },
+    // ── structured Normalize Dates ladder (2026-07-08) — recovered paths ─────
     {
-      name: "R04 dates unreadable once → retry recovers → guest stage g2 row \"More than 6\"",
+      name: "N01 target UX: \"this weekend\" → refine can't parse → one-by-one ladder (\"10 july\" / \"11 july\") → Continue → recovered dated summary",
       inputs: [
-        stay("Mechmech please"),
-        { expect: "check-in and check-out dates", answer: "whenever is fine" },
-        { expect: "check-in and check-out dates together", answer: "July 10 to July 15" },
-        guestClick("More than 6"),
-        { expect: "How many guests exactly", answer: "10" },
-        escName,
+        stay("this weekend"),
+        { expect: "check-in and check-out dates", answer: "this weekend 10 july" },
+        askCheckInSolo("10 july"),
+        askCheckOutSolo("11 july"),
+        continueResolved,
+        guestClick("2"),
+        bedroomClick("1 bedroom"),
       ],
       fixtures: [
         { api: "7466", response: norm(null, null, "Villa Mechmech", null) },
         { api: "8101", response: norm(null, null, "Villa Mechmech", null) },
-        { api: "8101", response: norm("2026-07-10", "2026-07-15", "Villa Mechmech", null) },
+        ndOk("2026-07-10", "2026-07-11"),
+        { api: "6961", response: { prefill_url: "https://stayoraya.com/book?h=TESTTOKEN123" } },
+      ],
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: [...SUMMARY_TERMINAL, "Check-in: 2026-07-10", "Check-out: 2026-07-11", "Overnight guests: 2", "TESTTOKEN123"],
+        terminalExcludes: ["null"],
+        askedExcludes: ["full name"],
+        // the resume pair interpolates the freshly normalized dates
+        messagesInclude: ["I have your dates as 2026-07-10 → 2026-07-11"],
+        fieldEquals: { oraya_check_in: "2026-07-10", oraya_check_out: "2026-07-11", oraya_check_in_text: "10 july", oraya_check_out_text: "11 july" },
+        // 430 False → ladder gate 1100 (check-in missing) → one-by-one chain →
+        // ND → both-present gate → resolved pair A3 → H_R → guest stage 1160
+        visitsInOrder: [["400", "401", "410", "420", "421", "422", "430", "1100", "1107", "1108", "1109", "1110", "1111", "1134", "1135", "1150", "1151", "1160", "1164", "860", "1000", "870", "871", "930", "470", "941", "944", "942"]],
+      },
+    },
+    {
+      name: "N02 refine finds the check-in only → ladder asks ONLY the check-out → ND → Continue → recovered dated summary",
+      inputs: [
+        stay("looking for a villa"),
+        { expect: "check-in and check-out dates", answer: "from july 10" },
+        askCheckOutSolo("12 july"),
+        continueResolved,
+        guestClick("4"),
+        bedroomClick("2 bedrooms"),
+      ],
+      fixtures: [
+        { api: "7466", response: norm(null, null, "Villa Byblos", null) },
+        { api: "8101", response: norm(D_IN, null, "Villa Byblos", null) },
+        ndOk(D_IN, D_OUT),
+        { api: "6961", response: {} },
+      ],
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: [...SUMMARY_TERMINAL, "Check-in: 2026-07-10", "Check-out: 2026-07-12"],
+        askedExcludes: ["full name", "What is your check-in date"],
+        fieldEquals: { oraya_check_out: "2026-07-12" },
+        // 430 False → gate 1100 True (check-in present) → check-out-only
+        // question → ND → resolved pair A1 → H_R → guest stage 1160
+        visitsInOrder: [["422", "430", "1100", "1103", "1104", "1105", "1106", "1130", "1131", "1150", "1151", "1160", "1166", "860", "870", "872", "930", "470", "941", "944", "942"]],
+      },
+    },
+    {
+      name: "R04 LIVE GAP: split-turn check-out (\"11 july\") normalizes FIRST TRY — no refine clobber — → guest stage row \"6\"",
+      inputs: [stay("Mechmech from July 10"), { expect: "check-out date", answer: "11 july" }, continueResolved, guestClick("6"), bedroomClick("3 bedrooms")],
+      fixtures: [
+        { api: "7466", response: norm("2026-07-10", null, "Villa Mechmech", null) },
+        ndOk("2026-07-10", "2026-07-11"),
+        { api: "6961", response: {} },
+      ],
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: [...SUMMARY_TERMINAL, "Check-in: 2026-07-10", "Check-out: 2026-07-11"],
+        // the v5.5 refine-first wiring CLOBBERED the good check-in here;
+        // ND-first must preserve it
+        fieldEquals: { oraya_check_in: "2026-07-10", oraya_check_out: "2026-07-11", oraya_guest_count: "6" },
+        // Q426 (rebound to oraya_check_out_text) → ND → resolved pair B1 →
+        // H_R → guest stage 1160 row "6"
+        visitsInOrder: [["425", "426", "1120", "1121", "1140", "1141", "1150", "1151", "1160", "1168", "860", "1000", "870", "873", "930", "470", "941", "944", "942"]],
+      },
+    },
+    {
+      name: "R05 check-out recovered by ND, guests extracted (3) → bedroom stage on the recovered hub",
+      inputs: [stay("Byblos from July 20 for 3"), { expect: "check-out date", answer: "23 july" }, continueResolved, bedroomClick("1 bedroom")],
+      fixtures: [
+        { api: "7466", response: norm("2026-07-20", null, "Villa Byblos", "3") },
+        ndOk("2026-07-20", "2026-07-23"),
+        { api: "6961", response: {} },
+      ],
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: [...SUMMARY_TERMINAL, "Check-in: 2026-07-20", "Check-out: 2026-07-23"],
+        messagesExclude: ["How many guests will be staying overnight"],
+        visitsInOrder: [["425", "426", "1120", "1121", "1140", "1141", "1150", "1151", "1152", "1180", "1170", "1171", "930", "470", "941", "944", "942"]],
+      },
+    },
+    {
+      name: "R06 check-out recovered by ND, guests extracted UNSUPPORTED (9) → recovered-hub overflow tail",
+      inputs: [stay("Byblos from July 20, 9 guests"), { expect: "check-out date", answer: "23 july" }, continueResolved, escName],
+      fixtures: [
+        { api: "7466", response: norm("2026-07-20", null, "Villa Byblos", "9") },
+        ndOk("2026-07-20", "2026-07-23"),
         { api: "6961", response: {} },
       ],
       expect: {
         leadSubmitted: true,
         terminalIncludes: ESC_TERMINAL,
-        messagesInclude: ["couldn’t read those dates clearly"],
-        fieldEquals: { oraya_guest_followup: "10", oraya_guest_count: "More than 6" },
-        // retry refine → recovered gate 436 (False) → clone 752 → g2 → overflow row → 466
-        visitsInOrder: [["432", "434", "435", "436", "752", "820", "829", "466", "467", "468", "712"]],
+        fieldEquals: { oraya_guest_count: "9" },
+        visitsInOrder: [["1120", "1121", "1140", "1141", "1150", "1151", "1152", "1190", "1191", "1192", "1193", "1194"]],
       },
     },
     {
-      name: "R05 retry recovers, guests extracted (4) → bedroom stage b3 directly",
-      inputs: [
-        stay("Mechmech, 4 guests"),
-        { expect: "check-in and check-out dates", answer: "whenever" },
-        { expect: "check-in and check-out dates together", answer: "July 10 to July 15" },
-        bedroomClick("3 bedrooms"),
-      ],
-      fixtures: [
-        { api: "7466", response: norm(null, null, "Villa Mechmech", "4") },
-        { api: "8101", response: norm(null, null, "Villa Mechmech", "4") },
-        { api: "8101", response: norm("2026-07-10", "2026-07-15", "Villa Mechmech", "4") },
-        { api: "6961", response: {} },
-      ],
-      expect: { leadSubmitted: true, terminalIncludes: SUMMARY_TERMINAL, visitsInOrder: [["436", "752", "753", "885", "888", "930"]] },
-    },
-    {
-      name: "R06 retry recovers, guests extracted UNSUPPORTED (8) → overflow tail e3",
-      inputs: [
-        stay("Mechmech, 8 of us"),
-        { expect: "check-in and check-out dates", answer: "whenever" },
-        { expect: "check-in and check-out dates together", answer: "July 10 to July 15" },
-        escName,
-      ],
-      fixtures: [
-        { api: "7466", response: norm(null, null, "Villa Mechmech", "8") },
-        { api: "8101", response: norm(null, null, "Villa Mechmech", "8") },
-        { api: "8101", response: norm("2026-07-10", "2026-07-15", "Villa Mechmech", "8") },
-        { api: "6961", response: {} },
-      ],
-      expect: { leadSubmitted: true, terminalIncludes: ESC_TERMINAL, fieldEquals: { oraya_guest_count: "8" }, visitsInOrder: [["753", "965", "978", "981"]] },
-    },
-    {
-      name: "R07 check-out missing → recovered on follow-up → guest stage g3 row \"6\"",
-      inputs: [stay("Mechmech from July 10"), { expect: "check-out date", answer: "July 12" }, guestClick("6"), bedroomClick("3 bedrooms")],
-      fixtures: [
-        { api: "7466", response: norm("2026-07-10", null, "Villa Mechmech", null) },
-        { api: "8101", response: norm("2026-07-10", "2026-07-12", "Villa Mechmech", null) },
-        { api: "6961", response: {} },
-      ],
-      expect: {
-        leadSubmitted: true,
-        terminalIncludes: SUMMARY_TERMINAL,
-        fieldEquals: { oraya_check_out: "2026-07-12", oraya_guest_count: "6" },
-        visitsInOrder: [["425", "426", "427", "501", "754", "830", "838", "860", "870"]],
-      },
-    },
-    {
-      name: "R08 check-out recovered, guests extracted (3) → bedroom stage b4 directly",
-      inputs: [stay("Byblos from July 20 for 3"), { expect: "check-out date", answer: "July 23" }, bedroomClick("1 bedroom")],
-      fixtures: [
-        { api: "7466", response: norm("2026-07-20", null, "Villa Byblos", "3") },
-        { api: "8101", response: norm("2026-07-20", "2026-07-23", "Villa Byblos", "3") },
-        { api: "6961", response: {} },
-      ],
-      expect: { leadSubmitted: true, terminalIncludes: SUMMARY_TERMINAL, visitsInOrder: [["501", "754", "755", "890", "891", "930"]] },
-    },
-    {
-      name: "R09 check-out recovered, guests extracted UNSUPPORTED (8) → overflow tail e4",
-      inputs: [stay("Byblos from July 20, 8 guests"), { expect: "check-out date", answer: "July 23" }, escName],
-      fixtures: [
-        { api: "7466", response: norm("2026-07-20", null, "Villa Byblos", "8") },
-        { api: "8101", response: norm("2026-07-20", "2026-07-23", "Villa Byblos", "8") },
-        { api: "6961", response: {} },
-      ],
-      expect: { leadSubmitted: true, terminalIncludes: ESC_TERMINAL, visitsInOrder: [["755", "966", "982", "985"]] },
-    },
-    {
-      name: "R10 check-out unreadable once → retry recovers → guest stage g4 row \"5\"",
+      name: "R07 unreadable check-out reply (\"to 11 july\") → ONE structured retry recovers → guest stage row \"5\"",
       inputs: [
         stay("Byblos from July 20"),
-        { expect: "check-out date", answer: "soonish" },
-        { expect: "check-in and check-out dates together", answer: "July 20 to July 23" },
+        { expect: "check-out date", answer: "to 23 july" },
+        askCheckOutRetry("23 july"),
+        continueResolved,
         guestClick("5"),
         bedroomClick("2 bedrooms"),
       ],
       fixtures: [
         { api: "7466", response: norm("2026-07-20", null, "Villa Byblos", null) },
-        { api: "8101", response: norm("2026-07-20", null, "Villa Byblos", null) },
-        { api: "8101", response: norm("2026-07-20", "2026-07-23", "Villa Byblos", null) },
+        ndCheckInOnly("2026-07-20"),
+        ndOk("2026-07-20", "2026-07-23"),
         { api: "6961", response: {} },
       ],
       expect: {
         leadSubmitted: true,
         terminalIncludes: SUMMARY_TERMINAL,
-        fieldEquals: { oraya_guest_count: "5" },
-        visitsInOrder: [["503", "507", "506", "505", "756", "840", "847", "860", "870"]],
+        fieldEquals: { oraya_guest_count: "5", oraya_check_out: "2026-07-23" },
+        visitsInOrder: [["425", "426", "1120", "1121", "1122", "1123", "1124", "1125", "1142", "1143", "1150", "1151", "1160", "1167", "860", "870", "872", "930"]],
       },
     },
-    {
-      name: "R11 check-out retry recovers, guests extracted (1) → bedroom stage b5 directly",
-      inputs: [
-        stay("Byblos from July 20, just me"),
-        { expect: "check-out date", answer: "soonish" },
-        { expect: "check-in and check-out dates together", answer: "July 20 to July 23" },
-        bedroomClick("2 bedrooms"),
-      ],
-      fixtures: [
-        { api: "7466", response: norm("2026-07-20", null, "Villa Byblos", "1") },
-        { api: "8101", response: norm("2026-07-20", null, "Villa Byblos", "1") },
-        { api: "8101", response: norm("2026-07-20", "2026-07-23", "Villa Byblos", "1") },
-        { api: "6961", response: {} },
-      ],
-      expect: { leadSubmitted: true, terminalIncludes: SUMMARY_TERMINAL, visitsInOrder: [["505", "756", "757", "895", "897", "930"]] },
-    },
-    {
-      name: "R12 check-out retry recovers, guests extracted UNSUPPORTED (11) → overflow tail e5",
-      inputs: [
-        stay("Byblos from July 20 for 11"),
-        { expect: "check-out date", answer: "soonish" },
-        { expect: "check-in and check-out dates together", answer: "July 20 to July 23" },
-        escName,
-      ],
-      fixtures: [
-        { api: "7466", response: norm("2026-07-20", null, "Villa Byblos", "11") },
-        { api: "8101", response: norm("2026-07-20", null, "Villa Byblos", "11") },
-        { api: "8101", response: norm("2026-07-20", "2026-07-23", "Villa Byblos", "11") },
-        { api: "6961", response: {} },
-      ],
-      expect: { leadSubmitted: true, terminalIncludes: ESC_TERMINAL, visitsInOrder: [["757", "967", "986", "989"]] },
-    },
 
-    // ── failed FINAL date retry: the intake continues with dates pending ─────
-    // (the date-escalation tails are gone — no name question, no escalation;
-    // the guest picks dates on /book via the secure link in the undated summary)
+    // ── dates pending after the ladder: the intake continues ─────────────────
+    // (no name question, no date-escalation tail; the guest picks dates on
+    // /book via the secure link in the undated summary. Both null-mapping
+    // semantics of the Normalize Dates response are exercised across D01–D06:
+    // omitted keys — ndNone / ndCheckInOnly — and "" writes — ndBlankOut.)
     {
-      name: "D01 unreadable dates twice → intake continues (guest row \"2\" → bedrooms → villa) → UNDATED summary, no name ask",
+      name: "D01 nothing parses anywhere (ND returns NO keys) → intake continues (guest row \"2\" → bedrooms → villa) → UNDATED summary, no name ask",
       inputs: [
         stay("a villa please"),
         { expect: "check-in and check-out dates", answer: "whenever" },
-        { expect: "check-in and check-out dates together", answer: "still whenever" },
+        askCheckInSolo("no idea"),
+        askCheckOutSolo("really no idea"),
+        continuePending,
         guestClick("2"),
         bedroomClick("1 bedroom"),
         villaClick("Villa Byblos"),
@@ -959,7 +936,7 @@ export function buildScenarios() {
       fixtures: [
         { api: "7466", response: norm(null, null, null, null) },
         { api: "8101", response: norm(null, null, null, null) },
-        { api: "8101", response: norm(null, null, null, null) },
+        ndNone,
         { api: "6961", response: { prefill_url: "https://stayoraya.com/book?h=TESTTOKEN123" } },
       ],
       expect: {
@@ -968,26 +945,27 @@ export function buildScenarios() {
         terminalExcludes: ["null", "Check-in:", "Check-out:"],
         askedExcludes: ["full name"],
         messagesInclude: ["pick your exact dates on our secure booking page"],
-        messagesExclude: ["trouble reading the dates", "passed your request"],
+        messagesExclude: ["passed your request"],
         fieldEquals: { oraya_guest_count: "2", oraya_bedroom_count: "1 bedroom", oraya_villa: "Villa Byblos" },
-        // final retry fails → transitional #438 → dates-pending guest gate 758
-        // (missing) → guest stage 900 → row "2" → shared spine → villa asked →
-        // Lead Submit A → date branch 943 (True: unresolved) → undated summary
-        visitsInOrder: [["435", "436", "438", "758", "900", "904", "860", "870", "871", "930", "470", "935", "937", "938", "939", "943", "945"]],
+        // one-by-one ladder fails → pending pair PC → H_P → guest gate 1201
+        // (missing) → guest stage 1210 row "2" → shared spine → villa asked →
+        // Lead Submit A → date branch 943 (False: unresolved) → undated summary
+        visitsInOrder: [["422", "430", "1100", "1107", "1108", "1109", "1110", "1111", "1138", "1139", "1200", "1201", "1210", "1214", "860", "1000", "870", "871", "930", "470", "935", "937", "938", "939", "943", "945"]],
       },
     },
     {
-      name: "D02 unreadable check-out twice (check-in WAS captured) → bedroom stage → UNDATED summary shows neither date",
+      name: "D02 check-out unreadable twice on the B path (ND writes \"\") → bedroom stage → UNDATED summary shows neither date",
       inputs: [
         stay("Mechmech from July 10 for 3"),
         { expect: "check-out date", answer: "soonish" },
-        { expect: "check-in and check-out dates together", answer: "still soonish" },
+        askCheckOutRetry("still soonish"),
+        continuePending,
         bedroomClick("2 bedrooms"),
       ],
       fixtures: [
         { api: "7466", response: norm("2026-07-10", null, "Villa Mechmech", "3") },
-        { api: "8101", response: norm("2026-07-10", null, "Villa Mechmech", "3") },
-        { api: "8101", response: norm("2026-07-10", null, "Villa Mechmech", "3") },
+        ndNone,
+        ndBlankOut("2026-07-10"),
         { api: "6961", response: {} },
       ],
       expect: {
@@ -996,25 +974,27 @@ export function buildScenarios() {
         // the captured check-in must NOT render on its own — a half-date pair
         // is misleading; the guest sets both dates on /book
         terminalExcludes: ["2026-07-10", "null", "Check-in:", "Check-out:"],
-        askedExcludes: ["full name", "check-in and check-out dates together?"],
-        // 505 True → transitional #504 → gate 760 (guests known) → supported
-        // clone 761 (True) → bedroom stage 925 → completion B → undated summary
-        visitsInOrder: [["506", "505", "504", "760", "761", "925", "927", "930", "470", "941", "944", "946"]],
+        askedExcludes: ["full name"],
+        // Q426 → ND fails → retry → ND writes check_out "" (no "-") → pending
+        // pair PD → H_P → supported clone 1202 → bedroom stage 1220 →
+        // completion B → undated summary
+        visitsInOrder: [["425", "426", "1120", "1121", "1122", "1123", "1124", "1125", "1144", "1145", "1200", "1201", "1202", "1230", "1220", "1222", "930", "470", "941", "944", "946"]],
       },
     },
     {
-      name: "D03 check-out fails twice, guests missing → guest stage on the dates-pending path → UNDATED summary",
+      name: "D03 check-out pending, guests missing → guest stage on the pending hub → UNDATED summary",
       inputs: [
         stay("Mechmech from July 10"),
         { expect: "check-out date", answer: "no idea" },
-        { expect: "check-in and check-out dates together", answer: "really no idea" },
+        askCheckOutRetry("really no idea"),
+        continuePending,
         guestClick("5"),
         bedroomClick("3 bedrooms"),
       ],
       fixtures: [
         { api: "7466", response: norm("2026-07-10", null, "Villa Mechmech", null) },
-        { api: "8101", response: norm("2026-07-10", null, "Villa Mechmech", null) },
-        { api: "8101", response: norm("2026-07-10", null, "Villa Mechmech", null) },
+        ndCheckInOnly("2026-07-10"),
+        ndCheckInOnly("2026-07-10"),
         { api: "6961", response: {} },
       ],
       expect: {
@@ -1023,81 +1003,65 @@ export function buildScenarios() {
         terminalExcludes: ["null", "2026-07-10"],
         askedExcludes: ["full name"],
         fieldEquals: { oraya_guest_count: "5" },
-        visitsInOrder: [["504", "760", "910", "917", "860", "870", "873", "930", "470", "941", "944", "946"]],
+        visitsInOrder: [["1124", "1125", "1144", "1145", "1200", "1201", "1210", "1217", "860", "870", "873", "930", "470", "941", "944", "946"]],
       },
     },
     {
-      name: "D04 both dates fail, guests extracted (4) → bedroom stage on the dates-pending path → UNDATED summary",
+      name: "D04 check-in recovered but check-out never parses on the A path → pending pair PA → bedroom stage → UNDATED summary",
       inputs: [
-        stay("Mechmech for 4 of us"),
-        { expect: "check-in and check-out dates", answer: "whenever" },
-        { expect: "check-in and check-out dates together", answer: "still whenever" },
+        stay("hello, 4 of us"),
+        { expect: "check-in and check-out dates", answer: "from july 10" },
+        askCheckOutSolo("hmm not sure"),
+        continuePending,
         bedroomClick("3 bedrooms"),
       ],
       fixtures: [
         { api: "7466", response: norm(null, null, "Villa Mechmech", "4") },
-        { api: "8101", response: norm(null, null, "Villa Mechmech", "4") },
-        { api: "8101", response: norm(null, null, "Villa Mechmech", "4") },
+        { api: "8101", response: norm(D_IN, null, "Villa Mechmech", "4") },
+        ndCheckInOnly(D_IN),
         { api: "6961", response: {} },
       ],
       expect: {
         leadSubmitted: true,
         terminalIncludes: [...SUMMARY_TERMINAL, "Dates: Please choose them using the secure link below", "Overnight guests: 4"],
-        terminalExcludes: ["null"],
+        terminalExcludes: ["null", "2026-07-10"],
         askedExcludes: ["full name", "How many guests will be staying overnight"],
-        // gate 758 (guests known: False) → supported clone 759 (True) →
-        // bedroom stage 920 → completion B → undated summary
-        visitsInOrder: [["436", "438", "758", "759", "920", "923", "930", "470", "941", "944", "946"]],
+        // gate 1100 True → check-out-only ask → ND fails → pending pair PA →
+        // H_P → supported clone 1202 → bedroom stage 1220 → undated summary
+        visitsInOrder: [["430", "1100", "1103", "1104", "1105", "1106", "1136", "1137", "1200", "1201", "1202", "1230", "1220", "1223", "930", "470", "941", "944", "946"]],
       },
     },
     {
-      name: "D05 both dates fail + extracted UNSUPPORTED count (12) → large-group review tail (existing human outcome)",
+      name: "D05 dates pending + extracted UNSUPPORTED count (12) → pending-hub large-group review tail",
       inputs: [
         stay("a villa for 12 people"),
         { expect: "check-in and check-out dates", answer: "whenever" },
-        { expect: "check-in and check-out dates together", answer: "still whenever" },
+        askCheckInSolo("dunno"),
+        askCheckOutSolo("still dunno"),
+        continuePending,
         escName,
       ],
       fixtures: [
         { api: "7466", response: norm(null, null, null, "12") },
         { api: "8101", response: norm(null, null, null, "12") },
-        { api: "8101", response: norm(null, null, null, "12") },
+        ndNone,
         { api: "6961", response: {} },
       ],
       expect: {
         leadSubmitted: true,
         terminalIncludes: ESC_TERMINAL,
         fieldEquals: { oraya_guest_count: "12" },
-        visitsInOrder: [["438", "758", "759", "968", "990", "991", "992", "993"]],
+        visitsInOrder: [["1111", "1138", "1139", "1200", "1201", "1202", "1240", "1241", "1242", "1243", "1244"]],
       },
     },
     {
-      name: "D06 check-out fails + extracted UNSUPPORTED count (7) → large-group review tail on the check-out path",
-      inputs: [
-        stay("Mechmech from July 10 for 7"),
-        { expect: "check-out date", answer: "dunno" },
-        { expect: "check-in and check-out dates together", answer: "still dunno" },
-        escName,
-      ],
-      fixtures: [
-        { api: "7466", response: norm("2026-07-10", null, "Villa Mechmech", "7") },
-        { api: "8101", response: norm("2026-07-10", null, "Villa Mechmech", "7") },
-        { api: "8101", response: norm("2026-07-10", null, "Villa Mechmech", "7") },
-        { api: "6961", response: {} },
-      ],
-      expect: {
-        leadSubmitted: true,
-        terminalIncludes: ESC_TERMINAL,
-        fieldEquals: { oraya_guest_count: "7" },
-        visitsInOrder: [["504", "760", "761", "969", "994", "995", "996", "997"]],
-      },
-    },
-    {
-      name: "D07 dates pending + clicked \"More than 6\" → shared overflow ack → exact-count → large-group tail",
+      name: "D06 dates pending + clicked \"More than 6\" → shared overflow ack → exact-count → large-group tail",
       inputs: [
         stay("a villa please"),
         { expect: "check-in and check-out dates", answer: "whenever" },
-        { expect: "check-in and check-out dates together", answer: "still whenever" },
+        askCheckInSolo("x"),
+        askCheckOutSolo("y"),
+        continuePending,
         guestClick("More than 6"),
         { expect: "How many guests exactly", answer: "10" },
         escName,
@@ -1105,14 +1069,14 @@ export function buildScenarios() {
       fixtures: [
         { api: "7466", response: norm(null, null, null, null) },
         { api: "8101", response: norm(null, null, null, null) },
-        { api: "8101", response: norm(null, null, null, null) },
+        ndNone,
         { api: "6961", response: {} },
       ],
       expect: {
         leadSubmitted: true,
         terminalIncludes: ESC_TERMINAL,
         fieldEquals: { oraya_guest_followup: "10", oraya_guest_count: "More than 6" },
-        visitsInOrder: [["758", "900", "909", "865", "466", "467", "468", "712", "715"]],
+        visitsInOrder: [["1200", "1201", "1210", "1219", "865", "466", "467", "468", "712", "715"]],
       },
     },
 
@@ -1141,11 +1105,11 @@ export function buildScenarios() {
       },
     },
     {
-      name: "B01 misbound mapping writes \"\" for check-out → read as MISSING → check-out follow-up → recovered dated summary (bedrooms extracted → skipped)",
-      inputs: [stay("mechmech july 10 for 4 people 2 bedrooms"), { expect: "check-out date", answer: "july 11" }],
+      name: "B01 misbound mapping writes \"\" for check-out → read as MISSING → Q426 → ND recovers → recovered dated summary (bedrooms extracted → skipped)",
+      inputs: [stay("mechmech july 10 for 4 people 2 bedrooms"), { expect: "check-out date", answer: "july 11" }, continueResolved],
       fixtures: [
         { api: "7466", response: { ...norm("2026-07-10", null, "Villa Mechmech", "4", "2 bedrooms"), check_out: "" } },
-        { api: "8101", response: norm("2026-07-10", "2026-07-11", "Villa Mechmech", "4", "2 bedrooms") },
+        ndOk("2026-07-10", "2026-07-11"),
         { api: "6961", response: { prefill_url: "https://stayoraya.com/book?h=TESTTOKEN123" } },
       ],
       expect: {
@@ -1154,20 +1118,23 @@ export function buildScenarios() {
         askedIncludes: ["check-out date"],
         askedExcludes: ["full name"],
         messagesExclude: ["How many bedrooms would you like"],
-        visitsInOrder: [["401", "410", "411", "425", "426", "427", "501", "754", "755", "1040", "1041", "1045", "1047"]],
+        // "" fails presence → Q426 → ND → resolved pair B1 → H_R → supported
+        // clone → bedroom-known gate 1180 skips → dated summary 1187
+        visitsInOrder: [["401", "410", "411", "425", "426", "1120", "1121", "1140", "1141", "1150", "1151", "1152", "1180", "1181", "1185", "1187"]],
       },
     },
     {
-      name: "B02 \"\" check-out persists through follow-up + retry → UNDATED summary; captured check-in never renders alone (bedrooms extracted → skipped)",
+      name: "B02 \"\" check-out persists through ND + structured retry → UNDATED summary; captured check-in never renders alone (bedrooms extracted → skipped)",
       inputs: [
         stay("mechmech july 10 to july 11 for 4 people 2 bedrooms"),
         { expect: "check-out date", answer: "july 11" },
-        { expect: "check-in and check-out dates together", answer: "july 10 to july 11" },
+        askCheckOutRetry("july 11 again"),
+        continuePending,
       ],
       fixtures: [
         { api: "7466", response: { ...norm("2026-07-10", null, "Villa Mechmech", "4", "2 bedrooms"), check_out: "" } },
-        { api: "8101", response: { ...norm("2026-07-10", null, "Villa Mechmech", "4", "2 bedrooms"), check_out: "" } },
-        { api: "8101", response: { ...norm("2026-07-10", null, "Villa Mechmech", "4", "2 bedrooms"), check_out: "" } },
+        ndBlankOut("2026-07-10"),
+        ndBlankOut("2026-07-10"),
         { api: "6961", response: { prefill_url: "https://stayoraya.com/book?h=TESTTOKEN123" } },
       ],
       expect: {
@@ -1176,7 +1143,8 @@ export function buildScenarios() {
         terminalExcludes: ["2026-07-10", "null", "Check-in:", "Check-out:"],
         askedExcludes: ["full name"],
         messagesExclude: ["How many bedrooms would you like"],
-        visitsInOrder: [["506", "505", "504", "760", "761", "1070", "1071", "1075", "1078"]],
+        // pending pair PD → H_P → bedroom-known gate 1230 skips → undated 1238
+        visitsInOrder: [["1120", "1121", "1122", "1123", "1124", "1125", "1144", "1145", "1200", "1201", "1202", "1230", "1231", "1235", "1238"]],
       },
     },
     {
@@ -1256,47 +1224,57 @@ export function buildScenarios() {
 
     // ── fault injection (HTTP failures write no fields; walk continues) ──────
     {
-      name: "F01 initial normalization fails → BLANK fields read as MISSING → date follow-up + retry, then the safe human outcome",
+      name: "F01 EVERY date API fails (HTTP) → BLANK fields read as MISSING → full ladder walk → pending hub → safe human outcome",
       inputs: [
         stay("Villa Mechmech July 10 to 11 for 3"),
         { expect: "check-in and check-out dates", answer: "July 10 to July 11" },
-        { expect: "check-in and check-out dates together", answer: "July 10 to July 11" },
+        askCheckInSolo("July 10"),
+        askCheckOutSolo("July 11"),
+        continuePending,
         escName,
       ],
       fixtures: [
         { api: "7466", failed: true, response: {} },
         { api: "8101", failed: true, response: {} },
-        { api: "8101", failed: true, response: {} },
+        { api: "7458", failed: true, response: {} },
         { api: "6961", response: {} },
       ],
       expect: {
         leadSubmitted: true,
         terminalIncludes: ESC_TERMINAL,
         // presence contract: unwritten fields ("") contain no "-" and are
-        // MISSING, so total API failure now asks the date follow-up + retry
-        // (previously "" slipped past the "null" checks as a phantom date),
-        // then continues the dates-pending branch; the blank guest field
-        // fails the supported-count gate → large-group review tail (name +
-        // lead + booking links). The opening question already delivered
-        // https://stayoraya.com/book (pre-API safety invariant).
-        visitsInOrder: [["400", "401", "410", "420", "421", "422", "430", "432", "434", "435", "436", "438", "758", "759", "968", "990", "991", "992", "993"]],
+        // MISSING, so total API failure walks the whole ladder (follow-up →
+        // one-by-one questions → ND), then continues with dates pending; the
+        // blank guest field fails BOTH the guest-known equality gate ("" ≠
+        // "null") and the supported-count gate → large-group review tail
+        // (name + lead + booking links) — the documented residual. The
+        // opening question already delivered https://stayoraya.com/book
+        // (pre-API safety invariant).
+        visitsInOrder: [["400", "401", "410", "420", "421", "422", "430", "1100", "1107", "1108", "1109", "1110", "1111", "1138", "1139", "1200", "1201", "1202", "1240", "1241", "1242", "1243", "1244"]],
       },
     },
     {
-      name: "F02 refine fails once → retry ask still recovers on the second refine",
+      name: "F02 refine fails (HTTP) → structured ladder still recovers the dates via ND",
       inputs: [
         stay("Mechmech, 2 guests"),
         { expect: "check-in and check-out dates", answer: "July 10 to July 12" },
-        { expect: "check-in and check-out dates together", answer: "July 10 to July 12" },
+        askCheckInSolo("July 10"),
+        askCheckOutSolo("July 12"),
+        continueResolved,
         bedroomClick("1 bedroom"),
       ],
       fixtures: [
         { api: "7466", response: norm(null, null, "Villa Mechmech", "2") },
         { api: "8101", failed: true, response: {} },
-        { api: "8101", response: norm("2026-07-10", "2026-07-12", "Villa Mechmech", "2") },
+        ndOk(D_IN, D_OUT),
         { api: "6961", response: {} },
       ],
-      expect: { leadSubmitted: true, terminalIncludes: SUMMARY_TERMINAL, fieldEquals: { oraya_check_in: "2026-07-10" } },
+      expect: {
+        leadSubmitted: true,
+        terminalIncludes: SUMMARY_TERMINAL,
+        fieldEquals: { oraya_check_in: "2026-07-10" },
+        visitsInOrder: [["422", "430", "1100", "1107", "1108", "1109", "1110", "1111", "1134", "1135", "1150", "1151", "1152", "1180", "1170", "1171", "930"]],
+      },
     },
     {
       name: "F03 completion Lead Submit fails → summary still delivers the canonical fallback link (prefill slot empty)",
@@ -1330,13 +1308,15 @@ export function buildScenarios() {
       inputs: [
         stay("Mechmech for 4 of us"),
         { expect: "check-in and check-out dates", answer: "whenever" },
-        { expect: "check-in and check-out dates together", answer: "still whenever" },
+        askCheckInSolo("no clue"),
+        askCheckOutSolo("still no clue"),
+        continuePending,
         bedroomClick("2 bedrooms"),
       ],
       fixtures: [
         { api: "7466", response: norm(null, null, "Villa Mechmech", "4") },
         { api: "8101", response: norm(null, null, "Villa Mechmech", "4") },
-        { api: "8101", response: norm(null, null, "Villa Mechmech", "4") },
+        ndNone,
         { api: "6961", failed: true, response: {} },
       ],
       expect: {

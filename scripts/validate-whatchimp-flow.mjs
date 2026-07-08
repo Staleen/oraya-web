@@ -357,6 +357,7 @@ export function validateFlow(flow, profile, opts = {}) {
     profile.apis.initialNormalize.id,
     profile.apis.refine.id,
     ...profile.apis.leadSubmit.ids,
+    ...(profile.apis.normalizeDates ? [profile.apis.normalizeDates.id] : []),
   ]);
 
   const questionNodes = ids.filter((id) => nodes[id].name === "User Input Flow Single");
@@ -533,6 +534,51 @@ export function validateFlow(flow, profile, opts = {}) {
       const src = nodes[String(e.node)];
       if (src?.name !== "User Input Flow Single" || fieldNameOf(src) !== profile.followupField) {
         err("refine-placement", `refine API ${nodeLabel(id, node)} is fed by ${nodeLabel(e.node, src)} which is not a "${profile.followupField}" question`);
+      }
+    }
+  }
+
+  // 16b. structured Normalize Dates placement (2026-07-08): the ladder's
+  // single-date questions and the Normalize Dates integration may only appear
+  // in each other's company. The integration's FIXED request body reads
+  // exactly oraya_check_in_text / oraya_check_out_text, so (a) a
+  // check-out-text question's final reply must feed a Normalize Dates call
+  // (anything else would leave freshly captured raw text unparsed), (b) every
+  // Normalize Dates call must be fed by a check-out-text question (fired from
+  // anywhere else it would re-parse stale text), and (c) a check-in-text
+  // question must CHAIN into a check-out-text question — the one-by-one
+  // ladder always collects both before normalizing once.
+  const ndId = profile.apis.normalizeDates?.id;
+  if (ndId) {
+    for (const id of questionNodes) {
+      const node = nodes[id];
+      if (fieldNameOf(node) === profile.checkOutTextField) {
+        for (const e of outEdges(node)) {
+          const dst = nodes[String(e.node)];
+          if (dst?.name !== "HTTP API" || dst.data?.httpApiId !== ndId) {
+            err("normalize-dates-placement", `check-out-text question ${nodeLabel(id, node)} must continue directly into the Normalize Dates API (${ndId}), found ${nodeLabel(e.node, dst)}`);
+          }
+        }
+      }
+      if (fieldNameOf(node) === profile.checkInTextField) {
+        for (const e of outEdges(node)) {
+          const dst = nodes[String(e.node)];
+          const chained = e.outKey === "userInputFlowSingleOutput" &&
+            dst?.name === "User Input Flow Single" && fieldNameOf(dst) === profile.checkOutTextField;
+          if (!chained) {
+            err("normalize-dates-placement", `check-in-text question ${nodeLabel(id, node)} must chain (userInputFlowSingleOutput) into a "${profile.checkOutTextField}" question — the ladder always collects both dates before normalizing; found ${e.outKey} → ${nodeLabel(e.node, dst)}`);
+          }
+        }
+      }
+    }
+    for (const id of apiNodes) {
+      const node = nodes[id];
+      if ((node.data?.httpApiId ?? "") !== ndId) continue;
+      for (const e of inEdges(node)) {
+        const src = nodes[String(e.node)];
+        if (src?.name !== "User Input Flow Single" || fieldNameOf(src) !== profile.checkOutTextField) {
+          err("normalize-dates-placement", `Normalize Dates API ${nodeLabel(id, node)} is fed by ${nodeLabel(e.node, src)} which is not a "${profile.checkOutTextField}" question — the call must fire immediately after the raw text fields are (re)captured`);
+        }
       }
     }
   }
@@ -803,17 +849,19 @@ export function validateFlow(flow, profile, opts = {}) {
     if (datedCount === 0) err("summary", "no dated summary terminal exists — resolved dates must be displayed");
   }
 
-  // 26. every date refine API continues into the interactive intake: it must
-  // reach a bedroom-selection control AND a summary terminal (recovery or the
-  // dates-pending continuation) — a failed final retry may no longer dead-end
-  // into a date-escalation tail (removed 2026-07-04)
+  // 26. every date-recovery API (refine AND Normalize Dates) continues into
+  // the interactive intake: it must reach a bedroom-selection control AND a
+  // summary terminal (recovery or the dates-pending continuation) — a failed
+  // date attempt may no longer dead-end into a date-escalation tail
+  // (removed 2026-07-04)
+  const dateRecoveryApiIds = new Set([profile.apis.refine.id, ...(ndId ? [ndId] : [])]);
   for (const id of apiNodes) {
-    if ((nodes[id].data?.httpApiId ?? "") !== profile.apis.refine.id) continue;
+    if (!dateRecoveryApiIds.has(nodes[id].data?.httpApiId ?? "")) continue;
     if (!reachesPred(id, isBedroomControl)) {
-      err("date-retry", `refine API ${nodeLabel(id, nodes[id])} never continues into the interactive intake (no bedroom-selection control reachable)`);
+      err("date-retry", `date-recovery API ${nodeLabel(id, nodes[id])} never continues into the interactive intake (no bedroom-selection control reachable)`);
     }
     if (!reachesPred(id, isSummaryTerminal)) {
-      err("date-retry", `refine API ${nodeLabel(id, nodes[id])} never reaches a request-summary terminal — the dates-pending continuation must complete the request`);
+      err("date-retry", `date-recovery API ${nodeLabel(id, nodes[id])} never reaches a request-summary terminal — the dates-pending continuation must complete the request`);
     }
   }
 
