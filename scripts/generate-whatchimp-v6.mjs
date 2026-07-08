@@ -713,22 +713,74 @@ function generateV6(flow) {
     connect(nodes, entry.id, entry.outKey, base, "interactiveInput");
   }
 
-  // ── bedroom stages (always asked — bedrooms are never extracted) ──────────
-  // b0: after a clicked guest count (shared guest-ack); b1–b5: after an
-  // extracted, supported guest count (one per supported-gate clone).
+  // ── bedroom stages with bedroom-skip gates (hotfix 2026-07-08) ────────────
+  // Bedrooms CAN now arrive extracted (`extracted_text.bedroom_count` →
+  // `oraya_bedroom_count`, PR #67). Each bedroom-stage entry therefore passes
+  // a bedroom-known gate first: the field must equal one of the three
+  // approved labels EXACTLY ("", "null", whitespace, or any other value all
+  // fail equality → ask, exactly as before). Because Conditions accept ONE
+  // inbound and only postback convergence survives import, the skip side of
+  // every gate carries its own villa-gate clone and — when the villa is also
+  // known — its own Lead Submit + summary tail; when the villa is missing,
+  // the branch's own villa Interactive rejoins the SHARED completion A
+  // through the villa-button postback hub #938. Branches reached only with
+  // both dates proven present emit the dated summary directly; the
+  // dates-pending branches emit the undated summary directly; only the
+  // clicked-guest branch (reachable both ways) keeps a date-branch Condition.
+  const BEDROOM_KNOWN = BEDROOM_CHOICES.map((v) => ({ field: FIELD.bedroom, value: v }));
   const bedroomStages = [
-    { base: 870, entry: { id: 860, outKey: "textOutput" }, pos: [6900, -1900] },
-    { base: 875, entry: { id: 602, outKey: "conditionOutputTrue" }, pos: [6900, -2200] },
-    { base: 880, entry: { id: 751, outKey: "conditionOutputTrue" }, pos: [6900, -2500] },
-    { base: 885, entry: { id: 753, outKey: "conditionOutputTrue" }, pos: [6900, -2800] },
-    { base: 890, entry: { id: 755, outKey: "conditionOutputTrue" }, pos: [6900, 900] },
-    { base: 895, entry: { id: 757, outKey: "conditionOutputTrue" }, pos: [6900, 1200] },
-    { base: 920, entry: { id: 759, outKey: "conditionOutputTrue" }, pos: [6900, -3100] }, // dates pending A
-    { base: 925, entry: { id: 761, outKey: "conditionOutputTrue" }, pos: [6900, 1500] }, // dates pending B
+    { base: 870, entry: { id: 860, outKey: "textOutput" }, skipBase: 1000, dateState: "mixed", pos: [6900, -1900] },
+    { base: 875, entry: { id: 602, outKey: "conditionOutputTrue" }, skipBase: 1010, dateState: "dated", pos: [6900, -2200] },
+    { base: 880, entry: { id: 751, outKey: "conditionOutputTrue" }, skipBase: 1020, dateState: "dated", pos: [6900, -2500] },
+    { base: 885, entry: { id: 753, outKey: "conditionOutputTrue" }, skipBase: 1030, dateState: "dated", pos: [6900, -2800] },
+    { base: 890, entry: { id: 755, outKey: "conditionOutputTrue" }, skipBase: 1040, dateState: "dated", pos: [6900, 900] },
+    { base: 895, entry: { id: 757, outKey: "conditionOutputTrue" }, skipBase: 1050, dateState: "dated", pos: [6900, 1200] },
+    { base: 920, entry: { id: 759, outKey: "conditionOutputTrue" }, skipBase: 1060, dateState: "undated", pos: [6900, -3100] }, // dates pending A
+    { base: 925, entry: { id: 761, outKey: "conditionOutputTrue" }, skipBase: 1070, dateState: "undated", pos: [6900, 1500] }, // dates pending B
   ];
-  for (const { base, entry, pos } of bedroomStages) {
+  for (const { base, entry, skipBase, dateState, pos } of bedroomStages) {
     bedroomStage(nodes, base, { ackTargetId: 930, ackTargetInput: "textInput" }, pos);
-    connect(nodes, entry.id, entry.outKey, base, "interactiveInput");
+    // skipBase+0 gate, +1 villa-gate clone, +2 villa Interactive, +3/+4 villa
+    // buttons, +5 Lead Submit, +6 date branch (mixed only), +7 dated summary,
+    // +8 undated summary
+    const gate = skipBase;
+    const villaGate = skipBase + 1;
+    const villaAsk = skipBase + 2;
+    const lead = skipBase + 5;
+    conditionNode(nodes, gate, BEDROOM_KNOWN, [pos[0] - 260, pos[1]]);
+    connect(nodes, entry.id, entry.outKey, gate, "conditionInput"); // gate's ONLY inbound
+    connect(nodes, gate, "conditionOutputFalse", base, "interactiveInput"); // unknown/invalid → ask (as before)
+    cloneCondition(nodes, 470, villaGate, [pos[0] - 260, pos[1] - 130]); // VILLA_PRESENT rows
+    connect(nodes, gate, "conditionOutputTrue", villaGate, "conditionInput"); // known → skip the bedroom question
+    // villa missing → branch-local villa Interactive; its buttons rejoin the
+    // shared villa-ack #938 (postback convergence — the import-surviving class)
+    interactiveNode(nodes, villaAsk, COPY.villaQuestion, [pos[0], pos[1] - 260]);
+    VILLA_CHOICES.forEach((label, i) => {
+      inlineButtonNode(nodes, villaAsk + 1 + i, { label, field: FIELD.villa }, [pos[0] + 260, pos[1] - 330 + i * 140]);
+      connect(nodes, villaAsk, "interactiveOutputButton", villaAsk + 1 + i, "buttonInput");
+      connect(nodes, villaAsk + 1 + i, "buttonOutput", 938, "textInput");
+    });
+    connect(nodes, villaGate, "conditionOutputFalse", villaAsk, "interactiveInput");
+    // villa known → branch-local Lead Submit + summary (single-parent chain)
+    apiNode(nodes, lead, API.leadSubmit, [pos[0] + 260, pos[1] - 130]);
+    connect(nodes, villaGate, "conditionOutputTrue", lead, "httpApiInput");
+    if (dateState === "mixed") {
+      conditionNode(nodes, skipBase + 6, BOTH_DATES_PRESENT, [pos[0] + 520, pos[1] - 130], { anyMatch: false });
+      textNode(nodes, skipBase + 7, COPY.summary + COPY.continuationBlock, [pos[0] + 780, pos[1] - 200]);
+      textNode(nodes, skipBase + 8, COPY.summaryUndated + COPY.continuationBlock, [pos[0] + 780, pos[1] - 60]);
+      connect(nodes, lead, "httpApiOutput", skipBase + 6, "conditionInput");
+      connect(nodes, skipBase + 6, "conditionOutputTrue", skipBase + 7, "textInput");
+      connect(nodes, skipBase + 6, "conditionOutputFalse", skipBase + 8, "textInput");
+    } else if (dateState === "dated") {
+      // reachable ONLY when both dates were proven present (contains "-")
+      // at the branch's date gate; no API between there and here writes them
+      textNode(nodes, skipBase + 7, COPY.summary + COPY.continuationBlock, [pos[0] + 520, pos[1] - 130]);
+      connect(nodes, lead, "httpApiOutput", skipBase + 7, "textInput");
+    } else {
+      // dates-pending branches: reachable ONLY when a date is still missing
+      textNode(nodes, skipBase + 8, COPY.summaryUndated + COPY.continuationBlock, [pos[0] + 520, pos[1] - 130]);
+      connect(nodes, lead, "httpApiOutput", skipBase + 8, "textInput");
+    }
   }
 
   // ── extracted unsupported counts (7, 8, 12, …): per-branch team review ────
@@ -782,7 +834,8 @@ const APPROVED_POSTBACK_MERGES = {
            //   Rows → User Input Flow #466 was dropped on import; the shared
            //   Text carries the single serialized edge into #466 instead)
   930: 24, // bedroom-ack ← 3 buttons × 8 bedroom stages
-  938: 2,  // villa-ack ← both villa buttons
+  938: 18, // villa-ack ← the primary villa Interactive's 2 buttons + 2 × 8
+           //   bedroom-skip villa Interactives (postback convergence)
 };
 
 const POSTBACK_SOURCE_NAMES = new Set(["Inline Button", "Rows"]);

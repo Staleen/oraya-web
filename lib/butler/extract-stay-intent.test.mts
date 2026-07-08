@@ -371,6 +371,19 @@ test("bedroom labels are the exact approved control values (1 bedroom / 2 bedroo
   assert.equal(three.extracted_text.bedroom_count, "3 bedrooms");
 });
 
+test("singular \"2 bedroom\" normalizes to the approved plural label \"2 bedrooms\" (bedroom-skip acceptance #3)", () => {
+  const r = extractStayIntent({
+    stay_text: "mechmech july 10 to july 11 for 4 people 2 bedroom",
+    reference_date: REF,
+  });
+  assert.equal(r.extracted.check_in,  "2026-07-10");
+  assert.equal(r.extracted.check_out, "2026-07-11");
+  assert.equal(r.extracted.bedroom_count, 2);
+  // the emitted label must be an EXACT bedroom-known-gate value, or the flow
+  // would fall back to asking the bedroom question
+  assert.equal(r.extracted_text.bedroom_count, "2 bedrooms");
+});
+
 test("out-of-range bedroom counts are stripped from the text but extract as the literal \"null\"", () => {
   const r = extractStayIntent({
     stay_text: "mechmech july 10 to july 11 for 4 people 5 bedrooms",

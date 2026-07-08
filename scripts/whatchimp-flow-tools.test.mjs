@@ -430,11 +430,15 @@ test("artifact: canonical v6 is fully bound — strict-clean, placeholder-free, 
   // exact interactive-control bindings (the stored value IS the label):
   //   - 24 bedroom Inline Buttons on custom_69114 (3 buttons × 8 stages,
   //     incl. the two dates-pending stages);
-  //   - 2 villa Inline Buttons on custom_57698 with exact canonical labels;
+  //   - 18 villa Inline Buttons on custom_57698 with exact canonical labels
+  //     (the primary villa Interactive's 2 + 2 × 8 bedroom-skip villa clones,
+  //     hotfix 2026-07-08);
   //   - 49 guest Rows on custom_57693 (7 rows × 7 list stages, incl. the two
   //     dates-pending stages);
-  //   - zero bedroom UIF questions and zero bedroom condition rows remain
-  //     (no WhatsApp-side capacity validation — the website validates).
+  //   - zero bedroom UIF questions; the ONLY Conditions referencing the
+  //     bedroom field are the 8 bedroom-known skip gates (equality on the
+  //     three approved labels, any-match) — no capacity validation exists
+  //     in WhatsApp; the website's /book form validates.
   const controls = Object.values(flow.nodes).filter((n) => n.name === "Inline Button" || n.name === "Rows");
   const byField = (f) => controls.filter((n) => n.data?.customFieldSelectedOptionText === f);
   const bedroomButtons = byField("oraya_bedroom_count");
@@ -444,8 +448,9 @@ test("artifact: canonical v6 is fully bound — strict-clean, placeholder-free, 
     assert.ok(["1 bedroom", "2 bedrooms", "3 bedrooms"].includes(b.data.buttonText), `unexpected bedroom label "${b.data.buttonText}"`);
   }
   const villaButtons = byField("oraya_villa");
-  assert.equal(villaButtons.length, 2, "expected exactly 2 villa buttons");
-  assert.deepEqual(villaButtons.map((b) => b.data.buttonText).sort(), ["Villa Byblos", "Villa Mechmech"], "villa buttons must carry the exact canonical values");
+  assert.equal(villaButtons.length, 18, "expected 18 villa buttons (primary Interactive + 8 bedroom-skip villa clones × 2)");
+  const villaLabels = new Set(villaButtons.map((b) => b.data.buttonText));
+  assert.deepEqual([...villaLabels].sort(), ["Villa Byblos", "Villa Mechmech"], "every villa button must carry an exact canonical value, and both must be present");
   for (const b of villaButtons) assert.equal(b.data.customFieldId, "custom_57698");
   const guestRows = byField("oraya_guest_count");
   assert.equal(guestRows.length, 49, "expected 49 guest rows (7 × 7 list stages)");
@@ -458,10 +463,20 @@ test("artifact: canonical v6 is fully bound — strict-clean, placeholder-free, 
     if (n.name === "User Input Flow Single") {
       assert.notEqual(n.data?.customFieldSelectedOptionText, "oraya_bedroom_count", "no bedroom UIF question may remain");
     }
-    if (n.name === "Condition") {
-      assert.ok(!(n.data?.custom_field_variable_selected_texts ?? []).includes("oraya_bedroom_count"), "no Condition may reference the bedroom field (no WhatsApp capacity validation)");
+    if (n.name === "Condition" && (n.data?.custom_field_variable_selected_texts ?? []).includes("oraya_bedroom_count")) {
+      // the ONLY permitted bedroom Conditions are the 8 bedroom-known skip
+      // gates: equality any-match on exactly the three approved labels —
+      // never a capacity comparison (no WhatsApp-side validation)
+      assert.deepEqual(n.data.custom_field_variable_selected_texts, ["oraya_bedroom_count", "oraya_bedroom_count", "oraya_bedroom_count"], "bedroom Condition must test only the bedroom field");
+      assert.deepEqual(n.data.custom_field_operator, ["equal", "equal", "equal"], "bedroom-known gate must use exact equality");
+      assert.deepEqual([...n.data.custom_field_variable_value].sort(), ["1 bedroom", "2 bedrooms", "3 bedrooms"], "bedroom-known gate must compare exactly the approved labels");
+      assert.equal(n.data.any_match, true, "bedroom-known gate must be any-match");
     }
   }
+  const bedroomGates = Object.values(flow.nodes).filter(
+    (n) => n.name === "Condition" && (n.data?.custom_field_variable_selected_texts ?? []).includes("oraya_bedroom_count"),
+  );
+  assert.equal(bedroomGates.length, 8, "expected exactly 8 bedroom-known skip gates (one per bedroom stage)");
   // every remaining question node continues into exactly one Text or HTTP API
   // node — the only transitions genuine WhatChimp exports contain.
   for (const [id, n] of Object.entries(flow.nodes)) {
@@ -802,8 +817,8 @@ test("round trip #4 repair: overflow rows converge on the shared ack Text; no co
     .sort((a, b) => a - b);
   assert.deepEqual(
     terminals,
-    ["715", "940", "942", "945", "946", "973", "977", "981", "985", "989", "993", "997"],
-    "exactly the twelve intended terminals (2 dated + 2 undated summaries, the large-group tail, 7 extracted-overflow tails)",
+    ["715", "940", "942", "945", "946", "973", "977", "981", "985", "989", "993", "997", "1007", "1008", "1017", "1027", "1037", "1047", "1057", "1068", "1078"],
+    "exactly the 21 intended terminals (2 dated + 2 undated shared summaries, the large-group tail, 7 extracted-overflow tails, 9 bedroom-skip branch summaries)",
   );
 });
 
@@ -816,17 +831,21 @@ test("dates-pending continuation: a failed final retry reaches the interactive i
   }
   // (b) the transitional Texts hand off into the dates-pending gate chains,
   // not into any User Input Flow or name question
-  for (const [from, g, s, guestBase, bedroomBase] of [["438", "758", "759", "900", "920"], ["504", "760", "761", "910", "925"]]) {
+  for (const [from, g, s, guestBase, skipGate, bedroomBase] of [["438", "758", "759", "900", "1060", "920"], ["504", "760", "761", "910", "1070", "925"]]) {
     const text = (nodes[from].data?.textMessage ?? "").toString();
     assert.ok(text.includes("pick your exact dates on our secure booking page"), `#${from} must carry the dates-pending transition copy`);
     assert.ok(!text.toLowerCase().includes("bring in our team"), `#${from} must no longer announce a team escalation`);
     assert.deepEqual(nodes[from].outputs.textOutput.connections.map((c) => `${c.node}:${c.input}`), [`${g}:conditionInput`]);
     assert.equal(nodes[g].name, "Condition");
     assert.equal(nodes[s].name, "Condition");
-    // guest-unknown → its own guest list stage; guest-known → supported gate
+    // guest-unknown → its own guest list stage; guest-known → supported gate;
+    // supported → the branch's bedroom-known skip gate (hotfix 2026-07-08),
+    // whose False side asks the bedroom Interactive exactly as before
     assert.deepEqual(nodes[g].outputs.conditionOutputTrue.connections.map((c) => String(c.node)), [guestBase]);
     assert.deepEqual(nodes[g].outputs.conditionOutputFalse.connections.map((c) => String(c.node)), [s]);
-    assert.deepEqual(nodes[s].outputs.conditionOutputTrue.connections.map((c) => String(c.node)), [bedroomBase]);
+    assert.deepEqual(nodes[s].outputs.conditionOutputTrue.connections.map((c) => String(c.node)), [skipGate]);
+    assert.equal(nodes[skipGate].name, "Condition");
+    assert.deepEqual(nodes[skipGate].outputs.conditionOutputFalse.connections.map((c) => String(c.node)), [bedroomBase]);
     assert.equal(nodes[guestBase].name, "Interactive");
     assert.equal(nodes[bedroomBase].name, "Interactive");
   }
@@ -895,6 +914,94 @@ test("dates-pending continuation: a failed final retry reaches the interactive i
   }
 });
 
+test("bedroom-skip routing (hotfix 2026-07-08): every bedroom-stage entry gates on the approved labels; skip tails are branch-local; villa clones rejoin #938", { skip: !existsSync(v6Path) }, () => {
+  const flow = JSON.parse(readFileSync(v6Path, "utf8"));
+  const nodes = flow.nodes;
+  // id scheme per branch: skipBase+0 gate, +1 villa-gate clone, +2 villa
+  // Interactive, +3/+4 villa buttons, +5 Lead Submit, +6 date branch (mixed
+  // only), +7 dated summary, +8 undated summary
+  const skipStages = [
+    { entry: "860", out: "textOutput", base: "870", skipBase: 1000, dateState: "mixed" },
+    { entry: "602", out: "conditionOutputTrue", base: "875", skipBase: 1010, dateState: "dated" },
+    { entry: "751", out: "conditionOutputTrue", base: "880", skipBase: 1020, dateState: "dated" },
+    { entry: "753", out: "conditionOutputTrue", base: "885", skipBase: 1030, dateState: "dated" },
+    { entry: "755", out: "conditionOutputTrue", base: "890", skipBase: 1040, dateState: "dated" },
+    { entry: "757", out: "conditionOutputTrue", base: "895", skipBase: 1050, dateState: "dated" },
+    { entry: "759", out: "conditionOutputTrue", base: "920", skipBase: 1060, dateState: "undated" },
+    { entry: "761", out: "conditionOutputTrue", base: "925", skipBase: 1070, dateState: "undated" },
+  ];
+  for (const { entry, out, base, skipBase, dateState } of skipStages) {
+    const gate = String(skipBase);
+    const villaGate = String(skipBase + 1);
+    const villaAsk = String(skipBase + 2);
+    const lead = String(skipBase + 5);
+    // entry feeds the gate (its ONLY inbound), not the bedroom Interactive
+    assert.deepEqual(nodes[entry].outputs[out].connections.map((c) => `${c.node}:${c.input}`), [`${gate}:conditionInput`], `entry #${entry} must feed gate #${gate}`);
+    // gate: equality any-match on exactly the three approved bedroom labels —
+    // "", "null", whitespace, and any invalid value all fail → ask as before
+    const g = nodes[gate];
+    assert.equal(g.name, "Condition");
+    assert.deepEqual(g.data.custom_field_variable_selected_texts, ["oraya_bedroom_count", "oraya_bedroom_count", "oraya_bedroom_count"]);
+    assert.deepEqual(g.data.custom_field_operator, ["equal", "equal", "equal"]);
+    assert.deepEqual(g.data.custom_field_variable_value, ["1 bedroom", "2 bedrooms", "3 bedrooms"]);
+    assert.equal(g.data.any_match, true);
+    assert.deepEqual(g.outputs.conditionOutputFalse.connections.map((c) => String(c.node)), [base], `gate #${gate} False must ask bedroom Interactive #${base}`);
+    assert.deepEqual(g.outputs.conditionOutputTrue.connections.map((c) => String(c.node)), [villaGate], `gate #${gate} True must skip into villa gate #${villaGate}`);
+    // villa gate: presence clone of #470 (contains "Villa")
+    const vg = nodes[villaGate];
+    assert.equal(vg.name, "Condition");
+    assert.deepEqual(vg.data.custom_field_variable_selected_texts, ["oraya_villa"]);
+    assert.deepEqual(vg.data.custom_field_operator, ["contains"]);
+    assert.deepEqual(vg.data.custom_field_variable_value, ["Villa"]);
+    assert.deepEqual(vg.outputs.conditionOutputTrue.connections.map((c) => String(c.node)), [lead]);
+    assert.deepEqual(vg.outputs.conditionOutputFalse.connections.map((c) => String(c.node)), [villaAsk]);
+    // villa-missing side: branch-local Interactive whose 2 canonical buttons
+    // rejoin the shared villa-ack #938 (postback convergence)
+    assert.equal(nodes[villaAsk].name, "Interactive");
+    const btnIds = nodes[villaAsk].outputs.interactiveOutputButton.connections.map((c) => String(c.node));
+    assert.deepEqual(btnIds, [String(skipBase + 3), String(skipBase + 4)]);
+    assert.deepEqual(btnIds.map((id) => nodes[id].data.buttonText), ["Villa Mechmech", "Villa Byblos"]);
+    for (const id of btnIds) {
+      assert.equal(nodes[id].data.customFieldId, "custom_57698");
+      assert.deepEqual(nodes[id].outputs.buttonOutput.connections.map((c) => `${c.node}:${c.input}`), ["938:textInput"]);
+    }
+    // villa-known side: branch-local Lead Submit on the production integration
+    assert.equal(nodes[lead].name, "HTTP API");
+    assert.equal(nodes[lead].data.httpApiId, "6961");
+    if (dateState === "mixed") {
+      // only the clicked-guest branch is reachable both dated and dates-pending
+      const cond = String(skipBase + 6);
+      assert.deepEqual(nodes[lead].outputs.httpApiOutput.connections.map((c) => `${c.node}:${c.input}`), [`${cond}:conditionInput`]);
+      assert.equal(nodes[cond].name, "Condition");
+      assert.equal(nodes[cond].data.all_match, true);
+      assert.deepEqual(nodes[cond].data.custom_field_operator, ["contains", "contains"]);
+      assert.deepEqual(nodes[cond].data.custom_field_variable_value, ["-", "-"]);
+      assert.deepEqual(nodes[cond].outputs.conditionOutputTrue.connections.map((c) => String(c.node)), [String(skipBase + 7)]);
+      assert.deepEqual(nodes[cond].outputs.conditionOutputFalse.connections.map((c) => String(c.node)), [String(skipBase + 8)]);
+    } else {
+      const summary = String(dateState === "dated" ? skipBase + 7 : skipBase + 8);
+      assert.deepEqual(nodes[lead].outputs.httpApiOutput.connections.map((c) => `${c.node}:${c.input}`), [`${summary}:textInput`]);
+    }
+    // dated summaries render both dates; undated render neither and never "null"
+    const checkSummary = (id, dated) => {
+      const n = nodes[String(id)];
+      assert.equal(n.name, "Text");
+      const text = (n.data?.textMessage ?? "").toString();
+      assert.ok(Object.values(n.outputs ?? {}).every((o) => (o.connections ?? []).length === 0), `summary #${id} must be terminal`);
+      assert.ok(text.includes("#oraya_prefill_url#") && text.includes("https://stayoraya.com/book"), `summary #${id} must carry the secure slot + fallback`);
+      if (dated) {
+        assert.ok(text.includes("#oraya_check_in#") && text.includes("#oraya_check_out#"), `dated summary #${id} must display both dates`);
+      } else {
+        assert.ok(text.includes(profile.undatedSummarySnippet), `#${id} must be the undated summary`);
+        assert.ok(!text.includes("#oraya_check_in#") && !text.includes("#oraya_check_out#"), `undated summary #${id} must not render date hashtags`);
+        assert.ok(!/\bnull\b/i.test(text), `undated summary #${id} must not contain the literal "null"`);
+      }
+    };
+    if (dateState !== "undated") checkSummary(skipBase + 7, true);
+    if (dateState !== "dated") checkSummary(skipBase + 8, false);
+  }
+});
+
 // ─── operator layout baseline (positions adopted; logic NOT adopted) ─────────
 
 const layoutBaselinePath = path.join(repoRoot, "artifacts", "whatchimp", "roundtrips", "Oraya_natural_intake_v6.roundtrip-5.layout-baseline.txt");
@@ -909,10 +1016,15 @@ test("layout baseline: operator positions are adopted; the export's API rebinds 
   );
   const baseline = JSON.parse(raw.toString("utf8"));
   const flow = JSON.parse(readFileSync(v6Path, "utf8"));
-  // every canonical node adopts the operator's hand-tuned position
+  // every node the operator hand-placed adopts that position; only the
+  // bedroom-skip nodes added AFTER the layout export (hotfix 2026-07-08,
+  // ids 1000–1078) may carry computed positions
   for (const [id, node] of Object.entries(flow.nodes)) {
     const b = baseline.nodes[id];
-    assert.ok(b, `layout baseline is missing node #${id}`);
+    if (!b) {
+      assert.ok(Number(id) >= 1000 && Number(id) <= 1078, `node #${id} is missing from the layout baseline but is not a bedroom-skip node`);
+      continue;
+    }
     assert.deepEqual(node.position, b.position, `node #${id} must carry the operator's position`);
   }
   // …but the export's tenant-side drift is NOT adopted: every Lead Submit in

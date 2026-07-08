@@ -27,7 +27,7 @@
       "860": 42,
       "865": 7,
       "930": 24,
-      "938": 2
+      "938": 18
     },
     "postbackSourceNames": ["Inline Button", "Rows"],
     "maxInboundPerCondition": 1,
