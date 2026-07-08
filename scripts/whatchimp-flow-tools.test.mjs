@@ -428,36 +428,44 @@ test("artifact: canonical v6 is fully bound — strict-clean, placeholder-free, 
   assert.deepEqual(errors, [], errors.join("\n"));
   assert.deepEqual(warnings, [], warnings.join("\n"));
   // exact interactive-control bindings (the stored value IS the label):
-  //   - 24 bedroom Inline Buttons on custom_69114 (3 buttons × 8 stages,
-  //     incl. the two dates-pending stages);
-  //   - 18 villa Inline Buttons on custom_57698 with exact canonical labels
-  //     (the primary villa Interactive's 2 + 2 × 8 bedroom-skip villa clones,
-  //     hotfix 2026-07-08);
-  //   - 49 guest Rows on custom_57693 (7 rows × 7 list stages, incl. the two
-  //     dates-pending stages);
+  //   - 15 bedroom Inline Buttons on custom_69114 (3 buttons × 5 stages,
+  //     incl. the ladder's recovered and pending stages);
+  //   - 12 villa Inline Buttons on custom_57698 with exact canonical labels
+  //     (the primary villa Interactive's 2 + 2 × 5 bedroom-skip villa clones);
+  //   - 28 guest Rows on custom_57693 (7 rows × 4 list stages, incl. the
+  //     ladder's recovered and pending stages);
+  //   - 7 "Continue" Inline Buttons on custom_58532 (one per date-ladder
+  //     resume pair — 4 resolved + 3 pending);
   //   - zero bedroom UIF questions; the ONLY Conditions referencing the
-  //     bedroom field are the 8 bedroom-known skip gates (equality on the
+  //     bedroom field are the 5 bedroom-known skip gates (equality on the
   //     three approved labels, any-match) — no capacity validation exists
   //     in WhatsApp; the website's /book form validates.
   const controls = Object.values(flow.nodes).filter((n) => n.name === "Inline Button" || n.name === "Rows");
   const byField = (f) => controls.filter((n) => n.data?.customFieldSelectedOptionText === f);
   const bedroomButtons = byField("oraya_bedroom_count");
-  assert.equal(bedroomButtons.length, 24, "expected 24 bedroom buttons (3 × 8 stages)");
+  assert.equal(bedroomButtons.length, 15, "expected 15 bedroom buttons (3 × 5 stages)");
   for (const b of bedroomButtons) {
     assert.equal(b.data.customFieldId, "custom_69114", "bedroom buttons must reference exactly custom_69114");
     assert.ok(["1 bedroom", "2 bedrooms", "3 bedrooms"].includes(b.data.buttonText), `unexpected bedroom label "${b.data.buttonText}"`);
   }
   const villaButtons = byField("oraya_villa");
-  assert.equal(villaButtons.length, 18, "expected 18 villa buttons (primary Interactive + 8 bedroom-skip villa clones × 2)");
+  assert.equal(villaButtons.length, 12, "expected 12 villa buttons (primary Interactive + 5 bedroom-skip villa clones × 2)");
   const villaLabels = new Set(villaButtons.map((b) => b.data.buttonText));
   assert.deepEqual([...villaLabels].sort(), ["Villa Byblos", "Villa Mechmech"], "every villa button must carry an exact canonical value, and both must be present");
   for (const b of villaButtons) assert.equal(b.data.customFieldId, "custom_57698");
   const guestRows = byField("oraya_guest_count");
-  assert.equal(guestRows.length, 49, "expected 49 guest rows (7 × 7 list stages)");
+  assert.equal(guestRows.length, 28, "expected 28 guest rows (7 × 4 list stages)");
   for (const r of guestRows) {
     assert.equal(r.name, "Rows", "guest choices must be list rows (WhatsApp caps reply buttons at 3)");
     assert.equal(r.data.customFieldId, "custom_57693");
     assert.ok(["1", "2", "3", "4", "5", "6", "More than 6"].includes(r.data.title), `unexpected guest label "${r.data.title}"`);
+  }
+  const continueButtons = byField("oraya_dates_confirmed_text");
+  assert.equal(continueButtons.length, 7, "expected 7 Continue buttons (4 resolved + 3 pending resume pairs)");
+  for (const b of continueButtons) {
+    assert.equal(b.name, "Inline Button");
+    assert.equal(b.data.customFieldId, "custom_58532");
+    assert.equal(b.data.buttonText, "Continue");
   }
   for (const n of Object.values(flow.nodes)) {
     if (n.name === "User Input Flow Single") {
@@ -476,17 +484,23 @@ test("artifact: canonical v6 is fully bound — strict-clean, placeholder-free, 
   const bedroomGates = Object.values(flow.nodes).filter(
     (n) => n.name === "Condition" && (n.data?.custom_field_variable_selected_texts ?? []).includes("oraya_bedroom_count"),
   );
-  assert.equal(bedroomGates.length, 8, "expected exactly 8 bedroom-known skip gates (one per bedroom stage)");
+  assert.equal(bedroomGates.length, 5, "expected exactly 5 bedroom-known skip gates (one per bedroom stage)");
   // every remaining question node continues into exactly one Text or HTTP API
-  // node — the only transitions genuine WhatChimp exports contain.
+  // node, or CHAINS into the next question via userInputFlowSingleOutput —
+  // the only transitions genuine WhatChimp exports contain (the chained form
+  // is the operator's v4.3.3 date-capture schema reused by the ladder).
   for (const [id, n] of Object.entries(flow.nodes)) {
     if (n.name !== "User Input Flow Single") continue;
     const edges = [];
-    for (const out of Object.values(n.outputs ?? {})) for (const c of out.connections ?? []) edges.push(c);
+    for (const [outKey, out] of Object.entries(n.outputs ?? {})) for (const c of out.connections ?? []) edges.push({ outKey, node: c.node });
     assert.equal(edges.length, 1, `question #${id} must have exactly one continuation`);
     const dst = flow.nodes[String(edges[0].node)];
-    assert.ok(dst?.name === "Text" || dst?.name === "HTTP API",
-      `question #${id} continues into ${dst?.name} — only Text / HTTP API are export-proven`);
+    if (edges[0].outKey === "userInputFlowSingleOutput") {
+      assert.equal(dst?.name, "User Input Flow Single", `question #${id} chained port must target another question`);
+    } else {
+      assert.ok(dst?.name === "Text" || dst?.name === "HTTP API",
+        `question #${id} continues into ${dst?.name} — only Text / HTTP API are export-proven`);
+    }
   }
   // the removed stages stay removed: no confirmation question, no handoff
   // choice, no Edit re-capture, and no full-name ask outside escalation tails
@@ -746,7 +760,7 @@ test("round trip #4 repair: overflow rows converge on the shared ack Text; no co
     .filter(([, n]) => n.name === "Rows" && n.data?.title === profile.guestOverflowChoice)
     .map(([id]) => id)
     .sort((a, b) => a - b);
-  assert.deepEqual(overflowRows, ["809", "819", "829", "839", "849", "909", "919"]);
+  assert.deepEqual(overflowRows, ["809", "819", "1169", "1219"]);
   for (const id of overflowRows) {
     assert.deepEqual(
       nodes[id].outputs.rowOutput.connections.map((c) => `${c.node}:${c.input}`),
@@ -799,7 +813,13 @@ test("round trip #4 repair: overflow rows converge on the shared ack Text; no co
   assert.deepEqual(targetsOf((n) => n.name === "Rows" && fieldOf(n) === profile.guestCountField && n.data?.title !== profile.guestOverflowChoice), ["860:textInput"]);
   assert.deepEqual(targetsOf((n) => n.name === "Inline Button" && fieldOf(n) === profile.bedroomField), ["930:textInput"]);
   assert.deepEqual(targetsOf((n) => n.name === "Inline Button" && fieldOf(n) === profile.villaField), ["938:textInput"]);
-  // (f) zero unreachable nodes, and exactly the ten intended terminals
+  // …and the date-ladder "Continue" buttons converge on exactly the two
+  // ladder hubs (recovered #1150 / pending #1200)
+  assert.deepEqual(
+    targetsOf((n) => n.name === "Inline Button" && fieldOf(n) === "oraya_dates_confirmed_text").sort(),
+    ["1150:textInput", "1200:textInput"],
+  );
+  // (f) zero unreachable nodes, and exactly the fifteen intended terminals
   const reachable = new Set(["1"]);
   const queue = ["1"];
   while (queue.length) {
@@ -817,43 +837,49 @@ test("round trip #4 repair: overflow rows converge on the shared ack Text; no co
     .sort((a, b) => a - b);
   assert.deepEqual(
     terminals,
-    ["715", "940", "942", "945", "946", "973", "977", "981", "985", "989", "993", "997", "1007", "1008", "1017", "1027", "1037", "1047", "1057", "1068", "1078"],
-    "exactly the 21 intended terminals (2 dated + 2 undated shared summaries, the large-group tail, 7 extracted-overflow tails, 9 bedroom-skip branch summaries)",
+    ["715", "940", "942", "945", "946", "973", "977", "1007", "1008", "1017", "1027", "1187", "1194", "1238", "1244"],
+    "exactly the 15 intended terminals (2 dated + 2 undated shared summaries, the large-group tail, 4 extracted-overflow tails, 6 bedroom-skip branch summaries)",
   );
 });
 
-test("dates-pending continuation: a failed final retry reaches the interactive intake and the undated summary — never a name question or a date-escalation tail", { skip: !existsSync(v6Path) }, () => {
+test("dates-pending continuation: a failed date ladder reaches the interactive intake and the undated summary — never a name question or a date-escalation tail", { skip: !existsSync(v6Path) }, () => {
   const flow = JSON.parse(readFileSync(v6Path, "utf8"));
   const nodes = flow.nodes;
-  // (a) the date-escalation tails are DELETED from the canonical graph
-  for (const id of ["640", "641", "642", "643", "700", "701", "702", "703"]) {
-    assert.equal(nodes[id], undefined, `date-escalation node #${id} must not exist in the canonical graph`);
+  // (a) the date-escalation tails AND the v5.5 retry layer are DELETED from
+  // the canonical graph (the structured ladder replaced the whole layer)
+  for (const id of ["640", "641", "642", "643", "700", "701", "702", "703",
+    "432", "433", "434", "435", "436", "438", "427", "501", "503", "504", "505", "506", "507", "508"]) {
+    assert.equal(nodes[id], undefined, `removed date-retry/escalation node #${id} must not exist in the canonical graph`);
   }
-  // (b) the transitional Texts hand off into the dates-pending gate chains,
-  // not into any User Input Flow or name question
-  for (const [from, g, s, guestBase, skipGate, bedroomBase] of [["438", "758", "759", "900", "1060", "920"], ["504", "760", "761", "910", "1070", "925"]]) {
-    const text = (nodes[from].data?.textMessage ?? "").toString();
-    assert.ok(text.includes("pick your exact dates on our secure booking page"), `#${from} must carry the dates-pending transition copy`);
-    assert.ok(!text.toLowerCase().includes("bring in our team"), `#${from} must no longer announce a team escalation`);
-    assert.deepEqual(nodes[from].outputs.textOutput.connections.map((c) => `${c.node}:${c.input}`), [`${g}:conditionInput`]);
-    assert.equal(nodes[g].name, "Condition");
-    assert.equal(nodes[s].name, "Condition");
-    // guest-unknown → its own guest list stage; guest-known → supported gate;
-    // supported → the branch's bedroom-known skip gate (hotfix 2026-07-08),
-    // whose False side asks the bedroom Interactive exactly as before
-    assert.deepEqual(nodes[g].outputs.conditionOutputTrue.connections.map((c) => String(c.node)), [guestBase]);
-    assert.deepEqual(nodes[g].outputs.conditionOutputFalse.connections.map((c) => String(c.node)), [s]);
-    assert.deepEqual(nodes[s].outputs.conditionOutputTrue.connections.map((c) => String(c.node)), [skipGate]);
-    assert.equal(nodes[skipGate].name, "Condition");
-    assert.deepEqual(nodes[skipGate].outputs.conditionOutputFalse.connections.map((c) => String(c.node)), [bedroomBase]);
-    assert.equal(nodes[guestBase].name, "Interactive");
-    assert.equal(nodes[bedroomBase].name, "Interactive");
+  // (b) the three pending resume pairs carry the dates-pending transition
+  // copy and their Continue presses converge on the pending hub #1200, whose
+  // clone chain continues the interactive intake
+  for (const [pairI, pairBtn] of [["1136", "1137"], ["1138", "1139"], ["1144", "1145"]]) {
+    const text = (nodes[pairI].data?.textMessage ?? "").toString();
+    assert.equal(nodes[pairI].name, "Interactive");
+    assert.ok(text.includes("pick your exact dates on our secure booking page"), `#${pairI} must carry the dates-pending transition copy`);
+    assert.ok(!text.toLowerCase().includes("bring in our team"), `#${pairI} must not announce a team escalation`);
+    assert.deepEqual(nodes[pairI].outputs.interactiveOutputButton.connections.map((c) => String(c.node)), [pairBtn]);
+    assert.deepEqual(nodes[pairBtn].outputs.buttonOutput.connections.map((c) => `${c.node}:${c.input}`), ["1200:textInput"]);
   }
-  // (c) walking forward from each transitional Text, no full-name question is
+  // pending hub topology: #1200 → guest-known clone #1201 (True: missing →
+  // guest stage #1210; False → supported clone #1202) → bedroom-known gate
+  // #1230 (False side asks the bedroom Interactive #1220 exactly as before)
+  assert.deepEqual(nodes["1200"].outputs.textOutput.connections.map((c) => `${c.node}:${c.input}`), ["1201:conditionInput"]);
+  assert.equal(nodes["1201"].name, "Condition");
+  assert.equal(nodes["1202"].name, "Condition");
+  assert.deepEqual(nodes["1201"].outputs.conditionOutputTrue.connections.map((c) => String(c.node)), ["1210"]);
+  assert.deepEqual(nodes["1201"].outputs.conditionOutputFalse.connections.map((c) => String(c.node)), ["1202"]);
+  assert.deepEqual(nodes["1202"].outputs.conditionOutputTrue.connections.map((c) => String(c.node)), ["1230"]);
+  assert.equal(nodes["1230"].name, "Condition");
+  assert.deepEqual(nodes["1230"].outputs.conditionOutputFalse.connections.map((c) => String(c.node)), ["1220"]);
+  assert.equal(nodes["1210"].name, "Interactive");
+  assert.equal(nodes["1220"].name, "Interactive");
+  // (c) walking forward from the pending hub, no full-name question is
   // reachable except through the guest-overflow (large-group) routes — prune
   // the overflow branches (supported-gate False + the "More than 6" rows) and
-  // assert the remaining reachable set holds NO name question and DOES hold
-  // an undated summary terminal
+  // assert the remaining reachable set holds NO name question, NO
+  // date-writing API, and DOES hold an undated summary terminal
   const overflowRowIds = new Set(
     Object.entries(nodes)
       .filter(([, n]) => n.name === "Rows" && n.data?.title === profile.guestOverflowChoice)
@@ -874,16 +900,18 @@ test("dates-pending continuation: a failed final retry reaches the interactive i
     }
     return seen;
   };
-  for (const [from, , s] of [["438", "758", "759"], ["504", "760", "761"]]) {
-    const seen = walk(from, { prunedNodes: overflowRowIds, prunedPorts: new Set([`${s}:conditionOutputFalse`]) });
+  {
+    const seen = walk("1200", { prunedNodes: overflowRowIds, prunedPorts: new Set(["1202:conditionOutputFalse"]) });
     const nameQuestions = [...seen].filter((id) => nodes[id]?.name === "User Input Flow Single" && (nodes[id].data?.customFieldSelectedOptionText ?? "") === profile.fullNameField);
-    assert.deepEqual(nameQuestions, [], `dates-pending mainline from #${from} must never reach a full-name question`);
+    assert.deepEqual(nameQuestions, [], "dates-pending mainline must never reach a full-name question");
+    const dateApis = [...seen].filter((id) => nodes[id]?.name === "HTTP API" && ["7466", "8101", "7458"].includes(nodes[id].data?.httpApiId ?? ""));
+    assert.deepEqual(dateApis, [], "no date-writing API may run after the pending hub");
     const undatedSummaries = [...seen].filter((id) => {
       const n = nodes[id];
       return n?.name === "Text" && Object.values(n.outputs ?? {}).every((o) => (o.connections ?? []).length === 0) &&
         (n.data?.textMessage ?? "").includes(profile.undatedSummarySnippet);
     });
-    assert.ok(undatedSummaries.length >= 1, `dates-pending mainline from #${from} must reach an undated summary terminal`);
+    assert.ok(undatedSummaries.length >= 1, "dates-pending mainline must reach an undated summary terminal");
   }
   // (d) both undated summaries carry the secure slot + fallback and no date
   // hashtags; both dated summaries still display both dates
@@ -924,11 +952,8 @@ test("bedroom-skip routing (hotfix 2026-07-08): every bedroom-stage entry gates 
     { entry: "860", out: "textOutput", base: "870", skipBase: 1000, dateState: "mixed" },
     { entry: "602", out: "conditionOutputTrue", base: "875", skipBase: 1010, dateState: "dated" },
     { entry: "751", out: "conditionOutputTrue", base: "880", skipBase: 1020, dateState: "dated" },
-    { entry: "753", out: "conditionOutputTrue", base: "885", skipBase: 1030, dateState: "dated" },
-    { entry: "755", out: "conditionOutputTrue", base: "890", skipBase: 1040, dateState: "dated" },
-    { entry: "757", out: "conditionOutputTrue", base: "895", skipBase: 1050, dateState: "dated" },
-    { entry: "759", out: "conditionOutputTrue", base: "920", skipBase: 1060, dateState: "undated" },
-    { entry: "761", out: "conditionOutputTrue", base: "925", skipBase: 1070, dateState: "undated" },
+    { entry: "1152", out: "conditionOutputTrue", base: "1170", skipBase: 1180, dateState: "dated" }, // dates recovered (ladder)
+    { entry: "1202", out: "conditionOutputTrue", base: "1220", skipBase: 1230, dateState: "undated" }, // dates pending (ladder)
   ];
   for (const { entry, out, base, skipBase, dateState } of skipStages) {
     const gate = String(skipBase);
@@ -1016,27 +1041,183 @@ test("layout baseline: operator positions are adopted; the export's API rebinds 
   );
   const baseline = JSON.parse(raw.toString("utf8"));
   const flow = JSON.parse(readFileSync(v6Path, "utf8"));
-  // every node the operator hand-placed adopts that position; only the
-  // bedroom-skip nodes added AFTER the layout export (hotfix 2026-07-08,
-  // ids 1000–1078) may carry computed positions
+  // every node the operator hand-placed adopts that position; only the nodes
+  // added AFTER the layout export (bedroom-skip hotfix + structured date
+  // ladder, ids 1000–1299) may carry computed positions
   for (const [id, node] of Object.entries(flow.nodes)) {
     const b = baseline.nodes[id];
     if (!b) {
-      assert.ok(Number(id) >= 1000 && Number(id) <= 1078, `node #${id} is missing from the layout baseline but is not a bedroom-skip node`);
+      assert.ok(Number(id) >= 1000 && Number(id) <= 1299, `node #${id} is missing from the layout baseline but is not a post-layout node`);
       continue;
     }
     assert.deepEqual(node.position, b.position, `node #${id} must carry the operator's position`);
   }
-  // …but the export's tenant-side drift is NOT adopted: every Lead Submit in
-  // the canonical artifact stays on the production WhatsApp lead integration
+  // …but the export's tenant-side drift is NOT adopted: every HTTP API in the
+  // canonical artifact stays on a production integration from the manifest
   for (const [id, node] of Object.entries(flow.nodes)) {
     if (node.name !== "HTTP API") continue;
     const apiId = node.data?.httpApiId ?? "";
     assert.ok(
-      [profile.apis.initialNormalize.id, profile.apis.refine.id, ...profile.apis.leadSubmit.ids].includes(apiId),
+      [profile.apis.initialNormalize.id, profile.apis.refine.id, profile.apis.normalizeDates.id, ...profile.apis.leadSubmit.ids].includes(apiId),
       `HTTP API #${id} is bound to "${apiId}" — the operator export's rebinds (7459/7460) must never reach the canonical artifact`,
     );
   }
+});
+
+// ─── round trip #6 evidence fixture (bedroom-skip 258-node import survival) ──
+
+const roundtrip6Path = path.join(repoRoot, "artifacts", "whatchimp", "roundtrips", "Oraya_natural_intake_v6.roundtrip-6.bedroom-skip-import.saved-reexport.txt");
+
+test("round trip #6: the TEST-bot re-export of the 258-node bedroom-skip artifact is pinned — 42/24/18/7-way postback convergence survived import; the tenant's 6961→7459 lead rebinds are documented drift, NOT adopted", { skip: !existsSync(roundtrip6Path) }, () => {
+  const raw = readFileSync(roundtrip6Path);
+  assert.equal(raw.length, 238782, "round-trip-6 fixture byte size must not change");
+  assert.equal(
+    createHash("sha256").update(raw).digest("hex").toUpperCase(),
+    "BEB3786373E710C780D59011677E18546D006D294AAB707D48522B5EC620C707",
+    "round-trip-6 fixture bytes must not change",
+  );
+  const flow = JSON.parse(raw.toString("utf8"));
+  const nodes = flow.nodes;
+  // every node and every edge of the imported 258-node artifact survived —
+  // the strongest fan-in proof yet: zero lost edges at 42-way convergence
+  assert.equal(Object.keys(nodes).length, 258);
+  let edges = 0;
+  for (const n of Object.values(nodes)) for (const o of Object.values(n.outputs ?? {})) edges += (o.connections ?? []).length;
+  assert.equal(edges, 344, "all 344 serialized connections survived the import");
+  const inbound = new Map();
+  for (const n of Object.values(nodes)) {
+    for (const o of Object.values(n.outputs ?? {})) {
+      for (const c of o.connections ?? []) inbound.set(String(c.node), (inbound.get(String(c.node)) ?? 0) + 1);
+    }
+  }
+  const hubs = {};
+  for (const [id, count] of inbound) if (count > 1) hubs[id] = count;
+  assert.deepEqual(hubs, { 860: 42, 865: 7, 930: 24, 938: 18 }, "every postback-convergence hub survived at full fan-in");
+  // tenant-side drift on the TEST bot: all 18 Lead Submit nodes were rebound
+  // 6961 → 7459 (same /api/butler/lead endpoint class) and #401 carries the
+  // ": POST : POST" text drift. Both are DOCUMENTED, neither is adopted —
+  // the canonical artifact keeps 6961 (see the layout-baseline test).
+  const leadRebinds = Object.values(nodes).filter((n) => n.name === "HTTP API" && n.data?.httpApiId === "7459");
+  assert.equal(leadRebinds.length, 18, "the TEST bot rebinds all 18 Lead Submits to 7459");
+  assert.ok(!Object.values(nodes).some((n) => n.name === "HTTP API" && n.data?.httpApiId === "6961"));
+  assert.ok((nodes["401"].data?.httpApiText ?? "").includes(": POST : POST"), "#401 carries the known text drift");
+  // the fixture is evidence, not a candidate
+  assert.notEqual(raw.toString("utf8"), readFileSync(v6Path, "utf8"), "the round-trip-6 re-export must never be the canonical import file");
+});
+
+// ─── structured Normalize Dates ladder (2026-07-08) ──────────────────────────
+
+test("structured date ladder: gates, chained questions, Normalize Dates placement, resume pairs, and hub chains match the approved design exactly", { skip: !existsSync(v6Path) }, () => {
+  const flow = JSON.parse(readFileSync(v6Path, "utf8"));
+  const nodes = flow.nodes;
+  const out = (id, key) => (nodes[String(id)].outputs?.[key]?.connections ?? []).map((c) => `${c.node}:${c.input}`);
+  const outIds = (id, key) => (nodes[String(id)].outputs?.[key]?.connections ?? []).map((c) => String(c.node));
+  // exactly four Normalize Dates calls on the EXISTING integration 7458
+  const ndNodes = Object.entries(nodes).filter(([, n]) => n.name === "HTTP API" && n.data?.httpApiId === "7458").map(([id]) => id).sort((a, b) => a - b);
+  assert.deepEqual(ndNodes, ["1105", "1110", "1120", "1124"]);
+  // combined-follow-up gate #430: presence rows, True → recovery clone chain,
+  // False → the ladder's check-in gate #1100 (its ONLY inbound)
+  assert.deepEqual(nodes["430"].data.custom_field_operator, ["contains", "contains"]);
+  assert.deepEqual(nodes["430"].data.custom_field_variable_value, ["-", "-"]);
+  assert.equal(nodes["430"].data.all_match, true);
+  assert.deepEqual(outIds(430, "conditionOutputTrue"), ["750"]);
+  assert.deepEqual(outIds(430, "conditionOutputFalse"), ["1100"]);
+  assert.equal((nodes["1100"].inputs.conditionInput?.connections ?? []).length, 1);
+  // #1100: single check-in presence row picks the shorter ladder
+  assert.deepEqual(nodes["1100"].data.custom_field_variable_selected_texts, ["oraya_check_in"]);
+  assert.deepEqual(nodes["1100"].data.custom_field_operator, ["contains"]);
+  assert.deepEqual(nodes["1100"].data.custom_field_variable_value, ["-"]);
+  // A-recovered check-in: wrapper → check-out-only question (58018) → ND → gate
+  assert.deepEqual(outIds(1100, "conditionOutputTrue"), ["1103"]);
+  assert.deepEqual(out(1103, "userInputFlowOutput"), ["1104:userInputFlowSingleInput"]);
+  assert.equal(nodes["1104"].data.customField, "58018");
+  assert.equal(nodes["1104"].data.customFieldSelectedOptionText, "oraya_check_out_text");
+  assert.deepEqual(out(1104, "userInputFlowSingleOutputFinalReply"), ["1105:httpApiInput"]);
+  assert.deepEqual(out(1105, "httpApiOutput"), ["1106:conditionInput"]);
+  // A-no check-in: wrapper → CHAINED 58017 → 58018 questions → ND → gate
+  // (operator-proven v4.3.3 chained-question schema)
+  assert.deepEqual(outIds(1100, "conditionOutputFalse"), ["1107"]);
+  assert.deepEqual(out(1107, "userInputFlowOutput"), ["1108:userInputFlowSingleInput"]);
+  assert.equal(nodes["1108"].data.customField, "58017");
+  assert.equal(nodes["1108"].data.customFieldSelectedOptionText, "oraya_check_in_text");
+  assert.deepEqual(out(1108, "userInputFlowSingleOutput"), ["1109:userInputFlowSingleInput"]);
+  assert.equal(nodes["1109"].data.customField, "58018");
+  assert.deepEqual(out(1109, "userInputFlowSingleOutputFinalReply"), ["1110:httpApiInput"]);
+  assert.deepEqual(out(1110, "httpApiOutput"), ["1111:conditionInput"]);
+  // PATH B: inherited #426 is REBOUND to 58018 and feeds ND first (the v5.5
+  // refine-first wiring clobbered a good check-in on a bare "11 july" reply)
+  assert.equal(nodes["426"].data.customField, "58018");
+  assert.equal(nodes["426"].data.customFieldSelectedOptionText, "oraya_check_out_text");
+  assert.deepEqual(out(426, "userInputFlowSingleOutputFinalReply"), ["1120:httpApiInput"]);
+  assert.deepEqual(out(1120, "httpApiOutput"), ["1121:conditionInput"]);
+  assert.deepEqual(outIds(1121, "conditionOutputFalse"), ["1122"]);
+  assert.deepEqual(out(1122, "userInputFlowOutput"), ["1123:userInputFlowSingleInput"]);
+  assert.equal(nodes["1123"].data.customField, "58018");
+  assert.ok((nodes["1123"].data.question ?? "").includes("just your check-out date"), "the retry question must carry the retry copy");
+  assert.deepEqual(out(1123, "userInputFlowSingleOutputFinalReply"), ["1124:httpApiInput"]);
+  assert.deepEqual(out(1124, "httpApiOutput"), ["1125:conditionInput"]);
+  // every post-ND gate requires BOTH dates present (all-match, contains "-")
+  for (const gate of ["1106", "1111", "1121", "1125"]) {
+    assert.equal(nodes[gate].data.all_match, true, `gate #${gate} must be all-match`);
+    assert.deepEqual(nodes[gate].data.custom_field_variable_selected_texts, ["oraya_check_in", "oraya_check_out"]);
+    assert.deepEqual(nodes[gate].data.custom_field_operator, ["contains", "contains"]);
+    assert.deepEqual(nodes[gate].data.custom_field_variable_value, ["-", "-"]);
+    assert.equal((nodes[gate].inputs.conditionInput?.connections ?? []).length, 1, `gate #${gate} must keep ONE inbound`);
+  }
+  // resume pairs: gate outcome → one-button Interactive → Continue → hub
+  const pairs = [
+    { gate: "1106", branch: "conditionOutputTrue", i: "1130", btn: "1131", hub: "1150", resolved: true },
+    { gate: "1111", branch: "conditionOutputTrue", i: "1134", btn: "1135", hub: "1150", resolved: true },
+    { gate: "1121", branch: "conditionOutputTrue", i: "1140", btn: "1141", hub: "1150", resolved: true },
+    { gate: "1125", branch: "conditionOutputTrue", i: "1142", btn: "1143", hub: "1150", resolved: true },
+    { gate: "1106", branch: "conditionOutputFalse", i: "1136", btn: "1137", hub: "1200", resolved: false },
+    { gate: "1111", branch: "conditionOutputFalse", i: "1138", btn: "1139", hub: "1200", resolved: false },
+    { gate: "1125", branch: "conditionOutputFalse", i: "1144", btn: "1145", hub: "1200", resolved: false },
+  ];
+  for (const p of pairs) {
+    assert.deepEqual(outIds(p.gate, p.branch), [p.i], `gate #${p.gate} ${p.branch} must enter pair #${p.i}`);
+    assert.equal(nodes[p.i].name, "Interactive");
+    const text = (nodes[p.i].data?.textMessage ?? "").toString();
+    if (p.resolved) {
+      assert.ok(text.includes("#oraya_check_in#") && text.includes("#oraya_check_out#"), `resolved pair #${p.i} must echo the normalized dates`);
+    } else {
+      assert.ok(text.includes("pick your exact dates on our secure booking page"), `pending pair #${p.i} must carry the dates-pending copy`);
+    }
+    assert.deepEqual(outIds(p.i, "interactiveOutputButton"), [p.btn]);
+    assert.equal(nodes[p.btn].data.buttonText, "Continue");
+    assert.equal(nodes[p.btn].data.customFieldId, "custom_58532");
+    assert.deepEqual(out(p.btn, "buttonOutput"), [`${p.hub}:textInput`]);
+  }
+  // hub fan-ins: 4 resolved / 3 pending Continue buttons
+  assert.equal((nodes["1150"].inputs.textInput?.connections ?? []).length, 4);
+  assert.equal((nodes["1200"].inputs.textInput?.connections ?? []).length, 3);
+  // recovered-hub chain: #1150 → guest clone #1151 → supported clone #1152 →
+  // bedroom-known gate #1180 / overflow preface #1190
+  assert.deepEqual(out(1150, "textOutput"), ["1151:conditionInput"]);
+  assert.deepEqual(outIds(1151, "conditionOutputTrue"), ["1160"]);
+  assert.deepEqual(outIds(1151, "conditionOutputFalse"), ["1152"]);
+  assert.deepEqual(outIds(1152, "conditionOutputTrue"), ["1180"]);
+  assert.deepEqual(outIds(1152, "conditionOutputFalse"), ["1190"]);
+  // H_R is reachable ONLY with both dates proven present, and no date-writing
+  // API runs after it — so its whole subtree may hard-wire the DATED summary
+  const seen = new Set(["1150"]);
+  const queue = ["1150"];
+  while (queue.length) {
+    const cur = queue.shift();
+    for (const o of Object.values(nodes[cur]?.outputs ?? {})) {
+      for (const c of o.connections ?? []) {
+        if (!seen.has(String(c.node))) { seen.add(String(c.node)); queue.push(String(c.node)); }
+      }
+    }
+  }
+  const dateApisAfterHR = [...seen].filter((id) => nodes[id]?.name === "HTTP API" && ["7466", "8101", "7458"].includes(nodes[id].data?.httpApiId ?? ""));
+  assert.deepEqual(dateApisAfterHR, [], "no date-writing API may run after the recovered hub");
+  // …so the branch-LOCAL tail (#1180's) hard-wires the dated summary #1187,
+  // and wherever the subtree rejoins the SHARED completion (via #930/#938)
+  // the single-inbound date-branch Conditions #943/#944 re-evaluate the same
+  // proven-present values and always take the dated side (scenario-proven:
+  // N01/N02/R04–R07 all end on a dated summary).
+  assert.ok((nodes["1187"].data?.textMessage ?? "").includes("#oraya_check_in#"), "#1187 must be the dated branch summary");
 });
 
 // ─── simulator control coverage ──────────────────────────────────────────────

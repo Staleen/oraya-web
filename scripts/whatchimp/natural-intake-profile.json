@@ -1,10 +1,11 @@
 {
   "profile": "oraya-natural-stay-intake",
-  "description": "Semantic contract for the Oraya Natural Stay Intake WhatChimp flow (Phase 16A, interactive-controls candidate). Consumed by scripts/validate-whatchimp-flow.mjs and scripts/simulate-whatchimp-flow.mjs. IDs are the real WhatChimp tenant IDs verified from the operator's v5.5 export; oraya_bedroom_count is the operator-created field 69114 (confirmed 2026-07-03) and the generator emits it directly on the bedroom Inline Buttons — the canonical Oraya_natural_intake_v6.txt is fully bound with no placeholder and no second binding step. Missing structured values (guest count / bedrooms / villa) are collected with Interactive controls whose buttons/rows save directly to the custom field (stored value = visible label; schema evidence: operator's 2026-07-04 saved/reopened export, fixture roundtrips/Oraya_natural_intake_v6.button-evidence.saved-reexport.txt).",
+  "description": "Semantic contract for the Oraya Natural Stay Intake WhatChimp flow (Phase 16A, interactive-controls candidate). Consumed by scripts/validate-whatchimp-flow.mjs and scripts/simulate-whatchimp-flow.mjs. IDs are the real WhatChimp tenant IDs verified from the operator's v5.5 export; oraya_bedroom_count is the operator-created field 69114 (confirmed 2026-07-03) and the generator emits it directly on the bedroom Inline Buttons — the canonical Oraya_natural_intake_v6.txt is fully bound with no placeholder and no second binding step. Missing structured values (guest count / bedrooms / villa) are collected with Interactive controls whose buttons/rows save directly to the custom field (stored value = visible label; schema evidence: operator's 2026-07-04 saved/reopened export, fixture roundtrips/Oraya_natural_intake_v6.button-evidence.saved-reexport.txt). Date recovery (2026-07-08) is the structured Normalize Dates ladder: single-date questions save raw text into oraya_check_in_text (58017) / oraya_check_out_text (58018) and the EXISTING tenant integration 7458 (Oraya Normalize Dates — its fixed request body reads exactly those two fields) re-parses them into the final ISO fields; ladder outcomes converge through one-button Continue Interactives onto the dates-recovered (#1150) / dates-pending (#1200) hub Texts. The 7466/8101 apiFieldWrites arrays mirror the TWO ADDITIVE tenant response-mapping rows (extracted_text.check_in → oraya_check_in_text, extracted_text.check_out → oraya_check_out_text) the operator must add so an already-extracted date reaches the Normalize Dates body.",
   "apis": {
     "initialNormalize": { "id": "7466", "label": "Oraya Stay Intent - Production" },
     "refine": { "id": "8101", "label": "Oraya Stay Intent Refine - Production" },
-    "leadSubmit": { "ids": ["6961"], "label": "Oraya Lead Submit - Production" }
+    "leadSubmit": { "ids": ["6961"], "label": "Oraya Lead Submit - Production" },
+    "normalizeDates": { "id": "7458", "label": "Oraya Normalize Dates - Production" }
   },
   "fields": {
     "oraya_stay_text": "67692",
@@ -12,6 +13,8 @@
     "oraya_guest_followup": "69091",
     "oraya_check_in": "57699",
     "oraya_check_out": "57692",
+    "oraya_check_in_text": "58017",
+    "oraya_check_out_text": "58018",
     "oraya_guest_count": "57693",
     "oraya_villa": "57698",
     "oraya_dates_confirmed_text": "58532",
@@ -24,10 +27,12 @@
     "rootNodeName": "Start Bot Flow",
     "maxInboundPerNode": 1,
     "approvedPostbackMerges": {
-      "860": 42,
-      "865": 7,
-      "930": 24,
-      "938": 18
+      "860": 24,
+      "865": 4,
+      "930": 15,
+      "938": 12,
+      "1150": 4,
+      "1200": 3
     },
     "postbackSourceNames": ["Inline Button", "Rows"],
     "maxInboundPerCondition": 1,
@@ -42,7 +47,8 @@
   "interactiveControls": {
     "oraya_guest_count": { "controlType": "Rows", "labels": ["1", "2", "3", "4", "5", "6", "More than 6"] },
     "oraya_bedroom_count": { "controlType": "Inline Button", "labels": ["1 bedroom", "2 bedrooms", "3 bedrooms"] },
-    "oraya_villa": { "controlType": "Inline Button", "labels": ["Villa Mechmech", "Villa Byblos"] }
+    "oraya_villa": { "controlType": "Inline Button", "labels": ["Villa Mechmech", "Villa Byblos"] },
+    "oraya_dates_confirmed_text": { "controlType": "Inline Button", "labels": ["Continue"] }
   },
   "roundTripIgnoreFields": ["uniqueId", "postbackId", "newPostbackId", "xitFbpostbackId"],
   "stayTextField": "oraya_stay_text",
@@ -53,6 +59,8 @@
   "villaField": "oraya_villa",
   "checkInField": "oraya_check_in",
   "checkOutField": "oraya_check_out",
+  "checkInTextField": "oraya_check_in_text",
+  "checkOutTextField": "oraya_check_out_text",
   "fullNameField": "oraya_full_name",
   "supportedGuestValues": ["1", "2", "3", "4", "5", "6"],
   "guestOverflowChoice": "More than 6",
@@ -93,20 +101,27 @@
   ],
   "apiFieldWrites": {
     "7466": {
-      "check_in": "oraya_check_in",
-      "check_out": "oraya_check_out",
+      "check_in": ["oraya_check_in", "oraya_check_in_text"],
+      "check_out": ["oraya_check_out", "oraya_check_out_text"],
       "villa": "oraya_villa",
       "guest_count": "oraya_guest_count",
       "guest_followup": "oraya_guest_followup",
       "bedroom_count": "oraya_bedroom_count"
     },
     "8101": {
-      "check_in": "oraya_check_in",
-      "check_out": "oraya_check_out",
+      "check_in": ["oraya_check_in", "oraya_check_in_text"],
+      "check_out": ["oraya_check_out", "oraya_check_out_text"],
       "villa": "oraya_villa",
       "guest_count": "oraya_guest_count",
       "guest_followup": "oraya_guest_followup",
       "bedroom_count": "oraya_bedroom_count"
+    },
+    "7458": {
+      "check_in": "oraya_check_in",
+      "check_out": "oraya_check_out",
+      "nights": "oraya_nights",
+      "status": "oraya_date_status",
+      "safe_message": "safe_message"
     },
     "6961": { "prefill_url": "oraya_prefill_url" }
   },

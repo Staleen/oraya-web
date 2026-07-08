@@ -8,14 +8,22 @@
  *
  *   1. Natural-language intake + date conversation: opening stay-text
  *      question (with the pre-API https://stayoraya.com/book safety link),
- *      one initial normalization call, ONE date follow-up (both dates, or
- *      check-out only when check-in exists) + ONE final retry through the
- *      refine API, and the Condition-clone cascade that keeps every
- *      Condition at exactly ONE inbound connection (round trip #3). A failed
- *      FINAL retry no longer escalates: the flow stops asking about dates
- *      and continues into the normal interactive intake with dates pending
- *      (no name question, no date-escalation tail); the guest picks dates on
- *      /book via the secure link in the undated summary.
+ *      one initial normalization call, and ONE combined date follow-up
+ *      through the refine API (the full natural-phrase path is unchanged).
+ *      When a date is STILL missing, the flow switches to the structured
+ *      Normalize Dates ladder (2026-07-08): single-date questions save the
+ *      guest's raw words into oraya_check_in_text / oraya_check_out_text and
+ *      the EXISTING Normalize Dates integration (7458 — its fixed request
+ *      body reads exactly those two fields) re-parses them into the final
+ *      ISO fields; the check-out-only gap normalizes the guest's follow-up
+ *      answer FIRST and re-asks at most once. Every ladder outcome ends on a
+ *      one-button "Continue" Interactive whose press rejoins the interactive
+ *      intake through the dates-recovered / dates-pending hub Text (control
+ *      → Text is the only import-surviving convergence class). The pending
+ *      side never re-asks about dates — no name question, no date-escalation
+ *      tail; the guest picks dates on /book via the secure link in the
+ *      undated summary. The Condition-clone cascade still keeps every
+ *      Condition at exactly ONE inbound connection (round trip #3).
  *   2. Missing STRUCTURED values are collected with WhatChimp Interactive
  *      controls whose buttons/rows save DIRECTLY to the custom field and
  *      route forward on the press (schema reference: the operator's
@@ -114,12 +122,32 @@ const FIELD = {
   villa: { id: "57698", name: "oraya_villa" },
   fullName: { id: "57759", name: "oraya_full_name" },
   bedroom: { id: BEDROOM_FIELD_ID, name: "oraya_bedroom_count" },
+  // Raw single-date capture fields (tenant-existing since the v4.3.3
+  // structured intake; ids verified from the operator's flow exports). The
+  // Normalize Dates integration's FIXED request body reads exactly these two
+  // fields, so every structured date question saves into them and the
+  // 7466/8101 response mappings mirror extracted_text.check_in/check_out
+  // into them (stale-field reset + ISO pass-through for the ND calls).
+  checkInText: { id: "58017", name: "oraya_check_in_text" },
+  checkOutText: { id: "58018", name: "oraya_check_out_text" },
+  // Tenant-existing field reused by the date-ladder "Continue" buttons —
+  // the ONLY legal convergence class is control → Text (round trip #4), so
+  // each date-ladder outcome ends on a one-button Interactive whose press
+  // rejoins the shared recovered / dates-pending hub Text.
+  datesConfirmed: { id: "58532", name: "oraya_dates_confirmed_text" },
 };
 
 const API = {
   initial: { id: "7466", text: "Oraya Stay Intent - Production : POST" },
   refine: { id: "8101", text: "Oraya Stay Intent Refine - Production : POST" },
   leadSubmit: { id: "6961", text: "Oraya Lead Submit - Production : POST" },
+  // Existing tenant integration (operator-created 2026-05-17, 55/55 calls):
+  // POST https://www.stayoraya.com/api/butler/normalize-dates with body
+  // { check_in_text: #oraya_check_in_text#, check_out_text: #oraya_check_out_text# }
+  // and response mappings check_in → oraya_check_in, check_out →
+  // oraya_check_out (tenant-side; verified from the operator's integration
+  // export). Referenced by id exactly like 7466/8101/6961.
+  normalizeDates: { id: "7458", text: "Oraya Normalize Dates - Production : POST" },
 };
 
 // The stored value IS the visible label (see docblock §2). These labels are
@@ -139,6 +167,16 @@ const COPY = {
   overflowAck: "Got it 😊",
   datesPendingContinue:
     "No problem at all 😊 You can pick your exact dates on our secure booking page in a moment — let me get the rest of the details first.",
+  askCheckOutSolo: "And what is your check-out date? 😊 (For example: July 12)",
+  askCheckOutRetry:
+    "Hmm, I couldn’t quite read that — could you share just your check-out date? (For example: July 12)",
+  askCheckInSolo:
+    "No problem — let’s take the dates one by one 😊 What is your check-in date? (For example: July 10)",
+  datesResolvedInteractive:
+    "Lovely — I have your dates as #oraya_check_in# → #oraya_check_out# ✅",
+  continueButton: "Continue",
+  datesResolvedAck: "Wonderful — thank you 😊",
+  datesPendingAck: "Thank you 😊",
   escalationName: "So our team can follow up personally — may I have your full name?",
   continuationBlock:
     "\n\nYou can also continue your request online whenever you like:\n#oraya_prefill_url#\n\nIf that secure link is unavailable, please use:\nhttps://stayoraya.com/book",
@@ -494,6 +532,21 @@ function escalationTail(nodes, [w, q, a, t], campaignName, pos) {
   return w;
 }
 
+// Date-ladder resume pair: a one-button Interactive whose "Continue" press
+// rejoins the shared dates-recovered / dates-pending hub Text. The press
+// writes the tenant-existing oraya_dates_confirmed_text field (a value must
+// be assigned for the postback schema, but nothing downstream reads it) —
+// the button exists ONLY because control → Text postback convergence is the
+// single import-surviving merge class (round trip #4), so ladder outcomes
+// cannot converge on a Condition or wrapper directly.
+function resumePair(nodes, [iId, btnId], text, hubId, pos) {
+  interactiveNode(nodes, iId, text, [pos[0], pos[1]]);
+  inlineButtonNode(nodes, btnId, { label: COPY.continueButton, field: FIELD.datesConfirmed }, [pos[0] + 260, pos[1]]);
+  connect(nodes, iId, "interactiveOutputButton", btnId, "buttonInput");
+  connect(nodes, btnId, "buttonOutput", hubId, "textInput");
+  return iId;
+}
+
 function conditionRowsData(rows, { anyMatch }) {
   return {
     all_match: !anyMatch,
@@ -537,12 +590,20 @@ function generateV6(flow) {
   //      the villa Interactive with exact-canonical buttons;
   //    - the confirmation / Edit loop (490–498);
   //    - the handoff choice, full-name questions, and both endings
-  //      (70–75, 84, 7, 8, 9).
+  //      (70–75, 84, 7, 8, 9);
+  //    - the "send both dates together" retry layer + the refine-driven
+  //      check-out recovery (432/434/435/436, 503/506/507/505, the refine
+  //      call 427 + gate 501, and the old transitional Texts 438/504) —
+  //      replaced by the structured Normalize Dates fallback (2026-07-08):
+  //      single-date questions saving oraya_check_in_text /
+  //      oraya_check_out_text feed the existing Normalize Dates integration.
   for (const id of [
     450, 451, 452, 453, 454, 455, 456, 457, 458, 459, 460, 461, 462, 463, 464, 465,
     480, 481, 482,
     490, 491, 492, 493, 494, 495, 496, 497, 498,
     70, 71, 72, 73, 74, 75, 84, 7, 8, 9,
+    432, 433, 434, 435, 436, 438,
+    427, 501, 503, 508, 507, 506, 505, 504,
   ]) {
     removeNode(nodes, id);
   }
@@ -643,55 +704,127 @@ function generateV6(flow) {
   connect(nodes, 944, "conditionOutputFalse", 946, "textInput"); // anything else → undated
 
   // ── date-recovery Condition-clone cascade (round trip #3 invariant) ───────
-  // Each of the four date-recovery exits keeps its own "guest known?" clone
-  // (440) chained to its own "supported count?" clone (602), all serialized
-  // single-parent so the import keeps every link.
-  const dateRecoverySplits = [
-    { from: 430, g: 750, s: 751 },
-    { from: 436, g: 752, s: 753 },
-    { from: 501, g: 754, s: 755 },
-    { from: 505, g: 756, s: 757 },
-  ];
-  for (const { from, g, s } of dateRecoverySplits) {
-    const [px, py] = nodes[String(from)].position;
-    detachEdge(nodes, from, "conditionOutputFalse", 440, "conditionInput");
-    cloneCondition(nodes, 440, g, [px + 260, py + 120]);
-    cloneCondition(nodes, 602, s, [px + 520, py + 120]);
-    connect(nodes, from, "conditionOutputFalse", g, "conditionInput"); // sole connection — import keeps it
-    connect(nodes, g, "conditionOutputFalse", s, "conditionInput"); // sole connection — import keeps it
+  // The combined-follow-up recovery exit (#430 True after the flip below)
+  // keeps its own "guest known?" clone (440) chained to its own "supported
+  // count?" clone (602), serialized single-parent so the import keeps every
+  // link. (The v5.5 retry-layer exits 436/501/505 are gone — the structured
+  // Normalize Dates ladder below replaces the whole retry layer.)
+  {
+    const [px, py] = nodes["430"].position;
+    detachEdge(nodes, 430, "conditionOutputFalse", 440, "conditionInput");
+    cloneCondition(nodes, 440, 750, [px + 260, py + 120]);
+    cloneCondition(nodes, 602, 751, [px + 520, py + 120]);
+    connect(nodes, 430, "conditionOutputFalse", 750, "conditionInput"); // sole connection — import keeps it
+    connect(nodes, 750, "conditionOutputFalse", 751, "conditionInput"); // sole connection — import keeps it
   }
 
-  // ── date-presence flip for the follow-up / retry gates ────────────────────
-  // 430/436/501/505 carried missing-check polarity (True = still missing →
-  // retry or dates-pending; False = recovered → cascade clone, wired just
-  // above). With PRESENCE rows (both dates contain "-") the branches swap:
-  // True = recovered; False = retry / dates-pending — and "", "null", or
-  // whitespace in EITHER field can never masquerade as a captured date.
-  for (const id of [430, 436, 501, 505]) {
-    setConditionRows(nodes, id, [CHECK_IN_PRESENT, CHECK_OUT_PRESENT], { anyMatch: false });
-    swapConditionOutputs(nodes, id);
-  }
+  // ── date-presence flip for the combined follow-up gate ───────────────────
+  // 430 carried missing-check polarity (True = still missing → the removed
+  // retry layer; False = recovered → cascade clone, wired just above). With
+  // PRESENCE rows (both dates contain "-") the branches swap: True =
+  // recovered; False = structured ladder — and "", "null", or whitespace in
+  // EITHER field can never masquerade as a captured date. The old True edge
+  // targeted the removed #432, so after the swap the False side is empty and
+  // the ladder's entry gate becomes its single serialized connection.
+  setConditionRows(nodes, 430, [CHECK_IN_PRESENT, CHECK_OUT_PRESENT], { anyMatch: false });
+  swapConditionOutputs(nodes, 430);
 
-  // ── failed FINAL date retry: continue the intake with dates pending ───────
-  // Behavior decision 2026-07-04: after the one follow-up + one retry the
-  // flow STOPS asking about dates — no name question, no date-escalation
-  // tail. The transitional Text (#438 / #504, rewritten in place) hands off
-  // into its own guest-known/supported-count clone chain, the normal
-  // Interactive intake continues, and the summary switches to the undated
-  // variant whose secure link lets the guest pick dates on /book.
-  const datesPendingBranches = [
-    { from: 438, g: 758, s: 759 }, // both-dates path (436 True)
-    { from: 504, g: 760, s: 761 }, // check-out path (505 True)
-  ];
-  for (const { from, g, s } of datesPendingBranches) {
-    const [px, py] = nodes[String(from)].position;
-    nodes[String(from)].data.textMessage = COPY.datesPendingContinue;
-    disconnectOutput(nodes, from, "textOutput");
-    cloneCondition(nodes, 440, g, [px + 260, py + 120]);
-    cloneCondition(nodes, 602, s, [px + 520, py + 120]);
-    connect(nodes, from, "textOutput", g, "conditionInput"); // sole connection — import keeps it
-    connect(nodes, g, "conditionOutputFalse", s, "conditionInput"); // sole connection — import keeps it
-  }
+  // ── structured Normalize Dates ladder (2026-07-08) ────────────────────────
+  // Replaces the v5.5 "send both dates together" retry + refine-driven
+  // check-out recovery. Single-date questions save the guest's RAW words
+  // into oraya_check_in_text / oraya_check_out_text — never into the final
+  // ISO fields, so a raw "10-july" can never satisfy the presence contract —
+  // and the existing Normalize Dates integration (7458) re-parses both text
+  // fields (an already-final ISO check-in passes through as an identity
+  // re-parse via the 7466/8101 extracted_text mirrors). Each Normalize Dates
+  // call is followed by ONE both-dates presence gate; every outcome ends on
+  // a one-button "Continue" Interactive whose press rejoins the intake
+  // through the dates-recovered hub (#1150) or dates-pending hub (#1200) —
+  // control → Text postback convergence, the import-surviving class.
+
+  // PATH A — the combined follow-up + refine still left a date missing
+  // (#430 False). One check-in presence gate picks the shorter ladder:
+  conditionNode(nodes, 1100, [CHECK_IN_PRESENT], [3000, 2200]);
+  connect(nodes, 430, "conditionOutputFalse", 1100, "conditionInput"); // #1100's ONLY inbound
+
+  // A-recovered check-in: ask ONLY the check-out (one question), normalize.
+  wrapperNode(nodes, 1103, "Oraya v6 - Dates: structured check-out", [3300, 2000]);
+  questionNode(nodes, 1104, { question: COPY.askCheckOutSolo, field: FIELD.checkOutText }, [3560, 2000]);
+  apiNode(nodes, 1105, API.normalizeDates, [3820, 2000]);
+  conditionNode(nodes, 1106, BOTH_DATES_PRESENT, [4080, 2000], { anyMatch: false });
+  connect(nodes, 1100, "conditionOutputTrue", 1103, "userInputFlowInput");
+  connect(nodes, 1103, "userInputFlowOutput", 1104, "userInputFlowSingleInput");
+  connect(nodes, 1104, "userInputFlowSingleOutputFinalReply", 1105, "httpApiInput");
+  connect(nodes, 1105, "httpApiOutput", 1106, "conditionInput"); // #1106's ONLY inbound
+
+  // A-no check-in: take the dates one by one — two CHAINED single-date
+  // questions (operator-proven v4.3.3 schema: question → question via
+  // userInputFlowSingleOutput, final reply → HTTP API), then normalize once.
+  wrapperNode(nodes, 1107, "Oraya v6 - Dates: one by one", [3300, 2400]);
+  questionNode(nodes, 1108, { question: COPY.askCheckInSolo, field: FIELD.checkInText }, [3560, 2400]);
+  questionNode(nodes, 1109, { question: COPY.askCheckOutSolo, field: FIELD.checkOutText }, [3820, 2400]);
+  apiNode(nodes, 1110, API.normalizeDates, [4080, 2400]);
+  conditionNode(nodes, 1111, BOTH_DATES_PRESENT, [4340, 2400], { anyMatch: false });
+  connect(nodes, 1100, "conditionOutputFalse", 1107, "userInputFlowInput");
+  connect(nodes, 1107, "userInputFlowOutput", 1108, "userInputFlowSingleInput");
+  connect(nodes, 1108, "userInputFlowSingleOutput", 1109, "userInputFlowSingleInput");
+  connect(nodes, 1109, "userInputFlowSingleOutputFinalReply", 1110, "httpApiInput");
+  connect(nodes, 1110, "httpApiOutput", 1111, "conditionInput"); // #1111's ONLY inbound
+
+  // PATH B — check-in exists, check-out missing (#411 False → wrapper #425 →
+  // question #426, both inherited). #426 is REBOUND to save the guest's raw
+  // reply into oraya_check_out_text and its final reply now feeds Normalize
+  // Dates FIRST (v5.5 fed refine here, which re-extracted over the WHOLE
+  // followup text and clobbered a good check-in on a bare "11 july" reply —
+  // the live gap this ladder fixes). One structured re-ask on failure.
+  nodes["426"].data.customField = FIELD.checkOutText.id;
+  nodes["426"].data.customFieldSelectedOptionText = FIELD.checkOutText.name;
+  apiNode(nodes, 1120, API.normalizeDates, [3000, 2800]);
+  conditionNode(nodes, 1121, BOTH_DATES_PRESENT, [3260, 2800], { anyMatch: false });
+  connect(nodes, 426, "userInputFlowSingleOutputFinalReply", 1120, "httpApiInput");
+  connect(nodes, 1120, "httpApiOutput", 1121, "conditionInput"); // #1121's ONLY inbound
+  wrapperNode(nodes, 1122, "Oraya v6 - Dates: check-out retry", [3520, 2900]);
+  questionNode(nodes, 1123, { question: COPY.askCheckOutRetry, field: FIELD.checkOutText }, [3780, 2900]);
+  apiNode(nodes, 1124, API.normalizeDates, [4040, 2900]);
+  conditionNode(nodes, 1125, BOTH_DATES_PRESENT, [4300, 2900], { anyMatch: false });
+  connect(nodes, 1121, "conditionOutputFalse", 1122, "userInputFlowInput");
+  connect(nodes, 1122, "userInputFlowOutput", 1123, "userInputFlowSingleInput");
+  connect(nodes, 1123, "userInputFlowSingleOutputFinalReply", 1124, "httpApiInput");
+  connect(nodes, 1124, "httpApiOutput", 1125, "conditionInput"); // #1125's ONLY inbound
+
+  // ── ladder convergence hubs + resume pairs ────────────────────────────────
+  // H_R (#1150) is reachable ONLY after a both-dates presence gate passed and
+  // no date-writing API runs afterwards → its whole subtree emits the DATED
+  // summary. H_P (#1200) is reachable only with a date still missing → its
+  // subtree emits the UNDATED summary (secure /book link picks the dates).
+  textNode(nodes, 1150, COPY.datesResolvedAck, [5100, 2200]);
+  textNode(nodes, 1200, COPY.datesPendingAck, [5100, 3400]);
+  resumePair(nodes, [1130, 1131], COPY.datesResolvedInteractive, 1150, [4340, 1900]);
+  connect(nodes, 1106, "conditionOutputTrue", 1130, "interactiveInput");
+  resumePair(nodes, [1134, 1135], COPY.datesResolvedInteractive, 1150, [4600, 2300]);
+  connect(nodes, 1111, "conditionOutputTrue", 1134, "interactiveInput");
+  resumePair(nodes, [1136, 1137], COPY.datesPendingContinue, 1200, [4340, 2100]);
+  connect(nodes, 1106, "conditionOutputFalse", 1136, "interactiveInput");
+  resumePair(nodes, [1138, 1139], COPY.datesPendingContinue, 1200, [4600, 2500]);
+  connect(nodes, 1111, "conditionOutputFalse", 1138, "interactiveInput");
+  resumePair(nodes, [1140, 1141], COPY.datesResolvedInteractive, 1150, [3520, 2700]);
+  connect(nodes, 1121, "conditionOutputTrue", 1140, "interactiveInput");
+  resumePair(nodes, [1142, 1143], COPY.datesResolvedInteractive, 1150, [4560, 2800]);
+  connect(nodes, 1125, "conditionOutputTrue", 1142, "interactiveInput");
+  resumePair(nodes, [1144, 1145], COPY.datesPendingContinue, 1200, [4560, 3000]);
+  connect(nodes, 1125, "conditionOutputFalse", 1144, "interactiveInput");
+
+  // Each hub continues into its own guest-known/supported-count clone chain
+  // (single-parent, round trip #3), feeding the hub's guest list stage,
+  // bedroom stage, and overflow branch wired in the tables below.
+  cloneCondition(nodes, 440, 1151, [5360, 2200]);
+  connect(nodes, 1150, "textOutput", 1151, "conditionInput"); // sole connection — import keeps it
+  cloneCondition(nodes, 602, 1152, [5360, 2350]);
+  connect(nodes, 1151, "conditionOutputFalse", 1152, "conditionInput"); // sole connection — import keeps it
+  cloneCondition(nodes, 440, 1201, [5360, 3400]);
+  connect(nodes, 1200, "textOutput", 1201, "conditionInput"); // sole connection — import keeps it
+  cloneCondition(nodes, 602, 1202, [5360, 3550]);
+  connect(nodes, 1201, "conditionOutputFalse", 1202, "conditionInput"); // sole connection — import keeps it
 
   // ── guest list stages (one per guest-unknown entry; Conditions keep ONE
   // inbound, so each entry owns its stage; the stages' rows converge on the
@@ -699,11 +832,8 @@ function generateV6(flow) {
   const guestStages = [
     { base: 800, entry: { id: 440, outKey: "conditionOutputTrue" }, pos: [5200, -2200] },
     { base: 810, entry: { id: 750, outKey: "conditionOutputTrue" }, pos: [4700, -3000] },
-    { base: 820, entry: { id: 752, outKey: "conditionOutputTrue" }, pos: [5200, -3300] },
-    { base: 830, entry: { id: 754, outKey: "conditionOutputTrue" }, pos: [4200, 900] },
-    { base: 840, entry: { id: 756, outKey: "conditionOutputTrue" }, pos: [4700, 1200] },
-    { base: 900, entry: { id: 758, outKey: "conditionOutputTrue" }, pos: [5400, -2700] }, // dates pending A
-    { base: 910, entry: { id: 760, outKey: "conditionOutputTrue" }, pos: [5400, 1500] }, // dates pending B
+    { base: 1160, entry: { id: 1151, outKey: "conditionOutputTrue" }, pos: [5700, 2000] }, // dates recovered (ladder)
+    { base: 1210, entry: { id: 1201, outKey: "conditionOutputTrue" }, pos: [5700, 3300] }, // dates pending (ladder)
   ];
   for (const { base, entry, pos } of guestStages) {
     guestListStage(nodes, base, {
@@ -732,11 +862,8 @@ function generateV6(flow) {
     { base: 870, entry: { id: 860, outKey: "textOutput" }, skipBase: 1000, dateState: "mixed", pos: [6900, -1900] },
     { base: 875, entry: { id: 602, outKey: "conditionOutputTrue" }, skipBase: 1010, dateState: "dated", pos: [6900, -2200] },
     { base: 880, entry: { id: 751, outKey: "conditionOutputTrue" }, skipBase: 1020, dateState: "dated", pos: [6900, -2500] },
-    { base: 885, entry: { id: 753, outKey: "conditionOutputTrue" }, skipBase: 1030, dateState: "dated", pos: [6900, -2800] },
-    { base: 890, entry: { id: 755, outKey: "conditionOutputTrue" }, skipBase: 1040, dateState: "dated", pos: [6900, 900] },
-    { base: 895, entry: { id: 757, outKey: "conditionOutputTrue" }, skipBase: 1050, dateState: "dated", pos: [6900, 1200] },
-    { base: 920, entry: { id: 759, outKey: "conditionOutputTrue" }, skipBase: 1060, dateState: "undated", pos: [6900, -3100] }, // dates pending A
-    { base: 925, entry: { id: 761, outKey: "conditionOutputTrue" }, skipBase: 1070, dateState: "undated", pos: [6900, 1500] }, // dates pending B
+    { base: 1170, entry: { id: 1152, outKey: "conditionOutputTrue" }, skipBase: 1180, dateState: "dated", pos: [6900, 2200] }, // dates recovered (ladder)
+    { base: 1220, entry: { id: 1202, outKey: "conditionOutputTrue" }, skipBase: 1230, dateState: "undated", pos: [6900, 3500] }, // dates pending (ladder)
   ];
   for (const { base, entry, skipBase, dateState, pos } of bedroomStages) {
     bedroomStage(nodes, base, { ackTargetId: 930, ackTargetInput: "textInput" }, pos);
@@ -789,12 +916,9 @@ function generateV6(flow) {
   // tail (name → Lead Submit → safe ending).
   const overflowBranches = [
     { from: 602, preface: 963, tail: [970, 971, 972, 973], label: "initial" },
-    { from: 751, preface: 964, tail: [974, 975, 976, 977], label: "dates recovery A" },
-    { from: 753, preface: 965, tail: [978, 979, 980, 981], label: "dates recovery B" },
-    { from: 755, preface: 966, tail: [982, 983, 984, 985], label: "check-out recovery A" },
-    { from: 757, preface: 967, tail: [986, 987, 988, 989], label: "check-out recovery B" },
-    { from: 759, preface: 968, tail: [990, 991, 992, 993], label: "dates pending A" },
-    { from: 761, preface: 969, tail: [994, 995, 996, 997], label: "dates pending B" },
+    { from: 751, preface: 964, tail: [974, 975, 976, 977], label: "dates recovery" },
+    { from: 1152, preface: 1190, tail: [1191, 1192, 1193, 1194], label: "dates recovered" },
+    { from: 1202, preface: 1240, tail: [1241, 1242, 1243, 1244], label: "dates pending" },
   ];
   for (const { from, preface, tail, label } of overflowBranches) {
     const [px, py] = nodes[String(from)].position;
@@ -829,13 +953,17 @@ function generateV6(flow) {
 // save/close/reopen/export). Everything else is single-parent (round trip #1).
 // The exact expected merge map is asserted so the artifact can never drift.
 const APPROVED_POSTBACK_MERGES = {
-  860: 42, // guest-ack ← 6 stay rows × 7 guest list stages
-  865: 7,  // overflow-ack ← the 7 "More than 6" rows (round trip #4: direct
-           //   Rows → User Input Flow #466 was dropped on import; the shared
-           //   Text carries the single serialized edge into #466 instead)
-  930: 24, // bedroom-ack ← 3 buttons × 8 bedroom stages
-  938: 18, // villa-ack ← the primary villa Interactive's 2 buttons + 2 × 8
-           //   bedroom-skip villa Interactives (postback convergence)
+  860: 24,  // guest-ack ← 6 stay rows × 4 guest list stages
+  865: 4,   // overflow-ack ← the 4 "More than 6" rows (round trip #4: direct
+            //   Rows → User Input Flow #466 was dropped on import; the shared
+            //   Text carries the single serialized edge into #466 instead)
+  930: 15,  // bedroom-ack ← 3 buttons × 5 bedroom stages
+  938: 12,  // villa-ack ← the primary villa Interactive's 2 buttons + 2 × 5
+            //   bedroom-skip villa Interactives (postback convergence)
+  1150: 4,  // dates-recovered hub ← the 4 "Continue" buttons of the resolved
+            //   date-ladder resume pairs (1131/1135/1141/1143)
+  1200: 3,  // dates-pending hub ← the 3 "Continue" buttons of the pending
+            //   date-ladder resume pairs (1137/1139/1145)
 };
 
 const POSTBACK_SOURCE_NAMES = new Set(["Inline Button", "Rows"]);
@@ -849,6 +977,7 @@ const APPROVED_CONTROL_LABELS = {
   [FIELD.guestCount.name]: [...GUEST_STAY_CHOICES, GUEST_OVERFLOW_CHOICE],
   [FIELD.bedroom.name]: BEDROOM_CHOICES,
   [FIELD.villa.name]: VILLA_CHOICES,
+  [FIELD.datesConfirmed.name]: [COPY.continueButton],
 };
 
 function assertGraphContracts(flow) {
