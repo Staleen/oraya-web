@@ -480,6 +480,94 @@ The single intentional exception is the signed `/booking/view/[token]` URL, surf
 
 **Out-of-scope follow-up.** The booking-request flow (whatsapp-bot_1846656_*) does **not** yet send `subscriber_id` to `POST /api/butler/lead`. Until that flow is updated separately, new leads created via the booking-request path won't be auto-resumable by subscriber id from WhatChimp — the orchestrator will fall through to the reference + identity-proof gate. Tracked as a follow-up; the schema and backend already accept the field, only the WhatChimp-side wiring is missing.
 
+## Phase 16A WhatChimp production builder (LOCKED 2026-07-09)
+
+This section preserves the final Phase 16A WhatChimp production wiring so future agents/operators can understand, rebuild, audit, or safely modify the bot without relying on chat memory, screenshots, or committed WhatChimp exports. **Production flow JSON is intentionally NOT committed to this repo** — download the current export from WhatChimp when you need the live node graph. What is durable here is the builder method, the API contract, the trigger strategy, the platform limitations, and the release checklist. David completed this manual wiring on 2026-07-09; see [DECISIONS_LOG.md](DECISIONS_LOG.md) 2026-07-09 "Phase 16A WhatChimp production wiring locked".
+
+### Active production flow responsibilities
+
+| Flow | Responsibility |
+|---|---|
+| **Greeting / Main Menu** | Entry point. Offers the top-level choices and routes into Book a Stay, Plan an Event, or general help. Booking-support intents no longer route through the menu (see Guest Identification v2 below). |
+| **Book a Stay** | Natural-language stay intake (one message → `POST /api/butler/normalize-stay-intent`) → structured confirmation → `POST /api/butler/lead` → secure website prefill handoff (`prefill_url` → `/book?h=...`). This is the LOCKED v6 natural stay intake — see "Natural stay intake (Phase 16A)" above. |
+| **Plan an Event** | **Direct event-inquiry handoff.** It sends guests straight to `https://stayoraya.com/events/inquiry`, where the website collects event type, villa, dates, setup, services, and details. WhatsApp collects **no** event details — no event-type, villa, attendee, date, setup, or services questions. The event trigger bot may use marketing-friendly text and a "Start Event Request" button/link, but the destination is the website inquiry flow. It does **not** duplicate the website inquiry flow. |
+| **Guest Identification v2** | Booking-support flow for returning guests. **Identify-first** (no menu): the trigger calls Oraya Identify immediately, and the conversation is driven entirely by the orchestrator's `recommended_next_action`. This is the final approved booking-support flow. |
+
+### Guest Identification v2 — final wiring
+
+Identify-first. The old menu-first opening is removed. The flow is a loop around one HTTP API node (`POST /api/butler/identify`), branching on `#oraya_identity_action#`:
+
+1. **Trigger** (booking-support intent — see trigger strategy below) → **Oraya Identify - Production** API call. On the first call the bot sends `subscriber_id` / `chat_id` / `message_text` with `booking_reference` and `identity_proof` still empty.
+2. **Known subscriber** (subscriber already linked to a booking → `recommended_next_action = reply_with_status`): the bot replies directly with the safe booking status. Final reply echoes `#oraya_identity_safe_message#`.
+3. **Unknown subscriber** (`ask_for_booking_reference`): the bot asks for the 8-character booking reference → saves the reply into **`oraya_booking_reference`** → calls Oraya Identify again.
+4. **Proof needed** (`request_identity_proof`): the bot asks for the email OR full name on the booking → saves the reply into **`oraya_identity_proof`** → calls Oraya Identify again.
+5. **Final booking-sensitive reply** is always the orchestrator's `#oraya_identity_safe_message#` — never a hand-composed booking status. Cancellation / escalation / not-found branches also echo `#oraya_identity_safe_message#` and follow the action map in "WhatsApp identity orchestration (Phase 16A)" above.
+
+The orchestrator is the single source of truth per turn: the bot passes the signals it has, reads `#oraya_identity_action#`, and echoes `#oraya_identity_safe_message#`. It does not branch on booking data itself.
+
+### Required WhatChimp API config — Oraya Identify
+
+- **API name:** `Oraya Identify - Production`
+- **Method:** `POST`
+- **Endpoint behavior:** points at the Oraya `/api/butler/identify` route on the **direct `www` API host** (`https://www.stayoraya.com/api/butler/identify`). ⚠️ A live WhatChimp API test observed an HTTP **308 redirect from the non-`www` origin to `www`** for `/api/butler/identify`; WhatChimp does not reliably follow that redirect, so the response mappings would arrive unpopulated if the non-`www` host is configured. Configure the `www` host directly and verify with a redirect-following test. This `www` host applies to the **server-to-server API call only** — guest-facing links stay on the canonical non-`www` `https://stayoraya.com` (see "Canonical Oraya web origin" above and [KNOWN_BUGS.md](KNOWN_BUGS.md) #11).
+- **Header (name only):** `X-Butler-Secret`
+- **Secret (name only):** `BUTLER_WEBHOOK_SECRET` (the value lives in Vercel + WhatChimp private config — never in this repo; see [ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md)).
+- **Content-Type:** `application/json`
+- **Body variables:**
+
+  | Body field | WhatChimp variable |
+  |---|---|
+  | `subscriber_id` | `#LEAD_USER_SUBSCRIBER_ID#` |
+  | `chat_id` | `#LEAD_USER_CHAT_ID#` |
+  | `booking_reference` | `#oraya_booking_reference#` |
+  | `identity_proof` | `#oraya_identity_proof#` |
+  | `message_text` | `#last_user_message#` |
+
+- **Response mappings:**
+
+  | Response field | WhatChimp custom field |
+  |---|---|
+  | `state` | `oraya_identity_state` |
+  | `recommended_next_action` | `oraya_identity_action` |
+  | `safe_message` | `oraya_identity_safe_message` |
+  | `booking_status` | `booking_status` |
+
+### Safe trigger strategy
+
+Booking-support triggers should be **specific multi-word phrases** so they cannot steal unrelated traffic. Good examples (case-insensitive substrings):
+
+`check my booking`, `help with my booking`, `my booking`, `my reservation`, `booking reference`, `booking status`, `reservation status`, `where is my booking`, `ask about my booking`.
+
+- **Do NOT** use broad single-word triggers like `booking`, `reservation`, or `stay` alone — they collide with Book a Stay / Plan an Event intents and with ordinary conversation.
+- **Do NOT** keep duplicate mini-flows for the same intent. Duplicate trigger bots can steal a message from the correct flow (WhatChimp routes to whichever matching flow it resolves first). The old standalone "website booking" / "Check my booking" / "Help with my booking" mini-flows were **deleted** on 2026-07-09 and their triggers consolidated into Guest Identification v2 to remove this conflict.
+
+### WhatChimp platform limitations (verified)
+
+- **Manual node deletion can lose or break wiring.** Deleting nodes in the WhatChimp editor can silently drop connections on neighbouring nodes — after any manual edit, save → reopen and re-verify the connectors before relying on the flow.
+- **Duplicate trigger bots route messages away** from the intended flow. Keep exactly one flow per intent.
+- **Inbound message text is not reliably exposed.** WhatChimp may not surface the full inbound message as a usable variable/body field on this tenant (see [KNOWN_BUGS.md](KNOWN_BUGS.md) #7). `message_text` is sent when the tenant exposes it and is forward-compatible; the flow must still function when it is empty (hence the explicit booking-reference ask).
+- **API tests may not follow redirects.** A WhatChimp HTTP API test that reports "sent" is not proof the response was consumed — a 3xx (e.g. the observed 308) leaves response mappings unpopulated. Verify operational endpoint behavior with a redirect-following request against the exact configured host.
+
+### Release checklist (smoke tests before declaring the bot good)
+
+Run each on a real WhatsApp thread against the production bot:
+
+1. **Book a Stay** — natural intake message → confirmation → secure `/book?h=...` handoff link appears.
+2. **Plan an Event** — a birthday / private dinner / event-inquiry message routes **directly** to `https://stayoraya.com/events/inquiry` (no event questions asked in WhatsApp).
+3. **Known guest booking-support** — a subscriber already linked to a booking sends a booking-support trigger → bot replies with the safe status directly (no reference ask).
+4. **Unknown guest fallback** — a subscriber with no linked booking → bot asks for the 8-character reference → verifies → safe status.
+5. **Wrong reference** — an unrecognized reference → bot re-asks / escalates safely (no confident wrong booking).
+6. **Identity-proof mismatch** — a valid reference but a wrong email/full name → bot does not disclose booking details; it escalates to a human.
+
+### Protected behavior (must stay true after any WhatsApp change)
+
+- WhatChimp and AI Training must **never own** booking status, availability, pricing, payment, access/PIN, or policy truth. Those come from Oraya's backend only.
+- The 8-character booking reference is a **public support code** — not identity proof and not an access PIN/gate/door code.
+- All booking-sensitive replies must come from `/api/butler/identify`'s `safe_message` (`#oraya_identity_safe_message#`) — never hand-composed by WhatChimp / AI Training.
+- **No payment promises** in Phase 16A (no "paid" / "payment link active" / "confirmed booking" claims).
+- **No location / PIN / access automation** in Phase 16A (that is Phase 16D).
+- **No real secret values** in docs, exports, or AI replies.
+
 ## Forbidden AI behavior
 
 The Butler must **never**:
