@@ -13,9 +13,16 @@ Minimal revision of the existing WhatChimp event flow export. **Documentation + 
 
 A fast, three-field qualifier that always hands off to the website event inquiry surface. It does **not** duplicate the website inquiry flow.
 
-1. **Event type** (free text → `oraya_event_type`, field `58466`)
-2. **Preferred villa** — Mechmech / Byblos quick-reply (→ `oraya_event_villa`, field `58464`)
-3. **Approx. attendees** (number → `oraya_event_guest_count`, field `58474`)
+1. **Event type** — multiple-choice (`questionType: "multiple"`, → `oraya_event_type`, field `58466`).
+   The 9 choices are the canonical types from `lib/event-types.ts` `CANONICAL_EVENT_TYPES`:
+   Private Celebration · Gender Reveal · Baptism / First Communion · Wedding / Engagement ·
+   Graduation Celebration · Family Gathering / Reunion · Dinner Event · Wellness Retreat · Corporate Event.
+2. **Preferred villa** — Mechmech / Byblos multiple-choice (→ `oraya_event_villa`, field `58464`)
+3. **Approx. attendees** — multiple-choice (`questionType: "multiple"`, → `oraya_event_guest_count`, field `58474`).
+   Choices: 5 guests · 10 guests · 15 guests · 20 guests · 25+ guests. Stored as the label text
+   (`replyType: "Text"`, since "25+ guests" is not a bare number).
+
+All three qualifying questions are tap-to-select — there is no free typing or numeric input in this flow.
 4. Existing **Event Lead Submit** HTTP API (integration `7074`) fires — unchanged.
 5. **Summary + handoff** message echoes the three fields and sends the guest to
    `https://stayoraya.com/events/inquiry`, stating this is an inquiry, not a confirmed booking.
@@ -63,7 +70,8 @@ the separate menu flow and was **not** modified here.
 1. Import `Oraya_Event_Quick_Intake_v6.txt` into WhatChimp as a **test copy** (not production).
 2. Point the Main Menu "Plan an Event" choice at the test flow.
 3. Send: `Birthday at Mechmech for around 20 people.`
-4. Confirm the bot collects event type, villa, and approximate attendees (three quick steps), then
-   summarizes them and sends `https://stayoraya.com/events/inquiry`.
+4. Confirm all three steps are **tap-to-select** (event type = 9 canonical choices, villa = Mechmech/Byblos,
+   attendees = 5/10/15/20/25+ guests) — no free typing or number entry — then it summarizes them and sends
+   `https://stayoraya.com/events/inquiry`.
 5. Confirm it does **not** ask for event dates, services, add-ons, setup, contact details, or overnight hosts.
 6. Confirm it does **not** say the event is confirmed, available, priced, or approved.
