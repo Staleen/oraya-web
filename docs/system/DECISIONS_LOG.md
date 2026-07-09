@@ -16,6 +16,36 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-07-09 — Phase 16A WhatChimp production wiring locked (closeout)
+
+**Decision:** Phase 16A WhatChimp production wiring is **complete** for the approved production scope. David manually finished the final production wiring on 2026-07-09. The durable knowledge is preserved as documentation (the "Phase 16A WhatChimp production builder (LOCKED 2026-07-09)" section in [BUTLER_PLAYBOOK.md](BUTLER_PLAYBOOK.md), the internal readiness checklist + smoke tests in [PHASE_16A_PRODUCTION_READINESS.md](PHASE_16A_PRODUCTION_READINESS.md), and the guest-facing guide in [WHATSAPP_GUEST_USAGE_GUIDE.md](WHATSAPP_GUEST_USAGE_GUIDE.md)) — **not** as committed WhatChimp flow exports. Production flow JSON is downloaded from WhatChimp on demand; the repo keeps the builder method, API contract, trigger strategy, limitations, readiness checks, and guest guidance instead.
+
+Final approved production behavior:
+
+- **Book a Stay** — natural stay intake (`/api/butler/normalize-stay-intent`) → structured confirmation → `/api/butler/lead` → secure website prefill handoff (`prefill_url` → `/book?h=...`). This is the LOCKED v6 natural intake.
+- **Plan an Event** — a **direct event-inquiry handoff**. It routes the guest straight to `https://stayoraya.com/events/inquiry` with **no duplicate WhatsApp event intake** — no event-type, villa, attendee, date, setup, or services questions in WhatsApp. The event trigger bot may use marketing-friendly text and a "Start Event Request" button/link, but the destination is the website inquiry flow, where the site collects event type, villa, dates, setup, services, and details.
+- **Guest Identification v2** — the final approved booking-support flow (there is no v3). It is **identify-first**: the old menu-first opening is removed; booking-support triggers call **Oraya Identify - Production** (`POST /api/butler/identify`) immediately. Known subscriber → reply directly with the safe status (`#oraya_identity_safe_message#`); unknown subscriber → ask for the 8-character reference (saved to `oraya_booking_reference`) → identify again; proof needed → ask email/full name (saved to `oraya_identity_proof`) → identify again. Every booking-sensitive reply echoes `#oraya_identity_safe_message#`.
+- **Duplicate mini-flows removed** — the standalone "website booking" / "Check my booking" / "Help with my booking" mini-flows were deleted and their triggers consolidated into Guest Identification v2 to prevent trigger-matching conflicts (a duplicate trigger bot can steal a message from the correct flow).
+
+Durable sub-decisions:
+
+1. **Phase 16A WhatChimp production wiring is locked** (approved scope: natural stay intake, secure website handoff, event redirect, Guest Identification v2, manual WhatChimp closeout).
+2. **Phase 16A production readiness + guest usage guide added** — [PHASE_16A_PRODUCTION_READINESS.md](PHASE_16A_PRODUCTION_READINESS.md) (internal smoke tests + go-live checks) and [WHATSAPP_GUEST_USAGE_GUIDE.md](WHATSAPP_GUEST_USAGE_GUIDE.md) (guest/marketing/support-facing, no internal names/secrets).
+3. **Production WhatChimp exports are not committed** to the repo; they remain on the WhatChimp platform and are re-downloaded when needed. Only non-secret documentation/evidence is stored here.
+4. **Future WhatsApp changes must preserve the safe boundaries** — booking-sensitive replies come only from `/api/butler/identify` `safe_message`; no bot-owned booking status/availability/pricing/payment/access truth; no payment promises; no location/PIN/access disclosure; the booking reference stays a public support code (not identity proof, not an access credential). Such changes are **new scoped work**, not remaining Phase 16A closeout, unless they are documentation corrections or bug fixes.
+
+**Reason:** the manual WhatChimp closeout had to be captured somewhere durable and platform-independent. Committing production exports is explicitly avoided (they drift from the live tenant and invite stale-copy edits); the builder-method documentation is the source future agents/operators/marketing/support should rebuild, audit, or reuse against.
+
+**Impact:** documentation only — [BUTLER_PLAYBOOK.md](BUTLER_PLAYBOOK.md) (production-builder section), [PHASE_16A_PRODUCTION_READINESS.md](PHASE_16A_PRODUCTION_READINESS.md) + [WHATSAPP_GUEST_USAGE_GUIDE.md](WHATSAPP_GUEST_USAGE_GUIDE.md) (new), [CURRENT_PHASE.md](CURRENT_PHASE.md) + [PROJECT_STATE.md](PROJECT_STATE.md) (Phase 16A complete for approved scope; 16B/16C remain separate), [KNOWN_BUGS.md](KNOWN_BUGS.md) #6 (duplicate mini-flows deleted). No code, schema, env, or production-behavior change. Phase 16B and Phase 16C are **not** closed by this decision.
+
+**Scope going forward:** future WhatsApp enhancements are new scoped work, not remaining Phase 16A closeout. Preserved exclusions still hold: no WhatsApp-side confirmed booking submission unless separately reapproved; no payment promises or payment-state ownership; no location/PIN/access automation; the booking reference remains a public support code, not identity proof and not an access credential.
+
+**Reversible?:** yes (docs only).
+
+**Domain verification note:** a live WhatChimp API test observed an HTTP **308 redirect from the non-`www` origin to `www`** for `/api/butler/identify`. This does **not** change the canonical guest-facing origin (`https://stayoraya.com`, non-`www`); it applies only to WhatChimp's server-to-server API host, which must be the direct `www` host so response mappings are populated. Consistent with the 2026-07-03 server-to-server exception and [KNOWN_BUGS.md](KNOWN_BUGS.md) #11 — recorded here as an operational verification note, not a canonical-origin change.
+
+---
+
 ## 2026-07-09 - Phase 16A v6 structured-date intake LOCKED (operator-approved after live production verification)
 
 **Decision:** Phase 16A v6 (natural-language stay intake + structured Normalize Dates ladder + bedroom-skip + backend extractor lead-in fix) is **LOCKED and operator-approved for production**. PR #69 is merged and production-deployed; David completed the mandatory WhatChimp response mappings and passed live production WhatsApp verification against the normal API links (no preview URLs, no API-link changes, no new integrations, no artifact regeneration).
