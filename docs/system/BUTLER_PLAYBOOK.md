@@ -490,7 +490,7 @@ This section preserves the final Phase 16A WhatChimp production wiring so future
 |---|---|
 | **Greeting / Main Menu** | Entry point. Offers the top-level choices and routes into Book a Stay, Plan an Event, or general help. Booking-support intents no longer route through the menu (see Guest Identification v2 below). |
 | **Book a Stay** | Natural-language stay intake (one message → `POST /api/butler/normalize-stay-intent`) → structured confirmation → `POST /api/butler/lead` → secure website prefill handoff (`prefill_url` → `/book?h=...`). This is the LOCKED v6 natural stay intake — see "Natural stay intake (Phase 16A)" above. |
-| **Plan an Event** | Quick qualifier only — event type, preferred villa, approximate attendees (tap-to-select) — then routes the guest to `https://stayoraya.com/events/inquiry` to complete the full request. It does **not** re-collect dates/setup/services/add-ons/contact/overnight-hosts in WhatsApp and does **not** duplicate the website inquiry flow. |
+| **Plan an Event** | **Direct event-inquiry handoff.** It sends guests straight to `https://stayoraya.com/events/inquiry`, where the website collects event type, villa, dates, setup, services, and details. WhatsApp collects **no** event details — no event-type, villa, attendee, date, setup, or services questions. The event trigger bot may use marketing-friendly text and a "Start Event Request" button/link, but the destination is the website inquiry flow. It does **not** duplicate the website inquiry flow. |
 | **Guest Identification v2** | Booking-support flow for returning guests. **Identify-first** (no menu): the trigger calls Oraya Identify immediately, and the conversation is driven entirely by the orchestrator's `recommended_next_action`. This is the final approved booking-support flow. |
 
 ### Guest Identification v2 — final wiring
@@ -553,7 +553,7 @@ Booking-support triggers should be **specific multi-word phrases** so they canno
 Run each on a real WhatsApp thread against the production bot:
 
 1. **Book a Stay** — natural intake message → confirmation → secure `/book?h=...` handoff link appears.
-2. **Plan an Event** — quick qualifier (type / villa / attendees) → handoff to `https://stayoraya.com/events/inquiry`, no duplicate detail collection.
+2. **Plan an Event** — a birthday / private dinner / event-inquiry message routes **directly** to `https://stayoraya.com/events/inquiry` (no event questions asked in WhatsApp).
 3. **Known guest booking-support** — a subscriber already linked to a booking sends a booking-support trigger → bot replies with the safe status directly (no reference ask).
 4. **Unknown guest fallback** — a subscriber with no linked booking → bot asks for the 8-character reference → verifies → safe status.
 5. **Wrong reference** — an unrecognized reference → bot re-asks / escalates safely (no confident wrong booking).
