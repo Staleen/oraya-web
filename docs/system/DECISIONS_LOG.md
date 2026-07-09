@@ -16,6 +16,29 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-07-09 - Phase 16A v6 structured-date intake LOCKED (operator-approved after live production verification)
+
+**Decision:** Phase 16A v6 (natural-language stay intake + structured Normalize Dates ladder + bedroom-skip + backend extractor lead-in fix) is **LOCKED and operator-approved for production**. PR #69 is merged and production-deployed; David completed the mandatory WhatChimp response mappings and passed live production WhatsApp verification against the normal API links (no preview URLs, no API-link changes, no new integrations, no artifact regeneration).
+
+- **Locked version / merge commit:** `92c144197d72ef5bcc3bb76f9615c3ea4481339c` (PR #69 → `master`). Canonical artifact `Oraya_natural_intake_v6.txt` SHA-256 `4383A12F4EEE2E1E721F94BB03DA584B0383D3F47A69BC77C48F659C2E841659` (unchanged; **not** regenerated for the lock). Backend fix `0ad7dbf` live on production.
+- **Production endpoints verified (direct `www` host, unchanged):** `https://www.stayoraya.com/api/butler/normalize-stay-intent` and `…/normalize-dates`. Production deployment for `92c1441` recorded `success` (2026-07-08T18:46:43Z).
+- **Operator mappings completed on Stay Intent (`7466`) + Refine (`8101`)** — each date on TWO rows: `extracted_text.check_in` → `oraya_check_in` **and** `oraya_check_in_text`; `extracted_text.check_out` → `oraya_check_out` **and** `oraya_check_out_text`; plus `extracted_text.nights`→`oraya_nights`, `extracted_text.guest_count`→`oraya_guest_count`, `extracted_text.bedroom_count`→`oraya_bedroom_count`, `extracted_text.villa`→`oraya_villa`, `status`→`oraya_date_status`, `safe_message`→`safe_message`. **Normalize Dates (`7458`)** unchanged: `check_in`→`oraya_check_in`, `check_out`→`oraya_check_out`, `nights`→`oraya_nights`, `status`→`oraya_date_status`, `safe_message`→`oraya_date_confirmation_message`.
+- **Live production verification (all passed):**
+  1. Full one-message intake `mechmech july 10 to july 15 for 4 people 2 bedrooms` → dated summary, ZERO questions: check-in `2026-07-10`, check-out `2026-07-15`, Villa Mechmech, 4 guests, 2 bedrooms, secure `/book?h=…` link. (This is the full-sentence case the extractor fix targeted.)
+  2. Missing-checkout / stale-clear `mechmech from july 10 for 4 people 2 bedrooms` → bot asked for check-out, did NOT reuse the prior July 15 value; after "July 12" confirmed `2026-07-10 → 2026-07-12`; summary preserved villa/guests/bedrooms/secure link.
+  3. Repeated missing-checkout `mechmech july 10 for 4 people 2 bedrooms` → asked check-out; after "July 12" confirmed and summarized correctly.
+- **Operator export (post-mapping, production-verified) — NOT committed to the repo (by design):** the operator's approved production bot export is preserved on the **WhatChimp platform** and can be re-downloaded from there when needed. Per David's preservation rule, production/operator WhatChimp exports are not stored in this repo; only the non-secret evidence below is kept as text. For provenance, the reviewed export was 192 nodes (observed SHA-256 `C80F325D…76E9` at review time; scanned clean — the flow export carries integration IDs only, no `X-Butler-Secret`/URLs/bodies, secrets live outside the export). **Known tenant-side deviation (documented, NOT a defect):** in David's live bot 11 of the 12 Lead Submit nodes are bound to `7459` and 1 to `6961` (the repo canonical `Oraya_natural_intake_v6.txt` keeps all 12 on `6961`). Both are the "Oraya Lead Submit" class POSTing to the same `/api/butler/lead` endpoint, and live verification confirmed the lead saved and the secure link minted — so the deviation is operational.
+
+**Reason:** the fix + mappings had to prove out against the real production backend and the operator's real bot, which David has now done end-to-end on the normal API links. Locking records the exact approved state so future work has an unambiguous baseline.
+
+**Impact:** docs only — `docs/system/CURRENT_PHASE.md` (status → LOCKED), `docs/system/KNOWN_BUGS.md` #10 (marked RESOLVED), and this entry. **No production/operator WhatChimp export is committed** (it stays on the WhatChimp platform). **No code, no artifact regeneration, no flow-layout change, no API-URL change, no secret/`.env` change, no production WhatChimp change.**
+
+**Remaining optional polish (non-blocking, deferred):** if a guest gives a check-out that precedes the check-in (e.g. check-in July 10, check-out June 15), the bot falls back with "couldn't read that." Acceptable for lock; a future UX nicety would be a clearer "Check-out must be after check-in." message. Not required to move on from Phase 16A v6.
+
+**Reversible?:** yes (docs only). Phase 16A v6 date-intake is **approved to move on from**.
+
+---
+
 ## 2026-07-08 - Structured date fallback: the Normalize Dates ladder replaces the "send both dates together" retry; single-date questions feed the existing integration 7458; "Continue" resume pairs rejoin the intake
 
 **Decision:** the v5.5/v6 date recovery retried by asking the guest to "send your check-in and check-out dates together" and re-ran the refine extractor over the whole follow-up text. Per David's hybrid-ladder clarification, that whole retry layer is replaced (branch `claude/v6-structured-date-fallback`, from master `72f045a` with PRs #67+#68 merged) by a structured ladder built on the **existing tenant integration 7458 "Oraya Normalize Dates"** (operator-created 2026-05-17, 55/55 calls on record; its FIXED request body reads exactly `oraya_check_in_text` 58017 / `oraya_check_out_text` 58018 — both tenant-existing v4.3.3 fields):
