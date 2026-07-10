@@ -37,6 +37,7 @@ docs/design/phase-16c/welcome-guide/
 ├── oraya-guest-welcome-guide-print-mechmech.html    ← A4 print · Villa Mechmech · 7 pages
 ├── oraya-print-a4.css                               ← shared A4 print stylesheet
 ├── assets/concept/                                  ← provided concept images
+├── PHOTO_SLOT_MANIFEST.md                           ← production photo-slot contract (every image slot, both villas)
 ├── CONTENT_MATRIX.md                                ← content status per block
 ├── OPEN_QUESTIONS.md                                ← items requiring David's input
 ├── IMAGE_PROMPTS.md                                 ← generation prompts for missing images
