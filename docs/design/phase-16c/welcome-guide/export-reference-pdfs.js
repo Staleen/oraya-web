@@ -68,6 +68,23 @@ const GUIDES = [
   },
 ];
 
+/* ─────────────────────────────────────────────────────────────────
+   V2 PROTOTYPE TARGETS — editorial house book direction.
+   Exported ONLY with the --v2 flag so the default run keeps
+   exporting the approved baseline guides untouched:
+     node export-reference-pdfs.js         → baseline guides (as before)
+     node export-reference-pdfs.js --v2    → V2 prototype only
+───────────────────────────────────────────────────────────────── */
+const V2_GUIDES = [
+  {
+    html:  path.join(GUIDE_DIR, 'oraya-guest-welcome-guide-print-v2-byblos.html'),
+    pdf:   path.join(EXPORTS_DIR, 'oraya-guide-print-v2-byblos.pdf'),
+    label: 'Villa Byblos — Print Guide V2 (editorial house book prototype)',
+  },
+];
+
+const RUN_GUIDES = process.argv.includes('--v2') ? V2_GUIDES : GUIDES;
+
 (async () => {
   console.log('Oraya Print Guide — Reference PDF Export (screen-mode)');
   console.log('─'.repeat(55));
@@ -85,7 +102,7 @@ const GUIDES = [
   });
 
   try {
-    for (const guide of GUIDES) {
+    for (const guide of RUN_GUIDES) {
       console.log(guide.label);
       console.log('  Source : ' + path.relative(process.cwd(), guide.html));
       console.log('  Output : ' + path.relative(process.cwd(), guide.pdf));

@@ -163,3 +163,15 @@ This prototype is a **static design foundation**. The following items are requir
 This prototype lives in `/docs/design/` and is a **static design artifact only**. It does not touch any production route, API, database schema, authentication system, or existing page. It is safe to open, review, and print without affecting any running system.
 
 Branch: `claude/optimistic-mcnulty-5e085f`
+
+---
+
+## V2 prototype — editorial house book (2026-07-10, review draft)
+
+A separate **V2 design prototype** exists alongside the approved baseline. It does **not** replace the current print guides.
+
+- `oraya-guest-welcome-guide-print-v2-byblos.html` — Villa Byblos "House Book", 12-page editorial direction (chaptered structure, page-2 Essentials dashboard, welcome-letter centerpiece, ledger-style house systems, House Notes, ornamental photo-optional plates — no blank `PHOTO` boxes in guest-facing pages).
+- `oraya-print-a4-v2.css` — standalone V2 stylesheet (same 620px × 877px page architecture and export pipeline as the baseline).
+- `exports/oraya-guide-print-v2-byblos.pdf` — V2 proof PDF.
+
+Export: `node docs/design/phase-16c/welcome-guide/export-reference-pdfs.js --v2` (the default, flag-less run still exports only the approved baseline guides). Photo slots continue to follow `PHOTO_SLOT_MANIFEST.md`; V2 page numbers differ from the manifest's baseline page references (a V2 addendum is pending if this direction is approved). Mechmech V2 is not built yet.
