@@ -26,12 +26,18 @@
   --gold-faint:   rgba(197, 164, 109, 0.10);
   --gold-soft:    rgba(197, 164, 109, 0.28);
   --white:        #FFFFFF;
-  --beige:        #EAE3D9;
-  --beige-light:  #F5F1EB;
+  --beige:        #E7DECC;
+  --beige-light:  #F3EBDC;
   --charcoal:     #2E2E2E;
   --midnight:     #1F2B38;
   --muted:        #8a8070;
   --muted-light:  rgba(138, 128, 112, 0.22);
+
+  /* Warm boutique accents — used sparingly (hairlines / small marks only) */
+  --gold-deep:    #B08D4F;
+  --terracotta:   #B0714B;
+  --olive:        #7C7A54;
+  --warm-hairline: rgba(176, 113, 75, 0.26);
 
   /* Typography */
   --font-serif: 'Playfair Display', Georgia, 'Times New Roman', serif;
@@ -448,8 +454,8 @@ strong { font-weight: 700; }
   display: flex;
   align-items: baseline;
   gap: 12px;
-  padding: 15px 2px;
-  border-bottom: 1px solid var(--muted-light);
+  padding: 16px 2px;
+  border-bottom: 0.5px solid var(--muted-light);
 }
 .pp-index__name {
   font-family: var(--font-sans);
@@ -467,7 +473,7 @@ strong { font-weight: 700; }
   font-family: var(--font-serif);
   font-size: 16px;
   font-weight: 700;
-  color: var(--gold);
+  color: var(--gold-deep);
   flex-shrink: 0;
 }
 
@@ -555,7 +561,7 @@ strong { font-weight: 700; }
   color: var(--charcoal);
   margin-bottom: 7px;
   padding-bottom: 5px;
-  border-bottom: 1px solid var(--muted-light);
+  border-bottom: 0.5px solid var(--gold-soft);
 }
 
 .pp-section p,
@@ -609,7 +615,7 @@ strong { font-weight: 700; }
   gap: 10px;
   font-size: 13px;
   padding: 6.5px 0;
-  border-bottom: 1px solid var(--muted-light);
+  border-bottom: 0.5px solid var(--muted-light);
   color: var(--charcoal);
 }
 
@@ -754,7 +760,7 @@ strong { font-weight: 700; }
   color: var(--gold);
   margin-bottom: 8px;
   padding-bottom: 6px;
-  border-bottom: 1px solid var(--gold-soft);
+  border-bottom: 0.5px solid var(--gold-soft);
 }
 
 .pp-utility-item p {
@@ -921,7 +927,7 @@ strong { font-weight: 700; }
   color: var(--charcoal);
   margin-bottom: 6px;
   padding-bottom: 5px;
-  border-bottom: 1px solid var(--muted-light);
+  border-bottom: 0.5px solid var(--gold-soft);
 }
 
 .pp-feature-photo {
@@ -932,6 +938,7 @@ strong { font-weight: 700; }
   margin-bottom: 7px;
   background: var(--beige);
   line-height: 0;
+  border-radius: 12px 12px 3px 3px;
 }
 
 .pp-feature-photo img {
@@ -948,7 +955,7 @@ strong { font-weight: 700; }
 
 .pp-feature-photo--placeholder {
   background: var(--beige-light);
-  border: 1.5px dashed rgba(138, 128, 112, 0.42);
+  border: 1.5px dashed var(--warm-hairline);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1014,7 +1021,7 @@ strong { font-weight: 700; }
   color: var(--charcoal);
   margin-bottom: 8px;
   padding-bottom: 6px;
-  border-bottom: 1px solid var(--muted-light);
+  border-bottom: 0.5px solid var(--gold-soft);
 }
 
 /* Small relevant icon beside each expectation title */
