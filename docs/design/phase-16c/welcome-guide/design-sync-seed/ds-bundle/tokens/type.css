@@ -1,0 +1,14 @@
+/* Oraya typography — the pairing and the body-copy rule are brand constants.
+   Scale, hierarchy and composition are deliberately NOT fixed here: they are
+   open to redesign (see guidelines/ORAYA_BRAND_CONTEXT.md). */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@400;500;600;700;800&family=Lato:wght@300;400;700;900&display=swap');
+
+:root {
+  /* Display only: titles, large numerals, italic accents. */
+  --oraya-font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  /* All body and functional copy. Identity rule: body is never set in the serif. */
+  --oraya-font-body: 'Lato', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  /* The established label/eyebrow voice: letterspaced uppercase Lato, small. */
+  --oraya-eyebrow-tracking: 0.18em;
+}

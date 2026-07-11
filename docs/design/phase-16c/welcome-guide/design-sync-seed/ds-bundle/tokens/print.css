@@ -1,0 +1,20 @@
+/* Oraya print frame — A4 portrait, saddle-stitch. Hard constraints. */
+:root {
+  --oraya-page-width: 210mm;
+  --oraya-page-height: 297mm;
+
+  /* Nominal safety margin for content pages. */
+  --oraya-margin: 14mm;
+  /* Professional print bleed for full-bleed plates. */
+  --oraya-bleed: 3mm;
+  /* Nothing critical may sit inside the outer 5mm (office-printer safe zone). */
+  --oraya-danger-zone: 5mm;
+
+  /* Thinnest rule that survives plain office A4 printing. */
+  --oraya-hairline: 0.5pt;
+}
+
+@page {
+  size: A4 portrait;
+  margin: 0;
+}

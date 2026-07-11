@@ -1,0 +1,20 @@
+/* Oraya brand palette — brand constants. Do not add or alter hues. */
+:root {
+  --oraya-gold: #C5A46D;
+  --oraya-gold-deep: #B08D4F;
+  --oraya-terracotta: #B0714B;
+  --oraya-olive: #7C7A54;
+
+  --oraya-beige: #E7DECC;
+  --oraya-beige-light: #F3EBDC;
+  --oraya-ivory: #FAF6EE;
+  --oraya-page: #FFFFFF;
+
+  --oraya-charcoal: #2E2E2E;
+  --oraya-midnight: #1F2B38;
+  --oraya-muted: #8a8070;
+
+  /* Faint fills and soft hairlines */
+  --oraya-gold-10: rgba(197, 164, 109, 0.10);
+  --oraya-gold-28: rgba(197, 164, 109, 0.28);
+}
