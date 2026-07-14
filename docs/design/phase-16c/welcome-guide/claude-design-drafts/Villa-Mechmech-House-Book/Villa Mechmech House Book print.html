@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Villa Mechmech &mdash; The House Book (A4 print)</title>
+<!--
+  Villa Mechmech — printed House Book (repo source, A4)
+  STATIC document — lives inside the villa.
+  Contains NO guest name, NO stay dates, NO booking reference, NO gate PIN,
+  NO front-door PIN, NO access codes. The Arrival Guide is a separate document
+  and must never be bound into this print PDF.
+  QR targets (real scannable codes, do not change):
+  - Location:    https://www.google.com/maps/search/?api=1&query=34.130333,35.773083
+  - Living List: https://stayoraya.com/explore/mechmech
+  - Website:     https://stayoraya.com
+  Print: A4, margin 0, background graphics ON. One page per .hy block (9 pages).
+  Packaged from Claude Design source directions/mechmech-housebook.js (draft 1,
+  cloned from the approved Villa Byblos template) — format conversion only,
+  content unchanged.
+-->
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500;1,600;1,700;1,800&family=Lato:wght@300;400;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/oraya-tokens.css">
+<link rel="stylesheet" href="css/system-print.css">
+</head>
+<body>
+<div class="hy" data-screen-label="House Book — Cover"><section class="oraya-page oraya-page--beige-light oraya-page--bleed" style="padding:18mm; display:flex; flex-direction:column; align-items:center; text-align:center;">
+  <img src="assets/ORAYA_logo_full.svg" alt="Oraya" style="height:30mm; display:block; margin:1mm auto 0;">
+  <div style="flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center;">
+    <img src="assets/oraya-housebook-seal.svg" alt="House Book seal" style="width:46mm; display:block; margin:0 auto;">
+    <h1 class="oraya-display" style="font-size:46pt; line-height:1.05; color:var(--oraya-midnight); margin:10mm 0 0;">Villa</h1>
+    <h1 class="oraya-display oraya-display--italic" style="font-size:54pt; line-height:1.05; color:var(--oraya-gold-deep); margin:0 0 8mm;">Mechmech</h1>
+    <p class="eyebrow-t" style="margin:0 0 3mm;">the house book</p>
+    <p class="oraya-eyebrow" style="margin:0;">Mechmech &middot; near Annaya &middot; Mount Lebanon</p>
+  </div>
+  <div>
+    <span class="oraya-gem" style="margin-bottom:4mm;"></span>
+    <p class="micro" style="margin:3mm 0 0;">A guide to your stay at Villa Mechmech</p>
+  </div>
+</section></div>
+<div class="hy" data-screen-label="House Book — Essentials"><section class="oraya-page oraya-page--ivory" style="display:flex; flex-direction:column; justify-content:space-between;">
+  <div>
+    <p class="eyebrow-t" style="margin:0 0 3mm;">The Essentials</p>
+    <h2 class="catch">At a glance<b>.</b></h2>
+  </div>
+  <div style="display:grid; grid-template-columns:repeat(4, 1fr); column-gap:5mm; margin-bottom:7mm;">
+    <div class="arch-cell">
+      <div class="micro" style="color:var(--oraya-terracotta);">Wi-Fi</div>
+      <div class="nm" style="font-family:var(--oraya-font-body); font-weight:900; font-size:11.5pt;">ORAYA</div>
+      <div class="tx">Password provided in the villa</div>
+    </div>
+    <div class="arch-cell">
+      <div class="micro" style="color:var(--oraya-terracotta);">Checkout</div>
+      <div class="nm">11:00 AM</div>
+      <div class="tx">Late or extended &mdash; by advance confirmation</div>
+    </div>
+    <div class="arch-cell">
+      <div class="micro" style="color:var(--oraya-terracotta);">Concierge</div>
+      <div class="nm" style="font-family:var(--oraya-font-body); font-weight:900; font-size:8.5pt; letter-spacing:0; white-space:nowrap;">+961&nbsp;71&nbsp;140&nbsp;041</div>
+      <div class="tx">WhatsApp or call &middot; 24/7</div>
+    </div>
+    <div class="arch-cell">
+      <div class="micro" style="color:var(--oraya-terracotta);">Quiet hours</div>
+      <div class="nm" style="font-size:11pt;">11 PM &ndash; 8 AM</div>
+      <div class="tx">The hills carry sound</div>
+    </div>
+  </div>
+  <div style="display:grid; grid-template-columns:1fr 1fr; column-gap:5mm; margin-bottom:8mm;">
+    <div class="warm-panel" style="display:grid; grid-template-columns:auto 1fr; column-gap:6mm; align-items:center;">
+      <img src="assets/oraya-qr-maps-mechmech.svg" alt="QR code — Villa Mechmech in Google Maps" style="width:19mm; height:19mm; display:block;">
+      <div class="fact">
+        <div class="l">The villa&rsquo;s location</div>
+        <div class="s" style="margin-top:0;">Scan to open Villa Mechmech in Google Maps &mdash; handy for taxis, deliveries, and finding your way home.</div>
+      </div>
+    </div>
+    <div class="warm-panel">
+      <div class="fact">
+        <div class="l">A message away &mdash; 24/7</div>
+        <div class="v" style="font-size:15pt;">+961 71 140 041</div>
+        <div class="s">A recommendation, an extra comfort, or simply a question &mdash; WhatsApp or call, day or night.</div>
+      </div>
+    </div>
+  </div>
+  <div style="border-top:0.5pt solid var(--oraya-gold-28); border-bottom:0.5pt solid var(--oraya-gold-28); padding:8mm 0 6mm; margin-bottom:6mm;">
+    <img src="assets/oraya-area-plate-mechmech.svg" alt="Mechmech area plate" style="width:118mm; display:block; margin:0 auto;">
+    <p class="micro" style="text-align:center; margin:4mm 0 0;">Mechmech &middot; near Annaya &middot; Mount Lebanon</p>
+  </div>
+  <div style="text-align:center;">
+    <img src="assets/oraya-olive-mark.svg" alt="" style="width:13mm; display:block; margin:0 auto;">
+    <p class="oraya-display oraya-display--italic" style="font-size:12.5pt; color:var(--oraya-muted); margin:2mm 0 0;">Everything else is a message away.</p>
+  </div>
+  <div class="strip"><span>Villa Mechmech &middot; The House Book</span><span>Wi-Fi <b>ORAYA</b> &nbsp;&middot;&nbsp; Checkout <b>11:00 AM</b> &nbsp;&middot;&nbsp; Concierge <b>+961 71 140 041</b></span></div>
+</section></div>
+<div class="hy" data-screen-label="House Book — Welcome letter"><section class="oraya-page oraya-page--beige-light" style="display:flex; align-items:center; justify-content:center;">
+  <div class="arch-panel" style="width:138mm; padding:16mm 14mm 12mm; text-align:center;">
+    <p class="eyebrow-t" style="margin:0 0 6mm;">Prepared for every stay at Oraya</p>
+    <h2 class="head" style="font-size:32pt; margin-bottom:9mm;">Welcome to <em>the house</em></h2>
+    <div class="body" style="font-size:10pt; line-height:1.8; text-align:left;">
+      <p style="margin:0 0 4mm;">It is our pleasure to welcome you to Villa Mechmech &mdash; a three-floor mountain villa with 3 bedrooms, 2 full bathrooms + guest WC, heated pool, winter glass room, outdoor kitchen, pergola, BBQ area, and parking inside the gate. We hope your time here is restful, private, and entirely effortless.</p>
+      <p style="margin:0 0 4mm;">This little book holds everything you need for your stay &mdash; how the villa and its comforts work, what surrounds you in Mechmech and beyond, the few things we kindly ask of our guests, and how to reach us at any hour.</p>
+      <p style="margin:0 0 4mm;">Should you need anything at all &mdash; a recommendation, an extra comfort, or simply a question &mdash; our concierge is only a message away, day or night.</p>
+      <p style="margin:0 0 8mm;">Until then, make yourself completely at home. We are so glad to have you.</p>
+    </div>
+    <img src="assets/oraya-olive-mark.svg" alt="" style="width:14mm; display:block; margin:0 auto;">
+    <p class="oraya-display oraya-display--italic" style="font-size:15pt; color:var(--oraya-terracotta); margin:2.5mm 0 0;">&mdash; The Oraya Team</p>
+  </div>
+  <div class="strip"><span>Villa Mechmech &middot; The House Book</span><span>Wi-Fi <b>ORAYA</b> &nbsp;&middot;&nbsp; Checkout <b>11:00 AM</b> &nbsp;&middot;&nbsp; Concierge <b>+961 71 140 041</b></span></div>
+</section></div>
+<div class="hy" data-screen-label="House Book — Around Villa Mechmech"><section class="oraya-page oraya-page--ivory" style="display:flex; flex-direction:column; justify-content:space-between;">
+  <div style="display:flex; justify-content:space-between; align-items:flex-end;">
+    <div>
+      <p class="eyebrow-t" style="margin:0 0 3mm;">Around Villa Mechmech</p>
+      <h2 class="catch">Explore<b>.</b></h2>
+    </div>
+    <img src="assets/oraya-area-plate-mechmech.svg" alt="Mechmech area plate" style="width:62mm; display:block;">
+  </div>
+  <div style="display:grid; grid-template-columns:repeat(3, 1fr); column-gap:4mm; margin-bottom:6mm;">
+    <div class="arch-cell" style="padding-top:7mm;">
+      <div class="micro" style="color:var(--oraya-terracotta);">~5&ndash;10 min</div>
+      <div class="nm">Saint Charbel &middot; Annaya</div>
+      <div class="tx">A nearby spiritual landmark and one of the area&rsquo;s most meaningful visits.</div>
+    </div>
+    <div class="arch-cell" style="padding-top:7mm;">
+      <div class="micro" style="color:var(--oraya-terracotta);">~25&ndash;35 min</div>
+      <div class="nm">Laklouk Highlands</div>
+      <div class="tx">Mountain viewpoints, hiking routes, and winter snow scenery when in season.</div>
+    </div>
+    <div class="arch-cell" style="padding-top:7mm;">
+      <div class="micro" style="color:var(--oraya-terracotta);">~45&ndash;60 min</div>
+      <div class="nm">Baatara / Baloua Balaa</div>
+      <div class="tx">A dramatic waterfall and natural chasm, best in the wet/spring season.</div>
+    </div>
+  </div>
+  <div style="display:grid; grid-template-columns:1fr 1fr; column-gap:9mm; margin-bottom:6mm;">
+    <div>
+      <p class="micro" style="color:var(--oraya-terracotta); margin:0 0 2mm;">Around the area &mdash; living list</p>
+      <div style="display:flex; gap:4mm; padding:2.8mm 0; align-items:baseline; border-top:0.5pt solid var(--oraya-gold-28);"><span class="micro" style="flex:none; width:30mm; color:var(--oraya-charcoal);">[Restaurant name]</span><span class="body" style="font-size:8.5pt;">[Cuisine] &middot; [area] &middot; [min]</span></div>
+      <div style="display:flex; gap:4mm; padding:2.8mm 0; align-items:baseline; border-top:0.5pt solid var(--oraya-gold-28);"><span class="micro" style="flex:none; width:30mm; color:var(--oraya-charcoal);">[Restaurant name]</span><span class="body" style="font-size:8.5pt;">[Cuisine] &middot; [area] &middot; [min]</span></div>
+      <div style="display:flex; gap:4mm; padding:2.8mm 0; align-items:baseline; border-top:0.5pt solid var(--oraya-gold-28);"><span class="micro" style="flex:none; width:30mm; color:var(--oraya-charcoal);">[Caf&eacute; name]</span><span class="body" style="font-size:8.5pt;">[Cuisine] &middot; [area] &middot; [min]</span></div>
+      <div style="display:flex; gap:4mm; padding:2.8mm 0; align-items:baseline; border-top:0.5pt solid var(--oraya-gold-28); border-bottom:0.5pt solid var(--oraya-gold-28);"><span class="micro" style="flex:none; width:30mm; color:var(--oraya-charcoal);">[Restaurant name]</span><span class="body" style="font-size:8.5pt;">[Cuisine] &middot; [area] &middot; [min]</span></div>
+    </div>
+    <div>
+      <p class="micro" style="color:var(--oraya-terracotta); margin:0 0 2mm;">Practical &amp; nearby</p>
+      <div style="display:flex; gap:4mm; padding:2.8mm 0; align-items:baseline; border-top:0.5pt solid var(--oraya-gold-28);"><span class="micro" style="flex:none; width:30mm; color:var(--oraya-charcoal);">[Mini-market]</span><span class="body" style="font-size:8.5pt;">[What &amp; where] &middot; [min]</span></div>
+      <div style="display:flex; gap:4mm; padding:2.8mm 0; align-items:baseline; border-top:0.5pt solid var(--oraya-gold-28);"><span class="micro" style="flex:none; width:30mm; color:var(--oraya-charcoal);">[Bakery]</span><span class="body" style="font-size:8.5pt;">[What &amp; where] &middot; [min]</span></div>
+      <div style="display:flex; gap:4mm; padding:2.8mm 0; align-items:baseline; border-top:0.5pt solid var(--oraya-gold-28);"><span class="micro" style="flex:none; width:30mm; color:var(--oraya-charcoal);">[Pharmacy]</span><span class="body" style="font-size:8.5pt;">[Where] &middot; [min] &middot; non-urgent guidance: message Oraya</span></div>
+      <div style="display:flex; gap:4mm; padding:2.8mm 0; align-items:baseline; border-top:0.5pt solid var(--oraya-gold-28); border-bottom:0.5pt solid var(--oraya-gold-28);"><span class="micro" style="flex:none; width:30mm; color:var(--oraya-charcoal);">[ATM &amp; fuel]</span><span class="body" style="font-size:8.5pt;">[Where] &middot; [min]</span></div>
+    </div>
+  </div>
+  <div style="display:grid; grid-template-columns:1fr 1fr; column-gap:5mm; border-top:0.5pt solid var(--oraya-gold-28); padding-top:6mm;">
+    <div class="warm-panel" style="display:grid; grid-template-columns:auto 1fr; column-gap:6mm; align-items:center;">
+      <img src="assets/oraya-qr-living-list-mechmech.svg" alt="QR code — Oraya living list, Mechmech" style="width:19mm; height:19mm; display:block;">
+      <div class="fact">
+        <div class="l">The living list</div>
+        <div class="s" style="margin-top:0;">Scan for Oraya&rsquo;s current area guide &mdash; openings change with the seasons; this list stays fresh.</div>
+      </div>
+    </div>
+    <div class="warm-panel">
+      <div class="fact">
+        <div class="l">Oraya arranges</div>
+        <div class="s" style="margin-top:0;">Reservations, drivers, boat days, guided visits &mdash; message the concierge at <strong style="color:var(--oraya-charcoal);">+961 71 140 041</strong>.</div>
+      </div>
+    </div>
+  </div>
+  <div class="strip"><span>Villa Mechmech &middot; The House Book</span><span>Wi-Fi <b>ORAYA</b> &nbsp;&middot;&nbsp; Checkout <b>11:00 AM</b> &nbsp;&middot;&nbsp; Concierge <b>+961 71 140 041</b></span></div>
+</section></div>
+<div class="hy" data-screen-label="House Book — Living Spaces"><section class="oraya-page oraya-page--beige-light" style="display:flex; flex-direction:column; justify-content:space-between;">
+  <div>
+    <p class="eyebrow-t" style="margin:0 0 3mm;">Living spaces</p>
+    <h2 class="catch">Live<b>.</b></h2>
+  </div>
+  <div style="display:grid; grid-template-columns:repeat(4, 1fr); column-gap:4mm; margin-bottom:5mm;">
+    <div class="arch-cell" style="padding-top:7mm;">
+      <img src="assets/oraya-icon-pool.svg" alt="" style="width:12mm; height:12mm; display:block; margin:0 auto 2mm;">
+      <div class="nm">Pool</div>
+      <div class="tx">Heated pool readied before your stay. No diving; children swim with an adult.</div>
+    </div>
+    <div class="arch-cell" style="padding-top:7mm;">
+      <img src="assets/oraya-icon-kitchen.svg" alt="" style="width:12mm; height:12mm; display:block; margin:0 auto 2mm;">
+      <div class="nm">Kitchen</div>
+      <div class="tx">Kettle, microwave, gas cooktop, cutlery and glassware.</div>
+    </div>
+    <div class="arch-cell" style="padding-top:7mm;">
+      <img src="assets/oraya-icon-barbecue.svg" alt="" style="width:12mm; height:12mm; display:block; margin:0 auto 2mm;">
+      <div class="nm">Barbecue</div>
+      <div class="tx">Open the valve, ignite as labeled, close and cool after. Never unattended.</div>
+    </div>
+    <div class="arch-cell" style="padding-top:7mm;">
+      <img src="assets/oraya-icon-bathroom.svg" alt="" style="width:12mm; height:12mm; display:block; margin:0 auto 2mm;">
+      <div class="nm">Bathrooms</div>
+      <div class="tx">Towels and amenities provided. Used towels on the floor.</div>
+    </div>
+  </div>
+  <div class="warm-panel" style="display:flex; justify-content:space-between; gap:8mm; margin-bottom:7mm; padding:4mm 5.5mm;">
+    <p class="body" style="font-size:9pt; font-weight:700; margin:0;">Using the heated pool? Cover back on after use.</p>
+    <p class="body" style="font-size:9pt; margin:0; color:var(--oraya-muted);">Garbage: a small bin per room; outdoor cans outside &mdash; never on the street.</p>
+  </div>
+  <div class="warm-panel" style="padding:7mm 7mm 6mm;">
+    <p class="eyebrow-t" style="margin:0 0 4.5mm;">The comforts &mdash; how the house works</p>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 9mm;">
+      <div style="display:flex; gap:4mm; padding:2.8mm 0; align-items:baseline; border-top:0.5pt solid var(--oraya-gold-28);"><span class="micro" style="flex:none; width:26mm; color:var(--oraya-charcoal);">Wi-Fi</span><span class="body" style="font-size:8.5pt;">Network <strong>ORAYA</strong> &middot; password provided in the villa.</span></div>
+      <div style="display:flex; gap:4mm; padding:2.8mm 0; align-items:baseline; border-top:0.5pt solid var(--oraya-gold-28);"><span class="micro" style="flex:none; width:26mm; color:var(--oraya-charcoal);">Heating</span><span class="body" style="font-size:8.5pt;">Radiators with adjustable valves; diesel stove for deep winter.</span></div>
+      <div style="display:flex; gap:4mm; padding:2.8mm 0; align-items:baseline; border-top:0.5pt solid var(--oraya-gold-28);"><span class="micro" style="flex:none; width:26mm; color:var(--oraya-charcoal);">Hot water</span><span class="body" style="font-size:8.5pt;">Labeled hot-water switch in the villa. Call before any reset.</span></div>
+      <div style="display:flex; gap:4mm; padding:2.8mm 0; align-items:baseline; border-top:0.5pt solid var(--oraya-gold-28);"><span class="micro" style="flex:none; width:26mm; color:var(--oraya-charcoal);">Glass room</span><span class="body" style="font-size:8.5pt;">The winter glass room is part of the Mechmech stay &mdash; keep it closed when heating is on.</span></div>
+      <div style="display:flex; gap:4mm; padding:2.8mm 0; align-items:baseline; border-top:0.5pt solid var(--oraya-gold-28);"><span class="micro" style="flex:none; width:26mm; color:var(--oraya-charcoal);">TV</span><span class="body" style="font-size:8.5pt;">Two smart TVs &mdash; streaming ready.</span></div>
+      <div style="display:flex; gap:4mm; padding:2.8mm 0; align-items:baseline; border-top:0.5pt solid var(--oraya-gold-28);"><span class="micro" style="flex:none; width:26mm; color:var(--oraya-charcoal);">Power &amp; water</span><span class="body" style="font-size:8.5pt;">Backup systems are handled by Oraya. A brief start-up or pump sound can be normal.</span></div>
+    </div>
+    <p class="oraya-display oraya-display--italic" style="font-size:12pt; color:var(--oraya-terracotta); margin:5mm 0 0; text-align:center; border-top:0.5pt solid var(--oraya-gold-28); padding-top:4.5mm;">If something does not work as expected, contact Oraya before attempting a fix.</p>
+  </div>
+  <div class="strip"><span>Villa Mechmech &middot; The House Book</span><span>Wi-Fi <b>ORAYA</b> &nbsp;&middot;&nbsp; Checkout <b>11:00 AM</b> &nbsp;&middot;&nbsp; Concierge <b>+961 71 140 041</b></span></div>
+</section></div>
+<div class="hy" data-screen-label="House Book — House Notes"><section class="oraya-page oraya-page--ivory" style="display:flex; flex-direction:column; justify-content:space-between;">
+  <div style="text-align:center;">
+    <p class="eyebrow-t" style="margin:0 0 3mm;">House notes</p>
+    <h2 class="head" style="font-size:30pt;">The few things we <em>ask</em></h2>
+  </div>
+  <div style="display:grid; grid-template-columns:1fr 18mm 1fr; column-gap:5mm; height:158mm;">
+    <div style="display:grid; align-content:space-evenly; gap:6mm;">
+      <div><p class="micro" style="color:var(--oraya-terracotta); margin:0 0 1.5mm;">I &middot; Visitors &amp; gatherings</p><p class="body" style="margin:0;">Additional visitors and gatherings must be approved by Oraya in advance. For events and larger gatherings, Oraya arranges everything &mdash; catering, d&eacute;cor, music and ambience.</p></div>
+      <div><p class="micro" style="color:var(--oraya-terracotta); margin:0 0 1.5mm;">II &middot; Restricted areas</p><p class="body" style="margin:0;">Mechanical, electrical, plumbing, security and storage rooms stay closed &mdash; please do not access or tamper.</p></div>
+      <div><p class="micro" style="color:var(--oraya-terracotta); margin:0 0 1.5mm;">III &middot; Smoking</p><p class="body" style="margin:0;">On the terrace and outdoors, where ashtrays are set out. Not indoors.</p></div>
+      <div><p class="micro" style="color:var(--oraya-terracotta); margin:0 0 1.5mm;">IV &middot; Pool safety</p><p class="body" style="margin:0;">No diving. Children swim supervised. Using the heated pool? Cover back on after use.</p></div>
+    </div>
+    <div style="align-self:center;"><img src="assets/oraya-vertical-branch-ivory-v14.svg" alt="" style="height:150mm; display:block; margin:0 auto;"></div>
+    <div style="display:grid; align-content:space-evenly; gap:6mm;">
+      <div><p class="micro" style="color:var(--oraya-terracotta); margin:0 0 1.5mm;">V &middot; Children &amp; supervision</p><p class="body" style="margin:0;">An adult keeps an eye on little ones at all times, indoors and out.</p></div>
+      <div><p class="micro" style="color:var(--oraya-terracotta); margin:0 0 1.5mm;">VI &middot; Property care</p><p class="body" style="margin:0;">Treat the villa, its furniture and the outdoor areas with care &mdash; as you would your own.</p></div>
+      <div><p class="micro" style="color:var(--oraya-terracotta); margin:0 0 1.5mm;">VII &middot; Quiet hours</p><p class="body" style="margin:0;">Low volume between 11:00 PM and 8:00 AM.</p></div>
+      <div><p class="micro" style="color:var(--oraya-terracotta); margin:0 0 1.5mm;">VIII &middot; Keys &amp; security</p><p class="body" style="margin:0;">Lock doors and windows and secure the gate when you head out. A lost key or code &mdash; tell us at once.</p></div>
+    </div>
+  </div>
+  <div style="border-top:0.5pt solid var(--oraya-gold-28); padding-top:5.5mm; text-align:center;">
+    <p class="eyebrow-t" style="margin:0 0 2mm;">Anything unclear?</p>
+    <p class="body" style="font-size:9.5pt; margin:0;">Our concierge is a message away, day or night &mdash; <strong>+961 71 140 041</strong></p>
+  </div>
+  <div class="strip"><span>Villa Mechmech &middot; The House Book</span><span>Wi-Fi <b>ORAYA</b> &nbsp;&middot;&nbsp; Checkout <b>11:00 AM</b> &nbsp;&middot;&nbsp; Concierge <b>+961 71 140 041</b></span></div>
+</section></div>
+<div class="hy" data-screen-label="House Book — Checkout"><section class="oraya-page oraya-page--beige-light" style="display:flex; flex-direction:column; justify-content:space-between;">
+  <div style="display:flex; justify-content:space-between; align-items:flex-end;">
+    <div>
+      <p class="eyebrow-t" style="margin:0 0 3mm;">Checkout</p>
+      <h2 class="catch">Leave<b>.</b></h2>
+    </div>
+    <div style="width:24mm;"><img src="assets/oraya-setting-sun.svg" alt="" style="width:24mm; display:block;"></div>
+  </div>
+  <div class="warm-panel" style="display:grid; grid-template-columns:auto 1fr; column-gap:8mm; align-items:center; margin-bottom:7mm;">
+    <div style="font-family:var(--oraya-font-display); font-size:38pt; line-height:1; color:var(--oraya-midnight);">11:00 <span style="font-size:15pt;">AM</span></div>
+    <p class="body" style="font-size:9pt; margin:0;">In no rush? Late or extended checkout may be available &mdash; arrange and confirm with Oraya in advance at +961 71 140 041.</p>
+  </div>
+  <div class="arch-panel" style="padding:17mm 14mm 10mm;">
+    <p class="micro" style="color:var(--oraya-terracotta); text-align:center; margin:0 0 6mm;">A short round of the house</p>
+    <div style="max-width:124mm; margin:0 auto; display:grid; grid-template-columns:1fr 1fr; gap:5mm 10mm;">
+      <div class="ck"><div class="box"></div><div>Dishes to sink</div></div>
+      <div class="ck"><div class="box"></div><div>Lights off</div></div>
+      <div class="ck"><div class="box"></div><div>Garbage to the outdoor cans</div></div>
+      <div class="ck"><div class="box"></div><div>Heating &amp; stove off</div></div>
+      <div class="ck"><div class="box"></div><div>Interior doors closed</div></div>
+      <div class="ck"><div class="box"></div><div>Windows latched</div></div>
+      <div class="ck"><div class="box"></div><div>Final lock-up &mdash; front door + gate</div></div>
+    </div>
+  </div>
+  <div style="display:flex; justify-content:space-between; align-items:center; border-top:0.5pt solid var(--oraya-gold-28); padding-top:5mm;">
+    <p class="oraya-display oraya-display--italic" style="font-size:13.5pt; color:var(--oraya-terracotta); margin:0;">Leave the rest to us.</p>
+    <div class="fact" style="text-align:right;">
+      <div class="l">Questions before you go</div>
+      <div class="s" style="margin-top:0;"><strong style="color:var(--oraya-charcoal);">+961 71 140 041</strong> &mdash; WhatsApp or call</div>
+    </div>
+  </div>
+  <div class="strip"><span>Villa Mechmech &middot; The House Book</span><span>Wi-Fi <b>ORAYA</b> &nbsp;&middot;&nbsp; Checkout <b>11:00 AM</b> &nbsp;&middot;&nbsp; Concierge <b>+961 71 140 041</b></span></div>
+</section></div>
+<div class="hy" data-screen-label="House Book — Emergency & Contacts"><section class="oraya-page" style="display:flex; flex-direction:column; justify-content:space-between;">
+  <div>
+    <p class="eyebrow-t" style="margin:0 0 3mm;">Emergency &amp; contacts</p>
+    <h2 class="head" style="font-size:24pt;">Clear heads, <em>clear numbers</em></h2>
+  </div>
+  <div class="warm-panel" style="margin-bottom:6mm;">
+    <div class="fact"><div class="l">Gas &middot; electrical &middot; water &middot; fire</div></div>
+    <div style="display:grid; grid-template-columns:repeat(4,1fr); column-gap:5mm; margin-top:1mm;">
+      <div class="body" style="font-size:9pt;"><strong>1.</strong> Step outside</div>
+      <div class="body" style="font-size:9pt;"><strong>2.</strong> Move away from the area</div>
+      <div class="body" style="font-size:9pt;"><strong>3.</strong> Contact the emergency service</div>
+      <div class="body" style="font-size:9pt;"><strong>4.</strong> Inform Oraya</div>
+    </div>
+  </div>
+  <div style="display:grid; grid-template-columns:1fr 1fr; column-gap:6mm; margin-bottom:6mm;">
+    <div style="border:0.75pt solid var(--oraya-gold); border-radius:999px 999px 0 0; padding:9mm 6mm 6mm; text-align:center;">
+      <div style="font-family:var(--oraya-font-display); font-size:42pt; line-height:1; color:var(--oraya-midnight);">112</div>
+      <div class="micro" style="margin-top:2.5mm;">Police / Internal Security</div>
+    </div>
+    <div style="border:0.75pt solid var(--oraya-gold); border-radius:999px 999px 0 0; padding:9mm 6mm 6mm; text-align:center;">
+      <div style="font-family:var(--oraya-font-display); font-size:42pt; line-height:1; color:var(--oraya-midnight);">140</div>
+      <div class="micro" style="margin-top:2.5mm;">Lebanese Red Cross</div>
+    </div>
+  </div>
+  <div style="display:grid; grid-template-columns:1fr auto; column-gap:8mm; align-items:center; padding:5mm 0; border-top:0.5pt solid var(--oraya-gold-28); border-bottom:0.5pt solid var(--oraya-gold-28); margin-bottom:6mm;">
+    <div>
+      <div class="fact">
+        <div class="l">Oraya Concierge &mdash; WhatsApp or call, 24/7</div>
+        <div class="v" style="font-size:16pt;">+961 71 140 041</div>
+        <div class="s">For medical emergencies, call the emergency service first. For non-urgent pharmacy guidance, message Oraya.</div>
+        <div class="micro" style="margin-top:2mm; color:var(--oraya-terracotta);">stayoraya.com</div>
+      </div>
+    </div>
+    <div style="text-align:center;">
+      <img src="assets/oraya-qr-stayoraya.svg" alt="QR code — stayoraya.com" style="width:22mm; height:22mm; display:block; margin:0 auto;">
+      <div class="micro" style="margin-top:1.6mm;">Scan to open stayoraya.com</div>
+    </div>
+  </div>
+  <div>
+    <p class="eyebrow-t" style="margin:0 0 3.5mm;">Worth remembering</p>
+    <div style="display:grid; grid-template-columns:repeat(4, 1fr); column-gap:4mm;">
+    <div class="warm-panel" style="padding:3.5mm;"><div class="body" style="font-size:8pt; line-height:1.45;"><strong>Checkout</strong><br>11:00 AM</div></div>
+    <div class="warm-panel" style="padding:3.5mm;"><div class="body" style="font-size:8pt; line-height:1.45;"><strong>Lost access</strong><br>Call Oraya</div></div>
+    <div class="warm-panel" style="padding:3.5mm;"><div class="body" style="font-size:8pt; line-height:1.45;"><strong>Quiet</strong><br>After 11:00 PM</div></div>
+    <div class="warm-panel" style="padding:3.5mm;"><div class="body" style="font-size:8pt; line-height:1.45;"><strong>Garbage</strong><br>Outdoor bins</div></div>
+    </div>
+  </div>
+  <div class="strip"><span>Villa Mechmech &middot; The House Book</span><span>Wi-Fi <b>ORAYA</b> &nbsp;&middot;&nbsp; Checkout <b>11:00 AM</b> &nbsp;&middot;&nbsp; Concierge <b>+961 71 140 041</b></span></div>
+</section></div>
+<div class="hy" data-screen-label="House Book — Farewell / back cover"><section class="oraya-page oraya-page--midnight oraya-page--bleed" style="padding:18mm; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;">
+  <img src="assets/oraya-housebook-seal-midnight.svg" alt="" style="width:32mm; display:block; margin:0 auto;">
+  <h2 class="oraya-display" style="font-size:27pt; color:var(--oraya-ivory); margin:10mm 0 4mm; line-height:1.25;">Thank you for staying <em class="oraya-display--italic" style="color:var(--oraya-gold);">at Oraya.</em></h2>
+  <p class="oraya-body" style="color:var(--oraya-beige); font-size:10.5pt; margin:0 0 12mm;">We hope to welcome you back.</p>
+  <img src="assets/ORAYA_logo_full.svg" alt="Oraya" style="height:26mm; display:block; margin:0 auto 5mm;">
+  <p style="font-size:8pt; font-weight:700; letter-spacing:0.18em; text-transform:uppercase; color:rgba(231,222,204,0.75); margin:0;">stayoraya.com &middot; +961 71 140 041</p>
+</section></div>
+</body>
+</html>

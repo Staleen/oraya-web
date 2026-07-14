@@ -1,0 +1,36 @@
+/* Oraya brand tokens (color + type) — from the Oraya design system */
+/* Oraya brand palette — brand constants. Do not add or alter hues. */
+:root {
+  --oraya-gold: #C5A46D;
+  --oraya-gold-deep: #B08D4F;
+  --oraya-terracotta: #B0714B;
+  --oraya-olive: #7C7A54;
+
+  --oraya-beige: #E7DECC;
+  --oraya-beige-light: #F3EBDC;
+  --oraya-ivory: #FAF6EE;
+  --oraya-page: #FFFFFF;
+
+  --oraya-charcoal: #2E2E2E;
+  --oraya-midnight: #1F2B38;
+  --oraya-muted: #8a8070;
+
+  /* Faint fills and soft hairlines */
+  --oraya-gold-10: rgba(197, 164, 109, 0.10);
+  --oraya-gold-28: rgba(197, 164, 109, 0.28);
+}
+
+/* Oraya typography — the pairing and the body-copy rule are brand constants.
+   Scale, hierarchy and composition are deliberately NOT fixed here: they are
+   open to redesign (see guidelines/ORAYA_BRAND_CONTEXT.md). */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@400;500;600;700;800&family=Lato:wght@300;400;700;900&display=swap');
+
+:root {
+  /* Display only: titles, large numerals, italic accents. */
+  --oraya-font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  /* All body and functional copy. Identity rule: body is never set in the serif. */
+  --oraya-font-body: 'Lato', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  /* The established label/eyebrow voice: letterspaced uppercase Lato, small. */
+  --oraya-eyebrow-tracking: 0.18em;
+}
