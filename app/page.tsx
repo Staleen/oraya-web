@@ -802,6 +802,33 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ── Guest guides (Phase 16C — public House Book + Living List) ── */}
+      <section className="oraya-section-tone text-center" style={{ backgroundColor: BEIGELIGHT, padding: "2.75rem clamp(1rem, 4vw, 3rem)" }}>
+        <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, marginBottom: "10px" }}>
+          Guest guides
+        </p>
+        <p className="oraya-text-muted" style={{ fontFamily: LATO, fontSize: "13px", fontWeight: 300, lineHeight: 1.75, margin: "0 auto 18px", maxWidth: "560px" }}>
+          The House Book for each villa, and Oraya&rsquo;s living area guides — online and printable.
+        </p>
+        <div className="flex justify-center flex-wrap" style={{ gap: "0.9rem 2rem" }}>
+          {[
+            { label: "House Book · Mechmech", href: "/house-book/mechmech" },
+            { label: "House Book · Byblos", href: "/house-book/byblos" },
+            { label: "Explore Mechmech", href: "/explore/mechmech" },
+            { label: "Explore Byblos", href: "/explore/byblos" },
+          ].map(({ label, href }) => (
+            <a
+              key={href}
+              href={href}
+              className="no-underline uppercase oraya-link-cta"
+              style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", color: GOLD, paddingBottom: "2px" }}
+            >
+              {label}
+            </a>
+          ))}
+        </div>
+      </section>
+
       {/* ── Social Strip ── */}
       <div className="text-center" style={{ backgroundColor: "var(--oraya-footer-bg)", padding: "3rem" }}>
         <p

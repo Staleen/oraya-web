@@ -16,6 +16,20 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-07-15 - Phase 16C Stage 1: public Explore routes are a permanent QR contract; House Book + Explore pages ship as repo-native React
+
+**Decision:** the public Explore / Living List routes are fixed at **`/explore/mechmech`** and **`/explore/byblos`** on the canonical origin (`https://stayoraya.com/explore/mechmech`, `https://stayoraya.com/explore/byblos`). Printed Villa House Books carry QR codes that encode these exact URLs (machine-decode verified in PR #73), so these routes are a **permanent contract: do not rename, move, or repurpose them casually** — a rename invalidates already-printed physical books. The villa spelling is exactly `mechmech` (the earlier `mishmash` spelling was corrected before print in PR #73). Alongside this contract, Phase 16C Stage 1 ships the four public guest-guide routes as repo-native React: `/house-book/mechmech` + `/house-book/byblos` (the 9-page A4 House Book, browser-printable, converted one-to-one from the PR #73 design package — not rendered from archived HTML, no `dangerouslySetInnerHTML`) and the two Explore pages (villa area guides seeded from the approved design content).
+
+**Reason:** the printed House Book QRs already point at the Explore URLs, and the House Book itself needed a public online home that shares one source with the printable document. Converting to React components (shared primitives + per-villa compositions, route-scoped CSS under `.oraya-hb`, tokens NOT on `:root`) keeps the approved light print palette independent of app dark mode and avoids design drift between web and print.
+
+**Impact:** new `app/house-book/*`, `app/explore/*`, `components/house-book/*`, `components/explore/*`, static SVG assets under `public/house-book/**` + `public/explore/**` (copied from the archived design package, which remains the archival source of truth at `docs/design/phase-16c/welcome-guide/claude-design-drafts/**`). Minimal links added on the homepage and both villa pages. Public pages contain no guest name, stay dates, booking reference, PINs, merge fields, or bracketed venue placeholders — the printed design's `[Restaurant name]` sample rows are replaced with placeholder-free Living List copy until David approves real venue names. Private Arrival Guide routes, email/WhatsApp delivery, admin actions, and access/PIN automation are explicitly NOT part of Stage 1.
+
+**Reversible?:** the React pages are reversible (single-PR revert); the Explore route *contract* is effectively **hard** once physical House Books are printed — treat `/explore/mechmech` and `/explore/byblos` as permanent.
+
+**Supersedes:** none.
+
+---
+
 ## 2026-07-09 — Phase 16A WhatChimp production wiring locked (closeout)
 
 **Decision:** Phase 16A WhatChimp production wiring is **complete** for the approved production scope. David manually finished the final production wiring on 2026-07-09. The durable knowledge is preserved as documentation (the "Phase 16A WhatChimp production builder (LOCKED 2026-07-09)" section in [BUTLER_PLAYBOOK.md](BUTLER_PLAYBOOK.md), the internal readiness checklist + smoke tests in [PHASE_16A_PRODUCTION_READINESS.md](PHASE_16A_PRODUCTION_READINESS.md), and the guest-facing guide in [WHATSAPP_GUEST_USAGE_GUIDE.md](WHATSAPP_GUEST_USAGE_GUIDE.md)) — **not** as committed WhatChimp flow exports. Production flow JSON is downloaded from WhatChimp on demand; the repo keeps the builder method, API contract, trigger strategy, limitations, readiness checks, and guest guidance instead.

@@ -1,0 +1,251 @@
+/* Oraya House Book — route-scoped styles for /house-book/[villa].
+   Converted from the Phase 16C Claude Design package
+   (docs/design/phase-16c/welcome-guide/claude-design-drafts/**, PR #73):
+   oraya-tokens.css + system-print.css, with every selector scoped under
+   .oraya-hb so nothing leaks into the global app theme, and every token
+   defined on the wrapper (NOT :root) so app dark mode cannot recolor the
+   print palette. Fonts come from the app's next/font variables — no
+   Google Fonts @import here.
+
+   NOTE: @page cannot be scoped by selector. It only ships on the
+   /house-book/* routes via this file, and it is what makes browser
+   "Print / Save as PDF" produce clean A4 pages. */
+
+.oraya-hb {
+  /* — Oraya brand palette (print constants — deliberately NOT theme-aware) — */
+  --oraya-gold: #C5A46D;
+  --oraya-gold-deep: #B08D4F;
+  --oraya-terracotta: #B0714B;
+  --oraya-olive: #7C7A54;
+
+  --oraya-beige: #E7DECC;
+  --oraya-beige-light: #F3EBDC;
+  --oraya-ivory: #FAF6EE;
+  --oraya-page: #FFFFFF;
+
+  --oraya-charcoal: #2E2E2E;
+  --oraya-midnight: #1F2B38;
+  --oraya-muted: #8a8070;
+
+  --oraya-gold-10: rgba(197, 164, 109, 0.10);
+  --oraya-gold-28: rgba(197, 164, 109, 0.28);
+
+  /* — Typography (app-loaded fonts via next/font variables) — */
+  --oraya-font-display: var(--font-playfair), 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --oraya-font-body: var(--font-lato), 'Lato', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --oraya-eyebrow-tracking: 0.18em;
+
+  /* — Print frame (A4 portrait) — */
+  --oraya-page-width: 210mm;
+  --oraya-page-height: 297mm;
+  --oraya-margin: 14mm;
+  --oraya-hairline: 0.5pt;
+
+  background: #e9e2d3;
+  font-family: var(--oraya-font-body);
+}
+
+.oraya-hb,
+.oraya-hb * {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* ---------------------------------------------------------------- Grounds */
+
+.oraya-hb .oraya-page {
+  position: relative;
+  box-sizing: border-box;
+  width: var(--oraya-page-width);
+  height: var(--oraya-page-height);
+  padding: var(--oraya-margin);
+  background: var(--oraya-page);
+  color: var(--oraya-charcoal);
+  font-family: var(--oraya-font-body);
+  overflow: hidden;
+}
+
+.oraya-hb .oraya-page--bleed { padding: 0; }
+.oraya-hb .oraya-page--midnight { background: var(--oraya-midnight); color: var(--oraya-ivory); }
+.oraya-hb .oraya-page--ivory { background: var(--oraya-ivory); }
+.oraya-hb .oraya-page--beige { background: var(--oraya-beige); }
+.oraya-hb .oraya-page--beige-light { background: var(--oraya-beige-light); }
+
+/* ------------------------------------------------------------------- Type */
+
+.oraya-hb .oraya-display {
+  font-family: var(--oraya-font-display);
+  font-weight: 400;
+  line-height: 1.08;
+}
+.oraya-hb .oraya-display--italic { font-style: italic; }
+
+.oraya-hb .oraya-body {
+  font-family: var(--oraya-font-body);
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+.oraya-hb .oraya-eyebrow {
+  font-family: var(--oraya-font-body);
+  font-weight: 700;
+  font-size: 8.5pt;
+  text-transform: uppercase;
+  letter-spacing: var(--oraya-eyebrow-tracking);
+  color: var(--oraya-gold-deep);
+}
+.oraya-hb .oraya-page--midnight .oraya-eyebrow { color: var(--oraya-gold); }
+
+/* -------------------------------------------------------------- Ornaments */
+
+.oraya-hb .oraya-gem {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  background: var(--oraya-gold);
+  transform: rotate(45deg);
+}
+
+/* ============================================================
+   Hybrid House Book layout system (from the approved design)
+   ============================================================ */
+
+.oraya-hb .hy .oraya-page { padding: 15mm 15mm 20mm; }
+
+.oraya-hb .hy .eyebrow-t {
+  font-family: var(--oraya-font-body);
+  font-weight: 700; font-size: 8.5pt;
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--oraya-terracotta);
+}
+
+.oraya-hb .hy .catch {
+  font-family: var(--oraya-font-display);
+  font-style: italic; font-weight: 500;
+  font-size: 44pt; line-height: 0.98; letter-spacing: -0.01em;
+  color: var(--oraya-midnight); margin: 0;
+}
+.oraya-hb .hy .catch b { font-weight: 500; color: var(--oraya-terracotta); }
+
+.oraya-hb .hy .head {
+  font-family: var(--oraya-font-display);
+  font-weight: 400; font-size: 28pt; line-height: 1.15;
+  color: var(--oraya-midnight); margin: 0;
+}
+.oraya-hb .hy .head em { color: var(--oraya-terracotta); }
+
+.oraya-hb .hy .body { font-size: 9.5pt; line-height: 1.6; color: var(--oraya-charcoal); }
+
+.oraya-hb .hy .micro {
+  font-size: 7.5pt; font-weight: 700; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--oraya-muted);
+}
+
+.oraya-hb .hy .strip {
+  position: absolute; left: 15mm; right: 15mm; bottom: 8mm;
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding-top: 2.4mm;
+  border-top: var(--oraya-hairline) solid var(--oraya-gold-28);
+  font-size: 7pt; font-weight: 400; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--oraya-muted);
+}
+.oraya-hb .hy .strip b { font-weight: 700; color: var(--oraya-charcoal); letter-spacing: 0.08em; }
+
+.oraya-hb .hy .arch-cell {
+  border: 0.75pt solid var(--oraya-gold);
+  border-radius: 999px 999px 0 0;
+  padding: 8mm 4mm 5mm;
+  text-align: center;
+  background: rgba(250, 246, 238, 0.6);
+}
+.oraya-hb .hy .arch-cell .nm {
+  font-family: var(--oraya-font-display);
+  font-size: 12.5pt; color: var(--oraya-midnight); margin: 2.5mm 0 1.5mm;
+}
+.oraya-hb .hy .arch-cell .tx { font-size: 8pt; line-height: 1.5; color: var(--oraya-charcoal); }
+
+.oraya-hb .hy .arch-panel {
+  border: 0.75pt solid var(--oraya-gold);
+  border-radius: 999px 999px 0 0;
+  background: var(--oraya-ivory);
+}
+
+.oraya-hb .hy .ck { display: flex; gap: 2.8mm; align-items: flex-start; font-size: 9.5pt; line-height: 1.45; }
+.oraya-hb .hy .ck .box {
+  flex: none; width: 3.4mm; height: 4mm; margin-top: 0.6mm;
+  border: 0.6pt solid var(--oraya-gold-deep);
+  border-radius: 99px 99px 0 0;
+}
+
+.oraya-hb .hy .fact .l {
+  font-size: 7.5pt; font-weight: 700; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--oraya-muted); margin-bottom: 1.4mm;
+}
+.oraya-hb .hy .fact .v { font-size: 12.5pt; font-weight: 900; color: var(--oraya-charcoal); line-height: 1.25; }
+.oraya-hb .hy .fact .s { font-size: 8.5pt; color: var(--oraya-muted); line-height: 1.45; margin-top: 1mm; }
+
+.oraya-hb .hy .warm-panel {
+  background: var(--oraya-ivory);
+  box-shadow: inset 0 0 0 0.5pt var(--oraya-gold-28);
+  padding: 5.5mm;
+}
+
+/* Links inside the book render like the surrounding text (the printed
+   artifact has no link styling). */
+.oraya-hb .hy a { color: inherit; text-decoration: none; }
+
+/* ------------------------------------------------- Screen presentation */
+
+.oraya-hb .hy {
+  width: var(--oraya-page-width);
+  margin: 0 auto;
+  break-after: page;
+  break-inside: avoid;
+}
+.oraya-hb .hy:last-child { break-after: auto; }
+
+@media screen {
+  .oraya-hb-pages {
+    overflow-x: auto; /* A4 pages keep their print width; small screens pan */
+    padding: 24px 12px 48px;
+  }
+  .oraya-hb .hy {
+    margin: 0 auto 28px;
+    box-shadow: 0 3px 26px rgba(31, 43, 56, 0.22);
+  }
+  .oraya-hb .hy:last-child { margin-bottom: 0; }
+}
+
+/* Screen-only toolbar above the book (hidden in print). */
+.oraya-hb-toolbar {
+  max-width: var(--oraya-page-width);
+  margin: 0 auto;
+  padding: 18px 4px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-family: var(--oraya-font-body);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--oraya-muted);
+}
+.oraya-hb-toolbar a {
+  color: var(--oraya-gold-deep);
+  text-decoration: none;
+  font-weight: 700;
+}
+.oraya-hb-toolbar a:hover { color: var(--oraya-terracotta); }
+
+/* ---------------------------------------------------------- Print output */
+
+@page { size: A4 portrait; margin: 0; }
+
+@media print {
+  .oraya-hb { background: #fff; }
+  .oraya-hb-pages { overflow: visible; padding: 0; }
+  .oraya-hb .hy { margin: 0 auto; box-shadow: none; }
+  .oraya-hb-toolbar { display: none !important; }
+}
