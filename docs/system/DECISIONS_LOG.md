@@ -16,6 +16,20 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-07-15 - Follow-up: member-profile booking-view mint uses default temporary TTL (not checkout-day expiry)
+
+**Decision:** correct the PR #77 member-profile mint so `POST /api/profile/booking-view` calls `createActionToken(bookingId, "view")` with the locked helper's **default temporary TTL (72h)** and does **not** set `expiresAt` from `check_out`. Authenticated owners retain profile access for as long as they own the booking row (including after checkout); each generated URL is temporary, and the member remints another fresh URL by clicking **View booking** again. Remove `check_out` from the profile booking-view select / `MemberBookingViewRow` / mint helpers, and remove all `new Date()` parsing of stay dates from this surface (AGENT_RULES §10). **Email checkout-day expiry is unchanged** — transactional senders remain a separate minting site.
+
+**Reason:** tying profile remints to checkout left historical bookings with already-expired tokens and violated date-only discipline. Profile ownership is continuous; the signed URL is a short-lived credential that can be reissued on demand (same model as Butler's default-TTL booking-view links).
+
+**Impact:** `lib/profile/member-booking-view.ts`, `app/api/profile/booking-view/route.ts`, focused tests, docs. No email, token-helper, booking-view page, Arrival Guide, or locked-pipeline changes.
+
+**Reversible?:** yes — but reverting would reintroduce the historical-booking expiry defect.
+
+**Supersedes:** none (follow-up correction to the 2026-07-15 "Member profile opens the canonical signed booking-view page" entry; that entry is not rewritten).
+
+---
+
 ## 2026-07-15 - Member profile opens the canonical signed booking-view page (no duplicate details UI)
 
 **Decision:** the member `/profile` "My Bookings" surface does **not** grow a second booking-details page. Each booking card exposes a **View booking** action that obtains a fresh signed `/booking/view/[token]` path through `POST /api/profile/booking-view` (Bearer member auth). The server verifies `bookings.member_id` equals the authenticated user before minting; missing auth returns `401`, and a foreign or unavailable booking returns a non-disclosing `404`. Token creation uses the locked `createActionToken(..., "view")` helper (**import only** — `/lib/booking-action-token.ts` is not modified) and returns a **relative** path so Vercel Preview navigation stays on the same deployment. The Arrival Guide remains available only through the existing confirmed-booking gate on `/booking/view/[token]` → `/arrival/[token]`; pending / cancelled / invalid / expired states do not bypass that gate. Modify, Cancel, and WhatsApp remain sibling controls (no nested interactive elements). Client components import only the path-safety helper in `lib/profile/booking-view-path.ts` — never the signing module or `BOOKING_ACTION_SECRET`.
@@ -27,6 +41,8 @@ Durable architectural and operational decisions. Append-only - never edit a past
 **Reversible?:** yes — remove the profile action + `/api/profile/booking-view` route; existing email/Butler view links are unaffected.
 
 **Supersedes:** none.
+
+> **Follow-up (2026-07-15):** checkout-date expiry for this mint was corrected — profile remints use the default temporary TTL; see the follow-up entry above ("member-profile booking-view mint uses default temporary TTL").
 
 ---
 

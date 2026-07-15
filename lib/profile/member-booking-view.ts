@@ -5,8 +5,13 @@
  * after ownership of the booking row is verified. Token creation stays
  * server-only — this module must never be imported from a `"use client"` file.
  *
- * Uses the locked `createActionToken` helper (import only). Expiry matches the
- * transactional email pattern: 23:59:59 UTC on the booking's check-out date.
+ * Uses the locked `createActionToken` helper (import only) with the helper's
+ * default temporary TTL (72h). Profile access remains available to an
+ * authenticated owner at any time — including after checkout — because each
+ * click remints a fresh temporary URL. Do NOT derive expiry from check_out
+ * (that left historical bookings with already-expired tokens and violated
+ * date-only discipline via `new Date()`). Email checkout-day expiry is a
+ * separate minting site and is unchanged.
  *
  * Client-safe path checks live in `./booking-view-path` (no secret / crypto).
  */
@@ -17,7 +22,6 @@ import { buildRelativeBookingViewPath } from "./booking-view-path.ts";
 export type MemberBookingViewRow = {
   id: string;
   member_id: string | null;
-  check_out: string;
 };
 
 export type OwnershipResult =
@@ -27,11 +31,6 @@ export type OwnershipResult =
 export type MintMemberBookingViewResult =
   | { ok: true; path: string }
   | { ok: false; status: 401 | 400 | 404 | 500; error: string };
-
-/** Absolute Unix expiry (seconds) at 23:59:59 UTC on the check-out date. */
-export function checkOutExpiryUnix(checkOut: string): number {
-  return Math.floor(new Date(`${checkOut}T23:59:59Z`).getTime() / 1000);
-}
 
 export { buildRelativeBookingViewPath };
 
@@ -57,21 +56,17 @@ export function authorizeMemberBookingOwnership(
 
 /**
  * Mint a fresh signed view token and return a relative booking-view path.
- * Caller must have already verified ownership.
+ * Caller must have already verified ownership. Uses the default temporary TTL.
  */
-export function mintRelativeBookingViewPath(
-  bookingId: string,
-  checkOut: string,
-): string {
-  const { token } = createActionToken(bookingId, "view", {
-    expiresAt: checkOutExpiryUnix(checkOut),
-  });
+export function mintRelativeBookingViewPath(bookingId: string): string {
+  const { token } = createActionToken(bookingId, "view");
   return buildRelativeBookingViewPath(token);
 }
 
 /**
  * Full authorize + mint pipeline used by POST /api/profile/booking-view.
  * Pure aside from the token HMAC (which needs BOOKING_ACTION_SECRET).
+ * Has no checkout-date dependency — ownership alone authorizes minting.
  */
 export function resolveMemberBookingViewPath(
   userId: string | null | undefined,
@@ -93,7 +88,7 @@ export function resolveMemberBookingViewPath(
   }
 
   try {
-    const path = mintRelativeBookingViewPath(owned.id, owned.check_out);
+    const path = mintRelativeBookingViewPath(owned.id);
     return { ok: true, path };
   } catch (err) {
     console.error("[profile/member-booking-view] mint failed:", err);

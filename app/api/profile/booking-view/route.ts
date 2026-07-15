@@ -48,7 +48,7 @@ export async function POST(request: Request) {
 
     const { data: booking, error: fetchError } = await supabaseAdmin
       .from("bookings")
-      .select("id, member_id, check_out")
+      .select("id, member_id")
       .eq("id", trimmedId)
       .maybeSingle();
 

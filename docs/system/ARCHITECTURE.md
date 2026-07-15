@@ -108,7 +108,7 @@ All routes verified against the current repo. Locked APIs are marked **locked** 
 | `/api/members` | POST | Member create (same-user bearer auth) | open w/ guard |
 | `/api/pricing` | GET | Public pricing query | open |
 | `/api/profile` | PATCH/DELETE | Member profile update / account delete | open w/ guard |
-| `/api/profile/booking-view` | POST | Member-authenticated mint of a fresh relative `/booking/view/[token]` path for a booking owned by the caller; verifies `member_id` before signing; returns non-disclosing 404 for foreign/missing bookings | open w/ guard |
+| `/api/profile/booking-view` | POST | Member-authenticated mint of a fresh relative `/booking/view/[token]` path for a booking owned by the caller; verifies `member_id` before signing; uses the locked helper's default temporary TTL (remintable anytime while owned — not checkout-day expiry); returns non-disclosing 404 for foreign/missing bookings | open w/ guard |
 | `/api/settings` | GET | Public allowlisted settings (`whatsapp_number`, payment public settings, selected operational flags) | open |
 | `/api/butler/health` | GET | Butler liveness + secret check | secret-guarded |
 | `/api/butler/event-types` | GET | Canonical event types for Butler intake | secret-guarded |
