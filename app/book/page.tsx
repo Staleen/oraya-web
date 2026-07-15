@@ -2464,7 +2464,9 @@ function BookPageInner() {
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
                               src={coverImage}
-                              alt={villa}
+                              alt={`${villa} — cover photo`}
+                              width={280}
+                              height={132}
                               style={{
                                 width: "100%",
                                 height: "100%",

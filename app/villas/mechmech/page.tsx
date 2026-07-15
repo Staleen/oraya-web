@@ -188,7 +188,10 @@ export default function VillaMechmechPage() {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={img.file_url}
-                  alt={img.category}
+                  alt={`Villa Mechmech — ${img.category}`}
+                  width={260}
+                  height={190}
+                  loading="lazy"
                   style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
                 />
                 <div style={{
