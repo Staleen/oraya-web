@@ -86,10 +86,39 @@ type ArrivalBookingRow = {
   id: string;
   villa: string | null;
   guest_name: string | null;
+  member_id: string | null;
   check_in: string | null;
   check_out: string | null;
   status: string;
 };
+
+/**
+ * Display-name resolution — the same canonical fallback chain the admin
+ * bookings UI (components/admin/BookingsTable.tsx) and the booking email
+ * senders (app/api/bookings/route.ts) already use:
+ *   1. bookings.guest_name (set on guest checkout; optional on member bookings)
+ *   2. members.full_name via bookings.member_id (member bookings)
+ *   3. neutral "Our guest" only when neither exists.
+ * Best-effort: a members lookup failure never blocks the guide.
+ */
+async function resolveGuestDisplayName(booking: ArrivalBookingRow): Promise<string> {
+  const direct = booking.guest_name?.trim();
+  if (direct) return direct;
+  if (booking.member_id) {
+    try {
+      const { data: memberRow } = await supabaseAdmin
+        .from("members")
+        .select("full_name")
+        .eq("id", booking.member_id)
+        .single<{ full_name: string | null }>();
+      const memberName = memberRow?.full_name?.trim();
+      if (memberName) return memberName;
+    } catch (err) {
+      console.warn("[arrival] member name lookup failed:", err instanceof Error ? err.message : err);
+    }
+  }
+  return "Our guest";
+}
 
 export default async function ArrivalGuidePage({ params }: { params: { token: string } }) {
   const verified = verifyViewToken(decodeURIComponent(params.token));
@@ -118,7 +147,7 @@ export default async function ArrivalGuidePage({ params }: { params: { token: st
   try {
     const { data, error } = await supabaseAdmin
       .from("bookings")
-      .select("id, villa, guest_name, check_in, check_out, status")
+      .select("id, villa, guest_name, member_id, check_in, check_out, status")
       .eq("id", verified.booking_id)
       .single<ArrivalBookingRow>();
     if (!error) booking = data;
@@ -166,7 +195,7 @@ export default async function ArrivalGuidePage({ params }: { params: { token: st
     );
   }
 
-  const guestName = booking.guest_name?.trim() || "Our guest";
+  const guestName = await resolveGuestDisplayName(booking);
   const stayDates = formatStayDates(booking.check_in, booking.check_out);
   const bookingReference = formatBookingReference(booking.id);
 
