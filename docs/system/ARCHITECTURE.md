@@ -47,6 +47,8 @@ Next.js App Router (TypeScript)
 |---|---|---|
 | `/` | [app/page.tsx](../../app/page.tsx) | Homepage / brand entry |
 | `/villas/byblos`, `/villas/mechmech` | `app/villas/<villa>/page.tsx` | Per-villa detail |
+| `/house-book/mechmech`, `/house-book/byblos` | `app/house-book/<villa>/page.tsx` | Public villa House Book (Phase 16C Stage 1) — 9-page printable guest guide converted from the PR #73 design package; static, no guest-specific data; route-scoped print CSS in [components/house-book/house-book.css](../../components/house-book/house-book.css) |
+| `/explore/mechmech`, `/explore/byblos` | `app/explore/<villa>/page.tsx` | Public Explore / Living List area guide (Phase 16C Stage 1) — **permanent QR destination** of the printed House Books; do not rename (see DECISIONS_LOG 2026-07-15) |
 | `/book` | [app/book/page.tsx](../../app/book/page.tsx) | Booking flow (Reserve + Instant Book UI) |
 | `/booking-confirmed` | [app/booking-confirmed/page.tsx](../../app/booking-confirmed/page.tsx) | Post-submit confirmation |
 | `/booking/view/[token]` | [app/booking/view/[token]/page.tsx](../../app/booking/view/%5Btoken%5D/page.tsx) | Guest booking-view via signed token |

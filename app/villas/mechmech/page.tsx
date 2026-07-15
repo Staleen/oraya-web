@@ -279,6 +279,26 @@ export default function VillaMechmechPage() {
         </div>
       </section>
 
+      {/* ── Guest guides (Phase 16C — public House Book + Living List) ── */}
+      <section className="oraya-section-tone" style={{ backgroundColor: WHITE, padding: "3rem" }}>
+        <div style={{ maxWidth: "760px", margin: "0 auto", textAlign: "center" }}>
+          <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "4px", textTransform: "uppercase", color: GOLD, marginBottom: "12px" }}>
+            Guest guides
+          </p>
+          <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, fontWeight: 300, lineHeight: 1.75, margin: "0 0 20px" }}>
+            Everything for your stay — the villa&rsquo;s House Book and Oraya&rsquo;s living area guide.
+          </p>
+          <div style={{ display: "flex", justifyContent: "center", flexWrap: "wrap", gap: "1rem 2.5rem" }}>
+            <a href="/house-book/mechmech" className="no-underline uppercase oraya-link-cta" style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", color: GOLD, paddingBottom: "2px" }}>
+              The House Book
+            </a>
+            <a href="/explore/mechmech" className="no-underline uppercase oraya-link-cta" style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", color: GOLD, paddingBottom: "2px" }}>
+              Explore Mechmech
+            </a>
+          </div>
+        </div>
+      </section>
+
       <SiteFooter />
     </div>
   );
