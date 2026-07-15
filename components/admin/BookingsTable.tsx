@@ -1016,6 +1016,8 @@ export default function BookingsTable({
   const [feedbackCopiedBookingId, setFeedbackCopiedBookingId] = useState<string | null>(null);
   const [feedbackEmailModalBookingId, setFeedbackEmailModalBookingId] = useState<string | null>(null);
   const [feedbackEmailSendingId, setFeedbackEmailSendingId] = useState<string | null>(null);
+  const [arrivalLinkFetchingId, setArrivalLinkFetchingId] = useState<string | null>(null);
+  const [arrivalLinkCopiedBookingId, setArrivalLinkCopiedBookingId] = useState<string | null>(null);
   const [expandedCompactId, setExpandedCompactId] = useState<string | null>(null);
   const [bulkActionBookingId, setBulkActionBookingId] = useState<string | null>(null);
   const [confirmedSort, setConfirmedSort] = useState<ConfirmedSortKey>("created_desc");
@@ -1086,6 +1088,40 @@ export default function BookingsTable({
       setFeedbackEmailModalBookingId(null);
     } finally {
       setFeedbackEmailSendingId(null);
+    }
+  }
+
+  // Phase 16C Stage 4A — mint + copy the personalized Arrival Guide link for a
+  // confirmed booking so the operator can paste it to the guest on WhatsApp
+  // manually. The token is fetched only when the operator clicks and is never
+  // rendered in the UI; non-confirmed bookings are refused server-side too.
+  async function copyArrivalGuideLink(booking: Booking) {
+    if (booking.status !== "confirmed") return;
+    setArrivalLinkFetchingId(booking.id);
+    setError("");
+    try {
+      const res = await fetch(`/api/admin/bookings/${booking.id}/arrival-link`, adminApiFetchInit);
+      let data: { error?: string; arrival_guide_url?: string } = {};
+      try {
+        data = (await res.json()) as { error?: string; arrival_guide_url?: string };
+      } catch {
+        data = {};
+      }
+      if (!res.ok || typeof data.arrival_guide_url !== "string" || !data.arrival_guide_url) {
+        setError(
+          data.error === "booking_not_confirmed"
+            ? "Arrival Guide links are only available for confirmed bookings."
+            : "Could not generate the Arrival Guide link.",
+        );
+        return;
+      }
+      await navigator.clipboard.writeText(data.arrival_guide_url);
+      setArrivalLinkCopiedBookingId(booking.id);
+      setTimeout(() => setArrivalLinkCopiedBookingId(null), 2200);
+    } catch {
+      setError("Could not copy the Arrival Guide link — try again.");
+    } finally {
+      setArrivalLinkFetchingId(null);
     }
   }
 
@@ -5316,6 +5352,38 @@ export default function BookingsTable({
         })()}
 
         {renderPaymentSection(booking)}
+
+        {booking.status === "confirmed" && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
+            <button
+              type="button"
+              onClick={() => void copyArrivalGuideLink(booking)}
+              disabled={arrivalLinkFetchingId === booking.id}
+              style={{
+                fontFamily: LATO,
+                fontSize: "10px",
+                letterSpacing: "1.4px",
+                textTransform: "uppercase",
+                color: GOLD,
+                backgroundColor: "transparent",
+                border: "0.5px solid rgba(197,164,109,0.35)",
+                padding: "8px 14px",
+                borderRadius: "6px",
+                cursor: arrivalLinkFetchingId === booking.id ? "not-allowed" : "pointer",
+                opacity: arrivalLinkFetchingId === booking.id ? 0.5 : 1,
+              }}
+            >
+              {arrivalLinkFetchingId === booking.id
+                ? "Generating..."
+                : arrivalLinkCopiedBookingId === booking.id
+                  ? "Arrival Guide link copied"
+                  : "Copy Arrival Guide link"}
+            </button>
+            <span style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, lineHeight: 1.5 }}>
+              Personal guest link — paste it to the guest on WhatsApp. Valid until checkout day.
+            </span>
+          </div>
+        )}
 
         {booking.status === "confirmed" && (
           <div style={{ display: "grid", gap: "8px" }}>

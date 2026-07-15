@@ -30,6 +30,20 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-07-15 - Phase 16C Stage 4A: WhatsApp delivery of the Arrival Guide stays MANUAL — admin copies `/arrival/<signed-view-token>`; no outbound WhatsApp sender, no WhatChimp field
+
+**Decision:** Stage 4A ships a **manual** WhatsApp workflow only: a new admin-auth route `GET /api/admin/bookings/[id]/arrival-link` mints the personalized Arrival Guide URL for a **confirmed** booking (existing signed `view` token, `expiresAt: checkOutExpiryUnix(check_out)` — identical token type and expiry to the confirmed booking email), and a "Copy Arrival Guide link" action in the admin bookings console ([components/admin/BookingsTable.tsx](../../components/admin/BookingsTable.tsx), confirmed bookings only) copies that URL to the clipboard for the operator to paste to the guest on WhatsApp. The route refuses pending/cancelled bookings (403, no link minted) and missing/invalid `check_out` (400, no link minted), and returns nothing but the URL — no PINs, access codes, admin notes, payment links, or extra booking fields. **No outbound WhatsApp sending is implemented, no WhatChimp field is created, and no automation is claimed.** Future WhatChimp/automated delivery must reuse the exact same URL contract — `https://stayoraya.com/arrival/<signed-view-token>`, villa resolved from the booking row, never a villa-in-path route — and must not invent a different route or token type.
+
+**Reason:** the operator needs a safe way to hand a confirmed guest their Arrival Guide on WhatsApp today, without waiting for (or risking) WhatsApp automation. Minting on demand with the same checkout-day expiry keeps every delivery surface (email, admin copy) on one credential contract, and admin-auth + confirmed-only gating keeps unconfirmed bookings from ever receiving a live link.
+
+**Impact:** new `app/api/admin/bookings/[id]/arrival-link/route.ts` (admin-auth, read-only on `bookings`, mints via the locked helper imported only); small confirmed-only UI action + fetch handler in `BookingsTable.tsx`. No token helper change, no email change, no Butler/WhatChimp change, no schema/env change. Stage 4B+ (any automated WhatsApp delivery) and Phase 16D (access codes) remain unimplemented.
+
+**Reversible?:** yes — single-PR revert of the route + UI action; nothing else depends on it.
+
+**Supersedes:** none. Extends the 2026-07-15 Stage 3 entry.
+
+---
+
 ## 2026-07-15 - Member profile opens the canonical signed booking-view page (no duplicate details UI)
 
 **Decision:** the member `/profile` "My Bookings" surface does **not** grow a second booking-details page. Each booking card exposes a **View booking** action that obtains a fresh signed `/booking/view/[token]` path through `POST /api/profile/booking-view` (Bearer member auth). The server verifies `bookings.member_id` equals the authenticated user before minting; missing auth returns `401`, and a foreign or unavailable booking returns a non-disclosing `404`. Token creation uses the locked `createActionToken(..., "view")` helper (**import only** — `/lib/booking-action-token.ts` is not modified) and returns a **relative** path so Vercel Preview navigation stays on the same deployment. The Arrival Guide remains available only through the existing confirmed-booking gate on `/booking/view/[token]` → `/arrival/[token]`; pending / cancelled / invalid / expired states do not bypass that gate. Modify, Cancel, and WhatsApp remain sibling controls (no nested interactive elements). Client components import only the path-safety helper in `lib/profile/booking-view-path.ts` — never the signing module or `BOOKING_ACTION_SECRET`.
@@ -41,8 +55,6 @@ Durable architectural and operational decisions. Append-only - never edit a past
 **Reversible?:** yes — remove the profile action + `/api/profile/booking-view` route; existing email/Butler view links are unaffected.
 
 **Supersedes:** none.
-
-> **Follow-up (2026-07-15):** checkout-date expiry for this mint was corrected — profile remints use the default temporary TTL; see the follow-up entry above ("member-profile booking-view mint uses default temporary TTL").
 
 ---
 
