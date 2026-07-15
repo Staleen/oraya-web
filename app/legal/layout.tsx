@@ -7,7 +7,7 @@ export default function LegalLayout({ children }: { children: React.ReactNode })
     <>
       <LegalTopBar />
 
-      <main style={{ backgroundColor: "var(--oraya-bg)", minHeight: "70vh", padding: "4rem 2rem", overflowX: "hidden" }}>
+      <main id="main-content" style={{ backgroundColor: "var(--oraya-bg)", minHeight: "70vh", padding: "4rem 2rem", overflowX: "hidden" }}>
         <article
           style={{
             maxWidth: "780px",

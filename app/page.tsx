@@ -292,6 +292,7 @@ export default function Home() {
 
       {/* ── Hero ── */}
       <section
+        id="main-content"
         className="oraya-section-tone min-h-screen flex items-center justify-center relative overflow-hidden"
         style={{
           backgroundColor: "var(--oraya-hero-canvas)",

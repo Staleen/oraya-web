@@ -110,6 +110,7 @@ function LoginPageInner() {
       </nav>
 
       <main
+        id="main-content"
         className="flex items-center justify-center"
         style={{ padding: "96px 24px 80px", minHeight: "100vh", boxSizing: "border-box" }}
       >

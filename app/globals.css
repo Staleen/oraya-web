@@ -438,6 +438,29 @@ a.oraya-card-interactive:active {
   transform: scale(0.995);
 }
 
+/** Skip link (root layout): visually hidden until keyboard-focused */
+.oraya-skip-link {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 300;
+  padding: 12px 20px;
+  background-color: var(--oraya-surface);
+  color: var(--oraya-ink);
+  border: 0.5px solid var(--oraya-border);
+  font-family: var(--font-lato), system-ui, sans-serif;
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  text-decoration: none;
+  transform: translateY(calc(-100% - 16px));
+}
+.oraya-skip-link:focus-visible {
+  transform: none;
+  outline: 2px solid color-mix(in srgb, var(--oraya-gold) 72%, var(--oraya-ink));
+  outline-offset: 4px;
+}
+
 /** Homepage villa grid: keyboard focus ring (theme-aware gold blend, no layout shift) */
 a.oraya-villa-card-link:focus {
   outline: none;

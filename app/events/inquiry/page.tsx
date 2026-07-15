@@ -1595,7 +1595,7 @@ function EventInquiryPageInner() {
     return (
       <div style={{ minHeight: "100vh", backgroundColor: PAGE_BG, overflowX: "hidden" }}>
         <EventsInquiryNav />
-        <main className="oraya-book-input-zoom-fix" style={{ minHeight: "100vh", padding: "96px 24px calc(80px + env(safe-area-inset-bottom, 0px))", boxSizing: "border-box" }}>
+        <main id="main-content" className="oraya-book-input-zoom-fix" style={{ minHeight: "100vh", padding: "96px 24px calc(80px + env(safe-area-inset-bottom, 0px))", boxSizing: "border-box" }}>
           <div style={{ width: "100%", maxWidth: "720px", margin: "0 auto" }} aria-hidden="true">
             <div style={{ width: "52px", margin: "0 auto 2.5rem", opacity: 0.45 }}><OrayaEmblem /></div>
             <p style={{ textAlign: "center", color: MUTED, fontFamily: LATO, fontSize: "12px" }}>Loading…</p>
@@ -1610,7 +1610,7 @@ function EventInquiryPageInner() {
   return (
     <div style={{ minHeight: "100vh", backgroundColor: PAGE_BG, overflowX: "hidden" }}>
       <EventsInquiryNav />
-      <main className="oraya-book-input-zoom-fix" style={{ minHeight: "100vh", padding: "96px 24px calc(80px + env(safe-area-inset-bottom, 0px))", boxSizing: "border-box" }}>
+      <main id="main-content" className="oraya-book-input-zoom-fix" style={{ minHeight: "100vh", padding: "96px 24px calc(80px + env(safe-area-inset-bottom, 0px))", boxSizing: "border-box" }}>
       <style>{CALENDAR_CSS}</style>
 
       <div style={{ width: "100%", maxWidth: containerWidth, margin: "0 auto", transition: "max-width 0.3s ease" }}>

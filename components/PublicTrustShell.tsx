@@ -36,6 +36,7 @@ export default function PublicTrustShell({
         <PublicThemeToggle variant="public" />
       </nav>
       <main
+        id="main-content"
         style={{
           minHeight: "100vh",
           padding: "96px 24px 80px",

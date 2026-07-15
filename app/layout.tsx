@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import { Playfair_Display, Lato } from "next/font/google";
 import "./globals.css";
@@ -24,6 +24,15 @@ const OG_IMAGE   = `${SITE_URL}/logos/ORAYA_logo_full.png`;
 const TITLE      = "Oraya | Luxury Boutique Villas in Lebanon";
 const DESCRIPTION =
   "Oraya offers an exclusive collection of luxury boutique villas in Lebanon, where timeless elegance meets authentic Lebanese hospitality.";
+
+/**
+ * Theme is driven by `data-theme` (default light), not `prefers-color-scheme`,
+ * so a single themeColor matching the light page background is used —
+ * media-query entries would track the OS preference and mismatch the page.
+ */
+export const viewport: Viewport = {
+  themeColor: "#ede6dc",
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -70,6 +79,9 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning data-theme="light" className={`${playfairDisplay.variable} ${lato.variable}`}>
       <body>
+        <a href="#main-content" className="oraya-skip-link">
+          Skip to main content
+        </a>
         <Script id="oraya-theme-init" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: ORAYA_THEME_INIT }} />
         {children}
       </body>

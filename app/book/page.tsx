@@ -2172,7 +2172,7 @@ function BookPageInner() {
 
   if (authStatus === "loading") {
     return (
-      <main style={{ backgroundColor: PAGE_BG, minHeight: "100vh", padding: "80px 24px", position: "relative" }}>
+      <main id="main-content" style={{ backgroundColor: PAGE_BG, minHeight: "100vh", padding: "80px 24px", position: "relative" }}>
         <div style={{ position: "absolute", top: "1rem", right: "1rem", zIndex: 20 }}>
           <PublicThemeToggle variant="onDark" />
         </div>
@@ -2291,7 +2291,7 @@ function BookPageInner() {
 
   if (authStatus === "none" && !guestMode) {
     return (
-      <main style={{ backgroundColor: PAGE_BG, minHeight: "100vh", padding: "80px 24px", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
+      <main id="main-content" style={{ backgroundColor: PAGE_BG, minHeight: "100vh", padding: "80px 24px", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
         <div style={{ position: "absolute", top: "1rem", right: "1rem", zIndex: 20 }}>
           <PublicThemeToggle variant="onDark" />
         </div>
@@ -2348,7 +2348,7 @@ function BookPageInner() {
   const containerWidth = step === 1 ? "720px" : "560px";
 
   return (
-    <main className="oraya-book-input-zoom-fix" style={{ backgroundColor: PAGE_BG, minHeight: "100vh", padding: "80px 24px", position: "relative" }}>
+    <main id="main-content" className="oraya-book-input-zoom-fix" style={{ backgroundColor: PAGE_BG, minHeight: "100vh", padding: "80px 24px", position: "relative" }}>
       <style>{CALENDAR_CSS}</style>
       <div style={{ position: "absolute", top: "1rem", right: "1rem", zIndex: 20 }}>
         <PublicThemeToggle variant="onDark" />

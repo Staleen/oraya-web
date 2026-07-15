@@ -82,7 +82,7 @@ export default function VillaMechmechPage() {
       <SiteNav base="/" />
 
       {/* ── Hero ── */}
-      <section className="oraya-section-tone" style={{ paddingTop: "80px", backgroundColor: MIDNIGHT, minHeight: "65vh", display: "flex", flexDirection: "column" }}>
+      <section id="main-content" className="oraya-section-tone" style={{ paddingTop: "80px", backgroundColor: MIDNIGHT, minHeight: "65vh", display: "flex", flexDirection: "column" }}>
         <div style={{
           flex: 1,
           minHeight: "520px",

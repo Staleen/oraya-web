@@ -449,7 +449,7 @@ export default function ProfilePage() {
     return (
       <>
         <SiteNav base="/" />
-        <main style={{ backgroundColor: MIDNIGHT, minHeight: "100vh", paddingTop: "80px" }}>
+        <main id="main-content" style={{ backgroundColor: MIDNIGHT, minHeight: "100vh", paddingTop: "80px" }}>
           <div style={{ maxWidth: "720px", margin: "0 auto", padding: "4rem 2rem 6rem" }} aria-hidden="true">
             <div style={{ marginBottom: "3.5rem" }}>
               <SkeletonText width="130px" height="10px" style={{ marginBottom: "18px" }} />
@@ -485,7 +485,7 @@ export default function ProfilePage() {
     <>
       <SiteNav base="/" />
 
-      <main style={{ backgroundColor: MIDNIGHT, minHeight: "100vh", paddingTop: "80px" }}>
+      <main id="main-content" style={{ backgroundColor: MIDNIGHT, minHeight: "100vh", paddingTop: "80px" }}>
         <div style={{ maxWidth: "720px", margin: "0 auto", padding: "4rem 2rem 6rem" }}>
 
           {/* ── Page header ── */}
