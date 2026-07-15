@@ -16,6 +16,20 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-07-15 - Phase 16C Stage 4A: WhatsApp delivery of the Arrival Guide stays MANUAL — admin copies `/arrival/<signed-view-token>`; no outbound WhatsApp sender, no WhatChimp field
+
+**Decision:** Stage 4A ships a **manual** WhatsApp workflow only: a new admin-auth route `GET /api/admin/bookings/[id]/arrival-link` mints the personalized Arrival Guide URL for a **confirmed** booking (existing signed `view` token, `expiresAt: checkOutExpiryUnix(check_out)` — identical token type and expiry to the confirmed booking email), and a "Copy Arrival Guide link" action in the admin bookings console ([components/admin/BookingsTable.tsx](../../components/admin/BookingsTable.tsx), confirmed bookings only) copies that URL to the clipboard for the operator to paste to the guest on WhatsApp. The route refuses pending/cancelled bookings (403, no link minted) and missing/invalid `check_out` (400, no link minted), and returns nothing but the URL — no PINs, access codes, admin notes, payment links, or extra booking fields. **No outbound WhatsApp sending is implemented, no WhatChimp field is created, and no automation is claimed.** Future WhatChimp/automated delivery must reuse the exact same URL contract — `https://stayoraya.com/arrival/<signed-view-token>`, villa resolved from the booking row, never a villa-in-path route — and must not invent a different route or token type.
+
+**Reason:** the operator needs a safe way to hand a confirmed guest their Arrival Guide on WhatsApp today, without waiting for (or risking) WhatsApp automation. Minting on demand with the same checkout-day expiry keeps every delivery surface (email, admin copy) on one credential contract, and admin-auth + confirmed-only gating keeps unconfirmed bookings from ever receiving a live link.
+
+**Impact:** new `app/api/admin/bookings/[id]/arrival-link/route.ts` (admin-auth, read-only on `bookings`, mints via the locked helper imported only); small confirmed-only UI action + fetch handler in `BookingsTable.tsx`. No token helper change, no email change, no Butler/WhatChimp change, no schema/env change. Stage 4B+ (any automated WhatsApp delivery) and Phase 16D (access codes) remain unimplemented.
+
+**Reversible?:** yes — single-PR revert of the route + UI action; nothing else depends on it.
+
+**Supersedes:** none. Extends the 2026-07-15 Stage 3 entry.
+
+---
+
 ## 2026-07-15 - Phase 16C Stage 3: confirmed booking email delivers the Arrival Guide link; same token, checkout-day expiry, confirmed email only
 
 **Decision:** the confirmed booking email ([lib/send-booking-email.ts](../../lib/send-booking-email.ts) — locked file, explicitly authorized for this additive edit) now includes exactly one "Open your Arrival Guide" CTA pointing at `${base}/arrival/${encodeURIComponent(token)}` — the **same signed `view` token the email already mints** with `expiresAt: checkOutExpiryUnix(check_out)` (23:59:59 UTC on checkout day), so the Arrival Guide link and the booking-view link live and die together and no second token is minted. The block renders only on the `confirmed` branch (`arrivalUrl` stays `null` for cancelled emails — byte-identical cancelled output); pending, payment, event, admin-notification, and feedback emails are untouched. Email copy makes no payment claims and no access claims beyond the approved line: "Access details are shared by Oraya before arrival" — no gate PIN, no front-door PIN, no access codes.
