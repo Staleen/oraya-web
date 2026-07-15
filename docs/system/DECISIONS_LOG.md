@@ -27,6 +27,17 @@ Durable architectural and operational decisions. Append-only - never edit a past
 **Reversible?:** yes — single-PR revert of the route + UI action; nothing else depends on it.
 
 **Supersedes:** none. Extends the 2026-07-15 Stage 3 entry.
+## 2026-07-15 - Member profile opens the canonical signed booking-view page (no duplicate details UI)
+
+**Decision:** the member `/profile` "My Bookings" surface does **not** grow a second booking-details page. Each booking card exposes a **View booking** action that obtains a fresh signed `/booking/view/[token]` path through `POST /api/profile/booking-view` (Bearer member auth). The server verifies `bookings.member_id` equals the authenticated user before minting; missing auth returns `401`, and a foreign or unavailable booking returns a non-disclosing `404`. Token creation uses the locked `createActionToken(..., "view")` helper (**import only** — `/lib/booking-action-token.ts` is not modified) and returns a **relative** path so Vercel Preview navigation stays on the same deployment. The Arrival Guide remains available only through the existing confirmed-booking gate on `/booking/view/[token]` → `/arrival/[token]`; pending / cancelled / invalid / expired states do not bypass that gate. Modify, Cancel, and WhatsApp remain sibling controls (no nested interactive elements). Client components import only the path-safety helper in `lib/profile/booking-view-path.ts` — never the signing module or `BOOKING_ACTION_SECRET`.
+
+**Reason:** `/booking/view/[token]` is already the single canonical guest booking-details page (villa, dates, 8-character reference, status, payment context, Arrival Guide entry). Duplicating that UI on `/profile` would drift and risk leaking confirmed-only surfaces. Server-side ownership checks plus relative signed paths keep Preview parity and prevent cross-member token minting.
+
+**Impact:** `app/profile/page.tsx` (View booking action), `app/api/profile/booking-view/route.ts`, `lib/profile/member-booking-view.ts` + `lib/profile/booking-view-path.ts`, focused `node:test` coverage, docs updates. No schema, locked booking/payment/email/auth/token, or Arrival Guide content changes.
+
+**Reversible?:** yes — remove the profile action + `/api/profile/booking-view` route; existing email/Butler view links are unaffected.
+
+**Supersedes:** none.
 
 ---
 

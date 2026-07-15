@@ -6,6 +6,7 @@ import OrayaEmblem from "@/components/OrayaEmblem";
 import { SkeletonBlock, SkeletonText } from "@/components/LoadingSkeleton";
 import { supabase } from "@/lib/supabase";
 import { formatBeirutDateTime } from "@/lib/format-date";
+import { isSafeRelativeBookingViewPath } from "@/lib/profile/booking-view-path";
 
 const GOLD       = "#C5A46D";
 const WHITE      = "#FFFFFF";
@@ -247,6 +248,7 @@ export default function ProfilePage() {
   const [expandedId, setExpandedId]       = useState<string | null>(null);
   const [editForms, setEditForms]         = useState<Record<string, BookingEditForm>>({});
   const [savingBookingId, setSavingBookingId] = useState<string | null>(null);
+  const [viewingId, setViewingId]         = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
@@ -442,6 +444,36 @@ export default function ProfilePage() {
 
   function setEditField(bookingId: string, field: keyof BookingEditForm, value: string) {
     setEditForms((f) => ({ ...f, [bookingId]: { ...f[bookingId], [field]: value } }));
+  }
+
+  async function handleViewBooking(bookingId: string) {
+    setViewingId(bookingId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch("/api/profile/booking-view", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session?.access_token ?? ""}`,
+        },
+        body: JSON.stringify({ booking_id: bookingId }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(
+          typeof d.error === "string" ? d.error : "Unable to open booking.",
+        );
+      }
+      const d = await res.json();
+      if (!isSafeRelativeBookingViewPath(d.path)) {
+        throw new Error("Unable to open booking.");
+      }
+      router.push(d.path);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Unable to open booking.");
+    } finally {
+      setViewingId(null);
+    }
   }
 
   // Loading skeleton
@@ -854,8 +886,25 @@ export default function ProfilePage() {
                               />
                             </div>
                             {/* Action buttons */}
-                            <div style={{ display: "flex", gap: "10px", marginTop: "4px" }}>
+                            <div style={{ display: "flex", gap: "10px", marginTop: "4px", flexWrap: "wrap" }}>
                               <button
+                                type="button"
+                                onClick={() => handleViewBooking(b.id)}
+                                disabled={viewingId === b.id || isSaving}
+                                style={{
+                                  fontFamily: LATO, fontSize: "10px", letterSpacing: "2px",
+                                  textTransform: "uppercase", color: GOLD,
+                                  backgroundColor: "transparent",
+                                  border: "0.5px solid rgba(197,164,109,0.35)",
+                                  padding: "11px 24px",
+                                  cursor: viewingId === b.id || isSaving ? "not-allowed" : "pointer",
+                                  opacity: viewingId === b.id ? 0.7 : 1,
+                                }}
+                              >
+                                {viewingId === b.id ? "Opening…" : "View booking"}
+                              </button>
+                              <button
+                                type="button"
                                 onClick={() => handleSaveBooking(b.id)}
                                 disabled={isSaving}
                                 style={{
@@ -872,6 +921,7 @@ export default function ProfilePage() {
                                 {isSaving ? "Saving…" : "Save Changes"}
                               </button>
                               <button
+                                type="button"
                                 onClick={() => setExpandedId(null)}
                                 disabled={isSaving}
                                 style={{
@@ -904,8 +954,30 @@ export default function ProfilePage() {
                           <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "0 0 12px", lineHeight: 1.65 }}>
                             Your request is under review. We will confirm your booking within 24 hours.
                           </p>
-                          <div style={{ display: "flex", gap: "10px" }}>
+                          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
                           <button
+                            type="button"
+                            onClick={() => handleViewBooking(b.id)}
+                            disabled={viewingId === b.id}
+                            style={{
+                              fontFamily: LATO, fontSize: "10px", letterSpacing: "2px",
+                              textTransform: "uppercase", color: CHARCOAL,
+                              backgroundColor: GOLD, border: "none",
+                              padding: "9px 22px",
+                              cursor: viewingId === b.id ? "not-allowed" : "pointer",
+                              opacity: viewingId === b.id ? 0.7 : 1,
+                            }}
+                            onMouseEnter={(e) => {
+                              if (viewingId !== b.id) (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a";
+                            }}
+                            onMouseLeave={(e) => {
+                              (e.currentTarget as HTMLElement).style.backgroundColor = GOLD;
+                            }}
+                          >
+                            {viewingId === b.id ? "Opening…" : "View booking"}
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => openModify(b)}
                             style={{
                               fontFamily: LATO, fontSize: "10px", letterSpacing: "2px",
@@ -927,6 +999,7 @@ export default function ProfilePage() {
                             Modify
                           </button>
                           <button
+                            type="button"
                             onClick={() => handleCancel(b.id)}
                             disabled={isCancelling}
                             style={{
@@ -955,12 +1028,34 @@ export default function ProfilePage() {
                         </div>
                       )}
 
-                      {/* ── Confirmed: WhatsApp contact ── */}
+                      {/* ── Confirmed: View booking + WhatsApp contact ── */}
                       {isConfirmed && (
                         <div style={{ marginTop: "1.25rem", paddingTop: "1rem", borderTop: `0.5px solid ${BORDER}` }}>
                           <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "0 0 10px", lineHeight: 1.65 }}>
                             Your booking is confirmed. To make any changes or cancel, please reach out to us via WhatsApp.
                           </p>
+                          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
+                          <button
+                            type="button"
+                            onClick={() => handleViewBooking(b.id)}
+                            disabled={viewingId === b.id}
+                            style={{
+                              fontFamily: LATO, fontSize: "10px", letterSpacing: "2px",
+                              textTransform: "uppercase", color: CHARCOAL,
+                              backgroundColor: GOLD, border: "none",
+                              padding: "9px 22px",
+                              cursor: viewingId === b.id ? "not-allowed" : "pointer",
+                              opacity: viewingId === b.id ? 0.7 : 1,
+                            }}
+                            onMouseEnter={(e) => {
+                              if (viewingId !== b.id) (e.currentTarget as HTMLElement).style.backgroundColor = "#d4b98a";
+                            }}
+                            onMouseLeave={(e) => {
+                              (e.currentTarget as HTMLElement).style.backgroundColor = GOLD;
+                            }}
+                          >
+                            {viewingId === b.id ? "Opening…" : "View booking"}
+                          </button>
                           <a
                             href={waUrl}
                             target="_blank"
@@ -992,12 +1087,41 @@ export default function ProfilePage() {
                             </svg>
                             WhatsApp
                           </a>
+                          </div>
                         </div>
                       )}
 
-                      {/* ── Cancelled: guidance note ── */}
+                      {/* ── Cancelled: View booking + guidance note ── */}
                       {isCancelled && (
                         <div style={{ marginTop: "1.25rem", paddingTop: "1rem", borderTop: `0.5px solid ${BORDER}` }}>
+                          <div style={{ marginBottom: "12px" }}>
+                            <button
+                              type="button"
+                              onClick={() => handleViewBooking(b.id)}
+                              disabled={viewingId === b.id}
+                              style={{
+                                fontFamily: LATO, fontSize: "10px", letterSpacing: "2px",
+                                textTransform: "uppercase", color: GOLD,
+                                backgroundColor: "transparent",
+                                border: "0.5px solid rgba(197,164,109,0.35)",
+                                padding: "9px 22px",
+                                cursor: viewingId === b.id ? "not-allowed" : "pointer",
+                                opacity: viewingId === b.id ? 0.7 : 1,
+                              }}
+                              onMouseEnter={(e) => {
+                                if (viewingId !== b.id) {
+                                  (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(197,164,109,0.08)";
+                                  (e.currentTarget as HTMLElement).style.borderColor = GOLD;
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
+                                (e.currentTarget as HTMLElement).style.borderColor = "rgba(197,164,109,0.35)";
+                              }}
+                            >
+                              {viewingId === b.id ? "Opening…" : "View booking"}
+                            </button>
+                          </div>
                           <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0, lineHeight: 1.65 }}>
                             This booking was cancelled. If you have any questions or would like to rebook, please contact us via{" "}
                             <a
