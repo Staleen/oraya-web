@@ -1,0 +1,162 @@
+/* ============================================================
+   Villa Byblos — Arrival Guide (mobile-first digital document)
+   Same Oraya identity: palette, Playfair/Lato, arches, marks.
+   Sizes in px — this is a phone document, not print.
+   ============================================================ */
+
+.mob { width: 390px; }
+
+.mob .m-screen {
+  box-sizing: border-box;
+  width: 390px;
+  padding: 36px 28px 32px;
+  border-radius: 30px;
+  overflow: hidden;
+  background: var(--oraya-ivory);
+  color: var(--oraya-charcoal);
+  font-family: var(--oraya-font-body);
+  box-shadow: 0 0 0 1px rgba(31, 43, 56, 0.08),
+              0 2px 6px rgba(31, 43, 56, 0.10),
+              0 18px 44px rgba(31, 43, 56, 0.13);
+}
+.mob .m-screen--beige { background: var(--oraya-beige-light); }
+.mob .m-screen--midnight { background: var(--oraya-midnight); color: var(--oraya-ivory); }
+
+/* Continuous-scroll flow — one phone document, sections stack inside */
+.mob--flow .m-flow {
+  border-radius: 30px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px rgba(31, 43, 56, 0.08),
+              0 2px 6px rgba(31, 43, 56, 0.10),
+              0 18px 44px rgba(31, 43, 56, 0.13);
+}
+.mob--flow .m-screen {
+  border-radius: 0;
+  box-shadow: none;
+  padding: 40px 28px 44px;
+}
+
+/* Type voices */
+.mob .m-eyebrow {
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--oraya-terracotta);
+}
+.mob .m-screen--midnight .m-eyebrow { color: var(--oraya-gold); }
+
+.mob .m-display {
+  font-family: var(--oraya-font-display);
+  font-weight: 400; font-size: 30px; line-height: 1.12;
+  color: var(--oraya-midnight); margin: 0;
+}
+.mob .m-display em { font-style: italic; color: var(--oraya-terracotta); }
+.mob .m-screen--midnight .m-display { color: var(--oraya-ivory); }
+.mob .m-screen--midnight .m-display em { color: var(--oraya-gold); }
+
+.mob .m-body { font-size: 14.5px; line-height: 1.65; color: var(--oraya-charcoal); }
+.mob .m-screen--midnight .m-body { color: var(--oraya-beige); }
+
+.mob .m-micro {
+  font-size: 9.5px; font-weight: 700;
+  letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--oraya-muted);
+}
+
+/* Pill chip — the PIN promise */
+.mob .m-chip {
+  display: inline-block; padding: 5px 14px;
+  border: 1px solid var(--oraya-terracotta);
+  border-radius: 999px;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--oraya-terracotta); white-space: nowrap;
+}
+
+/* Buttons — 52px targets */
+.mob .m-btn {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 52px; padding: 0 22px;
+  border-radius: 999px;
+  background: var(--oraya-midnight);
+  color: var(--oraya-ivory);
+  font-size: 11.5px; font-weight: 700;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  text-decoration: none;
+}
+.mob .m-btn--ghost {
+  background: transparent;
+  color: var(--oraya-charcoal);
+  box-shadow: inset 0 0 0 1px var(--oraya-gold);
+}
+.mob .m-screen--midnight .m-btn--ghost {
+  color: var(--oraya-gold);
+  box-shadow: inset 0 0 0 1px var(--oraya-gold);
+}
+
+/* Panels & facts */
+.mob .m-panel {
+  background: var(--oraya-ivory);
+  box-shadow: inset 0 0 0 1px var(--oraya-gold-28);
+  padding: 16px 18px;
+}
+.mob .m-screen--beige .m-panel { background: var(--oraya-ivory); }
+.mob .m-fact .l {
+  font-size: 9.5px; font-weight: 700;
+  letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--oraya-muted); margin-bottom: 4px;
+}
+.mob .m-fact .v { font-size: 19px; font-weight: 900; color: var(--oraya-charcoal); line-height: 1.25; }
+.mob .m-fact .s { font-size: 12.5px; color: var(--oraya-muted); line-height: 1.5; margin-top: 3px; }
+.mob .m-screen--midnight .m-fact .l { color: rgba(231, 222, 204, 0.6); }
+.mob .m-screen--midnight .m-fact .v { color: var(--oraya-ivory); }
+.mob .m-screen--midnight .m-fact .s { color: rgba(231, 222, 204, 0.7); }
+
+/* Arch-numbered steps */
+.mob .m-step { display: flex; gap: 14px; align-items: center; }
+.mob .m-step .t { font-size: 14.5px; line-height: 1.5; }
+.mob .m-num {
+  flex: none; width: 27px; height: 33px;
+  border: 1px solid var(--oraya-gold-deep);
+  border-radius: 999px 999px 0 0;
+  display: flex; align-items: flex-end; justify-content: center;
+  padding-bottom: 3px;
+  font-family: var(--oraya-font-display);
+  font-size: 16px; line-height: 1; color: var(--oraya-terracotta);
+}
+
+/* Gem checklist */
+.mob .m-gem-li {
+  display: flex; gap: 11px; align-items: baseline;
+  font-size: 15px; line-height: 1.55;
+}
+.mob .m-gem-li::before {
+  content: ""; flex: none; width: 5px; height: 5px;
+  background: var(--oraya-terracotta); transform: rotate(45deg) translateY(-1px);
+}
+
+/* Hairline */
+.mob .m-hr { border: 0; border-top: 1px solid var(--oraya-gold-28); margin: 0; }
+.mob .m-screen--midnight .m-hr { border-top-color: rgba(197, 164, 109, 0.4); }
+
+/* Photo placeholders (arch-masked, px sizing) */
+.mob .m-photo {
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  background-color: var(--oraya-gold-10);
+  background-size: cover; background-position: center;
+  box-shadow: inset 0 0 0 1px var(--oraya-gold-28);
+  border-radius: 999px 999px 0 0;
+  overflow: hidden;
+}
+.mob .m-photo::after {
+  content: ""; width: 8px; height: 8px;
+  background: var(--oraya-gold-28); transform: rotate(45deg);
+}
+.mob .m-photo.is-filled::after { content: none; }
+.mob .m-photo.is-filled { background-color: transparent; }
+
+.mob .m-qr {
+  width: 74px; height: 74px;
+  background: var(--oraya-gold-10);
+  box-shadow: inset 0 0 0 1px var(--oraya-gold-28);
+}

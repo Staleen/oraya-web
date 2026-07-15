@@ -1,0 +1,100 @@
+/*
+ * ═══════════════════════════════════════════════════════════════════
+ * ORAYA PRINT GUIDE — PUPPETEER EXPORT CSS LAYER
+ * Phase 16C · The Compendium
+ *
+ * PURPOSE
+ *   Injected by export-reference-pdfs.js at PDF render time only.
+ *   This file must stay MINIMAL — all layout lives in oraya-print-a4.css.
+ *   Only add rules here for things that genuinely differ between the
+ *   browser screen preview and the Puppeteer PDF render.
+ *
+ * RENDERING MODE
+ *   Puppeteer stays in SCREEN mode (no emulateMediaType('print')).
+ *   This preserves the screen layout exactly.
+ *
+ * SCALE FACTOR (DO NOT CHANGE without also updating export-reference-pdfs.js)
+ *   Screen .print-page : 620px wide × 877px tall
+ *   A4 at 96 CSS DPI   : 793.7px wide × 1122px tall
+ *   Scale = 793.7 / 620 ≈ 1.2802
+ * ═══════════════════════════════════════════════════════════════════
+ */
+
+
+/* ── 1. HIDE PROTOTYPE UI ──────────────────────────────────────────
+   Remove the review bar and prototype notice from the PDF.
+───────────────────────────────────────────────────────────────── */
+.review-bar,
+.prototype-notice {
+  display: none !important;
+}
+
+
+/* ── 2. CLEAN BODY ─────────────────────────────────────────────────
+   Strip body background colour and padding (screen-only chrome).
+───────────────────────────────────────────────────────────────── */
+html {
+  background: #fff !important;
+}
+
+body {
+  margin:  0 !important;
+  padding: 0 !important;
+  background: #fff !important;
+}
+
+
+/* ── 3. PAGE STACK ─────────────────────────────────────────────────
+   Lock the document wrapper to exactly 620px so every .print-page
+   aligns flush to the left edge. No centering margin — Puppeteer
+   scales the whole viewport to fill A4 width.
+───────────────────────────────────────────────────────────────── */
+.print-document {
+  width:   620px;
+  margin:  0;
+  padding: 0;
+}
+
+
+/* ── 4. INDIVIDUAL PAGES ───────────────────────────────────────────
+   Remove screen-only shadow and margin gap between pages.
+   Add page breaks so Puppeteer starts a new PDF page after each.
+───────────────────────────────────────────────────────────────── */
+.print-page {
+  box-shadow: none !important;
+  border:     none !important;
+  margin:     0    !important;
+  break-after:      page;
+  page-break-after: always;
+}
+
+.print-page:last-of-type,
+.print-page:last-child {
+  break-after:      auto;
+  page-break-after: auto;
+}
+
+
+/* ── 5. HERO FULL-BLEED FIX ────────────────────────────────────────
+   .pp-hero is a flex item inside .print-page (flex column). In a
+   regular browser, the block formatting context treats negative margins
+   on a flex child the same as on a block, expanding the item to 620px.
+   In Puppeteer PDF mode:
+     (a) The negative-margin width expansion is ignored — the item
+         defaults to the container's content width (572px).
+     (b) flex-shrink:1 (default) further collapses it if it overflows.
+   Fix: force the exact page width AND prevent any flex shrinking.
+───────────────────────────────────────────────────────────────── */
+.pp-hero {
+  width:        620px !important;
+  max-width:    none  !important;
+  flex-shrink:  0     !important;
+}
+
+
+/* ── 6. LINK ANNOTATION SUPPRESSION ───────────────────────────────
+   Prevent PDF viewers from appending URL text after links.
+───────────────────────────────────────────────────────────────── */
+a::after {
+  content: none !important;
+}

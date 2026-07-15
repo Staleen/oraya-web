@@ -1,0 +1,12 @@
+{
+  "projectId": "ce4013e2-38a2-4889-a51a-2ed60d471325",
+  "shape": "brand-seed",
+  "readmeHeader": ".design-sync/conventions.md",
+  "outDir": "ds-bundle",
+  "guidelinesSrc": [
+    "ORAYA_BRAND_CONTEXT.md",
+    "WELCOME_BOOK_CONTENT_BRIEF.md",
+    "DESIGN_EXPLORATION_BRIEF.md",
+    "CURRENT_V2_CRITIQUE.md"
+  ]
+}

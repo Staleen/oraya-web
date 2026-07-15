@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Villa Byblos &mdash; Arrival Guide</title>
+<!--
+  Villa Byblos — Mobile Arrival Guide (repo source)
+  PRIVATE confirmed-booking page — not a public static page.
+
+  Merge fields (render only when the booking is confirmed; never hardcode):
+    {{guestName}} {{stayDates}} {{bookingReference}} {{gatePin}} {{frontDoorPin}}
+
+  Security rules for implementation:
+  - Guest name, stay dates, booking reference, gate PIN and front-door PIN
+    appear ONLY on a confirmed-booking render; the unauthenticated state must
+    not include them in markup, JSON or comments.
+  - No access code is ever hardcoded in this repo.
+  - No access code appears in the printed House Book or on public Explore pages.
+
+  Confirmed link targets (do not change):
+  - Google Maps: https://www.google.com/maps/search/?api=1&query=34.106387,35.661531
+  - Living List: https://stayoraya.com/explore/byblos
+  - WhatsApp:    https://wa.me/96171140041
+  - Website:     https://stayoraya.com
+
+  [PHOTO PLACEHOLDER — …] slots take real villa photography via
+  background-image on .m-photo (add class "is-filled") without layout change.
+-->
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500;1,600;1,700;1,800&family=Lato:wght@300;400;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/oraya-tokens.css">
+<link rel="stylesheet" href="css/system-mobile.css">
+<style>
+body{margin:0;padding:0;background:var(--oraya-beige-light, #F3EBDC);display:flex;justify-content:center}
+.mob{width:390px;max-width:100%}
+a{color:var(--oraya-terracotta)}a:hover{color:var(--oraya-gold-deep)}
+</style>
+</head>
+<body>
+<div class="mob mob--flow">
+<div class="m-flow"><div data-screen-label="Arrival Guide — Welcome">
+<section class="m-screen m-screen--beige" style="display:flex; flex-direction:column; gap:22px; text-align:center;">
+  <img src="assets/ORAYA_logo_full.svg" alt="Oraya" style="height:44px; display:block; margin:0 auto;">
+  <div>
+    <p class="m-eyebrow" style="margin:0 0 10px;">Your arrival guide</p>
+    <h1 class="m-display" style="font-size:40px;">Villa <em>Byblos</em></h1>
+    <p class="m-micro" style="margin:12px 0 0;">Mastita · Jbeil · Lebanon</p>
+  </div>
+  <div style="border:1px solid var(--oraya-gold); border-radius:999px 999px 0 0; background:var(--oraya-ivory); padding:34px 24px 24px;">
+    <p class="m-micro" style="color:var(--oraya-terracotta); margin:0 0 6px;">Prepared for</p>
+    <p class="m-display" style="font-size:23px; margin:0 0 4px;">{{guestName}}</p>
+    <p class="m-body" style="margin:0 0 12px; color:var(--oraya-muted);">{{stayDates}}</p>
+    <p class="m-micro" style="margin:0 0 16px;">Booking {{bookingReference}}</p>
+    <span class="m-chip">Access — provided by Oraya before arrival</span>
+  </div>
+  <div class="m-photo" style="height:150px; display:flex; align-items:center; justify-content:center;"><span class="m-micro" style="color:var(--oraya-muted);">[PHOTO PLACEHOLDER — VILLA EXTERIOR]</span></div>
+  <div style="display:grid; gap:12px;">
+    <a class="m-btn" href="https://www.google.com/maps/search/?api=1&amp;query=34.106387,35.661531">Open in Google Maps</a>
+    <a class="m-btn m-btn--ghost" href="https://wa.me/96171140041">Message Oraya on WhatsApp</a>
+  </div>
+  <div style="text-align:center;">
+    <img src="assets/oraya-housebook-seal.svg" alt="" style="width:40px; display:block; margin:0 auto 10px;">
+    <p class="m-micro" style="margin:0;">Everything for the drive and the door — keep this handy</p>
+  </div>
+</section></div><div data-screen-label="Arrival Guide — Getting there">
+<section class="m-screen" style="display:flex; flex-direction:column; gap:20px;">
+  <div>
+    <p class="m-eyebrow" style="margin:0 0 8px;">Getting there</p>
+    <h2 class="m-display">The road to <em>Mastita</em></h2>
+  </div>
+  <div>
+    <div class="m-photo" style="height:180px; display:flex; align-items:center; justify-content:center;"><span class="m-micro" style="color:var(--oraya-muted);">[PHOTO PLACEHOLDER — MAP PREVIEW]</span></div>
+    <p style="font-size:11px; color:var(--oraya-muted); margin:8px 0 0; text-align:center;">The pin drops at the villa gate</p>
+  </div>
+  <a class="m-btn" href="https://www.google.com/maps/search/?api=1&amp;query=34.106387,35.661531">Open in Google Maps</a>
+  <div>
+    <div style="display:flex; gap:14px; padding:12px 0; border-top:1px solid var(--oraya-gold-28); align-items:baseline;"><span class="m-micro" style="flex:none; width:96px; color:var(--oraya-charcoal);">From Beirut</span><span class="m-body" style="font-size:13.5px;">About 45 minutes along the coast highway.</span></div>
+    <div style="display:flex; gap:14px; padding:12px 0; border-top:1px solid var(--oraya-gold-28); align-items:baseline;"><span class="m-micro" style="flex:none; width:96px; color:var(--oraya-charcoal);">From the airport</span><span class="m-body" style="font-size:13.5px;">About 55 minutes, traffic willing.</span></div>
+    <div style="display:flex; gap:14px; padding:12px 0; border-top:1px solid var(--oraya-gold-28); border-bottom:1px solid var(--oraya-gold-28); align-items:baseline;"><span class="m-micro" style="flex:none; width:96px; color:var(--oraya-charcoal);">The last stretch</span><span class="m-body" style="font-size:13.5px;">A hill road — follow the pin, not shortcuts.</span></div>
+  </div>
+  <div class="m-panel m-fact">
+    <div class="l">Timing</div>
+    <div class="s" style="margin-top:0;">Late arrival is always fine; early arrival by advance request. Share your ETA on WhatsApp and we’ll be ready.</div>
+  </div>
+  <img src="assets/oraya-coast-plate-jbeil-mastita.svg" alt="" style="width:230px; display:block; margin:4px auto 0;">
+</section></div><div data-screen-label="Arrival Guide — Gate access">
+<section class="m-screen m-screen--beige" style="display:flex; flex-direction:column; gap:20px;">
+  <div>
+    <p class="m-eyebrow" style="margin:0 0 8px;">At the gate</p>
+    <h2 class="m-display">Through the <em>gate</em></h2>
+  </div>
+  <div>
+    <div class="m-photo" style="height:150px; display:flex; align-items:center; justify-content:center;"><span class="m-micro" style="color:var(--oraya-muted);">[PHOTO PLACEHOLDER — GATE KEYPAD]</span></div>
+    <p style="font-size:11px; color:var(--oraya-muted); margin:8px 0 0; text-align:center;">Gate keypad · Aqara U100</p>
+  </div>
+  <div style="display:grid; gap:14px;">
+    <div class="m-step"><div class="m-num">1</div><div class="t">Enter the gate PIN on the keypad.</div></div>
+    <div class="m-step"><div class="m-num">2</div><div class="t">Press the <strong>open</strong> button.</div></div>
+    <div class="m-step"><div class="m-num">3</div><div class="t">The gate slides open — drive in.</div></div>
+  </div>
+  <div style="text-align:center;"><span class="m-chip">Gate PIN — {{gatePin}}</span></div>
+  <div class="m-panel m-fact">
+    <div class="l">Parking</div>
+    <div class="s" style="margin-top:0;">Two cars inside the gate; extra cars just outside.</div>
+  </div>
+</section></div><div data-screen-label="Arrival Guide — Front door access">
+<section class="m-screen" style="display:flex; flex-direction:column; gap:20px;">
+  <div>
+    <p class="m-eyebrow" style="margin:0 0 8px;">The front door</p>
+    <h2 class="m-display">Let yourself <em>in</em></h2>
+  </div>
+  <div>
+    <div class="m-photo" style="height:150px; display:flex; align-items:center; justify-content:center;"><span class="m-micro" style="color:var(--oraya-muted);">[PHOTO PLACEHOLDER — FRONT-DOOR LOCK]</span></div>
+    <p style="font-size:11px; color:var(--oraya-muted); margin:8px 0 0; text-align:center;">Front-door lock · Aqara A100</p>
+  </div>
+  <div style="display:grid; gap:14px;">
+    <div class="m-step"><div class="m-num">1</div><div class="t">Touch the keypad to wake it.</div></div>
+    <div class="m-step"><div class="m-num">2</div><div class="t">Enter the front-door PIN.</div></div>
+    <div class="m-step"><div class="m-num">3</div><div class="t">Press the handle — <strong>you’re home.</strong></div></div>
+  </div>
+  <div style="text-align:center;"><span class="m-chip">Front-door PIN — {{frontDoorPin}}</span></div>
+  <div class="m-panel m-fact">
+    <div class="l">PIN not accepted?</div>
+    <div class="s" style="margin-top:0;">Wait a moment and try again — or message Oraya. We’re on it, any time.</div>
+  </div>
+</section></div><div data-screen-label="Arrival Guide — The house">
+<section class="m-screen" style="display:flex; flex-direction:column; gap:20px;">
+  <div>
+    <p class="m-eyebrow" style="margin:0 0 8px;">Once you’re in</p>
+    <h2 class="m-display">The house, <em>briefly</em></h2>
+  </div>
+  <div class="m-panel m-fact">
+    <div class="l">Wi-Fi</div>
+    <div class="v" style="font-size:20px;">ORAYA</div>
+    <div class="s">Password provided in the villa.</div>
+  </div>
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+    <div class="m-photo" style="height:110px; display:flex; align-items:center; justify-content:center; text-align:center; padding:8px;"><span class="m-micro" style="color:var(--oraya-muted); font-size:9px;">[PHOTO PLACEHOLDER — POOL]</span></div>
+    <div class="m-photo" style="height:110px; display:flex; align-items:center; justify-content:center; text-align:center; padding:8px;"><span class="m-micro" style="color:var(--oraya-muted); font-size:9px;">[PHOTO PLACEHOLDER — BEDROOM]</span></div>
+    <div class="m-photo" style="height:110px; grid-column:1 / -1; display:flex; align-items:center; justify-content:center; text-align:center; padding:8px;"><span class="m-micro" style="color:var(--oraya-muted); font-size:9px;">[PHOTO PLACEHOLDER — KITCHEN / OUTDOOR AREA]</span></div>
+  </div>
+  <div>
+    <div style="display:flex; gap:14px; padding:12px 0; border-top:1px solid var(--oraya-gold-28); align-items:baseline;"><span class="m-micro" style="flex:none; width:96px; color:var(--oraya-charcoal);">Pool</span><span class="m-body" style="font-size:13.5px;">Readied before your stay. Cover off before swimming — back on after use.</span></div>
+    <div style="display:flex; gap:14px; padding:12px 0; border-top:1px solid var(--oraya-gold-28); align-items:baseline;"><span class="m-micro" style="flex:none; width:96px; color:var(--oraya-charcoal);">Checkout</span><span class="m-body" style="font-size:13.5px;">11:00 AM — late or extended by advance confirmation.</span></div>
+    <div style="display:flex; gap:14px; padding:12px 0; border-top:1px solid var(--oraya-gold-28); border-bottom:1px solid var(--oraya-gold-28); align-items:baseline;"><span class="m-micro" style="flex:none; width:96px; color:var(--oraya-charcoal);">Quiet hours</span><span class="m-body" style="font-size:13.5px;">11 PM – 8 AM — outdoor sound carries.</span></div>
+  </div>
+  <div class="m-panel m-fact">
+    <div class="l">The full guide</div>
+    <div class="s" style="margin-top:0;">The printed House Book in the villa covers every room and system in detail.</div>
+  </div>
+</section></div><div data-screen-label="Arrival Guide — Explore / Living List">
+<section class="m-screen m-screen--beige" style="display:flex; flex-direction:column; gap:20px;">
+  <div>
+    <p class="m-eyebrow" style="margin:0 0 8px;">Around Byblos</p>
+    <h2 class="m-display">The <em>Living List</em></h2>
+  </div>
+  <p class="m-body" style="margin:0; font-size:13.5px;">Oraya’s current area guide — openings change with the seasons; this list stays fresh.</p>
+  <div>
+    <div style="display:flex; gap:14px; padding:12px 0; border-top:1px solid var(--oraya-gold-28); align-items:baseline;"><span class="m-micro" style="flex:none; width:120px; color:var(--oraya-charcoal);">Nearby visits</span><span class="m-body" style="font-size:13.5px;">Byblos Castle, the Old Souk, the harbour &amp; beaches.</span></div>
+    <div style="display:flex; gap:14px; padding:12px 0; border-top:1px solid var(--oraya-gold-28); align-items:baseline;"><span class="m-micro" style="flex:none; width:120px; color:var(--oraya-charcoal);">Food &amp; cafés</span><span class="m-body" style="font-size:13.5px;">[Current recommendations on the list]</span></div>
+    <div style="display:flex; gap:14px; padding:12px 0; border-top:1px solid var(--oraya-gold-28); align-items:baseline;"><span class="m-micro" style="flex:none; width:120px; color:var(--oraya-charcoal);">Mini-market / bakery</span><span class="m-body" style="font-size:13.5px;">[Nearest options on the list]</span></div>
+    <div style="display:flex; gap:14px; padding:12px 0; border-top:1px solid var(--oraya-gold-28); align-items:baseline;"><span class="m-micro" style="flex:none; width:120px; color:var(--oraya-charcoal);">Pharmacy</span><span class="m-body" style="font-size:13.5px;">[Nearest option on the list]</span></div>
+    <div style="display:flex; gap:14px; padding:12px 0; border-top:1px solid var(--oraya-gold-28); border-bottom:1px solid var(--oraya-gold-28); align-items:baseline;"><span class="m-micro" style="flex:none; width:120px; color:var(--oraya-charcoal);">Drivers &amp; reservations</span><span class="m-body" style="font-size:13.5px;">Arranged through Oraya — just message us.</span></div>
+  </div>
+  <a class="m-btn" href="https://stayoraya.com/explore/byblos">Open the Living List</a>
+</section></div><div data-screen-label="Arrival Guide — Before you set out">
+<section class="m-screen m-screen--beige" style="display:flex; flex-direction:column; gap:22px;">
+  <div>
+    <p class="m-eyebrow" style="margin:0 0 8px;">Before you set out</p>
+    <h2 class="m-display">Six small <em>checks</em></h2>
+  </div>
+  <div style="display:grid; gap:15px; padding:22px 20px; background:var(--oraya-ivory); box-shadow:inset 0 0 0 1px var(--oraya-gold-28);">
+    <div class="m-gem-li">This guide saved to your phone</div>
+    <div class="m-gem-li">Access details received from Oraya</div>
+    <div class="m-gem-li">Maps link saved</div>
+    <div class="m-gem-li">Living List link saved</div>
+    <div class="m-gem-li">Oraya WhatsApp saved</div>
+    <div class="m-gem-li">ETA shared with Oraya</div>
+  </div>
+  <div style="text-align:center; padding-top:4px;">
+    <img src="assets/oraya-olive-mark.svg" alt="" style="width:56px; display:block; margin:0 auto;">
+    <p style="font-family:var(--oraya-font-display); font-style:italic; font-size:17px; color:var(--oraya-terracotta); margin:10px 0 0;">Then simply enjoy the drive.</p>
+  </div>
+</section></div><div data-screen-label="Arrival Guide — Need help?">
+<section class="m-screen m-screen--midnight" style="display:flex; flex-direction:column; gap:22px; text-align:center;">
+  <img src="assets/oraya-housebook-seal-midnight.svg" alt="" style="width:44px; display:block; margin:0 auto;">
+  <div>
+    <p class="m-eyebrow" style="margin:0 0 10px;">Need help?</p>
+    <h2 class="m-display">A message <em>away.</em></h2>
+  </div>
+  <p class="m-body" style="margin:0; font-size:13.5px; color:rgba(231,222,204,0.75);">Gate not opening · PIN not working · arriving late · can’t find the road — day or night.</p>
+  <div class="m-fact">
+    <div class="l">Oraya concierge — 24/7</div>
+    <div class="v" style="font-size:24px;">+961 71 140 041</div>
+  </div>
+  <a class="m-btn m-btn--ghost" href="https://wa.me/96171140041">Message Oraya on WhatsApp</a>
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+    <div class="m-fact"><div class="v" style="font-size:26px;">112</div><div class="l">Police / Internal Security</div></div>
+    <div class="m-fact"><div class="v" style="font-size:26px;">140</div><div class="l">Lebanese Red Cross</div></div>
+  </div>
+  <p class="m-micro" style="margin:0; color:rgba(231,222,204,0.75);">For medical emergencies, call the emergency service first — then message Oraya for non-urgent guidance.</p>
+  <hr class="m-hr">
+  <div>
+    <img src="assets/ORAYA_logo_full.svg" alt="Oraya" style="height:44px; display:block; margin:0 auto;">
+    <p class="m-micro" style="margin:14px 0 0;"><a href="https://stayoraya.com" style="color:rgba(231,222,204,0.75); text-decoration:none;">stayoraya.com</a></p>
+  </div>
+</section></div></div>
+</div>
+</body>
+</html>

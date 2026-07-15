@@ -1,0 +1,701 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Oraya Guest Welcome Guide — Design Prototype · Phase 16C</title>
+  <meta name="description" content="Design prototype only. Not for guest distribution. Phase 16C — The Compendium.">
+  <meta name="robots" content="noindex, nofollow">
+
+  <!-- Google Fonts — Oraya brand fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="oraya-guest-welcome-guide.css">
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════════
+     PROTOTYPE NOTICE — visible on screen, hidden in print
+     ════════════════════════════════════════════════════════════ -->
+<div class="prototype-notice" aria-hidden="true">
+  <span class="prototype-notice__label">Design Prototype</span>
+  Phase 16C · The Compendium · Not for guest distribution · Concept images used — replace with approved villa photography before guest release
+</div>
+
+
+<!-- ════════════════════════════════════════════════════════════
+     REVIEW HUB — prototype overlay (screen only)
+     Three outputs: Digital Guide · Byblos Print · Mechmech Print
+     ════════════════════════════════════════════════════════════ -->
+<section class="review-hub" id="review-hub" aria-label="Prototype review hub">
+  <div class="review-hub__inner">
+
+    <div>
+      <span class="review-hub__tag">Phase 16C · Guest Guide Engine · Design Prototype</span>
+      <h2 class="review-hub__title">Review Hub</h2>
+      <p class="review-hub__subtitle">
+        Three review outputs are available below. Open each one to review the screen experience or print the A4 guide.
+        Scroll down to see the digital guide in full.
+      </p>
+    </div>
+
+    <div class="review-hub__outputs">
+
+      <!-- Output 1 — Digital Guide (this file) -->
+      <div class="review-hub__output review-hub__output--current">
+        <span class="review-hub__output-badge">Currently viewing</span>
+        <span class="review-hub__output-number">Output 1 of 3</span>
+        <span class="review-hub__output-label">Digital<br>Welcome Guide</span>
+        <span class="review-hub__output-desc">
+          Mobile-first journey rail. 8 steps from pre-departure to checkout.
+          Screen only — sent to guest before arrival.
+        </span>
+        <a href="#digital-guide" class="review-hub__output-cta review-hub__output-cta--secondary">
+          ↓ Scroll to guide
+        </a>
+      </div>
+
+      <!-- Output 2 — Byblos A4 Print -->
+      <div class="review-hub__output">
+        <span class="review-hub__output-number">Output 2 of 3</span>
+        <span class="review-hub__output-label">Villa Byblos<br>A4 Print Guide</span>
+        <span class="review-hub__output-desc">
+          7-page A4 in-villa manual. Mastita, Jbeil.
+          Open → File → Print → A4, 100% scale, background graphics on.
+        </span>
+        <a href="oraya-guest-welcome-guide-print-byblos.html" class="review-hub__output-cta" target="_blank" rel="noopener">
+          Open Byblos A4 Guide →
+        </a>
+      </div>
+
+      <!-- Output 3 — Mechmech A4 Print -->
+      <div class="review-hub__output">
+        <span class="review-hub__output-number">Output 3 of 3</span>
+        <span class="review-hub__output-label">Villa Mechmech<br>A4 Print Guide</span>
+        <span class="review-hub__output-desc">
+          7-page A4 in-villa manual. Mechmech, Sama.
+          Open → File → Print → A4, 100% scale, background graphics on.
+        </span>
+        <a href="oraya-guest-welcome-guide-print-mechmech.html" class="review-hub__output-cta" target="_blank" rel="noopener">
+          Open Mechmech A4 Guide →
+        </a>
+      </div>
+
+    </div><!-- end .review-hub__outputs -->
+
+    <div class="review-hub__print-instructions">
+      <strong>To print an A4 guide:</strong>
+      Open the villa file above → browser File → Print (Ctrl+P / Cmd+P) →
+      Paper size: <strong>A4</strong> · Scale: <strong>Default (100%)</strong> ·
+      ☑ Background graphics → Print / Save as PDF.
+      Do not set custom margins — the file manages them internally.
+    </div>
+
+  </div><!-- end .review-hub__inner -->
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════
+     DIGITAL GUIDE
+     Mobile-first · Sent before arrival · Screen only in print
+     ════════════════════════════════════════════════════════════ -->
+<div class="digital-guide" id="digital-guide">
+
+  <!-- Header -->
+  <header class="dg-header">
+    <div class="dg-header__inner">
+      <div class="dg-header__brand">
+        <span class="dg-header__wordmark">ORAYA</span>
+        <span class="dg-header__separator">·</span>
+        <span class="dg-header__villa">Villa <span class="placeholder-inline">[Villa Name]</span></span>
+      </div>
+      <div class="dg-header__meta">
+        <span class="dg-header__guest">For <em class="placeholder-inline">[Guest Name]</em></span>
+        <span class="dg-header__dates">
+          <span class="placeholder-inline">[Check-in date]</span>
+          &ensp;—&ensp;
+          <span class="placeholder-inline">[Check-out date]</span>
+        </span>
+      </div>
+    </div>
+    <div class="dg-header__rule"></div>
+  </header>
+
+  <!-- Journey Rail — 8 steps, scrollable on mobile -->
+  <nav class="dg-journey-rail" aria-label="Guest arrival journey">
+    <div class="dg-journey-rail__inner">
+
+      <a href="#step-1" class="dg-step-node">
+        <span class="dg-step-node__number">1</span>
+        <span class="dg-step-node__label">Before<br>You Leave</span>
+      </a>
+      <div class="dg-step-connector" aria-hidden="true"></div>
+
+      <a href="#step-2" class="dg-step-node">
+        <span class="dg-step-node__number">2</span>
+        <span class="dg-step-node__label">On the<br>Way</span>
+      </a>
+      <div class="dg-step-connector" aria-hidden="true"></div>
+
+      <a href="#step-3" class="dg-step-node">
+        <span class="dg-step-node__number">3</span>
+        <span class="dg-step-node__label">At the<br>Gate</span>
+      </a>
+      <div class="dg-step-connector" aria-hidden="true"></div>
+
+      <a href="#step-4" class="dg-step-node">
+        <span class="dg-step-node__number">4</span>
+        <span class="dg-step-node__label">Parking</span>
+      </a>
+      <div class="dg-step-connector" aria-hidden="true"></div>
+
+      <a href="#step-5" class="dg-step-node">
+        <span class="dg-step-node__number">5</span>
+        <span class="dg-step-node__label">Front<br>Door</span>
+      </a>
+      <div class="dg-step-connector" aria-hidden="true"></div>
+
+      <a href="#step-6" class="dg-step-node">
+        <span class="dg-step-node__number">6</span>
+        <span class="dg-step-node__label">Settling<br>In</span>
+      </a>
+      <div class="dg-step-connector" aria-hidden="true"></div>
+
+      <a href="#step-7" class="dg-step-node">
+        <span class="dg-step-node__number">7</span>
+        <span class="dg-step-node__label">During<br>Your Stay</span>
+      </a>
+      <div class="dg-step-connector" aria-hidden="true"></div>
+
+      <a href="#step-8" class="dg-step-node">
+        <span class="dg-step-node__number">8</span>
+        <span class="dg-step-node__label">Checkout</span>
+      </a>
+
+    </div>
+  </nav>
+
+  <!-- ─── Journey Sections ─── -->
+  <main class="dg-main">
+
+
+    <!-- ── Step 1: Before You Leave ── -->
+    <section class="dg-section" id="step-1" aria-labelledby="s1-title">
+      <div class="dg-section__inner">
+        <div class="dg-section__number-tag">Step 1</div>
+        <h2 class="dg-section__title" id="s1-title">Before You Leave</h2>
+        <p class="dg-section__intro">Make sure you have everything you need before setting out for the villa.</p>
+
+        <div class="dg-checklist" role="list">
+          <div class="dg-checklist__item" role="listitem">
+            <span class="dg-checklist__box" aria-hidden="true"></span>
+            <span class="dg-checklist__text">This guide is saved on your phone or available offline</span>
+          </div>
+          <div class="dg-checklist__item" role="listitem">
+            <span class="dg-checklist__box" aria-hidden="true"></span>
+            <span class="dg-checklist__text">
+              Gate PIN confirmed:
+              <span class="placeholder-tag">[Gate PIN — provided before arrival]</span>
+            </span>
+          </div>
+          <div class="dg-checklist__item" role="listitem">
+            <span class="dg-checklist__box" aria-hidden="true"></span>
+            <span class="dg-checklist__text">
+              Front-door PIN confirmed:
+              <span class="placeholder-tag">[Front-door PIN — provided before arrival]</span>
+            </span>
+          </div>
+          <div class="dg-checklist__item" role="listitem">
+            <span class="dg-checklist__box" aria-hidden="true"></span>
+            <span class="dg-checklist__text">
+              Villa address saved for navigation — see Step 2 for your Maps link
+            </span>
+          </div>
+          <div class="dg-checklist__item" role="listitem">
+            <span class="dg-checklist__box" aria-hidden="true"></span>
+            <span class="dg-checklist__text">
+              Oraya WhatsApp saved in contacts:
+              <strong>+961 71 140 041</strong>
+            </span>
+          </div>
+        </div>
+
+        <p class="dg-page-ref">→ See print guide p. 1–2 for full arrival information</p>
+      </div>
+    </section>
+
+
+    <!-- ── Step 2: On the Way ── -->
+    <section class="dg-section dg-section--alt" id="step-2" aria-labelledby="s2-title">
+      <div class="dg-section__inner">
+        <div class="dg-section__number-tag">Step 2</div>
+        <h2 class="dg-section__title" id="s2-title">On the Way</h2>
+        <p class="dg-section__intro">Navigate to the villa using the Maps link for your property.</p>
+
+        <div class="dg-villa-card-group">
+          <div class="concept-img-wrap concept-img-wrap--thumb">
+            <img src="assets/concept/byblos-exterior.png" alt="Villa Byblos exterior at night — concept image" class="concept-img">
+            <span class="concept-img-label">Concept image</span>
+          </div>
+          <div class="dg-info-card">
+            <div class="dg-info-card__label">Villa Byblos — location &amp; navigation</div>
+            <div class="dg-info-card__value">
+              <span class="status-badge status-confirmed">Confirmed</span>
+              <p style="margin-top:6px; font-size:15px;">Mastita, Jbeil</p>
+              <p style="margin-top:6px;">
+                <a href="https://maps.app.goo.gl/1a1Ybf4o6Qyzy7xh7" target="_blank" rel="noopener" style="color:var(--gold); font-size:14px; letter-spacing:0.04em;">→ Open Villa Byblos in Google Maps</a>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="dg-villa-card-group" style="margin-top:16px;">
+          <div class="concept-img-wrap concept-img-wrap--thumb">
+            <img src="assets/concept/mechmech-exterior.png" alt="Villa Mechmech exterior in winter, pool visible — concept image" class="concept-img">
+            <span class="concept-img-label">Concept image</span>
+          </div>
+          <div class="dg-info-card">
+            <div class="dg-info-card__label">Villa Mechmech — location &amp; navigation</div>
+            <div class="dg-info-card__value">
+              <span class="status-badge status-confirmed">Confirmed</span>
+              <p style="margin-top:6px; font-size:15px;">Mechmech, Sama</p>
+              <p style="margin-top:6px;">
+                <a href="https://maps.app.goo.gl/2A4jAeUKWP8G9GbVA" target="_blank" rel="noopener" style="color:var(--gold); font-size:14px; letter-spacing:0.04em;">→ Open Villa Mechmech in Google Maps</a>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <p style="font-size:12px; color:var(--muted); margin-top:14px; font-style:italic;">Navigation QR codes are generated per stay in production from the confirmed Maps links above. In production, only your villa's link and image appear.</p>
+
+        <p class="dg-page-ref">→ See print guide p. 1 for map and navigation QR code</p>
+      </div>
+    </section>
+
+
+    <!-- ── Step 3: At the Gate ── -->
+    <section class="dg-section" id="step-3" aria-labelledby="s3-title">
+      <div class="dg-section__inner">
+        <div class="dg-section__number-tag">Step 3</div>
+        <h2 class="dg-section__title" id="s3-title">At the Gate</h2>
+        <p class="dg-section__intro">When you reach the property, follow these steps to open the gate.</p>
+
+        <div class="image-placeholder" role="img" aria-label="Gate concept image">
+          <p class="image-placeholder__label">Concept image — replace with approved final image.</p>
+          <p class="image-placeholder__desc">Required: Villa gate and driveway approach</p>
+        </div>
+
+        <ol class="dg-step-list" style="margin-top: 24px;">
+          <li class="dg-step-list__item">
+            <span class="dg-step-list__number">1</span>
+            <div class="dg-step-list__content">
+              <strong>Arrive at the property gate</strong>
+            </div>
+          </li>
+          <li class="dg-step-list__item">
+            <span class="dg-step-list__number">2</span>
+            <div class="dg-step-list__content">
+              <strong>Enter your gate PIN on the keypad</strong>
+              <div class="dg-pin-display">
+                <span class="placeholder-tag">[Gate PIN — provided before arrival]</span>
+              </div>
+            </div>
+          </li>
+          <li class="dg-step-list__item">
+            <span class="dg-step-list__number">3</span>
+            <div class="dg-step-list__content">
+              <strong>Press the gate open button</strong>
+            </div>
+          </li>
+          <li class="dg-step-list__item">
+            <span class="dg-step-list__number">4</span>
+            <div class="dg-step-list__content">
+              <strong>The gate will slide open</strong>
+            </div>
+          </li>
+        </ol>
+
+        <div class="image-placeholder" role="img" aria-label="Gate keypad concept image">
+          <p class="image-placeholder__label">Concept image — replace with approved final image.</p>
+          <p class="image-placeholder__desc">Required: Gate keypad — PIN pad and open button</p>
+        </div>
+
+        <div class="dg-troubleshoot">
+          <h3 class="dg-troubleshoot__title">Gate not opening?</h3>
+          <span class="status-badge status-confirmed">Confirmed</span>
+          <p style="margin-top:6px;">If the gate does not open, the PIN does not work, or you cannot access the villa, message Oraya on WhatsApp or call us directly.</p>
+          <p style="margin-top:6px;"><strong>Oraya: +961 71 140 041</strong></p>
+        </div>
+
+        <p class="dg-page-ref">→ See print guide p. 2 for full arrival sequence</p>
+      </div>
+    </section>
+
+
+    <!-- ── Step 4: Parking ── -->
+    <section class="dg-section dg-section--alt" id="step-4" aria-labelledby="s4-title">
+      <div class="dg-section__inner">
+        <div class="dg-section__number-tag">Step 4</div>
+        <h2 class="dg-section__title" id="s4-title">Parking</h2>
+        <p class="dg-section__intro">Drive through the gate and park in the designated area.</p>
+
+        <div class="dg-info-card">
+          <div class="dg-info-card__label">Where to park</div>
+          <div class="dg-info-card__value">
+            <span class="status-badge status-confirmed">Confirmed</span>
+            <p style="margin-top:6px; font-size:15px;">Inside the gate fits two cars comfortably. If you have extra cars, you may park outside the gate.</p>
+          </div>
+        </div>
+
+        <p class="dg-page-ref">→ See print guide p. 2</p>
+      </div>
+    </section>
+
+
+    <!-- ── Step 5: Front Door ── -->
+    <section class="dg-section" id="step-5" aria-labelledby="s5-title">
+      <div class="dg-section__inner">
+        <div class="dg-section__number-tag">Step 5</div>
+        <h2 class="dg-section__title" id="s5-title">Front Door</h2>
+        <p class="dg-section__intro">Walk to the front door and enter using your second PIN.</p>
+
+        <div class="image-placeholder" role="img" aria-label="Front door keypad concept image">
+          <p class="image-placeholder__label">Concept image — replace with approved final image.</p>
+          <p class="image-placeholder__desc">Required: Front-door keypad close-up</p>
+        </div>
+
+        <ol class="dg-step-list" style="margin-top: 24px;">
+          <li class="dg-step-list__item">
+            <span class="dg-step-list__number">5</span>
+            <div class="dg-step-list__content">
+              <strong>Park your vehicle and walk to the front door</strong>
+            </div>
+          </li>
+          <li class="dg-step-list__item">
+            <span class="dg-step-list__number">6</span>
+            <div class="dg-step-list__content">
+              <strong>Enter your front-door PIN on the keypad</strong>
+              <div class="dg-pin-display">
+                <span class="placeholder-tag">[Front-door PIN — provided before arrival]</span>
+              </div>
+            </div>
+          </li>
+          <li class="dg-step-list__item">
+            <span class="dg-step-list__number">7</span>
+            <div class="dg-step-list__content">
+              <strong>You are in. Welcome to the villa.</strong>
+            </div>
+          </li>
+        </ol>
+
+        <div class="image-placeholder" role="img" aria-label="Villa entrance concept image">
+          <p class="image-placeholder__label">Concept image — replace with approved final image.</p>
+          <p class="image-placeholder__desc">Required: Villa entrance or foyer — first interior impression</p>
+        </div>
+
+        <div class="dg-troubleshoot">
+          <h3 class="dg-troubleshoot__title">PIN not working or cannot access the villa?</h3>
+          <span class="status-badge status-confirmed">Confirmed</span>
+          <p style="margin-top:6px;">If the gate does not open, the PIN does not work, or you cannot access the villa, message Oraya on WhatsApp or call us directly.</p>
+          <p style="margin-top:6px;"><strong>Oraya: +961 71 140 041</strong></p>
+        </div>
+
+        <div class="dg-troubleshoot" style="margin-top: 12px;">
+          <h3 class="dg-troubleshoot__title">Arriving late or early?</h3>
+          <span class="status-badge status-confirmed">Confirmed</span>
+          <p style="margin-top:6px;">Late arrival is fine. If you would like to arrive early, please request it in advance so the villa can be prepared accordingly.</p>
+        </div>
+
+        <p class="dg-page-ref">→ See print guide p. 2 for arrival details and contacts</p>
+      </div>
+    </section>
+
+
+    <!-- ── Step 6: Settling In ── -->
+    <section class="dg-section dg-section--alt" id="step-6" aria-labelledby="s6-title">
+      <div class="dg-section__inner">
+        <div class="dg-section__number-tag">Step 6</div>
+        <h2 class="dg-section__title" id="s6-title">Settling In</h2>
+        <p class="dg-section__intro">Your essential comforts, ready when you arrive. Select your villa below.</p>
+
+        <!-- CSS-only villa tab selector -->
+        <div class="villa-selector">
+          <input type="radio" name="villa-digital" id="vd-byblos" checked class="villa-radio" aria-label="Villa Byblos">
+          <input type="radio" name="villa-digital" id="vd-mechmech" class="villa-radio" aria-label="Villa Mechmech">
+
+          <div class="villa-tabs">
+            <label for="vd-byblos" class="villa-tab">Villa Byblos</label>
+            <label for="vd-mechmech" class="villa-tab">Villa Mechmech</label>
+          </div>
+
+          <!-- ─── Byblos utilities ─── -->
+          <div class="villa-panel" id="vp-byblos">
+
+            <div class="dg-utility-item">
+              <h4 class="dg-utility-item__title">Wi-Fi</h4>
+              <span class="status-badge status-confirmed">Confirmed</span>
+              <p><span class="label-small">Network</span> <strong>ORAYA</strong></p>
+              <p><span class="label-small">Password</span> <strong>Oraya2026</strong></p>
+            </div>
+
+            <div class="dg-utility-item">
+              <h4 class="dg-utility-item__title">AC &amp; Cooling</h4>
+              <span class="status-badge status-confirmed">Confirmed</span>
+              <p>Each room has an air conditioner. The controller is mounted on the wall next to the light switch. The units support cooling and heating.</p>
+            </div>
+
+            <div class="dg-utility-item">
+              <h4 class="dg-utility-item__title">Hot Water</h4>
+              <span class="status-badge status-confirmed">Confirmed</span>
+              <p>Hot water is prepared for your stay. The villa uses a solar-heated tank that heats during the day and maintains hot water through the night. If you experience any issue with hot water, contact Oraya before attempting any reset.</p>
+            </div>
+
+            <div class="dg-utility-item">
+              <h4 class="dg-utility-item__title">Pool</h4>
+              <span class="status-badge status-confirmed">Confirmed</span>
+              <p>The pool is available for guest use and is maintained before your stay. It is kept covered to help protect it from leaves and insects.</p>
+              <p style="margin-top:6px;">Remove the pool cover manually before use and place it back after you finish using the pool, to help protect the water from leaves and insects.</p>
+            </div>
+
+            <div class="dg-utility-item">
+              <h4 class="dg-utility-item__title">Kitchen &amp; BBQ</h4>
+              <span class="status-badge status-confirmed">Confirmed</span>
+              <p>The kitchen is fully operational and includes a kettle, microwave, gas cooktop, stove, cutlery, and glassware.</p>
+              <p style="margin-top:6px;">The outdoor area includes a functional BBQ/kitchenette section with a barbecue kit. After using the BBQ, make sure it is fully turned off.</p>
+            </div>
+
+            <div class="dg-utility-item">
+              <h4 class="dg-utility-item__title">TV &amp; Entertainment</h4>
+              <span class="status-badge status-confirmed">Confirmed</span>
+              <p>The living room includes one Smart TV.</p>
+            </div>
+
+          </div><!-- end vp-byblos -->
+
+          <!-- ─── Mechmech utilities ─── -->
+          <div class="villa-panel" id="vp-mechmech">
+
+            <div class="dg-utility-item">
+              <h4 class="dg-utility-item__title">Wi-Fi</h4>
+              <span class="status-badge status-confirmed">Confirmed</span>
+              <p><span class="label-small">Network</span> <strong>ORAYA</strong></p>
+              <p><span class="label-small">Password</span> <strong>Oraya2026</strong></p>
+            </div>
+
+            <div class="dg-utility-item">
+              <h4 class="dg-utility-item__title">Heating</h4>
+              <span class="status-badge status-confirmed">Confirmed</span>
+              <p>During winter, the house heating system will be on before you arrive. The heating uses the same labeled switch area as the water-heater system. If you want to reduce or turn off heating in a room, adjust the radiator valve in that room.</p>
+            </div>
+
+            <div class="dg-utility-item">
+              <h4 class="dg-utility-item__title">Fireplace &amp; Diesel Stove</h4>
+              <span class="status-badge status-confirmed">Confirmed</span>
+              <p>The winter glass room includes a traditional Lebanese diesel stove heater. It is prepared with a full tank. Additional diesel use may be charged separately. The stove also includes an oven compartment and a top surface that may be used for warming food.</p>
+              <p style="margin-top:6px; font-style:italic; color:var(--muted); font-size:13px;">Use only as instructed. Do not move the heater, refill it yourself, or leave it unattended. If you need help, contact Oraya.</p>
+            </div>
+
+            <div class="dg-utility-item">
+              <h4 class="dg-utility-item__title">Winter Room</h4>
+              <span class="status-badge status-confirmed">Confirmed</span>
+              <p>The winter room is accessible from the kitchen or from outside. It has a panoramic glass view, a kitchenette, a TV, and lounge seating. It functions as an additional living area during winter, separate from the main indoor living room.</p>
+            </div>
+
+            <div class="dg-utility-item">
+              <h4 class="dg-utility-item__title">Hot Water</h4>
+              <span class="status-badge status-confirmed">Confirmed</span>
+              <p>Hot water is available during your stay. It can be turned on or off from the labeled switch shown in the villa. During summer, if you need hot water, turn on the labeled switch and allow approximately 15 minutes.</p>
+            </div>
+
+            <div class="dg-utility-item">
+              <h4 class="dg-utility-item__title">Pool</h4>
+              <span class="status-badge status-confirmed">Confirmed</span>
+              <div class="concept-img-wrap concept-img-wrap--small" style="margin:8px 0;">
+                <img src="assets/concept/mechmech-pool.png" alt="Mechmech pool at night with villa behind — concept image" class="concept-img">
+                <span class="concept-img-label">Concept image</span>
+              </div>
+              <p>The Mechmech pool is covered. If you use the pool, remove the cover manually before use and place it back after you finish. If the pool is heated for your stay, replacing the cover helps retain heat. If the pool is not heated, replacing the cover is not required unless instructed by Oraya.</p>
+            </div>
+
+            <div class="dg-utility-item">
+              <h4 class="dg-utility-item__title">Kitchen &amp; BBQ</h4>
+              <span class="status-badge status-confirmed">Confirmed</span>
+              <p>The kitchen is fully operational and includes a kettle, microwave, gas cooktop, stove, cutlery, and glassware.</p>
+              <p style="margin-top:6px;">The outdoor BBQ is positioned outside the winter glass room while still protected under the roof, allowing it to be used comfortably during colder weather. The area includes a functional BBQ/kitchenette section with a barbecue kit. After using the BBQ, make sure it is fully turned off.</p>
+            </div>
+
+            <div class="dg-utility-item">
+              <h4 class="dg-utility-item__title">TV &amp; Entertainment</h4>
+              <span class="status-badge status-confirmed">Confirmed</span>
+              <p>The living room includes one Smart TV. The winter room also includes a TV.</p>
+            </div>
+
+          </div><!-- end vp-mechmech -->
+
+        </div><!-- end villa-selector -->
+
+        <div class="dg-troubleshoot" style="margin-top:16px;">
+          <h3 class="dg-troubleshoot__title">If something does not work as expected</h3>
+          <span class="status-badge status-confirmed">Confirmed</span>
+          <p style="margin-top:6px;">Contact Oraya before attempting a fix. <strong>+961 71 140 041</strong></p>
+        </div>
+
+        <p class="dg-page-ref">→ See print guide p. 3 for the full utilities reference for your villa</p>
+      </div>
+    </section>
+
+
+    <!-- ── Step 7: During Your Stay ── -->
+    <section class="dg-section" id="step-7" aria-labelledby="s7-title">
+      <div class="dg-section__inner">
+        <div class="dg-section__number-tag">Step 7</div>
+        <h2 class="dg-section__title" id="s7-title">During Your Stay</h2>
+        <p class="dg-section__intro">The complete villa guide is available in the printed handbook inside the villa. Quick links below.</p>
+
+        <nav class="dg-quick-links" aria-label="Villa guide sections">
+          <a href="#print-p4" class="dg-quick-link">
+            <span class="dg-quick-link__title">Using the Villa</span>
+            <span class="dg-quick-link__sub">Kitchen · BBQ · Pool · Bathrooms · Garbage</span>
+          </a>
+          <a href="#print-p5" class="dg-quick-link">
+            <span class="dg-quick-link__title">House Expectations</span>
+            <span class="dg-quick-link__sub">Visitors · Smoking · Pool safety · Property care</span>
+          </a>
+          <a href="#print-p7" class="dg-quick-link">
+            <span class="dg-quick-link__title">Emergency &amp; Contacts</span>
+            <span class="dg-quick-link__sub">Oraya concierge · Emergency services</span>
+          </a>
+        </nav>
+
+        <div class="dg-info-card" style="margin-top: 16px;">
+          <div class="dg-info-card__label">Oraya concierge — available 24/7</div>
+          <div class="dg-info-card__value">
+            <span class="status-badge status-confirmed">Confirmed</span>
+            <p style="margin-top:6px; font-size:15px; font-weight:700;">+961 71 140 041</p>
+            <p style="font-size:13px; color: var(--muted); margin-top:4px;">If you need help at any time, message us on WhatsApp or call us.</p>
+          </div>
+        </div>
+
+        <div class="concept-img-wrap concept-img-wrap--medium" style="margin-top:var(--space-xl); max-width:320px;">
+          <img src="assets/concept/mechmech-02.png" alt="Oraya branded bathrobe — guest welcome amenity concept image" class="concept-img">
+          <span class="concept-img-label">Concept image</span>
+        </div>
+
+        <p class="dg-page-ref">→ See print guide p. 4–5 for full villa information</p>
+      </div>
+    </section>
+
+
+    <!-- ── Step 8: Checkout ── -->
+    <section class="dg-section dg-section--alt" id="step-8" aria-labelledby="s8-title">
+      <div class="dg-section__inner">
+        <div class="dg-section__number-tag">Step 8</div>
+        <h2 class="dg-section__title" id="s8-title">Checkout</h2>
+        <p class="dg-section__intro">Complete this checklist before leaving the villa.</p>
+
+        <div class="dg-info-card">
+          <div class="dg-info-card__label">Checkout time</div>
+          <div class="dg-info-card__value">
+            <span class="status-badge status-confirmed">Confirmed</span>
+            <p style="margin-top:6px; font-size:15px;">Checkout is at 11:00 AM.</p>
+            <p style="font-size:13px; color:var(--muted); margin-top:6px;">Late checkout may be available on request. Extended checkout, including night checkout, can be arranged at discounted pricing when available and confirmed by Oraya.</p>
+          </div>
+        </div>
+
+        <div class="dg-checklist" role="list">
+          <div class="dg-checklist__item" role="listitem">
+            <span class="dg-checklist__box" aria-hidden="true"></span>
+            <span class="dg-checklist__text">All dishes washed and returned to their places</span>
+          </div>
+          <div class="dg-checklist__item" role="listitem">
+            <span class="dg-checklist__box" aria-hidden="true"></span>
+            <span class="dg-checklist__text">Garbage removed to the outdoor garbage cans</span>
+          </div>
+          <div class="dg-checklist__item" role="listitem">
+            <span class="dg-checklist__box" aria-hidden="true"></span>
+            <span class="dg-checklist__text">Pool cover replaced and secured</span>
+          </div>
+          <div class="dg-checklist__item" role="listitem">
+            <span class="dg-checklist__box" aria-hidden="true"></span>
+            <span class="dg-checklist__text">All lights off throughout the villa</span>
+          </div>
+          <div class="dg-checklist__item" role="listitem">
+            <span class="dg-checklist__box" aria-hidden="true"></span>
+            <span class="dg-checklist__text">AC / Heating turned off</span>
+          </div>
+          <div class="dg-checklist__item" role="listitem">
+            <span class="dg-checklist__box" aria-hidden="true"></span>
+            <span class="dg-checklist__text">All interior doors closed</span>
+          </div>
+          <div class="dg-checklist__item" role="listitem">
+            <span class="dg-checklist__box" aria-hidden="true"></span>
+            <span class="dg-checklist__text">All windows closed and latched</span>
+          </div>
+          <div class="dg-checklist__item" role="listitem">
+            <span class="dg-checklist__box" aria-hidden="true"></span>
+            <span class="dg-checklist__text">Front door secured · Gate closed behind you</span>
+          </div>
+        </div>
+
+        <div class="dg-farewell">
+          <p>Thank you for staying with Oraya.</p>
+          <p>We hope to welcome you back soon.</p>
+          <p class="dg-farewell__contact">
+            Left something behind? &ensp;
+            <strong>+961 71 140 041</strong>
+          </p>
+        </div>
+
+        <p class="dg-page-ref">→ See print guide p. 6 for the full checkout checklist</p>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Digital footer -->
+  <footer class="dg-footer">
+    <div class="dg-footer__inner">
+      <div class="dg-footer__brand">ORAYA</div>
+      <div class="dg-footer__link">stayoraya.com</div>
+      <p class="dg-footer__note">A printed copy of this guide is available inside the villa. For printing, open the villa-specific A4 print file.</p>
+    </div>
+  </footer>
+
+</div><!-- end .digital-guide -->
+
+<!-- ══════════════════════════════════════════════════════════════
+     PRINT FILES FOOTER — screen only (also see review hub above)
+     ══════════════════════════════════════════════════════════════ -->
+<div class="review-hub" style="padding-top:28px; padding-bottom:28px;">
+  <div class="review-hub__inner">
+    <p class="review-hub__tag">A4 print guides — open and print in browser</p>
+    <div class="review-hub__outputs">
+      <div class="review-hub__output">
+        <span class="review-hub__output-label">Villa Byblos · A4 · 7 pages</span>
+        <span class="review-hub__output-desc">Mastita, Jbeil</span>
+        <a href="oraya-guest-welcome-guide-print-byblos.html" class="review-hub__output-cta" target="_blank" rel="noopener">
+          Open Byblos Print Guide →
+        </a>
+      </div>
+      <div class="review-hub__output">
+        <span class="review-hub__output-label">Villa Mechmech · A4 · 7 pages</span>
+        <span class="review-hub__output-desc">Mechmech, Sama</span>
+        <a href="oraya-guest-welcome-guide-print-mechmech.html" class="review-hub__output-cta" target="_blank" rel="noopener">
+          Open Mechmech Print Guide →
+        </a>
+      </div>
+      <div class="review-hub__output review-hub__output--current">
+        <span class="review-hub__output-label">Review Hub</span>
+        <span class="review-hub__output-desc">Return to the top of this page for all three output links and print instructions.</span>
+        <a href="#review-hub" class="review-hub__output-cta review-hub__output-cta--secondary">
+          ↑ Back to top
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

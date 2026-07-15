@@ -1,0 +1,1664 @@
+/*
+ * ═══════════════════════════════════════════════════════════════════
+ * ORAYA PRINT GUIDE — A4 SHARED STYLESHEET
+ * Phase 16C · The Compendium · Design Prototype
+ *
+ * A4 portrait · 8mm margins · 7 pages per villa
+ * Used by:
+ *   oraya-guest-welcome-guide-print-byblos.html
+ *   oraya-guest-welcome-guide-print-mechmech.html
+ *
+ * PRODUCTION GUEST GUIDE.
+ * Real villa imagery + scannable Maps QR. Per-booking values
+ * (gate / front-door PIN) remain bracketed placeholders, filled
+ * before each guest's arrival.
+ * ═══════════════════════════════════════════════════════════════════
+ */
+
+
+/* ═══════════════════════════════════════════════════════
+   1. TOKENS
+   ═══════════════════════════════════════════════════════ */
+
+:root {
+  /* Brand palette — Oraya */
+  --gold:         #C5A46D;
+  --gold-faint:   rgba(197, 164, 109, 0.10);
+  --gold-soft:    rgba(197, 164, 109, 0.28);
+  --white:        #FFFFFF;
+  --beige:        #E7DECC;
+  --beige-light:  #F3EBDC;
+  --charcoal:     #2E2E2E;
+  --midnight:     #1F2B38;
+  --muted:        #8a8070;
+  --muted-light:  rgba(138, 128, 112, 0.22);
+
+  /* Warm boutique accents — used sparingly (hairlines / small marks only) */
+  --gold-deep:    #B08D4F;
+  --terracotta:   #B0714B;
+  --olive:        #7C7A54;
+  --warm-hairline: rgba(176, 113, 75, 0.26);
+
+  /* Typography */
+  --font-serif: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-sans:  'Lato', system-ui, -apple-system, sans-serif;
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   2. RESET & BASE
+   ═══════════════════════════════════════════════════════ */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html { font-size: 16px; }
+
+body {
+  font-family: var(--font-sans);
+  color: var(--charcoal);
+  background: #ddd8cf;
+  padding: 32px 16px 64px;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  color: var(--midnight);
+  line-height: 1.25;
+}
+
+p  { line-height: 1.6; }
+ul, ol { padding-left: 1.25em; }
+li { margin-bottom: 2px; }
+a  { color: var(--midnight); text-decoration: none; }
+strong { font-weight: 700; }
+
+
+/* ═══════════════════════════════════════════════════════
+   3. PROTOTYPE NOTICE (screen only — hidden in print)
+   ═══════════════════════════════════════════════════════ */
+
+.prototype-notice {
+  max-width: 680px;
+  margin: 0 auto 20px;
+  background: var(--midnight);
+  color: rgba(255, 255, 255, 0.78);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  line-height: 1.5;
+}
+
+.prototype-notice__label {
+  display: inline-block;
+  background: var(--gold);
+  color: var(--midnight);
+  font-weight: 700;
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   4. PRINT PAGES — SCREEN PREVIEW CARDS
+   A4 aspect ratio: 210 × 297mm = 1 : 1.4142
+   At 620px wide → min-height 877px
+   ═══════════════════════════════════════════════════════ */
+
+.print-page {
+  width: 100%;
+  max-width: 620px;
+  min-height: 877px;
+  background: var(--white);
+  margin: 0 auto 32px;
+  padding: 36px 24px;
+  box-shadow: 0 2px 28px rgba(46, 46, 46, 0.16);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   5. TYPOGRAPHY UTILITIES
+   ═══════════════════════════════════════════════════════ */
+
+.label-small {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 3px;
+}
+
+.placeholder-inline {
+  color: #7a6340;
+  font-style: italic;
+}
+
+.placeholder-tag {
+  display: inline-block;
+  background: rgba(197, 164, 109, 0.18);
+  color: #7a6340;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   6. PAGE STRUCTURE — HEADER, RULE, CONTENT, PAGE NUMBER
+   ═══════════════════════════════════════════════════════ */
+
+.pp-page-header {
+  margin-bottom: 20px;
+}
+
+.pp-page-label {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.pp-rule {
+  border: none;
+  border-top: 1px solid var(--gold);
+  margin: 0;
+}
+
+.pp-rule--light {
+  border: none;
+  border-top: 1px solid var(--gold-soft);
+  margin: 12px 0;
+}
+
+.pp-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pp-page-number {
+  font-family: var(--font-sans);
+  font-size: 9px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: center;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--muted-light);
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   7. PAGE 1 — WELCOME
+   ═══════════════════════════════════════════════════════ */
+
+/* Hero image — bleeds to page edge on screen */
+.pp-hero {
+  margin: -36px -24px 0;
+}
+
+.pp-welcome {
+  padding-top: 18px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.pp-brand__wordmark {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.36em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 10px;
+}
+
+.pp-villa-name {
+  font-family: var(--font-serif);
+  font-size: 30px;
+  color: var(--midnight);
+  margin: 14px 0 5px;
+  font-weight: 700;
+}
+
+.pp-guest-greeting {
+  font-family: var(--font-serif);
+  font-size: 13px;
+  color: var(--charcoal);
+  font-style: italic;
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+
+.pp-guest-name {
+  display: block;
+  font-size: 22px;
+  font-style: italic;
+  font-weight: 700;
+  color: var(--midnight);
+  margin-top: 2px;
+}
+
+.pp-stay-dates {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  color: var(--charcoal);
+  margin-bottom: 12px;
+}
+
+.pp-info-grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  margin: 10px 0;
+  align-items: start;
+}
+
+.pp-info-item {
+  font-family: var(--font-sans);
+}
+
+.pp-contacts {
+  background: var(--beige-light);
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.pp-contact-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  padding: 4px 0;
+}
+
+/* ─── Clickable maps link (page 1 villa location) ────────────── */
+.pp-maps-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  color: var(--muted);
+  font-style: italic;
+  text-decoration: none;
+  margin-top: 3px;
+}
+.pp-maps-link:hover { color: var(--gold); }
+
+/* ─── WhatsApp clickable link ─────────────────────────────────── */
+.pp-wa-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  text-decoration: none;
+  color: inherit;
+  font-weight: 700;
+}
+
+.pp-guide-note {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  color: var(--muted);
+  font-style: italic;
+  line-height: 1.5;
+  padding-top: 8px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.pp-guide-note p { font-size: 10px; }
+
+
+/* ═══════════════════════════════════════════════════════
+   7.5 BOOK COVER + CONTENTS (front matter)
+   ═══════════════════════════════════════════════════════ */
+
+/* ─── Cover — full-bleed image with branding ─────────────────── */
+.print-page--cover { padding: 0; }
+
+.pp-cover {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--midnight);
+}
+.pp-cover__img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+}
+.pp-cover__scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom,
+    rgba(31, 43, 56, 0.55) 0%,
+    rgba(31, 43, 56, 0.10) 26%,
+    rgba(31, 43, 56, 0.12) 50%,
+    rgba(31, 43, 56, 0.88) 100%);
+}
+.pp-cover__top {
+  position: relative;
+  z-index: 1;
+  padding: 46px 44px 0;
+  text-align: center;
+}
+.pp-cover__brand {
+  font-family: var(--font-sans);
+  font-weight: 900;
+  font-size: 15px;
+  letter-spacing: 0.46em;
+  text-transform: uppercase;
+  color: #fff;
+  padding-left: 0.46em;
+}
+.pp-cover__bottom {
+  position: relative;
+  z-index: 1;
+  margin-top: auto;
+  padding: 0 44px 54px;
+  text-align: center;
+  color: #fff;
+}
+.pp-cover__eyebrow {
+  display: block;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.30em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 14px;
+  padding-left: 0.30em;
+}
+.pp-cover__title {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 44px;
+  line-height: 1.08;
+  color: #fff;
+  margin: 0;
+}
+.pp-cover__rule {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.55);
+  width: 64px;
+  margin: 18px auto;
+}
+.pp-cover__loc {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.88);
+  padding-left: 0.18em;
+}
+
+/* ─── Contents / index ───────────────────────────────────────── */
+.pp-index-intro {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.6;
+  margin-bottom: 4px;
+}
+.pp-index {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.pp-index__item {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 16px 2px;
+  border-bottom: 0.5px solid var(--muted-light);
+}
+.pp-index__name {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--midnight);
+}
+.pp-index__dots {
+  flex: 1;
+  border-bottom: 1px dotted rgba(138, 128, 112, 0.55);
+  transform: translateY(-3px);
+}
+.pp-index__page {
+  font-family: var(--font-serif);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--gold-deep);
+  flex-shrink: 0;
+}
+
+/* ─── Welcome letter (page 3) — italic, letter style ─────────── */
+.pp-welcome-letter {
+  margin-top: 20px;
+}
+.pp-welcome-letter p {
+  font-family: var(--font-sans);
+  font-style: italic;
+  font-size: 15.5px;
+  line-height: 2.0;
+  color: var(--charcoal);
+  margin-bottom: 15px;
+}
+.pp-welcome-sign {
+  font-family: var(--font-sans);
+  font-style: italic;
+  font-size: 15.5px;
+  color: var(--muted);
+  margin-top: 22px;
+}
+
+/* ─── Back cover ─────────────────────────────────────────────── */
+.print-page--backcover {
+  padding: 0;
+  background: var(--midnight);
+}
+.pp-backcover {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: #fff;
+  padding: 60px 44px;
+}
+.pp-backcover__brand {
+  font-family: var(--font-sans);
+  font-weight: 900;
+  font-size: 20px;
+  letter-spacing: 0.46em;
+  color: var(--gold);
+  padding-left: 0.46em;
+}
+.pp-backcover__rule {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.40);
+  width: 58px;
+  margin: 22px auto;
+}
+.pp-backcover__tagline {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.82);
+  line-height: 1.7;
+  max-width: 300px;
+}
+.pp-backcover__contact {
+  margin-top: 42px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.68);
+  line-height: 2.1;
+}
+.pp-backcover__url {
+  color: var(--gold);
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   8. PAGE 2 — ARRIVAL & ACCESS
+   ═══════════════════════════════════════════════════════ */
+
+.pp-section-title {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--charcoal);
+  margin-bottom: 7px;
+  padding-bottom: 5px;
+  border-bottom: 0.5px solid var(--gold-soft);
+}
+
+.pp-section p,
+.pp-section li {
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--charcoal);
+}
+
+.pp-checklist {
+  list-style: none;
+  padding: 0;
+  font-size: 12.5px;
+  color: var(--charcoal);
+  line-height: 1.7;
+}
+
+/* Arrival sequence — steps on left, keypad images on right */
+.pp-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.pp-two-col__left  { }
+.pp-two-col__right {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-self: stretch;
+}
+
+/* Keypad images fill the full right-column height equally */
+.pp-two-col__right .image-placeholder {
+  flex: 1;
+  min-height: 0;
+}
+
+.pp-numbered-steps {
+  counter-reset: step;
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.pp-numbered-steps li {
+  counter-increment: step;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  padding: 6.5px 0;
+  border-bottom: 0.5px solid var(--muted-light);
+  color: var(--charcoal);
+}
+
+/* Gold monochrome step icon — left of the text */
+.pp-step-icon {
+  flex-shrink: 0;
+  width: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pp-step-icon svg { display: block; }
+
+.pp-step-text { flex: 1; }
+
+/* Step number — gold disc on the RIGHT of each step */
+.pp-numbered-steps li::after {
+  content: counter(step);
+  font-family: var(--font-sans);
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--white);
+  background: var(--gold);
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Access-support warning callout — reads as a clear "if stuck" notice */
+.pp-access-support {
+  background: var(--gold-faint);
+  border: 1px solid var(--gold-soft);
+  border-left: 3px solid var(--gold);
+  padding: 11px 14px;
+}
+
+.pp-access-support__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 9px;
+}
+
+.pp-access-support__head svg { flex-shrink: 0; display: block; }
+
+.pp-access-support__heading {
+  font-family: var(--font-sans);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--midnight);
+}
+
+/* Wrapping tag pills — no orphaned words, scannable trigger list */
+.pp-access-support__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 6px;
+  margin-bottom: 9px;
+}
+
+.pp-access-tag {
+  font-family: var(--font-sans);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #7a6340;
+  background: rgba(197, 164, 109, 0.20);
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+
+.pp-access-support__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 12.5px;
+  color: var(--charcoal);
+  padding: 3px 0;
+  gap: 8px;
+  line-height: 1.5;
+}
+
+.pp-access-support__row em {
+  color: var(--muted);
+  font-style: italic;
+  font-size: 11px;
+}
+
+.pp-access-support__row strong {
+  white-space: nowrap;
+  color: var(--midnight);
+}
+
+/* Page 2 — distribute the five sections to fill the sheet height */
+#print-p2 .pp-content {
+  justify-content: space-between;
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   9. PAGE 3 — UTILITIES GRID
+   ═══════════════════════════════════════════════════════ */
+
+.pp-utilities-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: repeat(3, 1fr);
+  gap: 11px;
+  flex: 1;
+  align-items: stretch;
+}
+
+/* Mechmech P3 variant: 4 uniform cards (2 rows) + a full-width strip */
+.pp-utilities-grid--split {
+  grid-template-rows: 1fr 1fr auto;
+}
+
+.pp-utility-item {
+  background: var(--beige-light);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+}
+
+.pp-utility-item--wide {
+  grid-column: 1 / -1;
+}
+
+.pp-utility-title {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 0.5px solid var(--gold-soft);
+}
+
+.pp-utility-item p {
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--charcoal);
+  margin-top: 5px;
+}
+
+.pp-utility-item p + p {
+  margin-top: 4px;
+}
+
+.pp-utility-note {
+  font-size: 9.5px;
+  color: var(--muted);
+  font-style: italic;
+  margin-top: 4px;
+}
+
+/* ── Wi-Fi / Mesh badges (P3 Wi-Fi card) ───────────────────── */
+.pp-utility-logos {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-top: auto;
+  padding-top: 9px;
+}
+
+.pp-utility-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-sans);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.pp-utility-badge svg { flex-shrink: 0; display: block; width: 22px; height: 22px; }
+
+/* ── TV service chips (P3 TV card — Netflix / webOS / Cablevision) ── */
+.pp-service-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 9px;
+}
+
+.pp-service-chip {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 5px 9px;
+  border: 1px solid var(--muted-light);
+  background: var(--white);
+  color: var(--midnight);
+}
+
+.pp-service-chip--netflix {
+  color: #E50914;
+  border-color: rgba(229, 9, 20, 0.32);
+  letter-spacing: 0.08em;
+}
+
+/* Real brand-logo chips (webOS, Cablevision) — kept in their own colours */
+.pp-service-chip--logo {
+  padding: 4px 8px;
+}
+.pp-service-chip--logo img {
+  height: 15px;
+  width: auto;
+  display: block;
+}
+
+.pp-utilities-safety {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  color: var(--muted);
+  font-style: italic;
+  padding-top: 8px;
+  border-top: 1px solid var(--muted-light);
+  margin-top: auto;
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   10. PAGE 4 — USING THE VILLA
+   ═══════════════════════════════════════════════════════ */
+
+.pp-expectations-notice {
+  background: var(--gold-faint);
+  border-left: 2px solid var(--gold);
+  padding: 8px 12px;
+  font-size: 11px;
+  color: var(--charcoal);
+  line-height: 1.5;
+}
+
+.pp-two-col--auto {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.pp-section--full {
+  grid-column: 1 / -1;
+}
+
+.pp-section-body {
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--charcoal);
+  margin-top: 6px;
+}
+
+.pp-section-body + .pp-section-body {
+  margin-top: 4px;
+}
+
+.pp-amenity-strip {
+  display: flex;
+  gap: 6px;
+  margin: 5px 0 4px;
+}
+
+.pp-amenity-strip .concept-img-wrap {
+  flex: 1;
+}
+
+/* ─── Feature photo grid (Page 4 — Comfort & Using the Villa) ───── */
+.pp-feature-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  flex: 1;
+  align-content: space-between;
+  align-items: start;
+}
+
+.pp-feature-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.pp-feature-card--wide {
+  grid-column: 1 / -1;
+}
+
+.pp-feature-card__title {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--charcoal);
+  margin-bottom: 6px;
+  padding-bottom: 5px;
+  border-bottom: 0.5px solid var(--gold-soft);
+}
+
+.pp-feature-photo {
+  width: 100%;
+  height: 125px;
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 7px;
+  background: var(--beige);
+  line-height: 0;
+  border-radius: 12px 12px 3px 3px;
+}
+
+.pp-feature-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+}
+
+.pp-feature-card--wide .pp-feature-photo {
+  height: 155px;
+}
+
+.pp-feature-photo--placeholder {
+  background: var(--beige-light);
+  border: 1.5px dashed var(--warm-hairline);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  line-height: 1;
+}
+
+.pp-feature-photo--placeholder::before {
+  content: '◻';
+  font-size: 18px;
+  color: var(--muted);
+  opacity: 0.40;
+  line-height: 1;
+}
+
+.pp-feature-photo__hint {
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  opacity: 0.65;
+}
+
+.pp-feature-card__body {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--charcoal);
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   11. PAGE 5 — HOUSE EXPECTATIONS
+   ═══════════════════════════════════════════════════════ */
+
+.pp-expectations-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 11px;
+  flex: 1;
+  align-items: start;
+  align-content: space-between;
+}
+
+.pp-expectation-item {
+  background: var(--beige-light);
+  padding: 13px 15px;
+  display: flex;
+  flex-direction: column;
+}
+
+.pp-expectation-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--charcoal);
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 0.5px solid var(--gold-soft);
+}
+
+/* Small relevant icon beside each expectation title */
+.pp-expectation-title svg {
+  flex-shrink: 0;
+  display: block;
+}
+
+.pp-expectation-item p {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--charcoal);
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   12. PAGE 6 — CHECKOUT
+   ═══════════════════════════════════════════════════════ */
+
+.pp-checkout-time {
+  text-align: center;
+  padding: 12px 0 10px;
+  border-bottom: 1px solid var(--gold-soft);
+  margin-bottom: 6px;
+}
+
+.pp-checkout-time .label-small {
+  margin-bottom: 4px;
+}
+
+.pp-checkout-time-value {
+  display: block;
+  font-family: var(--font-serif);
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--midnight);
+  letter-spacing: 0.03em;
+  margin-bottom: 6px;
+}
+
+.pp-checkout-note {
+  font-size: 10px;
+  color: var(--muted);
+  font-style: italic;
+  line-height: 1.5;
+  max-width: 380px;
+  margin: 0 auto;
+}
+
+.pp-checkout-list {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  justify-content: space-between;
+}
+
+.pp-checkout-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--muted-light);
+}
+
+.pp-checkout-item__number {
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--gold);
+  min-width: 14px;
+  text-align: center;
+  padding-top: 2px;
+  flex-shrink: 0;
+}
+
+.pp-checkout-item__box {
+  width: 13px;
+  height: 13px;
+  border: 1.5px solid var(--muted);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.pp-checkout-item__content {
+  flex: 1;
+}
+
+.pp-checkout-item__content strong {
+  font-size: 13px;
+  font-family: var(--font-sans);
+  display: block;
+  margin-bottom: 2px;
+}
+
+.pp-checkout-item__content p {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.pp-farewell {
+  text-align: center;
+  padding: 18px 0 0;
+  font-family: var(--font-serif);
+  font-size: 15px;
+  font-style: italic;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   13. PAGE 7 — EMERGENCY & CONTACTS
+   ═══════════════════════════════════════════════════════ */
+
+.pp-contacts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.pp-contact-section {
+  background: var(--beige-light);
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+}
+
+.pp-contact-section--emergency {
+  background: rgba(197, 164, 109, 0.08);
+  border: 1px solid var(--gold-soft);
+}
+
+.pp-contact-section-title {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 12px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--muted-light);
+}
+
+.pp-contact-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--muted-light);
+  font-size: 13px;
+}
+
+.pp-contact-item:last-child {
+  border-bottom: none;
+}
+
+.pp-contact-label {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.pp-contact-value {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--midnight);
+  text-align: right;
+}
+
+.pp-booking-ref {
+  margin-top: auto;
+}
+
+.pp-booking-ref__inner {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding-top: 8px;
+}
+
+.pp-booking-ref__text {
+  flex: 1;
+}
+
+.pp-booking-ref__code {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--midnight);
+  margin: 4px 0;
+}
+
+.pp-booking-ref__note {
+  font-size: 10px;
+  color: var(--muted);
+  font-style: italic;
+  line-height: 1.4;
+}
+
+.pp-booking-ref__qr {
+  flex-shrink: 0;
+}
+
+.pp-last-brand {
+  text-align: center;
+  margin-top: auto;
+  padding: 16px 0 8px;
+  border-top: 1px solid var(--muted-light);
+}
+
+.pp-last-brand__url {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.10em;
+  margin-top: 2px;
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   14. CONCEPT IMAGE WRAPPERS
+   ═══════════════════════════════════════════════════════ */
+
+.concept-img-wrap {
+  position: relative;
+  overflow: hidden;
+  background: var(--beige);
+  display: block;
+  line-height: 0;
+}
+
+.concept-img {
+  width: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: center;
+}
+
+.concept-img-wrap--hero   .concept-img { height: 340px; }
+.concept-img-wrap--medium .concept-img { height: 130px; }
+.concept-img-wrap--small  .concept-img { height: 82px; }
+.concept-img-wrap--thumb  .concept-img { height: 108px; }
+.concept-img-wrap--micro  .concept-img { height: 58px; }
+
+.concept-img-label {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  background: rgba(31, 43, 56, 0.72);
+  color: rgba(255, 255, 255, 0.92);
+  font-family: var(--font-sans);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  pointer-events: none;
+  line-height: 1.4;
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   15. CSS IMAGE PLACEHOLDERS
+   ═══════════════════════════════════════════════════════ */
+
+.image-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 56px;
+  background: var(--beige-light);
+  border: 1.5px dashed rgba(138, 128, 112, 0.42);
+  gap: 4px;
+  text-align: center;
+  padding: 8px;
+}
+
+.image-placeholder::before {
+  content: '◻';
+  font-size: 15px;
+  color: var(--muted);
+  opacity: 0.45;
+}
+
+.image-placeholder__label {
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.image-placeholder__desc {
+  font-family: var(--font-sans);
+  font-size: 9px;
+  color: var(--muted);
+  font-style: italic;
+  line-height: 1.4;
+}
+
+.image-placeholder--small { min-height: 44px; }
+.image-placeholder--qr {
+  min-height: 64px;
+  width: 64px;
+  padding: 8px;
+}
+
+/* ── Navigation QR (production — real scannable code) ───────── */
+.pp-qr {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.pp-qr__frame {
+  width: 88px;
+  height: 88px;
+  padding: 5px;
+  background: #fff;
+  border: 1px solid var(--muted-light);
+}
+.pp-qr__frame svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.pp-qr__hint {
+  font-family: var(--font-sans);
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ── Keypad photo slots (drop in real Aqara photos; placeholder until then) ── */
+.pp-keypad-tile {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  background: var(--beige-light);
+  border: 1px solid var(--muted-light);
+  position: relative;
+  overflow: hidden;
+}
+.pp-keypad-tile img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.pp-keypad-tile--placeholder {
+  border: 1.5px dashed rgba(138, 128, 112, 0.42);
+}
+.pp-keypad-tile--placeholder::before {
+  content: '\25FB';
+  font-size: 17px;
+  color: var(--muted);
+  opacity: 0.42;
+  line-height: 1;
+}
+.pp-keypad-tile__hint {
+  font-family: var(--font-sans);
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  opacity: 0.7;
+}
+.pp-keypad-tile svg { display: block; }
+.pp-keypad-tile__label {
+  font-family: var(--font-sans);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: center;
+  padding: 0 8px;
+  line-height: 1.4;
+}
+
+/* Caption overlay for a real keypad/lock photo */
+.pp-keypad-tile__caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(31, 43, 56, 0.74);
+  color: rgba(255, 255, 255, 0.94);
+  font-family: var(--font-sans);
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  padding: 4px 7px;
+  text-align: center;
+  line-height: 1.35;
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   15.5 REVIEW BAR (screen only — prototype navigation)
+   ═══════════════════════════════════════════════════════ */
+
+.review-bar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--midnight);
+  border-bottom: 2px solid var(--gold);
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 48px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+}
+
+.review-bar__left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.review-bar__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: rgba(255, 255, 255, 0.55);
+  transition: color 0.15s;
+  white-space: nowrap;
+}
+
+.review-bar__back:hover {
+  color: var(--gold);
+}
+
+.review-bar__back svg {
+  opacity: 0.7;
+}
+
+.review-bar__divider {
+  width: 1px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.10);
+  flex-shrink: 0;
+}
+
+.review-bar__label {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.75);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.review-bar__badge {
+  font-family: var(--font-sans);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--midnight);
+  background: var(--gold);
+  padding: 2px 7px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.review-bar__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.review-bar__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  text-decoration: none;
+  padding: 6px 12px;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+  cursor: pointer;
+  border: none;
+  outline: none;
+}
+
+.review-bar__btn--print {
+  background: var(--gold);
+  color: var(--midnight);
+}
+
+.review-bar__btn--print:hover {
+  opacity: 0.85;
+}
+
+.review-bar__btn--alt {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.review-bar__btn--alt:hover {
+  color: var(--gold);
+  border-color: rgba(197, 164, 109, 0.35);
+}
+
+/* .print-document — wraps all .print-page divs in print files */
+.print-document {
+  /* Screen: transparent wrapper — layout handled by body centering */
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   16. PRINT MEDIA
+   ═══════════════════════════════════════════════════════ */
+
+@media print {
+
+  /* ─── A4 page, zero margin ──────────────────────────────────────
+     Content padding is owned by .print-page { padding: 36px 40px }
+     (same as screen). margin: 0 prevents double-counting.
+  ─────────────────────────────────────────────────────────────── */
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+
+  /* ─── Set document to physical paper width ──────────────────────
+     Prevents the renderer from auto-scaling the 620px content.
+  ─────────────────────────────────────────────────────────────── */
+  html, body {
+    width: 210mm;
+    margin: 0;
+    padding: 0;
+    background: #fff;
+  }
+
+  /* ─── Hide screen-only UI ───────────────────────────────────── */
+  .prototype-notice,
+  .review-bar {
+    display: none !important;
+  }
+
+  /* ─── Centre the page stack on A4 paper ────────────────────────
+     Pages are 620px wide. A4 is 210mm = 793.7px wide.
+     Flex centering places each page with ~87px (23mm) margins
+     on each side — identical content, clean printed layout.
+  ─────────────────────────────────────────────────────────────── */
+  .print-document {
+    width: 210mm;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* ─── Each print page ───────────────────────────────────────────
+     Same 620px width and 36px/40px padding as the browser view.
+     height: 297mm = one A4 page. break-after: page separates them.
+     No typography overrides — screen px values render identically.
+     No overflow: hidden — content must genuinely fit.
+  ─────────────────────────────────────────────────────────────── */
+  .print-page {
+    width: 620px;
+    height: 297mm;
+    padding: 36px 40px;
+    box-sizing: border-box;
+    margin: 0;
+    box-shadow: none;
+    border: none;
+    transform: none;
+    break-after: page;
+    page-break-after: always;
+  }
+
+  .print-page:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  /* ─── Page number — push to bottom of flex column ────────────── */
+  .pp-page-number {
+    position: static;
+    margin-top: auto;
+  }
+
+  /* ─── Checkout checkboxes — visible boxes in print ────────────── */
+  .pp-checkout-item__box {
+    width: 9pt;
+    height: 9pt;
+    border: 1pt solid #999;
+  }
+
+  /* ─── Placeholder tags — plain italic in print ──────────────── */
+  .placeholder-tag {
+    background: none;
+    color: #2E2E2E;
+    padding: 0;
+    font-style: italic;
+  }
+
+  /* ─── Suppress browser link URL annotation ──────────────────── */
+  a::after { content: none !important; }
+
+}
