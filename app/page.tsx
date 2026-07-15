@@ -391,11 +391,11 @@ export default function Home() {
             >
               Our philosophy
             </p>
-            <h2
+            <h1
               style={{ fontFamily: PLAYFAIR, fontWeight: 400, color: CHARCOAL, lineHeight: 1.2, fontSize: "clamp(1.8rem, 3.5vw, 3rem)" }}
             >
               Refined stays,<br />timeless memories
-            </h2>
+            </h1>
             <div style={{ width: "40px", height: "0.5px", background: GOLD, margin: "1.5rem 0" }} />
             <p
               className="max-w-[34ch] md:max-w-none oraya-text-muted"
