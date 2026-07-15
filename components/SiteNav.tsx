@@ -45,6 +45,15 @@ export default function SiteNav({ base = "" }: Props) {
     });
   }, []);
 
+  useEffect(() => {
+    if (!dropOpen) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setDropOpen(false);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [dropOpen]);
+
   async function signOut() {
     await supabase.auth.signOut();
     window.location.href = "/";
@@ -104,6 +113,8 @@ export default function SiteNav({ base = "" }: Props) {
             <button
               type="button"
               className="oraya-pressable"
+              aria-expanded={dropOpen}
+              aria-haspopup="menu"
               style={{
                 fontFamily: LATO, fontSize: "11px", letterSpacing: "1.5px",
                 textTransform: "uppercase", color: GOLD,
@@ -120,7 +131,7 @@ export default function SiteNav({ base = "" }: Props) {
             </button>
 
             {dropOpen && (
-              <div style={{
+              <div role="menu" style={{
                 position: "absolute", top: "100%", right: 0,
                 minWidth: "180px",
                 zIndex: 200,
@@ -133,6 +144,7 @@ export default function SiteNav({ base = "" }: Props) {
                 <a
                   href="/profile"
                   className="oraya-pressable"
+                  role="menuitem"
                   style={{
                     display: "block", padding: "13px 20px",
                     fontFamily: LATO, fontSize: "10px", letterSpacing: "2px",
@@ -154,6 +166,7 @@ export default function SiteNav({ base = "" }: Props) {
                 <button
                   type="button"
                   className="oraya-pressable"
+                  role="menuitem"
                   onClick={signOut}
                   style={{
                     display: "block", width: "100%",

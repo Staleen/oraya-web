@@ -157,6 +157,15 @@ export default function Home() {
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    if (!dropOpen) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setDropOpen(false);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [dropOpen]);
+
   async function signOut() {
     await supabase.auth.signOut();
     setIsLoggedIn(false);
@@ -210,7 +219,7 @@ export default function Home() {
               onMouseEnter={() => setDropOpen(true)}
               onMouseLeave={() => setDropOpen(false)}
             >
-              <button type="button" className="oraya-pressable" style={{
+              <button type="button" className="oraya-pressable" aria-expanded={dropOpen} aria-haspopup="menu" style={{
                 fontFamily: LATO, fontSize: "11px", letterSpacing: "1.5px",
                 textTransform: "uppercase", color: GOLD,
                 backgroundColor: "transparent", border: "none",
@@ -223,7 +232,7 @@ export default function Home() {
                 <span style={{ fontSize: "7px", opacity: 0.5, marginTop: "1px" }}>▾</span>
               </button>
               {dropOpen && (
-                <div style={{
+                <div role="menu" style={{
                   position: "absolute", top: "100%", right: 0,
                   backgroundColor: WHITE,
                   border: "0.5px solid rgba(197,164,109,0.25)",
@@ -233,6 +242,7 @@ export default function Home() {
                   <a
                     href="/profile"
                     className="oraya-pressable"
+                    role="menuitem"
                     style={{
                       display: "block", padding: "13px 20px",
                       fontFamily: LATO, fontSize: "10px", letterSpacing: "2px",
@@ -247,6 +257,7 @@ export default function Home() {
                   <button
                     type="button"
                     className="oraya-pressable"
+                    role="menuitem"
                     onClick={signOut}
                     style={{
                       display: "block", width: "100%", padding: "13px 20px", textAlign: "left",
