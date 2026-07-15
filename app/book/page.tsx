@@ -14,6 +14,7 @@ import type { NightSource } from "@/lib/pricing/types";
 import { formatBeirutMonthDay, getBeirutDay } from "@/lib/utils/date-beirut";
 import { supabase } from "@/lib/supabase";
 import { writeBookToEventHandoff } from "@/lib/event-inquiry-handoff";
+import { formatUsdDisplay } from "@/lib/money";
 import { AddonIcon } from "@/components/addon-icon";
 import { SkeletonBlock, SkeletonText } from "@/components/LoadingSkeleton";
 import PublicThemeToggle from "@/components/PublicThemeToggle";
@@ -380,7 +381,7 @@ function nightCount(checkIn: string, checkOut: string): number {
 }
 
 function formatUsd(amount: number): string {
-  return `$${amount.toLocaleString("en-US")}`;
+  return formatUsdDisplay(amount);
 }
 
 const NIGHT_DAYS   = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
@@ -2218,7 +2219,7 @@ function BookPageInner() {
           text="Based on selected dates, bedroom setup, and selected add-ons. Final confirmation is reviewed by Oraya."
         />
       </div>
-      <p style={{ fontFamily: LATO, fontSize: "21px", fontWeight: 600, color: GOLD, margin: narrowStep1 ? "0 0 6px" : "0 0 10px", lineHeight: 1.2, letterSpacing: "0.02em" }}>
+      <p style={{ fontFamily: LATO, fontSize: "21px", fontWeight: 600, color: GOLD, margin: narrowStep1 ? "0 0 6px" : "0 0 10px", lineHeight: 1.2, letterSpacing: "0.02em", fontVariantNumeric: "tabular-nums" }}>
         {formatUsd(estimatedTotal)}
       </p>
     </>
@@ -2234,7 +2235,7 @@ function BookPageInner() {
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", gap: "16px" }}>
         <span style={{ fontFamily: LATO, fontSize: "12px", color: BOOK_SOFT }}>Selected add-ons</span>
-        <span style={{ fontFamily: LATO, fontSize: "12px", color: BOOK_SOFT2, textAlign: "right" }}>
+        <span style={{ fontFamily: LATO, fontSize: "12px", color: BOOK_SOFT2, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
           {formatUsd(selectedAddonSubtotal)}
         </span>
       </div>
@@ -3065,10 +3066,10 @@ function BookPageInner() {
                             {hasAppliedDiscount && offerData ? (
                               /* Phase 12E Batch 5: discount override (display only, not submitted) */
                               <>
-                                <span style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, display: "block", textDecoration: "line-through" }}>
+                                <span style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, display: "block", textDecoration: "line-through", fontVariantNumeric: "tabular-nums" }}>
                                   {offerData.basePrice.toLocaleString()} {addon.currency}
                                 </span>
-                                <span style={{ fontFamily: LATO, fontSize: "14px", color: selected ? SUCCESS : GOLD, display: "block", fontWeight: 600, lineHeight: 1.35 }}>
+                                <span style={{ fontFamily: LATO, fontSize: "14px", color: selected ? SUCCESS : GOLD, display: "block", fontWeight: 600, lineHeight: 1.35, fontVariantNumeric: "tabular-nums" }}>
                                   {offerData.discountedPrice.toLocaleString()} {addon.currency}
                                 </span>
                                 <span style={{ fontFamily: LATO, fontSize: "10px", color: selected ? SUCCESS : "#6fbf7e", display: "block", lineHeight: 1.4 }}>
@@ -3086,7 +3087,7 @@ function BookPageInner() {
                                 {(() => {
                                   const computed = computeAddonPrice(addon);
                                   return computed !== null ? (
-                                    <span style={{ fontFamily: LATO, fontSize: "12px", color: selected ? SUCCESS : MUTED }}>
+                                    <span style={{ fontFamily: LATO, fontSize: "12px", color: selected ? SUCCESS : MUTED, fontVariantNumeric: "tabular-nums" }}>
                                       {Math.round(computed).toLocaleString()} {addon.currency}
                                     </span>
                                   ) : (
@@ -3102,7 +3103,7 @@ function BookPageInner() {
                                   {PRICING_MODEL_LABELS[addon.pricing_model] ?? addon.pricing_model}
                                 </span>
                                 {addon.price !== null ? (
-                                  <span style={{ fontFamily: LATO, fontSize: "12px", color: selected ? SUCCESS : MUTED }}>
+                                  <span style={{ fontFamily: LATO, fontSize: "12px", color: selected ? SUCCESS : MUTED, fontVariantNumeric: "tabular-nums" }}>
                                     {addon.price.toLocaleString()} {addon.currency}
                                   </span>
                                 ) : (
@@ -3158,10 +3159,10 @@ function BookPageInner() {
                                 {offerAddon.label}
                               </p>
                               <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.4 }}>
-                                <span style={{ textDecoration: "line-through", marginRight: "6px" }}>
+                                <span style={{ textDecoration: "line-through", marginRight: "6px", fontVariantNumeric: "tabular-nums" }}>
                                   {bp.toLocaleString()} {offerAddon.currency}
                                 </span>
-                                <span style={{ color: GOLD, marginRight: "6px" }}>
+                                <span style={{ color: GOLD, marginRight: "6px", fontVariantNumeric: "tabular-nums" }}>
                                   {dp.toLocaleString()} {offerAddon.currency}
                                 </span>
                                 <span style={{ color: "#6fbf7e" }}>
@@ -3523,7 +3524,7 @@ function BookPageInner() {
                   className={loading ? undefined : "oraya-pressable oraya-cta-gold-hover"}
                   style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 18px", minHeight: "50px", flex: 1, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}
                 >
-                  {loading && submitIntent === "pay_now" ? "Preparing payment..." : "Continue to secure payment"}
+                  {loading && submitIntent === "pay_now" ? "Preparing payment…" : "Continue to secure payment"}
                 </button>
               </div>
               <button
@@ -3550,7 +3551,7 @@ function BookPageInner() {
                   justifyContent: "center",
                 }}
               >
-                {loading && submitIntent === "reserve" ? "Submitting request..." : "Reserve now, pay later"}
+                {loading && submitIntent === "reserve" ? "Submitting request…" : "Reserve now, pay later"}
               </button>
             </div>
           )}

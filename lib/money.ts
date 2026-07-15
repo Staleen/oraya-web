@@ -12,6 +12,17 @@ export function roundMoney(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+const USD_DISPLAY_FORMATTER = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 0,
+});
+
+/** Guest-facing USD display, e.g. 1250 → "$1,250" (whole dollars). */
+export function formatUsdDisplay(value: number): string {
+  return USD_DISPLAY_FORMATTER.format(value);
+}
+
 /** Sum a list of monetary values with 2-decimal rounding applied per addition. */
 export function sumMoney(values: ReadonlyArray<number>): number {
   let total = 0;

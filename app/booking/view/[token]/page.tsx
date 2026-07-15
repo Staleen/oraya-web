@@ -13,6 +13,7 @@ import type {
 } from "@/lib/payments/domain";
 import type { PaymentLinkProvider } from "@/lib/payments/provider";
 import { formatPaymentMethodLabel } from "@/lib/payment-method-labels";
+import { formatUsdDisplay } from "@/lib/money";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { verifyViewToken } from "@/lib/booking-action-token";
 import {
@@ -134,7 +135,7 @@ function statusVisual(
 
 function formatAddonPrice(price: number | null | undefined): string {
   if (typeof price !== "number") return "Price on request";
-  return `$${price.toLocaleString("en-US")}`;
+  return formatUsdDisplay(price);
 }
 
 function parseAmount(value: unknown): number | null {
@@ -147,7 +148,7 @@ function parseAmount(value: unknown): number | null {
 }
 
 function formatMoney(value: number): string {
-  return `USD ${Math.round(value).toLocaleString("en-US")}`;
+  return formatUsdDisplay(value);
 }
 
 function formatDateTime(value: string | null | undefined): string | null {
@@ -820,8 +821,8 @@ export default async function BookingViewPage({
                             ) : null}
                           </span>
                           <span style={{ textAlign: "right" }}>{row.quantity}</span>
-                          <span style={{ textAlign: "right", color: MUTED }}>{formatMoney(row.unit_price)}</span>
-                          <span style={{ textAlign: "right", color: GOLD }}>{formatMoney(row.line_total)}</span>
+                          <span style={{ textAlign: "right", color: MUTED, fontVariantNumeric: "tabular-nums" }}>{formatMoney(row.unit_price)}</span>
+                          <span style={{ textAlign: "right", color: GOLD, fontVariantNumeric: "tabular-nums" }}>{formatMoney(row.line_total)}</span>
                         </div>
                       ))}
                       {/* Phase 15H — show the proposal grand total directly under the line table. */}
@@ -1022,7 +1023,7 @@ export default async function BookingViewPage({
                 <span style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED }}>
                   {String(label)}
                 </span>
-                <span style={{ fontFamily: LATO, fontSize: isTotal ? "16px" : "13px", color: isTotal ? GOLD : WHITE, fontWeight: isTotal ? 600 : 300, textAlign: "right" }}>
+                <span style={{ fontFamily: LATO, fontSize: isTotal ? "16px" : "13px", color: isTotal ? GOLD : WHITE, fontWeight: isTotal ? 600 : 300, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
                   {String(value)}
                 </span>
               </div>
