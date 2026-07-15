@@ -46,6 +46,7 @@
  */
 
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { bookingReferenceUuidRange } from "@/lib/booking-reference-range";
 
 const REFERENCE_LENGTH = 8;
 const REFERENCE_HEX_RE = /^[0-9A-F]{8}$/;
@@ -121,9 +122,16 @@ type BookingReferenceRow = {
 /**
  * Resolve a guest-supplied reference to a single booking row.
  *
- * Lookup strategy: case-insensitive prefix match on `bookings.id` via the
- * PostgREST `id::text` cast filter. Stops at 2 rows so an ambiguous match
- * is detected without fetching the entire table.
+ * Lookup strategy: uuid RANGE match on the indexed `bookings.id` primary
+ * key via plain `gte`/`lt(e)` operators ([lib/booking-reference-range.ts]).
+ * The reference is the uuid's first 8 hex chars — its first 4 bytes — and
+ * Postgres compares uuids byte-wise, so the half-open range covers exactly
+ * the prefix. (The previous `.ilike("id::text", …)` filter relied on a
+ * cast in a PostgREST filter key, which PostgREST rejects server-side;
+ * the error collapsed to "not_found" and broke every reference lookup —
+ * caught in the Stage 4B Preview verification, 2026-07-15.) Stops at
+ * 2 rows so an ambiguous match is detected without fetching the entire
+ * table.
  *
  * Failure modes (Supabase error, unexpected throw) collapse to
  * `{ kind: "not_found" }` and are logged server-side. The caller cannot
@@ -142,14 +150,16 @@ export async function resolveBookingByReference(
   const normalized = normalizeBookingReference(reference);
   if (!normalized) return { kind: "not_found" };
 
-  const pattern = `${normalized.toLowerCase()}%`;
+  const range = bookingReferenceUuidRange(normalized);
+  if (!range) return { kind: "not_found" };
 
   try {
-    const { data, error } = await supabaseAdmin
+    let query = supabaseAdmin
       .from("bookings")
       .select("id, status, villa, check_in, check_out")
-      .ilike("id::text", pattern)
-      .limit(2);
+      .gte("id", range.gte);
+    query = range.lt !== undefined ? query.lt("id", range.lt) : query.lte("id", range.lte);
+    const { data, error } = await query.limit(2);
 
     if (error) {
       console.warn("[lib/booking-reference] resolve error:", error.message);

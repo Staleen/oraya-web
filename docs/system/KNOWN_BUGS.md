@@ -181,6 +181,18 @@ Living list of bugs, gaps, and operational pitfalls that are **known** but **not
 
 ---
 
+### #12 — `resolveBookingByReference` never matched any reference: PostgREST rejects the `id::text` cast filter, and the error collapsed to "not_found"
+
+- **Severity:** 🟠 High (was silent) — every guest-typed booking-reference lookup failed while looking like a clean "no such reference" answer.
+- **Area:** `lib/booking-reference.ts` / `/api/butler/identify` reference branch / `/api/butler/booking-lookup` / `/api/butler/confirmed-guest-info` (Stage 4B)
+- **Description:** `resolveBookingByReference` filtered with `.ilike("id::text", "<prefix>%")`. PostgREST does not accept a cast in a filter key, so the query errored server-side; by design the helper collapses lookup errors to `{ kind: "not_found" }` (guests must not be able to distinguish "lookup blew up" from "no match"), which made the failure invisible. Discovered during the Stage 4B PR #80 Preview verification (2026-07-15): a confirmed booking whose Arrival Guide and booking-view pages rendered fine (reference `0F28C563`) came back `ask_for_alternative_identifier` from `/api/butler/confirmed-guest-info`. The bug affects every consumer of the shared resolver — including the production Guest Identification v2 reference-fallback branch — meaning a guest who typed their reference has never successfully resolved through it; subscriber-id continuity paths were unaffected.
+- **Status:** **closed (resolved 2026-07-15, PR #80)** — the lookup now uses a uuid **range** on the indexed primary key: the 8-hex reference is the uuid's first 4 bytes, so `gte <prefix>-0000… / lt <prefix+1>-0000…` (inclusive `lte` max-uuid for the `ffffffff` edge) covers exactly the prefix with plain, universally-supported operators. Pure range computation lives in [lib/booking-reference-range.ts](../../lib/booking-reference-range.ts) with a focused `node:test` suite (7/7). Behavior contract unchanged: normalize → not_found / ambiguous(≥2) / found, errors still collapse to not_found.
+- **Recommended fix path:** n/a — resolved. Lesson recorded: PostgREST filter keys cannot carry `::` casts; error-collapsing resolvers need at least one live-path verification before being presumed working.
+- **Discovered:** 2026-07-15 (PR #80 Preview human verification by David).
+- **Resolved:** 2026-07-15
+
+---
+
 <!-- New entries go above this line, lowest # at the top. Closed entries can be moved to a "Closed" section below or stay in place with status: closed + date. -->
 
 ## Closed / wontfix
