@@ -512,6 +512,7 @@ export default function ProfilePage() {
                 <label style={labelStyle}>Full name</label>
                 <input
                   type="text"
+                  autoComplete="name"
                   value={form.fullName}
                   onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))}
                   placeholder="Your full name"
@@ -563,6 +564,7 @@ export default function ProfilePage() {
                   </select>
                   <input
                     type="tel"
+                    autoComplete="tel"
                     value={form.phoneNumber}
                     onChange={(e) => setForm((f) => ({ ...f, phoneNumber: e.target.value }))}
                     placeholder="70 000 000"
@@ -576,6 +578,7 @@ export default function ProfilePage() {
               <div>
                 <label style={labelStyle}>Country</label>
                 <select
+                  autoComplete="country-name"
                   value={form.country}
                   onChange={(e) => setForm((f) => ({ ...f, country: e.target.value }))}
                   onFocus={focusBorder} onBlur={blurBorder}
@@ -600,6 +603,7 @@ export default function ProfilePage() {
                 <label style={labelStyle}>Address</label>
                 <input
                   type="text"
+                  autoComplete="street-address"
                   value={form.address}
                   onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
                   placeholder="City, region"

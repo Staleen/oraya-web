@@ -1904,6 +1904,7 @@ function EventInquiryPageInner() {
                   ref={step1AttendeesInputRef}
                   name="dayVisitors"
                   type="number"
+                  autoComplete="off"
                   required
                   min={1}
                   max={MAX_EVENT_ATTENDEES}
@@ -2243,6 +2244,7 @@ function EventInquiryPageInner() {
                   ref={sleepingGuestsInputRef}
                   name="sleepingGuests"
                   type="number"
+                  autoComplete="off"
                   required
                   min={1}
                   max={8}
@@ -2278,7 +2280,7 @@ function EventInquiryPageInner() {
 
                   <div>
                     <label style={labelStyle}>Full name</label>
-                    <input ref={guestFullNameInputRef} name="fullName" type="text" required value={guest.fullName} onChange={handleGuestChange}
+                    <input ref={guestFullNameInputRef} name="fullName" type="text" autoComplete="name" required value={guest.fullName} onChange={handleGuestChange}
                       placeholder="Your full name" style={inputStyle} onFocus={focusGold} onBlur={blurGold} />
                   </div>
 
@@ -2292,7 +2294,7 @@ function EventInquiryPageInner() {
                           <option key={`${d.code}-${d.label}`} value={d.code} style={{ backgroundColor: OPT_BG }}>{d.flag} {d.code}</option>
                         ))}
                       </select>
-                      <input ref={guestPhoneInputRef} name="phoneNumber" type="tel" value={guest.phoneNumber} onChange={handleGuestChange}
+                      <input ref={guestPhoneInputRef} name="phoneNumber" type="tel" autoComplete="tel" value={guest.phoneNumber} onChange={handleGuestChange}
                         placeholder="70 000 000" style={{ ...inputStyle, flex: 1 }} onFocus={focusGold} onBlur={blurGold} />
                     </div>
                   </div>
@@ -2312,7 +2314,7 @@ function EventInquiryPageInner() {
 
                   <div>
                     <label style={labelStyle}>Country</label>
-                    <select name="country" value={guest.country} onChange={handleGuestChange}
+                    <select name="country" autoComplete="country-name" value={guest.country} onChange={handleGuestChange}
                       onFocus={focusGold} onBlur={blurGold} style={{ ...inputStyle, cursor: "pointer" }}>
                       {COUNTRIES.map(c => (
                         <option key={c} value={c} style={{ backgroundColor: OPT_BG }}>{c}</option>

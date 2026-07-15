@@ -2734,7 +2734,7 @@ function BookPageInner() {
                         text="Optional helper for preparation. Bedroom selection remains the primary setup preference."
                       />
                     </div>
-                    <input name="sleepingGuests" type="number" required min={1} max={8}
+                    <input name="sleepingGuests" type="number" autoComplete="off" required min={1} max={8}
                       value={form.sleepingGuests} onChange={handleFormChange}
                       onFocus={focusGold} onBlur={blurGold} style={inputStyle} />
                     {bedroomCapacityWarning && (
@@ -2752,7 +2752,7 @@ function BookPageInner() {
                     <div style={labelRowStyle}>
                       <span style={labelRowTextStyle}>Expected day visitors</span>
                     </div>
-                    <input name="dayVisitors" type="number" required min={0} max={25}
+                    <input name="dayVisitors" type="number" autoComplete="off" required min={0} max={25}
                       value={form.dayVisitors} onChange={handleFormChange}
                       onFocus={focusGold} onBlur={blurGold} style={inputStyle} />
                   </div>
@@ -3419,7 +3419,7 @@ function BookPageInner() {
 
                   <div>
                     <label style={labelStyle}>Full name</label>
-                    <input ref={guestFullNameInputRef} name="fullName" type="text" required value={guest.fullName} onChange={handleGuestChange}
+                    <input ref={guestFullNameInputRef} name="fullName" type="text" autoComplete="name" required value={guest.fullName} onChange={handleGuestChange}
                       placeholder="Your full name" style={inputStyle} onFocus={focusGold} onBlur={blurGold} />
                   </div>
 
@@ -3437,7 +3437,7 @@ function BookPageInner() {
                           )
                         )}
                       </select>
-                      <input ref={guestPhoneInputRef} name="phoneNumber" type="tel" value={guest.phoneNumber} onChange={handleGuestChange}
+                      <input ref={guestPhoneInputRef} name="phoneNumber" type="tel" autoComplete="tel" value={guest.phoneNumber} onChange={handleGuestChange}
                         placeholder="70 000 000" style={{ ...inputStyle, flex: 1 }} onFocus={focusGold} onBlur={blurGold} />
                     </div>
                   </div>
@@ -3460,7 +3460,7 @@ function BookPageInner() {
 
                   <div>
                     <label style={labelStyle}>Country</label>
-                    <select name="country" value={guest.country} onChange={handleGuestChange}
+                    <select name="country" autoComplete="country-name" value={guest.country} onChange={handleGuestChange}
                       onFocus={focusGold} onBlur={blurGold} style={{ ...inputStyle, cursor: "pointer" }}>
                       {COUNTRIES.map((c, i) =>
                         c.value === "" ? (

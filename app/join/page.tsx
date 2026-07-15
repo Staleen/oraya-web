@@ -285,7 +285,7 @@ export default function JoinPage() {
             <div>
               <label style={labelStyle}>Full name</label>
               <input
-                name="fullName" type="text" required
+                name="fullName" type="text" autoComplete="name" required
                 value={form.fullName} onChange={handleChange}
                 placeholder="Your full name"
                 style={inputStyle}
@@ -296,7 +296,7 @@ export default function JoinPage() {
             <div>
               <label style={labelStyle}>Email address</label>
               <input
-                name="email" type="email" required
+                name="email" type="email" autoComplete="email" required
                 value={form.email} onChange={handleChange}
                 placeholder="you@example.com"
                 style={inputStyle}
@@ -307,7 +307,7 @@ export default function JoinPage() {
             <div>
               <label style={labelStyle}>Password</label>
               <input
-                name="password" type="password" required minLength={8}
+                name="password" type="password" autoComplete="new-password" required minLength={8}
                 value={form.password} onChange={handleChange}
                 placeholder="Minimum 8 characters"
                 style={inputStyle}
@@ -350,6 +350,7 @@ export default function JoinPage() {
                 <input
                   name="phoneNumber"
                   type="tel"
+                  autoComplete="tel"
                   value={form.phoneNumber}
                   onChange={handleChange}
                   placeholder="70 000 000"
@@ -364,6 +365,7 @@ export default function JoinPage() {
               <label style={labelStyle}>Country</label>
               <select
                 name="country"
+                autoComplete="country-name"
                 value={form.country}
                 onChange={handleChange}
                 onFocus={focusBorder}
@@ -387,7 +389,7 @@ export default function JoinPage() {
             <div>
               <label style={labelStyle}>Address</label>
               <input
-                name="address" type="text"
+                name="address" type="text" autoComplete="street-address"
                 value={form.address} onChange={handleChange}
                 placeholder="City, region"
                 style={inputStyle}

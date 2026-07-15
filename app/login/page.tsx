@@ -174,6 +174,7 @@ function LoginPageInner() {
               <input
                 name="email"
                 type="email"
+                autoComplete="email"
                 required
                 value={form.email}
                 onChange={handleChange}
@@ -198,6 +199,7 @@ function LoginPageInner() {
               <input
                 name="password"
                 type="password"
+                autoComplete="current-password"
                 required
                 value={form.password}
                 onChange={handleChange}
