@@ -135,14 +135,18 @@ export async function sendBookingEmail(payload: BookingEmailPayload): Promise<vo
   const firstName    = payload.name.split(" ")[0];
 
   // View link is only offered on the confirmation email; a cancelled booking
-  // has no further details to track.
+  // has no further details to track. The private Arrival Guide link (Phase 16C
+  // Stage 3) reuses the SAME signed view token — checkout-day expiry — so both
+  // links live and die together. Confirmed email only; no access codes.
   let viewUrl: string | null = null;
+  let arrivalUrl: string | null = null;
   if (isConfirmed) {
     const base = process.env.NEXT_PUBLIC_SITE_URL || SITE_URL;
     const { token } = createActionToken(payload.booking_id, "view", {
       expiresAt: checkOutExpiryUnix(payload.check_out),
     });
     viewUrl = `${base}/booking/view/${encodeURIComponent(token)}`;
+    arrivalUrl = `${base}/arrival/${encodeURIComponent(token)}`;
   }
 
   const addonRows = (payload.addons_snapshot && payload.addons_snapshot.length > 0
@@ -356,6 +360,27 @@ export async function sendBookingEmail(payload: BookingEmailPayload): Promise<vo
 
           ${noteHtml ? `<tr><td style="padding-top:16px;">${noteHtml}</td></tr>` : ""}
 
+          ${arrivalUrl ? `
+          <!-- Arrival Guide (Phase 16C Stage 3 — confirmed email only) -->
+          <tr>
+            <td style="padding-top:16px;">
+              <table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="border:0.5px solid rgba(197,164,109,0.18);padding:22px 24px;background-color:rgba(197,164,109,0.04);">
+                <p style="margin:0 0 12px;font-size:9px;letter-spacing:3px;text-transform:uppercase;color:${GOLD};">
+                  Your Arrival Guide
+                </p>
+                <p style="margin:0 0 18px;font-size:13px;line-height:1.75;color:#ffffff;">
+                  Your Arrival Guide includes your stay details, villa guidance, maps, and local recommendations. Access details are shared by Oraya before arrival.
+                </p>
+                <a href="${arrivalUrl}"
+                   style="display:inline-block;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;
+                          font-size:11px;letter-spacing:2.5px;text-transform:uppercase;
+                          color:#2E2E2E;background-color:${GOLD};text-decoration:none;padding:14px 32px;">
+                  Open your Arrival Guide
+                </a>
+              </td></tr></table>
+            </td>
+          </tr>` : ""}
+
           ${viewUrl ? `
           <!-- View CTA -->
           <tr>
@@ -408,6 +433,13 @@ export async function sendBookingEmail(payload: BookingEmailPayload): Promise<vo
     "Payment Summary:",
     ...paymentRows.map(([label, value]) => `${label}: ${value}`),
     ...(payload.message?.trim() ? ["", `Special Request / Notes: ${payload.message.trim()}`] : []),
+    ...(arrivalUrl
+      ? [
+          "",
+          `Open your Arrival Guide: ${arrivalUrl}`,
+          "Your Arrival Guide includes your stay details, villa guidance, maps, and local recommendations. Access details are shared by Oraya before arrival.",
+        ]
+      : []),
     ...(viewUrl ? ["", `View your booking: ${viewUrl}`] : []),
     "",
     ...transactionalEmailFooterTextSuffix(),
