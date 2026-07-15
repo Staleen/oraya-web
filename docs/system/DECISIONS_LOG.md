@@ -16,6 +16,20 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-07-15 - Member profile opens the canonical signed booking-view page (no duplicate details UI)
+
+**Decision:** the member `/profile` "My Bookings" surface does **not** grow a second booking-details page. Each booking card exposes a **View booking** action that obtains a fresh signed `/booking/view/[token]` path through `POST /api/profile/booking-view` (Bearer member auth). The server verifies `bookings.member_id` equals the authenticated user before minting; missing auth returns `401`, and a foreign or unavailable booking returns a non-disclosing `404`. Token creation uses the locked `createActionToken(..., "view")` helper (**import only** — `/lib/booking-action-token.ts` is not modified) and returns a **relative** path so Vercel Preview navigation stays on the same deployment. The Arrival Guide remains available only through the existing confirmed-booking gate on `/booking/view/[token]` → `/arrival/[token]`; pending / cancelled / invalid / expired states do not bypass that gate. Modify, Cancel, and WhatsApp remain sibling controls (no nested interactive elements). Client components import only the path-safety helper in `lib/profile/booking-view-path.ts` — never the signing module or `BOOKING_ACTION_SECRET`.
+
+**Reason:** `/booking/view/[token]` is already the single canonical guest booking-details page (villa, dates, 8-character reference, status, payment context, Arrival Guide entry). Duplicating that UI on `/profile` would drift and risk leaking confirmed-only surfaces. Server-side ownership checks plus relative signed paths keep Preview parity and prevent cross-member token minting.
+
+**Impact:** `app/profile/page.tsx` (View booking action), `app/api/profile/booking-view/route.ts`, `lib/profile/member-booking-view.ts` + `lib/profile/booking-view-path.ts`, focused `node:test` coverage, docs updates. No schema, locked booking/payment/email/auth/token, or Arrival Guide content changes.
+
+**Reversible?:** yes — remove the profile action + `/api/profile/booking-view` route; existing email/Butler view links are unaffected.
+
+**Supersedes:** none.
+
+---
+
 ## 2026-07-15 - Phase 16C Stage 2: Arrival Guide v1 reuses the signed booking-view token; confirmed-only render; NO access/PIN values
 
 **Decision:** the private mobile Arrival Guide ships at `/arrival/[token]` and **reuses the existing signed booking-view token unchanged** (`verifyViewToken` from [lib/booking-action-token.ts](../../lib/booking-action-token.ts), imported only — the locked helper is not modified and no new token type is introduced). The route renders guest data (guest name, stay dates via manual `YYYY-MM-DD` formatting with no `new Date()` parsing, the 8-character public reference via `formatBookingReference`) **only when `bookings.status` is `confirmed`**; a pending booking shows a neutral "unlocks once your stay is confirmed" state, and cancelled / invalid / expired / not-found all collapse to safe neutral states that carry no booking data. The guide **intentionally renders no gate PIN, front-door PIN, or any access code** — the design's `{{gatePin}}` / `{{frontDoorPin}}` merge fields are replaced with the safe "Access — provided by Oraya before arrival" state because Phase 16D (secure access-code delivery) is not implemented and Phase 16A policy explicitly forbids surfacing access credentials today. The page is `noindex`/`nofollow`, is not in any sitemap, and is linked only from the confirmed-booking state of `/booking/view/[token]` (additive block reusing the same token) — never from public navigation.
