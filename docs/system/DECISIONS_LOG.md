@@ -30,6 +30,20 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-07-15 - Phase 16C Stage 3: confirmed booking email delivers the Arrival Guide link; same token, checkout-day expiry, confirmed email only
+
+**Decision:** the confirmed booking email ([lib/send-booking-email.ts](../../lib/send-booking-email.ts) — locked file, explicitly authorized for this additive edit) now includes exactly one "Open your Arrival Guide" CTA pointing at `${base}/arrival/${encodeURIComponent(token)}` — the **same signed `view` token the email already mints** with `expiresAt: checkOutExpiryUnix(check_out)` (23:59:59 UTC on checkout day), so the Arrival Guide link and the booking-view link live and die together and no second token is minted. The block renders only on the `confirmed` branch (`arrivalUrl` stays `null` for cancelled emails — byte-identical cancelled output); pending, payment, event, admin-notification, and feedback emails are untouched. Email copy makes no payment claims and no access claims beyond the approved line: "Access details are shared by Oraya before arrival" — no gate PIN, no front-door PIN, no access codes.
+
+**Reason:** Stage 2 shipped the private `/arrival/[token]` route gated on `status === "confirmed"`; the confirmed email is the natural first delivery surface and already holds a correctly-scoped checkout-day token, making this a zero-new-credential change. The permanent personalized URL contract for ALL future delivery channels (including WhatsApp/WhatChimp in Stage 4) is `https://stayoraya.com/arrival/<signed-view-token>` — future work must not invent a different route, and **no WhatChimp field name exists yet** (deliberately not invented here).
+
+**Impact:** one additive block in `sendBookingEmail` (HTML card + CTA and plain-text lines, both inside `arrivalUrl`-null-guarded conditionals). No token helper change, no other email sender change, no API/schema/env change. Stage 4 (WhatsApp/admin delivery) and Phase 16D (access codes) remain unimplemented.
+
+**Reversible?:** yes — single-PR revert of the email block; nothing else depends on it.
+
+**Supersedes:** none. Extends the 2026-07-15 Stage 2 entry.
+
+---
+
 ## 2026-07-15 - Phase 16C Stage 2: Arrival Guide v1 reuses the signed booking-view token; confirmed-only render; NO access/PIN values
 
 **Decision:** the private mobile Arrival Guide ships at `/arrival/[token]` and **reuses the existing signed booking-view token unchanged** (`verifyViewToken` from [lib/booking-action-token.ts](../../lib/booking-action-token.ts), imported only — the locked helper is not modified and no new token type is introduced). The route renders guest data (guest name, stay dates via manual `YYYY-MM-DD` formatting with no `new Date()` parsing, the 8-character public reference via `formatBookingReference`) **only when `bookings.status` is `confirmed`**; a pending booking shows a neutral "unlocks once your stay is confirmed" state, and cancelled / invalid / expired / not-found all collapse to safe neutral states that carry no booking data. The guide **intentionally renders no gate PIN, front-door PIN, or any access code** — the design's `{{gatePin}}` / `{{frontDoorPin}}` merge fields are replaced with the safe "Access — provided by Oraya before arrival" state because Phase 16D (secure access-code delivery) is not implemented and Phase 16A policy explicitly forbids surfacing access credentials today. The page is `noindex`/`nofollow`, is not in any sitemap, and is linked only from the confirmed-booking state of `/booking/view/[token]` (additive block reusing the same token) — never from public navigation.
