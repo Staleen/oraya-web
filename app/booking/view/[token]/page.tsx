@@ -381,6 +381,11 @@ export default async function BookingViewPage({
         ? "cancelled"
         : "pending";
   const trustStatusHeadline = viewStatusHeadline(isEventInquiry, statusNorm);
+  // Phase 16C Stage 2 — the private Arrival Guide exists for the two villas;
+  // the link renders for confirmed bookings only and reuses this page's token.
+  const arrivalGuideVilla = ["villa mechmech", "villa byblos"].includes(
+    (booking.villa ?? "").trim().toLowerCase(),
+  );
   // Phase 13I: bedroom setup label (stay bookings only) from snapshot persisted in 13H.
   const bedroomsRaw = booking.pricing_snapshot?.bedrooms_to_be_used;
   const bedroomLabel =
@@ -537,6 +542,48 @@ export default async function BookingViewPage({
           <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: "0 0 1.25rem", lineHeight: 1.65 }}>
             This booking has been cancelled. Contact us if you need help.
           </p>
+        )}
+
+        {/* Phase 16C Stage 2 — private Arrival Guide link (confirmed bookings only) */}
+        {statusNorm === "confirmed" && arrivalGuideVilla && (
+          <div
+            style={{
+              border: "0.5px solid rgba(197,164,109,0.22)",
+              backgroundColor: "rgba(197,164,109,0.05)",
+              padding: "16px",
+              marginBottom: "1.25rem",
+              textAlign: "center",
+              display: "grid",
+              gap: "12px",
+              justifyItems: "center",
+            }}
+          >
+            <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+              Your Arrival Guide
+            </p>
+            <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65 }}>
+              Directions, arrival steps and everything for the drive and the door — on one mobile page.
+            </p>
+            <a
+              href={`/arrival/${encodeURIComponent(params.token)}`}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontFamily: LATO,
+                fontSize: "11px",
+                letterSpacing: "2px",
+                textTransform: "uppercase",
+                color: GOLD_CTA,
+                backgroundColor: GOLD,
+                padding: "14px 18px",
+                textDecoration: "none",
+                width: "fit-content",
+              }}
+            >
+              Open your Arrival Guide
+            </a>
+          </div>
         )}
 
         {/* Reference — prominent */}

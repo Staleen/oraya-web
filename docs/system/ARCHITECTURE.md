@@ -51,7 +51,8 @@ Next.js App Router (TypeScript)
 | `/explore/mechmech`, `/explore/byblos` | `app/explore/<villa>/page.tsx` | Public Explore / Living List area guide (Phase 16C Stage 1) — **permanent QR destination** of the printed House Books; do not rename (see DECISIONS_LOG 2026-07-15) |
 | `/book` | [app/book/page.tsx](../../app/book/page.tsx) | Booking flow (Reserve + Instant Book UI) |
 | `/booking-confirmed` | [app/booking-confirmed/page.tsx](../../app/booking-confirmed/page.tsx) | Post-submit confirmation |
-| `/booking/view/[token]` | [app/booking/view/[token]/page.tsx](../../app/booking/view/%5Btoken%5D/page.tsx) | Guest booking-view via signed token |
+| `/booking/view/[token]` | [app/booking/view/[token]/page.tsx](../../app/booking/view/%5Btoken%5D/page.tsx) | Guest booking-view via signed token; confirmed bookings additionally show an "Open your Arrival Guide" link reusing the same token (Phase 16C Stage 2) |
+| `/arrival/[token]` | `app/arrival/[token]/page.tsx` | **PRIVATE** mobile Arrival Guide (Phase 16C Stage 2) — reuses the signed booking-view token (`verifyViewToken`, locked helper imported only), renders guest name / stay dates / reference / villa guide **for confirmed bookings only**; pending → neutral locked state, cancelled/invalid/expired → safe neutral states; `noindex`, no sitemap, no public links; **never renders gate/door PINs or access codes** (access delivery is Phase 16D, not implemented) |
 | `/booking-action/confirm`, `/result` | `app/booking-action/*/page.tsx` | Admin email-link confirm/cancel |
 | `/events/inquiry` | [app/events/inquiry/page.tsx](../../app/events/inquiry/page.tsx) | Event inquiry flow |
 | `/join`, `/login`, `/forgot-password`, `/reset-password`, `/welcome`, `/profile` | `app/*/page.tsx` | Member auth + dashboard |

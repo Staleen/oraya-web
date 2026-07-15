@@ -1,0 +1,190 @@
+/* Oraya Arrival Guide — route-scoped styles for the PRIVATE /arrival/[token]
+   route (Phase 16C Stage 2). Converted from the PR #73 Claude Design package
+   (css/oraya-tokens.css + css/system-mobile.css), with every selector scoped
+   under .oraya-ag and every token defined on the wrapper (NOT :root) so the
+   guide keeps the approved light identity independent of app dark mode.
+   Fonts come from the app's next/font variables — no Google Fonts @import. */
+
+.oraya-ag {
+  /* — Oraya brand palette (design constants, not theme-aware) — */
+  --oraya-gold: #C5A46D;
+  --oraya-gold-deep: #B08D4F;
+  --oraya-terracotta: #B0714B;
+  --oraya-beige: #E7DECC;
+  --oraya-beige-light: #F3EBDC;
+  --oraya-ivory: #FAF6EE;
+  --oraya-charcoal: #2E2E2E;
+  --oraya-midnight: #1F2B38;
+  --oraya-muted: #8a8070;
+  --oraya-gold-10: rgba(197, 164, 109, 0.10);
+  --oraya-gold-28: rgba(197, 164, 109, 0.28);
+
+  --oraya-font-display: var(--font-playfair), 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --oraya-font-body: var(--font-lato), 'Lato', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  margin: 0;
+  padding: 28px 12px 48px;
+  min-height: 100vh;
+  background: var(--oraya-beige-light);
+  display: flex;
+  justify-content: center;
+  font-family: var(--oraya-font-body);
+}
+
+.oraya-ag a { color: var(--oraya-terracotta); }
+.oraya-ag a:hover { color: var(--oraya-gold-deep); }
+
+.oraya-ag .mob { width: 390px; max-width: 100%; }
+
+/* Continuous-scroll flow — one phone document, sections stack inside */
+.oraya-ag .m-flow {
+  border-radius: 30px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px rgba(31, 43, 56, 0.08),
+              0 2px 6px rgba(31, 43, 56, 0.10),
+              0 18px 44px rgba(31, 43, 56, 0.13);
+}
+.oraya-ag .m-screen {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 40px 28px 44px;
+  overflow: hidden;
+  background: var(--oraya-ivory);
+  color: var(--oraya-charcoal);
+  font-family: var(--oraya-font-body);
+}
+.oraya-ag .m-screen--beige { background: var(--oraya-beige-light); }
+.oraya-ag .m-screen--midnight { background: var(--oraya-midnight); color: var(--oraya-ivory); }
+
+/* Type voices */
+.oraya-ag .m-eyebrow {
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--oraya-terracotta);
+}
+.oraya-ag .m-screen--midnight .m-eyebrow { color: var(--oraya-gold); }
+
+.oraya-ag .m-display {
+  font-family: var(--oraya-font-display);
+  font-weight: 400; font-size: 30px; line-height: 1.12;
+  color: var(--oraya-midnight); margin: 0;
+}
+.oraya-ag .m-display em { font-style: italic; color: var(--oraya-terracotta); }
+.oraya-ag .m-screen--midnight .m-display { color: var(--oraya-ivory); }
+.oraya-ag .m-screen--midnight .m-display em { color: var(--oraya-gold); }
+
+.oraya-ag .m-body { font-size: 14.5px; line-height: 1.65; color: var(--oraya-charcoal); }
+.oraya-ag .m-screen--midnight .m-body { color: var(--oraya-beige); }
+
+.oraya-ag .m-micro {
+  font-size: 9.5px; font-weight: 700;
+  letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--oraya-muted);
+}
+
+/* Pill chip — the access promise (never a real code) */
+.oraya-ag .m-chip {
+  display: inline-block; padding: 5px 14px;
+  border: 1px solid var(--oraya-terracotta);
+  border-radius: 999px;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--oraya-terracotta); white-space: normal;
+}
+
+/* Buttons — 52px targets */
+.oraya-ag .m-btn {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 52px; padding: 0 22px;
+  border-radius: 999px;
+  background: var(--oraya-midnight);
+  color: var(--oraya-ivory);
+  font-size: 11.5px; font-weight: 700;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  text-decoration: none;
+  text-align: center;
+}
+.oraya-ag .m-btn:hover { color: var(--oraya-ivory); }
+.oraya-ag .m-btn--ghost {
+  background: transparent;
+  color: var(--oraya-charcoal);
+  box-shadow: inset 0 0 0 1px var(--oraya-gold);
+}
+.oraya-ag .m-btn--ghost:hover { color: var(--oraya-charcoal); }
+.oraya-ag .m-screen--midnight .m-btn--ghost,
+.oraya-ag .m-screen--midnight .m-btn--ghost:hover {
+  color: var(--oraya-gold);
+  box-shadow: inset 0 0 0 1px var(--oraya-gold);
+}
+
+/* Panels & facts */
+.oraya-ag .m-panel {
+  background: var(--oraya-ivory);
+  box-shadow: inset 0 0 0 1px var(--oraya-gold-28);
+  padding: 16px 18px;
+}
+.oraya-ag .m-fact .l {
+  font-size: 9.5px; font-weight: 700;
+  letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--oraya-muted); margin-bottom: 4px;
+}
+.oraya-ag .m-fact .v { font-size: 19px; font-weight: 900; color: var(--oraya-charcoal); line-height: 1.25; }
+.oraya-ag .m-fact .s { font-size: 12.5px; color: var(--oraya-muted); line-height: 1.5; margin-top: 3px; }
+.oraya-ag .m-screen--midnight .m-fact .l { color: rgba(231, 222, 204, 0.6); }
+.oraya-ag .m-screen--midnight .m-fact .v { color: var(--oraya-ivory); }
+.oraya-ag .m-screen--midnight .m-fact .s { color: rgba(231, 222, 204, 0.7); }
+
+/* Arch-numbered steps */
+.oraya-ag .m-step { display: flex; gap: 14px; align-items: center; }
+.oraya-ag .m-step .t { font-size: 14.5px; line-height: 1.5; }
+.oraya-ag .m-num {
+  flex: none; width: 27px; height: 33px;
+  border: 1px solid var(--oraya-gold-deep);
+  border-radius: 999px 999px 0 0;
+  display: flex; align-items: flex-end; justify-content: center;
+  padding-bottom: 3px;
+  font-family: var(--oraya-font-display);
+  font-size: 16px; line-height: 1; color: var(--oraya-terracotta);
+}
+
+/* Gem checklist */
+.oraya-ag .m-gem-li {
+  display: flex; gap: 11px; align-items: baseline;
+  font-size: 15px; line-height: 1.55;
+}
+.oraya-ag .m-gem-li::before {
+  content: ""; flex: none; width: 5px; height: 5px;
+  background: var(--oraya-terracotta); transform: rotate(45deg) translateY(-1px);
+}
+
+/* Hairline */
+.oraya-ag .m-hr { border: 0; border-top: 1px solid var(--oraya-gold-28); margin: 0; }
+.oraya-ag .m-screen--midnight .m-hr { border-top-color: rgba(197, 164, 109, 0.4); }
+
+/* Photo slots (arch-masked; intentional while empty, per the design system) */
+.oraya-ag .m-photo {
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  background-color: var(--oraya-gold-10);
+  background-size: cover; background-position: center;
+  box-shadow: inset 0 0 0 1px var(--oraya-gold-28);
+  border-radius: 999px 999px 0 0;
+  overflow: hidden;
+}
+.oraya-ag .m-photo::after {
+  content: ""; width: 8px; height: 8px;
+  background: var(--oraya-gold-28); transform: rotate(45deg);
+}
+
+/* Safe non-confirmed / unavailable states (own centered card) */
+.oraya-ag .ag-state {
+  width: 390px; max-width: 100%;
+  align-self: center;
+  text-align: center;
+  background: var(--oraya-ivory);
+  border-radius: 30px;
+  padding: 44px 30px;
+  box-shadow: 0 0 0 1px rgba(31, 43, 56, 0.08),
+              0 2px 6px rgba(31, 43, 56, 0.10),
+              0 18px 44px rgba(31, 43, 56, 0.13);
+}
