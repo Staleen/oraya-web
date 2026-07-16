@@ -3,6 +3,7 @@ import { verifyActionToken } from "@/lib/booking-action-token";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { sendBookingEmail } from "@/lib/send-booking-email";
 import { findAvailabilityConflict } from "@/lib/calendar/availability";
+import { dispatchConfirmedStayWhatsAppNotification } from "@/lib/whatsapp/confirmed-stay-notification";
 
 function toResult(request: NextRequest, state: string) {
   return NextResponse.redirect(new URL(`/booking-action/result?state=${state}`, request.url));
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest) {
 
   const { data: booking, error: fetchErr } = await supabaseAdmin
     .from("bookings")
-    .select("villa, check_in, check_out, sleeping_guests, day_visitors, event_type, message, addons, addons_snapshot, pricing_subtotal, pricing_snapshot, status, member_id, guest_name, guest_email")
+    .select("villa, check_in, check_out, sleeping_guests, day_visitors, event_type, message, addons, addons_snapshot, pricing_subtotal, pricing_snapshot, status, member_id, guest_name, guest_email, guest_phone")
     .eq("id", booking_id)
     .single();
 
@@ -123,6 +124,29 @@ export async function POST(request: NextRequest) {
   } catch (emailErr) {
     console.error("[api/booking-action] guest email error:", emailErr);
     emailFailed = true;
+  }
+
+  // Phase 16C — automatic WhatsApp Arrival Guide dispatch for confirmed STAY
+  // bookings only. Fail-closed and at-most-once inside the helper (env gates,
+  // event-inquiry/phone/expired-stay skips, atomic whatsapp_confirmation_sent_at
+  // claim). Never blocks the confirmation or the email above.
+  if (action === "confirmed") {
+    try {
+      await dispatchConfirmedStayWhatsAppNotification({
+        booking_id,
+        status: "confirmed",
+        villa: booking.villa,
+        check_in: booking.check_in,
+        check_out: booking.check_out,
+        event_type: booking.event_type ?? null,
+        message: booking.message ?? null,
+        guest_name: booking.guest_name ?? null,
+        guest_phone: booking.guest_phone ?? null,
+        member_id: booking.member_id ?? null,
+      });
+    } catch (whatsappErr) {
+      console.error("[api/booking-action] whatsapp dispatch unexpected error:", whatsappErr);
+    }
   }
 
   const resultPath = emailFailed

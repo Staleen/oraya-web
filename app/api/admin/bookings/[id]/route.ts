@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdminAuth } from "@/lib/admin-auth";
 import { createClient } from "@supabase/supabase-js";
 import { sendBookingEmail } from "@/lib/send-booking-email";
+import { dispatchConfirmedStayWhatsAppNotification } from "@/lib/whatsapp/confirmed-stay-notification";
 import {
   sendBookingPaymentReceivedEmail,
   sendBookingPaymentReminderEmail,
@@ -130,7 +131,7 @@ export async function PATCH(
 
   const { data: existingBooking, error: existingBookingError } = await db
     .from("bookings")
-    .select("id, villa, check_in, check_out, status, sleeping_guests, day_visitors, event_type, message, addons, addons_snapshot, pricing_subtotal, pricing_snapshot, member_id, guest_name, guest_email, payment_status, payment_stage, payment_method, deposit_amount, amount_paid, amount_total, amount_due, payment_last_at, payment_reference, payment_due_at, payment_requested_at, payment_received_at, payment_notes, payment_link_url, payment_link_provider, payment_link_expires_at, payment_link_issued_at, payment_link_status, payment_provider_session_id, refund_status, refund_amount, refunded_at, proposal_status, proposal_total_amount, proposal_deposit_amount, proposal_included_services, proposal_excluded_services, proposal_optional_services, proposal_notes, proposal_valid_until, proposal_payment_methods, proposal_sent_at, proposal_responded_at")
+    .select("id, villa, check_in, check_out, status, sleeping_guests, day_visitors, event_type, message, addons, addons_snapshot, pricing_subtotal, pricing_snapshot, member_id, guest_name, guest_email, guest_phone, payment_status, payment_stage, payment_method, deposit_amount, amount_paid, amount_total, amount_due, payment_last_at, payment_reference, payment_due_at, payment_requested_at, payment_received_at, payment_notes, payment_link_url, payment_link_provider, payment_link_expires_at, payment_link_issued_at, payment_link_status, payment_provider_session_id, refund_status, refund_amount, refunded_at, proposal_status, proposal_total_amount, proposal_deposit_amount, proposal_included_services, proposal_excluded_services, proposal_optional_services, proposal_notes, proposal_valid_until, proposal_payment_methods, proposal_sent_at, proposal_responded_at")
     .eq("id", bookingId)
     .single();
 
@@ -600,6 +601,30 @@ export async function PATCH(
       }
     } catch (emailErr) {
       console.error("[api/admin/bookings] email notification error:", emailErr);
+    }
+  }
+
+  // Phase 16C — automatic WhatsApp Arrival Guide dispatch for confirmed STAY
+  // bookings only (event inquiries use their own email path and are excluded).
+  // Fail-closed and at-most-once inside the helper (env gates, phone/expired
+  // skips, atomic whatsapp_confirmation_sent_at claim — an admin re-confirm
+  // does not resend). Never blocks the PATCH response or the email above.
+  if (statusUpdateProvided && status === "confirmed" && !isEventInquiry) {
+    try {
+      await dispatchConfirmedStayWhatsAppNotification({
+        booking_id: bookingId,
+        status: "confirmed",
+        villa: updated.villa,
+        check_in: updated.check_in,
+        check_out: updated.check_out,
+        event_type: updated.event_type ?? null,
+        message: updated.message ?? null,
+        guest_name: updated.guest_name ?? null,
+        guest_phone: updated.guest_phone ?? null,
+        member_id: updated.member_id ?? null,
+      });
+    } catch (whatsappErr) {
+      console.error("[api/admin/bookings] whatsapp dispatch unexpected error:", whatsappErr);
     }
   }
 
