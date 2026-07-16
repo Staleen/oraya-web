@@ -163,7 +163,7 @@ Preview expectations:
 - **Scope:** server-only.
 - **Used in:**
   - [lib/booking-action-token.ts:22](lib/booking-action-token.ts:22) — required for HMAC signing/verification of booking action tokens (admin confirm/cancel and the Phase 6 guest "view" link).
-  - [lib/profile/member-booking-view.ts](../../lib/profile/member-booking-view.ts) — member-profile mint of relative `/booking/view/[token]` paths via `POST /api/profile/booking-view` (import of `createActionToken` only).
+  - [lib/profile/member-booking-view.ts](../../lib/profile/member-booking-view.ts) — member-profile mint of relative `/booking/view/[token]` paths via `POST /api/profile/booking-view` (import of `createActionToken` only; default temporary TTL, remintable while owned).
 - **Required:** local · preview · production. **No fallback** — the helper throws on first use if the secret is missing or whitespace-only.
 - **Where to get it:** generate a high-entropy random secret, e.g. `openssl rand -base64 32`. Treat it as you would a JWT signing key.
 - **Configure in Vercel:** yes — Production + Preview + Development. Mark as Sensitive. **Use the same value across all environments only if you want preview tokens to be redeemable in production (you usually do not).**

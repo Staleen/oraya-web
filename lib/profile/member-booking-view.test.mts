@@ -28,10 +28,10 @@ const MEMBER_A = "11111111-1111-1111-1111-111111111111";
 const MEMBER_B = "22222222-2222-2222-2222-222222222222";
 const BOOKING_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 
+/** Ownership row shape — no check_out; minting has no checkout-date dependency. */
 const ownedBooking = {
   id: BOOKING_ID,
   member_id: MEMBER_A,
-  check_out: "2026-08-20",
 };
 
 // ─── Ownership / auth ─────────────────────────────────────────────────────────
@@ -69,7 +69,7 @@ test("authenticated ownership success", () => {
   assert.equal(r.ok, true);
 });
 
-// ─── Path generation ──────────────────────────────────────────────────────────
+// ─── Path generation (default temporary TTL; no check_out) ────────────────────
 
 test("buildRelativeBookingViewPath produces a relative booking-view path", () => {
   const path = buildRelativeBookingViewPath("payload.sig");
@@ -79,7 +79,7 @@ test("buildRelativeBookingViewPath produces a relative booking-view path", () =>
 });
 
 test("mintRelativeBookingViewPath yields a verifiable relative path", () => {
-  const path = mintRelativeBookingViewPath(BOOKING_ID, "2026-08-20");
+  const path = mintRelativeBookingViewPath(BOOKING_ID);
   assert.ok(isSafeRelativeBookingViewPath(path));
 
   const token = decodeURIComponent(path.slice("/booking/view/".length));
@@ -124,6 +124,46 @@ test("resolveMemberBookingViewPath: missing booking_id → 400", () => {
   if (!r.ok) assert.equal(r.status, 400);
 });
 
+test("minting pipeline has no checkout-date dependency", () => {
+  // MemberBookingViewRow carries only id + member_id. A successful mint with
+  // that shape proves check_out is not required for profile reminting.
+  assert.equal("check_out" in ownedBooking, false);
+  const r = resolveMemberBookingViewPath(MEMBER_A, BOOKING_ID, ownedBooking);
+  assert.equal(r.ok, true);
+  if (r.ok) {
+    const token = decodeURIComponent(r.path.slice("/booking/view/".length));
+    assert.equal(verifyViewToken(token).ok, true);
+  }
+});
+
+test("historical booking (ownership only) still mints a currently valid token", () => {
+  // Regression for PR #77 checkout-expiry defect: a past stay must still be
+  // remintable from /profile. We never pass check_out into the helper — the
+  // corrected pipeline authorizes on ownership alone and uses the default TTL.
+  const historicalOwned = {
+    id: BOOKING_ID,
+    member_id: MEMBER_A,
+  };
+  const r = resolveMemberBookingViewPath(MEMBER_A, BOOKING_ID, historicalOwned);
+  assert.equal(r.ok, true);
+  if (!r.ok) return;
+
+  assert.ok(isSafeRelativeBookingViewPath(r.path));
+  const token = decodeURIComponent(r.path.slice("/booking/view/".length));
+  const verified = verifyViewToken(token);
+  assert.equal(verified.ok, true);
+  if (verified.ok) {
+    assert.equal(verified.booking_id, BOOKING_ID);
+  }
+
+  // Remint yields another currently-valid token (fresh URL after expiry).
+  const again = mintRelativeBookingViewPath(BOOKING_ID);
+  assert.ok(isSafeRelativeBookingViewPath(again));
+  const token2 = decodeURIComponent(again.slice("/booking/view/".length));
+  assert.equal(verifyViewToken(token2).ok, true);
+  assert.notEqual(token, token2);
+});
+
 // ─── Client-side path safety (profile navigation) ─────────────────────────────
 
 test("isSafeRelativeBookingViewPath accepts only relative booking-view paths", () => {
@@ -145,7 +185,7 @@ test("profile navigation helper: only safe paths would be pushed", () => {
     return isSafeRelativeBookingViewPath(path);
   }
 
-  const good = mintRelativeBookingViewPath(BOOKING_ID, "2026-08-20");
+  const good = mintRelativeBookingViewPath(BOOKING_ID);
   assert.equal(shouldNavigate(good), true);
   assert.equal(shouldNavigate("https://stayoraya.com/booking/view/x"), false);
   assert.equal(shouldNavigate("/api/admin"), false);

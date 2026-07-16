@@ -16,6 +16,20 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-07-15 - Follow-up: member-profile booking-view mint uses default temporary TTL (not checkout-day expiry)
+
+**Decision:** correct the PR #77 member-profile mint so `POST /api/profile/booking-view` calls `createActionToken(bookingId, "view")` with the locked helper's **default temporary TTL (72h)** and does **not** set `expiresAt` from `check_out`. Authenticated owners retain profile access for as long as they own the booking row (including after checkout); each generated URL is temporary, and the member remints another fresh URL by clicking **View booking** again. Remove `check_out` from the profile booking-view select / `MemberBookingViewRow` / mint helpers, and remove all `new Date()` parsing of stay dates from this surface (AGENT_RULES §10). **Email checkout-day expiry is unchanged** — transactional senders remain a separate minting site.
+
+**Reason:** tying profile remints to checkout left historical bookings with already-expired tokens and violated date-only discipline. Profile ownership is continuous; the signed URL is a short-lived credential that can be reissued on demand (same model as Butler's default-TTL booking-view links).
+
+**Impact:** `lib/profile/member-booking-view.ts`, `app/api/profile/booking-view/route.ts`, focused tests, docs. No email, token-helper, booking-view page, Arrival Guide, or locked-pipeline changes.
+
+**Reversible?:** yes — but reverting would reintroduce the historical-booking expiry defect.
+
+**Supersedes:** none (follow-up correction to the 2026-07-15 "Member profile opens the canonical signed booking-view page" entry; that entry is not rewritten).
+
+---
+
 ## 2026-07-15 - Phase 16C Stage 4B: Butler confirmed-guest boundary returns `arrival_guide_url` — the permanent WhatChimp field contract; still no outbound WhatsApp sender, no access/PIN delivery
 
 **Decision:** `POST /api/butler/confirmed-guest-info` now returns one additional allow-listed field, **`arrival_guide_url`** — the permanent WhatChimp response-field contract for Arrival Guide delivery. Exact contract: field name is `arrival_guide_url` (never `arrival_url`, `guide_url`, `oraya_arrival_guide`, or `arrivalGuideUrl`); URL is `https://stayoraya.com/arrival/<signed-view-token>` (same guest-facing origin convention as other guest links); token is the existing signed booking-view `view` token minted with checkout-day expiry (`checkOutExpiryUnix(check_out)`, 23:59:59 UTC on checkout day) by the new shared builder [lib/arrival-guide-link.ts](../../lib/arrival-guide-link.ts) (locked token helper imported only). The field is populated **only** when the endpoint's existing gates have already passed — identity established via `orchestrateButlerIdentity` AND `bookings.status === "confirmed"` — plus two mint gates: a usable `YYYY-MM-DD` `check_out` and a villa that resolves through `resolveButlerVilla`. Every refusal branch (unverified, pending, cancelled, unknown-status) and any mint failure carries `arrival_guide_url: null`, consistent with the endpoint's existing null-on-refusal shape. On eligible responses the `safe_message` gains one appended sentence: "Your Arrival Guide is ready here: <arrival_guide_url>". **No outbound WhatsApp sender is implemented, no WhatChimp artifact is edited, and no access/PIN data is added** — future WhatChimp wiring must map exactly `arrival_guide_url` and reuse the `/arrival/<signed-view-token>` route; it must not invent a different field name, route, or token type.
@@ -41,6 +55,9 @@ Durable architectural and operational decisions. Append-only - never edit a past
 **Reversible?:** yes — single-PR revert of the route + UI action; nothing else depends on it.
 
 **Supersedes:** none. Extends the 2026-07-15 Stage 3 entry.
+
+---
+
 ## 2026-07-15 - Member profile opens the canonical signed booking-view page (no duplicate details UI)
 
 **Decision:** the member `/profile` "My Bookings" surface does **not** grow a second booking-details page. Each booking card exposes a **View booking** action that obtains a fresh signed `/booking/view/[token]` path through `POST /api/profile/booking-view` (Bearer member auth). The server verifies `bookings.member_id` equals the authenticated user before minting; missing auth returns `401`, and a foreign or unavailable booking returns a non-disclosing `404`. Token creation uses the locked `createActionToken(..., "view")` helper (**import only** — `/lib/booking-action-token.ts` is not modified) and returns a **relative** path so Vercel Preview navigation stays on the same deployment. The Arrival Guide remains available only through the existing confirmed-booking gate on `/booking/view/[token]` → `/arrival/[token]`; pending / cancelled / invalid / expired states do not bypass that gate. Modify, Cancel, and WhatsApp remain sibling controls (no nested interactive elements). Client components import only the path-safety helper in `lib/profile/booking-view-path.ts` — never the signing module or `BOOKING_ACTION_SECRET`.
