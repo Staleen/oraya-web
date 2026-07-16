@@ -195,7 +195,7 @@ export default function PaymentCheckoutPage({ params }: { params: { token: strin
         if (!response.ok || !payload.ok) {
           setState({
             status: "blocked",
-            message: payload.error || "Secure payment is not available for this booking right now.",
+            message: "Secure payment is not available for this booking right now. Please return to your booking for the next step.",
             bookingViewUrl: payload.booking_view_url ?? bookingViewFallback,
           });
           return;
@@ -273,15 +273,16 @@ export default function PaymentCheckoutPage({ params }: { params: { token: strin
 
         setState({
           status: "blocked",
-          message:
-            completion.message ||
-            completion.error ||
-            "Payment was not approved. No booking payment was recorded.",
+          message: "Payment was not approved. No booking payment was recorded. Please try again or contact Oraya.",
           bookingViewUrl: completion.booking_view_url ?? bookingViewUrl,
         });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Secure payment could not be started.";
-        setState({ status: "blocked", message, bookingViewUrl: bookingViewFallback });
+      } catch {
+        console.error("[payments/checkout] secure checkout failed.");
+        setState({
+          status: "blocked",
+          message: "Secure payment could not be started. No booking payment was recorded. Please return to your booking and try again.",
+          bookingViewUrl: bookingViewFallback,
+        });
       }
     }
 

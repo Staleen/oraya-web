@@ -359,10 +359,6 @@ function buildPaymentRequest(
   };
 }
 
-function getSafePaymentMessage(payload: CyberSourcePaymentResponse | null, fallback: string) {
-  return payload?.errorInformation?.message || payload?.errorInformation?.reason || fallback;
-}
-
 function getUnifiedCheckoutLibraryUrl(apiBaseUrl: string) {
   return new URL(CYBERSOURCE_UNIFIED_CHECKOUT_LIBRARY_PATH, `${apiBaseUrl}/`).toString();
 }
@@ -417,7 +413,7 @@ export async function authorizeCreditLibanaisTransientToken(
     reference: transactionId ?? input.provider_session_id,
     message: approved
       ? "Payment was approved by the gateway."
-      : getSafePaymentMessage(payload, "Payment was not approved by the gateway."),
+      : "Payment was not approved by the gateway.",
   };
 }
 

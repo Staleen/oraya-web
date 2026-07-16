@@ -253,6 +253,9 @@ export async function POST(request: Request) {
         ? 503
         : 500;
     console.error("[api/payments/checkout] unexpected error:", err);
-    return NextResponse.json({ error: message }, { status });
+    return NextResponse.json(
+      { error: "Secure payment is not available for this booking right now." },
+      { status },
+    );
   }
 }

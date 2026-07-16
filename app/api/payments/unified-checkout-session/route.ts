@@ -156,7 +156,11 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     if (error instanceof PaymentProviderConfigurationError) {
-      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+      console.error("[api/payments/unified-checkout-session] configuration error:", error.message);
+      return NextResponse.json(
+        { error: "Secure payment is not available for this booking right now." },
+        { status: error.statusCode },
+      );
     }
     console.error("[api/payments/unified-checkout-session] unexpected error:", error);
     return NextResponse.json({ error: "Payment session could not be created." }, { status: 500 });

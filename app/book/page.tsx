@@ -2332,7 +2332,7 @@ function BookPageInner() {
             {" "}for member benefits.
           </p>
           <p style={{ fontFamily: LATO, fontSize: "12px", color: "var(--oraya-book-p72)", lineHeight: 1.65, margin: 0, textAlign: "center" }}>
-            Booking on this site is direct with Oraya — not instant self-checkout. Every request is reviewed before confirmation; payment is requested only after that review. For help,{" "}
+            Booking on this site is direct with Oraya. Every request is reviewed before confirmation; eligible stays may continue to secure payment after the request is created, and payment does not confirm the stay automatically. For help,{" "}
             <a href="mailto:hello@stayoraya.com" className="oraya-link-text" style={{ color: GOLD }}>hello@stayoraya.com</a>.
           </p>
         </div>
