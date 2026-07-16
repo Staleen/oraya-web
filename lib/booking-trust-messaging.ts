@@ -10,13 +10,13 @@ export const WHATSAPP_SUPPORT_LINE = "24/7 WhatsApp support available.";
 /** Step 4 (/book) — trust panel */
 export const STEP4_TRUST = {
   instant: {
-    headline: "Pay securely and receive access immediately after confirmation.",
+    headline: "Secure payment and booking confirmation are separate steps.",
     payment: "",
     ctaSubline: "Book instantly when checkout is live",
   },
   request: {
     headline: "This booking requires review.",
-    noPayment: "No payment required until your booking is confirmed.",
+    noPayment: "Payment follows the secure option you choose and does not confirm the booking automatically.",
     contact: "We will contact you via WhatsApp or email.",
     ctaSubline: "No payment required now",
   },
@@ -43,12 +43,12 @@ export function viewStatusHeadline(
 }
 
 export const VIEW_CONFIRMED_LINES = [
-  "Payment received / booking confirmed",
+  "Oraya has confirmed this booking",
   "Access details will be provided",
 ] as const;
 
 export const VIEW_PENDING_LINES = [
-  "No payment required yet",
+  "Oraya is reviewing this booking request",
   "We will contact you shortly",
 ] as const;
 

@@ -4,6 +4,12 @@ import test from "node:test";
 
 const bookPage = readFileSync("app/book/page.tsx", "utf8");
 const bookingViewPage = readFileSync("app/booking/view/[token]/page.tsx", "utf8");
+const checkoutPage = readFileSync("app/payments/checkout/[token]/page.tsx", "utf8");
+const checkoutRoute = readFileSync("app/api/payments/checkout/route.ts", "utf8");
+const sessionRoute = readFileSync("app/api/payments/unified-checkout-session/route.ts", "utf8");
+const completionRoute = readFileSync("app/api/payments/unified-checkout-complete/route.ts", "utf8");
+const guestPresentation = readFileSync("lib/payments/guest-presentation.ts", "utf8");
+const trustMessaging = readFileSync("lib/booking-trust-messaging.ts", "utf8");
 
 test("/book pay-now fallback creates a pending-payment booking handoff", () => {
   assert.match(bookPage, /\?payment=pending/);
@@ -21,7 +27,7 @@ test("booking-view uses one guest-facing payment presentation vocabulary", () =>
     "Payment link expired",
     "Payment could not be completed",
   ]) {
-    assert.match(bookingViewPage, new RegExp(label));
+    assert.match(guestPresentation, new RegExp(label));
   }
 
   for (const retiredCopy of [
@@ -31,12 +37,31 @@ test("booking-view uses one guest-facing payment presentation vocabulary", () =>
     "Payment link cancelled",
     "No payment link",
   ]) {
-    assert.equal(bookingViewPage.includes(retiredCopy), false, `${retiredCopy} should not be guest-visible`);
+    assert.equal(
+      bookingViewPage.includes(retiredCopy) || guestPresentation.includes(retiredCopy),
+      false,
+      `${retiredCopy} should not be guest-visible`,
+    );
   }
 });
 
 test("browser payment return copy stays informational unless server payment state is paid", () => {
-  assert.match(bookingViewPage, /payment\.isPaid/);
-  assert.match(bookingViewPage, /Your payment was submitted\. Oraya is verifying it now\./);
-  assert.match(bookingViewPage, /No payment has been collected yet\./);
+  assert.match(guestPresentation, /payment\.isPaid/);
+  assert.match(guestPresentation, /Your payment was submitted\. Oraya is verifying it now\./);
+  assert.match(guestPresentation, /No payment has been collected yet\./);
+});
+
+test("booking-status trust copy does not make payment claims", () => {
+  assert.doesNotMatch(trustMessaging, /Payment received \/ booking confirmed/);
+  assert.doesNotMatch(trustMessaging, /No payment required yet/);
+  assert.match(trustMessaging, /Oraya has confirmed this booking/);
+  assert.match(trustMessaging, /Oraya is reviewing this booking request/);
+});
+
+test("public checkout failures do not echo provider or configuration detail", () => {
+  assert.doesNotMatch(checkoutPage, /message:\s*payload\.error/);
+  assert.doesNotMatch(checkoutPage, /completion\.(message|error)\s*\|\|/);
+  assert.doesNotMatch(checkoutRoute, /\{\s*error:\s*message\s*\}/);
+  assert.doesNotMatch(sessionRoute, /\{\s*error:\s*error\.message\s*\}/);
+  assert.doesNotMatch(completionRoute, /\{\s*error:\s*error\.message\s*\}/);
 });

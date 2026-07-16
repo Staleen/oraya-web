@@ -170,7 +170,7 @@ export async function POST(request: Request) {
           ok: false,
           paid: false,
           status: payment.status,
-          message: payment.message || "Payment was not approved. No booking payment was recorded.",
+          message: "Payment was not approved. No booking payment was recorded. Please try again or contact Oraya.",
           booking_view_url: `${viewUrl}?payment=failed`,
         },
         { status: payment.ok ? 402 : 502 },
@@ -221,7 +221,11 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     if (error instanceof PaymentProviderConfigurationError) {
-      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+      console.error("[api/payments/unified-checkout-complete] configuration error:", error.message);
+      return NextResponse.json(
+        { error: "Payment could not be verified. No booking payment was recorded." },
+        { status: error.statusCode },
+      );
     }
     console.error("[api/payments/unified-checkout-complete] unexpected error:", error);
     return NextResponse.json({ error: "Payment could not be verified." }, { status: 500 });

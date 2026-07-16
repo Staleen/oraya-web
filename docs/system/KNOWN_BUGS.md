@@ -1,6 +1,6 @@
 # Known Bugs & Open Issues
 
-**Updated:** 2026-07-04
+**Updated:** 2026-07-17
 
 Living list of bugs, gaps, and operational pitfalls that are **known** but **not yet fixed** (or accepted as a permanent trade-off). New AI sessions: read this before assuming production is in a clean state.
 
@@ -190,6 +190,39 @@ Living list of bugs, gaps, and operational pitfalls that are **known** but **not
 - **Recommended fix path:** n/a — resolved. Lesson recorded: PostgREST filter keys cannot carry `::` casts; error-collapsing resolvers need at least one live-path verification before being presumed working.
 - **Discovered:** 2026-07-15 (PR #80 Preview human verification by David).
 - **Resolved:** 2026-07-15
+
+---
+
+### #13 — Guest booking-status copy contradicted authoritative payment state
+
+- **Severity:** 🟠 High (guest trust and payment-state clarity)
+- **Area:** `/booking/view/[token]`, `/book`, and public hosted-checkout failures
+- **Description:** after an authoritative CyberSource sandbox approval, a booking could correctly remain `PENDING` while `payment_status` became `paid_in_full`. The dedicated payment panel then showed "Payment received successfully" and "Paid in full", but a separate booking-status card still said "No payment required yet"; the confirmed variant separately coupled "Payment received / booking confirmed". The page also exposed the raw persisted method `card_manual`, pre-payment copy still implied payment only followed review, and some public checkout failure paths could echo provider/configuration detail. David found the contradiction during Preview verification after merged PR #81. The payment record itself was not forged by the browser return: the server had accepted the CyberSource response as `AUTHORIZED` or `CAPTURED`, while booking confirmation deliberately remained an Oraya operations decision.
+- **Status:** **in-progress (2026-07-17 corrective branch)** — booking-status trust copy is payment-neutral; a pure guest-payment projection owns payment vocabulary and prioritizes recorded paid state over stale link state; payment method labels use the shared formatter; `/book` copy now describes pay-before-confirm correctly; and public checkout errors are guest-safe. Focused state-matrix coverage protects pending+paid, unpaid link states, and browser-return behavior.
+- **Recommended fix path:** merge and Preview-verify the corrective PR. Keep the invariant that `bookings.status` and `payment_status` are independent; do not auto-confirm a paid booking. Separately obtain the official provider declined-card vector, because a sandbox test card authorizing is not evidence that decline handling is validated.
+- **Discovered:** 2026-07-17 (David, PR #81 Vercel Preview screenshot and manual sandbox payment).
+
+---
+
+### #14 — Unified Checkout completion is not durably idempotent before provider authorization
+
+- **Severity:** 🔴 Critical production blocker (production checkout remains disabled)
+- **Area:** `/api/payments/unified-checkout-complete`, provider authorization, payment attempts
+- **Description:** the completion route reads an `active` booking payment link, calls CyberSource authorization/capture, and only then updates the booking with `.eq("payment_link_status", "active")`. Two concurrent completion requests can both read `active` and both submit provider operations before either database update wins. The later conditional update can match zero rows without surfacing an error because matched-row count is not checked, yet the route still returns success. Session creation has the related orphan-session risk when its post-provider conditional update matches no row. There is no durable payment-attempt record, pre-authorization claim, or documented provider idempotency key tying a retry to one operation.
+- **Status:** open — production remains fail-closed; this corrective guest-presentation branch documents but does not attempt a schema/provider protocol change.
+- **Recommended fix path:** design a dedicated payment-attempt/idempotency contract before production activation: atomically claim a unique attempt before calling the provider, send a stable provider idempotency/request identifier where supported, persist provider request/transaction identifiers, verify every conditional update's returned row count, and test concurrent calls plus retry-after-timeout behavior. Reconcile ambiguous outcomes against CyberSource before allowing another charge.
+- **Discovered:** 2026-07-17 (full payment-code audit after PR #81 Preview verification).
+
+---
+
+### #15 — Admin "Issue refund" records internal state but does not execute a provider refund
+
+- **Severity:** 🟠 High operational/money-movement risk
+- **Area:** admin booking payment actions / CyberSource refunds
+- **Description:** the admin payment foundation exposes an "Issue refund" action, but the current implementation only updates booking refund/payment fields. It does not call CyberSource follow-on refund, void, or reversal APIs and does not verify provider acceptance, settlement state, or refunded amount. The UI is therefore a bookkeeping control, not proof that money returned to the guest.
+- **Status:** open — no provider-side refund automation exists; production checkout remains disabled.
+- **Recommended fix path:** before live charging, rename or clearly gate the current action as an internal record-only operation, then implement separately approved, role-gated provider refund/void endpoints with idempotency, transaction references, audit history, reconciliation, and explicit partial/full refund semantics. The locked admin route must not be edited without named approval.
+- **Discovered:** 2026-07-17 (full payment-code audit; architectural gap was already described generally in the Phase 16B payment operations audit).
 
 ---
 

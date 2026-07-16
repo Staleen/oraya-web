@@ -6,6 +6,11 @@ import { BookingViewMemberLink } from "@/components/BookingViewMemberLink";
 import { buildProposalEmailLineItems } from "@/lib/event-proposal-line-items";
 import { extractEventInquiryGuestNotesLine, parseEventSetupEstimateFromMessage } from "@/lib/event-inquiry-message";
 import { derivePaymentLinkState } from "@/lib/payments/link-state";
+import {
+  buildGuestPaymentPresentation,
+  paymentReturnMessage,
+  type GuestPaymentPresentationTone,
+} from "@/lib/payments/guest-presentation";
 import type {
   BookingPaymentLifecycleStatus,
   HostedSessionLifecycleStatus,
@@ -167,18 +172,7 @@ type GuestPaymentTone = {
   border: string;
 };
 
-type GuestPaymentPresentation = {
-  label: string;
-  headline: string;
-  body: string;
-  tone: GuestPaymentTone;
-  actionUrl: string | null;
-  actionLabel: string | null;
-  rows: Array<[string, string]>;
-  isPaid: boolean;
-};
-
-function paymentPresentationTone(kind: "pending" | "deposit" | "paid" | "attention"): GuestPaymentTone {
+function paymentPresentationTone(kind: GuestPaymentPresentationTone): GuestPaymentTone {
   if (kind === "paid") {
     return { color: "#6fcf8a", bg: "rgba(111,207,138,0.15)", border: "rgba(111,207,138,0.28)" };
   }
@@ -189,166 +183,6 @@ function paymentPresentationTone(kind: "pending" | "deposit" | "paid" | "attenti
     return { color: "#f0bd67", bg: "rgba(224,112,112,0.08)", border: "rgba(224,112,112,0.24)" };
   }
   return { color: GOLD, bg: "rgba(197,164,109,0.14)", border: "rgba(197,164,109,0.28)" };
-}
-
-function appendPaymentDetail(rows: Array<[string, string]>, label: string, value: string | null | undefined) {
-  if (value && value.trim()) {
-    rows.push([label, value]);
-  }
-}
-
-function buildGuestPaymentPresentation(input: {
-  paymentStatus: BookingPaymentLifecycleStatus | null;
-  paymentLinkStatus: HostedSessionLifecycleStatus;
-  paymentLinkUrl: string | null;
-  hasActivePaymentLink: boolean;
-  paymentLinkExpiresAt: string | null;
-  depositAmount: number | null;
-  amountPaid: number | null;
-  balanceDue: number | null;
-  paymentDueAt: string | null;
-  paymentRequestedAt: string | null;
-  paymentReceivedAt: string | null;
-  paymentMethod: string | null;
-  paymentReference: string | null;
-}): GuestPaymentPresentation {
-  const rows: Array<[string, string]> = [];
-  const method = input.paymentMethod?.replaceAll("_", " ") ?? null;
-  const reference = input.paymentReference?.trim() ?? null;
-
-  if (input.paymentStatus === "paid_in_full") {
-    appendPaymentDetail(rows, "Amount paid", input.amountPaid !== null ? formatMoney(input.amountPaid) : null);
-    appendPaymentDetail(rows, "Method", method);
-    appendPaymentDetail(rows, "Reference", reference);
-    appendPaymentDetail(rows, "Received on", input.paymentReceivedAt);
-    return {
-      label: "Paid in full",
-      headline: "Paid in full",
-      body: "Payment has been recorded for this booking.",
-      tone: paymentPresentationTone("paid"),
-      actionUrl: null,
-      actionLabel: null,
-      rows,
-      isPaid: true,
-    };
-  }
-
-  if (input.paymentStatus === "deposit_paid") {
-    appendPaymentDetail(rows, "Amount paid", input.amountPaid !== null ? formatMoney(input.amountPaid) : null);
-    appendPaymentDetail(
-      rows,
-      "Remaining balance",
-      input.balanceDue !== null ? formatMoney(input.balanceDue) : null,
-    );
-    appendPaymentDetail(rows, "Method", method);
-    appendPaymentDetail(rows, "Reference", reference);
-    appendPaymentDetail(rows, "Received on", input.paymentReceivedAt);
-    return {
-      label: "Deposit paid",
-      headline: "Deposit paid",
-      body: "Your deposit has been recorded. Oraya will confirm any remaining balance directly.",
-      tone: paymentPresentationTone("deposit"),
-      actionUrl: null,
-      actionLabel: null,
-      rows,
-      isPaid: true,
-    };
-  }
-
-  if (input.paymentLinkStatus === "expired") {
-    return {
-      label: "Payment link expired",
-      headline: "Payment link expired",
-      body: "No payment has been collected yet. Oraya will send a fresh secure payment link when it is ready.",
-      tone: paymentPresentationTone("attention"),
-      actionUrl: null,
-      actionLabel: null,
-      rows,
-      isPaid: false,
-    };
-  }
-
-  if (input.paymentLinkStatus === "failed" || input.paymentLinkStatus === "cancelled") {
-    return {
-      label: "Payment could not be completed",
-      headline: "Payment could not be completed",
-      body: "No payment has been collected yet. Oraya will send a fresh secure payment link when it is ready.",
-      tone: paymentPresentationTone("attention"),
-      actionUrl: null,
-      actionLabel: null,
-      rows,
-      isPaid: false,
-    };
-  }
-
-  if (input.hasActivePaymentLink && input.paymentLinkUrl) {
-    appendPaymentDetail(rows, "Link expires", input.paymentLinkExpiresAt);
-    appendPaymentDetail(rows, "Deposit amount", input.depositAmount !== null ? formatMoney(input.depositAmount) : null);
-    appendPaymentDetail(rows, "Due date", input.paymentDueAt);
-    appendPaymentDetail(rows, "Requested on", input.paymentRequestedAt);
-    return {
-      label: "Payment pending",
-      headline: "Secure payment link ready",
-      body: "Your secure payment link is ready. You will complete payment on Oraya's hosted payment page.",
-      tone: paymentPresentationTone("pending"),
-      actionUrl: input.paymentLinkUrl,
-      actionLabel: "Continue to secure payment",
-      rows,
-      isPaid: false,
-    };
-  }
-
-  if (input.paymentLinkStatus === "paid") {
-    return {
-      label: "Payment pending",
-      headline: "Payment is being verified",
-      body: "Your payment was submitted. Oraya will show it as received only after provider approval is recorded.",
-      tone: paymentPresentationTone("pending"),
-      actionUrl: null,
-      actionLabel: null,
-      rows,
-      isPaid: false,
-    };
-  }
-
-  if (input.paymentStatus === "payment_requested") {
-    appendPaymentDetail(rows, "Deposit amount", input.depositAmount !== null ? formatMoney(input.depositAmount) : null);
-    appendPaymentDetail(rows, "Due date", input.paymentDueAt);
-    appendPaymentDetail(rows, "Requested on", input.paymentRequestedAt);
-  }
-
-  return {
-    label: "Payment pending",
-    headline: "Payment pending",
-    body: "No payment has been collected yet. Oraya will send your secure payment link when it is ready.",
-    tone: paymentPresentationTone("pending"),
-    actionUrl: null,
-    actionLabel: null,
-    rows,
-    isPaid: false,
-  };
-}
-
-function paymentReturnMessage(
-  state: string | null,
-  payment: GuestPaymentPresentation,
-): { text: string; tone: "success" | "neutral" } | null {
-  if (!state) return null;
-  if (state === "success") {
-    return payment.isPaid
-      ? { text: "Payment received successfully.", tone: "success" }
-      : { text: "Your payment was submitted. Oraya is verifying it now.", tone: "neutral" };
-  }
-  if (state === "cancelled") {
-    return { text: "Payment was not completed. No payment has been collected yet.", tone: "neutral" };
-  }
-  if (state === "pending" || state === "setup_failed") {
-    return {
-      text: "Your booking request is in. No payment has been collected yet. Oraya will send your secure payment link when it is ready.",
-      tone: "neutral",
-    };
-  }
-  return null;
 }
 
 function formatProposalIncludedService(service: ProposalIncludedService) {
@@ -598,6 +432,7 @@ export default async function BookingViewPage({
     paymentMethod: booking.payment_method,
     paymentReference: booking.payment_reference,
   });
+  const stayPaymentTone = paymentPresentationTone(stayPaymentPresentation.tone);
   const paymentReturn = paymentReturnMessage(paymentReturnState, stayPaymentPresentation);
   const paymentRows: Array<[string, string, boolean]> = [
     ["Stay subtotal", staySubtotal !== null ? formatMoney(staySubtotal) : "Not available", false],
@@ -1245,7 +1080,7 @@ export default async function BookingViewPage({
         {!isEventInquiry && statusNorm !== "cancelled" && (
           <div
             style={{
-              border: paymentOverdue ? "0.5px solid rgba(224,112,112,0.32)" : `0.5px solid ${stayPaymentPresentation.tone.border}`,
+              border: paymentOverdue ? "0.5px solid rgba(224,112,112,0.32)" : `0.5px solid ${stayPaymentTone.border}`,
               padding: "1.75rem",
               marginBottom: "2rem",
               textAlign: "left",
