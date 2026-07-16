@@ -22,6 +22,9 @@
 | `ADMIN_SECRET` | server-only | yes (admin login + admin APIs) | yes | yes | yes |
 | `BUTLER_WEBHOOK_SECRET` | server-only | optional (only for Butler endpoint testing) | yes (once WhatChimp is wired) | yes (once WhatChimp is wired) | yes — Sensitive |
 | `BUTLER_PREFILL_SECRET` | server-only | optional (only for WhatsApp -> /book prefill testing) | yes (once the handoff is wired) | yes (once the handoff is wired) | yes - Sensitive |
+| `WHATCHIMP_CONFIRMED_STAY_WEBHOOK_URL` | server-only | no (unset = dispatch off) | **no — keep unset** (fail closed) | yes at activation (after Meta template approval + WhatChimp workflow) | yes — Sensitive, Production only |
+| `WHATCHIMP_CONFIRMED_STAY_WEBHOOK_SECRET` | server-only | no | no | optional (only if the WhatChimp workflow verifies a shared-secret header) | yes — Sensitive, if used |
+| `WHATSAPP_CONFIRMATION_ALLOW_NONPROD` | server-only | no | **no — set `true` only during a supervised test** | **never** | only temporarily on Preview |
 | `PAYMENT_PROVIDER` | server-only | optional (defaults to `stripe` only outside production) | yes | yes | yes |
 | `NETCOMMERCE_CYBERSOURCE_ENVIRONMENT` | server-only | yes (sandbox test) | yes | yes | yes |
 | `NETCOMMERCE_CYBERSOURCE_MERCHANT_ID` | server-only | yes (sandbox test) | yes | yes | yes - Sensitive |
@@ -224,6 +227,32 @@ Preview expectations:
 - **Configure in Vercel:** yes - Production + Preview, marked Sensitive. Different value per environment strongly recommended.
 - **Risk if missing:** `POST /api/butler/lead` still succeeds, but it omits `prefill_url`. `GET /api/butler/prefill` treats tokens as invalid because verification cannot run.
 - **Security contract:** token payload is opaque HMAC-signed data only; raw booking intent and PII are not placed in the public URL. The public prefill route returns a strict allow-list only.
+
+### `WHATCHIMP_CONFIRMED_STAY_WEBHOOK_URL`
+
+- **Scope:** server-only. **Never expose in a `"use client"` component or any `NEXT_PUBLIC_*` variable. Never log the full value.**
+- **Status:** Phase 16C automatic WhatsApp Arrival Guide dispatch. **Presence is the activation switch** — while unset, the dispatcher logs a safe "skipped: not_configured" line and makes no outbound call; booking confirmation and the confirmed email are unaffected.
+- **Used in:** [lib/whatsapp/confirmed-stay-notification.ts](../../lib/whatsapp/confirmed-stay-notification.ts) — sole reader. The two authoritative confirmation writers ([app/api/booking-action/route.ts](../../app/api/booking-action/route.ts), [app/api/admin/bookings/[id]/route.ts](../../app/api/admin/bookings/%5Bid%5D/route.ts)) call the dispatcher after a stay booking is confirmed.
+- **Required:** local no · preview **no — keep unset (fail closed; Preview shares the production database)** · production yes, but **only at activation**: after Meta approves `oraya_booking_confirmed_arrival_guide_v1`, WhatChimp syncs the template, and the WhatChimp Webhook Workflow exists.
+- **Where to get it:** the WhatChimp Webhook Workflow URL from the WhatChimp platform (operator-created; not stored in this repo).
+- **Configure in Vercel:** yes — Production only, marked Sensitive.
+- **Risk if missing:** WhatsApp automation is simply off; the Stage 4A admin "Copy Arrival Guide link" manual flow still works.
+- **Risk if leaked:** anyone holding the URL can trigger the WhatChimp workflow — treat it as a capability credential; rotate on the WhatChimp side if exposed.
+
+### `WHATCHIMP_CONFIRMED_STAY_WEBHOOK_SECRET`
+
+- **Scope:** server-only. Optional.
+- **Used in:** [lib/whatsapp/confirmed-stay-notification.ts](../../lib/whatsapp/confirmed-stay-notification.ts) — when set, sent as the outbound `X-Oraya-Webhook-Secret` header on the webhook POST. When unset, no header is sent and dispatch proceeds (the secret is optional by contract).
+- **Required:** no in all environments. Set only if the WhatChimp Webhook Workflow is configured to verify a shared-secret header.
+- **Where to get it:** generate (`openssl rand -base64 32`); configure the same value on the WhatChimp workflow. Distinct from every other secret — do not reuse.
+- **Configure in Vercel:** yes if used — Production only, marked Sensitive.
+
+### `WHATSAPP_CONFIRMATION_ALLOW_NONPROD`
+
+- **Scope:** server-only.
+- **Used in:** [lib/whatsapp/confirmed-stay-notification.ts](../../lib/whatsapp/confirmed-stay-notification.ts) — outside `VERCEL_ENV === "production"`, dispatch is skipped ("skipped: non_production") unless this is exactly the string `true`.
+- **Required:** never in normal operation. Set `true` only on a Preview deployment during a deliberate, supervised test against a **disposable** WhatChimp workflow — and remove it immediately after. **Warning:** Preview shares the production Supabase database, so a Preview dispatch consumes the real booking's one-shot `whatsapp_confirmation_sent_at` claim and can message a real guest.
+- **Configure in Vercel:** only temporarily, Preview scope only. Never in Production (production does not read it).
 
 ### `PAYMENT_PROVIDER`
 
