@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireButlerAuth } from "@/lib/butler/auth";
 import { orchestrateButlerIdentity } from "@/lib/butler/identity-orchestrator";
+import { resolveButlerVilla } from "@/lib/butler/villa";
+import { buildArrivalGuideUrl } from "@/lib/arrival-guide-link";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 /**
@@ -37,6 +39,15 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
  *   - high-level `location_access_note` explicitly stating that exact
  *     location and access details are only shared after a future approved
  *     configuration ships (Phase 16D)
+ *   - `arrival_guide_url` (Phase 16C Stage 4B) — the personalized private
+ *     Arrival Guide link `https://stayoraya.com/arrival/<signed-view-token>`
+ *     (existing signed "view" token, checkout-day expiry via the shared
+ *     [lib/arrival-guide-link.ts] builder). Only minted when identity is
+ *     established AND the booking is confirmed AND `check_out` is a usable
+ *     `YYYY-MM-DD` AND the villa resolves to a supported Butler villa;
+ *     null on every refusal branch and on any mint failure. The guide
+ *     contains stay details, villa guidance, maps, and local
+ *     recommendations — NO access codes (access delivery stays Phase 16D)
  *
  * Hard refusals — this endpoint NEVER returns:
  *   - smart-lock PIN, gate code, door code, or any access credential
@@ -112,6 +123,7 @@ interface ConfirmedGuestInfoResponseBody {
   check_in: string | null;
   check_out: string | null;
   booking_view_url: string | null;
+  arrival_guide_url: string | null;
   checkin_guidance: CheckinGuidance | null;
   location_access_note: string | null;
   safe_message: string;
@@ -186,9 +198,10 @@ function buildConfirmedSafeMessage(args: {
   checkIn: string | null;
   checkOut: string | null;
   viewUrl: string | null;
+  arrivalGuideUrl: string | null;
   guidanceConfigured: boolean;
 }): string {
-  const { bookingReference, villa, checkIn, checkOut, viewUrl, guidanceConfigured } = args;
+  const { bookingReference, villa, checkIn, checkOut, viewUrl, arrivalGuideUrl, guidanceConfigured } = args;
 
   // Format YYYY-MM-DD without JS Date parsing (mirrors the booking-view
   // page's fmtDate helper). Per the standing time/date discipline rule,
@@ -230,7 +243,14 @@ function buildConfirmedSafeMessage(args: {
   const viewClause =
     typeof viewUrl === "string" && viewUrl.length > 0 ? ` Full details: ${viewUrl}` : "";
 
-  return `${opener}${guidanceClause}${viewClause}`;
+  // Phase 16C Stage 4B — appended ONLY when a confirmed eligible booking
+  // minted an Arrival Guide link. No access/PIN claims.
+  const arrivalClause =
+    typeof arrivalGuideUrl === "string" && arrivalGuideUrl.length > 0
+      ? ` Your Arrival Guide is ready here: ${arrivalGuideUrl}`
+      : "";
+
+  return `${opener}${guidanceClause}${viewClause}${arrivalClause}`;
 }
 
 export async function POST(request: Request) {
@@ -333,6 +353,7 @@ export async function POST(request: Request) {
       check_in: null,
       check_out: null,
       booking_view_url: null,
+      arrival_guide_url: null,
       checkin_guidance: null,
       location_access_note: null,
       safe_message: identity.safe_message,
@@ -359,6 +380,7 @@ export async function POST(request: Request) {
       check_in: null,
       check_out: null,
       booking_view_url: null,
+      arrival_guide_url: null,
       checkin_guidance: null,
       location_access_note: null,
       safe_message:
@@ -376,6 +398,7 @@ export async function POST(request: Request) {
       check_in: null,
       check_out: null,
       booking_view_url: null,
+      arrival_guide_url: null,
       checkin_guidance: null,
       location_access_note: null,
       safe_message:
@@ -395,6 +418,7 @@ export async function POST(request: Request) {
       check_in: null,
       check_out: null,
       booking_view_url: null,
+      arrival_guide_url: null,
       checkin_guidance: null,
       location_access_note: null,
       safe_message:
@@ -410,6 +434,16 @@ export async function POST(request: Request) {
       ? { configured: true, message: configuredGuidance }
       : { configured: false, message: UNCONFIGURED_CHECKIN_GUIDANCE_MESSAGE };
 
+  // Phase 16C Stage 4B — mint the personalized Arrival Guide URL only on this
+  // branch (identity established + confirmed), and only when the booking has
+  // a usable check_out AND resolves to a supported villa. Any gate failure or
+  // mint failure yields null (no link) without changing the rest of the
+  // confirmed response.
+  const arrivalGuideUrl =
+    resolveButlerVilla(identity.villa) !== null
+      ? buildArrivalGuideUrl(identity.booking_id, identity.check_out)
+      : null;
+
   return ok({
     ok: true,
     state: "confirmed_guest_info",
@@ -419,6 +453,7 @@ export async function POST(request: Request) {
     check_in: identity.check_in,
     check_out: identity.check_out,
     booking_view_url: identity.booking_view_url,
+    arrival_guide_url: arrivalGuideUrl,
     checkin_guidance: checkinGuidance,
     location_access_note: LOCATION_ACCESS_NOTE,
     safe_message: buildConfirmedSafeMessage({
@@ -427,6 +462,7 @@ export async function POST(request: Request) {
       checkIn: identity.check_in,
       checkOut: identity.check_out,
       viewUrl: identity.booking_view_url,
+      arrivalGuideUrl,
       guidanceConfigured: checkinGuidance.configured,
     }),
   });
