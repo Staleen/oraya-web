@@ -1964,13 +1964,6 @@ function BookPageInner() {
         selectedAddons.length === 0 &&
         !hasSpecialRequest &&
         !hasManualReviewAddonSelection;
-      if (intent === "pay_now" && !attemptingOnlineCheckout) {
-        throw new Error(
-          !hostedCheckoutReady
-            ? paymentSettings.online_checkout_message || "Online payment is not available for this booking right now."
-            : "This stay needs Oraya review before payment can be collected.",
-        );
-      }
       if (attemptingOnlineCheckout && !selectedPaymentSelection.ok) {
         throw new Error(selectedPaymentSelection.error);
       }
@@ -2032,20 +2025,28 @@ function BookPageInner() {
                 `System branch: ${
                   attemptingOnlineCheckout
                     ? "Hosted checkout after booking creation"
+                    : intent === "pay_now"
+                      ? "Guest selected secure payment; Oraya follow-up payment link required"
                     : "Pending booking request for admin review"
                 }`,
                 attemptingOnlineCheckout
                   ? selectedPaymentPurpose === "full"
                     ? "Payment choice: Full payment on hosted checkout"
                     : "Payment choice: Minimum deposit on hosted checkout"
+                  : intent === "pay_now"
+                    ? "Payment choice: Secure payment requested; no charge collected on website at booking-request stage"
                   : "Charge status: No charge collected on website at booking-request stage",
                 attemptingOnlineCheckout
                   ? "Supported online protocol targets: card/debit card, Apple Pay, Google Pay when enabled by the hosted provider"
+                  : intent === "pay_now"
+                    ? "Follow-up payment rail: Oraya sends a secure payment link when ready"
                   : "Future follow-up payment rails: OMT Pay, Western Union, Wish, bank transfer, or cash by Oraya confirmation",
                 attemptingOnlineCheckout
                   ? `Amount to collect now: ${
                       selectedPaymentSelection.ok ? formatUsd(selectedPaymentSelection.chargeAmount) : "Not available"
                     }`
+                  : intent === "pay_now"
+                    ? "Amount to collect now: None"
                   : "Preferred follow-up payment method: Not specified in schema; operator confirms manually",
               ]
             : [];
@@ -2129,12 +2130,8 @@ function BookPageInner() {
               : {};
           if (!checkoutRes.ok) {
             clearStoredButlerPrefillToken();
-            window.location.assign(`/booking/view/${bookingToken}?payment=setup_failed`);
-            const checkoutError =
-              typeof checkoutPayload.error === "string"
-                ? checkoutPayload.error
-                : "Secure payment could not be started.";
-            throw new Error(checkoutError);
+            window.location.assign(`/booking/view/${bookingToken}?payment=pending`);
+            return;
           }
           const checkoutUrl =
             typeof checkoutPayload.checkout_url === "string"
@@ -2142,15 +2139,15 @@ function BookPageInner() {
               : "";
           if (!checkoutUrl) {
             clearStoredButlerPrefillToken();
-            window.location.assign(`/booking/view/${bookingToken}?payment=setup_failed`);
-            throw new Error("Secure payment could not be started.");
+            window.location.assign(`/booking/view/${bookingToken}?payment=pending`);
+            return;
           }
           clearStoredButlerPrefillToken();
           window.location.assign(checkoutUrl);
           return;
         }
         clearStoredButlerPrefillToken();
-        window.location.assign(`/booking/view/${bookingToken}`);
+        window.location.assign(`/booking/view/${bookingToken}${intent === "pay_now" ? "?payment=pending" : ""}`);
         return;
       }
       setError("Booking was created but redirect token was missing. Please contact support.");
@@ -3492,10 +3489,10 @@ function BookPageInner() {
               {hasAddonsOrSpecialRequestsForReview && (
                 <div style={{ border: "0.5px solid rgba(197,164,109,0.24)", backgroundColor: "rgba(197,164,109,0.05)", padding: "14px 16px", display: "grid", gap: "6px" }}>
                   <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "1.6px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
-                    Payment after Oraya review
+                    Secure payment link follows
                   </p>
                   <p style={{ fontFamily: LATO, fontSize: "12px", color: "var(--oraya-book-p78)", margin: 0, lineHeight: 1.65 }}>
-                    Add-ons and special requests are confirmed by Oraya first. Reserve the stay now; we will send the correct payment step after approval, usually within 24 hours.
+                    Add-ons and special requests are confirmed by Oraya first. Reserve the stay now; we will send the secure payment link when it is ready, usually within 24 hours.
                   </p>
                 </div>
               )}

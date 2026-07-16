@@ -161,60 +161,194 @@ function formatDateTime(value: string | null | undefined): string | null {
   }).format(parsed);
 }
 
-function paymentStatusLabel(status: string | null | undefined): string {
-  switch (status) {
-    case "payment_requested":
-      return "Payment requested";
-    case "deposit_paid":
-      return "Deposit received";
-    case "paid_in_full":
-      return "Paid in full";
-    default:
-      return "Payment not requested yet";
-  }
-}
+type GuestPaymentTone = {
+  color: string;
+  bg: string;
+  border: string;
+};
 
-function paymentLinkStatusLabel(status: HostedSessionLifecycleStatus): string {
-  switch (status) {
-    case "active":
-      return "Payment link active";
-    case "paid":
-      return "Payment received";
-    case "expired":
-      return "Payment link expired";
-    case "cancelled":
-      return "Payment link cancelled";
-    case "failed":
-      return "Payment link unavailable";
-    default:
-      return "No payment link";
-  }
-}
+type GuestPaymentPresentation = {
+  label: string;
+  headline: string;
+  body: string;
+  tone: GuestPaymentTone;
+  actionUrl: string | null;
+  actionLabel: string | null;
+  rows: Array<[string, string]>;
+  isPaid: boolean;
+};
 
-function paymentLinkStatusTone(status: HostedSessionLifecycleStatus) {
-  if (status === "paid") {
+function paymentPresentationTone(kind: "pending" | "deposit" | "paid" | "attention"): GuestPaymentTone {
+  if (kind === "paid") {
     return { color: "#6fcf8a", bg: "rgba(111,207,138,0.15)", border: "rgba(111,207,138,0.28)" };
   }
-  if (status === "active") {
-    return { color: GOLD, bg: "rgba(197,164,109,0.14)", border: "rgba(197,164,109,0.28)" };
-  }
-  if (status === "expired" || status === "failed" || status === "cancelled") {
-    return { color: "#f0bd67", bg: "rgba(224,112,112,0.08)", border: "rgba(224,112,112,0.24)" };
-  }
-  return { color: MUTED, bg: GLASS1, border: "var(--oraya-border)" };
-}
-
-function paymentStatusTone(status: string | null | undefined) {
-  if (status === "paid_in_full") {
-    return { color: "#6fcf8a", bg: "rgba(111,207,138,0.15)", border: "rgba(111,207,138,0.28)" };
-  }
-  if (status === "deposit_paid") {
+  if (kind === "deposit") {
     return { color: "#9db7d9", bg: "rgba(157,183,217,0.14)", border: "rgba(157,183,217,0.26)" };
   }
-  if (status === "payment_requested") {
-    return { color: GOLD, bg: "rgba(197,164,109,0.14)", border: "rgba(197,164,109,0.28)" };
+  if (kind === "attention") {
+    return { color: "#f0bd67", bg: "rgba(224,112,112,0.08)", border: "rgba(224,112,112,0.24)" };
   }
-  return { color: MUTED, bg: GLASS1, border: "var(--oraya-border)" };
+  return { color: GOLD, bg: "rgba(197,164,109,0.14)", border: "rgba(197,164,109,0.28)" };
+}
+
+function appendPaymentDetail(rows: Array<[string, string]>, label: string, value: string | null | undefined) {
+  if (value && value.trim()) {
+    rows.push([label, value]);
+  }
+}
+
+function buildGuestPaymentPresentation(input: {
+  paymentStatus: BookingPaymentLifecycleStatus | null;
+  paymentLinkStatus: HostedSessionLifecycleStatus;
+  paymentLinkUrl: string | null;
+  hasActivePaymentLink: boolean;
+  paymentLinkExpiresAt: string | null;
+  depositAmount: number | null;
+  amountPaid: number | null;
+  balanceDue: number | null;
+  paymentDueAt: string | null;
+  paymentRequestedAt: string | null;
+  paymentReceivedAt: string | null;
+  paymentMethod: string | null;
+  paymentReference: string | null;
+}): GuestPaymentPresentation {
+  const rows: Array<[string, string]> = [];
+  const method = input.paymentMethod?.replaceAll("_", " ") ?? null;
+  const reference = input.paymentReference?.trim() ?? null;
+
+  if (input.paymentStatus === "paid_in_full") {
+    appendPaymentDetail(rows, "Amount paid", input.amountPaid !== null ? formatMoney(input.amountPaid) : null);
+    appendPaymentDetail(rows, "Method", method);
+    appendPaymentDetail(rows, "Reference", reference);
+    appendPaymentDetail(rows, "Received on", input.paymentReceivedAt);
+    return {
+      label: "Paid in full",
+      headline: "Paid in full",
+      body: "Payment has been recorded for this booking.",
+      tone: paymentPresentationTone("paid"),
+      actionUrl: null,
+      actionLabel: null,
+      rows,
+      isPaid: true,
+    };
+  }
+
+  if (input.paymentStatus === "deposit_paid") {
+    appendPaymentDetail(rows, "Amount paid", input.amountPaid !== null ? formatMoney(input.amountPaid) : null);
+    appendPaymentDetail(
+      rows,
+      "Remaining balance",
+      input.balanceDue !== null ? formatMoney(input.balanceDue) : null,
+    );
+    appendPaymentDetail(rows, "Method", method);
+    appendPaymentDetail(rows, "Reference", reference);
+    appendPaymentDetail(rows, "Received on", input.paymentReceivedAt);
+    return {
+      label: "Deposit paid",
+      headline: "Deposit paid",
+      body: "Your deposit has been recorded. Oraya will confirm any remaining balance directly.",
+      tone: paymentPresentationTone("deposit"),
+      actionUrl: null,
+      actionLabel: null,
+      rows,
+      isPaid: true,
+    };
+  }
+
+  if (input.paymentLinkStatus === "expired") {
+    return {
+      label: "Payment link expired",
+      headline: "Payment link expired",
+      body: "No payment has been collected yet. Oraya will send a fresh secure payment link when it is ready.",
+      tone: paymentPresentationTone("attention"),
+      actionUrl: null,
+      actionLabel: null,
+      rows,
+      isPaid: false,
+    };
+  }
+
+  if (input.paymentLinkStatus === "failed" || input.paymentLinkStatus === "cancelled") {
+    return {
+      label: "Payment could not be completed",
+      headline: "Payment could not be completed",
+      body: "No payment has been collected yet. Oraya will send a fresh secure payment link when it is ready.",
+      tone: paymentPresentationTone("attention"),
+      actionUrl: null,
+      actionLabel: null,
+      rows,
+      isPaid: false,
+    };
+  }
+
+  if (input.hasActivePaymentLink && input.paymentLinkUrl) {
+    appendPaymentDetail(rows, "Link expires", input.paymentLinkExpiresAt);
+    appendPaymentDetail(rows, "Deposit amount", input.depositAmount !== null ? formatMoney(input.depositAmount) : null);
+    appendPaymentDetail(rows, "Due date", input.paymentDueAt);
+    appendPaymentDetail(rows, "Requested on", input.paymentRequestedAt);
+    return {
+      label: "Payment pending",
+      headline: "Secure payment link ready",
+      body: "Your secure payment link is ready. You will complete payment on Oraya's hosted payment page.",
+      tone: paymentPresentationTone("pending"),
+      actionUrl: input.paymentLinkUrl,
+      actionLabel: "Continue to secure payment",
+      rows,
+      isPaid: false,
+    };
+  }
+
+  if (input.paymentLinkStatus === "paid") {
+    return {
+      label: "Payment pending",
+      headline: "Payment is being verified",
+      body: "Your payment was submitted. Oraya will show it as received only after provider approval is recorded.",
+      tone: paymentPresentationTone("pending"),
+      actionUrl: null,
+      actionLabel: null,
+      rows,
+      isPaid: false,
+    };
+  }
+
+  if (input.paymentStatus === "payment_requested") {
+    appendPaymentDetail(rows, "Deposit amount", input.depositAmount !== null ? formatMoney(input.depositAmount) : null);
+    appendPaymentDetail(rows, "Due date", input.paymentDueAt);
+    appendPaymentDetail(rows, "Requested on", input.paymentRequestedAt);
+  }
+
+  return {
+    label: "Payment pending",
+    headline: "Payment pending",
+    body: "No payment has been collected yet. Oraya will send your secure payment link when it is ready.",
+    tone: paymentPresentationTone("pending"),
+    actionUrl: null,
+    actionLabel: null,
+    rows,
+    isPaid: false,
+  };
+}
+
+function paymentReturnMessage(
+  state: string | null,
+  payment: GuestPaymentPresentation,
+): { text: string; tone: "success" | "neutral" } | null {
+  if (!state) return null;
+  if (state === "success") {
+    return payment.isPaid
+      ? { text: "Payment received successfully.", tone: "success" }
+      : { text: "Your payment was submitted. Oraya is verifying it now.", tone: "neutral" };
+  }
+  if (state === "cancelled") {
+    return { text: "Payment was not completed. No payment has been collected yet.", tone: "neutral" };
+  }
+  if (state === "pending" || state === "setup_failed") {
+    return {
+      text: "Your booking request is in. No payment has been collected yet. Oraya will send your secure payment link when it is ready.",
+      tone: "neutral",
+    };
+  }
+  return null;
 }
 
 function formatProposalIncludedService(service: ProposalIncludedService) {
@@ -365,7 +499,7 @@ export default async function BookingViewPage({
     );
   }
 
-  const { whatsappNumber, whishNumber } = await getContactSettings();
+  const { whatsappNumber } = await getContactSettings();
   const waLinkDigits = whatsappDigits(whatsappNumber);
   const ref = booking.id.slice(0, 8).toUpperCase();
   // Phase 13I: detect event inquiry — both conditions required (event_type set + structured notes marker).
@@ -449,13 +583,22 @@ export default async function BookingViewPage({
     Boolean(booking.payment_due_at) &&
     !Number.isNaN(new Date(booking.payment_due_at ?? "").getTime()) &&
     new Date(booking.payment_due_at ?? "").getTime() < Date.now();
-  const showConfirmedPaymentCard =
-    booking.status === "confirmed" &&
-    (!isEventInquiry ||
-      booking.payment_status === "payment_requested" ||
-      booking.payment_status === "deposit_paid" ||
-      booking.payment_status === "paid_in_full" ||
-      paymentLinkStatus !== "none");
+  const stayPaymentPresentation = buildGuestPaymentPresentation({
+    paymentStatus: booking.payment_status,
+    paymentLinkStatus,
+    paymentLinkUrl: paymentLinkState.url,
+    hasActivePaymentLink,
+    paymentLinkExpiresAt,
+    depositAmount,
+    amountPaid,
+    balanceDue,
+    paymentDueAt,
+    paymentRequestedAt,
+    paymentReceivedAt,
+    paymentMethod: booking.payment_method,
+    paymentReference: booking.payment_reference,
+  });
+  const paymentReturn = paymentReturnMessage(paymentReturnState, stayPaymentPresentation);
   const paymentRows: Array<[string, string, boolean]> = [
     ["Stay subtotal", staySubtotal !== null ? formatMoney(staySubtotal) : "Not available", false],
     ["Add-ons total", addonsTotal !== null ? formatMoney(addonsTotal) : "Price on request", false],
@@ -1077,29 +1220,52 @@ export default async function BookingViewPage({
           </div>
         )}
 
-        {booking.status === "pending" && !isEventInquiry && (
+        {paymentReturn && (
           <div
             style={{
-              border: "0.5px solid var(--oraya-border)",
+              border:
+                paymentReturn.tone === "success"
+                  ? "0.5px solid rgba(111,207,138,0.28)"
+                  : "0.5px solid rgba(197,164,109,0.22)",
+              backgroundColor:
+                paymentReturn.tone === "success"
+                  ? "rgba(111,207,138,0.08)"
+                  : "rgba(197,164,109,0.06)",
+              padding: "14px 16px",
+              marginBottom: "2rem",
+              textAlign: "left",
+            }}
+          >
+            <p style={{ fontFamily: LATO, fontSize: "12px", color: paymentReturn.tone === "success" ? "#9fe0ae" : WHITE, lineHeight: 1.7, margin: 0 }}>
+              {paymentReturn.text}
+            </p>
+          </div>
+        )}
+
+        {!isEventInquiry && statusNorm !== "cancelled" && (
+          <div
+            style={{
+              border: paymentOverdue ? "0.5px solid rgba(224,112,112,0.32)" : `0.5px solid ${stayPaymentPresentation.tone.border}`,
               padding: "1.75rem",
               marginBottom: "2rem",
               textAlign: "left",
-              backgroundColor: GLASS1,
+              backgroundColor: paymentOverdue ? "rgba(224,112,112,0.05)" : GLASS3,
             }}
           >
-            <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 12px" }}>
-              Payment
-            </p>
-            {paymentLinkStatus === "active" && paymentLinkState.has_url ? (
-              <div style={{ display: "grid", gap: "12px" }}>
-                <p style={{ fontFamily: PLAYFAIR, fontSize: "1.05rem", color: WHITE, margin: 0, lineHeight: 1.35 }}>
-                  Secure payment link ready
-                </p>
-                <p style={{ fontFamily: LATO, fontSize: "13px", color: BOOK_P82, lineHeight: 1.7, margin: 0 }}>
-                  Your payment link is ready. You will complete payment on a secure hosted page.
-                </p>
+            <div style={{ display: "grid", gap: "14px" }}>
+              <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+                Payment
+              </p>
+              <p style={{ fontFamily: PLAYFAIR, fontSize: "1.15rem", color: WHITE, margin: 0, lineHeight: 1.35 }}>
+                {stayPaymentPresentation.label}
+              </p>
+              <p style={{ fontFamily: LATO, fontSize: "13px", color: BOOK_P82, lineHeight: 1.7, margin: 0 }}>
+                {stayPaymentPresentation.body}
+              </p>
+
+              {stayPaymentPresentation.actionUrl && stayPaymentPresentation.actionLabel && (
                 <a
-                  href={paymentLinkState.url ?? undefined}
+                  href={stayPaymentPresentation.actionUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{
@@ -1112,196 +1278,15 @@ export default async function BookingViewPage({
                     textTransform: "uppercase",
                     color: GOLD_CTA,
                     backgroundColor: GOLD,
-                    padding: "14px 18px",
+                    padding: "12px 16px",
                     textDecoration: "none",
                     width: "fit-content",
                   }}
                 >
-                  Continue to secure payment
+                  {stayPaymentPresentation.actionLabel}
                 </a>
-                {paymentLinkExpiresAt && (
-                  <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.6, margin: 0 }}>
-                    Link expires {paymentLinkExpiresAt}
-                  </p>
-                )}
-              </div>
-            ) : paymentLinkStatus === "expired" ? (
-              <>
-                <p style={{ fontFamily: PLAYFAIR, fontSize: "1.05rem", color: WHITE, margin: "0 0 10px", lineHeight: 1.35 }}>
-                  Payment link expired
-                </p>
-                <p style={{ fontFamily: LATO, fontSize: "13px", color: BOOK_P82, lineHeight: 1.7, margin: 0 }}>
-                  Your earlier payment link has expired. Oraya will issue a fresh link after reviewing your request.
-                </p>
-              </>
-            ) : paymentLinkStatus === "cancelled" ? (
-              <>
-                <p style={{ fontFamily: PLAYFAIR, fontSize: "1.05rem", color: WHITE, margin: "0 0 10px", lineHeight: 1.35 }}>
-                  Payment link cancelled
-                </p>
-                <p style={{ fontFamily: LATO, fontSize: "13px", color: BOOK_P82, lineHeight: 1.7, margin: 0 }}>
-                  The latest payment link was cancelled. Oraya will guide you on the next payment step directly.
-                </p>
-              </>
-            ) : paymentLinkStatus === "failed" ? (
-              <>
-                <p style={{ fontFamily: PLAYFAIR, fontSize: "1.05rem", color: WHITE, margin: "0 0 10px", lineHeight: 1.35 }}>
-                  Payment link unavailable
-                </p>
-                <p style={{ fontFamily: LATO, fontSize: "13px", color: BOOK_P82, lineHeight: 1.7, margin: 0 }}>
-                  There was an issue with the latest payment link. Oraya will share a fresh secure payment step shortly.
-                </p>
-              </>
-            ) : (
-              <>
-                <p style={{ fontFamily: PLAYFAIR, fontSize: "1.05rem", color: WHITE, margin: "0 0 10px", lineHeight: 1.35 }}>
-                  Online payment portal (coming soon)
-                </p>
-                <p style={{ fontFamily: LATO, fontSize: "13px", color: BOOK_P82, lineHeight: 1.7, margin: 0 }}>
-                  Payment is not processed yet. Oraya will confirm availability and review your request first; payment will be requested only after your stay is confirmed and coordinated with you.
-                </p>
-              </>
-            )}
-          </div>
-        )}
-
-        {paymentReturnState && (
-          <div
-            style={{
-              border:
-                paymentReturnState === "success"
-                  ? "0.5px solid rgba(111,207,138,0.28)"
-                  : "0.5px solid rgba(197,164,109,0.22)",
-              backgroundColor:
-                paymentReturnState === "success"
-                  ? "rgba(111,207,138,0.08)"
-                  : "rgba(197,164,109,0.06)",
-              padding: "14px 16px",
-              marginBottom: "2rem",
-              textAlign: "left",
-            }}
-          >
-            <p style={{ fontFamily: LATO, fontSize: "12px", color: paymentReturnState === "success" ? "#9fe0ae" : WHITE, lineHeight: 1.7, margin: 0 }}>
-              {paymentReturnState === "success"
-                ? paymentLinkStatus === "paid" || booking.payment_status === "deposit_paid" || booking.payment_status === "paid_in_full"
-                  ? "Payment received successfully."
-                  : "Your payment was submitted. We’re confirming it now."
-                : paymentReturnState === "cancelled"
-                  ? "Payment was not completed. If your secure payment link is still active, you can continue below."
-                  : paymentReturnState === "setup_failed"
-                    ? "Your booking was created, but secure payment could not be started. Oraya will help you complete payment shortly."
-                    : "Payment status updated."}
-            </p>
-          </div>
-        )}
-
-        {showConfirmedPaymentCard && (
-          <div
-            style={{
-              border: paymentOverdue ? "0.5px solid rgba(224,112,112,0.32)" : "0.5px solid var(--oraya-border)",
-              padding: "1.75rem",
-              marginBottom: "2rem",
-              textAlign: "left",
-              backgroundColor: paymentOverdue ? "rgba(224,112,112,0.05)" : GLASS3,
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px", flexWrap: "wrap", marginBottom: "1rem" }}>
-              <div>
-                <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: "0 0 8px" }}>
-                  Payment
-                </p>
-                <p style={{ fontFamily: PLAYFAIR, fontSize: "1.15rem", color: WHITE, margin: 0 }}>
-                  {paymentStatusLabel(booking.payment_status)}
-                </p>
-              </div>
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontFamily: LATO,
-                  fontSize: "10px",
-                  letterSpacing: "1.5px",
-                  textTransform: "uppercase",
-                  color: paymentStatusTone(booking.payment_status).color,
-                  backgroundColor: paymentStatusTone(booking.payment_status).bg,
-                  border: `0.5px solid ${paymentStatusTone(booking.payment_status).border}`,
-                  padding: "6px 12px",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {paymentStatusLabel(booking.payment_status)}
-              </span>
+              )}
             </div>
-
-            {paymentLinkStatus !== "none" && (
-              <div
-                style={{
-                  border: `0.5px solid ${paymentLinkStatusTone(paymentLinkStatus).border}`,
-                  backgroundColor: paymentLinkStatusTone(paymentLinkStatus).bg,
-                  borderRadius: "8px",
-                  padding: "12px 14px",
-                  marginBottom: "12px",
-                  display: "grid",
-                  gap: "8px",
-                }}
-              >
-                <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: paymentLinkStatusTone(paymentLinkStatus).color, margin: 0 }}>
-                  {paymentLinkStatusLabel(paymentLinkStatus)}
-                </p>
-                {paymentLinkStatus === "active" && paymentLinkState.has_url ? (
-                  <>
-                    <p style={{ fontFamily: LATO, fontSize: "12px", color: WHITE, lineHeight: 1.7, margin: 0 }}>
-                      Complete payment on Oraya&apos;s secure hosted payment page.
-                    </p>
-                    <a
-                      href={paymentLinkState.url ?? undefined}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontFamily: LATO,
-                        fontSize: "11px",
-                        letterSpacing: "2px",
-                        textTransform: "uppercase",
-                        color: GOLD_CTA,
-                        backgroundColor: GOLD,
-                        padding: "12px 16px",
-                        textDecoration: "none",
-                        width: "fit-content",
-                      }}
-                    >
-                      Continue to secure payment
-                    </a>
-                    {paymentLinkExpiresAt && (
-                      <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, lineHeight: 1.6, margin: 0 }}>
-                        Link expires {paymentLinkExpiresAt}
-                      </p>
-                    )}
-                  </>
-                ) : paymentLinkStatus === "paid" &&
-                  booking.payment_status !== "deposit_paid" &&
-                  booking.payment_status !== "paid_in_full" ? (
-                  <p style={{ fontFamily: LATO, fontSize: "12px", color: WHITE, lineHeight: 1.7, margin: 0 }}>
-                    Payment has been received and is being confirmed on your booking.
-                  </p>
-                ) : paymentLinkStatus === "expired" ? (
-                  <p style={{ fontFamily: LATO, fontSize: "12px", color: WHITE, lineHeight: 1.7, margin: 0 }}>
-                    Your earlier payment link has expired. Oraya will issue a new one shortly.
-                  </p>
-                ) : paymentLinkStatus === "cancelled" ? (
-                  <p style={{ fontFamily: LATO, fontSize: "12px", color: WHITE, lineHeight: 1.7, margin: 0 }}>
-                    The latest payment link was cancelled. Oraya will guide you on the next payment step directly.
-                  </p>
-                ) : paymentLinkStatus === "failed" ? (
-                  <p style={{ fontFamily: LATO, fontSize: "12px", color: WHITE, lineHeight: 1.7, margin: 0 }}>
-                    There was an issue with the latest payment link. Oraya will send a fresh secure payment step shortly.
-                  </p>
-                ) : null}
-              </div>
-            )}
 
             {paymentOverdue && (
               <div
@@ -1310,179 +1295,38 @@ export default async function BookingViewPage({
                   backgroundColor: "rgba(224,112,112,0.08)",
                   borderRadius: "8px",
                   padding: "12px 14px",
-                  marginBottom: "12px",
+                  marginTop: "14px",
                 }}
               >
                 <p style={{ fontFamily: LATO, fontSize: "12px", color: "#f0bd67", lineHeight: 1.7, margin: 0 }}>
-                  Payment overdue — please complete payment to secure your booking.
+                  Payment timing needs a refresh. Oraya will confirm the next secure payment step directly.
                 </p>
               </div>
             )}
 
-            {(booking.payment_status === null || booking.payment_status === "unpaid") && (
-              <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, lineHeight: 1.7, margin: 0 }}>
-                Payment not requested yet.
-              </p>
-            )}
-
-            {booking.payment_status === "payment_requested" && (
-              <div style={{ display: "grid", gap: "12px" }}>
-                <div style={{ display: "grid", gap: "8px" }}>
-                  {depositAmount !== null && (
-                    <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, lineHeight: 1.6, margin: 0 }}>
-                      Deposit amount: <span style={{ color: GOLD }}>{formatMoney(depositAmount)}</span>
-                    </p>
-                  )}
-                  {paymentDueAt && (
-                    <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, lineHeight: 1.6, margin: 0 }}>
-                      Due date: <span style={{ color: GOLD }}>{paymentDueAt}</span>
-                    </p>
-                  )}
-                  {paymentRequestedAt && (
-                    <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.6, margin: 0 }}>
-                      Requested on {paymentRequestedAt}
-                    </p>
-                  )}
-                </div>
-                {!hasActivePaymentLink && (
-                  <div style={{ border: "0.5px solid var(--oraya-border)", backgroundColor: GLG3, padding: "14px 16px" }}>
-                  <div style={{ display: "grid", gap: "8px", marginBottom: "12px" }}>
-                    <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
-                      Pay via Whish
-                    </p>
-                    <div
-                      style={{
-                        border: "0.5px solid var(--oraya-border)",
-                        backgroundColor: GLASS1,
-                        padding: "12px 14px",
-                        borderRadius: "8px",
-                      }}
-                    >
-                      <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, lineHeight: 1.6, margin: 0 }}>
-                        {whishNumber?.trim() || "Send to Oraya Whish number"}
-                      </p>
-                    </div>
+            {stayPaymentPresentation.rows.length > 0 && (
+              <div style={{ borderTop: "0.5px solid var(--oraya-book-subtle-line)", marginTop: "14px", paddingTop: "14px", display: "grid", gap: "10px" }}>
+                {stayPaymentPresentation.rows.map(([label, value]) => (
+                  <div key={label} style={{ display: "flex", justifyContent: "space-between", gap: "14px", alignItems: "baseline" }}>
+                    <span style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED, flexShrink: 0 }}>
+                      {label}
+                    </span>
+                    <span style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, textAlign: "right", lineHeight: 1.5 }}>
+                      {value}
+                    </span>
                   </div>
-                  <div style={{ display: "grid", gap: "8px", marginBottom: "12px" }}>
-                    <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
-                      Booking reference
-                    </p>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", flexWrap: "wrap" }}>
-                      <div
-                        style={{
-                          border: "0.5px solid var(--oraya-border)",
-                          backgroundColor: GLASS1,
-                          padding: "12px 14px",
-                          borderRadius: "8px",
-                          flex: "1 1 180px",
-                        }}
-                      >
-                        <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, letterSpacing: "1px", margin: 0 }}>
-                          {ref}
-                        </p>
-                      </div>
-                      <CopyValueButton value={ref} buttonLabel="Copy reference" />
-                    </div>
-                    <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, lineHeight: 1.6, margin: 0 }}>
-                      Use this reference when sending payment.
-                    </p>
-                  </div>
-                  <p style={{ fontFamily: LATO, fontSize: "12px", color: WHITE, lineHeight: 1.75, margin: "0 0 10px" }}>
-                    Please complete payment using one of the available methods and send the reference to Oraya.
-                  </p>
-                  <div style={{ display: "grid", gap: "8px" }}>
-                    <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.7, margin: 0 }}>
-                      Whish: Send payment through Whish using the details provided by Oraya.
-                    </p>
-                    <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.7, margin: 0 }}>
-                      Bank transfer: Use the bank transfer details provided by Oraya.
-                    </p>
-                    <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.7, margin: 0 }}>
-                      Cash: Cash payment can be arranged directly with Oraya.
-                    </p>
-                  </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {booking.payment_status === "deposit_paid" && (
-              <div style={{ display: "grid", gap: "8px" }}>
-                {estimatedTotal !== null && (
-                  <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, lineHeight: 1.6, margin: 0 }}>
-                    Total booking value: <span style={{ color: GOLD }}>{formatMoney(estimatedTotal)}</span>
-                  </p>
-                )}
-                <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, lineHeight: 1.6, margin: 0 }}>
-                  Amount paid: <span style={{ color: GOLD }}>{amountPaid !== null ? formatMoney(amountPaid) : "Not available"}</span>
-                </p>
-                {balanceDue !== null && (
-                  <div
-                    style={{
-                      border: "0.5px solid var(--oraya-border)",
-                      backgroundColor: GLG4,
-                      borderRadius: "8px",
-                      padding: "12px 14px",
-                    }}
-                  >
-                    <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, margin: "0 0 6px" }}>
-                      Remaining balance
-                    </p>
-                    <p style={{ fontFamily: PLAYFAIR, fontSize: "1.2rem", color: GOLD, lineHeight: 1.2, margin: 0 }}>
-                      {formatMoney(balanceDue)}
-                    </p>
-                  </div>
-                )}
-                {booking.payment_method && (
-                  <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.6, margin: 0 }}>
-                    Method: {booking.payment_method.replaceAll("_", " ")}
-                  </p>
-                )}
-                {booking.payment_reference?.trim() && (
-                  <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.6, margin: 0 }}>
-                    Reference: {booking.payment_reference}
-                  </p>
-                )}
-                {paymentReceivedAt && (
-                  <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.6, margin: 0 }}>
-                    Received on {paymentReceivedAt}
-                  </p>
-                )}
-              </div>
-            )}
-
-            {booking.payment_status === "paid_in_full" && (
-              <div style={{ display: "grid", gap: "8px" }}>
-                <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, lineHeight: 1.6, margin: 0 }}>
-                  Paid in full
-                  {amountPaid !== null ? ` — ${formatMoney(amountPaid)}` : ""}
-                </p>
-                {booking.payment_method && (
-                  <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.6, margin: 0 }}>
-                    Method: {booking.payment_method.replaceAll("_", " ")}
-                  </p>
-                )}
-                {booking.payment_reference?.trim() && (
-                  <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.6, margin: 0 }}>
-                    Reference: {booking.payment_reference}
-                  </p>
-                )}
-                {paymentReceivedAt && (
-                  <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.6, margin: 0 }}>
-                    Received on {paymentReceivedAt}
-                  </p>
-                )}
+                ))}
               </div>
             )}
 
             {booking.refund_status && (
-              <div style={{ borderTop: `0.5px solid ${BOOK_SUBTLE}`, marginTop: "14px", paddingTop: "14px", display: "grid", gap: "8px" }}>
+              <div style={{ borderTop: "0.5px solid var(--oraya-book-subtle-line)", marginTop: "14px", paddingTop: "14px", display: "grid", gap: "8px" }}>
                 <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
                   Refund
                 </p>
                 <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, lineHeight: 1.6, margin: 0 }}>
                   Refund recorded
-                  {refundAmount !== null ? ` — ${formatMoney(refundAmount)}` : ""}
+                  {refundAmount !== null ? " - " + formatMoney(refundAmount) : ""}
                 </p>
                 {refundedAt && (
                   <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, lineHeight: 1.6, margin: 0 }}>
