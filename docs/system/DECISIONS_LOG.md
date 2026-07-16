@@ -31,6 +31,17 @@ Durable architectural and operational decisions. Append-only - never edit a past
 **Reversible?:** yes — unset the env var to deactivate instantly; single-PR revert removes the dispatcher and call sites; the column is inert if unused.
 
 **Supersedes:** none. Extends the 2026-07-15 Stage 4A/4B entries (manual copy + Butler field contract remain unchanged).
+## 2026-07-17 - Guest-facing payment polish before production activation; checkout-unavailable handoff stays pending
+
+**Decision:** Oraya may present a finished guest-facing payment journey before NetCommerce production credentials are available, but live charging stays blocked until the separate production-activation gate. `/book` keeps the primary **Continue to secure payment** CTA and secondary **Reserve now, pay later** CTA. When hosted checkout is not truly ready, the primary CTA creates the booking request through the existing booking pipeline and routes to `/booking/view/[token]?payment=pending`; it does not expose provider readiness, environment, setup-failure details, or technical gateway configuration to the guest. `/booking/view/[token]` shows one clear payment state (`Payment pending`, `Deposit paid`, `Paid in full`, `Payment link expired`, or `Payment could not be completed`) and removes duplicate/noisy payment-status presentation. Admin-only readiness surfaces may continue showing technical truth.
+
+**Reason:** NetCommerce sandbox validation and saved-card omission are complete, but production credentials, webhook/MLE reconciliation, decline-vector validation, idempotency/reconciliation, and explicit human rollout approval are still pending. The public site should feel intentional and payment-ready without suggesting a fake charge, leaking implementation readiness, or conflating booking request status with payment receipt.
+
+**Impact:** guest presentation only: `/book` fallback behavior, `/booking/view/[token]` payment status presentation, focused presentation tests, and docs. The CyberSource foundation is preserved: capture contexts still come from `/uc/v1/sessions`, payment completion remains server-authoritative through `/pts/v2/payments`, browser returns remain informational, saved-card/tokenization remains disabled, and `bookings.status` is not auto-confirmed by payment UI. No schema, `/api/bookings`, booking-action, admin, calendar, cron, auth, token-helper, webhook, refund, or production-env change.
+
+**Reversible?:** yes - the presentation fallback can be adjusted in a later PR without changing provider state or schema.
+
+**Supersedes:** PR #57 and older MPGS/placeholder payment branches are obsolete for Phase 16B execution and must not be merged or revived; the merged PR #64 / PR #65 CyberSource foundation remains the active architecture.
 
 ---
 
