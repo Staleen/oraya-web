@@ -1,6 +1,7 @@
 "use client";
 import { Suspense, useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
+import Image from "next/image";
 import { DayPicker } from "react-day-picker";
 import type { DateRange, Matcher } from "react-day-picker";
 import "react-day-picker/dist/style.css";
@@ -17,6 +18,7 @@ import { writeBookToEventHandoff } from "@/lib/event-inquiry-handoff";
 import { AddonIcon } from "@/components/addon-icon";
 import { SkeletonBlock, SkeletonText } from "@/components/LoadingSkeleton";
 import PublicThemeToggle from "@/components/PublicThemeToggle";
+import { useBookingMedia } from "@/components/BookingMediaProvider";
 import {
   HEATED_POOL_CARRYOVER_GUEST_NOTE,
   isHeatedPoolAddon,
@@ -893,6 +895,7 @@ function InfoPopover({ label, text }: { label: string; text: string }) {
 // ─── Main component ───────────────────────────────────────────────────────────
 function BookPageInner() {
   const searchParams = useSearchParams();
+  const bookingMedia = useBookingMedia();
   const loginRedirectTarget = (() => {
     const raw = searchParams.toString();
     return raw ? `/book?${raw}` : "/book";
@@ -964,8 +967,6 @@ function BookPageInner() {
   // Phase 12E Batch 5: addon IDs that have had the dead-day discount applied (client-only, display only).
   const [appliedDiscounts, setAppliedDiscounts] = useState<string[]>([]);
   const [guestEstimateManuallyChanged, setGuestEstimateManuallyChanged] = useState(false);
-  const [mechmechCover, setMechmechCover] = useState("");
-  const [byblosCover, setByblosCover] = useState("");
   const [whatsappDigits, setWhatsappDigits] = useState<string | null>(null);
   const [instantBookingFlags, setInstantBookingFlags] = useState<InstantBookingFlags>({
     "Villa Mechmech": false,
@@ -1169,33 +1170,6 @@ function BookPageInner() {
         setAuthStatus("none");
       }
     });
-  }, []);
-
-  useEffect(() => {
-    Promise.all([
-      fetch("/api/media?villa=mechmech&limit=1").then((r) => r.json()),
-      fetch("/api/media?villa=byblos&limit=1").then((r) => r.json()),
-      fetch("/api/media?villa=general&limit=1").then((r) => r.json()),
-    ])
-      .then(([mechmech, byblos, general]) => {
-        const firstUrl = (media: unknown): string => {
-          if (!Array.isArray(media)) return "";
-          const row = media.find((item) => {
-            if (!item || typeof item !== "object") return false;
-            const fileUrl = (item as { file_url?: unknown }).file_url;
-            return typeof fileUrl === "string" && fileUrl.trim().length > 0;
-          }) as { file_url?: string } | undefined;
-          return typeof row?.file_url === "string" ? row.file_url : "";
-        };
-
-        const generalCover = firstUrl(general?.media);
-        setMechmechCover(firstUrl(mechmech?.media) || generalCover);
-        setByblosCover(firstUrl(byblos?.media) || generalCover);
-      })
-      .catch(() => {
-        setMechmechCover("");
-        setByblosCover("");
-      });
   }, []);
 
   useEffect(() => {
@@ -2430,8 +2404,8 @@ function BookPageInner() {
                       const meta = VILLA_CARD_META[villa];
                       const coverImage =
                         villa === "Villa Mechmech"
-                          ? (mechmechCover || meta.image)
-                          : (byblosCover || meta.image);
+                          ? (bookingMedia.mechmech || meta.image)
+                          : (bookingMedia.byblos || meta.image);
                       const startingPrice = getVillaEntryPrice(villa, pricing);
                       return (
                         <button
@@ -2455,19 +2429,20 @@ function BookPageInner() {
                               height: "132px",
                               position: "relative",
                               overflow: "hidden",
+                              backgroundColor: GLASS2,
                               borderBottom: "0.5px solid rgba(197,164,109,0.12)",
                             }}
                           >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
+                            <Image
                               src={coverImage}
                               alt={villa}
+                              fill
+                              quality={70}
+                              loading="eager"
+                              sizes="350px"
                               style={{
-                                width: "100%",
-                                height: "100%",
                                 objectFit: "cover",
                                 objectPosition: meta.imagePosition,
-                                display: "block",
                               }}
                             />
                             <div
