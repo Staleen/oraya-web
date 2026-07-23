@@ -40,6 +40,18 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-07-23 - Remediation Phase 3 (CI & test coverage) from the 2026-07-23 health check
+
+**Decision:** (3.1) `.github/workflows/ci.yml` now gates every PR and master push with `npm ci` (PUPPETEER_SKIP_DOWNLOAD), `tsc --noEmit`, `next lint`, `npm test`, and `next build` (Google-Fonts network note + restricted-runner fallback documented in the workflow); `package.json` gains a `test` script (`node --test "scripts/*.test.mjs" "lib/**/*.test.mts"`) so CI and humans run the identical command. (3.2) Money/token-critical libraries got focused edge-case suites: action/view tokens and butler prefill tokens (expiry, tamper, wrong-purpose, secret rotation), checkout deposit math, the pure overlap/event-expansion core under `findAvailabilityConflict`, the pricing engine (boundary dates, Beirut weekends, seasonal overrides, minimum stay), and `lib/money`. To make these modules loadable under node's test runner, several lib modules' `@/lib/...` imports were converted to relative `.ts` imports (behavior-identical; verified by tsc + build + full suite).
+
+**Reason:** health-check items 7 and 11 — no CI gate and no coverage on the code paths that move money or gate booking state.
+
+**Impact:** tests 208 → 239 across 19 suites; every future PR is gated. No runtime behavior change.
+
+**Reversible?:** yes.
+
+---
+
 ## 2026-07-17 - Booking approval and payment are independent guest truths; one projection owns payment presentation
 
 **Decision:** `bookings.status` continues to represent Oraya's operational approval, while `payment_status` and the payment-link fields represent money state. A valid guest state is therefore `status = pending` plus `payment_status = paid_in_full`; payment must not auto-confirm a booking. On `/booking/view/[token]`, booking-status messaging must be payment-neutral and the pure [lib/payments/guest-presentation.ts](../../lib/payments/guest-presentation.ts) projection is the sole owner of guest payment vocabulary, method labels, and return-message interpretation. Recorded payment states take precedence over stale payment-link state. Browser return parameters remain informational and cannot create a success state. Public checkout errors are fixed guest-safe messages; provider/configuration detail stays in server logs or authenticated admin readiness surfaces.

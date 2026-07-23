@@ -53,8 +53,8 @@
 
 ## Phase 3 — CI & test coverage (items 7, 11)
 
-- [x] 3.1 **`.github/workflows/ci.yml`** — done: PR + master push run npm ci (PUPPETEER_SKIP_DOWNLOAD), tsc, lint, `npm test` (new script: `node --test "scripts/*.test.mjs" "lib/**/*.test.mts"` — node's own globstar, shell-safe), and `next build` (Google-Fonts note + restricted-runner fallback documented in the workflow). Commit: see `Remediation 3.1`.
-- [ ] 3.2 **Tests for money/token-critical libs** (pure-function first): `lib/booking-action-token.ts` + `lib/butler/prefill-token.ts` (expiry, tamper, wrong-purpose), `lib/payments/checkout-amount.ts` (deposit math edges), `lib/calendar/availability.ts` (overlap semantics incl. event expansion), `lib/pricing/engine.ts` (night iteration, boundary dates), `lib/payments/webhook-handler.ts` (with 1.6's cases), `lib/money.ts`. Target: meaningful edge cases, not line coverage.
+- [x] 3.1 **`.github/workflows/ci.yml`** — done: PR + master push run npm ci (PUPPETEER_SKIP_DOWNLOAD), tsc, lint, `npm test` (new script: `node --test "scripts/*.test.mjs" "lib/**/*.test.mts"` — node's own globstar, shell-safe), and `next build` (Google-Fonts note + restricted-runner fallback documented in the workflow). Commit: `d9109ba`.
+- [x] 3.2 **Tests for money/token-critical libs** — done: 6 new suites, 31 tests (total 239). `booking-action-token` + `prefill-token` (round trip, expiry, tamper, wrong-purpose, secret rotation/missing), `checkout-amount` (deposit minimum boundary, over-total, float artifacts, custom percentage), `calendar/event-block` (half-open overlap, event setup-day expansion, boundary arithmetic — the pure core `findAvailabilityConflict` builds on), `pricing/engine` (night iteration, month/year/leap boundaries, Beirut Fri+Sat weekends, seasonal overrides, minimum stay, unpriced nights), `money`. Webhook-handler set_paid cases were covered in 1.6 (`webhook-set-paid.test.mts`). Commit: see `Remediation 3.2`.
 
 ## Phase 4 — Dependencies (report §4)
 
