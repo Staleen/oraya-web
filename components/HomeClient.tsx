@@ -1,5 +1,6 @@
 "use client";
 import { Fragment, useState, useEffect } from "react";
+import Image from "next/image";
 import OrayaEmblem from "@/components/OrayaEmblem";
 import OrayaLogoFull from "@/components/OrayaLogoFull";
 import LegalEntityNotice from "@/components/LegalEntityNotice";
@@ -20,12 +21,6 @@ import { LATO, PLAYFAIR } from "@/components/theme";
 const GRAD_HERO     = "linear-gradient(145deg, #1a2a38 0%, #243444 45%, #1c2e3e 75%, #111e2a 100%)";
 const GRAD_MECHMECH = "linear-gradient(160deg, #1b3a2f 0%, #2b5040 45%, #162a20 80%, #0e1e17 100%)";
 const GRAD_BYBLOS   = "linear-gradient(160deg, #283520 0%, #3a5028 45%, #1e2e14 80%, #131d0c 100%)";
-
-function villaBg(img: string, gradient: string): React.CSSProperties {
-  return img
-    ? { backgroundImage: `url(${img})`, backgroundSize: "cover", backgroundPosition: "center" }
-    : { backgroundImage: gradient };
-}
 
 const GOLD       = "var(--oraya-gold)";
 const WHITE      = "var(--oraya-surface)";
@@ -273,11 +268,19 @@ export default function HomeClient({
         className="oraya-section-tone min-h-screen flex items-center justify-center relative overflow-hidden"
         style={{
           backgroundColor: "var(--oraya-hero-canvas)",
-          ...(heroImg
-            ? { backgroundImage: `url(${heroImg})`, backgroundSize: "cover", backgroundPosition: "center" }
-            : { backgroundImage: GRAD_HERO }),
+          backgroundImage: GRAD_HERO,
         }}
       >
+        {heroImg && (
+          <Image
+            src={heroImg}
+            alt=""
+            fill
+            priority
+            sizes="100vw"
+            style={{ objectFit: "cover" }}
+          />
+        )}
         {/* Overlay to ensure text legibility over photo */}
         <div
           className="absolute inset-0"
@@ -449,9 +452,18 @@ export default function HomeClient({
                   alignItems: "center",
                   justifyContent: "center",
                   gap: "12px",
-                  ...villaBg(img, gradient),
+                  backgroundImage: gradient,
                 }}
               >
+                {img && (
+                  <Image
+                    src={img}
+                    alt={`${name} cover photo`}
+                    fill
+                    sizes="(max-width: 768px) 100vw, 550px"
+                    style={{ objectFit: "cover" }}
+                  />
+                )}
                 {instantBadgeOn && (
                   <span
                     className="instant-badge instant-badge--on-photo pointer-events-none"
