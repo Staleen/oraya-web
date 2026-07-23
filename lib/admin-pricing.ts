@@ -1,5 +1,6 @@
-import { KNOWN_VILLAS } from "@/lib/calendar/villas";
-import type { SeasonalOverride } from "@/lib/pricing/types";
+// Relative .ts imports so node:test can load this module (repo test convention).
+import { KNOWN_VILLAS } from "./calendar/villas.ts";
+import type { SeasonalOverride } from "./pricing/types.ts";
 
 export const VILLA_BASE_PRICING_KEY = "villa_base_pricing";
 const ENTRY_BEDROOM_FACTOR = 0.6;
