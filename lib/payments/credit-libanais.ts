@@ -400,6 +400,8 @@ export async function authorizeCreditLibanaisTransientToken(
     },
     body,
     cache: "no-store",
+    // Remediation 2.2: bound gateway latency (payment authorization).
+    signal: AbortSignal.timeout(15_000),
   });
 
   let payload: CyberSourcePaymentResponse | null = null;
@@ -484,6 +486,8 @@ export async function createCreditLibanaisUnifiedCheckoutSession(
     },
     body,
     cache: "no-store",
+    // Remediation 2.2: bound gateway latency (session creation).
+    signal: AbortSignal.timeout(10_000),
   });
 
   const sessionJwt = (await response.text()).trim();

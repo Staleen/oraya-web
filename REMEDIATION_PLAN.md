@@ -36,8 +36,8 @@
 
 ## Phase 2 — Hardening & correctness (items 8, 9, 10, 18)
 
-- [x] 2.1 **Member booking modification** — done: PATCH now uses `findAvailabilityConflict` (incl. event expansion + calendar blocks), date changes reprice via `lib/pricing/reprice.ts` (Question 4 default; mirrors the POST audit→bedroom-factor→snapshot→estimated_total path, 4 tests), and guest counts require integers (`sleeping_guests ≥ 1`, `day_visitors ≥ 0`). Commit: see `Remediation 2.1`.
-- [ ] 2.2 **Timeouts on outbound fetches**: `AbortSignal.timeout(10_000)` + response-size cap + scheme check (https only) in `lib/calendar/sync.ts:38`; timeouts on Stripe and CyberSource fetch calls. Copy the existing pattern from `lib/whatsapp/confirmed-stay-notification.ts:275`.
+- [x] 2.1 **Member booking modification** — done: PATCH now uses `findAvailabilityConflict` (incl. event expansion + calendar blocks), date changes reprice via `lib/pricing/reprice.ts` (Question 4 default; mirrors the POST audit→bedroom-factor→snapshot→estimated_total path, 4 tests), and guest counts require integers (`sleeping_guests ≥ 1`, `day_visitors ≥ 0`). Commit: `5f5b9ce`.
+- [x] 2.2 **Timeouts on outbound fetches** — done: calendar feed sync now enforces https-only, 10s `AbortSignal.timeout`, and a 5 MB response cap (header + body); Stripe checkout-session fetch got a 10s timeout, CyberSource authorization 15s and session creation 10s. Commit: see `Remediation 2.2`.
 - [ ] 2.3 **Stop echoing raw DB errors on public routes** (six call sites: `bookings` POST, `media`, `addons`, `bookings/availability`, `butler/availability` GET, `pricing`): log server-side, return generic messages — match the butler-POST discipline.
 - [ ] 2.4 **Quick-win sweep** (one commit each or grouped sensibly):
   - `admin/media` PATCH: inspect per-row errors from `Promise.all`, return failure if any failed; validate `display_order` type; validate `villa` against `ALLOWED_VILLAS` in POST.
