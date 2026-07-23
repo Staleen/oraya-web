@@ -946,6 +946,10 @@ function BookPageInner() {
   const [heatedPoolCarryover, setHeatedPoolCarryover] = useState(false);
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [availabilitySettledKey, setAvailabilitySettledKey] = useState<string | null>(null);
+  // Remediation 1.5: availability must fail CLOSED — a fetch failure disables
+  // date selection instead of silently showing every date as free.
+  const [availabilityError, setAvailabilityError] = useState(false);
+  const [availabilityRetryNonce, setAvailabilityRetryNonce] = useState(0);
 
   // Add-ons
   const [addons,         setAddons]         = useState<Addon[]>([]);
@@ -1387,6 +1391,7 @@ function BookPageInner() {
       setHeatedPoolCarryover(false);
       setAvailabilityLoading(false);
       setAvailabilitySettledKey(null);
+      setAvailabilityError(false);
       return;
     }
     const availabilityKey = `${form.villa}|${checkIn}`;
@@ -1395,8 +1400,12 @@ function BookPageInner() {
     let cancelled = false;
     setAvailabilityLoading(true);
     setAvailabilitySettledKey(null);
+    setAvailabilityError(false);
     fetch(`/api/bookings/availability?${qs}`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`availability fetch failed (${r.status})`);
+        return r.json();
+      })
       .then((d: { ranges?: unknown; heated_pool_carryover?: unknown }) => {
         if (cancelled) return;
         setConfirmedRanges(Array.isArray(d.ranges) ? d.ranges : []);
@@ -1406,14 +1415,17 @@ function BookPageInner() {
       })
       .catch(() => {
         if (cancelled) return;
+        // Fail closed: keep settledKey null and flag the error so the
+        // calendar blocks selection and offers a retry.
         setConfirmedRanges([]);
         setHeatedPoolCarryover(false);
         setAvailabilityLoading(false);
+        setAvailabilityError(true);
       });
     return () => {
       cancelled = true;
     };
-  }, [form.villa, checkIn]);
+  }, [form.villa, checkIn, availabilityRetryNonce]);
   const sleepingGuestsCount = parseInt(form.sleepingGuests, 10) || 0;
   const selectedBedroomsCount = parseInt(form.bedroomCount, 10) || 3;
   const sleepingSetupLabel = getSleepingSetupLabel(sleepingGuestsCount);
@@ -1819,6 +1831,7 @@ function BookPageInner() {
   }
 
   function handleDateSelect(nextRange: DateRange | undefined, selectedDay: Date) {
+    if (availabilityError) return;
     const startsNewRange =
       !dateRange?.from ||
       Boolean(dateRange.to) ||
@@ -2525,20 +2538,44 @@ function BookPageInner() {
                   <div ref={dateSectionRef}>
                     <p style={{ ...labelStyle, marginBottom: "14px" }}>Select dates</p>
                     <div style={{ border: "0.5px solid rgba(197,164,109,0.12)", backgroundColor: GLASS3, padding: narrowStep1 ? "1rem" : "1.25rem" }}>
-                      <div className="oraya-cal">
-                        <DayPicker
-                          mode="range"
-                          selected={dateRange}
-                          onSelect={handleDateSelect}
-                          disabled={disabledDays}
-                          modifiers={{ deadCheckIn: isChoosingCheckout ? () => false : isDeadCheckInDate }}
-                          month={displayedCalendarMonth}
-                          onMonthChange={handleCalendarMonthChange}
-                          numberOfMonths={2}
-                          fromDate={today}
-                          showOutsideDays
-                        />
-                      </div>
+                      {availabilityError ? (
+                        <div style={{ padding: "2rem 1rem", textAlign: "center" }}>
+                          <p style={{ fontFamily: LATO, fontSize: "14px", color: "#e07070", margin: "0 0 14px", lineHeight: 1.6 }}>
+                            We couldn&apos;t load availability — please retry.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setAvailabilityRetryNonce((n) => n + 1)}
+                            style={{
+                              fontFamily: LATO,
+                              fontSize: "13px",
+                              letterSpacing: "1px",
+                              color: GOLD,
+                              backgroundColor: "transparent",
+                              border: `1px solid ${GOLD}`,
+                              padding: "10px 26px",
+                              cursor: "pointer",
+                            }}
+                          >
+                            Retry
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="oraya-cal">
+                          <DayPicker
+                            mode="range"
+                            selected={dateRange}
+                            onSelect={handleDateSelect}
+                            disabled={disabledDays}
+                            modifiers={{ deadCheckIn: isChoosingCheckout ? () => false : isDeadCheckInDate }}
+                            month={displayedCalendarMonth}
+                            onMonthChange={handleCalendarMonthChange}
+                            numberOfMonths={2}
+                            fromDate={today}
+                            showOutsideDays
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
 

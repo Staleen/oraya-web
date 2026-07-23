@@ -773,6 +773,10 @@ function EventInquiryPageInner() {
   });
 
   const [confirmedRanges, setConfirmedRanges] = useState<ConfirmedRange[]>([]);
+  // Remediation 1.5: availability fails CLOSED — fetch failure disables date
+  // selection instead of showing every date as free.
+  const [availabilityError, setAvailabilityError] = useState(false);
+  const [availabilityRetryNonce, setAvailabilityRetryNonce] = useState(0);
   const [error,           setError]           = useState("");
   const [loading,         setLoading]         = useState(false);
   /** Step 3 — optional notes hidden until expanded (value stays in form.message). */
@@ -884,22 +888,41 @@ function EventInquiryPageInner() {
     };
   }, []);
 
-  // Reload availability whenever villa changes (clear dates only when switching villa, not on first select)
+  // Reload availability whenever villa changes (clear dates only when switching villa, not on first select).
+  // Remediation 1.5: `cancelled` guard prevents a stale response from a rapid
+  // villa toggle overwriting the newer villa's ranges; failures set an error
+  // state that blocks date selection until retried.
   useEffect(() => {
     if (!form.villa) {
       prevVillaRef.current = "";
       setConfirmedRanges([]);
+      setAvailabilityError(false);
       return;
     }
     if (prevVillaRef.current && prevVillaRef.current !== form.villa) {
       setDateRange(undefined);
     }
     prevVillaRef.current = form.villa;
+    let cancelled = false;
+    setAvailabilityError(false);
     fetch(`/api/bookings/availability?villa=${encodeURIComponent(form.villa)}`)
-      .then(r => r.json())
-      .then(d => setConfirmedRanges(Array.isArray(d.ranges) ? d.ranges : []))
-      .catch(() => setConfirmedRanges([]));
-  }, [form.villa]);
+      .then(r => {
+        if (!r.ok) throw new Error(`availability fetch failed (${r.status})`);
+        return r.json();
+      })
+      .then(d => {
+        if (cancelled) return;
+        setConfirmedRanges(Array.isArray(d.ranges) ? d.ranges : []);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setConfirmedRanges([]);
+        setAvailabilityError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [form.villa, availabilityRetryNonce]);
 
   // ── Derived values ────────────────────────────────────────────────────────
   const today = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; })();
@@ -1273,6 +1296,7 @@ function EventInquiryPageInner() {
   }
 
   function handleDateSelect(nextRange: DateRange | undefined, selectedDay: Date) {
+    if (availabilityError) return;
     const startsNewRange =
       !dateRange?.from ||
       Boolean(dateRange.to) ||
@@ -1821,6 +1845,29 @@ function EventInquiryPageInner() {
                     Select start and end on the calendar.
                   </p>
                   <div style={{ border: "0.5px solid var(--oraya-border)", backgroundColor: GLASS3, padding: "1.25rem" }}>
+                    {availabilityError ? (
+                      <div style={{ padding: "2rem 1rem", textAlign: "center" }}>
+                        <p style={{ fontFamily: LATO, fontSize: "14px", color: "#e07070", margin: "0 0 14px", lineHeight: 1.6 }}>
+                          We couldn&apos;t load availability — please retry.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setAvailabilityRetryNonce((n) => n + 1)}
+                          style={{
+                            fontFamily: LATO,
+                            fontSize: "13px",
+                            letterSpacing: "1px",
+                            color: GOLD,
+                            backgroundColor: "transparent",
+                            border: `1px solid ${GOLD}`,
+                            padding: "10px 26px",
+                            cursor: "pointer",
+                          }}
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    ) : (
                     <div className="oraya-cal">
                       <DayPicker
                         // Remount when the prefilled start month changes so DayPicker focuses August (or whatever the guest picked) instead of today.
@@ -1836,6 +1883,7 @@ function EventInquiryPageInner() {
                         showOutsideDays
                       />
                     </div>
+                    )}
                   </div>
 
                   {eventDeadDayHints && (eventDeadDayHints.suggestLateCheckout || eventDeadDayHints.suggestEarlyCheckin) && (
