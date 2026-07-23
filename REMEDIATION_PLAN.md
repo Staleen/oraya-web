@@ -75,14 +75,44 @@ Order matters: helpers first (mechanical), then components. NO behavior changes 
 
 ## Phase 6 — Cleanup & closeout (item 17)
 
-- [ ] 6.1 Branch cleanup: generate the list of the ~55 remote branches with no commits in 30+ days (`git for-each-ref --sort=-committerdate refs/remotes`), verify each is merged into master (or clearly superseded), output the exact `git push origin --delete ...` commands to the Human-actions list — do NOT delete without David's confirmation.
+- [x] 6.1 Branch cleanup — done (analysis on 2026-07-23): 55 remote branches have no commits in 30+ days. 26 are **provably merged** into master (`git merge-base --is-ancestor`) — exact delete commands in Human actions below. The other 29 stale branches are **unmerged** (mostly superseded phase-16a/16b iterations from claude/codex/cursor agents) — listed separately for David's judgment; NOT included in the safe delete command. Nothing was deleted.
 - [ ] 6.2 Final full verification: `tsc`, build, all suites, `npm audit` re-run; update `docs/system/DECISIONS_LOG.md` + `KNOWN_BUGS.md`; update this file so every box is checked; open PR(s) with a summary mapping commits → plan items.
 
 ## Human actions (agent appends here; David executes)
 
 - [ ] Rotate the production admin password + store new hash (after 1.1).
 - [ ] Run new SQL files in `sql/` against Supabase (after 1.2, 1.4) — preflight queries included in each file.
-- [ ] Confirm/execute remote-branch deletions (after 6.1).
+- [ ] Confirm/execute remote-branch deletions (after 6.1). **Safe (all 26 verified merged into master):**
+  ```bash
+  git push origin --delete \
+    agent/phase-16b-cybersource-unified-checkout-test \
+    checkpoint/phase-16c-welcome-guide-print-4afa3bb \
+    claude/angry-chandrasekhar-5c6da1 \
+    claude/butler-identify-message-text \
+    claude/cool-leavitt-9a2e7c \
+    claude/heuristic-mclaren-f5710e \
+    claude/interesting-khayyam-ab4d82 \
+    claude/interesting-payne-993861 \
+    claude/optimistic-mcnulty-5e085f \
+    claude/phase-16a-confirmed-guest-info \
+    claude/phase-16b1-payment-architecture \
+    claude/quizzical-pascal-282919 \
+    claude/recursing-sinoussi-d6245d \
+    claude/refine-booking-cta-buttons \
+    claude/whatchimp-marker-routing-correction \
+    claude/whatsapp-cta-marker-prefill \
+    claude/whatsapp-prefill-human-sentences \
+    codex/book-3-step-checkout-ui \
+    codex/book-review-before-payment \
+    codex/phase16a-ops-hardening \
+    codex/phase16b-admin-payment-settings-step3 \
+    codex/phase16b3-provider-agnostic-bank-gateway \
+    codex/phase16b4-credit-libanais-readiness \
+    fix/book-step1-bottom-reserve-bug \
+    fix/book-step1-reserve-final \
+    fix/book-step1-reserve-scroll-bug
+  ```
+  **Stale but UNMERGED (29 — review individually before deleting; likely superseded iterations):** claude/book-3step-review-guest-details, claude/butler-normalize-compact-dates, claude/phase-16a-2c-butler-normalize-dates, claude/phase-16a-2d-butler-availability-post, claude/phase-16a-2e-whatsapp-leads, claude/phase-16a-closeout-phase-16b-provision, claude/phase-16a2f-leads-redesign, claude/phase-16a2g-leads-active-inbox, claude/phase-16a2h-lead-delete, claude/priceless-mirzakhani-311483, codex/book-checkout-step, codex/book-flow-polish, codex/book-pay-now-action, codex/chatgpt-source-doc-refresh, codex/payment-foundation-only, codex/payment-protocol-ux, codex/phase-16a-continuation-readiness, codex/phase-16b-payment-readiness, cursor/butler-prefill-handoff-5658, cursor/dev-env-setup-c08d, cursor/fix-admin-leads-select-6d63, cursor/fix-whatsapp-settings-cache-6d63, cursor/phase-15-critical-hotfix-f1cb, cursor/phase-16a2i1-stay-lead-conversion-5bde, cursor/secure-members-api-7340, fix/book-step-advance-instant-scroll, phase-16a-whatsapp-identity-continuity, phase-16a-whatsapp-villa-alias-prefill, phase-3/member-system.
 - [ ] Schedule the Next 15+/React 19 upgrade task (4.3 default decision: separate scoped task; also resolves the 5 remaining `npm audit` findings that live inside next@14).
 - [ ] (Optional, 5.6) Supply static villa photographs (one per villa) if a photo fallback is preferred over the branded gradient/emblem fallback when the cover fetch fails.
 - [ ] (Recommended, 5.2/5.5) Schedule Preview-verified PRs for: BookingsTable render-section memoization; next/image hero conversion + Supabase `images.remotePatterns` config.
