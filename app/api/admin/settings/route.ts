@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireAdminAuth } from "@/lib/admin-auth";
-import { hashAdminPassword } from "@/lib/admin-password";
 
 export const dynamic = "force-dynamic";
 
@@ -28,24 +27,20 @@ export async function POST(request: NextRequest) {
 
   if (!key) return NextResponse.json({ error: "key is required." }, { status: 400 });
 
-  // Remediation follow-up (1.1): the admin-password row stores a scrypt hash,
-  // never plaintext — hash here so the Settings-page "Update password" button
-  // keeps working with the fail-closed verify route (same rules as
-  // scripts/hash-admin-password.mjs).
-  let storedValue = value;
+  // Remediation 2 (A.1): the admin password can only change through
+  // POST /api/admin/change-password (current-password check, confirm field,
+  // min 12 chars, throttled). The generic settings upsert refuses the key so
+  // that path cannot be bypassed.
   if (key === "admin_password") {
-    if (typeof value !== "string" || value.length < 8) {
-      return NextResponse.json(
-        { error: "Password must be at least 8 characters." },
-        { status: 400 },
-      );
-    }
-    storedValue = hashAdminPassword(value);
+    return NextResponse.json(
+      { error: "Use the change-password endpoint to update the admin password." },
+      { status: 400 },
+    );
   }
 
   const { error } = await supabaseAdmin
     .from("settings")
-    .upsert({ key, value: storedValue }, { onConflict: "key" });
+    .upsert({ key, value }, { onConflict: "key" });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });

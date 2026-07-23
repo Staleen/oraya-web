@@ -27,9 +27,12 @@ export default function AdminSettingsPage() {
   const [whatsappNum, setWhatsappNum] = useState("");
   const [whatsappSaving, setWhatsappSaving] = useState(false);
   const [whatsappSaved, setWhatsappSaved] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [pwSaving, setPwSaving] = useState(false);
   const [pwSaved, setPwSaved] = useState(false);
+  const [pwError, setPwError] = useState("");
   const [notifEmails, setNotifEmails] = useState("");
   const [notifSaving, setNotifSaving] = useState(false);
   const [notifSaved, setNotifSaved] = useState(false);
@@ -105,23 +108,39 @@ export default function AdminSettingsPage() {
   }
 
   async function savePassword() {
-    if (!newPassword.trim()) return;
+    // Remediation 2 (A.1): current password required; new password twice,
+    // min 12 chars; server verifies + throttles via /api/admin/change-password.
+    setPwError("");
+    if (!currentPassword.trim()) { setPwError("Enter your current password."); return; }
+    if (newPassword.length < 12) { setPwError("New password must be at least 12 characters."); return; }
+    if (newPassword !== confirmPassword) { setPwError("New password and confirmation do not match."); return; }
     setPwSaving(true);
     setPwSaved(false);
-    const res = await fetch("/api/admin/settings", {
-      ...adminApiFetchInit,
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key: "admin_password", value: newPassword }),
-    });
-    setPwSaving(false);
-    if (res.ok) {
-      setPwSaved(true);
-      setNewPassword("");
-      setTimeout(() => setPwSaved(false), 3000);
-    } else {
-      const d = await res.json();
-      setError(d.error ?? "Failed to save password.");
+    try {
+      const res = await fetch("/api/admin/change-password", {
+        ...adminApiFetchInit,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          current_password: currentPassword,
+          new_password: newPassword,
+          confirm_password: confirmPassword,
+        }),
+      });
+      if (res.ok) {
+        setPwSaved(true);
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+        setTimeout(() => setPwSaved(false), 5000);
+      } else {
+        const d = await res.json().catch(() => ({}));
+        setPwError(typeof d.error === "string" ? d.error : "Failed to update password.");
+      }
+    } catch {
+      setPwError("Failed to update password. Check your connection and try again.");
+    } finally {
+      setPwSaving(false);
     }
   }
 
@@ -246,10 +265,15 @@ export default function AdminSettingsPage() {
         whatsappSaving={whatsappSaving}
         whatsappSaved={whatsappSaved}
         saveWhatsapp={saveWhatsapp}
+        currentPassword={currentPassword}
+        setCurrentPassword={(value) => { setCurrentPassword(value); setPwSaved(false); setPwError(""); }}
         newPassword={newPassword}
-        setNewPassword={(value) => { setNewPassword(value); setPwSaved(false); }}
+        setNewPassword={(value) => { setNewPassword(value); setPwSaved(false); setPwError(""); }}
+        confirmPassword={confirmPassword}
+        setConfirmPassword={(value) => { setConfirmPassword(value); setPwSaved(false); setPwError(""); }}
         pwSaving={pwSaving}
         pwSaved={pwSaved}
+        pwError={pwError}
         savePassword={savePassword}
         notifEmails={notifEmails}
         setNotifEmails={(value) => { setNotifEmails(value); setNotifSaved(false); }}

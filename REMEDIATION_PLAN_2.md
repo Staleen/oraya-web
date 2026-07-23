@@ -14,7 +14,7 @@
 
 ## Phase A — Admin password: finish the account-recovery story
 
-- [ ] A.1 **Harden the Settings "Update password" flow to the full spec** (builds on PR #86's server-side hashing — if #86 is not yet merged, branch from it):
+- [x] A.1 **Harden the Settings "Update password" flow to the full spec** — done: new `POST /api/admin/change-password` (session + current password via `lib/admin-change-password.ts`; new password twice, min 12; shared login throttle via extracted `lib/admin-login-attempts.ts` with wrong-current counted as a failure + 500ms delay; audit log lines, no password values). Generic settings POST now refuses the `admin_password` key so the check can't be bypassed. Settings UI has current/new/confirm fields with inline success/error feedback. 5 tests (257 total). Commit: see `Remediation 2 A.1`. (builds on PR #86's server-side hashing — if #86 is not yet merged, branch from it):
   - Require the **current password** before accepting a new one (verify via `lib/admin-password.ts` against the stored hash; the admin session cookie alone is not enough).
   - New password entered twice (confirm field), minimum **12** characters (raise from #86's 8).
   - Reuse the existing `lib/admin-login-throttle.ts` limiter on this endpoint (count failed current-password checks as failures).
