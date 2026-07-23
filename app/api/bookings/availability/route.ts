@@ -43,7 +43,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ ranges: data ?? [], heated_pool_carryover });
   } catch (error) {
     console.error("[api/bookings/availability] query error:", error);
-    const message = error instanceof Error ? error.message : String(error);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: "Could not load availability." }, { status: 500 });
   }
 }

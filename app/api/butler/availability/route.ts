@@ -96,8 +96,7 @@ export async function GET(request: Request) {
     );
   } catch (error) {
     console.error("[api/butler/availability] query error:", error);
-    const message = error instanceof Error ? error.message : String(error);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: "availability_unavailable" }, { status: 500 });
   }
 }
 

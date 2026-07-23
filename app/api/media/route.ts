@@ -18,6 +18,9 @@ export async function GET(request: NextRequest) {
   if (limit > 0) query = query.limit(limit);
 
   const { data, error } = await query;
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error("[api/media] query error:", error);
+    return NextResponse.json({ error: "Could not load media." }, { status: 500 });
+  }
   return NextResponse.json({ media: data ?? [] });
 }

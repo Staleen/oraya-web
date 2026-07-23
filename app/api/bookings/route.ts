@@ -777,7 +777,10 @@ export async function POST(request: Request) {
         );
       }
       console.error("[api/bookings] insert error:", error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json(
+        { error: "Could not save your booking request. Please try again." },
+        { status: 500 }
+      );
     }
 
     try {
