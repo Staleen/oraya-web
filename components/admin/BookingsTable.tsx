@@ -98,6 +98,7 @@ import {
   completedHistoryFeedbackLine,
 } from "./bookings/helpers";
 import { requestAddonResolution } from "./bookings/approve-addon";
+import ConfirmDialog from "./ConfirmDialog";
 
 export default function BookingsTable({
   loading,
@@ -5178,99 +5179,29 @@ export default function BookingsTable({
         const guestMail = getBookingGuestEmailForFeedback(bookingForModal, members);
         const modalBusy = feedbackEmailSendingId === feedbackEmailModalBookingId;
         return (
-          <div
-            role="presentation"
-            style={{
-              position: "fixed",
-              inset: 0,
-              zIndex: 1400,
-              backgroundColor: "rgba(0,0,0,0.55)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "16px",
-            }}
-            onClick={() => {
-              if (!modalBusy) setFeedbackEmailModalBookingId(null);
-            }}
+          <ConfirmDialog
+            titleId="feedback-email-confirm-title"
+            title="Send feedback request to this guest?"
+            confirmLabel={modalBusy ? "Sending…" : "Send email"}
+            confirmDisabled={!guestMail}
+            busy={modalBusy}
+            isMobile={isMobile}
+            onCancel={() => setFeedbackEmailModalBookingId(null)}
+            onConfirm={() => void confirmSendFeedbackEmail()}
           >
-            <div
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="feedback-email-confirm-title"
-              style={{
-                maxWidth: "420px",
-                width: "100%",
-                borderRadius: "14px",
-                border: `0.5px solid ${BORDER}`,
-                background: "linear-gradient(180deg, rgba(26,37,53,0.99) 0%, rgba(18,29,43,0.99) 100%)",
-                padding: isMobile ? "18px" : "22px",
-                boxShadow: "0 24px 60px rgba(0,0,0,0.35)",
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <p
-                id="feedback-email-confirm-title"
-                style={{ fontFamily: PLAYFAIR, fontSize: "1.35rem", color: WHITE, margin: "0 0 10px", lineHeight: 1.35 }}
-              >
-                Send feedback request to this guest?
-              </p>
-              <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: "0 0 6px", lineHeight: 1.55 }}>
-                {guestLabel}
-                {guestMail ? (
-                  <>
-                    {" "}
-                    · <span style={{ color: "rgba(255,255,255,0.78)" }}>{guestMail}</span>
-                  </>
-                ) : null}
-              </p>
-              <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "0 0 18px", lineHeight: 1.55 }}>
-                This sends one transactional email from Oraya Reservations. It is not automatic and does not publish testimonials.
-              </p>
-              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", justifyContent: "flex-end" }}>
-                <button
-                  type="button"
-                  disabled={modalBusy}
-                  onClick={() => setFeedbackEmailModalBookingId(null)}
-                  style={{
-                    fontFamily: LATO,
-                    fontSize: "11px",
-                    letterSpacing: "1.4px",
-                    textTransform: "uppercase",
-                    color: WHITE,
-                    backgroundColor: "transparent",
-                    border: `0.5px solid ${BORDER}`,
-                    padding: "10px 16px",
-                    borderRadius: "6px",
-                    cursor: modalBusy ? "not-allowed" : "pointer",
-                    opacity: modalBusy ? 0.6 : 1,
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={modalBusy || !guestMail}
-                  onClick={() => void confirmSendFeedbackEmail()}
-                  style={{
-                    fontFamily: LATO,
-                    fontSize: "11px",
-                    letterSpacing: "1.4px",
-                    textTransform: "uppercase",
-                    color: MIDNIGHT,
-                    backgroundColor: "#6fcf8a",
-                    border: "none",
-                    padding: "10px 16px",
-                    borderRadius: "6px",
-                    cursor: modalBusy || !guestMail ? "not-allowed" : "pointer",
-                    opacity: modalBusy || !guestMail ? 0.6 : 1,
-                  }}
-                >
-                  {modalBusy ? "Sending…" : "Send email"}
-                </button>
-              </div>
-            </div>
-          </div>
+            <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, margin: "0 0 6px", lineHeight: 1.55 }}>
+              {guestLabel}
+              {guestMail ? (
+                <>
+                  {" "}
+                  · <span style={{ color: "rgba(255,255,255,0.78)" }}>{guestMail}</span>
+                </>
+              ) : null}
+            </p>
+            <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "0 0 18px", lineHeight: 1.55 }}>
+              This sends one transactional email from Oraya Reservations. It is not automatic and does not publish testimonials.
+            </p>
+          </ConfirmDialog>
         );
       })() : null}
 

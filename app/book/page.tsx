@@ -3312,15 +3312,15 @@ function BookPageInner() {
                   </p>
 
                   <div>
-                    <label style={labelStyle}>Full name</label>
-                    <input ref={guestFullNameInputRef} name="fullName" type="text" required value={guest.fullName} onChange={handleGuestChange}
+                    <label style={labelStyle} htmlFor="book-guest-full-name">Full name</label>
+                    <input id="book-guest-full-name" ref={guestFullNameInputRef} name="fullName" type="text" required value={guest.fullName} onChange={handleGuestChange}
                       placeholder="Your full name" style={inputStyle} onFocus={focusGold} onBlur={blurGold} />
                   </div>
 
                   <div>
-                    <label style={labelStyle}>WhatsApp / phone number</label>
+                    <label style={labelStyle} htmlFor="book-guest-phone">WhatsApp / phone number</label>
                     <div style={{ display: "flex" }}>
-                      <select name="dialCode" value={guest.dialCode} onChange={handleGuestChange}
+                      <select aria-label="Country dial code" name="dialCode" value={guest.dialCode} onChange={handleGuestChange}
                         onFocus={focusGold} onBlur={blurGold}
                         style={{ ...inputStyle, width: "auto", flexShrink: 0, paddingRight: "10px", borderRight: "none", cursor: "pointer", minWidth: "120px" }}>
                         {DIAL_CODES.map((d, i) =>
@@ -3331,14 +3331,14 @@ function BookPageInner() {
                           )
                         )}
                       </select>
-                      <input ref={guestPhoneInputRef} name="phoneNumber" type="tel" value={guest.phoneNumber} onChange={handleGuestChange}
+                      <input id="book-guest-phone" ref={guestPhoneInputRef} name="phoneNumber" type="tel" value={guest.phoneNumber} onChange={handleGuestChange}
                         placeholder="70 000 000" style={{ ...inputStyle, flex: 1 }} onFocus={focusGold} onBlur={blurGold} />
                     </div>
                   </div>
 
                   <div>
-                    <label style={labelStyle}>Email address</label>
-                    <input ref={guestEmailInputRef} name="email" type="email" autoComplete="email" value={guest.email} onChange={handleGuestChange}
+                    <label style={labelStyle} htmlFor="book-guest-email">Email address</label>
+                    <input id="book-guest-email" ref={guestEmailInputRef} name="email" type="email" autoComplete="email" value={guest.email} onChange={handleGuestChange}
                       placeholder="you@example.com"
                       style={{
                         ...inputStyle,
@@ -3353,8 +3353,8 @@ function BookPageInner() {
                   </div>
 
                   <div>
-                    <label style={labelStyle}>Country</label>
-                    <select name="country" value={guest.country} onChange={handleGuestChange}
+                    <label style={labelStyle} htmlFor="book-guest-country">Country</label>
+                    <select id="book-guest-country" name="country" value={guest.country} onChange={handleGuestChange}
                       onFocus={focusGold} onBlur={blurGold} style={{ ...inputStyle, cursor: "pointer" }}>
                       {COUNTRIES.map((c, i) =>
                         c.value === "" ? (

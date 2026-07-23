@@ -1891,13 +1891,14 @@ function EventInquiryPageInner() {
               {/* Expected attendees */}
               <div ref={step1AttendeesSectionRef}>
                 <div className="events-popover-heading-row" style={{ marginBottom: "8px" }}>
-                  <label style={{ ...labelStyle, margin: 0 }}>Expected number of attendees</label>
+                  <label style={{ ...labelStyle, margin: 0 }} htmlFor="events-attendees">Expected number of attendees</label>
                   <InfoPopover
                     label="Attendee capacity"
                     text={`Private events at Oraya are limited to ${MAX_EVENT_ATTENDEES} attendees. Final capacity is confirmed after review.`}
                   />
                 </div>
                 <input
+                  id="events-attendees"
                   ref={step1AttendeesInputRef}
                   name="dayVisitors"
                   type="number"
@@ -2071,10 +2072,11 @@ function EventInquiryPageInner() {
 
                               {selected && service.quantity_enabled && (
                                 <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                                  <label style={{ ...labelStyle, marginBottom: 0 }}>
+                                  <label style={{ ...labelStyle, marginBottom: 0 }} htmlFor={`events-service-qty-${service.id}`}>
                                     Quantity{unitLabel ? ` (${unitLabel})` : ""}
                                   </label>
                                   <input
+                                    id={`events-service-qty-${service.id}`}
                                     type="number"
                                     min={minQuantity}
                                     max={maxQuantity}
@@ -2235,8 +2237,9 @@ function EventInquiryPageInner() {
 
               {/* Overnight hosts */}
               <div ref={step3HostSectionRef}>
-                <label style={labelStyle}>Host overnight stay</label>
+                <label style={labelStyle} htmlFor="events-sleeping-guests">Host overnight stay</label>
                 <input
+                  id="events-sleeping-guests"
                   ref={sleepingGuestsInputRef}
                   name="sleepingGuests"
                   type="number"
@@ -2274,29 +2277,29 @@ function EventInquiryPageInner() {
                   </div>
 
                   <div>
-                    <label style={labelStyle}>Full name</label>
-                    <input ref={guestFullNameInputRef} name="fullName" type="text" required value={guest.fullName} onChange={handleGuestChange}
+                    <label style={labelStyle} htmlFor="events-guest-full-name">Full name</label>
+                    <input id="events-guest-full-name" ref={guestFullNameInputRef} name="fullName" type="text" required value={guest.fullName} onChange={handleGuestChange}
                       placeholder="Your full name" style={inputStyle} onFocus={focusGold} onBlur={blurGold} />
                   </div>
 
                   <div>
-                    <label style={labelStyle}>WhatsApp / phone number</label>
+                    <label style={labelStyle} htmlFor="events-guest-phone">WhatsApp / phone number</label>
                     <div style={{ display: "flex" }}>
-                      <select name="dialCode" value={guest.dialCode} onChange={handleGuestChange}
+                      <select aria-label="Country dial code" name="dialCode" value={guest.dialCode} onChange={handleGuestChange}
                         onFocus={focusGold} onBlur={blurGold}
                         style={{ ...inputStyle, width: "auto", flexShrink: 0, paddingRight: "10px", borderRight: "none", cursor: "pointer", minWidth: "120px" }}>
                         {DIAL_CODES.map(d => (
                           <option key={`${d.code}-${d.label}`} value={d.code} style={{ backgroundColor: OPT_BG }}>{d.flag} {d.code}</option>
                         ))}
                       </select>
-                      <input ref={guestPhoneInputRef} name="phoneNumber" type="tel" value={guest.phoneNumber} onChange={handleGuestChange}
+                      <input id="events-guest-phone" ref={guestPhoneInputRef} name="phoneNumber" type="tel" value={guest.phoneNumber} onChange={handleGuestChange}
                         placeholder="70 000 000" style={{ ...inputStyle, flex: 1 }} onFocus={focusGold} onBlur={blurGold} />
                     </div>
                   </div>
 
                   <div>
-                    <label style={labelStyle}>Email address</label>
-                    <input ref={guestEmailInputRef} name="email" type="email" autoComplete="email" value={guest.email} onChange={handleGuestChange}
+                    <label style={labelStyle} htmlFor="events-guest-email">Email address</label>
+                    <input id="events-guest-email" ref={guestEmailInputRef} name="email" type="email" autoComplete="email" value={guest.email} onChange={handleGuestChange}
                       placeholder="you@example.com"
                       style={{ ...inputStyle, borderColor: guestEmailInvalid ? "#e07070" : "var(--oraya-book-input-border)" }}
                       onFocus={focusGold} onBlur={blurGold} />
@@ -2308,8 +2311,8 @@ function EventInquiryPageInner() {
                   </div>
 
                   <div>
-                    <label style={labelStyle}>Country</label>
-                    <select name="country" value={guest.country} onChange={handleGuestChange}
+                    <label style={labelStyle} htmlFor="events-guest-country">Country</label>
+                    <select id="events-guest-country" name="country" value={guest.country} onChange={handleGuestChange}
                       onFocus={focusGold} onBlur={blurGold} style={{ ...inputStyle, cursor: "pointer" }}>
                       {COUNTRIES.map(c => (
                         <option key={c} value={c} style={{ backgroundColor: OPT_BG }}>{c}</option>

@@ -543,8 +543,9 @@ export default function ProfilePage() {
 
               {/* Full name */}
               <div>
-                <label style={labelStyle}>Full name</label>
+                <label style={labelStyle} htmlFor="profile-full-name">Full name</label>
                 <input
+                  id="profile-full-name"
                   type="text"
                   value={form.fullName}
                   onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))}
@@ -556,11 +557,12 @@ export default function ProfilePage() {
 
               {/* Email — read-only */}
               <div>
-                <label style={labelStyle}>
+                <label style={labelStyle} htmlFor="profile-email">
                   Email address{" "}
                   <span style={{ color: "rgba(138,128,112,0.45)", letterSpacing: 0 }}>(cannot be changed)</span>
                 </label>
                 <input
+                  id="profile-email"
                   type="email"
                   value={email}
                   readOnly
@@ -570,9 +572,10 @@ export default function ProfilePage() {
 
               {/* Phone with dial code */}
               <div>
-                <label style={labelStyle}>Phone number</label>
+                <label style={labelStyle} htmlFor="profile-phone">Phone number</label>
                 <div style={{ display: "flex" }}>
                   <select
+                    aria-label="Country dial code"
                     value={form.dialCode}
                     onChange={(e) => setForm((f) => ({ ...f, dialCode: e.target.value }))}
                     onFocus={focusBorder} onBlur={blurBorder}
@@ -596,6 +599,7 @@ export default function ProfilePage() {
                     )}
                   </select>
                   <input
+                    id="profile-phone"
                     type="tel"
                     value={form.phoneNumber}
                     onChange={(e) => setForm((f) => ({ ...f, phoneNumber: e.target.value }))}
@@ -608,8 +612,9 @@ export default function ProfilePage() {
 
               {/* Country */}
               <div>
-                <label style={labelStyle}>Country</label>
+                <label style={labelStyle} htmlFor="profile-country">Country</label>
                 <select
+                  id="profile-country"
                   value={form.country}
                   onChange={(e) => setForm((f) => ({ ...f, country: e.target.value }))}
                   onFocus={focusBorder} onBlur={blurBorder}
@@ -631,8 +636,9 @@ export default function ProfilePage() {
 
               {/* Address */}
               <div>
-                <label style={labelStyle}>Address</label>
+                <label style={labelStyle} htmlFor="profile-address">Address</label>
                 <input
+                  id="profile-address"
                   type="text"
                   value={form.address}
                   onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
@@ -813,8 +819,9 @@ export default function ProfilePage() {
                             {/* Check-in / Check-out */}
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                               <div>
-                                <label style={labelStyle}>Check-in</label>
+                                <label style={labelStyle} htmlFor={`profile-edit-check-in-${b.id}`}>Check-in</label>
                                 <input
+                                  id={`profile-edit-check-in-${b.id}`}
                                   type="date"
                                   value={ef.check_in}
                                   onChange={(e) => setEditField(b.id, "check_in", e.target.value)}
@@ -823,8 +830,9 @@ export default function ProfilePage() {
                                 />
                               </div>
                               <div>
-                                <label style={labelStyle}>Check-out</label>
+                                <label style={labelStyle} htmlFor={`profile-edit-check-out-${b.id}`}>Check-out</label>
                                 <input
+                                  id={`profile-edit-check-out-${b.id}`}
                                   type="date"
                                   value={ef.check_out}
                                   onChange={(e) => setEditField(b.id, "check_out", e.target.value)}
@@ -836,8 +844,9 @@ export default function ProfilePage() {
                             {/* Guests / Day visitors */}
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                               <div>
-                                <label style={labelStyle}>Sleeping guests</label>
+                                <label style={labelStyle} htmlFor={`profile-edit-sleeping-${b.id}`}>Sleeping guests</label>
                                 <input
+                                  id={`profile-edit-sleeping-${b.id}`}
                                   type="number"
                                   min={0}
                                   value={ef.sleeping_guests}
@@ -847,8 +856,9 @@ export default function ProfilePage() {
                                 />
                               </div>
                               <div>
-                                <label style={labelStyle}>Day visitors</label>
+                                <label style={labelStyle} htmlFor={`profile-edit-visitors-${b.id}`}>Day visitors</label>
                                 <input
+                                  id={`profile-edit-visitors-${b.id}`}
                                   type="number"
                                   min={0}
                                   value={ef.day_visitors}
@@ -860,8 +870,9 @@ export default function ProfilePage() {
                             </div>
                             {/* Event type */}
                             <div>
-                              <label style={labelStyle}>Event type</label>
+                              <label style={labelStyle} htmlFor={`profile-edit-event-type-${b.id}`}>Event type</label>
                               <input
+                                id={`profile-edit-event-type-${b.id}`}
                                 type="text"
                                 value={ef.event_type}
                                 onChange={(e) => setEditField(b.id, "event_type", e.target.value)}
@@ -872,8 +883,9 @@ export default function ProfilePage() {
                             </div>
                             {/* Special requests */}
                             <div>
-                              <label style={labelStyle}>Special requests</label>
+                              <label style={labelStyle} htmlFor={`profile-edit-message-${b.id}`}>Special requests</label>
                               <textarea
+                                id={`profile-edit-message-${b.id}`}
                                 value={ef.message}
                                 onChange={(e) => setEditField(b.id, "message", e.target.value)}
                                 placeholder="Any additional requests or notes…"

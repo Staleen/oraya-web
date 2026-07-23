@@ -281,8 +281,9 @@ export default function JoinPage() {
           <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
 
             <div>
-              <label style={labelStyle}>Full name</label>
+              <label style={labelStyle} htmlFor="join-full-name">Full name</label>
               <input
+                id="join-full-name"
                 name="fullName" type="text" required
                 value={form.fullName} onChange={handleChange}
                 placeholder="Your full name"
@@ -292,8 +293,9 @@ export default function JoinPage() {
             </div>
 
             <div>
-              <label style={labelStyle}>Email address</label>
+              <label style={labelStyle} htmlFor="join-email">Email address</label>
               <input
+                id="join-email"
                 name="email" type="email" required
                 value={form.email} onChange={handleChange}
                 placeholder="you@example.com"
@@ -303,8 +305,9 @@ export default function JoinPage() {
             </div>
 
             <div>
-              <label style={labelStyle}>Password</label>
+              <label style={labelStyle} htmlFor="join-password">Password</label>
               <input
+                id="join-password"
                 name="password" type="password" required minLength={8}
                 value={form.password} onChange={handleChange}
                 placeholder="Minimum 8 characters"
@@ -314,9 +317,10 @@ export default function JoinPage() {
             </div>
 
             <div>
-              <label style={labelStyle}>Phone number</label>
+              <label style={labelStyle} htmlFor="join-phone">Phone number</label>
               <div style={{ display: "flex", gap: "0" }}>
                 <select
+                  aria-label="Country dial code"
                   name="dialCode"
                   value={form.dialCode}
                   onChange={handleChange}
@@ -346,6 +350,7 @@ export default function JoinPage() {
                   )}
                 </select>
                 <input
+                  id="join-phone"
                   name="phoneNumber"
                   type="tel"
                   value={form.phoneNumber}
@@ -359,8 +364,9 @@ export default function JoinPage() {
             </div>
 
             <div>
-              <label style={labelStyle}>Country</label>
+              <label style={labelStyle} htmlFor="join-country">Country</label>
               <select
+                id="join-country"
                 name="country"
                 value={form.country}
                 onChange={handleChange}
@@ -383,8 +389,9 @@ export default function JoinPage() {
             </div>
 
             <div>
-              <label style={labelStyle}>Address</label>
+              <label style={labelStyle} htmlFor="join-address">Address</label>
               <input
+                id="join-address"
                 name="address" type="text"
                 value={form.address} onChange={handleChange}
                 placeholder="City, region"
