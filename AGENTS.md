@@ -98,7 +98,7 @@ npm run dev
 - Color constants: `GOLD=#C5A46D`, `WHITE=#FFFFFF`, `BEIGE=#EAE3D9`, `BEIGELIGHT=#F5F1EB`, `CHARCOAL=#2E2E2E`, `MIDNIGHT=#1F2B38`, `MUTED=#8a8070`.
 - Font constants: `PLAYFAIR="'Playfair Display', Georgia, serif"`, `LATO="'Lato', system-ui, sans-serif"`.
 - SVG logos are inlined as React components (`OrayaEmblem.tsx`, `OrayaLogoFull.tsx`) — do not use `<img>` or `next/image` for SVGs.
-- `page.tsx` must stay `"use client"` (uses mouse event handlers).
+- `/` is a SERVER component (`app/page.tsx`: metadata + server-fetched covers/testimonials) rendering the `components/HomeClient.tsx` client island, which owns all mouse-event handlers, auth nav, and client hooks. Keep interactivity in HomeClient; keep data fetching + metadata in the server page.
 - Config file is `next.config.mjs` (not `.ts` — unsupported in Next.js 14).
 
 ---
