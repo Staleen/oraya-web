@@ -5,11 +5,11 @@ import { BORDER, GOLD, LATO, MIDNIGHT, MUTED, SURFACE, WHITE, fieldStyle } from 
 import { adminApiFetchInit } from "@/lib/admin-auth";
 import type { WhatsappLeadAdminRow } from "@/lib/butler/leads";
 import { isStayLead } from "./leadHelpers";
+import { EMAIL_RE } from "@/lib/guest-validation";
 
 const ALLOWED_VILLAS = ["Villa Mechmech", "Villa Byblos"] as const;
 const BEDROOM_OPTIONS = ["1", "2", "3"] as const;
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type ConversionDraft = {
   villa: string;

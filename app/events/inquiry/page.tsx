@@ -22,6 +22,8 @@ import {
 } from "@/lib/event-service-seed";
 import { supabase } from "@/lib/supabase";
 import { buildBookedRangeList, createEventCalendarRules } from "@/lib/booking/calendar-validity";
+import { fmtDate, nightCount, toISO } from "@/lib/guest-format";
+import { EMAIL_RE } from "@/lib/guest-validation";
 import { takeBookToEventHandoffIfLock } from "@/lib/event-inquiry-handoff";
 import { EVENT_SETUP_ESTIMATE_PREFIX, type EventSetupEstimatePayload } from "@/lib/event-inquiry-message";
 import {
@@ -58,6 +60,7 @@ import {
   STEP4_REFUND_TRUST,
   WHATSAPP_SUPPORT_LINE,
 } from "@/lib/booking-trust-messaging";
+import { LATO, PLAYFAIR } from "@/components/theme";
 
 // ─── Brand constants (theme tokens from globals.css; matches /book) ───────────
 const GOLD       = "var(--oraya-gold)";
@@ -82,11 +85,8 @@ const BOOK_P72   = "var(--oraya-book-p72)";
 const BOOK_P68   = "var(--oraya-book-p68)";
 const BOOK_P60   = "var(--oraya-book-p60)";
 const BOOK_SUBTLE = "var(--oraya-book-subtle-line)";
-const PLAYFAIR = "'Playfair Display', Georgia, serif";
-const LATO     = "'Lato', system-ui, sans-serif";
 
 const VILLAS   = ["Villa Mechmech", "Villa Byblos"];
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Guest-facing event type list — canonical taxonomy, sourced from lib/event-types.ts.
 // Old stored values (e.g. "Baptism / Family Gathering", "Wedding", "Birthday Party") are
@@ -247,31 +247,13 @@ interface EventServiceOption extends AddonOperationalFields {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-function toISO(d: Date): string {
-  const y  = d.getFullYear();
-  const m  = String(d.getMonth() + 1).padStart(2, "0");
-  const dy = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${dy}`;
-}
 
 function parseLocalISO(s: string): Date {
   const [y, m, d] = s.split("-").map(Number);
   return new Date(y, m - 1, d);
 }
 
-function fmtDate(iso: string): string {
-  if (!iso) return "—";
-  const [y, m, d] = iso.split("-");
-  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  return `${parseInt(d)} ${months[parseInt(m) - 1]} ${y}`;
-}
 
-function nightCount(checkIn: string, checkOut: string): number {
-  if (!checkIn || !checkOut) return 0;
-  return Math.max(0, Math.round(
-    (parseLocalISO(checkOut).getTime() - parseLocalISO(checkIn).getTime()) / 86_400_000
-  ));
-}
 
 /** Mirrors `detectDeadDaySuggestion` in app/book/page.tsx (Phase 12E) — same gap detection on merged ranges. */
 function detectDeadDaySuggestion(

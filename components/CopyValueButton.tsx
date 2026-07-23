@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { LATO } from "@/components/theme";
 
 const GOLD = "var(--oraya-gold)";
 const GOLD_CTA = "var(--oraya-gold-cta-text)";
-const LATO = "'Lato', system-ui, sans-serif";
 
 export default function CopyValueButton({
   value,

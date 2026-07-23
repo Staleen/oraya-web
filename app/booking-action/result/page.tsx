@@ -1,12 +1,6 @@
 import OrayaEmblem from "@/components/OrayaEmblem";
+import { CHARCOAL, GOLD, LATO, MIDNIGHT, MUTED, PLAYFAIR, WHITE } from "@/components/theme";
 
-const GOLD     = "#C5A46D";
-const WHITE    = "#FFFFFF";
-const MIDNIGHT = "#1F2B38";
-const CHARCOAL = "#2E2E2E";
-const MUTED    = "#8a8070";
-const PLAYFAIR = "'Playfair Display', Georgia, serif";
-const LATO     = "'Lato', system-ui, sans-serif";
 
 interface StateConfig {
   eyebrow: string;

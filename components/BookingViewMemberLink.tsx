@@ -3,10 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { LATO } from "@/components/theme";
 
 const GOLD = "var(--oraya-gold)";
 const GOLD_CTA = "var(--oraya-gold-cta-text)";
-const LATO = "'Lato', system-ui, sans-serif";
 
 /** Shown only when the signed-in user is the member who owns this booking. */
 export function BookingViewMemberLink({ bookingMemberId }: { bookingMemberId: string | null }) {

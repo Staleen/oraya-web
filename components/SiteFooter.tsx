@@ -1,12 +1,11 @@
 "use client";
 import LegalEntityNotice from "@/components/LegalEntityNotice";
 import OrayaLogoFull from "@/components/OrayaLogoFull";
+import { LATO, PLAYFAIR } from "@/components/theme";
 
 const GOLD    = "var(--oraya-gold)";
 const FOOTER_BG = "var(--oraya-footer-bg)";
 const MUTED   = "var(--oraya-text-muted)";
-const PLAYFAIR = "'Playfair Display', Georgia, serif";
-const LATO    = "'Lato', system-ui, sans-serif";
 
 export default function SiteFooter() {
   const columns = [

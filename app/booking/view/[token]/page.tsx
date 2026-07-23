@@ -34,6 +34,8 @@ import {
   type BookingViewStatusNorm,
   WHATSAPP_SUPPORT_LINE,
 } from "@/lib/booking-trust-messaging";
+import { fmtDate } from "@/lib/guest-format";
+import { LATO, PLAYFAIR } from "@/components/theme";
 
 const GOLD        = "var(--oraya-gold)";
 const WHITE       = "var(--oraya-book-heading)";
@@ -45,8 +47,6 @@ const GLASS1      = "var(--oraya-book-surface-1)";
 const GLASS3      = "var(--oraya-book-surface-3)";
 const GLG3        = "var(--oraya-book-surface-gold-3)";
 const GLG4        = "var(--oraya-book-surface-gold-4)";
-const PLAYFAIR = "'Playfair Display', Georgia, serif";
-const LATO     = "'Lato', system-ui, sans-serif";
 
 export const dynamic = "force-dynamic";
 
@@ -113,12 +113,6 @@ interface BookingRow {
   proposal_responded_at: string | null;
 }
 
-function fmtDate(iso: string) {
-  if (!iso) return "—";
-  const [y, m, d] = iso.split("-");
-  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  return `${parseInt(d)} ${months[parseInt(m) - 1]} ${y}`;
-}
 
 function statusVisual(
   status: string,

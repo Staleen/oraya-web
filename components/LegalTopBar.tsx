@@ -3,8 +3,8 @@
 import Link from "next/link";
 import OrayaEmblem from "@/components/OrayaEmblem";
 import PublicThemeToggle from "@/components/PublicThemeToggle";
+import { LATO } from "@/components/theme";
 
-const LATO = "'Lato', system-ui, sans-serif";
 
 const LINKS = [
   { label: "Privacy", href: "/legal/privacy" },

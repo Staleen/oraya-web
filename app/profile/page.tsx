@@ -5,20 +5,13 @@ import SiteNav from "@/components/SiteNav";
 import OrayaEmblem from "@/components/OrayaEmblem";
 import { SkeletonBlock, SkeletonText } from "@/components/LoadingSkeleton";
 import { supabase } from "@/lib/supabase";
+import { fmtDate } from "@/lib/guest-format";
 import { formatBeirutDateTime } from "@/lib/format-date";
 import { isSafeRelativeBookingViewPath } from "@/lib/profile/booking-view-path";
+import { BORDER, CHARCOAL, GOLD, LATO, MIDNIGHT, MUTED, PLAYFAIR, SURFACE, WHITE } from "@/components/theme";
 
-const GOLD       = "#C5A46D";
-const WHITE      = "#FFFFFF";
-const MIDNIGHT   = "#1F2B38";
-const CHARCOAL   = "#2E2E2E";
-const MUTED      = "#8a8070";
 const GREEN      = "#6fcf8a";
 const RED        = "#e07070";
-const SURFACE    = "rgba(255,255,255,0.03)";
-const BORDER     = "rgba(197,164,109,0.12)";
-const PLAYFAIR   = "'Playfair Display', Georgia, serif";
-const LATO       = "'Lato', system-ui, sans-serif";
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
@@ -174,12 +167,6 @@ function parsePhone(phone: string): { dialCode: string; number: string } {
   return { dialCode: "+961", number: phone };
 }
 
-function fmtDate(iso: string) {
-  if (!iso) return "—";
-  const [y, m, d] = (iso.split("T")[0]).split("-");
-  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  return `${parseInt(d)} ${months[parseInt(m) - 1]} ${y}`;
-}
 
 interface BookingAddon {
   id:    string;

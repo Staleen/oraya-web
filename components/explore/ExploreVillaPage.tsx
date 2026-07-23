@@ -1,5 +1,6 @@
 import SiteNav from "@/components/SiteNav";
 import SiteFooter from "@/components/SiteFooter";
+import { LATO, PLAYFAIR } from "@/components/theme";
 
 /**
  * Public Explore / Living List page (Phase 16C Stage 1).
@@ -21,8 +22,6 @@ const SURFACE = "var(--oraya-surface)";
 const BG = "var(--oraya-bg)";
 const INK = "var(--oraya-ink)";
 const MUTED = "var(--oraya-text-muted)";
-const PLAYFAIR = "'Playfair Display', Georgia, serif";
-const LATO = "'Lato', system-ui, sans-serif";
 
 export interface ExploreAttraction {
   time: string; // "~10 min"

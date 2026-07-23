@@ -7,6 +7,8 @@ import "react-day-picker/dist/style.css";
 import OrayaLogoFull from "@/components/OrayaLogoFull";
 import { getVillaBasePrice, getVillaEntryPrice, getVillaPricing } from "@/lib/admin-pricing";
 import { buildBookedRangeList, createStayCalendarRules } from "@/lib/booking/calendar-validity";
+import { fmtDate, formatUsd, nightCount, toISO } from "@/lib/guest-format";
+import { EMAIL_RE } from "@/lib/guest-validation";
 import {
   nextBedroomCountAfterPrefill,
   nextFullNameAfterPrefill,
@@ -53,6 +55,7 @@ import {
   paymentModeAllowsPayNow,
   type PaymentPublicRuntimeSettings,
 } from "@/lib/payments/settings";
+import { LATO, PLAYFAIR } from "@/components/theme";
 
 // ─── Brand constants (theme tokens from globals.css) ─
 const GOLD      = "var(--oraya-gold)";
@@ -70,14 +73,11 @@ const GLASS3    = "var(--oraya-book-surface-3)";
 const GLG1      = "var(--oraya-book-surface-gold)";
 const OPT_BG    = "var(--oraya-book-option-bg)";
 const SUCCESS  = "#6fcf8a";
-const PLAYFAIR = "'Playfair Display', Georgia, serif";
-const LATO     = "'Lato', system-ui, sans-serif";
 /** Phase 12E Batch 5: discount applied to dead-gap extension offers (UI display only, not persisted). */
 const DEAD_DAY_DISCOUNT_PCT = 0.30;
 
 // ─── Static data ──────────────────────────────────────────────────────────────
 const VILLAS   = ["Villa Mechmech", "Villa Byblos"];
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const VILLA_CARD_META: Record<string, { image: string; imagePosition: string; note: string }> = {
   "Villa Mechmech": {
     image: "/logos/ORAYA_logo_full.png",
@@ -294,12 +294,6 @@ const PRICING_MODEL_LABELS: Record<string, string> = {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Local-date-aware ISO formatter — avoids UTC timezone shifts. */
-function toISO(d: Date): string {
-  const y  = d.getFullYear();
-  const m  = String(d.getMonth() + 1).padStart(2, "0");
-  const dy = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${dy}`;
-}
 
 /** Parse an ISO date string into a local Date (no UTC conversion). */
 function parseLocalISO(s: string): Date {
@@ -374,23 +368,8 @@ function clearStoredButlerPrefillToken() {
   } catch {}
 }
 
-function fmtDate(iso: string): string {
-  if (!iso) return "—";
-  const [y, m, d] = iso.split("-");
-  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  return `${parseInt(d)} ${months[parseInt(m) - 1]} ${y}`;
-}
 
-function nightCount(checkIn: string, checkOut: string): number {
-  if (!checkIn || !checkOut) return 0;
-  return Math.max(0, Math.round(
-    (parseLocalISO(checkOut).getTime() - parseLocalISO(checkIn).getTime()) / 86_400_000
-  ));
-}
 
-function formatUsd(amount: number): string {
-  return `$${amount.toLocaleString("en-US")}`;
-}
 
 const NIGHT_DAYS   = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 

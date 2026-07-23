@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import OrayaEmblem from "@/components/OrayaEmblem";
 import PublicThemeToggle from "@/components/PublicThemeToggle";
 import { supabase } from "@/lib/supabase";
+import { LATO, PLAYFAIR } from "@/components/theme";
 
 const GOLD      = "var(--oraya-gold)";
 const GOLD_CTA  = "var(--oraya-gold-cta-text)";
@@ -11,8 +12,6 @@ const PAGE_BG   = "var(--oraya-bg)";
 const CARD      = "var(--oraya-surface)";
 const INK       = "var(--oraya-ink)";
 const MUTED     = "var(--oraya-text-muted)";
-const PLAYFAIR  = "'Playfair Display', Georgia, serif";
-const LATO      = "'Lato', system-ui, sans-serif";
 
 const inputStyle: React.CSSProperties = {
   width: "100%",

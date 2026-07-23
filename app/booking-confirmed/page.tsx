@@ -17,6 +17,7 @@ import {
   WHATSAPP_CANCEL_CHANGE_NO_REF,
   WHATSAPP_SUPPORT_LINE,
 } from "@/lib/booking-trust-messaging";
+import { LATO, PLAYFAIR } from "@/components/theme";
 
 const GOLD     = "var(--oraya-gold)";
 const GOLD_CTA = "var(--oraya-gold-cta-text)";
@@ -24,8 +25,6 @@ const WHITE    = "var(--oraya-book-heading)";
 const MUTED    = "var(--oraya-book-muted)";
 const BOOK_P78 = "var(--oraya-book-p78)";
 const BOOK_P20 = "var(--oraya-book-p20)";
-const PLAYFAIR = "'Playfair Display', Georgia, serif";
-const LATO     = "'Lato', system-ui, sans-serif";
 
 function formatDate(iso: string) {
   if (!iso) return "—";

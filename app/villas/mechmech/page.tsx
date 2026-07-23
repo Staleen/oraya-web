@@ -11,6 +11,7 @@ import {
   instantBookingEnabledForVilla,
   type InstantBookingFlags,
 } from "@/lib/instant-booking-settings";
+import { LATO, PLAYFAIR } from "@/components/theme";
 
 const HERO_GRADIENT = "linear-gradient(160deg, #1b3a2f 0%, #2b5040 35%, #1a2f24 65%, #0f1e17 100%)";
 
@@ -23,8 +24,6 @@ const MIDNIGHT   = "var(--oraya-hero-canvas)";
 const MUTED      = "var(--oraya-text-muted)";
 const HERO_TEXT  = "var(--oraya-hero-text)";
 const HERO_TAG   = "var(--oraya-hero-tagline)";
-const PLAYFAIR   = "'Playfair Display', Georgia, serif";
-const LATO       = "'Lato', system-ui, sans-serif";
 
 const details = [
   { label: "Bedrooms",    value: "3 (master with en-suite)" },
