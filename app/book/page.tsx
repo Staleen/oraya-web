@@ -1,11 +1,20 @@
 "use client";
-import { Suspense, useState, useEffect, useRef, useCallback } from "react";
+import { Suspense, useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { DayPicker } from "react-day-picker";
 import type { DateRange, Matcher } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 import OrayaLogoFull from "@/components/OrayaLogoFull";
 import { getVillaBasePrice, getVillaEntryPrice, getVillaPricing } from "@/lib/admin-pricing";
+import { buildBookedRangeList, createStayCalendarRules } from "@/lib/booking/calendar-validity";
+import {
+  nextBedroomCountAfterPrefill,
+  nextFullNameAfterPrefill,
+  nextSleepingGuestsAfterPrefill,
+  nextVillaAfterPrefill,
+} from "@/lib/booking/butler-prefill-hydration";
+import { computeAddonAvailability } from "@/lib/booking/addon-availability";
+import { loadStayAddons } from "@/lib/booking/load-stay-addons";
 import { ADDON_OPERATIONAL_SETTINGS_KEY, formatPreparationTime, getAddonAppliesTo, getAddonEnforcementMode, getAddonTimingType, mergeAddonsWithOperationalSettings, parseAddonOperationalSetting, type AddonCategory, type AddonCutoffType, type AddonEnforcementMode, type AddonPricingType } from "@/lib/addon-operations";
 import { usePublicPricing } from "@/lib/public-pricing";
 import { calculateStayPricing } from "@/lib/pricing/engine";
@@ -1010,68 +1019,73 @@ function BookPageInner() {
     }
   }, [searchParams]);
 
-  const applyButlerPrefill = (prefill: ButlerPrefillPayload, queryVilla: string | null) => {
-    const normalizedVilla = normalizeVillaFromSearchParam(prefill.villa);
-    if (normalizedVilla && VILLAS.includes(normalizedVilla)) {
-      skipNextVillaDateResetRef.current = true;
-      setForm((current) => {
-        const canOverrideVilla =
-          !current.villa || (queryVilla !== null && current.villa === queryVilla);
-        if (!canOverrideVilla || current.villa === normalizedVilla) return current;
-        return { ...current, villa: normalizedVilla };
-      });
-      setShowFullVillaCards(false);
-    }
+  // Calendar month state + sync live above the Butler hydration callback that
+  // depends on them (const initialization order).
+  const [calendarMonth, setCalendarMonth] = useState<Date>(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return startOfLocalMonth(d);
+  });
+  const [calendarMonthUserNavigated, setCalendarMonthUserNavigated] = useState(false);
 
-    if (prefill.sleeping_guests) {
-      setForm((current) => {
-        if (current.sleepingGuests !== "2" && current.sleepingGuests.trim() !== "") return current;
-        return { ...current, sleepingGuests: prefill.sleeping_guests ?? current.sleepingGuests };
-      });
-    }
+  const syncCalendarMonthToSelection = useCallback((day: Date) => {
+    setCalendarMonth(startOfLocalMonth(day));
+    setCalendarMonthUserNavigated(false);
+  }, []);
 
-    const explicitBedrooms: BedroomCount | null =
-      prefill.bedroom_count === "1" || prefill.bedroom_count === "2" || prefill.bedroom_count === "3"
-        ? prefill.bedroom_count
-        : null;
-    if (explicitBedrooms) {
-      setForm((current) => {
-        if (current.bedroomCount !== "1") return current;
-        return { ...current, bedroomCount: explicitBedrooms };
-      });
-    } else if (prefill.sleeping_guests) {
-      const guestCount = parseInt(prefill.sleeping_guests, 10);
-      const derivedBedrooms: BedroomCount =
-        guestCount <= 2 ? "1" : guestCount <= 4 ? "2" : "3";
-      setForm((current) => {
-        if (current.bedroomCount !== "1") return current;
-        return { ...current, bedroomCount: derivedBedrooms };
-      });
-    }
-
-    if (prefill.full_name) {
-      setGuest((current) => {
-        if (current.fullName.trim()) return current;
-        return { ...current, fullName: prefill.full_name ?? current.fullName };
-      });
-    }
-
-    if (prefill.check_in && prefill.check_out) {
-      const from = parseSafeLocalISO(prefill.check_in);
-      const to = parseSafeLocalISO(prefill.check_out);
-      if (from && to && to > from) {
-        pendingButlerDateRangeRef.current = { from, to };
-        syncCalendarMonthToSelection(from);
-        setButlerDateHydrationNonce((current) => current + 1);
+  // Remediation 5.3 — decision logic lives in the pure module
+  // lib/booking/butler-prefill-hydration.ts; this callback only wires the
+  // decisions into state, so the hydration effects can list it honestly.
+  const applyButlerPrefill = useCallback(
+    (prefill: ButlerPrefillPayload, queryVilla: string | null) => {
+      const normalizedVilla = normalizeVillaFromSearchParam(prefill.villa);
+      if (normalizedVilla && VILLAS.includes(normalizedVilla)) {
+        skipNextVillaDateResetRef.current = true;
+        setForm((current) => {
+          const nextVilla = nextVillaAfterPrefill({
+            currentVilla: current.villa,
+            normalizedPrefillVilla: normalizedVilla,
+            queryVilla,
+            knownVillas: VILLAS,
+          });
+          return nextVilla === null ? current : { ...current, villa: nextVilla };
+        });
+        setShowFullVillaCards(false);
       }
-    }
-  };
+
+      setForm((current) => {
+        const nextGuests = nextSleepingGuestsAfterPrefill(current.sleepingGuests, prefill);
+        return nextGuests === null ? current : { ...current, sleepingGuests: nextGuests };
+      });
+
+      setForm((current) => {
+        const nextBedrooms = nextBedroomCountAfterPrefill(current.bedroomCount, prefill);
+        return nextBedrooms === null ? current : { ...current, bedroomCount: nextBedrooms };
+      });
+
+      setGuest((current) => {
+        const nextName = nextFullNameAfterPrefill(current.fullName, prefill);
+        return nextName === null ? current : { ...current, fullName: nextName };
+      });
+
+      if (prefill.check_in && prefill.check_out) {
+        const from = parseSafeLocalISO(prefill.check_in);
+        const to = parseSafeLocalISO(prefill.check_out);
+        if (from && to && to > from) {
+          pendingButlerDateRangeRef.current = { from, to };
+          syncCalendarMonthToSelection(from);
+          setButlerDateHydrationNonce((current) => current + 1);
+        }
+      }
+    },
+    [syncCalendarMonthToSelection],
+  );
 
   useEffect(() => {
     const storedPrefill = readStoredButlerPrefill();
     if (!storedPrefill) return;
     applyButlerPrefill(storedPrefill, normalizeVillaFromSearchParam(searchParams.get("villa")));
-  }, [searchParams]);
+  }, [searchParams, applyButlerPrefill]);
 
   useEffect(() => {
     if (authStatus === "loading") return;
@@ -1079,7 +1093,7 @@ function BookPageInner() {
     const storedPrefill = readStoredButlerPrefill();
     if (!storedPrefill) return;
     applyButlerPrefill(storedPrefill, normalizeVillaFromSearchParam(searchParams.get("villa")));
-  }, [authStatus, guestMode, searchParams]);
+  }, [authStatus, guestMode, searchParams, applyButlerPrefill]);
 
   useEffect(() => {
     const handoffToken = searchParams.get("h");
@@ -1121,7 +1135,7 @@ function BookPageInner() {
         setButlerPrefillReady(true);
         clearTokenFromUrl();
       });
-  }, [searchParams]);
+  }, [searchParams, applyButlerPrefill]);
 
   useEffect(() => {
     if (step !== 1) collapsedDateScrollKeyRef.current = null;
@@ -1222,27 +1236,21 @@ function BookPageInner() {
   }, []);
 
   // Fetch enabled add-ons when the user reaches merged stay setup (request step 2)
+  // Remediation 5.3 — the load itself lives in lib/booking/load-stay-addons.ts;
+  // a ref mirrors `addons` so the "already loaded" guard doesn't need addons in
+  // the dependency array (which would re-run the effect after every load).
+  const addonsCountRef = useRef(0);
   useEffect(() => {
-    if (step !== 2 || bookingPath !== "request" || addons.length > 0) return;
+    addonsCountRef.current = addons.length;
+  }, [addons]);
+  useEffect(() => {
+    if (step !== 2 || bookingPath !== "request" || addonsCountRef.current > 0) return;
     setAddonsLoading(true);
-    Promise.all([
-      fetch("/api/addons").then(r => r.json()),
-      fetch(`/api/settings?key=${encodeURIComponent(ADDON_OPERATIONAL_SETTINGS_KEY)}`).then(r => r.json()),
-    ])
-      .then(([addonsData, addonSettingsData]) => {
-        const addonRows = Array.isArray(addonsData.addons) ? addonsData.addons as Addon[] : [];
-        const operationalSettings = parseAddonOperationalSetting(addonSettingsData.value);
-        setAddons(
-          mergeAddonsWithOperationalSettings(addonRows, operationalSettings).filter(
-            (addon) =>
-              addon.enabled &&
-              ["stay", "both"].includes(getAddonAppliesTo(addon.applies_to)),
-          ),
-        );
-      })
+    loadStayAddons<Addon>()
+      .then(setAddons)
       .catch(() => setAddons([]))
       .finally(() => setAddonsLoading(false));
-  }, [step, bookingPath]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [step, bookingPath]);
 
   // Clear stay dates when villa changes; availability is fetched after check-in is derived (see below).
   useEffect(() => {
@@ -1262,17 +1270,10 @@ function BookPageInner() {
       if (current?.from || current?.to) return current;
       return pending;
     });
-  }, [form.villa, butlerDateHydrationNonce]);
+  }, [form.villa, butlerDateHydrationNonce, syncCalendarMonthToSelection]);
 
   // ── Derived values ────────────────────────────────────────────────────────
   const today = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; })();
-  const [calendarMonth, setCalendarMonth] = useState<Date>(() => startOfLocalMonth(today));
-  const [calendarMonthUserNavigated, setCalendarMonthUserNavigated] = useState(false);
-
-  function syncCalendarMonthToSelection(day: Date) {
-    setCalendarMonth(startOfLocalMonth(day));
-    setCalendarMonthUserNavigated(false);
-  }
 
   function handleCalendarMonthChange(month: Date) {
     setCalendarMonth(startOfLocalMonth(month));
@@ -1282,7 +1283,7 @@ function BookPageInner() {
   useEffect(() => {
     if (!dateRange?.from) return;
     syncCalendarMonthToSelection(dateRange.from);
-  }, [dateRange?.from]);
+  }, [dateRange?.from, syncCalendarMonthToSelection]);
 
   const displayedCalendarMonth =
     !calendarMonthUserNavigated && dateRange?.from
@@ -1290,88 +1291,29 @@ function BookPageInner() {
       : calendarMonth;
 
   /**
-   * Blocked day ranges for the calendar.
-   * We disable from check_in through (check_out - 1 day) inclusive so that
-   * the check_out date itself remains selectable as a new check-in.
+   * Remediation 5.3 — calendar validity rules now live in the pure module
+   * lib/booking/calendar-validity.ts (same logic verbatim, incl. the dead
+   * check-in guard); the page builds the rule set from its current state.
    */
-  const bookedRangeList: Array<{ from: Date; to: Date }> = confirmedRanges.flatMap(r => {
-    const from = parseLocalISO(r.check_in);
-    const to   = parseLocalISO(r.check_out);
-    to.setDate(to.getDate() - 1); // last occupied night, not checkout day
-    if (to < from) return []; // single-night stay edge case handled
-    return [{ from, to }];
-  });
-
-  /**
-   * Dead check-in guard.
-   * The -1 day logic above intentionally leaves each booking's check_out day
-   * open so a new guest can check in on the same day a prior guest checks out.
-   * However, if the very next night (or the first reachable checkout date given
-   * the minimum stay) is already inside another blocked range, that boundary day
-   * becomes a dead check-in — visually selectable but impossible to complete.
-   * We detect these and add them to the disabled set.
-   */
-  function isCalendarDateBlocked(d: Date): boolean {
-    if (d < today) return true;
-    return bookedRangeList.some(r => d >= r.from && d <= r.to);
-  }
+  const todayIso = toISO(today);
+  const bookedRangeList = useMemo(() => buildBookedRangeList(confirmedRanges), [confirmedRanges]);
 
   const minStayNights =
     (form.villa ? getVillaPricing(pricing, form.villa)?.minimum_stay : null) ?? 1;
   const effectiveMinStayNights = Math.max(1, minStayNights);
 
-  function addLocalDays(day: Date, days: number): Date {
-    const next = new Date(day.getTime());
-    next.setDate(next.getDate() + days);
-    return next;
-  }
-
-  function isStayRangeAvailable(checkInDay: Date, checkOutDay: Date): boolean {
-    if (checkOutDay <= checkInDay) return false;
-
-    for (let night = new Date(checkInDay.getTime()); night < checkOutDay; night.setDate(night.getDate() + 1)) {
-      if (isCalendarDateBlocked(night)) return false;
-    }
-
-    return true;
-  }
-
-  function hasValidCheckoutFromCheckIn(checkInDay: Date): boolean {
-    if (isCalendarDateBlocked(checkInDay)) return false;
-
-    // Search up to one year for a checkout where every occupied night is open.
-    for (let n = effectiveMinStayNights; n <= 366; n++) {
-      const candidateCheckout = addLocalDays(checkInDay, n);
-      if (!isCalendarDateBlocked(candidateCheckout) && isStayRangeAvailable(checkInDay, candidateCheckout)) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  function isDeadCheckInDate(day: Date): boolean {
-    return !isCalendarDateBlocked(day) && !hasValidCheckoutFromCheckIn(day);
-  }
+  const stayCalendarRules = useMemo(
+    () =>
+      createStayCalendarRules({
+        today: parseLocalISO(todayIso),
+        bookedRangeList,
+        minStayNights: effectiveMinStayNights,
+      }),
+    [todayIso, bookedRangeList, effectiveMinStayNights],
+  );
+  const { isDeadCheckInDate, isValidCheckoutFrom, hasValidCheckoutFromCheckIn } = stayCalendarRules;
 
   const isChoosingCheckout = Boolean(dateRange?.from && !dateRange.to);
-
-  // A checkout date is valid only if every condition holds:
-  // 1. checkout is strictly after check-in (minimum 1 night)
-  // 2. checkout day itself is not in the middle of a blocked stay
-  // 3. every night from check-in up to checkout-1 is free (continuous stay)
-  function isValidCheckoutFrom(checkIn: Date, checkout: Date): boolean {
-    if (checkout <= checkIn) return false;
-    if (isCalendarDateBlocked(checkout)) return false;
-    for (
-      let night = new Date(checkIn.getTime());
-      night < checkout;
-      night.setDate(night.getDate() + 1)
-    ) {
-      if (isCalendarDateBlocked(night)) return false;
-    }
-    return true;
-  }
 
   const disabledDays: Matcher[] = [
     { before: today },
@@ -1536,70 +1478,10 @@ function BookPageInner() {
   // Phase 12E Batch 4: dead-day suggestion (non-blocking, display only).
   const deadDaySuggestion = detectDeadDaySuggestion(checkIn, checkOut, confirmedRanges);
 
+  // Remediation 5.3 — the rule lives in lib/booking/addon-availability.ts;
+  // this thin wrapper feeds it the page's current selection context.
   function getAddonAvailability(addon: Addon) {
-    const enforcementMode = getAddonEnforcementMode(addon.enforcement_mode);
-    const preparationHours = addon.preparation_time_hours ?? null;
-    if (enforcementMode === "none" || !preparationHours || preparationHours <= 0) {
-      return {
-        available: true,
-        selectable: true,
-        warning: "",
-        mode: enforcementMode,
-      };
-    }
-
-    if (!checkIn) {
-      return {
-        available: true,
-        selectable: true,
-        warning: "",
-        mode: enforcementMode,
-      };
-    }
-
-    const hoursUntilCheckIn = (parseLocalISO(checkIn).getTime() - Date.now()) / 3_600_000;
-    if (
-      heatedPoolCarryover &&
-      isHeatedPoolAddon(addon) &&
-      enforcementMode === "strict" &&
-      typeof preparationHours === "number" &&
-      Number.isFinite(preparationHours) &&
-      preparationHours > 0 &&
-      hoursUntilCheckIn < preparationHours
-    ) {
-      return {
-        available: true,
-        selectable: true,
-        warning: "",
-        mode: enforcementMode,
-        carryoverNote: HEATED_POOL_CARRYOVER_GUEST_NOTE,
-      };
-    }
-    const available = hoursUntilCheckIn >= preparationHours;
-    if (available) {
-      return {
-        available: true,
-        selectable: true,
-        warning: "",
-        mode: enforcementMode,
-      };
-    }
-
-    if (enforcementMode === "strict") {
-      return {
-        available: false,
-        selectable: false,
-        warning: `Needs ${formatPreparationTime(preparationHours)} advance notice and is not available for your selected check-in.`,
-        mode: enforcementMode,
-      };
-    }
-
-    return {
-      available: false,
-      selectable: true,
-      warning: `Short notice: subject to confirmation for your selected check-in.`,
-      mode: enforcementMode,
-    };
+    return computeAddonAvailability(addon, { checkIn, heatedPoolCarryover });
   }
 
   function getAddonOperationalFeedback(addon: Addon) {
@@ -1789,11 +1671,12 @@ function BookPageInner() {
     if (sleepingGuestsCount < EXTRA_BEDDING_REQUIRED_GUESTS) return;
     const ebAddon = availableAddons.find(isExtraBeddingAddon);
     if (!ebAddon) return;
-    const ebAvailability = getAddonAvailability(ebAddon);
+    // Remediation 5.3 — pure module call with explicit inputs, so the
+    // dependency array is honest (no suppression needed).
+    const ebAvailability = computeAddonAvailability(ebAddon, { checkIn, heatedPoolCarryover });
     if (!ebAvailability.selectable) return;
     setSelectedAddons(prev => prev.includes(ebAddon.id) ? prev : [...prev, ebAddon.id]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sleepingGuestsCount, availableAddons, form.villa, checkIn]);
+  }, [sleepingGuestsCount, availableAddons, checkIn, heatedPoolCarryover]);
 
   // ── Event handlers ────────────────────────────────────────────────────────
   function handleFormChange(

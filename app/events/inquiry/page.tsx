@@ -21,7 +21,7 @@ import {
   findEventServiceSeedByLabel,
 } from "@/lib/event-service-seed";
 import { supabase } from "@/lib/supabase";
-import { addDaysToDateOnly, rangesOverlap } from "@/lib/calendar/event-block";
+import { buildBookedRangeList, createEventCalendarRules } from "@/lib/booking/calendar-validity";
 import { takeBookToEventHandoffIfLock } from "@/lib/event-inquiry-handoff";
 import { EVENT_SETUP_ESTIMATE_PREFIX, type EventSetupEstimatePayload } from "@/lib/event-inquiry-message";
 import {
@@ -928,69 +928,29 @@ function EventInquiryPageInner() {
   const today = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; })();
 
   /**
-   * Blocked day ranges for the calendar (same construction as app/book/page.tsx).
-   * `confirmedRanges` from /api/bookings/availability are already operational per lib/calendar/availability.ts.
+   * Remediation 5.3 — event calendar validity rules now live in the pure
+   * module lib/booking/calendar-validity.ts (same logic verbatim, incl. the
+   * setup-day span rule); memoizing the rule set gives the memos below honest
+   * dependencies (no more exhaustive-deps suppression).
    */
-  const bookedRangeList: Array<{ from: Date; to: Date }> = confirmedRanges.flatMap(r => {
-    const from = parseLocalISO(r.check_in);
-    const to   = parseLocalISO(r.check_out);
-    to.setDate(to.getDate() - 1);
-    if (to < from) return [];
-    return [{ from, to }];
-  });
-
-  function isCalendarDateBlocked(d: Date): boolean {
-    if (d < today) return true;
-    return bookedRangeList.some(r => d >= r.from && d <= r.to);
-  }
-
-  function addLocalDays(day: Date, days: number): Date {
-    const next = new Date(day.getTime());
-    next.setDate(next.getDate() + days);
-    return next;
-  }
-
-  /** Every calendar day in [check_in − 1, check_out) must be free — mirrors incoming event overlap in findAvailabilityConflict (event-block.ts). */
-  function isEventOperationalSpanClear(eventStart: Date, eventCheckout: Date): boolean {
-    if (eventCheckout <= eventStart) return false;
-    const setupISO = addDaysToDateOnly(toISO(eventStart), -1);
-    let d = parseLocalISO(setupISO);
-    for (; d < eventCheckout; d = addLocalDays(d, 1)) {
-      if (isCalendarDateBlocked(d)) return false;
-    }
-    return true;
-  }
-
-  function incomingOperationalOverlapsConfirmed(eventStart: Date, eventCheckout: Date): boolean {
-    const incomingOp = {
-      check_in: addDaysToDateOnly(toISO(eventStart), -1),
-      check_out: toISO(eventCheckout),
-    };
-    return confirmedRanges.some((r) =>
-      rangesOverlap(incomingOp, { check_in: r.check_in, check_out: r.check_out }),
-    );
-  }
-
-  function isValidEventCheckoutFrom(eventStart: Date, eventCheckout: Date): boolean {
-    if (eventCheckout <= eventStart) return false;
-    if (isCalendarDateBlocked(eventCheckout)) return false;
-    return isEventOperationalSpanClear(eventStart, eventCheckout);
-  }
-
-  function hasValidEventCheckoutFromCheckIn(checkInDay: Date): boolean {
-    const setupISO = addDaysToDateOnly(toISO(checkInDay), -1);
-    if (isCalendarDateBlocked(parseLocalISO(setupISO))) return false;
-
-    for (let n = MIN_EVENT_NIGHTS; n <= 366; n++) {
-      const candidateCheckout = addLocalDays(checkInDay, n);
-      if (isValidEventCheckoutFrom(checkInDay, candidateCheckout)) return true;
-    }
-    return false;
-  }
-
-  function isDeadEventCheckInDate(day: Date): boolean {
-    return !isCalendarDateBlocked(day) && !hasValidEventCheckoutFromCheckIn(day);
-  }
+  const todayIso = toISO(today);
+  const bookedRangeList = useMemo(() => buildBookedRangeList(confirmedRanges), [confirmedRanges]);
+  const eventCalendarRules = useMemo(
+    () =>
+      createEventCalendarRules({
+        today: parseLocalISO(todayIso),
+        confirmedRanges,
+        bookedRangeList,
+        minEventNights: MIN_EVENT_NIGHTS,
+      }),
+    [todayIso, confirmedRanges, bookedRangeList],
+  );
+  const {
+    incomingOperationalOverlapsConfirmed,
+    isValidEventCheckoutFrom,
+    hasValidEventCheckoutFromCheckIn,
+    isDeadEventCheckInDate,
+  } = eventCalendarRules;
 
   const isChoosingCheckout = Boolean(dateRange?.from && !dateRange.to);
 
@@ -1207,9 +1167,16 @@ function EventInquiryPageInner() {
       if (!Number.isFinite(attendees) || attendees < 1 || attendees > MAX_EVENT_ATTENDEES) return false;
       return true;
     },
-    // Calendar helpers close over the same state as `confirmedRanges`; their identities are not stable deps.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [form.villa, form.eventType, form.dayVisitors, checkIn, checkOut, dateRange, confirmedRanges],
+    [
+      form.villa,
+      form.eventType,
+      form.dayVisitors,
+      checkIn,
+      checkOut,
+      dateRange,
+      isValidEventCheckoutFrom,
+      incomingOperationalOverlapsConfirmed,
+    ],
   );
 
   const step2CanContinue = useMemo(
