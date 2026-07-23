@@ -13,6 +13,7 @@ import {
 } from "@/lib/payments/settings";
 import { derivePaymentFoundationStage, getFoundationAmountTotal } from "@/lib/payment-foundation";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { checkOutExpiryUnix } from "@/lib/checkout-expiry";
 
 type CheckoutBookingRow = {
   id: string;
@@ -64,16 +65,6 @@ function readRequestedAmount(value: unknown): number | null {
   return null;
 }
 
-function checkOutExpiryUnix(checkOut: string): number {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(checkOut);
-  if (!match) {
-    throw new Error("Booking check-out date is invalid.");
-  }
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  return Math.floor(Date.UTC(year, month - 1, day, 23, 59, 59) / 1000);
-}
 
 export async function POST(request: Request) {
   try {

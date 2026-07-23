@@ -28,6 +28,18 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-07-23 - Remediation Phase 2 (hardening & correctness) from the 2026-07-23 health check
+
+**Decision:** Phase 2 of `REMEDIATION_PLAN.md` shipped: (2.1) the member booking-modification PATCH uses `findAvailabilityConflict` (calendar blocks + event expansion), reprices date changes through the same audit/snapshot path as the booking POST (new pure `lib/pricing/reprice.ts` — Question 4 default "reprice" adopted), and requires integer guest counts; (2.2) outbound fetches are bounded — calendar feed sync is https-only with a 10 s timeout and 5 MB cap, Stripe/CyberSource calls carry 10–15 s timeouts; (2.3) the six public routes that echoed raw DB `error.message` now log server-side and return generic messages; (2.4) quick-win sweep — admin media PATCH validates rows and surfaces per-row failures, admin media POST validates the villa slug, `/api/profile` PATCH sanitizes and caps its four fields, the admin raw-payload log is dev-only, `/profile` loads in parallel with per-query error checks and an error state, the feedback-email action catches network failures, `/api/settings` GET distinguishes DB failure from "absent", the two route-local `makeAdminClient()`s were replaced by the shared `supabaseAdmin`, and `approve-addon` guards its snapshot write with jsonb optimistic concurrency (409 on conflict). **Reconciliation note:** the nine per-file `checkOutExpiryUnix` copies collapsed into `lib/checkout-expiry.ts` — the strict payments/checkout variant won, additionally hardened to reject Date.UTC rollover dates (`2026-99-99`); for every valid date the produced timestamp is byte-identical to the legacy formula. `getChargeAmount` and the member→recipient resolution are now shared helpers (`lib/payments/charge-amount.ts`, `lib/booking-recipient.ts`).
+
+**Reason:** health-check items 8, 9, 10, 18 — correctness gaps and copy-paste drift on money- and availability-relevant paths.
+
+**Impact:** behavior-preserving except where the plan explicitly demands otherwise (repricing on member date changes, strict invalid-date failure, generic public errors, 409 on concurrent add-on edits). Tests 201 → 208, tsc + build clean.
+
+**Reversible?:** yes.
+
+---
+
 ## 2026-07-17 - Booking approval and payment are independent guest truths; one projection owns payment presentation
 
 **Decision:** `bookings.status` continues to represent Oraya's operational approval, while `payment_status` and the payment-link fields represent money state. A valid guest state is therefore `status = pending` plus `payment_status = paid_in_full`; payment must not auto-confirm a booking. On `/booking/view/[token]`, booking-status messaging must be payment-neutral and the pure [lib/payments/guest-presentation.ts](../../lib/payments/guest-presentation.ts) projection is the sole owner of guest payment vocabulary, method labels, and return-message interpretation. Recorded payment states take precedence over stale payment-link state. Browser return parameters remain informational and cannot create a success state. Public checkout errors are fixed guest-safe messages; provider/configuration detail stays in server logs or authenticated admin readiness surfaces.

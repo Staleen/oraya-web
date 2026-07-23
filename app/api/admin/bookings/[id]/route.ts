@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminAuth } from "@/lib/admin-auth";
-import { createClient } from "@supabase/supabase-js";
+// Remediation 2.4: shared service-role client (carries the Data-Cache
+// no-store workaround) instead of a route-local createClient.
+import { supabaseAdmin } from "@/lib/supabase-admin";
 import { sendBookingEmail } from "@/lib/send-booking-email";
 import { dispatchConfirmedStayWhatsAppNotification } from "@/lib/whatsapp/confirmed-stay-notification";
 import {
@@ -23,15 +25,7 @@ import {
 } from "@/lib/payments/provider";
 import { findAvailabilityConflict } from "@/lib/calendar/availability";
 import { isExclusionViolation } from "@/lib/db-errors";
-
-function makeAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) {
-    throw new Error("[api/admin/bookings] NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is not set");
-  }
-  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
-}
+import { resolveBookingRecipient } from "@/lib/booking-recipient";
 
 function parseStoredNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -42,30 +36,6 @@ function parseStoredNumber(value: unknown): number | null {
   return null;
 }
 
-async function resolveRecipient(db: ReturnType<typeof makeAdminClient>, booking: {
-  member_id?: string | null;
-  guest_email?: string | null;
-  guest_name?: string | null;
-}) {
-  if (booking.member_id) {
-    const { data: { user } } = await db.auth.admin.getUserById(booking.member_id);
-    if (user?.email) {
-      let memberName = "Member";
-      const { data: member } = await db
-        .from("members")
-        .select("full_name")
-        .eq("id", booking.member_id)
-        .single();
-      if (member?.full_name) memberName = member.full_name;
-      return { email: user.email, name: memberName };
-    }
-  }
-
-  return {
-    email: booking.guest_email ?? null,
-    name: booking.guest_name || "Guest",
-  };
-}
 
 export async function PATCH(
   request: NextRequest,
@@ -74,7 +44,7 @@ export async function PATCH(
   const denied = requireAdminAuth(request);
   if (denied) return denied;
 
-  const db = makeAdminClient();
+  const db = supabaseAdmin;
   const payload = await request.json();
   const bookingId = params.id;
   const status = payload.status as unknown;
@@ -572,7 +542,7 @@ export async function PATCH(
 
   if (statusUpdateProvided && (status === "confirmed" || status === "cancelled")) {
     try {
-      const { email: recipientEmail, name: recipientName } = await resolveRecipient(db, updated);
+      const { email: recipientEmail, name: recipientName } = await resolveBookingRecipient(db, updated);
 
       if (!recipientEmail) {
         console.warn(`[api/admin/bookings] no email address for booking ${bookingId} — skipping notification`);
@@ -644,7 +614,7 @@ export async function PATCH(
 
   if (paymentStatusChanged) {
     try {
-      const { email: recipientEmail, name: recipientName } = await resolveRecipient(db, updated);
+      const { email: recipientEmail, name: recipientName } = await resolveBookingRecipient(db, updated);
 
       if (!recipientEmail) {
         console.warn(`[api/admin/bookings] no email address for booking ${bookingId} payment update — skipping notification`);
@@ -700,7 +670,7 @@ export async function PATCH(
 
   if (reminderRequested) {
     try {
-      const { email: recipientEmail, name: recipientName } = await resolveRecipient(db, updated);
+      const { email: recipientEmail, name: recipientName } = await resolveBookingRecipient(db, updated);
 
       if (!recipientEmail) {
         console.warn(`[api/admin/bookings] no email address for booking ${bookingId} reminder — skipping notification`);
@@ -750,7 +720,7 @@ export async function PATCH(
 
   if (proposalSendRequested && isEventInquiry) {
     try {
-      const { email: recipientEmail, name: recipientName } = await resolveRecipient(db, updated);
+      const { email: recipientEmail, name: recipientName } = await resolveBookingRecipient(db, updated);
 
       if (!recipientEmail) {
         console.warn(`[api/admin/bookings] no email address for booking ${bookingId} proposal — skipping notification`);

@@ -3,6 +3,7 @@ import { requireAdminAuth } from "@/lib/admin-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { sendFeedbackRequestEmail } from "@/lib/send-feedback-request-email";
 import { isFeedbackEmailCooldownActive, isPastCheckoutForFeedbackEmail } from "@/lib/booking-feedback-eligibility";
+import { resolveBookingRecipient } from "@/lib/booking-recipient";
 
 export const dynamic = "force-dynamic";
 
@@ -16,12 +17,8 @@ async function resolveRecipientEmail(booking: {
   member_id?: string | null;
   guest_email?: string | null;
 }): Promise<string | null> {
-  if (booking.member_id) {
-    const { data: { user } } = await supabaseAdmin.auth.admin.getUserById(booking.member_id);
-    if (user?.email?.trim()) return user.email.trim();
-  }
-  const g = booking.guest_email?.trim();
-  return g || null;
+  const { email } = await resolveBookingRecipient(supabaseAdmin, booking);
+  return email;
 }
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {

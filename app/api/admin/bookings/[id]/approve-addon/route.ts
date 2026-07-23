@@ -1,16 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { requireAdminAuth } from "@/lib/admin-auth";
-
-// Service-role client — bypasses RLS, admin-only route.
-function makeAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) {
-    throw new Error("[api/admin/bookings/approve-addon] NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is not set");
-  }
-  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
-}
+// Remediation 2.4: shared service-role client (carries the Data-Cache
+// no-store workaround) instead of a route-local createClient.
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 // PATCH — resolve a single add-on approval item within the booking's addons_snapshot.
 // Defaults to approve for backward compatibility, and can also mark the item declined.
@@ -40,10 +32,8 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const db = makeAdminClient();
-
   // Fetch only the snapshot column — we need nothing else.
-  const { data: booking, error: fetchErr } = await db
+  const { data: booking, error: fetchErr } = await supabaseAdmin
     .from("bookings")
     .select("addons_snapshot")
     .eq("id", params.id)
@@ -78,14 +68,26 @@ export async function PATCH(
       : item
   );
 
-  const { error: updateErr } = await db
+  // Remediation 2.4: optimistic-concurrency guard — the write only applies if
+  // the snapshot is still exactly what we read (jsonb equality is semantic),
+  // so two concurrent approvals cannot silently drop each other's change.
+  const { data: updatedRows, error: updateErr } = await supabaseAdmin
     .from("bookings")
     .update({ addons_snapshot: updatedSnapshot })
-    .eq("id", params.id);
+    .eq("id", params.id)
+    .eq("addons_snapshot", JSON.stringify(snapshot))
+    .select("id");
 
   if (updateErr) {
     console.error("[api/admin/bookings/approve-addon] update error:", updateErr);
-    return NextResponse.json({ error: updateErr.message }, { status: 500 });
+    return NextResponse.json({ error: "Could not update the add-on." }, { status: 500 });
+  }
+
+  if (!updatedRows || updatedRows.length === 0) {
+    return NextResponse.json(
+      { error: "This booking's add-ons changed while you were editing. Reload and try again." },
+      { status: 409 }
+    );
   }
 
   return NextResponse.json({ ok: true, addons_snapshot: updatedSnapshot });

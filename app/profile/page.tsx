@@ -238,6 +238,7 @@ export default function ProfilePage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [whatsappNumber, setWhatsappNumber] = useState("");
   const [pageLoading, setPageLoading] = useState(true);
+  const [pageError, setPageError] = useState("");
   const [saving, setSaving]     = useState(false);
   const [saved, setSaved]       = useState(false);
   const [saveError, setSaveError] = useState("");
@@ -251,6 +252,8 @@ export default function ProfilePage() {
   const [viewingId, setViewingId]         = useState<string | null>(null);
 
   useEffect(() => {
+    // Remediation 2.4: parallel independent fetches, per-query error checks,
+    // and a catch that lands in an error state instead of an eternal skeleton.
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) {
         router.push("/login?redirect=/profile");
@@ -260,14 +263,20 @@ export default function ProfilePage() {
       setUserId(user.id);
       setEmail(user.email ?? "");
 
-      // Fetch member profile
-      const { data: member } = await supabase
-        .from("members")
-        .select("*")
-        .eq("id", user.id)
-        .single();
+      const [memberRes, bookingsRes, waRes] = await Promise.all([
+        supabase.from("members").select("*").eq("id", user.id).maybeSingle(),
+        supabase
+          .from("bookings")
+          .select("id, villa, check_in, check_out, sleeping_guests, day_visitors, event_type, message, addons, status, created_at")
+          .eq("member_id", user.id)
+          .order("created_at", { ascending: false }),
+        supabase.from("settings").select("value").eq("key", "whatsapp_number").maybeSingle(),
+      ]);
 
-      if (member) {
+      if (memberRes.error) {
+        console.error("[profile] member fetch error:", memberRes.error);
+      } else if (memberRes.data) {
+        const member = memberRes.data;
         const { dialCode, number } = parsePhone(member.phone ?? "");
         setForm({
           fullName:    member.full_name ?? "",
@@ -278,23 +287,23 @@ export default function ProfilePage() {
         });
       }
 
-      // Fetch this member's bookings
-      const { data: bookingData } = await supabase
-        .from("bookings")
-        .select("id, villa, check_in, check_out, sleeping_guests, day_visitors, event_type, message, addons, status, created_at")
-        .eq("member_id", user.id)
-        .order("created_at", { ascending: false });
+      if (bookingsRes.error) {
+        console.error("[profile] bookings fetch error:", bookingsRes.error);
+        setPageError("We couldn't load your bookings. Please refresh to try again.");
+      } else if (bookingsRes.data) {
+        setBookings(bookingsRes.data);
+      }
 
-      if (bookingData) setBookings(bookingData);
+      if (waRes.error) {
+        console.error("[profile] settings fetch error:", waRes.error);
+      } else if (waRes.data?.value) {
+        setWhatsappNumber(waRes.data.value);
+      }
 
-      // Fetch WhatsApp number from settings
-      const { data: waSetting } = await supabase
-        .from("settings")
-        .select("value")
-        .eq("key", "whatsapp_number")
-        .single();
-      if (waSetting?.value) setWhatsappNumber(waSetting.value);
-
+      setPageLoading(false);
+    }).catch((err) => {
+      console.error("[profile] load error:", err);
+      setPageError("We couldn't load your profile. Please refresh to try again.");
       setPageLoading(false);
     });
   }, [router]);
@@ -530,6 +539,12 @@ export default function ProfilePage() {
             </h1>
             <div style={{ width: "40px", height: "0.5px", backgroundColor: GOLD, marginTop: "1.5rem", opacity: 0.7 }} />
           </div>
+
+          {pageError && (
+            <p style={{ fontFamily: LATO, fontSize: "13px", color: "#e07070", margin: "0 0 2rem", lineHeight: 1.6 }}>
+              {pageError}
+            </p>
+          )}
 
           {/* ── Personal details form ── */}
           <section style={{ marginBottom: "4rem" }}>

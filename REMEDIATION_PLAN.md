@@ -39,16 +39,17 @@
 - [x] 2.1 **Member booking modification** — done: PATCH now uses `findAvailabilityConflict` (incl. event expansion + calendar blocks), date changes reprice via `lib/pricing/reprice.ts` (Question 4 default; mirrors the POST audit→bedroom-factor→snapshot→estimated_total path, 4 tests), and guest counts require integers (`sleeping_guests ≥ 1`, `day_visitors ≥ 0`). Commit: `5f5b9ce`.
 - [x] 2.2 **Timeouts on outbound fetches** — done: calendar feed sync now enforces https-only, 10s `AbortSignal.timeout`, and a 5 MB response cap (header + body); Stripe checkout-session fetch got a 10s timeout, CyberSource authorization 15s and session creation 10s. Commit: `048a340`.
 - [x] 2.3 **Stop echoing raw DB errors on public routes** — done: all six call sites now log server-side and return generic messages (butler availability uses the route's snake_case error vocabulary). Commit: see `Remediation 2.3`.
-- [ ] 2.4 **Quick-win sweep** (one commit each or grouped sensibly):
-  - `admin/media` PATCH: inspect per-row errors from `Promise.all`, return failure if any failed; validate `display_order` type; validate `villa` against `ALLOWED_VILLAS` in POST.
-  - `/api/profile` PATCH: validate/cap `full_name`, `phone`, `country`, `address` (string type + length caps, reuse the pattern in `lib/butler/leads.ts`); generic errors.
-  - `AdminDataProvider.tsx` ~L116: gate the raw-payload `console.log` behind `NODE_ENV !== "production"`.
-  - `app/profile/page.tsx` mount effect: add `.catch` that clears the loading state into an error state; check `error` on each Supabase query; parallelize the independent fetches.
-  - `BookingsTable.tsx` `confirmSendFeedbackEmail` (~1063): add proper catch (copy `patchBookingRecord`'s pattern).
-  - Extract `checkOutExpiryUnix` into one shared helper in `lib/` (3 copies exist, one divergent — reconcile deliberately and note which behavior wins); extract the duplicated `getChargeAmount` and member→recipient resolution into `lib/` helpers.
-  - `/api/settings` GET: use `.maybeSingle()`, check `error` before reading `data`, don't mask DB failures as "absent" for payment-relevant keys.
-  - Admin routes `admin/bookings/[id]` and `approve-addon`: replace local `makeAdminClient()` with the shared `supabaseAdmin` (Data-Cache workaround).
-  - `approve-addon`: guard the snapshot write against concurrent modification (conditional update on `updated_at` or re-read-verify), reject on conflict.
+- [x] 2.4 **Quick-win sweep** — done, all nine sub-items in one commit:
+  - ✅ `admin/media` PATCH validates id/display_order per row and returns 500 listing per-row failures; POST validates the villa slug via `resolveVillaFromSlug`.
+  - ✅ `/api/profile` PATCH sanitizes + caps `full_name`(200)/`phone`(40)/`country`(100)/`address`(500), rejects non-strings, generic errors (DELETE too).
+  - ✅ `AdminDataProvider` raw-payload log gated to non-production.
+  - ✅ `/profile` mount effect: parallel fetches, per-query error checks, `.catch` → `pageError` state rendered on the page.
+  - ✅ `BookingsTable.confirmSendFeedbackEmail` got the patchBookingRecord-style catch.
+  - ✅ `checkOutExpiryUnix` → shared `lib/checkout-expiry.ts` (9 copies removed; strict variant wins + Date.UTC-rollover hardening — impossible dates now throw; identical output for valid dates; tests). `getChargeAmount` → `lib/payments/charge-amount.ts`; member→recipient → `lib/booking-recipient.ts`.
+  - ✅ `/api/settings` GET uses `.maybeSingle()` and returns 500 on DB error instead of masking as absent.
+  - ✅ `admin/bookings/[id]` + `approve-addon` use the shared `supabaseAdmin`.
+  - ✅ `approve-addon` snapshot write is optimistic-concurrency-guarded (jsonb equality), 409 on conflict.
+  Commit: see `Remediation 2.4`.
 
 ## Phase 3 — CI & test coverage (items 7, 11)
 

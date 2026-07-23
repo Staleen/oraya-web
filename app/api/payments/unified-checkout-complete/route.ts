@@ -9,6 +9,7 @@ import { isPaymentLinkExpired } from "@/lib/payments/link-state";
 import { PaymentProviderConfigurationError } from "@/lib/payments/provider";
 import { resolvePaymentRequestOrigin } from "@/lib/payments/request-origin";
 import { computeFoundationAmountDue, derivePaymentFoundationStage, getFoundationAmountTotal } from "@/lib/payment-foundation";
+import { getChargeAmount } from "@/lib/payments/charge-amount";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 type UnifiedCheckoutCompletionBookingRow = {
@@ -59,22 +60,6 @@ function readTransientToken(body: Record<string, unknown>) {
   }
 
   return "";
-}
-
-function getChargeAmount(booking: UnifiedCheckoutCompletionBookingRow) {
-  const depositAmount =
-    typeof booking.deposit_amount === "number" && Number.isFinite(booking.deposit_amount)
-      ? roundMoney(booking.deposit_amount)
-      : 0;
-  const amountDue =
-    typeof booking.amount_due === "number" && Number.isFinite(booking.amount_due)
-      ? roundMoney(booking.amount_due)
-      : 0;
-  const amountTotal =
-    typeof booking.amount_total === "number" && Number.isFinite(booking.amount_total)
-      ? roundMoney(booking.amount_total)
-      : 0;
-  return depositAmount > 0 ? depositAmount : amountDue > 0 ? amountDue : amountTotal;
 }
 
 function bookingViewUrl(request: Request, token: string) {

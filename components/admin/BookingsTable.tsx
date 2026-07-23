@@ -1086,6 +1086,11 @@ export default function BookingsTable({
       }
       await loadData(true);
       setFeedbackEmailModalBookingId(null);
+    } catch (error) {
+      // Remediation 2.4: same failure discipline as patchBookingRecord —
+      // a network error must surface instead of rejecting unhandled.
+      console.error("[admin] feedback email send error:", error);
+      setError("Could not send feedback email.");
     } finally {
       setFeedbackEmailSendingId(null);
     }

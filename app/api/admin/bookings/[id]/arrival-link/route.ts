@@ -3,6 +3,7 @@ import { requireAdminAuth } from "@/lib/admin-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { createActionToken } from "@/lib/booking-action-token";
 import { SITE_URL } from "@/lib/brand";
+import { checkOutExpiryUnix } from "@/lib/checkout-expiry";
 
 /**
  * Phase 16C Stage 4A — admin "Copy Arrival Guide link" support.
@@ -36,9 +37,6 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 // Same checkout-day expiry every transactional view-token mint uses
 // (see lib/send-booking-email.ts / app/api/bookings POST).
-function checkOutExpiryUnix(check_out: string): number {
-  return Math.floor(new Date(`${check_out}T23:59:59Z`).getTime() / 1000);
-}
 
 export async function GET(
   request: Request,

@@ -21,6 +21,7 @@ import { runAddonAudit } from "@/lib/addon-audit";
 import { heatedPoolCarryoverFromPriorBooking, isHeatedPoolAddon } from "@/lib/heated-pool-carryover";
 import { todayIsoUtc, validateStayDateRules } from "@/lib/booking-date-rules";
 import { isExclusionViolation } from "@/lib/db-errors";
+import { checkOutExpiryUnix } from "@/lib/checkout-expiry";
 
 const ALLOWED_VILLAS = ["Villa Mechmech", "Villa Byblos"];
 const ISO_DATE_RE    = /^\d{4}-\d{2}-\d{2}$/;
@@ -169,9 +170,6 @@ function addDaysDateOnly(value: string, days: number) {
   return formatDateOnlyFromSerial(serial + days);
 }
 
-function checkOutExpiryUnix(checkOut: string): number {
-  return Math.floor(new Date(`${checkOut}T23:59:59Z`).getTime() / 1000);
-}
 
 function detectDeadDayOfferSuggestion(
   checkIn: string,

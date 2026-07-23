@@ -115,7 +115,10 @@ export default function AdminDataProvider({ children }: { children: React.ReactN
       try {
         const r = await fetch("/api/admin/data", adminApiFetchInit);
         const text = await r.text();
-        if (!silent) console.log("[admin] /api/admin/data raw response:", text);
+        // Remediation 2.4: raw payload contains guest PII — dev-only logging.
+        if (!silent && process.env.NODE_ENV !== "production") {
+          console.log("[admin] /api/admin/data raw response:", text);
+        }
         let d: Record<string, unknown>;
         try {
           d = JSON.parse(text);

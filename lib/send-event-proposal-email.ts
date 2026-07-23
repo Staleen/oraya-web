@@ -4,6 +4,7 @@ import { createActionToken } from "@/lib/booking-action-token";
 import { transactionalEmailFooterHtmlBlock, transactionalEmailFooterTextSuffix } from "@/lib/transactional-email-footer";
 import type { ProposalEmailLineItem } from "@/lib/event-proposal-line-items";
 import { formatPaymentMethodLabel } from "@/lib/payment-method-labels";
+import { checkOutExpiryUnix } from "./checkout-expiry.ts";
 
 const GOLD = "#C5A46D";
 const MIDNIGHT = "#1F2B38";
@@ -53,9 +54,6 @@ function formatDateTime(value: string | null | undefined): string | null {
   }).format(parsed);
 }
 
-function checkOutExpiryUnix(checkOut: string): number {
-  return Math.floor(new Date(`${checkOut}T23:59:59Z`).getTime() / 1000);
-}
 
 function escapeHtml(value: string): string {
   return value

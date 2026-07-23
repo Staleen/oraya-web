@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireAdminAuth } from "@/lib/admin-auth";
+import { resolveVillaFromSlug } from "@/lib/calendar/villas";
 
 export const maxDuration = 60;
 
@@ -34,6 +35,11 @@ export async function POST(request: NextRequest) {
     const category = (formData.get("category") as string | null) ?? "other";
 
     if (!file || !villa) return NextResponse.json({ error: "file and villa required" }, { status: 400 });
+
+    // Remediation 2.4: only known villa slugs may become storage path segments.
+    if (!resolveVillaFromSlug(villa)) {
+      return NextResponse.json({ error: "Invalid villa." }, { status: 400 });
+    }
 
     if (file.size > 5 * 1024 * 1024) {
       return NextResponse.json({ error: `${file.name} exceeds 5 MB limit` }, { status: 400 });
@@ -119,11 +125,35 @@ export async function PATCH(request: NextRequest) {
     const body = await request.json();
 
     if (Array.isArray(body.updates)) {
-      await Promise.all(
-        body.updates.map(({ id, display_order }: { id: string; display_order: number }) =>
+      // Remediation 2.4: validate each entry and surface per-row failures.
+      for (const entry of body.updates) {
+        if (
+          !entry ||
+          typeof entry !== "object" ||
+          typeof entry.id !== "string" ||
+          !entry.id ||
+          !Number.isInteger(entry.display_order) ||
+          entry.display_order < 0
+        ) {
+          return NextResponse.json(
+            { error: "Each update needs a string id and a non-negative integer display_order." },
+            { status: 400 }
+          );
+        }
+      }
+      const results = await Promise.all(
+        (body.updates as Array<{ id: string; display_order: number }>).map(({ id, display_order }) =>
           supabaseAdmin.from("villa_media").update({ display_order }).eq("id", id)
         )
       );
+      const failed = results.filter((r) => r.error);
+      if (failed.length > 0) {
+        console.error("[api/admin/media] PATCH reorder failures:", failed.map((r) => r.error));
+        return NextResponse.json(
+          { error: `Failed to update ${failed.length} of ${results.length} items.` },
+          { status: 500 }
+        );
+      }
       return NextResponse.json({ ok: true });
     }
 
