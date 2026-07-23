@@ -2,12 +2,32 @@
 import { useState } from "react";
 import OrayaEmblem from "@/components/OrayaEmblem";
 import { adminApiFetchInit } from "@/lib/admin-auth";
-import { GOLD, WHITE, MIDNIGHT, CHARCOAL, PLAYFAIR, LATO, fieldStyle } from "./theme";
+import { GOLD, WHITE, MIDNIGHT, CHARCOAL, MUTED, PLAYFAIR, LATO, fieldStyle } from "./theme";
 
 export default function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
   const [input, setInput]   = useState("");
   const [error, setError]   = useState("");
   const [loading, setLoading] = useState(false);
+  const [recoverySending, setRecoverySending] = useState(false);
+  const [recoveryNotice, setRecoveryNotice] = useState("");
+
+  // Remediation 2 (A.2) — sends a one-time reset link to the server-side
+  // recovery address. The response is always generic by design.
+  async function requestRecovery() {
+    if (recoverySending) return;
+    setRecoverySending(true);
+    setRecoveryNotice("");
+    try {
+      await fetch("/api/admin/recovery/request", { method: "POST", cache: "no-store" });
+    } catch {
+      // Generic notice either way — the endpoint never confirms sends.
+    } finally {
+      setRecoverySending(false);
+      setRecoveryNotice(
+        "If recovery is configured, a one-time reset link was sent to the recovery email. It expires in 30 minutes.",
+      );
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -93,6 +113,26 @@ export default function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
             {loading ? "Verifying..." : "Enter"}
           </button>
         </form>
+
+        <button
+          type="button"
+          onClick={requestRecovery}
+          disabled={recoverySending}
+          style={{
+            fontFamily: LATO, fontSize: "11px", letterSpacing: "1.5px",
+            textTransform: "uppercase", color: MUTED,
+            backgroundColor: "transparent", border: "none",
+            marginTop: "1.5rem", cursor: recoverySending ? "wait" : "pointer",
+            textDecoration: "underline", textUnderlineOffset: "3px",
+          }}
+        >
+          {recoverySending ? "Sending…" : "Forgot password?"}
+        </button>
+        {recoveryNotice && (
+          <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, marginTop: "10px", lineHeight: 1.6 }}>
+            {recoveryNotice}
+          </p>
+        )}
       </div>
     </main>
   );

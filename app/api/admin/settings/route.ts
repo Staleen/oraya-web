@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireAdminAuth } from "@/lib/admin-auth";
-import { hashAdminPassword } from "@/lib/admin-password";
+import { ADMIN_RECOVERY_JTI_SETTINGS_KEY } from "@/lib/admin-recovery";
 
 export const dynamic = "force-dynamic";
 
-// GET — return all settings rows (never exposes admin_password)
+/** Auth-sensitive rows: never exposed by GET, never writable via generic POST. */
+const PROTECTED_KEYS = new Set(["admin_password", ADMIN_RECOVERY_JTI_SETTINGS_KEY]);
+
+// GET — return all settings rows (never exposes auth-sensitive keys)
 export async function GET(request: NextRequest) {
   const denied = requireAdminAuth(request);
   if (denied) return denied;
@@ -15,7 +18,7 @@ export async function GET(request: NextRequest) {
     .select("key, value");
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  const rows = (data ?? []).filter((row: { key: string }) => row.key !== "admin_password");
+  const rows = (data ?? []).filter((row: { key: string }) => !PROTECTED_KEYS.has(row.key));
   return NextResponse.json({ settings: rows });
 }
 
@@ -28,24 +31,20 @@ export async function POST(request: NextRequest) {
 
   if (!key) return NextResponse.json({ error: "key is required." }, { status: 400 });
 
-  // Remediation follow-up (1.1): the admin-password row stores a scrypt hash,
-  // never plaintext — hash here so the Settings-page "Update password" button
-  // keeps working with the fail-closed verify route (same rules as
-  // scripts/hash-admin-password.mjs).
-  let storedValue = value;
-  if (key === "admin_password") {
-    if (typeof value !== "string" || value.length < 8) {
-      return NextResponse.json(
-        { error: "Password must be at least 8 characters." },
-        { status: 400 },
-      );
-    }
-    storedValue = hashAdminPassword(value);
+  // Remediation 2 (A.1/A.2): auth-sensitive rows can only change through
+  // their dedicated endpoints (change-password with current-password check;
+  // the recovery jti is server-managed). The generic upsert refuses them so
+  // those checks cannot be bypassed.
+  if (PROTECTED_KEYS.has(key)) {
+    return NextResponse.json(
+      { error: "This setting can only be changed through its dedicated flow." },
+      { status: 400 },
+    );
   }
 
   const { error } = await supabaseAdmin
     .from("settings")
-    .upsert({ key, value: storedValue }, { onConflict: "key" });
+    .upsert({ key, value }, { onConflict: "key" });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
