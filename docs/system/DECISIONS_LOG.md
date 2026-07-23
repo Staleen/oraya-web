@@ -16,6 +16,18 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-07-23 - Remediation Phase 1 (security critical) from the 2026-07-23 health check
+
+**Decision:** the seven Phase 1 items of `REMEDIATION_PLAN.md` shipped on one branch: (1.1) the hardcoded `"Oraya2026"` admin-password fallback is deleted — `settings.admin_password` now stores a **scrypt hash** (`lib/admin-password.ts`, default option (b); `scripts/hash-admin-password.mjs` generates it) and login fails CLOSED (503 `admin_auth_unavailable`) whenever a trustworthy hash is absent, including a legacy plaintext row; (1.2) admin login is rate-limited via the human-run `admin_login_attempts` table (`sql/remediation-admin-login-attempts.sql`) — 5 failures/15 min per IP, 20 global, constant 500 ms failure delay, fail-closed when the table is unreachable; (1.3) route-boundary stay rules — max 60 nights, no past check-ins (UTC today allowed) — on `/api/bookings` POST and the member PATCH (`lib/booking-date-rules.ts`); (1.4) a Postgres `EXCLUDE USING gist` constraint on confirmed bookings (`sql/remediation-booking-overlap-constraint.sql`, preflight included) backstops the double-booking race, confirm writes are row-count-checked (`/api/booking-action` no longer burns tokens or emails on 0 matched rows) and 23P01 maps to the existing "dates unavailable" responses; (1.5) the guest availability calendars fail CLOSED with a retry UI instead of showing all dates free on fetch failure; (1.6) webhook `set_paid` is durably idempotent (`lib/payments/webhook-set-paid.ts` + NULL-safe conditional write); (1.7) CyberSource authorization responses must echo the requested amount AND currency (`lib/payments/authorized-amount.ts`, fail-closed) before any payment is recorded.
+
+**Reason:** 2026-07-23 health-check report items 1–6 and 12 — publicly known admin password, brute-forceable login, unbounded stays, double-booking and double-count races, fail-open availability, and unverified gateway amounts are all production risks.
+
+**Impact:** two new human-run SQL files in `sql/` (**run `remediation-admin-login-attempts.sql` BEFORE deploying** — admin login fails closed without it), the admin password must be rotated and stored as a hash, and locked booking/payment surfaces changed only in the narrow ways the plan mandates. Baseline 168 tests grew to 201, all passing; tsc + build clean.
+
+**Reversible?:** yes per item (each is one commit), though reverting 1.1 would re-expose a public credential.
+
+---
+
 ## 2026-07-17 - Booking approval and payment are independent guest truths; one projection owns payment presentation
 
 **Decision:** `bookings.status` continues to represent Oraya's operational approval, while `payment_status` and the payment-link fields represent money state. A valid guest state is therefore `status = pending` plus `payment_status = paid_in_full`; payment must not auto-confirm a booking. On `/booking/view/[token]`, booking-status messaging must be payment-neutral and the pure [lib/payments/guest-presentation.ts](../../lib/payments/guest-presentation.ts) projection is the sole owner of guest payment vocabulary, method labels, and return-message interpretation. Recorded payment states take precedence over stale payment-link state. Browser return parameters remain informational and cannot create a success state. Public checkout errors are fixed guest-safe messages; provider/configuration detail stays in server logs or authenticated admin readiness surfaces.
