@@ -980,3 +980,23 @@ export function completedHistoryFeedbackLine(booking: Booking): string {
   if (!when) return "Feedback · Not sent via system yet";
   return `Feedback · Requested on ${when}`;
 }
+
+export function renderOperationalBadge(text: string, kind: "approval" | "soft" | "strict") {
+  const tone = getOperationalBadgeStyle(kind);
+  return (
+    <span
+      style={{
+        fontFamily: LATO,
+        fontSize: "9px",
+        letterSpacing: "1.2px",
+        textTransform: "uppercase",
+        color: tone.color,
+        backgroundColor: tone.background,
+        padding: "4px 8px",
+        borderRadius: "4px",
+      }}
+    >
+      {text}
+    </span>
+  );
+}
