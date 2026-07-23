@@ -20,7 +20,7 @@
 
 ## Phase 1 — Security critical (report items 1, 2, 4, 3, 5, 6, 12)
 
-- [ ] 1.1 **Remove hardcoded fallback admin password** (`app/api/admin/verify-password/route.ts:48`). Delete `?? "Oraya2026"`; if the stored credential is absent/unreadable, fail closed (503 `{ error: "admin_auth_unavailable" }`, log server-side). 
+- [x] 1.1 **Remove hardcoded fallback admin password** — done (default option (b): scrypt hash in settings row via `lib/admin-password.ts`, fail-closed 503 `admin_auth_unavailable`, `scripts/hash-admin-password.mjs` helper, 9 tests). Commit: see `Remediation 1.1`. (`app/api/admin/verify-password/route.ts:48`). Delete `?? "Oraya2026"`; if the stored credential is absent/unreadable, fail closed (503 `{ error: "admin_auth_unavailable" }`, log server-side). 
   - **DECISION (David): password storage approach** — see Question 1. Default if unanswered: keep the settings-table row but store a **scrypt hash** (Node `crypto.scrypt`, timing-safe compare), add a small `scripts/hash-admin-password.mjs` helper to generate the hash, and fail closed when the row is missing. Never store or compare plaintext.
   - Add `node:test` coverage: missing row → 503; wrong password → 401; correct password → session.
   - HUMAN follow-up: rotate the real admin password (the old one is public in git history forever) and update the stored hash.

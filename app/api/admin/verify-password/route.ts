@@ -1,20 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createHash, timingSafeEqual } from "crypto";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { attachAdminSessionCookie } from "@/lib/admin-auth";
+import { decideAdminLogin } from "@/lib/admin-password";
 
 export const dynamic = "force-dynamic";
 
 function getAdminSecretOrNull(): string | null {
   const s = process.env.ADMIN_SECRET;
   return s?.trim() ? s.trim() : null;
-}
-
-/** Compare UTF-8 strings in near-constant time (length still observable). */
-function timingSafePasswordMatch(input: string, expected: string): boolean {
-  const a = createHash("sha256").update(input, "utf8").digest();
-  const b = createHash("sha256").update(expected, "utf8").digest();
-  return timingSafeEqual(a, b);
 }
 
 export async function POST(request: NextRequest) {
@@ -40,13 +33,22 @@ export async function POST(request: NextRequest) {
     .eq("key", "admin_password")
     .maybeSingle();
 
-  if (error) {
-    console.error("[api/admin/verify-password] settings error:", error);
-    return NextResponse.json({ ok: false, error: "Could not verify password." }, { status: 500 });
+  const decision = decideAdminLogin({
+    password,
+    storedValue: error ? null : (data?.value as string | null | undefined),
+    lookupFailed: Boolean(error),
+  });
+
+  if (decision.outcome === "unavailable") {
+    console.error(
+      "[api/admin/verify-password] admin auth unavailable:",
+      decision.reason,
+      error ?? "",
+    );
+    return NextResponse.json({ ok: false, error: "admin_auth_unavailable" }, { status: 503 });
   }
 
-  const stored = data?.value ?? "Oraya2026";
-  if (!timingSafePasswordMatch(password, stored)) {
+  if (decision.outcome === "unauthorized") {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
 
