@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { todayIsoUtc, validateStayDateRules } from "@/lib/booking-date-rules";
 
 async function getAuthUser(request: Request) {
   const token = request.headers.get("Authorization")?.replace("Bearer ", "");
@@ -67,6 +68,15 @@ export async function PATCH(
       }
       if (finalCheckOut <= finalCheckIn) {
         return NextResponse.json({ error: "check_out must be after check_in." }, { status: 400 });
+      }
+
+      const stayRuleError = validateStayDateRules({
+        check_in: finalCheckIn,
+        check_out: finalCheckOut,
+        todayIso: todayIsoUtc(),
+      });
+      if (stayRuleError) {
+        return NextResponse.json({ error: stayRuleError.error }, { status: stayRuleError.status });
       }
 
       // Reuse same overlap logic as admin PATCH — exclude self with .neq("id", id)

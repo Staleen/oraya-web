@@ -19,6 +19,7 @@ import { buildPricingSnapshot, runPricingAudit, type PricingSnapshot } from "@/l
 import { ADDON_OPERATIONAL_SETTINGS_KEY, formatPreparationTime, getAddonEnforcementMode, getAddonTimingType, mergeAddonsWithOperationalSettings, parseAddonOperationalSetting } from "@/lib/addon-operations";
 import { runAddonAudit } from "@/lib/addon-audit";
 import { heatedPoolCarryoverFromPriorBooking, isHeatedPoolAddon } from "@/lib/heated-pool-carryover";
+import { todayIsoUtc, validateStayDateRules } from "@/lib/booking-date-rules";
 
 const ALLOWED_VILLAS = ["Villa Mechmech", "Villa Byblos"];
 const ISO_DATE_RE    = /^\d{4}-\d{2}-\d{2}$/;
@@ -237,6 +238,11 @@ export async function POST(request: Request) {
     }
     if (check_out <= check_in) {
       return NextResponse.json({ error: "check_out must be after check_in." }, { status: 400 });
+    }
+
+    const stayRuleError = validateStayDateRules({ check_in, check_out, todayIso: todayIsoUtc() });
+    if (stayRuleError) {
+      return NextResponse.json({ error: stayRuleError.error }, { status: stayRuleError.status });
     }
 
     try {
