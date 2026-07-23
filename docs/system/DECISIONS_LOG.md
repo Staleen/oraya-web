@@ -52,6 +52,18 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-07-23 - Remediation Phase 4 (dependencies) from the 2026-07-23 health check
+
+**Decision:** `npm audit fix` plus minor bumps shipped: `ws` 8.21.1 (resolves the two high-severity ws advisories), `resend` 6.18.0, `@supabase/supabase-js` 2.110.8, `autoprefixer` ^10.5.4, `postcss` ^8.5.22. The five remaining audit findings all live inside `next@14.2.35`; their only fix is Next 16 — the **Next 15+/React 19 major upgrade stays a separate scoped task** (plan Question 3 default), listed under Human actions. README now documents `PUPPETEER_SKIP_DOWNLOAD=true npm install` for restricted networks.
+
+**Reason:** health-check §4 — known-vulnerable transitive deps; major-version upgrade has real migration surface (async request APIs, caching defaults) and doesn't belong in a remediation sweep.
+
+**Impact:** package.json/package-lock only; full gate (tsc, build, 239 tests) clean after the bumps.
+
+**Reversible?:** yes.
+
+---
+
 ## 2026-07-17 - Booking approval and payment are independent guest truths; one projection owns payment presentation
 
 **Decision:** `bookings.status` continues to represent Oraya's operational approval, while `payment_status` and the payment-link fields represent money state. A valid guest state is therefore `status = pending` plus `payment_status = paid_in_full`; payment must not auto-confirm a booking. On `/booking/view/[token]`, booking-status messaging must be payment-neutral and the pure [lib/payments/guest-presentation.ts](../../lib/payments/guest-presentation.ts) projection is the sole owner of guest payment vocabulary, method labels, and return-message interpretation. Recorded payment states take precedence over stale payment-link state. Browser return parameters remain informational and cannot create a success state. Public checkout errors are fixed guest-safe messages; provider/configuration detail stays in server logs or authenticated admin readiness surfaces.

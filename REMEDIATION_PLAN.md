@@ -58,9 +58,9 @@
 
 ## Phase 4 — Dependencies (report §4)
 
-- [ ] 4.1 `npm audit fix` (resolves `ws`); bump minors: `resend` → 6.18.x, `@supabase/supabase-js` → 2.110.x, `autoprefixer`, `postcss`. Full verification gate after.
-- [ ] 4.2 Add `PUPPETEER_SKIP_DOWNLOAD=true` guidance (`.npmrc` comment or README note) — or move `puppeteer` to `optionalDependencies` if the screenshot watcher tolerates it.
-- [ ] 4.3 **Next 15 + React 19 upgrade — DECISION (David): in this run or a separate scoped task?** See Question 3. Default: SEPARATE task (it's a major with real migration surface: async request APIs, caching-default changes). If included: own sub-branch, follow the official codemod, full manual pass over `/book`, `/booking/view/[token]`, admin, and payment flows afterward.
+- [x] 4.1 `npm audit fix` + minor bumps — done: `ws` → 8.21.1 (high-severity advisories resolved), `resend` → 6.18.0, `@supabase/supabase-js` → 2.110.8, `autoprefixer` → ^10.5.4, `postcss` → ^8.5.22. Remaining 5 audit findings are all inside `next@14.2.35` itself; the only fix is Next 16 (breaking) — explicitly deferred to 4.3's separate-task decision. Gate: tsc/build/239 tests clean. Commit: see `Remediation 4`.
+- [x] 4.2 `PUPPETEER_SKIP_DOWNLOAD=true` guidance — done: README "Local development" install step documents it (kept as devDependency; the screenshot watcher is the only consumer). Commit: see `Remediation 4`.
+- [x] 4.3 **Next 15 + React 19 upgrade** — default decision applied (unanswered → SEPARATE scoped task, not in this run). Added to Human actions: schedule the upgrade task. Note: the 5 remaining `npm audit` findings live in Next itself and will be resolved by that task.
 
 ## Phase 5 — Refactors & polish (items 13, 14, 15, 16)
 

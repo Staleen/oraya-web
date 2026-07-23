@@ -11,21 +11,21 @@
     "watch-screenshots": "node scripts/screenshot-watcher.mjs"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.103.0",
+    "@supabase/supabase-js": "^2.110.8",
     "next": "14.2.35",
     "react": "^18",
     "react-day-picker": "^8.10.1",
     "react-dom": "^18",
-    "resend": "^6.12.2"
+    "resend": "^6.18.0"
   },
   "devDependencies": {
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
-    "autoprefixer": "^10.0.1",
+    "autoprefixer": "^10.5.4",
     "eslint": "^8",
     "eslint-config-next": "14.2.35",
-    "postcss": "^8",
+    "postcss": "^8.5.22",
     "puppeteer": "^24.40.0",
     "tailwindcss": "^3.4.1",
     "typescript": "^5"
