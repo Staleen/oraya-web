@@ -1,0 +1,49 @@
+# Remediation 3.1 — CI: type-check, lint, tests, and build on every PR and
+# push to master. Tests are Node's built-in runner over the same glob as
+# `npm test`, so CI and humans run the identical command.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PUPPETEER_SKIP_DOWNLOAD: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Tests (node --test)
+        run: npm test
+
+      # `next build` downloads Google Fonts (Playfair Display + Lato) at build
+      # time, so the runner needs outbound network access to
+      # fonts.googleapis.com. GitHub-hosted runners allow this. Fallback if a
+      # self-hosted/restricted runner blocks it: either allowlist
+      # fonts.googleapis.com + fonts.gstatic.com, or temporarily drop this step
+      # — tsc + tests above still gate correctness.
+      - name: Build
+        run: npm run build
+        env:
+          # Build-time env so `next build` can prerender without real secrets.
+          # These are placeholders — CI never talks to production services.
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key' }}

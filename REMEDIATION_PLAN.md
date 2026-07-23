@@ -53,7 +53,7 @@
 
 ## Phase 3 — CI & test coverage (items 7, 11)
 
-- [ ] 3.1 **`.github/workflows/ci.yml`**: on PR + push to master — `npm ci` (with `PUPPETEER_SKIP_DOWNLOAD=true`), `npx tsc --noEmit`, `npm run lint`, and every `node --test` suite (glob `lib/**/*.test.mts scripts/*.test.mjs`). Note: `next build` in CI needs Google Fonts network access — include it; if the runner blocks it, document the fallback. Add a `test` script to `package.json` so CI and humans run the same command.
+- [x] 3.1 **`.github/workflows/ci.yml`** — done: PR + master push run npm ci (PUPPETEER_SKIP_DOWNLOAD), tsc, lint, `npm test` (new script: `node --test "scripts/*.test.mjs" "lib/**/*.test.mts"` — node's own globstar, shell-safe), and `next build` (Google-Fonts note + restricted-runner fallback documented in the workflow). Commit: see `Remediation 3.1`.
 - [ ] 3.2 **Tests for money/token-critical libs** (pure-function first): `lib/booking-action-token.ts` + `lib/butler/prefill-token.ts` (expiry, tamper, wrong-purpose), `lib/payments/checkout-amount.ts` (deposit math edges), `lib/calendar/availability.ts` (overlap semantics incl. event expansion), `lib/pricing/engine.ts` (night iteration, boundary dates), `lib/payments/webhook-handler.ts` (with 1.6's cases), `lib/money.ts`. Target: meaningful edge cases, not line coverage.
 
 ## Phase 4 — Dependencies (report §4)
