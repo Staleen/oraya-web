@@ -1,6 +1,7 @@
-import { roundMoney } from "@/lib/money";
-import type { PaymentRequestPurpose } from "@/lib/payments/domain";
-import { DEFAULT_PAYMENT_PUBLIC_SETTINGS, getMinimumDepositAmountFromPercentage } from "@/lib/payments/settings";
+// Relative .ts import so node:test can load this module (repo test convention).
+import { roundMoney } from "../money.ts";
+import type { PaymentRequestPurpose } from "./domain.ts";
+import { DEFAULT_PAYMENT_PUBLIC_SETTINGS, getMinimumDepositAmountFromPercentage } from "./settings.ts";
 
 export const MINIMUM_DEPOSIT_RATIO =
   DEFAULT_PAYMENT_PUBLIC_SETTINGS.deposit_minimum_percentage / 100;

@@ -1,11 +1,22 @@
 "use client";
-import { Suspense, useState, useEffect, useRef, useCallback } from "react";
+import { Suspense, useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { DayPicker } from "react-day-picker";
 import type { DateRange, Matcher } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 import OrayaLogoFull from "@/components/OrayaLogoFull";
 import { getVillaBasePrice, getVillaEntryPrice, getVillaPricing } from "@/lib/admin-pricing";
+import { buildBookedRangeList, createStayCalendarRules } from "@/lib/booking/calendar-validity";
+import { fmtDate, formatUsd, nightCount, toISO } from "@/lib/guest-format";
+import { EMAIL_RE } from "@/lib/guest-validation";
+import {
+  nextBedroomCountAfterPrefill,
+  nextFullNameAfterPrefill,
+  nextSleepingGuestsAfterPrefill,
+  nextVillaAfterPrefill,
+} from "@/lib/booking/butler-prefill-hydration";
+import { computeAddonAvailability } from "@/lib/booking/addon-availability";
+import { loadStayAddons } from "@/lib/booking/load-stay-addons";
 import { ADDON_OPERATIONAL_SETTINGS_KEY, formatPreparationTime, getAddonAppliesTo, getAddonEnforcementMode, getAddonTimingType, mergeAddonsWithOperationalSettings, parseAddonOperationalSetting, type AddonCategory, type AddonCutoffType, type AddonEnforcementMode, type AddonPricingType } from "@/lib/addon-operations";
 import { usePublicPricing } from "@/lib/public-pricing";
 import { calculateStayPricing } from "@/lib/pricing/engine";
@@ -44,6 +55,7 @@ import {
   paymentModeAllowsPayNow,
   type PaymentPublicRuntimeSettings,
 } from "@/lib/payments/settings";
+import { LATO, PLAYFAIR } from "@/components/theme";
 
 // ─── Brand constants (theme tokens from globals.css) ─
 const GOLD      = "var(--oraya-gold)";
@@ -61,14 +73,11 @@ const GLASS3    = "var(--oraya-book-surface-3)";
 const GLG1      = "var(--oraya-book-surface-gold)";
 const OPT_BG    = "var(--oraya-book-option-bg)";
 const SUCCESS  = "#6fcf8a";
-const PLAYFAIR = "'Playfair Display', Georgia, serif";
-const LATO     = "'Lato', system-ui, sans-serif";
 /** Phase 12E Batch 5: discount applied to dead-gap extension offers (UI display only, not persisted). */
 const DEAD_DAY_DISCOUNT_PCT = 0.30;
 
 // ─── Static data ──────────────────────────────────────────────────────────────
 const VILLAS   = ["Villa Mechmech", "Villa Byblos"];
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const VILLA_CARD_META: Record<string, { image: string; imagePosition: string; note: string }> = {
   "Villa Mechmech": {
     image: "/logos/ORAYA_logo_full.png",
@@ -285,12 +294,6 @@ const PRICING_MODEL_LABELS: Record<string, string> = {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Local-date-aware ISO formatter — avoids UTC timezone shifts. */
-function toISO(d: Date): string {
-  const y  = d.getFullYear();
-  const m  = String(d.getMonth() + 1).padStart(2, "0");
-  const dy = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${dy}`;
-}
 
 /** Parse an ISO date string into a local Date (no UTC conversion). */
 function parseLocalISO(s: string): Date {
@@ -365,23 +368,8 @@ function clearStoredButlerPrefillToken() {
   } catch {}
 }
 
-function fmtDate(iso: string): string {
-  if (!iso) return "—";
-  const [y, m, d] = iso.split("-");
-  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  return `${parseInt(d)} ${months[parseInt(m) - 1]} ${y}`;
-}
 
-function nightCount(checkIn: string, checkOut: string): number {
-  if (!checkIn || !checkOut) return 0;
-  return Math.max(0, Math.round(
-    (parseLocalISO(checkOut).getTime() - parseLocalISO(checkIn).getTime()) / 86_400_000
-  ));
-}
 
-function formatUsd(amount: number): string {
-  return `$${amount.toLocaleString("en-US")}`;
-}
 
 const NIGHT_DAYS   = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 
@@ -946,6 +934,10 @@ function BookPageInner() {
   const [heatedPoolCarryover, setHeatedPoolCarryover] = useState(false);
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [availabilitySettledKey, setAvailabilitySettledKey] = useState<string | null>(null);
+  // Remediation 1.5: availability must fail CLOSED — a fetch failure disables
+  // date selection instead of silently showing every date as free.
+  const [availabilityError, setAvailabilityError] = useState(false);
+  const [availabilityRetryNonce, setAvailabilityRetryNonce] = useState(0);
 
   // Add-ons
   const [addons,         setAddons]         = useState<Addon[]>([]);
@@ -1006,68 +998,73 @@ function BookPageInner() {
     }
   }, [searchParams]);
 
-  const applyButlerPrefill = (prefill: ButlerPrefillPayload, queryVilla: string | null) => {
-    const normalizedVilla = normalizeVillaFromSearchParam(prefill.villa);
-    if (normalizedVilla && VILLAS.includes(normalizedVilla)) {
-      skipNextVillaDateResetRef.current = true;
-      setForm((current) => {
-        const canOverrideVilla =
-          !current.villa || (queryVilla !== null && current.villa === queryVilla);
-        if (!canOverrideVilla || current.villa === normalizedVilla) return current;
-        return { ...current, villa: normalizedVilla };
-      });
-      setShowFullVillaCards(false);
-    }
+  // Calendar month state + sync live above the Butler hydration callback that
+  // depends on them (const initialization order).
+  const [calendarMonth, setCalendarMonth] = useState<Date>(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return startOfLocalMonth(d);
+  });
+  const [calendarMonthUserNavigated, setCalendarMonthUserNavigated] = useState(false);
 
-    if (prefill.sleeping_guests) {
-      setForm((current) => {
-        if (current.sleepingGuests !== "2" && current.sleepingGuests.trim() !== "") return current;
-        return { ...current, sleepingGuests: prefill.sleeping_guests ?? current.sleepingGuests };
-      });
-    }
+  const syncCalendarMonthToSelection = useCallback((day: Date) => {
+    setCalendarMonth(startOfLocalMonth(day));
+    setCalendarMonthUserNavigated(false);
+  }, []);
 
-    const explicitBedrooms: BedroomCount | null =
-      prefill.bedroom_count === "1" || prefill.bedroom_count === "2" || prefill.bedroom_count === "3"
-        ? prefill.bedroom_count
-        : null;
-    if (explicitBedrooms) {
-      setForm((current) => {
-        if (current.bedroomCount !== "1") return current;
-        return { ...current, bedroomCount: explicitBedrooms };
-      });
-    } else if (prefill.sleeping_guests) {
-      const guestCount = parseInt(prefill.sleeping_guests, 10);
-      const derivedBedrooms: BedroomCount =
-        guestCount <= 2 ? "1" : guestCount <= 4 ? "2" : "3";
-      setForm((current) => {
-        if (current.bedroomCount !== "1") return current;
-        return { ...current, bedroomCount: derivedBedrooms };
-      });
-    }
-
-    if (prefill.full_name) {
-      setGuest((current) => {
-        if (current.fullName.trim()) return current;
-        return { ...current, fullName: prefill.full_name ?? current.fullName };
-      });
-    }
-
-    if (prefill.check_in && prefill.check_out) {
-      const from = parseSafeLocalISO(prefill.check_in);
-      const to = parseSafeLocalISO(prefill.check_out);
-      if (from && to && to > from) {
-        pendingButlerDateRangeRef.current = { from, to };
-        syncCalendarMonthToSelection(from);
-        setButlerDateHydrationNonce((current) => current + 1);
+  // Remediation 5.3 — decision logic lives in the pure module
+  // lib/booking/butler-prefill-hydration.ts; this callback only wires the
+  // decisions into state, so the hydration effects can list it honestly.
+  const applyButlerPrefill = useCallback(
+    (prefill: ButlerPrefillPayload, queryVilla: string | null) => {
+      const normalizedVilla = normalizeVillaFromSearchParam(prefill.villa);
+      if (normalizedVilla && VILLAS.includes(normalizedVilla)) {
+        skipNextVillaDateResetRef.current = true;
+        setForm((current) => {
+          const nextVilla = nextVillaAfterPrefill({
+            currentVilla: current.villa,
+            normalizedPrefillVilla: normalizedVilla,
+            queryVilla,
+            knownVillas: VILLAS,
+          });
+          return nextVilla === null ? current : { ...current, villa: nextVilla };
+        });
+        setShowFullVillaCards(false);
       }
-    }
-  };
+
+      setForm((current) => {
+        const nextGuests = nextSleepingGuestsAfterPrefill(current.sleepingGuests, prefill);
+        return nextGuests === null ? current : { ...current, sleepingGuests: nextGuests };
+      });
+
+      setForm((current) => {
+        const nextBedrooms = nextBedroomCountAfterPrefill(current.bedroomCount, prefill);
+        return nextBedrooms === null ? current : { ...current, bedroomCount: nextBedrooms };
+      });
+
+      setGuest((current) => {
+        const nextName = nextFullNameAfterPrefill(current.fullName, prefill);
+        return nextName === null ? current : { ...current, fullName: nextName };
+      });
+
+      if (prefill.check_in && prefill.check_out) {
+        const from = parseSafeLocalISO(prefill.check_in);
+        const to = parseSafeLocalISO(prefill.check_out);
+        if (from && to && to > from) {
+          pendingButlerDateRangeRef.current = { from, to };
+          syncCalendarMonthToSelection(from);
+          setButlerDateHydrationNonce((current) => current + 1);
+        }
+      }
+    },
+    [syncCalendarMonthToSelection],
+  );
 
   useEffect(() => {
     const storedPrefill = readStoredButlerPrefill();
     if (!storedPrefill) return;
     applyButlerPrefill(storedPrefill, normalizeVillaFromSearchParam(searchParams.get("villa")));
-  }, [searchParams]);
+  }, [searchParams, applyButlerPrefill]);
 
   useEffect(() => {
     if (authStatus === "loading") return;
@@ -1075,7 +1072,7 @@ function BookPageInner() {
     const storedPrefill = readStoredButlerPrefill();
     if (!storedPrefill) return;
     applyButlerPrefill(storedPrefill, normalizeVillaFromSearchParam(searchParams.get("villa")));
-  }, [authStatus, guestMode, searchParams]);
+  }, [authStatus, guestMode, searchParams, applyButlerPrefill]);
 
   useEffect(() => {
     const handoffToken = searchParams.get("h");
@@ -1117,7 +1114,7 @@ function BookPageInner() {
         setButlerPrefillReady(true);
         clearTokenFromUrl();
       });
-  }, [searchParams]);
+  }, [searchParams, applyButlerPrefill]);
 
   useEffect(() => {
     if (step !== 1) collapsedDateScrollKeyRef.current = null;
@@ -1218,27 +1215,21 @@ function BookPageInner() {
   }, []);
 
   // Fetch enabled add-ons when the user reaches merged stay setup (request step 2)
+  // Remediation 5.3 — the load itself lives in lib/booking/load-stay-addons.ts;
+  // a ref mirrors `addons` so the "already loaded" guard doesn't need addons in
+  // the dependency array (which would re-run the effect after every load).
+  const addonsCountRef = useRef(0);
   useEffect(() => {
-    if (step !== 2 || bookingPath !== "request" || addons.length > 0) return;
+    addonsCountRef.current = addons.length;
+  }, [addons]);
+  useEffect(() => {
+    if (step !== 2 || bookingPath !== "request" || addonsCountRef.current > 0) return;
     setAddonsLoading(true);
-    Promise.all([
-      fetch("/api/addons").then(r => r.json()),
-      fetch(`/api/settings?key=${encodeURIComponent(ADDON_OPERATIONAL_SETTINGS_KEY)}`).then(r => r.json()),
-    ])
-      .then(([addonsData, addonSettingsData]) => {
-        const addonRows = Array.isArray(addonsData.addons) ? addonsData.addons as Addon[] : [];
-        const operationalSettings = parseAddonOperationalSetting(addonSettingsData.value);
-        setAddons(
-          mergeAddonsWithOperationalSettings(addonRows, operationalSettings).filter(
-            (addon) =>
-              addon.enabled &&
-              ["stay", "both"].includes(getAddonAppliesTo(addon.applies_to)),
-          ),
-        );
-      })
+    loadStayAddons<Addon>()
+      .then(setAddons)
       .catch(() => setAddons([]))
       .finally(() => setAddonsLoading(false));
-  }, [step, bookingPath]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [step, bookingPath]);
 
   // Clear stay dates when villa changes; availability is fetched after check-in is derived (see below).
   useEffect(() => {
@@ -1258,17 +1249,10 @@ function BookPageInner() {
       if (current?.from || current?.to) return current;
       return pending;
     });
-  }, [form.villa, butlerDateHydrationNonce]);
+  }, [form.villa, butlerDateHydrationNonce, syncCalendarMonthToSelection]);
 
   // ── Derived values ────────────────────────────────────────────────────────
   const today = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; })();
-  const [calendarMonth, setCalendarMonth] = useState<Date>(() => startOfLocalMonth(today));
-  const [calendarMonthUserNavigated, setCalendarMonthUserNavigated] = useState(false);
-
-  function syncCalendarMonthToSelection(day: Date) {
-    setCalendarMonth(startOfLocalMonth(day));
-    setCalendarMonthUserNavigated(false);
-  }
 
   function handleCalendarMonthChange(month: Date) {
     setCalendarMonth(startOfLocalMonth(month));
@@ -1278,7 +1262,7 @@ function BookPageInner() {
   useEffect(() => {
     if (!dateRange?.from) return;
     syncCalendarMonthToSelection(dateRange.from);
-  }, [dateRange?.from]);
+  }, [dateRange?.from, syncCalendarMonthToSelection]);
 
   const displayedCalendarMonth =
     !calendarMonthUserNavigated && dateRange?.from
@@ -1286,88 +1270,29 @@ function BookPageInner() {
       : calendarMonth;
 
   /**
-   * Blocked day ranges for the calendar.
-   * We disable from check_in through (check_out - 1 day) inclusive so that
-   * the check_out date itself remains selectable as a new check-in.
+   * Remediation 5.3 — calendar validity rules now live in the pure module
+   * lib/booking/calendar-validity.ts (same logic verbatim, incl. the dead
+   * check-in guard); the page builds the rule set from its current state.
    */
-  const bookedRangeList: Array<{ from: Date; to: Date }> = confirmedRanges.flatMap(r => {
-    const from = parseLocalISO(r.check_in);
-    const to   = parseLocalISO(r.check_out);
-    to.setDate(to.getDate() - 1); // last occupied night, not checkout day
-    if (to < from) return []; // single-night stay edge case handled
-    return [{ from, to }];
-  });
-
-  /**
-   * Dead check-in guard.
-   * The -1 day logic above intentionally leaves each booking's check_out day
-   * open so a new guest can check in on the same day a prior guest checks out.
-   * However, if the very next night (or the first reachable checkout date given
-   * the minimum stay) is already inside another blocked range, that boundary day
-   * becomes a dead check-in — visually selectable but impossible to complete.
-   * We detect these and add them to the disabled set.
-   */
-  function isCalendarDateBlocked(d: Date): boolean {
-    if (d < today) return true;
-    return bookedRangeList.some(r => d >= r.from && d <= r.to);
-  }
+  const todayIso = toISO(today);
+  const bookedRangeList = useMemo(() => buildBookedRangeList(confirmedRanges), [confirmedRanges]);
 
   const minStayNights =
     (form.villa ? getVillaPricing(pricing, form.villa)?.minimum_stay : null) ?? 1;
   const effectiveMinStayNights = Math.max(1, minStayNights);
 
-  function addLocalDays(day: Date, days: number): Date {
-    const next = new Date(day.getTime());
-    next.setDate(next.getDate() + days);
-    return next;
-  }
-
-  function isStayRangeAvailable(checkInDay: Date, checkOutDay: Date): boolean {
-    if (checkOutDay <= checkInDay) return false;
-
-    for (let night = new Date(checkInDay.getTime()); night < checkOutDay; night.setDate(night.getDate() + 1)) {
-      if (isCalendarDateBlocked(night)) return false;
-    }
-
-    return true;
-  }
-
-  function hasValidCheckoutFromCheckIn(checkInDay: Date): boolean {
-    if (isCalendarDateBlocked(checkInDay)) return false;
-
-    // Search up to one year for a checkout where every occupied night is open.
-    for (let n = effectiveMinStayNights; n <= 366; n++) {
-      const candidateCheckout = addLocalDays(checkInDay, n);
-      if (!isCalendarDateBlocked(candidateCheckout) && isStayRangeAvailable(checkInDay, candidateCheckout)) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  function isDeadCheckInDate(day: Date): boolean {
-    return !isCalendarDateBlocked(day) && !hasValidCheckoutFromCheckIn(day);
-  }
+  const stayCalendarRules = useMemo(
+    () =>
+      createStayCalendarRules({
+        today: parseLocalISO(todayIso),
+        bookedRangeList,
+        minStayNights: effectiveMinStayNights,
+      }),
+    [todayIso, bookedRangeList, effectiveMinStayNights],
+  );
+  const { isDeadCheckInDate, isValidCheckoutFrom, hasValidCheckoutFromCheckIn } = stayCalendarRules;
 
   const isChoosingCheckout = Boolean(dateRange?.from && !dateRange.to);
-
-  // A checkout date is valid only if every condition holds:
-  // 1. checkout is strictly after check-in (minimum 1 night)
-  // 2. checkout day itself is not in the middle of a blocked stay
-  // 3. every night from check-in up to checkout-1 is free (continuous stay)
-  function isValidCheckoutFrom(checkIn: Date, checkout: Date): boolean {
-    if (checkout <= checkIn) return false;
-    if (isCalendarDateBlocked(checkout)) return false;
-    for (
-      let night = new Date(checkIn.getTime());
-      night < checkout;
-      night.setDate(night.getDate() + 1)
-    ) {
-      if (isCalendarDateBlocked(night)) return false;
-    }
-    return true;
-  }
 
   const disabledDays: Matcher[] = [
     { before: today },
@@ -1387,6 +1312,7 @@ function BookPageInner() {
       setHeatedPoolCarryover(false);
       setAvailabilityLoading(false);
       setAvailabilitySettledKey(null);
+      setAvailabilityError(false);
       return;
     }
     const availabilityKey = `${form.villa}|${checkIn}`;
@@ -1395,8 +1321,12 @@ function BookPageInner() {
     let cancelled = false;
     setAvailabilityLoading(true);
     setAvailabilitySettledKey(null);
+    setAvailabilityError(false);
     fetch(`/api/bookings/availability?${qs}`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`availability fetch failed (${r.status})`);
+        return r.json();
+      })
       .then((d: { ranges?: unknown; heated_pool_carryover?: unknown }) => {
         if (cancelled) return;
         setConfirmedRanges(Array.isArray(d.ranges) ? d.ranges : []);
@@ -1406,14 +1336,17 @@ function BookPageInner() {
       })
       .catch(() => {
         if (cancelled) return;
+        // Fail closed: keep settledKey null and flag the error so the
+        // calendar blocks selection and offers a retry.
         setConfirmedRanges([]);
         setHeatedPoolCarryover(false);
         setAvailabilityLoading(false);
+        setAvailabilityError(true);
       });
     return () => {
       cancelled = true;
     };
-  }, [form.villa, checkIn]);
+  }, [form.villa, checkIn, availabilityRetryNonce]);
   const sleepingGuestsCount = parseInt(form.sleepingGuests, 10) || 0;
   const selectedBedroomsCount = parseInt(form.bedroomCount, 10) || 3;
   const sleepingSetupLabel = getSleepingSetupLabel(sleepingGuestsCount);
@@ -1524,70 +1457,10 @@ function BookPageInner() {
   // Phase 12E Batch 4: dead-day suggestion (non-blocking, display only).
   const deadDaySuggestion = detectDeadDaySuggestion(checkIn, checkOut, confirmedRanges);
 
+  // Remediation 5.3 — the rule lives in lib/booking/addon-availability.ts;
+  // this thin wrapper feeds it the page's current selection context.
   function getAddonAvailability(addon: Addon) {
-    const enforcementMode = getAddonEnforcementMode(addon.enforcement_mode);
-    const preparationHours = addon.preparation_time_hours ?? null;
-    if (enforcementMode === "none" || !preparationHours || preparationHours <= 0) {
-      return {
-        available: true,
-        selectable: true,
-        warning: "",
-        mode: enforcementMode,
-      };
-    }
-
-    if (!checkIn) {
-      return {
-        available: true,
-        selectable: true,
-        warning: "",
-        mode: enforcementMode,
-      };
-    }
-
-    const hoursUntilCheckIn = (parseLocalISO(checkIn).getTime() - Date.now()) / 3_600_000;
-    if (
-      heatedPoolCarryover &&
-      isHeatedPoolAddon(addon) &&
-      enforcementMode === "strict" &&
-      typeof preparationHours === "number" &&
-      Number.isFinite(preparationHours) &&
-      preparationHours > 0 &&
-      hoursUntilCheckIn < preparationHours
-    ) {
-      return {
-        available: true,
-        selectable: true,
-        warning: "",
-        mode: enforcementMode,
-        carryoverNote: HEATED_POOL_CARRYOVER_GUEST_NOTE,
-      };
-    }
-    const available = hoursUntilCheckIn >= preparationHours;
-    if (available) {
-      return {
-        available: true,
-        selectable: true,
-        warning: "",
-        mode: enforcementMode,
-      };
-    }
-
-    if (enforcementMode === "strict") {
-      return {
-        available: false,
-        selectable: false,
-        warning: `Needs ${formatPreparationTime(preparationHours)} advance notice and is not available for your selected check-in.`,
-        mode: enforcementMode,
-      };
-    }
-
-    return {
-      available: false,
-      selectable: true,
-      warning: `Short notice: subject to confirmation for your selected check-in.`,
-      mode: enforcementMode,
-    };
+    return computeAddonAvailability(addon, { checkIn, heatedPoolCarryover });
   }
 
   function getAddonOperationalFeedback(addon: Addon) {
@@ -1777,11 +1650,12 @@ function BookPageInner() {
     if (sleepingGuestsCount < EXTRA_BEDDING_REQUIRED_GUESTS) return;
     const ebAddon = availableAddons.find(isExtraBeddingAddon);
     if (!ebAddon) return;
-    const ebAvailability = getAddonAvailability(ebAddon);
+    // Remediation 5.3 — pure module call with explicit inputs, so the
+    // dependency array is honest (no suppression needed).
+    const ebAvailability = computeAddonAvailability(ebAddon, { checkIn, heatedPoolCarryover });
     if (!ebAvailability.selectable) return;
     setSelectedAddons(prev => prev.includes(ebAddon.id) ? prev : [...prev, ebAddon.id]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sleepingGuestsCount, availableAddons, form.villa, checkIn]);
+  }, [sleepingGuestsCount, availableAddons, checkIn, heatedPoolCarryover]);
 
   // ── Event handlers ────────────────────────────────────────────────────────
   function handleFormChange(
@@ -1819,6 +1693,7 @@ function BookPageInner() {
   }
 
   function handleDateSelect(nextRange: DateRange | undefined, selectedDay: Date) {
+    if (availabilityError) return;
     const startsNewRange =
       !dateRange?.from ||
       Boolean(dateRange.to) ||
@@ -2525,20 +2400,44 @@ function BookPageInner() {
                   <div ref={dateSectionRef}>
                     <p style={{ ...labelStyle, marginBottom: "14px" }}>Select dates</p>
                     <div style={{ border: "0.5px solid rgba(197,164,109,0.12)", backgroundColor: GLASS3, padding: narrowStep1 ? "1rem" : "1.25rem" }}>
-                      <div className="oraya-cal">
-                        <DayPicker
-                          mode="range"
-                          selected={dateRange}
-                          onSelect={handleDateSelect}
-                          disabled={disabledDays}
-                          modifiers={{ deadCheckIn: isChoosingCheckout ? () => false : isDeadCheckInDate }}
-                          month={displayedCalendarMonth}
-                          onMonthChange={handleCalendarMonthChange}
-                          numberOfMonths={2}
-                          fromDate={today}
-                          showOutsideDays
-                        />
-                      </div>
+                      {availabilityError ? (
+                        <div style={{ padding: "2rem 1rem", textAlign: "center" }}>
+                          <p style={{ fontFamily: LATO, fontSize: "14px", color: "#e07070", margin: "0 0 14px", lineHeight: 1.6 }}>
+                            We couldn&apos;t load availability — please retry.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setAvailabilityRetryNonce((n) => n + 1)}
+                            style={{
+                              fontFamily: LATO,
+                              fontSize: "13px",
+                              letterSpacing: "1px",
+                              color: GOLD,
+                              backgroundColor: "transparent",
+                              border: `1px solid ${GOLD}`,
+                              padding: "10px 26px",
+                              cursor: "pointer",
+                            }}
+                          >
+                            Retry
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="oraya-cal">
+                          <DayPicker
+                            mode="range"
+                            selected={dateRange}
+                            onSelect={handleDateSelect}
+                            disabled={disabledDays}
+                            modifiers={{ deadCheckIn: isChoosingCheckout ? () => false : isDeadCheckInDate }}
+                            month={displayedCalendarMonth}
+                            onMonthChange={handleCalendarMonthChange}
+                            numberOfMonths={2}
+                            fromDate={today}
+                            showOutsideDays
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -3413,15 +3312,15 @@ function BookPageInner() {
                   </p>
 
                   <div>
-                    <label style={labelStyle}>Full name</label>
-                    <input ref={guestFullNameInputRef} name="fullName" type="text" required value={guest.fullName} onChange={handleGuestChange}
+                    <label style={labelStyle} htmlFor="book-guest-full-name">Full name</label>
+                    <input id="book-guest-full-name" ref={guestFullNameInputRef} name="fullName" type="text" required value={guest.fullName} onChange={handleGuestChange}
                       placeholder="Your full name" style={inputStyle} onFocus={focusGold} onBlur={blurGold} />
                   </div>
 
                   <div>
-                    <label style={labelStyle}>WhatsApp / phone number</label>
+                    <label style={labelStyle} htmlFor="book-guest-phone">WhatsApp / phone number</label>
                     <div style={{ display: "flex" }}>
-                      <select name="dialCode" value={guest.dialCode} onChange={handleGuestChange}
+                      <select aria-label="Country dial code" name="dialCode" value={guest.dialCode} onChange={handleGuestChange}
                         onFocus={focusGold} onBlur={blurGold}
                         style={{ ...inputStyle, width: "auto", flexShrink: 0, paddingRight: "10px", borderRight: "none", cursor: "pointer", minWidth: "120px" }}>
                         {DIAL_CODES.map((d, i) =>
@@ -3432,14 +3331,14 @@ function BookPageInner() {
                           )
                         )}
                       </select>
-                      <input ref={guestPhoneInputRef} name="phoneNumber" type="tel" value={guest.phoneNumber} onChange={handleGuestChange}
+                      <input id="book-guest-phone" ref={guestPhoneInputRef} name="phoneNumber" type="tel" value={guest.phoneNumber} onChange={handleGuestChange}
                         placeholder="70 000 000" style={{ ...inputStyle, flex: 1 }} onFocus={focusGold} onBlur={blurGold} />
                     </div>
                   </div>
 
                   <div>
-                    <label style={labelStyle}>Email address</label>
-                    <input ref={guestEmailInputRef} name="email" type="email" autoComplete="email" value={guest.email} onChange={handleGuestChange}
+                    <label style={labelStyle} htmlFor="book-guest-email">Email address</label>
+                    <input id="book-guest-email" ref={guestEmailInputRef} name="email" type="email" autoComplete="email" value={guest.email} onChange={handleGuestChange}
                       placeholder="you@example.com"
                       style={{
                         ...inputStyle,
@@ -3454,8 +3353,8 @@ function BookPageInner() {
                   </div>
 
                   <div>
-                    <label style={labelStyle}>Country</label>
-                    <select name="country" value={guest.country} onChange={handleGuestChange}
+                    <label style={labelStyle} htmlFor="book-guest-country">Country</label>
+                    <select id="book-guest-country" name="country" value={guest.country} onChange={handleGuestChange}
                       onFocus={focusGold} onBlur={blurGold} style={{ ...inputStyle, cursor: "pointer" }}>
                       {COUNTRIES.map((c, i) =>
                         c.value === "" ? (

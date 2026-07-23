@@ -23,7 +23,7 @@ export async function GET() {
 
   if (error) {
     console.error("[api/addons] query error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Could not load add-ons." }, { status: 500 });
   }
 
   return NextResponse.json(

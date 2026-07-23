@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { roundMoney } from "@/lib/money";
-import { computeFoundationAmountDue, derivePaymentFoundationStage, getFoundationAmountTotal } from "@/lib/payment-foundation";
 import { PaymentProviderConfigurationError } from "@/lib/payments/provider";
 import { getHostedCheckoutProviderByKey } from "@/lib/payments/runtime";
+import { decideSetPaidUpdate } from "@/lib/payments/webhook-set-paid";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 type WebhookBookingRow = {
@@ -88,32 +87,40 @@ export async function handleHostedCheckoutWebhook(
 
     switch (delta.kind) {
       case "set_paid": {
-        if (booking.payment_link_status === "paid" && booking.payment_reference === delta.payment_reference) {
+        // Remediation 1.6: once paid, no further set_paid may add to
+        // amount_paid — duplicate deliveries AND different-reference events
+        // for the same session are both idempotent no-ops. The write below is
+        // additionally guarded at the DB so concurrent first deliveries
+        // cannot both apply (see the .not("payment_link_status", ...) filter
+        // and matched-row check).
+        const decision = decideSetPaidUpdate(booking, {
+          amount_paid: delta.amount_paid,
+          payment_reference: delta.payment_reference,
+          payment_received_at: delta.payment_received_at,
+        });
+        if (decision.action === "idempotent") {
           return NextResponse.json({ received: true, idempotent: true });
         }
+        Object.assign(updatePayload, decision.updatePayload);
 
-        const amountTotal = roundMoney(
-          typeof booking.amount_total === "number" && Number.isFinite(booking.amount_total)
-            ? booking.amount_total
-            : getFoundationAmountTotal(booking) ?? 0,
-        );
-        const existingAmountPaid =
-          typeof booking.amount_paid === "number" && Number.isFinite(booking.amount_paid)
-            ? roundMoney(booking.amount_paid)
-            : 0;
-        const nextAmountPaid = roundMoney(existingAmountPaid + delta.amount_paid);
-        const nextStatus = amountTotal > 0 && nextAmountPaid >= amountTotal ? "paid_in_full" : "deposit_paid";
+        const { data: paidRows, error: paidUpdateError } = await supabaseAdmin
+          .from("bookings")
+          .update(updatePayload)
+          .eq("id", booking.id)
+          .eq("payment_provider_session_id", event.provider_session_id)
+          // NULL-safe "not already paid" guard (neq alone would drop NULL rows).
+          .or("payment_link_status.is.null,payment_link_status.neq.paid")
+          .select("id");
 
-        updatePayload.payment_status = nextStatus;
-        updatePayload.payment_stage = derivePaymentFoundationStage(nextAmountPaid, amountTotal);
-        updatePayload.payment_method = "card_manual";
-        updatePayload.amount_total = amountTotal;
-        updatePayload.amount_paid = nextAmountPaid;
-        updatePayload.amount_due = computeFoundationAmountDue(amountTotal, nextAmountPaid);
-        updatePayload.payment_received_at = delta.payment_received_at;
-        updatePayload.payment_reference = delta.payment_reference;
-        updatePayload.payment_link_status = "paid";
-        break;
+        if (paidUpdateError) {
+          console.error(`[api/payments/webhook/${providerKey}] booking update failed:`, paidUpdateError);
+          return NextResponse.json({ error: "Booking update failed." }, { status: 500 });
+        }
+        if (!paidRows || paidRows.length === 0) {
+          // A concurrent delivery won the race — do not re-add amount_paid.
+          return NextResponse.json({ received: true, idempotent: true });
+        }
+        return NextResponse.json({ received: true });
       }
       case "set_expired":
         if (booking.payment_link_status === "paid") {

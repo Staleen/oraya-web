@@ -7,6 +7,7 @@ import {
   parseEventSetupEstimateFromMessage,
 } from "@/lib/event-inquiry-message";
 import { transactionalEmailFooterHtmlBlock, transactionalEmailFooterTextSuffix } from "@/lib/transactional-email-footer";
+import { checkOutExpiryUnix } from "./checkout-expiry.ts";
 
 const GOLD     = "#C5A46D";
 const MIDNIGHT = "#1F2B38";
@@ -84,9 +85,6 @@ function addonIconHtml(label: string): string {
 }
 
 // Token expires at the end of the stay (UTC end-of-day on check_out).
-function checkOutExpiryUnix(check_out: string): number {
-  return Math.floor(new Date(`${check_out}T23:59:59Z`).getTime() / 1000);
-}
 
 export interface BookingPendingEmailPayload {
   to:         string;

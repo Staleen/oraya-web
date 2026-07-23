@@ -1,6 +1,7 @@
-import { calculateStayPricing } from "./engine";
-import type { BedroomAdjustedNightlyRate, InternalPricingIntelligence } from "./intelligence";
-import type { NightSource, VillaPricingConfig } from "./types";
+// Explicit .ts extensions so node:test can load this module (repo test convention).
+import { calculateStayPricing } from "./engine.ts";
+import type { BedroomAdjustedNightlyRate, InternalPricingIntelligence } from "./intelligence.ts";
+import type { NightSource, VillaPricingConfig } from "./types.ts";
 
 export type PricingAuditResult = {
   ok: boolean;

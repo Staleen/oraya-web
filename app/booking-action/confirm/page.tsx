@@ -2,21 +2,10 @@ import { redirect } from "next/navigation";
 import OrayaEmblem from "@/components/OrayaEmblem";
 import { verifyActionToken } from "@/lib/booking-action-token";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { fmtDate } from "@/lib/guest-format";
+import { CHARCOAL, GOLD, LATO, MIDNIGHT, MUTED, PLAYFAIR, WHITE } from "@/components/theme";
 
-const GOLD     = "#C5A46D";
-const WHITE    = "#FFFFFF";
-const MIDNIGHT = "#1F2B38";
-const CHARCOAL = "#2E2E2E";
-const MUTED    = "#8a8070";
-const PLAYFAIR = "'Playfair Display', Georgia, serif";
-const LATO     = "'Lato', system-ui, sans-serif";
 
-function fmtDate(iso: string) {
-  if (!iso) return "—";
-  const [y, m, d] = iso.split("-");
-  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  return `${parseInt(d)} ${months[parseInt(m) - 1]} ${y}`;
-}
 
 export default async function BookingActionConfirmPage({
   searchParams,

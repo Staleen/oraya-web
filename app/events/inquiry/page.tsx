@@ -21,7 +21,9 @@ import {
   findEventServiceSeedByLabel,
 } from "@/lib/event-service-seed";
 import { supabase } from "@/lib/supabase";
-import { addDaysToDateOnly, rangesOverlap } from "@/lib/calendar/event-block";
+import { buildBookedRangeList, createEventCalendarRules } from "@/lib/booking/calendar-validity";
+import { fmtDate, nightCount, toISO } from "@/lib/guest-format";
+import { EMAIL_RE } from "@/lib/guest-validation";
 import { takeBookToEventHandoffIfLock } from "@/lib/event-inquiry-handoff";
 import { EVENT_SETUP_ESTIMATE_PREFIX, type EventSetupEstimatePayload } from "@/lib/event-inquiry-message";
 import {
@@ -58,6 +60,7 @@ import {
   STEP4_REFUND_TRUST,
   WHATSAPP_SUPPORT_LINE,
 } from "@/lib/booking-trust-messaging";
+import { LATO, PLAYFAIR } from "@/components/theme";
 
 // ─── Brand constants (theme tokens from globals.css; matches /book) ───────────
 const GOLD       = "var(--oraya-gold)";
@@ -82,11 +85,8 @@ const BOOK_P72   = "var(--oraya-book-p72)";
 const BOOK_P68   = "var(--oraya-book-p68)";
 const BOOK_P60   = "var(--oraya-book-p60)";
 const BOOK_SUBTLE = "var(--oraya-book-subtle-line)";
-const PLAYFAIR = "'Playfair Display', Georgia, serif";
-const LATO     = "'Lato', system-ui, sans-serif";
 
 const VILLAS   = ["Villa Mechmech", "Villa Byblos"];
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Guest-facing event type list — canonical taxonomy, sourced from lib/event-types.ts.
 // Old stored values (e.g. "Baptism / Family Gathering", "Wedding", "Birthday Party") are
@@ -247,31 +247,13 @@ interface EventServiceOption extends AddonOperationalFields {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-function toISO(d: Date): string {
-  const y  = d.getFullYear();
-  const m  = String(d.getMonth() + 1).padStart(2, "0");
-  const dy = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${dy}`;
-}
 
 function parseLocalISO(s: string): Date {
   const [y, m, d] = s.split("-").map(Number);
   return new Date(y, m - 1, d);
 }
 
-function fmtDate(iso: string): string {
-  if (!iso) return "—";
-  const [y, m, d] = iso.split("-");
-  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  return `${parseInt(d)} ${months[parseInt(m) - 1]} ${y}`;
-}
 
-function nightCount(checkIn: string, checkOut: string): number {
-  if (!checkIn || !checkOut) return 0;
-  return Math.max(0, Math.round(
-    (parseLocalISO(checkOut).getTime() - parseLocalISO(checkIn).getTime()) / 86_400_000
-  ));
-}
 
 /** Mirrors `detectDeadDaySuggestion` in app/book/page.tsx (Phase 12E) — same gap detection on merged ranges. */
 function detectDeadDaySuggestion(
@@ -773,6 +755,10 @@ function EventInquiryPageInner() {
   });
 
   const [confirmedRanges, setConfirmedRanges] = useState<ConfirmedRange[]>([]);
+  // Remediation 1.5: availability fails CLOSED — fetch failure disables date
+  // selection instead of showing every date as free.
+  const [availabilityError, setAvailabilityError] = useState(false);
+  const [availabilityRetryNonce, setAvailabilityRetryNonce] = useState(0);
   const [error,           setError]           = useState("");
   const [loading,         setLoading]         = useState(false);
   /** Step 3 — optional notes hidden until expanded (value stays in form.message). */
@@ -884,90 +870,69 @@ function EventInquiryPageInner() {
     };
   }, []);
 
-  // Reload availability whenever villa changes (clear dates only when switching villa, not on first select)
+  // Reload availability whenever villa changes (clear dates only when switching villa, not on first select).
+  // Remediation 1.5: `cancelled` guard prevents a stale response from a rapid
+  // villa toggle overwriting the newer villa's ranges; failures set an error
+  // state that blocks date selection until retried.
   useEffect(() => {
     if (!form.villa) {
       prevVillaRef.current = "";
       setConfirmedRanges([]);
+      setAvailabilityError(false);
       return;
     }
     if (prevVillaRef.current && prevVillaRef.current !== form.villa) {
       setDateRange(undefined);
     }
     prevVillaRef.current = form.villa;
+    let cancelled = false;
+    setAvailabilityError(false);
     fetch(`/api/bookings/availability?villa=${encodeURIComponent(form.villa)}`)
-      .then(r => r.json())
-      .then(d => setConfirmedRanges(Array.isArray(d.ranges) ? d.ranges : []))
-      .catch(() => setConfirmedRanges([]));
-  }, [form.villa]);
+      .then(r => {
+        if (!r.ok) throw new Error(`availability fetch failed (${r.status})`);
+        return r.json();
+      })
+      .then(d => {
+        if (cancelled) return;
+        setConfirmedRanges(Array.isArray(d.ranges) ? d.ranges : []);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setConfirmedRanges([]);
+        setAvailabilityError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [form.villa, availabilityRetryNonce]);
 
   // ── Derived values ────────────────────────────────────────────────────────
   const today = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; })();
 
   /**
-   * Blocked day ranges for the calendar (same construction as app/book/page.tsx).
-   * `confirmedRanges` from /api/bookings/availability are already operational per lib/calendar/availability.ts.
+   * Remediation 5.3 — event calendar validity rules now live in the pure
+   * module lib/booking/calendar-validity.ts (same logic verbatim, incl. the
+   * setup-day span rule); memoizing the rule set gives the memos below honest
+   * dependencies (no more exhaustive-deps suppression).
    */
-  const bookedRangeList: Array<{ from: Date; to: Date }> = confirmedRanges.flatMap(r => {
-    const from = parseLocalISO(r.check_in);
-    const to   = parseLocalISO(r.check_out);
-    to.setDate(to.getDate() - 1);
-    if (to < from) return [];
-    return [{ from, to }];
-  });
-
-  function isCalendarDateBlocked(d: Date): boolean {
-    if (d < today) return true;
-    return bookedRangeList.some(r => d >= r.from && d <= r.to);
-  }
-
-  function addLocalDays(day: Date, days: number): Date {
-    const next = new Date(day.getTime());
-    next.setDate(next.getDate() + days);
-    return next;
-  }
-
-  /** Every calendar day in [check_in − 1, check_out) must be free — mirrors incoming event overlap in findAvailabilityConflict (event-block.ts). */
-  function isEventOperationalSpanClear(eventStart: Date, eventCheckout: Date): boolean {
-    if (eventCheckout <= eventStart) return false;
-    const setupISO = addDaysToDateOnly(toISO(eventStart), -1);
-    let d = parseLocalISO(setupISO);
-    for (; d < eventCheckout; d = addLocalDays(d, 1)) {
-      if (isCalendarDateBlocked(d)) return false;
-    }
-    return true;
-  }
-
-  function incomingOperationalOverlapsConfirmed(eventStart: Date, eventCheckout: Date): boolean {
-    const incomingOp = {
-      check_in: addDaysToDateOnly(toISO(eventStart), -1),
-      check_out: toISO(eventCheckout),
-    };
-    return confirmedRanges.some((r) =>
-      rangesOverlap(incomingOp, { check_in: r.check_in, check_out: r.check_out }),
-    );
-  }
-
-  function isValidEventCheckoutFrom(eventStart: Date, eventCheckout: Date): boolean {
-    if (eventCheckout <= eventStart) return false;
-    if (isCalendarDateBlocked(eventCheckout)) return false;
-    return isEventOperationalSpanClear(eventStart, eventCheckout);
-  }
-
-  function hasValidEventCheckoutFromCheckIn(checkInDay: Date): boolean {
-    const setupISO = addDaysToDateOnly(toISO(checkInDay), -1);
-    if (isCalendarDateBlocked(parseLocalISO(setupISO))) return false;
-
-    for (let n = MIN_EVENT_NIGHTS; n <= 366; n++) {
-      const candidateCheckout = addLocalDays(checkInDay, n);
-      if (isValidEventCheckoutFrom(checkInDay, candidateCheckout)) return true;
-    }
-    return false;
-  }
-
-  function isDeadEventCheckInDate(day: Date): boolean {
-    return !isCalendarDateBlocked(day) && !hasValidEventCheckoutFromCheckIn(day);
-  }
+  const todayIso = toISO(today);
+  const bookedRangeList = useMemo(() => buildBookedRangeList(confirmedRanges), [confirmedRanges]);
+  const eventCalendarRules = useMemo(
+    () =>
+      createEventCalendarRules({
+        today: parseLocalISO(todayIso),
+        confirmedRanges,
+        bookedRangeList,
+        minEventNights: MIN_EVENT_NIGHTS,
+      }),
+    [todayIso, confirmedRanges, bookedRangeList],
+  );
+  const {
+    incomingOperationalOverlapsConfirmed,
+    isValidEventCheckoutFrom,
+    hasValidEventCheckoutFromCheckIn,
+    isDeadEventCheckInDate,
+  } = eventCalendarRules;
 
   const isChoosingCheckout = Boolean(dateRange?.from && !dateRange.to);
 
@@ -1184,9 +1149,16 @@ function EventInquiryPageInner() {
       if (!Number.isFinite(attendees) || attendees < 1 || attendees > MAX_EVENT_ATTENDEES) return false;
       return true;
     },
-    // Calendar helpers close over the same state as `confirmedRanges`; their identities are not stable deps.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [form.villa, form.eventType, form.dayVisitors, checkIn, checkOut, dateRange, confirmedRanges],
+    [
+      form.villa,
+      form.eventType,
+      form.dayVisitors,
+      checkIn,
+      checkOut,
+      dateRange,
+      isValidEventCheckoutFrom,
+      incomingOperationalOverlapsConfirmed,
+    ],
   );
 
   const step2CanContinue = useMemo(
@@ -1273,6 +1245,7 @@ function EventInquiryPageInner() {
   }
 
   function handleDateSelect(nextRange: DateRange | undefined, selectedDay: Date) {
+    if (availabilityError) return;
     const startsNewRange =
       !dateRange?.from ||
       Boolean(dateRange.to) ||
@@ -1821,6 +1794,29 @@ function EventInquiryPageInner() {
                     Select start and end on the calendar.
                   </p>
                   <div style={{ border: "0.5px solid var(--oraya-border)", backgroundColor: GLASS3, padding: "1.25rem" }}>
+                    {availabilityError ? (
+                      <div style={{ padding: "2rem 1rem", textAlign: "center" }}>
+                        <p style={{ fontFamily: LATO, fontSize: "14px", color: "#e07070", margin: "0 0 14px", lineHeight: 1.6 }}>
+                          We couldn&apos;t load availability — please retry.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setAvailabilityRetryNonce((n) => n + 1)}
+                          style={{
+                            fontFamily: LATO,
+                            fontSize: "13px",
+                            letterSpacing: "1px",
+                            color: GOLD,
+                            backgroundColor: "transparent",
+                            border: `1px solid ${GOLD}`,
+                            padding: "10px 26px",
+                            cursor: "pointer",
+                          }}
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    ) : (
                     <div className="oraya-cal">
                       <DayPicker
                         // Remount when the prefilled start month changes so DayPicker focuses August (or whatever the guest picked) instead of today.
@@ -1836,6 +1832,7 @@ function EventInquiryPageInner() {
                         showOutsideDays
                       />
                     </div>
+                    )}
                   </div>
 
                   {eventDeadDayHints && (eventDeadDayHints.suggestLateCheckout || eventDeadDayHints.suggestEarlyCheckin) && (
@@ -1894,13 +1891,14 @@ function EventInquiryPageInner() {
               {/* Expected attendees */}
               <div ref={step1AttendeesSectionRef}>
                 <div className="events-popover-heading-row" style={{ marginBottom: "8px" }}>
-                  <label style={{ ...labelStyle, margin: 0 }}>Expected number of attendees</label>
+                  <label style={{ ...labelStyle, margin: 0 }} htmlFor="events-attendees">Expected number of attendees</label>
                   <InfoPopover
                     label="Attendee capacity"
                     text={`Private events at Oraya are limited to ${MAX_EVENT_ATTENDEES} attendees. Final capacity is confirmed after review.`}
                   />
                 </div>
                 <input
+                  id="events-attendees"
                   ref={step1AttendeesInputRef}
                   name="dayVisitors"
                   type="number"
@@ -2074,10 +2072,11 @@ function EventInquiryPageInner() {
 
                               {selected && service.quantity_enabled && (
                                 <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                                  <label style={{ ...labelStyle, marginBottom: 0 }}>
+                                  <label style={{ ...labelStyle, marginBottom: 0 }} htmlFor={`events-service-qty-${service.id}`}>
                                     Quantity{unitLabel ? ` (${unitLabel})` : ""}
                                   </label>
                                   <input
+                                    id={`events-service-qty-${service.id}`}
                                     type="number"
                                     min={minQuantity}
                                     max={maxQuantity}
@@ -2238,8 +2237,9 @@ function EventInquiryPageInner() {
 
               {/* Overnight hosts */}
               <div ref={step3HostSectionRef}>
-                <label style={labelStyle}>Host overnight stay</label>
+                <label style={labelStyle} htmlFor="events-sleeping-guests">Host overnight stay</label>
                 <input
+                  id="events-sleeping-guests"
                   ref={sleepingGuestsInputRef}
                   name="sleepingGuests"
                   type="number"
@@ -2277,29 +2277,29 @@ function EventInquiryPageInner() {
                   </div>
 
                   <div>
-                    <label style={labelStyle}>Full name</label>
-                    <input ref={guestFullNameInputRef} name="fullName" type="text" required value={guest.fullName} onChange={handleGuestChange}
+                    <label style={labelStyle} htmlFor="events-guest-full-name">Full name</label>
+                    <input id="events-guest-full-name" ref={guestFullNameInputRef} name="fullName" type="text" required value={guest.fullName} onChange={handleGuestChange}
                       placeholder="Your full name" style={inputStyle} onFocus={focusGold} onBlur={blurGold} />
                   </div>
 
                   <div>
-                    <label style={labelStyle}>WhatsApp / phone number</label>
+                    <label style={labelStyle} htmlFor="events-guest-phone">WhatsApp / phone number</label>
                     <div style={{ display: "flex" }}>
-                      <select name="dialCode" value={guest.dialCode} onChange={handleGuestChange}
+                      <select aria-label="Country dial code" name="dialCode" value={guest.dialCode} onChange={handleGuestChange}
                         onFocus={focusGold} onBlur={blurGold}
                         style={{ ...inputStyle, width: "auto", flexShrink: 0, paddingRight: "10px", borderRight: "none", cursor: "pointer", minWidth: "120px" }}>
                         {DIAL_CODES.map(d => (
                           <option key={`${d.code}-${d.label}`} value={d.code} style={{ backgroundColor: OPT_BG }}>{d.flag} {d.code}</option>
                         ))}
                       </select>
-                      <input ref={guestPhoneInputRef} name="phoneNumber" type="tel" value={guest.phoneNumber} onChange={handleGuestChange}
+                      <input id="events-guest-phone" ref={guestPhoneInputRef} name="phoneNumber" type="tel" value={guest.phoneNumber} onChange={handleGuestChange}
                         placeholder="70 000 000" style={{ ...inputStyle, flex: 1 }} onFocus={focusGold} onBlur={blurGold} />
                     </div>
                   </div>
 
                   <div>
-                    <label style={labelStyle}>Email address</label>
-                    <input ref={guestEmailInputRef} name="email" type="email" autoComplete="email" value={guest.email} onChange={handleGuestChange}
+                    <label style={labelStyle} htmlFor="events-guest-email">Email address</label>
+                    <input id="events-guest-email" ref={guestEmailInputRef} name="email" type="email" autoComplete="email" value={guest.email} onChange={handleGuestChange}
                       placeholder="you@example.com"
                       style={{ ...inputStyle, borderColor: guestEmailInvalid ? "#e07070" : "var(--oraya-book-input-border)" }}
                       onFocus={focusGold} onBlur={blurGold} />
@@ -2311,8 +2311,8 @@ function EventInquiryPageInner() {
                   </div>
 
                   <div>
-                    <label style={labelStyle}>Country</label>
-                    <select name="country" value={guest.country} onChange={handleGuestChange}
+                    <label style={labelStyle} htmlFor="events-guest-country">Country</label>
+                    <select id="events-guest-country" name="country" value={guest.country} onChange={handleGuestChange}
                       onFocus={focusGold} onBlur={blurGold} style={{ ...inputStyle, cursor: "pointer" }}>
                       {COUNTRIES.map(c => (
                         <option key={c} value={c} style={{ backgroundColor: OPT_BG }}>{c}</option>

@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { roundMoney } from "@/lib/money";
+import { verifyAuthorizedAmountDetails } from "@/lib/payments/authorized-amount";
 import type {
   CreateCheckoutSessionInput,
   CreateCheckoutSessionResult,
@@ -74,6 +75,13 @@ interface CyberSourcePaymentResponse {
   };
   clientReferenceInformation?: {
     code?: string;
+  };
+  orderInformation?: {
+    amountDetails?: {
+      totalAmount?: string;
+      authorizedAmount?: string;
+      currency?: string;
+    };
   };
 }
 
@@ -392,6 +400,8 @@ export async function authorizeCreditLibanaisTransientToken(
     },
     body,
     cache: "no-store",
+    // Remediation 2.2: bound gateway latency (payment authorization).
+    signal: AbortSignal.timeout(15_000),
   });
 
   let payload: CyberSourcePaymentResponse | null = null;
@@ -403,7 +413,33 @@ export async function authorizeCreditLibanaisTransientToken(
 
   const status = typeof payload?.status === "string" ? payload.status : null;
   const transactionId = typeof payload?.id === "string" ? payload.id : null;
-  const approved = response.ok && (status === "AUTHORIZED" || status === "CAPTURED");
+  let approved = response.ok && (status === "AUTHORIZED" || status === "CAPTURED");
+  let message = approved
+    ? "Payment was approved by the gateway."
+    : "Payment was not approved by the gateway.";
+
+  // Remediation 1.7: never record a payment whose authorized amount/currency
+  // differs from the requested charge (fail closed on missing details too).
+  if (approved) {
+    const verification = verifyAuthorizedAmountDetails({
+      requested_amount: input.amount_due,
+      requested_currency: input.currency,
+      response_amount_details: payload?.orderInformation?.amountDetails,
+    });
+    if (!verification.ok) {
+      console.error(
+        "[payments/credit-libanais] authorized amount verification failed — treating as failed payment:",
+        {
+          reason: verification.reason,
+          booking_id: input.booking_id,
+          provider_session_id: input.provider_session_id,
+          transaction_id: transactionId,
+        },
+      );
+      approved = false;
+      message = "Payment could not be verified with the gateway. No payment was recorded.";
+    }
+  }
 
   return {
     ok: response.ok,
@@ -411,9 +447,7 @@ export async function authorizeCreditLibanaisTransientToken(
     status,
     transaction_id: transactionId,
     reference: transactionId ?? input.provider_session_id,
-    message: approved
-      ? "Payment was approved by the gateway."
-      : "Payment was not approved by the gateway.",
+    message,
   };
 }
 
@@ -452,6 +486,8 @@ export async function createCreditLibanaisUnifiedCheckoutSession(
     },
     body,
     cache: "no-store",
+    // Remediation 2.2: bound gateway latency (session creation).
+    signal: AbortSignal.timeout(10_000),
   });
 
   const sessionJwt = (await response.text()).trim();

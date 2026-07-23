@@ -3,12 +3,12 @@ import { useState, useEffect, useRef } from "react";
 import OrayaEmblem from "@/components/OrayaEmblem";
 import PublicThemeToggle from "@/components/PublicThemeToggle";
 import { supabase } from "@/lib/supabase";
+import { LATO } from "@/components/theme";
 
 const GOLD     = "var(--oraya-gold)";
 const WHITE    = "var(--oraya-surface)";
 const CHARCOAL = "var(--oraya-ink)";
 const MUTED    = "var(--oraya-text-muted)";
-const LATO     = "'Lato', system-ui, sans-serif";
 
 interface Props {
   /** prefix for anchor links — pass "/" when not on homepage */

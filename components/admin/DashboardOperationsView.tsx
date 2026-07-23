@@ -8,6 +8,16 @@ import { useAdminData } from "@/components/admin/AdminDataProvider";
 import { adminApiFetchInit } from "@/lib/admin-auth";
 import { AddonIcon } from "@/components/addon-icon";
 import { SkeletonBlock, SkeletonText } from "@/components/LoadingSkeleton";
+// Remediation 5.1 — shared helpers replace this file's former local copies.
+import {
+  addonHasTrackedOffer,
+  addonNeedsAttention,
+  formatAddonPrice,
+  getAddonRiskWarning,
+  getOperationalBadgeStyle as getOperationalBadgeTone,
+  hasResolvedAddonStatus,
+} from "./bookings/helpers";
+import { requestAddonResolution } from "./bookings/approve-addon";
 
 const DESKTOP_DAY_WIDTH = 92;
 const TIMELINE_DAYS = 90;
@@ -94,37 +104,6 @@ function getAddonStatusTone(status: NonNullable<Booking["addons_snapshot"]>[numb
   return { color: "#9db7d9", background: "rgba(157,183,217,0.14)" };
 }
 
-function getOperationalBadgeTone(kind: "approval" | "soft" | "strict") {
-  if (kind === "strict") return { color: "#e78f8f", background: "rgba(224,112,112,0.14)" };
-  if (kind === "soft") return { color: "#e2ab5a", background: "rgba(226,171,90,0.15)" };
-  return { color: GOLD, background: "rgba(197,164,109,0.14)" };
-}
-
-function getAddonRiskWarning(addon: NonNullable<Booking["addons_snapshot"]>[number]) {
-  if (addon.same_day_warning === "same_day_checkout") return "Same-day checkout risk";
-  if (addon.same_day_warning === "same_day_checkin") return "Same-day check-in risk";
-  return null;
-}
-
-function hasResolvedAddonStatus(addon: NonNullable<Booking["addons_snapshot"]>[number]) {
-  return addon.status === "approved" || addon.status === "declined";
-}
-
-function addonNeedsAttention(addon: NonNullable<Booking["addons_snapshot"]>[number]) {
-  if (hasResolvedAddonStatus(addon)) return false;
-  return (
-    addon.status === "pending_approval" ||
-    addon.status === "at_risk" ||
-    addon.same_day_warning === "same_day_checkout" ||
-    addon.same_day_warning === "same_day_checkin"
-  );
-}
-
-function formatAddonPrice(price: number | null) {
-  if (typeof price !== "number") return "Price on request";
-  return `$${price.toLocaleString("en-US")}`;
-}
-
 function readFiniteNumber(value: unknown) {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string" && value.trim()) {
@@ -140,10 +119,6 @@ function formatMoney(value: number) {
 
 function formatRate(value: number) {
   return `${Math.round(value * 100)}%`;
-}
-
-function addonHasTrackedOffer(addon: NonNullable<Booking["addons_snapshot"]>[number]) {
-  return addon.offer_applied === true;
 }
 
 function bookingHasTrackedOffer(booking: Booking) {
@@ -317,26 +292,15 @@ export default function DashboardOperationsView({
     const key = `${bookingId}-${addonId}-${decision}`;
     setApprovingAddonId(key);
     try {
-      const res = await fetch(`/api/admin/bookings/${bookingId}/approve-addon`, {
-        ...adminApiFetchInit,
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ addon_id: addonId, decision }),
-      });
-      const d = (await res.json().catch(() => ({}))) as { error?: string; addons_snapshot?: unknown };
-      if (res.ok && Array.isArray(d.addons_snapshot)) {
-        const addonsSnapshot = d.addons_snapshot as BookingAddonSnapshot[];
-        // Update booking in global context so list views reflect persisted state.
-        setBookings((prev) =>
-          prev.map((b) => b.id === bookingId ? { ...b, addons_snapshot: addonsSnapshot } : b)
-        );
-        // Also update the open modal's local booking reference.
-        setSelectedBooking((prev) =>
-          prev?.id === bookingId ? { ...prev, addons_snapshot: addonsSnapshot } : prev
-        );
-      } else {
-        setError(typeof d.error === "string" ? d.error : "Failed to update add-on state.");
-      }
+      const addonsSnapshot = await requestAddonResolution(bookingId, addonId, decision);
+      // Update booking in global context so list views reflect persisted state.
+      setBookings((prev) =>
+        prev.map((b) => b.id === bookingId ? { ...b, addons_snapshot: addonsSnapshot } : b)
+      );
+      // Also update the open modal's local booking reference.
+      setSelectedBooking((prev) =>
+        prev?.id === bookingId ? { ...prev, addons_snapshot: addonsSnapshot } : prev
+      );
     } catch (err) {
       console.error("[admin] resolve-addon network error:", err);
       setError(err instanceof Error ? err.message : "Failed to update add-on state.");

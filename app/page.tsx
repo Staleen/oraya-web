@@ -19,6 +19,7 @@ import {
 } from "@/lib/instant-booking-settings";
 import { supabase } from "@/lib/supabase";
 import InstantBookingIcon from "@/components/icons/InstantBookingIcon";
+import { LATO, PLAYFAIR } from "@/components/theme";
 
 // Branded gradient fallbacks
 const GRAD_HERO     = "linear-gradient(145deg, #1a2a38 0%, #243444 45%, #1c2e3e 75%, #111e2a 100%)";
@@ -43,8 +44,6 @@ const BAND_TEXT  = "var(--oraya-band-text)";
 const BAND_MUTED = "var(--oraya-band-muted)";
 const BAND_MUTED2 = "var(--oraya-band-muted-2)";
 const ON_GOLD    = "var(--oraya-on-gold-text)";
-const PLAYFAIR   = "'Playfair Display', Georgia, serif";
-const LATO       = "'Lato', system-ui, sans-serif";
 
 /** Mobile section rhythm: tight / medium / large — desktop keeps original `md:` padding. */
 const SEC = {

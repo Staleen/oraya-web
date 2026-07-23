@@ -1,4 +1,5 @@
-import { roundMoney } from "@/lib/money";
+// Relative .ts import so node:test can load this module (repo test convention).
+import { roundMoney } from "../money.ts";
 
 export const PAYMENT_PUBLIC_SETTINGS_KEY = "payment_public_settings";
 

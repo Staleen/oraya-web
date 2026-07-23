@@ -25,15 +25,13 @@
 
 import { SITE_URL } from "./brand.ts";
 import { createActionToken } from "./booking-action-token.ts";
+import { checkOutExpiryUnix } from "./checkout-expiry.ts";
 
 const CHECK_OUT_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 // Same checkout-day expiry formula every transactional view-token mint uses
 // (see lib/send-booking-email.ts / app/api/bookings POST — intentionally a
 // local helper per the established per-file convention).
-function checkOutExpiryUnix(check_out: string): number {
-  return Math.floor(new Date(`${check_out}T23:59:59Z`).getTime() / 1000);
-}
 
 export function buildArrivalGuideUrl(
   bookingId: string | null | undefined,
@@ -47,7 +45,12 @@ export function buildArrivalGuideUrl(
   const trimmedCheckOut = checkOut.trim();
   if (!CHECK_OUT_RE.test(trimmedCheckOut)) return null;
 
-  const expiresAt = checkOutExpiryUnix(trimmedCheckOut);
+  let expiresAt: number;
+  try {
+    expiresAt = checkOutExpiryUnix(trimmedCheckOut);
+  } catch {
+    return null; // impossible calendar date — refuse, never throw
+  }
   if (!Number.isFinite(expiresAt)) return null;
 
   try {

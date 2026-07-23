@@ -16,6 +16,66 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-07-23 - Remediation Phase 1 (security critical) from the 2026-07-23 health check
+
+**Decision:** the seven Phase 1 items of `REMEDIATION_PLAN.md` shipped on one branch: (1.1) the hardcoded `"Oraya2026"` admin-password fallback is deleted — `settings.admin_password` now stores a **scrypt hash** (`lib/admin-password.ts`, default option (b); `scripts/hash-admin-password.mjs` generates it) and login fails CLOSED (503 `admin_auth_unavailable`) whenever a trustworthy hash is absent, including a legacy plaintext row; (1.2) admin login is rate-limited via the human-run `admin_login_attempts` table (`sql/remediation-admin-login-attempts.sql`) — 5 failures/15 min per IP, 20 global, constant 500 ms failure delay, fail-closed when the table is unreachable; (1.3) route-boundary stay rules — max 60 nights, no past check-ins (UTC today allowed) — on `/api/bookings` POST and the member PATCH (`lib/booking-date-rules.ts`); (1.4) a Postgres `EXCLUDE USING gist` constraint on confirmed bookings (`sql/remediation-booking-overlap-constraint.sql`, preflight included) backstops the double-booking race, confirm writes are row-count-checked (`/api/booking-action` no longer burns tokens or emails on 0 matched rows) and 23P01 maps to the existing "dates unavailable" responses; (1.5) the guest availability calendars fail CLOSED with a retry UI instead of showing all dates free on fetch failure; (1.6) webhook `set_paid` is durably idempotent (`lib/payments/webhook-set-paid.ts` + NULL-safe conditional write); (1.7) CyberSource authorization responses must echo the requested amount AND currency (`lib/payments/authorized-amount.ts`, fail-closed) before any payment is recorded.
+
+**Reason:** 2026-07-23 health-check report items 1–6 and 12 — publicly known admin password, brute-forceable login, unbounded stays, double-booking and double-count races, fail-open availability, and unverified gateway amounts are all production risks.
+
+**Impact:** two new human-run SQL files in `sql/` (**run `remediation-admin-login-attempts.sql` BEFORE deploying** — admin login fails closed without it), the admin password must be rotated and stored as a hash, and locked booking/payment surfaces changed only in the narrow ways the plan mandates. Baseline 168 tests grew to 201, all passing; tsc + build clean.
+
+**Reversible?:** yes per item (each is one commit), though reverting 1.1 would re-expose a public credential.
+
+---
+
+## 2026-07-23 - Remediation Phase 2 (hardening & correctness) from the 2026-07-23 health check
+
+**Decision:** Phase 2 of `REMEDIATION_PLAN.md` shipped: (2.1) the member booking-modification PATCH uses `findAvailabilityConflict` (calendar blocks + event expansion), reprices date changes through the same audit/snapshot path as the booking POST (new pure `lib/pricing/reprice.ts` — Question 4 default "reprice" adopted), and requires integer guest counts; (2.2) outbound fetches are bounded — calendar feed sync is https-only with a 10 s timeout and 5 MB cap, Stripe/CyberSource calls carry 10–15 s timeouts; (2.3) the six public routes that echoed raw DB `error.message` now log server-side and return generic messages; (2.4) quick-win sweep — admin media PATCH validates rows and surfaces per-row failures, admin media POST validates the villa slug, `/api/profile` PATCH sanitizes and caps its four fields, the admin raw-payload log is dev-only, `/profile` loads in parallel with per-query error checks and an error state, the feedback-email action catches network failures, `/api/settings` GET distinguishes DB failure from "absent", the two route-local `makeAdminClient()`s were replaced by the shared `supabaseAdmin`, and `approve-addon` guards its snapshot write with jsonb optimistic concurrency (409 on conflict). **Reconciliation note:** the nine per-file `checkOutExpiryUnix` copies collapsed into `lib/checkout-expiry.ts` — the strict payments/checkout variant won, additionally hardened to reject Date.UTC rollover dates (`2026-99-99`); for every valid date the produced timestamp is byte-identical to the legacy formula. `getChargeAmount` and the member→recipient resolution are now shared helpers (`lib/payments/charge-amount.ts`, `lib/booking-recipient.ts`).
+
+**Reason:** health-check items 8, 9, 10, 18 — correctness gaps and copy-paste drift on money- and availability-relevant paths.
+
+**Impact:** behavior-preserving except where the plan explicitly demands otherwise (repricing on member date changes, strict invalid-date failure, generic public errors, 409 on concurrent add-on edits). Tests 201 → 208, tsc + build clean.
+
+**Reversible?:** yes.
+
+---
+
+## 2026-07-23 - Remediation Phase 3 (CI & test coverage) from the 2026-07-23 health check
+
+**Decision:** (3.1) `.github/workflows/ci.yml` now gates every PR and master push with `npm ci` (PUPPETEER_SKIP_DOWNLOAD), `tsc --noEmit`, `next lint`, `npm test`, and `next build` (Google-Fonts network note + restricted-runner fallback documented in the workflow); `package.json` gains a `test` script (`node --test "scripts/*.test.mjs" "lib/**/*.test.mts"`) so CI and humans run the identical command. (3.2) Money/token-critical libraries got focused edge-case suites: action/view tokens and butler prefill tokens (expiry, tamper, wrong-purpose, secret rotation), checkout deposit math, the pure overlap/event-expansion core under `findAvailabilityConflict`, the pricing engine (boundary dates, Beirut weekends, seasonal overrides, minimum stay), and `lib/money`. To make these modules loadable under node's test runner, several lib modules' `@/lib/...` imports were converted to relative `.ts` imports (behavior-identical; verified by tsc + build + full suite).
+
+**Reason:** health-check items 7 and 11 — no CI gate and no coverage on the code paths that move money or gate booking state.
+
+**Impact:** tests 208 → 239 across 19 suites; every future PR is gated. No runtime behavior change.
+
+**Reversible?:** yes.
+
+---
+
+## 2026-07-23 - Remediation Phase 4 (dependencies) from the 2026-07-23 health check
+
+**Decision:** `npm audit fix` plus minor bumps shipped: `ws` 8.21.1 (resolves the two high-severity ws advisories), `resend` 6.18.0, `@supabase/supabase-js` 2.110.8, `autoprefixer` ^10.5.4, `postcss` ^8.5.22. The five remaining audit findings all live inside `next@14.2.35`; their only fix is Next 16 — the **Next 15+/React 19 major upgrade stays a separate scoped task** (plan Question 3 default), listed under Human actions. README now documents `PUPPETEER_SKIP_DOWNLOAD=true npm install` for restricted networks.
+
+**Reason:** health-check §4 — known-vulnerable transitive deps; major-version upgrade has real migration surface (async request APIs, caching defaults) and doesn't belong in a remediation sweep.
+
+**Impact:** package.json/package-lock only; full gate (tsc, build, 239 tests) clean after the bumps.
+
+**Reversible?:** yes.
+
+---
+
+## 2026-07-23 - Remediation Phases 5-6 (refactors, accessibility, cleanup) from the 2026-07-23 health check
+
+**Decision:** behavior-preserving refactors shipped: (5.1) BookingsTable's 71 module-level pure helpers extracted verbatim to `components/admin/bookings/helpers.tsx` and shared with DashboardOperationsView (6 identical local copies deleted; its deliberately-different `getAddonStatusTone` kept local); the duplicated approve-addon fetch unified. (5.2, partial) the admin 45 s poll pauses while a payment edit is in flight and deep-equal poll payloads no longer re-render; the memoized render-section extraction is BLOCKED pending Preview-verified work (no admin credentials in the remediation environment to smoke-test the mandated manual pass). (5.3) /book's calendar validity rules, Butler-prefill hydration decisions, add-on availability rule, and add-on catalog load moved to pure `lib/booking/*` modules with tests — all three `react-hooks/exhaustive-deps` suppressions across /book and /events/inquiry are gone. (5.4) `lib/guest-format.ts`, `lib/guest-validation.ts`, and shared `components/theme.ts` replace 77 byte-identical local constant/helper copies; `friendlyError` deliberately stays per-page (different guest copy). (5.5, partial) the two villa pages merged into one config-driven `components/VillaPage.tsx`; villa routes are thin server wrappers exporting SEO metadata. Homepage server-component conversion is BLOCKED by CLAUDE.md's "page.tsx must stay use client" rule; next/image hero conversion deferred to a Preview-verified PR (remote Supabase `images.remotePatterns` cannot be validated here). (5.6) all 30 guest-form label/control pairs associated via htmlFor/id; shared accessible `components/admin/ConfirmDialog.tsx` (Escape, initial focus, focus trap, focus restore) replaces the feedback-email modal. (6.1) 55 stale remote branches audited: 26 provably merged (exact delete command in REMEDIATION_PLAN.md Human actions), 29 unmerged listed for David's review; nothing deleted.
+
+**Reason:** health-check items 13-17 — duplication, oversized components, suppressed lint rules, missing a11y associations, and branch clutter.
+
+**Impact:** tests 239 → 252; tsc/lint/build clean throughout; no schema or locked-surface behavior changes. Open follow-ups live in REMEDIATION_PLAN.md's Human actions.
+
+**Reversible?:** yes.
+
+---
+
 ## 2026-07-17 - Booking approval and payment are independent guest truths; one projection owns payment presentation
 
 **Decision:** `bookings.status` continues to represent Oraya's operational approval, while `payment_status` and the payment-link fields represent money state. A valid guest state is therefore `status = pending` plus `payment_status = paid_in_full`; payment must not auto-confirm a booking. On `/booking/view/[token]`, booking-status messaging must be payment-neutral and the pure [lib/payments/guest-presentation.ts](../../lib/payments/guest-presentation.ts) projection is the sole owner of guest payment vocabulary, method labels, and return-message interpretation. Recorded payment states take precedence over stale payment-link state. Browser return parameters remain informational and cannot create a success state. Public checkout errors are fixed guest-safe messages; provider/configuration detail stays in server logs or authenticated admin readiness surfaces.

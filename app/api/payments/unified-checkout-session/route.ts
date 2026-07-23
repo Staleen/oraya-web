@@ -6,6 +6,7 @@ import { isPaymentLinkExpired } from "@/lib/payments/link-state";
 import { PaymentProviderConfigurationError } from "@/lib/payments/provider";
 import { resolvePaymentRequestOrigin } from "@/lib/payments/request-origin";
 import { getHostedCheckoutProviderByKey } from "@/lib/payments/runtime";
+import { getChargeAmount } from "@/lib/payments/charge-amount";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 type UnifiedCheckoutBookingRow = {
@@ -28,22 +29,6 @@ type UnifiedCheckoutBookingRow = {
 
 function readToken(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : "";
-}
-
-function getChargeAmount(booking: UnifiedCheckoutBookingRow) {
-  const depositAmount =
-    typeof booking.deposit_amount === "number" && Number.isFinite(booking.deposit_amount)
-      ? roundMoney(booking.deposit_amount)
-      : 0;
-  const amountDue =
-    typeof booking.amount_due === "number" && Number.isFinite(booking.amount_due)
-      ? roundMoney(booking.amount_due)
-      : 0;
-  const amountTotal =
-    typeof booking.amount_total === "number" && Number.isFinite(booking.amount_total)
-      ? roundMoney(booking.amount_total)
-      : 0;
-  return depositAmount > 0 ? depositAmount : amountDue > 0 ? amountDue : amountTotal;
 }
 
 function getPaymentPurpose(booking: UnifiedCheckoutBookingRow) {

@@ -205,6 +205,8 @@ export const stripePaymentProvider: HostedCheckoutProvider = {
       },
       body: buildCheckoutRequestBody(input),
       cache: "no-store",
+      // Remediation 2.2: never hang a booking request on a slow gateway.
+      signal: AbortSignal.timeout(10_000),
     });
 
     const payload = (await response.json()) as StripeCheckoutSession & { error?: { message?: string } };

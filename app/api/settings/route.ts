@@ -27,11 +27,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Setting not found." }, { status: 404 });
   }
 
+  // Remediation 2.4: maybeSingle + explicit error check — a DB failure must
+  // not read as "setting absent", especially for payment-relevant keys.
   const { data, error } = await supabaseAdmin
     .from("settings")
     .select("value")
     .eq("key", key)
-    .single();
+    .maybeSingle();
+
+  if (error) {
+    console.error("[api/settings] query error:", key, error);
+    return NextResponse.json({ error: "Could not load setting." }, { status: 500 });
+  }
 
   if (key === PAYMENT_PUBLIC_SETTINGS_KEY) {
     const base = parsePaymentPublicSettings(data?.value ?? null);
@@ -54,6 +61,5 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  if (error) return NextResponse.json({ value: null });
   return NextResponse.json({ value: data?.value ?? null });
 }

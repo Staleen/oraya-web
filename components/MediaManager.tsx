@@ -2,16 +2,8 @@
 import { useState, useEffect, useRef, DragEvent } from "react";
 import { SkeletonBlock } from "@/components/LoadingSkeleton";
 import { adminApiFetchInit } from "@/lib/admin-auth";
+import { BORDER, CHARCOAL, GOLD, LATO, MIDNIGHT, MUTED, PLAYFAIR, SURFACE, WHITE } from "@/components/theme";
 
-const GOLD     = "#C5A46D";
-const WHITE    = "#FFFFFF";
-const MIDNIGHT = "#1F2B38";
-const CHARCOAL = "#2E2E2E";
-const MUTED    = "#8a8070";
-const LATO     = "'Lato', system-ui, sans-serif";
-const PLAYFAIR = "'Playfair Display', Georgia, serif";
-const SURFACE  = "rgba(255,255,255,0.03)";
-const BORDER   = "rgba(197,164,109,0.12)";
 
 const CATEGORIES = [
   "exterior", "pool", "bedroom", "garden",

@@ -1,10 +1,9 @@
 import Image from "next/image";
+import { LATO, PLAYFAIR } from "@/components/theme";
 
 const INK      = "var(--oraya-ink)";
 const MUTED    = "var(--oraya-text-muted)";
 const GOLD     = "var(--oraya-gold)";
-const PLAYFAIR = "'Playfair Display', Georgia, serif";
-const LATO     = "'Lato', system-ui, sans-serif";
 
 const eyebrow = { fontFamily: LATO, fontSize: "10px", letterSpacing: "3px", textTransform: "uppercase" as const, color: GOLD, margin: "0 0 1rem" };
 const heading = { fontFamily: PLAYFAIR, fontSize: "32px", color: INK, fontWeight: 400, margin: "0 0 0.5rem", lineHeight: 1.2 };

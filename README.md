@@ -4,7 +4,11 @@ Next.js 14 (App Router) site and booking stack for Oraya. See `PROJECT_STATE.md`
 
 ## Local development
 
-1. **Install:** `npm install`
+1. **Install:** `npm install` — on restricted networks (CI, sandboxes, agent
+   containers) use `PUPPETEER_SKIP_DOWNLOAD=true npm install`: puppeteer is a
+   devDependency used only by the optional screenshot watcher
+   (`npm run watch-screenshots`), and its postinstall Chromium download fails
+   without open network access. Everything else works without the browser.
 2. **Environment:** copy `.env.example` to `.env.local` and set values (see variable comments inside `.env.example`).
 3. **Run:** `npm run dev`
 

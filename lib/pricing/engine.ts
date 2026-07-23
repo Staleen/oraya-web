@@ -7,7 +7,8 @@ import type {
   SeasonalOverride,
   NightSource,
 } from "./types";
-import { getBeirutDay } from "@/lib/utils/date-beirut";
+// Relative .ts import so node:test can load this module (repo test convention).
+import { getBeirutDay } from "../utils/date-beirut.ts";
 
 function parseDateOnlyUTC(s: string): Date | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);

@@ -33,14 +33,40 @@ function normalizeSyncError(error: unknown) {
   return collapsed;
 }
 
+/** Remediation 2.2 — outbound feed fetch hardening. */
+const FEED_FETCH_TIMEOUT_MS = 10_000;
+const FEED_MAX_BYTES = 5 * 1024 * 1024; // 5 MB is far beyond any sane iCal feed
+
 async function syncSource(source: ExternalCalendarSourceRow): Promise<{ upserted: number }> {
   const nowIso = new Date().toISOString();
-  const response = await fetch(source.feed_url, { cache: "no-store" });
+
+  let feedUrl: URL;
+  try {
+    feedUrl = new URL(source.feed_url);
+  } catch {
+    throw new Error("Feed URL is not a valid URL");
+  }
+  if (feedUrl.protocol !== "https:") {
+    throw new Error("Feed URL must use https");
+  }
+
+  const response = await fetch(feedUrl, {
+    cache: "no-store",
+    signal: AbortSignal.timeout(FEED_FETCH_TIMEOUT_MS),
+  });
   if (!response.ok) {
     throw new Error(`Feed request failed (${response.status})`);
   }
 
+  const contentLength = Number(response.headers.get("content-length") ?? "0");
+  if (Number.isFinite(contentLength) && contentLength > FEED_MAX_BYTES) {
+    throw new Error("Feed response too large");
+  }
+
   const text = await response.text();
+  if (text.length > FEED_MAX_BYTES) {
+    throw new Error("Feed response too large");
+  }
   const events = parseIcalEvents(text);
   const seenUids = new Set(events.map((event) => event.uid));
 

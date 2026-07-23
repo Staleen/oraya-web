@@ -30,6 +30,11 @@ interface AdminDataContextValue {
   setError: React.Dispatch<React.SetStateAction<string>>;
   loadData: (silent?: boolean) => Promise<void>;
   signOut: () => void;
+  /**
+   * Remediation 5.2 — pause the 45s background poll (e.g. while a payment
+   * edit is in flight) so a poll response can't clobber optimistic state.
+   */
+  setPollingPaused: (paused: boolean) => void;
 }
 
 const AdminDataContext = createContext<AdminDataContextValue | null>(null);
@@ -95,6 +100,11 @@ export default function AdminDataProvider({ children }: { children: React.ReactN
   const bookingsRef = useRef<Booking[]>([]);
   const initialLoadFinishedRef = useRef(false);
   const silentDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollPausedRef = useRef(false);
+
+  const setPollingPaused = useCallback((paused: boolean) => {
+    pollPausedRef.current = paused;
+  }, []);
 
   useEffect(() => {
     bookingsRef.current = bookings;
@@ -115,7 +125,10 @@ export default function AdminDataProvider({ children }: { children: React.ReactN
       try {
         const r = await fetch("/api/admin/data", adminApiFetchInit);
         const text = await r.text();
-        if (!silent) console.log("[admin] /api/admin/data raw response:", text);
+        // Remediation 2.4: raw payload contains guest PII — dev-only logging.
+        if (!silent && process.env.NODE_ENV !== "production") {
+          console.log("[admin] /api/admin/data raw response:", text);
+        }
         let d: Record<string, unknown>;
         try {
           d = JSON.parse(text);
@@ -137,9 +150,12 @@ export default function AdminDataProvider({ children }: { children: React.ReactN
         const ms = (d.members as Member[]) ?? [];
         const cs = (d.calendar_sources as CalendarSource[]) ?? [];
 
-        setBookings(nb);
-        setMembers(ms);
-        setCalendarSources(cs);
+        // Remediation 5.2 — skip state updates when the payload is deep-equal
+        // to current state so the 45s poll doesn't re-render the admin views
+        // for identical data. Returning `prev` makes React bail out.
+        setBookings((prev) => (JSON.stringify(prev) === JSON.stringify(nb) ? prev : nb));
+        setMembers((prev) => (JSON.stringify(prev) === JSON.stringify(ms) ? prev : ms));
+        setCalendarSources((prev) => (JSON.stringify(prev) === JSON.stringify(cs) ? prev : cs));
 
         if (silent && initialLoadFinishedRef.current) {
           const msg = diffBookingsForToast(before, nb);
@@ -197,7 +213,11 @@ export default function AdminDataProvider({ children }: { children: React.ReactN
   /** Background polling — reliable refresh without page reload (Realtime may not deliver under RLS). */
   useEffect(() => {
     if (authed !== true) return;
-    const id = window.setInterval(() => void loadData(true), 45000);
+    const id = window.setInterval(() => {
+      // Remediation 5.2 — hold the poll while an edit is in flight.
+      if (pollPausedRef.current) return;
+      void loadData(true);
+    }, 45000);
     return () => clearInterval(id);
   }, [authed, loadData]);
 
@@ -259,8 +279,9 @@ export default function AdminDataProvider({ children }: { children: React.ReactN
       setError,
       loadData,
       signOut,
+      setPollingPaused,
     }),
-    [authed, bookings, members, calendarSources, loading, error, loadData],
+    [authed, bookings, members, calendarSources, loading, error, loadData, setPollingPaused],
   );
 
   if (authed === null) {

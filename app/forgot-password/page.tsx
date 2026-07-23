@@ -2,13 +2,12 @@
 import { useState } from "react";
 import PublicTrustShell from "@/components/PublicTrustShell";
 import { supabase } from "@/lib/supabase";
+import { LATO, PLAYFAIR } from "@/components/theme";
 
 const GOLD     = "var(--oraya-gold)";
 const GOLD_CTA = "var(--oraya-gold-cta-text)";
 const WHITE    = "var(--oraya-book-heading)";
 const MUTED    = "var(--oraya-book-muted)";
-const PLAYFAIR = "'Playfair Display', Georgia, serif";
-const LATO     = "'Lato', system-ui, sans-serif";
 
 const inputStyle: React.CSSProperties = {
   width: "100%",

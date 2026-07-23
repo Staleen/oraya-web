@@ -19,6 +19,9 @@ import { buildPricingSnapshot, runPricingAudit, type PricingSnapshot } from "@/l
 import { ADDON_OPERATIONAL_SETTINGS_KEY, formatPreparationTime, getAddonEnforcementMode, getAddonTimingType, mergeAddonsWithOperationalSettings, parseAddonOperationalSetting } from "@/lib/addon-operations";
 import { runAddonAudit } from "@/lib/addon-audit";
 import { heatedPoolCarryoverFromPriorBooking, isHeatedPoolAddon } from "@/lib/heated-pool-carryover";
+import { todayIsoUtc, validateStayDateRules } from "@/lib/booking-date-rules";
+import { isExclusionViolation } from "@/lib/db-errors";
+import { checkOutExpiryUnix } from "@/lib/checkout-expiry";
 
 const ALLOWED_VILLAS = ["Villa Mechmech", "Villa Byblos"];
 const ISO_DATE_RE    = /^\d{4}-\d{2}-\d{2}$/;
@@ -167,9 +170,6 @@ function addDaysDateOnly(value: string, days: number) {
   return formatDateOnlyFromSerial(serial + days);
 }
 
-function checkOutExpiryUnix(checkOut: string): number {
-  return Math.floor(new Date(`${checkOut}T23:59:59Z`).getTime() / 1000);
-}
 
 function detectDeadDayOfferSuggestion(
   checkIn: string,
@@ -237,6 +237,11 @@ export async function POST(request: Request) {
     }
     if (check_out <= check_in) {
       return NextResponse.json({ error: "check_out must be after check_in." }, { status: 400 });
+    }
+
+    const stayRuleError = validateStayDateRules({ check_in, check_out, todayIso: todayIsoUtc() });
+    if (stayRuleError) {
+      return NextResponse.json({ error: stayRuleError.error }, { status: stayRuleError.status });
     }
 
     try {
@@ -760,8 +765,20 @@ export async function POST(request: Request) {
       .single();
 
     if (error) {
+      // Remediation 1.4: defensive — inserts are status=pending so the
+      // confirmed-overlap constraint shouldn't fire here, but if any path ever
+      // inserts a confirmed row, surface the availability message.
+      if (isExclusionViolation(error)) {
+        return NextResponse.json(
+          { error: "These dates are no longer available. Please choose different dates." },
+          { status: 409 }
+        );
+      }
       console.error("[api/bookings] insert error:", error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json(
+        { error: "Could not save your booking request. Please try again." },
+        { status: 500 }
+      );
     }
 
     try {
