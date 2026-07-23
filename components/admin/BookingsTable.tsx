@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Booking, BookingAddonSnapshot, BookingProposalIncludedService, Member } from "./types";
 import { AddonIcon } from "@/components/addon-icon";
 import { SkeletonBlock, SkeletonText } from "@/components/LoadingSkeleton";
@@ -132,7 +132,7 @@ export default function BookingsTable({
   updateStatus: (id: string, status: "confirmed" | "cancelled") => void;
   emailWarnings: Record<string, string>;
 }) {
-  const { bookings, setBookings, setError, loadData } = useAdminData();
+  const { bookings, setBookings, setError, loadData, setPollingPaused } = useAdminData();
   const [approvingAddonId, setApprovingAddonId] = useState<string | null>(null);
   const [feedbackPrepBookingId, setFeedbackPrepBookingId] = useState<string | null>(null);
   const [feedbackCopiedBookingId, setFeedbackCopiedBookingId] = useState<string | null>(null);
@@ -154,6 +154,13 @@ export default function BookingsTable({
   const [bookingCardPanels, setBookingCardPanels] = useState<
     Record<string, Partial<Record<"proposal" | "payment" | "guestDetail" | "operationsContext" | "feedback" | "addons", boolean>>>
   >({});
+
+  // Remediation 5.2 — hold the 45s background poll while a payment edit is in
+  // flight so an interleaved poll response can't clobber the optimistic state.
+  useEffect(() => {
+    setPollingPaused(paymentUpdatingId !== null);
+    return () => setPollingPaused(false);
+  }, [paymentUpdatingId, setPollingPaused]);
 
   async function patchAddonResolution(bookingId: string, addonId: string, decision: "approve" | "decline") {
     const addonsSnapshot = await requestAddonResolution(bookingId, addonId, decision);
