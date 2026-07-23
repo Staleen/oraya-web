@@ -3,8 +3,9 @@
  * Mirrors admin `getBookingPaymentBasis` / stay revenue so `amount_total` stays aligned
  * with existing pricing snapshots (no new pricing engine).
  */
-import { isEventInquiryPayload } from "@/lib/event-inquiry-message";
-import { roundMoney } from "@/lib/money";
+// Relative .ts imports so node:test can load this module (repo test convention).
+import { isEventInquiryPayload } from "./event-inquiry-message.ts";
+import { roundMoney } from "./money.ts";
 
 export type PaymentFoundationStage = "none" | "unpaid" | "partially_paid" | "fully_paid";
 
