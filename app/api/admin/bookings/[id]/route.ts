@@ -22,6 +22,7 @@ import {
   isPaymentLinkStatus,
 } from "@/lib/payments/provider";
 import { findAvailabilityConflict } from "@/lib/calendar/availability";
+import { isExclusionViolation } from "@/lib/db-errors";
 
 function makeAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -543,9 +544,18 @@ export async function PATCH(
       .single();
 
     if (error || !data) {
+      // Remediation 1.4: losing the confirm race against the DB overlap
+      // constraint keeps the booking pending and surfaces the same message
+      // as the pre-write availability check.
+      if (isExclusionViolation(error)) {
+        return NextResponse.json(
+          { error: `Cannot confirm — ${existingBooking.villa} already has a confirmed stay overlapping these dates. The booking remains pending.` },
+          { status: 409 }
+        );
+      }
       console.error("[api/admin/bookings] update error or no row matched:", error);
       return NextResponse.json(
-        { error: error?.message ?? "Booking not found or could not be updated." },
+        { error: "Booking not found or could not be updated." },
         { status: error ? 500 : 404 }
       );
     }

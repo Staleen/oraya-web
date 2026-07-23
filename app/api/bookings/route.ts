@@ -20,6 +20,7 @@ import { ADDON_OPERATIONAL_SETTINGS_KEY, formatPreparationTime, getAddonEnforcem
 import { runAddonAudit } from "@/lib/addon-audit";
 import { heatedPoolCarryoverFromPriorBooking, isHeatedPoolAddon } from "@/lib/heated-pool-carryover";
 import { todayIsoUtc, validateStayDateRules } from "@/lib/booking-date-rules";
+import { isExclusionViolation } from "@/lib/db-errors";
 
 const ALLOWED_VILLAS = ["Villa Mechmech", "Villa Byblos"];
 const ISO_DATE_RE    = /^\d{4}-\d{2}-\d{2}$/;
@@ -766,6 +767,15 @@ export async function POST(request: Request) {
       .single();
 
     if (error) {
+      // Remediation 1.4: defensive — inserts are status=pending so the
+      // confirmed-overlap constraint shouldn't fire here, but if any path ever
+      // inserts a confirmed row, surface the availability message.
+      if (isExclusionViolation(error)) {
+        return NextResponse.json(
+          { error: "These dates are no longer available. Please choose different dates." },
+          { status: 409 }
+        );
+      }
       console.error("[api/bookings] insert error:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }

@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { sendBookingEmail } from "@/lib/send-booking-email";
 import { findAvailabilityConflict } from "@/lib/calendar/availability";
 import { dispatchConfirmedStayWhatsAppNotification } from "@/lib/whatsapp/confirmed-stay-notification";
+import { isExclusionViolation } from "@/lib/db-errors";
 
 function toResult(request: NextRequest, state: string) {
   return NextResponse.redirect(new URL(`/booking-action/result?state=${state}`, request.url));
@@ -57,15 +58,29 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const { error: updateErr } = await supabaseAdmin
+  // Remediation 1.4: row-count-checked write + DB overlap-constraint backstop.
+  // 0 matched rows (a concurrent action already processed the booking) must
+  // NOT burn the token or send email; an exclusion violation (23P01) from the
+  // bookings_no_confirmed_overlap constraint means we lost the confirm race —
+  // the booking stays pending.
+  const { data: updatedRows, error: updateErr } = await supabaseAdmin
     .from("bookings")
     .update({ status: action })
     .eq("id", booking_id)
-    .eq("status", "pending");
+    .eq("status", "pending")
+    .select("id");
 
   if (updateErr) {
+    if (isExclusionViolation(updateErr)) {
+      console.warn("[api/booking-action] confirm lost overlap race (23P01):", booking_id);
+      return toResult(request, "overlap_conflict");
+    }
     console.error("[api/booking-action] update error:", updateErr);
     return toResult(request, "invalid");
+  }
+
+  if (!updatedRows || updatedRows.length === 0) {
+    return toResult(request, "already_processed");
   }
 
   const { data: marked } = await supabaseAdmin
