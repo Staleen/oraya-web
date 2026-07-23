@@ -64,6 +64,18 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-07-23 - Remediation Phases 5-6 (refactors, accessibility, cleanup) from the 2026-07-23 health check
+
+**Decision:** behavior-preserving refactors shipped: (5.1) BookingsTable's 71 module-level pure helpers extracted verbatim to `components/admin/bookings/helpers.tsx` and shared with DashboardOperationsView (6 identical local copies deleted; its deliberately-different `getAddonStatusTone` kept local); the duplicated approve-addon fetch unified. (5.2, partial) the admin 45 s poll pauses while a payment edit is in flight and deep-equal poll payloads no longer re-render; the memoized render-section extraction is BLOCKED pending Preview-verified work (no admin credentials in the remediation environment to smoke-test the mandated manual pass). (5.3) /book's calendar validity rules, Butler-prefill hydration decisions, add-on availability rule, and add-on catalog load moved to pure `lib/booking/*` modules with tests — all three `react-hooks/exhaustive-deps` suppressions across /book and /events/inquiry are gone. (5.4) `lib/guest-format.ts`, `lib/guest-validation.ts`, and shared `components/theme.ts` replace 77 byte-identical local constant/helper copies; `friendlyError` deliberately stays per-page (different guest copy). (5.5, partial) the two villa pages merged into one config-driven `components/VillaPage.tsx`; villa routes are thin server wrappers exporting SEO metadata. Homepage server-component conversion is BLOCKED by CLAUDE.md's "page.tsx must stay use client" rule; next/image hero conversion deferred to a Preview-verified PR (remote Supabase `images.remotePatterns` cannot be validated here). (5.6) all 30 guest-form label/control pairs associated via htmlFor/id; shared accessible `components/admin/ConfirmDialog.tsx` (Escape, initial focus, focus trap, focus restore) replaces the feedback-email modal. (6.1) 55 stale remote branches audited: 26 provably merged (exact delete command in REMEDIATION_PLAN.md Human actions), 29 unmerged listed for David's review; nothing deleted.
+
+**Reason:** health-check items 13-17 — duplication, oversized components, suppressed lint rules, missing a11y associations, and branch clutter.
+
+**Impact:** tests 239 → 252; tsc/lint/build clean throughout; no schema or locked-surface behavior changes. Open follow-ups live in REMEDIATION_PLAN.md's Human actions.
+
+**Reversible?:** yes.
+
+---
+
 ## 2026-07-17 - Booking approval and payment are independent guest truths; one projection owns payment presentation
 
 **Decision:** `bookings.status` continues to represent Oraya's operational approval, while `payment_status` and the payment-link fields represent money state. A valid guest state is therefore `status = pending` plus `payment_status = paid_in_full`; payment must not auto-confirm a booking. On `/booking/view/[token]`, booking-status messaging must be payment-neutral and the pure [lib/payments/guest-presentation.ts](../../lib/payments/guest-presentation.ts) projection is the sole owner of guest payment vocabulary, method labels, and return-message interpretation. Recorded payment states take precedence over stale payment-link state. Browser return parameters remain informational and cannot create a success state. Public checkout errors are fixed guest-safe messages; provider/configuration detail stays in server logs or authenticated admin readiness surfaces.
