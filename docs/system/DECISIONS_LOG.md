@@ -73,6 +73,15 @@ Durable architectural and operational decisions. Append-only - never edit a past
 **Impact:** rendering-path changes on `/`, `/villas/*`, and the admin bookings console. **Merge gate: visual Preview check (page list in the PR body).** tsc/lint/build/252 tests clean throughout.
 
 **Reversible?:** yes (three isolated commits).
+## 2026-07-23 - Remediation 2 Phase A: admin password change hardening + email recovery
+
+**Decision:** (A.1) the admin password can only change through the new `POST /api/admin/change-password`: admin session AND the current password (verified against the stored scrypt hash), new password entered twice with a 12-character minimum, wrong-current attempts recorded in `admin_login_attempts` (shared 5/15-min throttle + 500 ms delay, helpers extracted to `lib/admin-login-attempts.ts`), audit log lines that never contain password values; the generic settings upsert refuses the `admin_password` key. (A.2) account recovery: a "Forgot password?" action on the login gate calls an always-generic send endpoint whose destination is exclusively the server-side `ADMIN_RECOVERY_EMAIL` env var (silent no-op when unset; global cap 3 sends/hour), delivering a one-time HMAC-signed 30-minute token (`lib/admin-recovery.ts`, parallel helper — locked token helpers untouched) whose jti is stored server-side and atomically claimed on spend (single-use; newer tokens supersede). The reset page lives at `/admin-reset-password` — deliberately OUTSIDE `/admin/*` because that layout's auth gate would block a locked-out admin — and stores a min-12 scrypt hash. The recovery-jti settings row is shielded from the generic settings GET/POST like `admin_password`.
+
+**Reason:** REMEDIATION_PLAN_2.md Phase A — the plan-1 work left password changes cookie-gated only and no recovery path if the password is lost.
+
+**Impact:** new routes `api/admin/change-password`, `api/admin/recovery/{request,reset}`, page `/admin-reset-password`; Settings UI gains current/new/confirm fields. Tests 252 → 264. HUMAN: set `ADMIN_RECOVERY_EMAIL=admin@stayoraya.com` in Vercel Production env; without it the recovery flow silently does nothing (by design).
+
+**Reversible?:** yes.
 
 ---
 

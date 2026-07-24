@@ -8,10 +8,15 @@ export default function SettingsSections({
   whatsappSaving,
   whatsappSaved,
   saveWhatsapp,
+  currentPassword,
+  setCurrentPassword,
   newPassword,
   setNewPassword,
+  confirmPassword,
+  setConfirmPassword,
   pwSaving,
   pwSaved,
+  pwError,
   savePassword,
   notifEmails,
   setNotifEmails,
@@ -24,10 +29,15 @@ export default function SettingsSections({
   whatsappSaving: boolean;
   whatsappSaved: boolean;
   saveWhatsapp: () => void;
+  currentPassword: string;
+  setCurrentPassword: (value: string) => void;
   newPassword: string;
   setNewPassword: (value: string) => void;
+  confirmPassword: string;
+  setConfirmPassword: (value: string) => void;
   pwSaving: boolean;
   pwSaved: boolean;
+  pwError: string;
   savePassword: () => void;
   notifEmails: string;
   setNotifEmails: (value: string) => void;
@@ -35,6 +45,10 @@ export default function SettingsSections({
   notifSaved: boolean;
   saveNotifEmails: () => void;
 }) {
+  const passwordFormReady =
+    currentPassword.trim().length > 0 &&
+    newPassword.length >= 12 &&
+    confirmPassword.length > 0;
   const isMobile = typeof window !== "undefined" ? window.innerWidth <= 768 : false;
 
   return (
@@ -81,39 +95,68 @@ export default function SettingsSections({
         </div>
       </div>
 
-      <div style={{ display: "flex", alignItems: isMobile ? "stretch" : "flex-end", gap: "12px", flexWrap: "wrap", marginBottom: "1.5rem", paddingBottom: "1.5rem", borderBottom: `0.5px solid ${BORDER}` }}>
-        <div style={{ flex: "1", minWidth: "220px" }}>
-          <label style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, display: "block", marginBottom: "6px" }}>
-            Change admin password
-          </label>
+      <div style={{ marginBottom: "1.5rem", paddingBottom: "1.5rem", borderBottom: `0.5px solid ${BORDER}` }}>
+        <label style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, display: "block", marginBottom: "6px" }}>
+          Change admin password
+        </label>
+        <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
           <input
             type="password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            placeholder="New password"
-            style={fieldStyle}
+            autoComplete="current-password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            placeholder="Current password"
+            style={{ ...fieldStyle, flex: "1", minWidth: "200px" }}
             onFocus={(e) => { e.currentTarget.style.borderColor = GOLD; }}
             onBlur={(e) => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
           />
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px", paddingBottom: isMobile ? "0" : "2px", width: isMobile ? "100%" : "auto", flexWrap: "wrap" }}>
+          <input
+            type="password"
+            autoComplete="new-password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            placeholder="New password (min 12 characters)"
+            style={{ ...fieldStyle, flex: "1", minWidth: "200px" }}
+            onFocus={(e) => { e.currentTarget.style.borderColor = GOLD; }}
+            onBlur={(e) => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+          />
+          <input
+            type="password"
+            autoComplete="new-password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            placeholder="Repeat new password"
+            style={{ ...fieldStyle, flex: "1", minWidth: "200px" }}
+            onFocus={(e) => { e.currentTarget.style.borderColor = GOLD; }}
+            onBlur={(e) => { e.currentTarget.style.borderColor = "rgba(197,164,109,0.25)"; }}
+          />
           <button
             onClick={savePassword}
-            disabled={pwSaving || !newPassword.trim()}
+            disabled={pwSaving || !passwordFormReady}
             style={{
               fontFamily: LATO, fontSize: "10px", letterSpacing: "2px",
               textTransform: "uppercase", color: CHARCOAL, backgroundColor: GOLD,
               border: "none", padding: "12px 28px",
-              cursor: pwSaving || !newPassword.trim() ? "not-allowed" : "pointer",
-              opacity: pwSaving || !newPassword.trim() ? 0.6 : 1, whiteSpace: "nowrap", width: isMobile ? "100%" : "auto",
+              cursor: pwSaving || !passwordFormReady ? "not-allowed" : "pointer",
+              opacity: pwSaving || !passwordFormReady ? 0.6 : 1, whiteSpace: "nowrap", width: isMobile ? "100%" : "auto",
             }}
           >
             {pwSaving ? "Saving..." : "Update password"}
           </button>
-          {pwSaved && (
-            <span style={{ fontFamily: LATO, fontSize: "11px", color: "#6fcf8a", letterSpacing: "1px" }}>Password updated</span>
-          )}
         </div>
+        <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, marginTop: "5px" }}>
+          Requires your current password. New password: minimum 12 characters, entered twice.
+        </p>
+        {pwSaved && (
+          <p style={{ fontFamily: LATO, fontSize: "11px", color: "#6fcf8a", letterSpacing: "1px", marginTop: "6px" }}>
+            Password updated — use it on your next sign-in.
+          </p>
+        )}
+        {pwError && (
+          <p style={{ fontFamily: LATO, fontSize: "11px", color: "#e07070", letterSpacing: "0.5px", marginTop: "6px" }}>
+            {pwError}
+          </p>
+        )}
       </div>
 
       <div style={{ display: "flex", alignItems: isMobile ? "stretch" : "flex-end", gap: "12px", flexWrap: "wrap" }}>
