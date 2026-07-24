@@ -80,9 +80,9 @@ Order matters: helpers first (mechanical), then components. NO behavior changes 
 
 ## Human actions (agent appends here; David executes)
 
-- [x] Rotate the production admin password + store new hash (after 1.1). Done 2026-07-24.
-- [x] Run new SQL files in `sql/` against Supabase (after 1.2, 1.4) — preflight queries included in each file. Done 2026-07-24.
-- [ ] Confirm/execute remote-branch deletions (after 6.1). **Safe (all 26 verified merged into master):**
+- [x] Rotate the production admin password + store new hash (after 1.1). Done 2026-07-24 (David).
+- [x] Run new SQL files in `sql/` against Supabase (after 1.2, 1.4) — preflight queries included in each file. Done 2026-07-24 (David).
+- [x] Confirm/execute remote-branch deletions (after 6.1). Done 2026-07-24 — all 26 re-verified with `git merge-base --is-ancestor` and deleted (26/26, none skipped); the 29 unmerged stale branches were NOT touched. **Safe (all 26 verified merged into master):**
   ```bash
   git push origin --delete \
     agent/phase-16b-cybersource-unified-checkout-test \
@@ -115,7 +115,7 @@ Order matters: helpers first (mechanical), then components. NO behavior changes 
   **Stale but UNMERGED (29 — review individually before deleting; likely superseded iterations):** claude/book-3step-review-guest-details, claude/butler-normalize-compact-dates, claude/phase-16a-2c-butler-normalize-dates, claude/phase-16a-2d-butler-availability-post, claude/phase-16a-2e-whatsapp-leads, claude/phase-16a-closeout-phase-16b-provision, claude/phase-16a2f-leads-redesign, claude/phase-16a2g-leads-active-inbox, claude/phase-16a2h-lead-delete, claude/priceless-mirzakhani-311483, codex/book-checkout-step, codex/book-flow-polish, codex/book-pay-now-action, codex/chatgpt-source-doc-refresh, codex/payment-foundation-only, codex/payment-protocol-ux, codex/phase-16a-continuation-readiness, codex/phase-16b-payment-readiness, cursor/butler-prefill-handoff-5658, cursor/dev-env-setup-c08d, cursor/fix-admin-leads-select-6d63, cursor/fix-whatsapp-settings-cache-6d63, cursor/phase-15-critical-hotfix-f1cb, cursor/phase-16a2i1-stay-lead-conversion-5bde, cursor/secure-members-api-7340, fix/book-step-advance-instant-scroll, phase-16a-whatsapp-identity-continuity, phase-16a-whatsapp-villa-alias-prefill, phase-3/member-system.
 - [ ] Schedule the Next 15+/React 19 upgrade task (4.3 default decision: separate scoped task; also resolves the 5 remaining `npm audit` findings that live inside next@14).
 - [ ] (Optional, 5.6) Supply static villa photographs (one per villa) if a photo fallback is preferred over the branded gradient/emblem fallback when the cover fetch fails.
-- [x] (Recommended, 5.2/5.5) Schedule Preview-verified PRs for: BookingsTable render-section memoization; next/image hero conversion + Supabase `images.remotePatterns` config. Done 2026-07-24 — shipped as PR #88.
+- [x] (Recommended, 5.2/5.5) Schedule Preview-verified PRs for: BookingsTable render-section memoization; next/image hero conversion + Supabase `images.remotePatterns` config. Done: shipped as Remediation 2 Phase B (PR #88, merged 2026-07-24; visually verified).
 
 ## Open decisions for David
 
