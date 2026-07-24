@@ -107,18 +107,39 @@ export async function POST(request: Request) {
       expires_at: booking.payment_link_expires_at ?? undefined,
     });
 
-    const { error: updateError } = await supabaseAdmin
+    // Plan 3 Phase 3 (KNOWN_BUGS #14, related orphan-session risk): the
+    // post-provider update is row-count verified. Zero matched rows means the
+    // link stopped being active between our read and this write (paid /
+    // expired / cancelled concurrently) — the freshly minted provider session
+    // is an orphan. It was never persisted anywhere, so superseding is
+    // explicit: log its id (it cannot be used to complete a payment — the
+    // completion route charges only the session id stored on the booking) and
+    // refuse instead of returning a capture context for a dead link. Any
+    // previously stored session id is superseded by the next successful write
+    // of this route (single-column overwrite).
+    const { data: sessionRows, error: updateError } = await supabaseAdmin
       .from("bookings")
       .update({
         payment_provider_session_id: session.provider_session_id,
         payment_last_at: new Date().toISOString(),
       })
       .eq("id", booking.id)
-      .eq("payment_link_status", "active");
+      .eq("payment_link_status", "active")
+      .select("id");
 
     if (updateError) {
       console.error("[api/payments/unified-checkout-session] booking update failed:", updateError);
       return NextResponse.json({ error: "Payment session could not be saved." }, { status: 500 });
+    }
+    if (!sessionRows || sessionRows.length === 0) {
+      console.error(
+        "[api/payments/unified-checkout-session] orphaned provider session (payment link no longer active):",
+        { booking_id: booking.id, orphaned_provider_session_id: session.provider_session_id },
+      );
+      return NextResponse.json(
+        { error: "This payment link is no longer active. Please refresh the page to see the booking's current status." },
+        { status: 409 },
+      );
     }
 
     return NextResponse.json({
