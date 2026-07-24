@@ -47,9 +47,13 @@ create unique index if not exists payment_attempts_one_in_flight_per_booking
 create index if not exists payment_attempts_booking_idx
   on payment_attempts (booking_id, created_at desc);
 
--- RLS intentionally NOT enabled: table is only touched server-side via the
--- service role (same posture as `settings` / `admin_login_attempts`). It is
--- never read client-side.
+-- RLS: enabled with NO policies (David ran this via the Supabase editor's
+-- "Run and enable RLS" option, 2026-07-24). The app only touches this table
+-- server-side via the service role, which BYPASSES RLS — so enabling it
+-- changes nothing for the code while hard-blocking anon/authenticated keys
+-- from a payments ledger. (Stricter posture than the older no-RLS
+-- `settings` / `admin_login_attempts` tables, on purpose.)
+alter table payment_attempts enable row level security;
 
 -- ---------------------------------------------------------------------------
 -- Manual reconciliation runbook for `ambiguous` attempts (admin, human-run)
