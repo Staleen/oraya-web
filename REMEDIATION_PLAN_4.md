@@ -38,8 +38,8 @@ The production gate says: "disabled until webhook/MLE reconciliation and live ro
 
 ## Phase 4 — Closeout
 
-- [ ] 4.1 Update the production-gate message so it reflects the new contract (what exactly is missing, instead of the blanket "remains disabled" text). `DECISIONS_LOG.md` entries for Phases 1–3; `KNOWN_BUGS.md` #14 note extended (webhook reconciliation now closes the ambiguous-outcome loop) and #15 resolved per Phase 1. Full gate green.
-- [ ] 4.2 PR body: the single GO-LIVE CHECKLIST below, updated with anything learned during implementation.
+- [x] 4.1 (`561fb1c` gate message; `325e031` docs) Update the production-gate message so it reflects the new contract (what exactly is missing, instead of the blanket "remains disabled" text). `DECISIONS_LOG.md` entries for Phases 1–3; `KNOWN_BUGS.md` #14 note extended (webhook reconciliation now closes the ambiguous-outcome loop) and #15 resolved per Phase 1. Full gate green. *(Gate after every phase: tsc clean, tests 291→313→322 all green, build passing, lint 0 errors / 37 pre-existing no-img-element warnings.)*
+- [x] 4.2 (`325e031`) PR body: the single GO-LIVE CHECKLIST below, updated with anything learned during implementation.
 
 ## GO-LIVE CHECKLIST (David executes when NetCommerce delivers — the PR body must carry the final version)
 
