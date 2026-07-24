@@ -16,6 +16,16 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-07-24 - Plan 3 Phase 4: /api/health config check + email-config observability (KNOWN_BUGS #2)
+
+**Decision:** an unauthenticated `GET /api/health` (pure decision in `lib/health.ts`, route force-dynamic) returns 200 `{ok:true}` when the required production keys are present and 503 with the missing key NAMES (never values, nothing sensitive) otherwise — required set: `RESEND_API_KEY`, `ADMIN_SECRET`, `ADMIN_RECOVERY_EMAIL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`. The seven email senders that silently `console.warn`-skipped on a missing `RESEND_API_KEY` now report through `lib/email-config.ts` `reportMissingResendKey()`: in production a structured `console.error` with the stable grep-able tag `[email-config-missing]`, warn elsewhere (dev legitimately runs without Resend). Senders that already THROW on a missing key (`send-admin-recovery-email`, `send-feedback-request-email`) are unchanged — they were never silent.
+
+**Reason:** KNOWN_BUGS #2 — a rotated/deleted `RESEND_API_KEY` meant bookings landed with zero confirmation emails and no alarm anywhere.
+
+**Impact:** new `app/api/health/route.ts`, `lib/health.ts`, `lib/email-config.ts`; one-line change in each of the seven warn-site senders. Optional human action: point an uptime monitor at `/api/health`. Tests 264 → 270 on this branch (Plan 3 phases are independent PRs; with Phase 3's +9 the combined suite is 279).
+
+**Reversible?:** yes.
+
 ## 2026-07-24 - Plan 3 Phase 3: durable payment-attempt idempotency for Unified Checkout completion (KNOWN_BUGS #14)
 
 **Decision:** the Unified Checkout completion route now runs on a durable payment-attempt ledger. A `payment_attempts` row (`sql/plan3-payment-attempts.sql`, human-run BEFORE deploy) is inserted BEFORE the provider call, and a partial unique index (`unique (booking_id) where status in ('claimed','authorized','ambiguous')`) makes that claim atomic: a concurrent second completion gets a unique violation → 409 without touching CyberSource. A deterministic merchant reference derived from the attempt id (`oraya-att-<uuid>`, `lib/payments/unified-checkout-completion.ts`) is sent as `clientReferenceInformation.code` and stored as the attempt's `idempotency_key`; provider transaction ids are persisted onto the attempt immediately after the call. Every conditional booking update is `.select("id")` row-count verified — completion (approved charge, zero rows → attempt `ambiguous`, `RECONCILIATION REQUIRED` log, explicit non-success response) and session creation (zero rows → orphaned provider session logged + 409, never a capture context for a dead link). Terminal states: `recorded` (success), `failed` (decline — releases the claim so the guest can retry with a NEW attempt), `ambiguous` (timeout/unknown/zero-row — blocks all new attempts for the booking until a human reconciles against CyberSource; runbook in the SQL file, never auto-released). Pre-migration the route fails CLOSED (503) — there is no fallback to the unguarded path.

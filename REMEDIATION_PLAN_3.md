@@ -49,9 +49,9 @@ Prior art to follow: `lib/payments/webhook-set-paid.ts` (remediation 1.6) — NU
 
 A missing/rotated `RESEND_API_KEY` currently means bookings land with zero confirmation emails and no alarm.
 
-- [ ] 4.1 Add `GET /api/health`: returns 200 with `{ ok: true }` when required production config is present; 503 listing missing keys (names only, never values) when not — check at minimum `RESEND_API_KEY`, `ADMIN_SECRET`, `ADMIN_RECOVERY_EMAIL`, Supabase URL/keys. No auth needed but response must leak nothing sensitive.
-- [ ] 4.2 In each `lib/send-*-email.ts`, when the key is missing in production, upgrade the silent `console.warn` to a structured `console.error` line with a stable grep-able tag (e.g. `[email-config-missing]`).
-- [ ] 4.3 Tests for the health decision logic (pure function). Update `KNOWN_BUGS.md` #2 and `DECISIONS_LOG.md`. Note in the PR body: David can point an uptime monitor (e.g. Vercel checks / UptimeRobot) at `/api/health` — listed as an optional human action.
+- [x] 4.1 (`f0bac95`) Add `GET /api/health`: returns 200 with `{ ok: true }` when required production config is present; 503 listing missing keys (names only, never values) when not — check at minimum `RESEND_API_KEY`, `ADMIN_SECRET`, `ADMIN_RECOVERY_EMAIL`, Supabase URL/keys. No auth needed but response must leak nothing sensitive.
+- [x] 4.2 (`f0bac95`) In each `lib/send-*-email.ts`, when the key is missing in production, upgrade the silent `console.warn` to a structured `console.error` line with a stable grep-able tag (e.g. `[email-config-missing]`).
+- [x] 4.3 (`f0bac95`) Tests for the health decision logic (pure function). Update `KNOWN_BUGS.md` #2 and `DECISIONS_LOG.md`. Note in the PR body: David can point an uptime monitor (e.g. Vercel checks / UptimeRobot) at `/api/health` — listed as an optional human action.
 
 ## Phase 5 — Next 16 + React 19 upgrade (breaking; LAST because everything above should land on the stable stack first)
 
