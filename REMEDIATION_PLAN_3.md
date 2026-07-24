@@ -22,8 +22,8 @@ All four outstanding human actions were completed and verified by David on 2026-
 
 ## Phase 2 — Branch cleanup (no code changes)
 
-- [ ] 2.1 Run the exact `git push origin --delete` command block from `REMEDIATION_PLAN.md` §6.1 Human actions (26 branches, all verified merged into master on 2026-07-23). Before deleting each branch, re-verify with `git merge-base --is-ancestor origin/<branch> origin/master`; skip and list any that fail the check. Do NOT touch the 29 unmerged stale branches — output their list in the PR/summary for David's separate judgment.
-- [ ] 2.2 Check the §6.1 human-action box in `REMEDIATION_PLAN.md` with the date and the count actually deleted (this edit can ride in the Phase 1 branch if Phase 1 hasn't merged yet; otherwise its own trivial PR).
+- [x] 2.1 (done 2026-07-24; 26/26 re-verified merged via `git merge-base --is-ancestor` and deleted, none skipped; 29 unmerged branches untouched — listed in the Phase 1+2 PR body) Run the exact `git push origin --delete` command block from `REMEDIATION_PLAN.md` §6.1 Human actions (26 branches, all verified merged into master on 2026-07-23). Before deleting each branch, re-verify with `git merge-base --is-ancestor origin/<branch> origin/master`; skip and list any that fail the check. Do NOT touch the 29 unmerged stale branches — output their list in the PR/summary for David's separate judgment.
+- [x] 2.2 (`cef328b`; rode on the Phase 1 branch per this item's allowance) Check the §6.1 human-action box in `REMEDIATION_PLAN.md` with the date and the count actually deleted (this edit can ride in the Phase 1 branch if Phase 1 hasn't merged yet; otherwise its own trivial PR).
 
 ## Phase 3 — KNOWN_BUGS #14: durable idempotency for Unified Checkout completion (CRITICAL — the production-payments blocker)
 
