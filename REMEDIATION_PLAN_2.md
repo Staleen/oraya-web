@@ -48,5 +48,5 @@ These were BLOCKED in the original run because they change rendering and need hu
 
 ## Human actions (agent appends; David executes)
 
-- [ ] Set `ADMIN_RECOVERY_EMAIL=admin@stayoraya.com` in Vercel env (after A.2 merges).
-- [ ] Visually check the Vercel Preview pages listed in Phase B's PR body before merging it.
+- [x] Set `ADMIN_RECOVERY_EMAIL=admin@stayoraya.com` in Vercel env (after A.2 merges). Done 2026-07-24.
+- [x] Visually check the Vercel Preview pages listed in Phase B's PR body before merging it. Done 2026-07-24.
