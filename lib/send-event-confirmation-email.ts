@@ -1,3 +1,4 @@
+import { reportMissingResendKey } from "@/lib/email-config";
 import { Resend } from "resend";
 import { LOGO_URL, SITE_URL } from "@/lib/brand";
 import { createActionToken } from "@/lib/booking-action-token";
@@ -65,7 +66,7 @@ function createViewUrl(bookingId: string, checkOut: string): string {
 export async function sendEventConfirmationEmail(payload: EventConfirmationEmailPayload): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
-    console.warn("[sendEventConfirmationEmail] RESEND_API_KEY not set - skipping email.");
+    reportMissingResendKey("sendEventConfirmationEmail");
     return;
   }
 

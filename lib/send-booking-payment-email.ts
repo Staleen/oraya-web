@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { LOGO_URL, SITE_URL } from "@/lib/brand";
+import { reportMissingResendKey } from "@/lib/email-config";
 import { createActionToken } from "@/lib/booking-action-token";
 import { transactionalEmailFooterHtmlBlock, transactionalEmailFooterTextSuffix } from "@/lib/transactional-email-footer";
 import { checkOutExpiryUnix } from "./checkout-expiry.ts";
@@ -228,7 +229,7 @@ async function sendPaymentEmail(
 ): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
-    console.warn(`[sendPaymentEmail:${variant}] RESEND_API_KEY not set - skipping email.`);
+    reportMissingResendKey(`sendPaymentEmail:${variant}`);
     return;
   }
 

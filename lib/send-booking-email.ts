@@ -1,3 +1,4 @@
+import { reportMissingResendKey } from "@/lib/email-config";
 import { Resend } from "resend";
 import { LOGO_URL, SITE_URL } from "@/lib/brand";
 import { createActionToken } from "@/lib/booking-action-token";
@@ -116,7 +117,7 @@ export interface BookingEmailPayload {
 export async function sendBookingEmail(payload: BookingEmailPayload): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
-    console.warn("[sendBookingEmail] RESEND_API_KEY not set - skipping email.");
+    reportMissingResendKey("sendBookingEmail");
     return;
   }
 

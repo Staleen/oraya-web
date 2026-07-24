@@ -16,6 +16,18 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-07-24 - Plan 3 Phase 4: /api/health config check + email-config observability (KNOWN_BUGS #2)
+
+**Decision:** an unauthenticated `GET /api/health` (pure decision in `lib/health.ts`, route force-dynamic) returns 200 `{ok:true}` when the required production keys are present and 503 with the missing key NAMES (never values, nothing sensitive) otherwise — required set: `RESEND_API_KEY`, `ADMIN_SECRET`, `ADMIN_RECOVERY_EMAIL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`. The seven email senders that silently `console.warn`-skipped on a missing `RESEND_API_KEY` now report through `lib/email-config.ts` `reportMissingResendKey()`: in production a structured `console.error` with the stable grep-able tag `[email-config-missing]`, warn elsewhere (dev legitimately runs without Resend). Senders that already THROW on a missing key (`send-admin-recovery-email`, `send-feedback-request-email`) are unchanged — they were never silent.
+
+**Reason:** KNOWN_BUGS #2 — a rotated/deleted `RESEND_API_KEY` meant bookings landed with zero confirmation emails and no alarm anywhere.
+
+**Impact:** new `app/api/health/route.ts`, `lib/health.ts`, `lib/email-config.ts`; one-line change in each of the seven warn-site senders. Optional human action: point an uptime monitor at `/api/health`. Tests 264 → 270 on this branch (Plan 3 phases are independent PRs; with Phase 3's +9 the combined suite is 279).
+
+**Reversible?:** yes.
+
+---
+
 ## 2026-07-23 - Remediation Phase 1 (security critical) from the 2026-07-23 health check
 
 **Decision:** the seven Phase 1 items of `REMEDIATION_PLAN.md` shipped on one branch: (1.1) the hardcoded `"Oraya2026"` admin-password fallback is deleted — `settings.admin_password` now stores a **scrypt hash** (`lib/admin-password.ts`, default option (b); `scripts/hash-admin-password.mjs` generates it) and login fails CLOSED (503 `admin_auth_unavailable`) whenever a trustworthy hash is absent, including a legacy plaintext row; (1.2) admin login is rate-limited via the human-run `admin_login_attempts` table (`sql/remediation-admin-login-attempts.sql`) — 5 failures/15 min per IP, 20 global, constant 500 ms failure delay, fail-closed when the table is unreachable; (1.3) route-boundary stay rules — max 60 nights, no past check-ins (UTC today allowed) — on `/api/bookings` POST and the member PATCH (`lib/booking-date-rules.ts`); (1.4) a Postgres `EXCLUDE USING gist` constraint on confirmed bookings (`sql/remediation-booking-overlap-constraint.sql`, preflight included) backstops the double-booking race, confirm writes are row-count-checked (`/api/booking-action` no longer burns tokens or emails on 0 matched rows) and 23P01 maps to the existing "dates unavailable" responses; (1.5) the guest availability calendars fail CLOSED with a retry UI instead of showing all dates free on fetch failure; (1.6) webhook `set_paid` is durably idempotent (`lib/payments/webhook-set-paid.ts` + NULL-safe conditional write); (1.7) CyberSource authorization responses must echo the requested amount AND currency (`lib/payments/authorized-amount.ts`, fail-closed) before any payment is recorded.
