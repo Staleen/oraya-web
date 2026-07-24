@@ -43,7 +43,7 @@ export default function MediaManager() {
 
   useEffect(() => {
     loadMedia(activeVilla);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [activeVilla]);
 
   async function loadMedia(villa: VillaKey) {

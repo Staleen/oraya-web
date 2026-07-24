@@ -7,11 +7,12 @@ import { CHARCOAL, GOLD, LATO, MIDNIGHT, MUTED, PLAYFAIR, WHITE } from "@/compon
 
 
 
-export default async function BookingActionConfirmPage({
-  searchParams,
-}: {
-  searchParams: { token?: string };
-}) {
+export default async function BookingActionConfirmPage(
+  props: {
+    searchParams: Promise<{ token?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const token = searchParams.token;
   if (!token) redirect("/booking-action/result?state=invalid");
 

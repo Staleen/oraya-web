@@ -120,7 +120,8 @@ async function resolveGuestDisplayName(booking: ArrivalBookingRow): Promise<stri
   return "Our guest";
 }
 
-export default async function ArrivalGuidePage({ params }: { params: { token: string } }) {
+export default async function ArrivalGuidePage(props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   const verified = verifyViewToken(decodeURIComponent(params.token));
 
   if (!verified.ok) {

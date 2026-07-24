@@ -49,11 +49,12 @@ const FALLBACK: StateConfig = {
   body:          "The link may be malformed or already used. Please use the admin dashboard to manage bookings.",
 };
 
-export default function BookingActionResultPage({
-  searchParams,
-}: {
-  searchParams: { state?: string; email?: string };
-}) {
+export default async function BookingActionResultPage(
+  props: {
+    searchParams: Promise<{ state?: string; email?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const state       = searchParams.state ?? "invalid";
   const emailFailed = searchParams.email === "failed";
   const config      = STATES[state] ?? FALLBACK;

@@ -7,10 +7,8 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 // PATCH — resolve a single add-on approval item within the booking's addons_snapshot.
 // Defaults to approve for backward compatibility, and can also mark the item declined.
 // No booking status, pricing, email, calendar, or overlap logic is touched.
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PATCH(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const denied = requireAdminAuth(request);
   if (denied) return denied;
 

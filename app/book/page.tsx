@@ -548,10 +548,20 @@ function detectDeadDaySuggestion(
 const CALENDAR_CSS = `
   .oraya-cal { display: flex; justify-content: center; }
 
-  .oraya-cal .rdp {
-    --rdp-cell-size: 38px;
+  /* react-day-picker v9 class names (v8 -> v9 migration, Plan 3 Phase 5):
+     .rdp -> .rdp-root, .rdp-head_cell -> .rdp-weekday,
+     .rdp-nav_button -> .rdp-button_previous/.rdp-button_next,
+     .rdp-day_* state classes -> .rdp-selected/.rdp-range_*/.rdp-disabled/
+     .rdp-outside/.rdp-today; day cell is now a <td> wrapping .rdp-day_button.
+     The custom deadCheckIn modifier keeps its v8 class via modifiersClassNames. */
+  .oraya-cal .rdp-root {
+    --rdp-day-width: 38px;
+    --rdp-day-height: 38px;
+    --rdp-day_button-width: 38px;
+    --rdp-day_button-height: 38px;
+    --rdp-months-gap: 24px;
     --rdp-accent-color: var(--oraya-gold);
-    --rdp-background-color: var(--oraya-rdp-bg);
+    --rdp-accent-background-color: var(--oraya-rdp-bg);
     margin: 0;
     font-family: 'Lato', system-ui, sans-serif;
     font-size: 13px;
@@ -566,7 +576,7 @@ const CALENDAR_CSS = `
     color: var(--oraya-gold);
   }
 
-  .oraya-cal .rdp-head_cell {
+  .oraya-cal .rdp-weekday {
     font-size: 9px;
     letter-spacing: 1.5px;
     text-transform: uppercase;
@@ -574,44 +584,57 @@ const CALENDAR_CSS = `
     color: var(--oraya-book-muted);
   }
 
-  .oraya-cal .rdp-nav_button { color: var(--oraya-gold); }
-  .oraya-cal .rdp-nav_button:hover { background-color: var(--oraya-rdp-nav-hover); }
+  .oraya-cal .rdp-button_previous,
+  .oraya-cal .rdp-button_next { color: var(--oraya-gold); border-radius: 2px; }
+  .oraya-cal .rdp-button_previous:hover,
+  .oraya-cal .rdp-button_next:hover { background-color: var(--oraya-rdp-nav-hover); }
+  .oraya-cal .rdp-chevron { fill: var(--oraya-gold); }
 
   .oraya-cal .rdp-day { color: var(--oraya-cal-day); border-radius: 2px; }
-  .oraya-cal .rdp-day:hover:not([disabled]):not(.rdp-day_selected):not(.rdp-day_range_middle) {
+  .oraya-cal .rdp-day_button { border: none; font: inherit; color: inherit; border-radius: inherit; }
+  .oraya-cal .rdp-day:hover:not(.rdp-disabled):not(.rdp-selected):not(.rdp-range_middle) {
     background-color: var(--oraya-rdp-hover);
     color: var(--oraya-gold);
   }
 
-  .oraya-cal .rdp-day_range_start,
-  .oraya-cal .rdp-day_range_end {
-    background-color: var(--oraya-gold) !important;
+  /* Neutralize v9's default circular selected-day ring; range styling below. */
+  .oraya-cal .rdp-selected { font-size: 13px; font-weight: 700; }
+  .oraya-cal .rdp-selected .rdp-day_button { border: none; border-radius: 2px; background-color: transparent; }
+
+  .oraya-cal .rdp-range_start,
+  .oraya-cal .rdp-range_end {
+    background: var(--oraya-gold) !important;
     color: var(--oraya-gold-cta-text) !important;
     font-weight: 700;
     border-radius: 2px !important;
   }
+  .oraya-cal .rdp-range_start .rdp-day_button,
+  .oraya-cal .rdp-range_end .rdp-day_button {
+    background-color: transparent !important;
+    color: inherit !important;
+  }
 
-  .oraya-cal .rdp-day_range_middle {
+  .oraya-cal .rdp-range_middle {
     background-color: var(--oraya-rdp-range);
     color: var(--oraya-cal-range-mid);
     border-radius: 0;
   }
 
-  .oraya-cal .rdp-day_disabled {
+  .oraya-cal .rdp-disabled {
     color: var(--oraya-cal-day-muted) !important;
     text-decoration: line-through;
     opacity: 0.5;
   }
 
-  .oraya-cal .rdp-day_deadCheckIn:not(.rdp-day_selected):not(.rdp-day_range_middle):not(.rdp-day_range_start):not(.rdp-day_range_end) {
+  .oraya-cal .rdp-day_deadCheckIn:not(.rdp-selected):not(.rdp-range_middle):not(.rdp-range_start):not(.rdp-range_end) {
     color: var(--oraya-cal-dead);
     text-decoration: line-through;
     cursor: not-allowed;
   }
 
-  .oraya-cal .rdp-day_outside { color: var(--oraya-cal-outside); }
+  .oraya-cal .rdp-outside { color: var(--oraya-cal-outside); }
 
-  .oraya-cal .rdp-day_today:not(.rdp-day_selected):not(.rdp-day_range_middle):not(.rdp-day_range_start):not(.rdp-day_range_end) {
+  .oraya-cal .rdp-today:not(.rdp-selected):not(.rdp-range_middle):not(.rdp-range_start):not(.rdp-range_end) {
     border: 1px solid rgba(197,164,109,0.4);
     color: var(--oraya-gold);
   }
@@ -620,7 +643,12 @@ const CALENDAR_CSS = `
 
   @media (max-width: 640px) {
     .oraya-cal .rdp-months { flex-direction: column; }
-    .oraya-cal .rdp { --rdp-cell-size: 34px; }
+    .oraya-cal .rdp-root {
+      --rdp-day-width: 34px;
+      --rdp-day-height: 34px;
+      --rdp-day_button-width: 34px;
+      --rdp-day_button-height: 34px;
+    }
   }
 
   @keyframes stepFadeIn {
@@ -2430,10 +2458,11 @@ function BookPageInner() {
                             onSelect={handleDateSelect}
                             disabled={disabledDays}
                             modifiers={{ deadCheckIn: isChoosingCheckout ? () => false : isDeadCheckInDate }}
+                            modifiersClassNames={{ deadCheckIn: "rdp-day_deadCheckIn" }}
                             month={displayedCalendarMonth}
                             onMonthChange={handleCalendarMonthChange}
                             numberOfMonths={2}
-                            fromDate={today}
+                            startMonth={today}
                             showOutsideDays
                           />
                         </div>

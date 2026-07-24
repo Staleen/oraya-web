@@ -5,10 +5,8 @@ import { getVillaSlug, resolveVillaFromSlug } from "@/lib/calendar/villas";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(
-  _request: Request,
-  { params }: { params: { villa: string } }
-) {
+export async function GET(_request: Request, props: { params: Promise<{ villa: string }> }) {
+  const params = await props.params;
   const villa = resolveVillaFromSlug(params.villa);
   if (!villa) {
     return NextResponse.json({ error: "Unknown villa." }, { status: 404 });

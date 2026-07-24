@@ -1,5 +1,5 @@
 "use client";
-/* eslint-disable @next/next/no-img-element */
+
 import type { CSSProperties, ReactNode } from "react";
 import type { Booking, Member } from "../types";
 import { AddonIcon } from "@/components/addon-icon";
