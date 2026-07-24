@@ -82,7 +82,7 @@ Order matters: helpers first (mechanical), then components. NO behavior changes 
 
 - [x] Rotate the production admin password + store new hash (after 1.1). Done 2026-07-24 (David).
 - [x] Run new SQL files in `sql/` against Supabase (after 1.2, 1.4) — preflight queries included in each file. Done 2026-07-24 (David).
-- [ ] Confirm/execute remote-branch deletions (after 6.1). **Safe (all 26 verified merged into master):**
+- [x] Confirm/execute remote-branch deletions (after 6.1). Done 2026-07-24 — all 26 re-verified with `git merge-base --is-ancestor` and deleted (26/26, none skipped); the 29 unmerged stale branches were NOT touched. **Safe (all 26 verified merged into master):**
   ```bash
   git push origin --delete \
     agent/phase-16b-cybersource-unified-checkout-test \
