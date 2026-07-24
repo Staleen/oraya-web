@@ -16,6 +16,18 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-07-24 - Plan 3 Phase 5: Next 16 + React 19 upgrade
+
+**Decision:** the stack moved from Next 14.2.35 / React 18 to **Next 16.2.11 (Turbopack build) / React 19.2.8**, with eslint 9 + `eslint-config-next` 16 (flat `eslint.config.mjs`; `next lint` no longer exists, `npm run lint` = `eslint app components lib`), `@types/react(-dom)` 19, and **react-day-picker 9** (v8 peers on React ≤18; `fromDate`→`startMonth`, `modifiersClassNames` keeps the `deadCheckIn` class, calendar CSS in `/book` and `/events/inquiry` mapped to v9 class names). The official `next-async-request-api` codemod converted all dynamic-route params to Promises (9 API routes, 4 server pages, one client page via `React.use()`). The new react-hooks v6 (React Compiler) lint rules are pinned off — the ~35 flagged sites pre-date the upgrade and are separate refactor work. `package.json` **overrides** force patched `sharp@^0.35` and `postcss@^8.5.23` inside next, taking `npm audit` from 5 high (inside next@14) to **0 vulnerabilities**. `next.config.mjs` behavior (Supabase `remotePatterns` derivation + `unoptimized` fallback) is unchanged; tsconfig deltas are Next 16's auto-migration.
+
+**Reason:** the last remaining `npm audit` high findings all lived inside next@14; the upgrade was deliberately sequenced LAST so Plan 3's payment/observability work landed on the stable stack first.
+
+**Impact:** PR #93; David visually verifies homepage, /book calendar flow, both villa pages, admin dashboard + Bookings tab, booking view, and events inquiry on the Vercel Preview before merging. Tests 264/264, tsc/build/lint clean (37 pre-existing `no-img-element` warnings only).
+
+**Reversible?:** yes (single branch), but staying on next@14 re-accepts 5 known high advisories.
+
+---
+
 ## 2026-07-23 - Remediation Phase 1 (security critical) from the 2026-07-23 health check
 
 **Decision:** the seven Phase 1 items of `REMEDIATION_PLAN.md` shipped on one branch: (1.1) the hardcoded `"Oraya2026"` admin-password fallback is deleted — `settings.admin_password` now stores a **scrypt hash** (`lib/admin-password.ts`, default option (b); `scripts/hash-admin-password.mjs` generates it) and login fails CLOSED (503 `admin_auth_unavailable`) whenever a trustworthy hash is absent, including a legacy plaintext row; (1.2) admin login is rate-limited via the human-run `admin_login_attempts` table (`sql/remediation-admin-login-attempts.sql`) — 5 failures/15 min per IP, 20 global, constant 500 ms failure delay, fail-closed when the table is unreachable; (1.3) route-boundary stay rules — max 60 nights, no past check-ins (UTC today allowed) — on `/api/bookings` POST and the member PATCH (`lib/booking-date-rules.ts`); (1.4) a Postgres `EXCLUDE USING gist` constraint on confirmed bookings (`sql/remediation-booking-overlap-constraint.sql`, preflight included) backstops the double-booking race, confirm writes are row-count-checked (`/api/booking-action` no longer burns tokens or emails on 0 matched rows) and 23P01 maps to the existing "dates unavailable" responses; (1.5) the guest availability calendars fail CLOSED with a retry UI instead of showing all dates free on fetch failure; (1.6) webhook `set_paid` is durably idempotent (`lib/payments/webhook-set-paid.ts` + NULL-safe conditional write); (1.7) CyberSource authorization responses must echo the requested amount AND currency (`lib/payments/authorized-amount.ts`, fail-closed) before any payment is recorded.

@@ -57,9 +57,9 @@ A missing/rotated `RESEND_API_KEY` currently means bookings land with zero confi
 
 Resolves all 5 remaining high `npm audit` findings (all inside `next@14.2.35`) plus the `glob` advisory in `eslint-config-next`.
 
-- [ ] 5.1 On a fresh branch: upgrade `next` + `eslint-config-next` to 16.x, `react`/`react-dom` to 19, `@types/react`/`@types/react-dom` to 19; run the official codemods (`npx @next/codemod@latest upgrade`) and fix all breaking changes (async request APIs, config changes, ESLint flat-config if required). Keep `next.config.mjs` behavior identical (images.remotePatterns derivation, unoptimized fallback).
-- [ ] 5.2 Full verification gate + `npm audit` re-run recorded in the PR body (expect 0 high). Manually list in the PR body the pages David should eyeball on the Vercel Preview before merging (homepage, /book flow, both villa pages, admin dashboard + Bookings tab, booking view page, events inquiry).
-- [ ] 5.3 Update `REMEDIATION_PLAN.md`'s "Schedule the Next 15+/React 19 upgrade" human-action box (done, PR #), `DECISIONS_LOG.md` entry.
+- [x] 5.1 (`07e69b5`, PR #93) On a fresh branch: upgrade `next` + `eslint-config-next` to 16.x, `react`/`react-dom` to 19, `@types/react`/`@types/react-dom` to 19; run the official codemods (`npx @next/codemod@latest upgrade`) and fix all breaking changes (async request APIs, config changes, ESLint flat-config if required). Keep `next.config.mjs` behavior identical (images.remotePatterns derivation, unoptimized fallback).
+- [x] 5.2 (`07e69b5`, PR #93) Full verification gate + `npm audit` re-run recorded in the PR body (expect 0 high). Manually list in the PR body the pages David should eyeball on the Vercel Preview before merging (homepage, /book flow, both villa pages, admin dashboard + Bookings tab, booking view page, events inquiry).
+- [x] 5.3 (`07e69b5`, PR #93) Update `REMEDIATION_PLAN.md`'s "Schedule the Next 15+/React 19 upgrade" human-action box (done, PR #), `DECISIONS_LOG.md` entry.
 
 ## Explicitly OUT of scope (do not touch)
 
