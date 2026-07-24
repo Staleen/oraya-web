@@ -16,6 +16,16 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-07-25 - Plan 4 Phase 2: verified webhooks are authoritative for payment attempts; webhook endpoint fails closed
+
+**Decision:** the CyberSource/NetCommerce webhook endpoint (`/api/payments/webhook/credit_libanais`) now has a dedicated fail-closed handler: missing MLE/verification env vars ⇒ **503** (payload never processed); missing/mismatched signature ⇒ **401** + structured log, never a state change (`lib/payments/credit-libanais-webhook.ts` — HMAC-SHA256 over the raw body keyed with the Base64-decoded webhook MLE private key, plus `v-c-key-id` match; if NetCommerce's delivered production spec differs, that one module adapts while the fail-closed contract stays). A VERIFIED event is matched to its `payment_attempts` row by `idempotency_key` (= `clientReferenceInformation.code`) or provider transaction id and is authoritative (`lib/payments/webhook-reconciliation.ts`): confirmed success for a claimed/authorized/**ambiguous** attempt records the payment on the booking through the EXISTING idempotent set-paid discipline (`decideSetPaidUpdate` + NULL-safe not-paid guard + matched-row check) and marks the attempt `recorded` — auto-resolving most ambiguous states without a human; confirmed decline/void marks it `failed` (releasing the one-in-flight claim). Contradictions with terminal states (success-for-failed, decline-for-recorded) log RECONCILIATION REQUIRED and change nothing. `GET /api/health` additionally reports counts of attempts stuck in claimed/ambiguous >1h (counts only, no amounts/guest data, verdict unchanged).
+
+**Reason:** the production gate's first half — "webhook/MLE reconciliation" — plus KNOWN_BUGS #14's residual: `ambiguous` attempts previously always required manual Business Center lookups.
+
+**Impact:** new `lib/payments/credit-libanais-webhook.ts`, `credit-libanais-webhook-handler.ts`, `webhook-reconciliation.ts`; `payment-attempts-store.ts` gains reference lookup + stuck counts; `webhook-handler.ts` routes credit_libanais to the dedicated handler (Stripe sandbox path untouched); `/api/health` extended. Tests +22 (`credit-libanais-webhook.test.mts` 12, `webhook-reconciliation.test.mts` 10).
+
+**Reversible?:** yes.
+
 ## 2026-07-25 - Plan 4 Phase 1: manual-first refunds (KNOWN_BUGS #15 resolved-by-policy)
 
 **Decision:** refunds stay MANUAL — executed by hand in the NetCommerce Business Center — and the admin UI records them honestly. The former "Issue refund" action is now **"Record manual refund"** with explicit copy that it only records an already-executed refund, and it REQUIRES the Business Center refund/transaction reference (`lib/payments/manual-refund.ts`; missing reference ⇒ 400). The reference is persisted to `bookings.refund_provider_reference` (`sql/plan4-refund-provider-reference.sql`, additive human-run; the PATCH route tolerates the pre-migration state by retrying without the column — the reference always also lands in `payment_notes`). Both money-back paths (manual refund + ambiguous payment-attempt reconciliation) live in one operator doc: `docs/system/REFUND_RUNBOOK.md`.

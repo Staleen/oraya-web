@@ -47,6 +47,16 @@ export async function handleHostedCheckoutWebhook(
   providerKey: string,
   request: Request,
 ) {
+  // Plan 4 Phase 2: CyberSource/NetCommerce webhooks are verified (fail
+  // closed: 503 unconfigured, 401 unverifiable) and reconciled against the
+  // payment_attempts ledger in a dedicated handler.
+  if (providerKey === "credit_libanais") {
+    const { handleCreditLibanaisWebhook } = await import(
+      "@/lib/payments/credit-libanais-webhook-handler"
+    );
+    return handleCreditLibanaisWebhook(request);
+  }
+
   const provider = getHostedCheckoutProviderByKey(providerKey);
   if (!provider) {
     return NextResponse.json({ error: "Unsupported payment provider." }, { status: 404 });
