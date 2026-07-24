@@ -17,8 +17,8 @@
 
 All four outstanding human actions were completed and verified by David on 2026-07-24. Record them:
 
-- [ ] 1.1 In `REMEDIATION_PLAN.md` (Human actions): check the "Rotate the production admin password + store new hash" box and the "Run new SQL files in `sql/` against Supabase" box — annotate each "Done 2026-07-24 (David)". Also check the 5.2/5.5 "(Recommended) Schedule Preview-verified PRs" box — annotate "Done: shipped as Remediation 2 Phase B (PR #88, merged 2026-07-24; visually verified)".
-- [ ] 1.2 In `REMEDIATION_PLAN_2.md` (Human actions): check the `ADMIN_RECOVERY_EMAIL` box — annotate "Done 2026-07-24 (David); Forgot password? verified working end-to-end" — and the "Visually check the Vercel Preview pages" box — annotate "Done 2026-07-24 (David); pages verified after PR #88 merged". No other changes in this phase.
+- [x] 1.1 (`9e3b98d`; note: PR #89 had pre-checked these boxes with shorter wording — this commit completes the exact annotations) In `REMEDIATION_PLAN.md` (Human actions): check the "Rotate the production admin password + store new hash" box and the "Run new SQL files in `sql/` against Supabase" box — annotate each "Done 2026-07-24 (David)". Also check the 5.2/5.5 "(Recommended) Schedule Preview-verified PRs" box — annotate "Done: shipped as Remediation 2 Phase B (PR #88, merged 2026-07-24; visually verified)".
+- [x] 1.2 (`9e3b98d`; same PR #89 note as 1.1) In `REMEDIATION_PLAN_2.md` (Human actions): check the `ADMIN_RECOVERY_EMAIL` box — annotate "Done 2026-07-24 (David); Forgot password? verified working end-to-end" — and the "Visually check the Vercel Preview pages" box — annotate "Done 2026-07-24 (David); pages verified after PR #88 merged". No other changes in this phase.
 
 ## Phase 2 — Branch cleanup (no code changes)
 
