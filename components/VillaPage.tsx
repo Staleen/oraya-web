@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import SiteNav from "@/components/SiteNav";
 import SiteFooter from "@/components/SiteFooter";
 import OrayaEmblem from "@/components/OrayaEmblem";
@@ -92,10 +93,18 @@ export default function VillaPage({ config }: { config: VillaPageConfig }) {
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          ...(heroImg
-            ? { backgroundImage: `url(${heroImg})`, backgroundSize: "cover", backgroundPosition: "center" }
-            : { backgroundImage: config.heroGradient }),
+          backgroundImage: config.heroGradient,
         }}>
+          {heroImg && (
+            <Image
+              src={heroImg}
+              alt={`${config.villa} cover photo`}
+              fill
+              priority
+              sizes="100vw"
+              style={{ objectFit: "cover" }}
+            />
+          )}
           {instantHeroBadge && (
             <span
               className="instant-badge instant-badge--on-photo pointer-events-none"
@@ -186,11 +195,12 @@ export default function VillaPage({ config }: { config: VillaPageConfig }) {
                   overflow: "hidden",
                 }}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <Image
                   src={img.file_url}
                   alt={img.category}
-                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                  fill
+                  sizes="260px"
+                  style={{ objectFit: "cover" }}
                 />
                 <div style={{
                   position: "absolute", bottom: 0, left: 0, right: 0,
