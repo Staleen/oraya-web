@@ -20,3 +20,17 @@ export function isUniqueViolation(error: unknown): boolean {
   const code = (error as { code?: unknown }).code;
   return code === "23505";
 }
+
+/**
+ * Plan 4 Phase 1 — 42703 is Postgres undefined_column; PGRST204 is PostgREST
+ * "column not found in schema cache" (what Supabase surfaces when an additive
+ * column migration has not been run yet). Callers use this to tolerate the
+ * pre-migration state by retrying without the named column.
+ */
+export function isMissingColumnError(error: unknown, column: string): boolean {
+  if (!error || typeof error !== "object") return false;
+  const code = (error as { code?: unknown }).code;
+  if (code !== "42703" && code !== "PGRST204") return false;
+  const message = (error as { message?: unknown }).message;
+  return typeof message === "string" && message.includes(column);
+}

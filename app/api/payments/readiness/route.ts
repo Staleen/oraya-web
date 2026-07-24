@@ -9,6 +9,6 @@ export async function GET(request: NextRequest) {
   if (denied) return denied;
 
   return NextResponse.json({
-    status: getHostedCheckoutAdminStatus(),
+    status: await getHostedCheckoutAdminStatus(),
   });
 }

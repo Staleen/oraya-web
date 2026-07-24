@@ -4,6 +4,7 @@ import type {
   PaymentAttemptStatus,
   PaymentAttemptStore,
 } from "@/lib/payments/unified-checkout-completion";
+import type { ReconciliationAttempt } from "@/lib/payments/webhook-reconciliation";
 
 /**
  * Plan 3 Phase 3 (KNOWN_BUGS #14) — Supabase implementation of the
@@ -80,3 +81,75 @@ export const supabasePaymentAttemptStore: PaymentAttemptStore = {
     return { ok: (data?.length ?? 0) === 1 };
   },
 };
+
+const ATTEMPT_RECONCILIATION_COLUMNS =
+  "id, booking_id, status, amount, currency, idempotency_key, provider_transaction_id";
+
+/**
+ * Plan 4 Phase 2 (2.1) — match a webhook event to its attempt row by
+ * idempotency_key (clientReferenceInformation.code) first, then by provider
+ * transaction id. Returns null on no match OR any storage error (the webhook
+ * handler treats both as "nothing to reconcile" — never a state change).
+ */
+export async function findPaymentAttemptByReference(ref: {
+  idempotency_key: string | null;
+  provider_transaction_id: string | null;
+}): Promise<ReconciliationAttempt | null> {
+  if (ref.idempotency_key) {
+    const { data, error } = await supabaseAdmin
+      .from("payment_attempts")
+      .select(ATTEMPT_RECONCILIATION_COLUMNS)
+      .eq("idempotency_key", ref.idempotency_key)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle<ReconciliationAttempt>();
+    if (error) {
+      console.error("[payments/attempts] attempt lookup by idempotency_key failed:", error);
+      return null;
+    }
+    if (data) return data;
+  }
+
+  if (ref.provider_transaction_id) {
+    const { data, error } = await supabaseAdmin
+      .from("payment_attempts")
+      .select(ATTEMPT_RECONCILIATION_COLUMNS)
+      .eq("provider_transaction_id", ref.provider_transaction_id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle<ReconciliationAttempt>();
+    if (error) {
+      console.error("[payments/attempts] attempt lookup by transaction id failed:", error);
+      return null;
+    }
+    if (data) return data;
+  }
+
+  return null;
+}
+
+/**
+ * Plan 4 Phase 2 (2.3) — reconciliation visibility for /api/health: counts of
+ * attempts stuck in claimed/ambiguous older than the cutoff. Counts ONLY —
+ * no amounts, no guest data. Null when the table is missing or unreadable.
+ */
+export async function countStuckPaymentAttempts(
+  olderThanIso: string,
+): Promise<{ stuck_claimed: number; stuck_ambiguous: number } | null> {
+  const counts: number[] = [];
+  for (const status of ["claimed", "ambiguous"] as const) {
+    const { count, error } = await supabaseAdmin
+      .from("payment_attempts")
+      .select("id", { count: "exact", head: true })
+      .eq("status", status)
+      .lt("created_at", olderThanIso);
+    if (error || typeof count !== "number") {
+      if (error && !isMissingTableError(error)) {
+        console.error("[payments/attempts] stuck-attempt count failed:", error);
+      }
+      return null;
+    }
+    counts.push(count);
+  }
+  return { stuck_claimed: counts[0], stuck_ambiguous: counts[1] };
+}

@@ -80,7 +80,7 @@ export async function POST(request: Request) {
     }
 
     const provider = getHostedCheckoutProviderByKey("credit_libanais");
-    const readiness = provider?.getReadiness();
+    const readiness = await provider?.getReadiness();
     if (!provider || !readiness?.checkout_ready) {
       throw new PaymentProviderConfigurationError(
         readiness?.admin_message ??

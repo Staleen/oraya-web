@@ -2,11 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireAdminAuth } from "@/lib/admin-auth";
 import { ADMIN_RECOVERY_JTI_SETTINGS_KEY } from "@/lib/admin-recovery";
+import { PAYMENTS_LIVE_ENABLED_SETTINGS_KEY } from "@/lib/payments/live-rollout";
 
 export const dynamic = "force-dynamic";
 
-/** Auth-sensitive rows: never exposed by GET, never writable via generic POST. */
-const PROTECTED_KEYS = new Set(["admin_password", ADMIN_RECOVERY_JTI_SETTINGS_KEY]);
+/**
+ * Auth-sensitive rows: never exposed by GET, never writable via generic POST.
+ * `payments_live_enabled` (Plan 4 Phase 3) is shielded like `admin_password`:
+ * only the dedicated, password-confirmed toggle endpoint may change it.
+ */
+const PROTECTED_KEYS = new Set([
+  "admin_password",
+  ADMIN_RECOVERY_JTI_SETTINGS_KEY,
+  PAYMENTS_LIVE_ENABLED_SETTINGS_KEY,
+]);
 
 // GET — return all settings rows (never exposes auth-sensitive keys)
 export async function GET(request: NextRequest) {

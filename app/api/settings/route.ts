@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
 
   if (key === PAYMENT_PUBLIC_SETTINGS_KEY) {
     const base = parsePaymentPublicSettings(data?.value ?? null);
-    const runtime = getHostedCheckoutPublicStatus();
+    const runtime = await getHostedCheckoutPublicStatus();
     const onlineModeAllowed = paymentModeAllowsPayNow(base.active_payment_mode);
     const onlineEnabled = base.online_payment_enabled && onlineModeAllowed;
     const onlineCheckoutReady = onlineEnabled && runtime.online_checkout_ready;

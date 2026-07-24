@@ -16,6 +16,36 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-07-25 - Plan 4 Phase 3: fail-closed live rollout switch replaces the sandbox-only gate
+
+**Decision:** the hardcoded `checkoutReady = configured && environment === "sandbox"` gate is replaced by an explicit, fail-closed rollout decision (`lib/payments/live-rollout.ts` `decideCreditLibanaisCheckoutReady`): checkout is ready when (a) all session env config is present AND (b) environment is `sandbox`, OR (c) environment is `production` AND all webhook/MLE env vars are present AND the server-side settings row **`payments_live_enabled` reads exactly `"true"`**. Missing row, any other value, or an unreadable settings table ⇒ NOT ready. The row is the kill switch — flipping it away from `"true"` disables live checkout instantly without a deploy. The ONLY writer is the dedicated endpoint `/api/admin/payments/live-toggle`: ENABLING requires the current admin password (same throttle discipline as the password-change flow); DISABLING requires only the admin session so the kill switch is never slowed down. The generic settings POST shields the key exactly like `admin_password`; the admin Settings payments panel gains the toggle (stark copy) and shows the CURRENT readiness verdict with the exact missing items (readiness became async end-to-end: `provider.getReadiness()` now returns a Promise).
+
+**Reason:** the production gate's second half — "live rollout controls". Go-live must be: env vars in Vercel → readiness shows zero missing → flip one admin switch; and un-live must be instant.
+
+**Impact:** `lib/payments/live-rollout.ts` (+ tests, every gate combination), `live-rollout-setting.ts`, async readiness through `provider.ts`/`stripe.ts`/`runtime.ts` and the settings/readiness/session/completion routes, new `/api/admin/payments/live-toggle`, PROTECTED_KEYS extension, PaymentSettingsSection + admin settings page UI. Tests +9 (`live-rollout.test.mts`).
+
+**Reversible?:** yes.
+
+## 2026-07-25 - Plan 4 Phase 2: verified webhooks are authoritative for payment attempts; webhook endpoint fails closed
+
+**Decision:** the CyberSource/NetCommerce webhook endpoint (`/api/payments/webhook/credit_libanais`) now has a dedicated fail-closed handler: missing MLE/verification env vars ⇒ **503** (payload never processed); missing/mismatched signature ⇒ **401** + structured log, never a state change (`lib/payments/credit-libanais-webhook.ts` — HMAC-SHA256 over the raw body keyed with the Base64-decoded webhook MLE private key, plus `v-c-key-id` match; if NetCommerce's delivered production spec differs, that one module adapts while the fail-closed contract stays). A VERIFIED event is matched to its `payment_attempts` row by `idempotency_key` (= `clientReferenceInformation.code`) or provider transaction id and is authoritative (`lib/payments/webhook-reconciliation.ts`): confirmed success for a claimed/authorized/**ambiguous** attempt records the payment on the booking through the EXISTING idempotent set-paid discipline (`decideSetPaidUpdate` + NULL-safe not-paid guard + matched-row check) and marks the attempt `recorded` — auto-resolving most ambiguous states without a human; confirmed decline/void marks it `failed` (releasing the one-in-flight claim). Contradictions with terminal states (success-for-failed, decline-for-recorded) log RECONCILIATION REQUIRED and change nothing. `GET /api/health` additionally reports counts of attempts stuck in claimed/ambiguous >1h (counts only, no amounts/guest data, verdict unchanged).
+
+**Reason:** the production gate's first half — "webhook/MLE reconciliation" — plus KNOWN_BUGS #14's residual: `ambiguous` attempts previously always required manual Business Center lookups.
+
+**Impact:** new `lib/payments/credit-libanais-webhook.ts`, `credit-libanais-webhook-handler.ts`, `webhook-reconciliation.ts`; `payment-attempts-store.ts` gains reference lookup + stuck counts; `webhook-handler.ts` routes credit_libanais to the dedicated handler (Stripe sandbox path untouched); `/api/health` extended. Tests +22 (`credit-libanais-webhook.test.mts` 12, `webhook-reconciliation.test.mts` 10).
+
+**Reversible?:** yes.
+
+## 2026-07-25 - Plan 4 Phase 1: manual-first refunds (KNOWN_BUGS #15 resolved-by-policy)
+
+**Decision:** refunds stay MANUAL — executed by hand in the NetCommerce Business Center — and the admin UI records them honestly. The former "Issue refund" action is now **"Record manual refund"** with explicit copy that it only records an already-executed refund, and it REQUIRES the Business Center refund/transaction reference (`lib/payments/manual-refund.ts`; missing reference ⇒ 400). The reference is persisted to `bookings.refund_provider_reference` (`sql/plan4-refund-provider-reference.sql`, additive human-run; the PATCH route tolerates the pre-migration state by retrying without the column — the reference always also lands in `payment_notes`). Both money-back paths (manual refund + ambiguous payment-attempt reconciliation) live in one operator doc: `docs/system/REFUND_RUNBOOK.md`.
+
+**Reason:** KNOWN_BUGS #15 — the old label implied the button moved money when it only wrote bookkeeping fields. David decided 2026-07-24 that automated provider-side refunds are a separate later plan; the honest baseline must ship before production card payments.
+
+**Impact:** admin PaymentSection copy + required reference field; validation in `app/api/admin/bookings/[id]` PATCH; new runbook; KNOWN_BUGS #15 → resolved-by-policy. Tests +7 (`lib/payments/manual-refund.test.mts`).
+
+**Reversible?:** yes.
+
 ## 2026-07-24 - Plan 3 Phase 5: Next 16 + React 19 upgrade
 
 **Decision:** the stack moved from Next 14.2.35 / React 18 to **Next 16.2.11 (Turbopack build) / React 19.2.8**, with eslint 9 + `eslint-config-next` 16 (flat `eslint.config.mjs`; `next lint` no longer exists, `npm run lint` = `eslint app components lib`), `@types/react(-dom)` 19, and **react-day-picker 9** (v8 peers on React ≤18; `fromDate`→`startMonth`, `modifiersClassNames` keeps the `deadCheckIn` class, calendar CSS in `/book` and `/events/inquiry` mapped to v9 class names). The official `next-async-request-api` codemod converted all dynamic-route params to Promises (9 API routes, 4 server pages, one client page via `React.use()`). The new react-hooks v6 (React Compiler) lint rules are pinned off — the ~35 flagged sites pre-date the upgrade and are separate refactor work. `package.json` **overrides** force patched `sharp@^0.35` and `postcss@^8.5.23` inside next, taking `npm audit` from 5 high (inside next@14) to **0 vulnerabilities**. `next.config.mjs` behavior (Supabase `remotePatterns` derivation + `unoptimized` fallback) is unchanged; tsconfig deltas are Next 16's auto-migration.
