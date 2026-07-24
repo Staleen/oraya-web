@@ -391,7 +391,10 @@ function PaymentSectionImpl({
           }}
         >
           <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: WHITE, margin: 0 }}>
-            Issue refund
+            Record manual refund
+          </p>
+          <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: 0, lineHeight: 1.45 }}>
+            Execute the refund in the NetCommerce Business Center first — this only records it. The Business Center refund reference is required.
           </p>
           <input
             value={draft.refundAmount}
@@ -400,11 +403,17 @@ function PaymentSectionImpl({
             inputMode="decimal"
             style={fieldStyle}
           />
+          <input
+            value={draft.refundReference}
+            onChange={(event) => actions.updatePaymentDraft(booking.id, { refundReference: event.target.value })}
+            placeholder="Business Center refund reference (required)"
+            style={fieldStyle}
+          />
           <textarea
             value={draft.refundNote}
             onChange={(event) => actions.updatePaymentDraft(booking.id, { refundNote: event.target.value })}
             placeholder="Refund note"
-            rows={5}
+            rows={3}
             style={{ ...fieldStyle, resize: "vertical" }}
           />
           <button
@@ -425,7 +434,7 @@ function PaymentSectionImpl({
               opacity: isRefunding ? 0.7 : 1,
             }}
           >
-            {isRefunding ? "Saving..." : "Issue refund"}
+            {isRefunding ? "Saving..." : "Record manual refund"}
           </button>
         </div>
 

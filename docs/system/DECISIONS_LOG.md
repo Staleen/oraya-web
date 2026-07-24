@@ -16,6 +16,16 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-07-25 - Plan 4 Phase 1: manual-first refunds (KNOWN_BUGS #15 resolved-by-policy)
+
+**Decision:** refunds stay MANUAL — executed by hand in the NetCommerce Business Center — and the admin UI records them honestly. The former "Issue refund" action is now **"Record manual refund"** with explicit copy that it only records an already-executed refund, and it REQUIRES the Business Center refund/transaction reference (`lib/payments/manual-refund.ts`; missing reference ⇒ 400). The reference is persisted to `bookings.refund_provider_reference` (`sql/plan4-refund-provider-reference.sql`, additive human-run; the PATCH route tolerates the pre-migration state by retrying without the column — the reference always also lands in `payment_notes`). Both money-back paths (manual refund + ambiguous payment-attempt reconciliation) live in one operator doc: `docs/system/REFUND_RUNBOOK.md`.
+
+**Reason:** KNOWN_BUGS #15 — the old label implied the button moved money when it only wrote bookkeeping fields. David decided 2026-07-24 that automated provider-side refunds are a separate later plan; the honest baseline must ship before production card payments.
+
+**Impact:** admin PaymentSection copy + required reference field; validation in `app/api/admin/bookings/[id]` PATCH; new runbook; KNOWN_BUGS #15 → resolved-by-policy. Tests +7 (`lib/payments/manual-refund.test.mts`).
+
+**Reversible?:** yes.
+
 ## 2026-07-24 - Plan 3 Phase 5: Next 16 + React 19 upgrade
 
 **Decision:** the stack moved from Next 14.2.35 / React 18 to **Next 16.2.11 (Turbopack build) / React 19.2.8**, with eslint 9 + `eslint-config-next` 16 (flat `eslint.config.mjs`; `next lint` no longer exists, `npm run lint` = `eslint app components lib`), `@types/react(-dom)` 19, and **react-day-picker 9** (v8 peers on React ≤18; `fromDate`→`startMonth`, `modifiersClassNames` keeps the `deadCheckIn` class, calendar CSS in `/book` and `/events/inquiry` mapped to v9 class names). The official `next-async-request-api` codemod converted all dynamic-route params to Promises (9 API routes, 4 server pages, one client page via `React.use()`). The new react-hooks v6 (React Compiler) lint rules are pinned off — the ~35 flagged sites pre-date the upgrade and are separate refactor work. `package.json` **overrides** force patched `sharp@^0.35` and `postcss@^8.5.23` inside next, taking `npm audit` from 5 high (inside next@14) to **0 vulnerabilities**. `next.config.mjs` behavior (Supabase `remotePatterns` derivation + `unoptimized` fallback) is unchanged; tsconfig deltas are Next 16's auto-migration.

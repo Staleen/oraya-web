@@ -57,6 +57,7 @@ export function buildInitialPaymentDraftFromBooking(booking: Booking): PaymentDr
     paymentNotes: "",
     refundAmount: booking.refund_amount != null ? String(booking.refund_amount) : "",
     refundNote: "",
+    refundReference: "",
   };
 }
 

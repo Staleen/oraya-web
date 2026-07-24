@@ -23,8 +23,9 @@ import {
   isPaymentLinkProvider,
   isPaymentLinkStatus,
 } from "@/lib/payments/provider";
+import { validateManualRefundRecord } from "@/lib/payments/manual-refund";
 import { findAvailabilityConflict } from "@/lib/calendar/availability";
-import { isExclusionViolation } from "@/lib/db-errors";
+import { isExclusionViolation, isMissingColumnError } from "@/lib/db-errors";
 import { resolveBookingRecipient } from "@/lib/booking-recipient";
 
 function parseStoredNumber(value: unknown): number | null {
@@ -73,6 +74,7 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
     "refund_status",
     "refund_amount",
     "refunded_at",
+    "refund_provider_reference",
   ] as const;
   const paymentUpdateProvided = paymentFieldNames.some((field) =>
     Object.prototype.hasOwnProperty.call(payload, field)
@@ -321,11 +323,20 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
       }
     }
 
+    // Plan 4 Phase 1 (KNOWN_BUGS #15): refunds are executed by hand in the
+    // NetCommerce Business Center — recording one here REQUIRES the Business
+    // Center refund/transaction reference so the record stays traceable.
+    const refundValidation = validateManualRefundRecord(payload);
+    if (!refundValidation.ok) {
+      return NextResponse.json({ error: refundValidation.error }, { status: 400 });
+    }
+
     readOptionalNumber("deposit_amount");
     readOptionalNumber("amount_paid");
     readOptionalNumber("amount_total");
     readOptionalNumber("amount_due");
     readOptionalNumber("refund_amount");
+    readOptionalText("refund_provider_reference");
     readOptionalText("payment_reference");
     readOptionalText("payment_notes");
     readOptionalText("payment_marked_by");
@@ -504,12 +515,33 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
   }
 
   if (statusUpdateProvided || paymentUpdateProvided || proposalUpdateProvided || proposalSendRequested) {
-    const { data, error } = await db
+    let { data, error } = await db
       .from("bookings")
       .update(updatePayload)
       .eq("id", bookingId)
       .select()
       .single();
+
+    // Plan 4 Phase 1: tolerate the pre-migration state — while the
+    // refund_provider_reference column is missing, record the refund without
+    // it (the reference is still preserved inside payment_notes).
+    if (
+      error &&
+      Object.prototype.hasOwnProperty.call(updatePayload, "refund_provider_reference") &&
+      isMissingColumnError(error, "refund_provider_reference")
+    ) {
+      console.warn(
+        "[api/admin/bookings] refund_provider_reference column missing — run sql/plan4-refund-provider-reference.sql (reference kept in payment_notes for now)",
+      );
+      const fallbackPayload = { ...updatePayload };
+      delete fallbackPayload.refund_provider_reference;
+      ({ data, error } = await db
+        .from("bookings")
+        .update(fallbackPayload)
+        .eq("id", bookingId)
+        .select()
+        .single());
+    }
 
     if (error || !data) {
       // Remediation 1.4: losing the confirm race against the DB overlap

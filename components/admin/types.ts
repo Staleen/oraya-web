@@ -136,6 +136,8 @@ export interface Booking {
   refund_status?: RefundLifecycleStatus | null;
   refund_amount?: number | null;
   refunded_at?: string | null;
+  /** Plan 4 Phase 1: NetCommerce Business Center refund/transaction reference. */
+  refund_provider_reference?: string | null;
   proposal_status?: "draft" | "sent" | "accepted" | "declined" | "expired" | null;
   proposal_total_amount?: number | null;
   proposal_deposit_amount?: number | null;

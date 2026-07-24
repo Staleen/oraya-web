@@ -312,6 +312,7 @@ export default function BookingsTable({
           paymentNotes: "",
           refundAmount: "",
           refundNote: "",
+          refundReference: "",
         }),
         ...updates,
       },
@@ -489,7 +490,21 @@ export default function BookingsTable({
       return;
     }
 
-    const combinedNotes = [booking.payment_notes?.trim(), draft.refundNote.trim() ? `Refund: ${draft.refundNote.trim()}` : ""]
+    // Plan 4 Phase 1 (KNOWN_BUGS #15): this action only RECORDS a refund the
+    // admin already executed in the NetCommerce Business Center — the Business
+    // Center refund/transaction reference is required for traceability.
+    const refundReference = draft.refundReference.trim();
+    if (!refundReference) {
+      setError(
+        "Enter the NetCommerce Business Center refund reference. Execute the refund in the Business Center first, then record it here.",
+      );
+      return;
+    }
+
+    const refundNoteLine = `Manual refund recorded — Business Center ref ${refundReference}${
+      draft.refundNote.trim() ? `: ${draft.refundNote.trim()}` : ""
+    }`;
+    const combinedNotes = [booking.payment_notes?.trim(), refundNoteLine]
       .filter(Boolean)
       .join("\n");
 
@@ -499,13 +514,14 @@ export default function BookingsTable({
         refund_status: "refunded",
         refund_amount: refundAmount,
         refunded_at: new Date().toISOString(),
+        refund_provider_reference: refundReference,
         payment_notes: combinedNotes || null,
       },
       "issue-refund",
     );
 
     if (updated) {
-      updatePaymentDraft(booking.id, { refundAmount: "", refundNote: "" });
+      updatePaymentDraft(booking.id, { refundAmount: "", refundNote: "", refundReference: "" });
     }
   }
 

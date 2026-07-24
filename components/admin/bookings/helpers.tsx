@@ -55,6 +55,8 @@ export type PaymentDraft = {
   paymentNotes: string;
   refundAmount: string;
   refundNote: string;
+  /** Plan 4 Phase 1: NetCommerce Business Center refund/transaction reference (required). */
+  refundReference: string;
 };
 export type EventProposalServiceOption = {
   key: string;
