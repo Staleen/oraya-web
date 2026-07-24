@@ -51,6 +51,13 @@ export interface CreditLibanaisTransientTokenPaymentInput {
   currency: "USD" | "LBP";
   guest_name?: string | null;
   guest_email?: string | null;
+  /**
+   * Plan 3 Phase 3 (KNOWN_BUGS #14): deterministic per-attempt merchant
+   * reference (deriveMerchantReference in unified-checkout-completion.ts).
+   * When set it is sent as clientReferenceInformation.code so a retry can be
+   * reconciled against exactly one provider operation.
+   */
+  merchant_reference?: string | null;
 }
 
 export interface CreditLibanaisTransientTokenPaymentResult {
@@ -347,8 +354,10 @@ function buildPaymentRequest(
 
   return {
     clientReferenceInformation: {
-      code: input.provider_session_id,
-      comments: `Oraya booking ${input.booking_id}`,
+      // The attempt-derived merchant reference (idempotency identifier) when
+      // provided; the provider session id remains the legacy fallback.
+      code: input.merchant_reference?.trim() || input.provider_session_id,
+      comments: `Oraya booking ${input.booking_id} session ${input.provider_session_id}`,
     },
     processingInformation: {
       commerceIndicator: "internet",
