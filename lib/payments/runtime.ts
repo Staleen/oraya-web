@@ -69,8 +69,8 @@ export interface HostedCheckoutAdminStatus {
   missing_requirements: string[];
 }
 
-function getHostedCheckoutStatusFromProvider(provider: HostedCheckoutProvider): HostedCheckoutAdminStatus {
-  const readiness = provider.getReadiness();
+async function getHostedCheckoutStatusFromProvider(provider: HostedCheckoutProvider): Promise<HostedCheckoutAdminStatus> {
+  const readiness = await provider.getReadiness();
   return {
     provider_key: provider.key,
     provider_display_name: provider.display_name,
@@ -85,10 +85,10 @@ function getHostedCheckoutStatusFromProvider(provider: HostedCheckoutProvider): 
   };
 }
 
-export function getHostedCheckoutAdminStatus(): HostedCheckoutAdminStatus {
+export async function getHostedCheckoutAdminStatus(): Promise<HostedCheckoutAdminStatus> {
   try {
     const provider = getConfiguredHostedCheckoutProvider();
-    return getHostedCheckoutStatusFromProvider(provider);
+    return await getHostedCheckoutStatusFromProvider(provider);
   } catch (error) {
     const message =
       error instanceof PaymentProviderConfigurationError
@@ -109,8 +109,8 @@ export function getHostedCheckoutAdminStatus(): HostedCheckoutAdminStatus {
   }
 }
 
-export function getHostedCheckoutPublicStatus() {
-  const status = getHostedCheckoutAdminStatus();
+export async function getHostedCheckoutPublicStatus() {
+  const status = await getHostedCheckoutAdminStatus();
   return {
     provider_key: status.provider_key,
     provider_display_name: status.provider_display_name,

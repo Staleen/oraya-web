@@ -25,7 +25,13 @@ test("NetCommerce payment authorization uses only transient payment tokens", () 
   assert.doesNotMatch(source, /consumerPreference/);
 });
 
-test("NetCommerce checkout remains sandbox-only until production hardening is approved", () => {
-  assert.match(source, /const checkoutReady = configured && config\.environment === "sandbox"/);
-  assert.match(source, /Production checkout remains disabled until webhook\/MLE reconciliation/);
+test("NetCommerce production checkout is gated by the fail-closed live rollout switch (Plan 4 Phase 3)", () => {
+  // The old hardcoded sandbox-only gate is gone ON PURPOSE — readiness now
+  // delegates to the pure fail-closed decision (sandbox, or production +
+  // webhook/MLE env + payments_live_enabled === "true"; anything else ⇒ not
+  // ready). Pin the delegation and the settings-row read.
+  assert.doesNotMatch(source, /const checkoutReady = configured && config\.environment === "sandbox"/);
+  assert.match(source, /decideCreditLibanaisCheckoutReady\(\{/);
+  assert.match(source, /readPaymentsLiveSetting\(\)/);
+  assert.match(source, /Production checkout is DISABLED \(fail closed\)/);
 });

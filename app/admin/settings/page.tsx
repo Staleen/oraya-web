@@ -51,6 +51,49 @@ export default function AdminSettingsPage() {
   const [paymentProviderStatus, setPaymentProviderStatus] = useState<HostedCheckoutAdminStatus | null>(null);
   const [paymentSaving, setPaymentSaving] = useState(false);
   const [paymentSaved, setPaymentSaved] = useState(false);
+  // Plan 4 Phase 3 (3.2): Live card payments rollout switch.
+  const [liveEnabled, setLiveEnabled] = useState<boolean | null>(null);
+  const [liveSaving, setLiveSaving] = useState(false);
+  const [liveError, setLiveError] = useState("");
+  const [liveSaved, setLiveSaved] = useState(false);
+
+  function refreshPaymentReadiness() {
+    fetch("/api/payments/readiness", adminApiFetchInit)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.status) setPaymentProviderStatus(d.status as HostedCheckoutAdminStatus);
+      })
+      .catch((e) => console.error("[admin] payment readiness fetch error:", e));
+  }
+
+  async function setLivePayments(enabled: boolean, currentPassword?: string) {
+    setLiveSaving(true);
+    setLiveError("");
+    setLiveSaved(false);
+    try {
+      const res = await fetch("/api/admin/payments/live-toggle", {
+        ...adminApiFetchInit,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          enabled ? { enabled: true, current_password: currentPassword ?? "" } : { enabled: false },
+        ),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setLiveEnabled(Boolean(d.enabled));
+        setLiveSaved(true);
+        setTimeout(() => setLiveSaved(false), 5000);
+        refreshPaymentReadiness();
+      } else {
+        setLiveError(typeof d.error === "string" ? d.error : "Failed to update live card payments.");
+      }
+    } catch {
+      setLiveError("Failed to update live card payments. Check your connection and try again.");
+    } finally {
+      setLiveSaving(false);
+    }
+  }
 
   useEffect(() => {
     fetch("/api/admin/settings", adminApiFetchInit)
@@ -86,6 +129,13 @@ export default function AdminSettingsPage() {
         if (d?.status) setPaymentProviderStatus(d.status as HostedCheckoutAdminStatus);
       })
       .catch((e) => console.error("[admin] payment readiness fetch error:", e));
+
+    fetch("/api/admin/payments/live-toggle", adminApiFetchInit)
+      .then((r) => r.json())
+      .then((d) => {
+        if (typeof d?.enabled === "boolean") setLiveEnabled(d.enabled);
+      })
+      .catch((e) => console.error("[admin] live payments fetch error:", e));
   }, []);
 
   async function saveWhatsapp() {
@@ -285,6 +335,15 @@ export default function AdminSettingsPage() {
       <PaymentSettingsSection
         value={paymentSettings}
         providerStatus={paymentProviderStatus}
+        livePayments={{
+          enabled: liveEnabled,
+          saving: liveSaving,
+          error: liveError,
+          saved: liveSaved,
+          onChange: (enabled, currentPassword) => {
+            void setLivePayments(enabled, currentPassword);
+          },
+        }}
         onChange={(next) => {
           setPaymentSaved(false);
           setPaymentSettings(parsePaymentPublicSettings(next));

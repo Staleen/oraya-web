@@ -182,9 +182,10 @@ export interface HostedCheckoutProvider {
   readonly persisted_link_provider: PaymentLinkProvider | null;
   /**
    * Safe runtime readiness summary for guest/admin UI. Never include raw
-   * secret values here.
+   * secret values here. Async since Plan 4 Phase 3: production readiness
+   * consults the server-side `payments_live_enabled` rollout switch.
    */
-  getReadiness(): HostedCheckoutProviderReadiness;
+  getReadiness(): Promise<HostedCheckoutProviderReadiness>;
 
   createCheckoutSession(input: CreateCheckoutSessionInput): Promise<CreateCheckoutSessionResult>;
   verifyWebhook(input: WebhookVerificationInput): Promise<WebhookVerificationResult>;

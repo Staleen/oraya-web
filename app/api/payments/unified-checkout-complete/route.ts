@@ -118,7 +118,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Payment session is not ready yet. Please refresh and try again." }, { status: 400 });
     }
 
-    const readiness = getCreditLibanaisReadiness();
+    const readiness = await getCreditLibanaisReadiness();
     if (!readiness.checkout_ready) {
       throw new PaymentProviderConfigurationError(readiness.admin_message);
     }

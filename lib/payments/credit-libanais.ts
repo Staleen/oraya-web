@@ -1,6 +1,8 @@
 import crypto from "crypto";
 import { roundMoney } from "@/lib/money";
 import { verifyAuthorizedAmountDetails } from "@/lib/payments/authorized-amount";
+import { decideCreditLibanaisCheckoutReady } from "@/lib/payments/live-rollout";
+import { readPaymentsLiveSetting } from "@/lib/payments/live-rollout-setting";
 import type {
   CreateCheckoutSessionInput,
   CreateCheckoutSessionResult,
@@ -149,36 +151,64 @@ function getWebhookMissingRequirements(config: NetCommerceConfig) {
   if (!config.webhookMleCertificateId) {
     missing.push("NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_CERTIFICATE_ID is not configured");
   }
-  missing.push("CyberSource webhook MLE decryption/verification must be confirmed for asynchronous reconciliation and production hardening");
   return missing;
 }
 
-export function getCreditLibanaisReadiness(): HostedCheckoutProviderReadiness {
+/**
+ * Plan 4 Phase 3 (3.1) — async readiness with the fail-closed live rollout
+ * switch. Checkout is ready when (a) session env config is complete AND
+ * (b) environment is sandbox, OR (c) environment is production AND all
+ * webhook/MLE env vars are present AND the `payments_live_enabled` settings
+ * row reads exactly "true" (missing row / other value / unreadable settings
+ * ⇒ NOT ready). The settings row is the kill switch — flipping it away from
+ * "true" disables live checkout instantly, without a deploy.
+ */
+export async function getCreditLibanaisReadiness(): Promise<HostedCheckoutProviderReadiness> {
   const config = readNetCommerceConfig();
   const sessionMissing = getSessionMissingRequirements(config);
-  const webhookMissing = getWebhookMissingRequirements(config);
+  const webhookEnvMissing = getWebhookMissingRequirements(config);
   const configured = sessionMissing.length === 0;
-  const checkoutReady = configured && config.environment === "sandbox";
-  const productionGate =
-    config.environment === "production"
-      ? ["Production checkout remains disabled until webhook/MLE reconciliation and live rollout controls are implemented and approved"]
+
+  // Only production consults the settings row — sandbox never reads it, so a
+  // DB hiccup cannot block sandbox verification work.
+  const liveSetting =
+    configured && config.environment === "production"
+      ? await readPaymentsLiveSetting()
+      : ({ ok: true, value: null } as const);
+
+  const decision = decideCreditLibanaisCheckoutReady({
+    environment: config.environment,
+    session_missing: sessionMissing,
+    webhook_env_missing: webhookEnvMissing,
+    live_setting: liveSetting,
+  });
+
+  // In sandbox the webhook/MLE vars are not gating, but they ARE required for
+  // production go-live — keep them visible in the readiness panel.
+  const sandboxAdvisories =
+    config.environment === "sandbox"
+      ? webhookEnvMissing.map((item) => `${item} (required for production go-live)`)
       : [];
+
+  const adminMessage = decision.checkout_ready
+    ? config.environment === "production"
+      ? "LIVE card payments are ENABLED — production checkout is active. Kill switch: admin Settings → Live card payments."
+      : "CyberSource Unified Checkout sandbox session creation, transient-token server authorization, and webhook reconciliation are configured. Production go-live additionally requires the webhook/MLE env vars and the Live card payments switch."
+    : configured && config.environment === "production"
+      ? `Production checkout is DISABLED (fail closed). Outstanding: ${decision.missing.join("; ")}.`
+      : "Credit Libanais / NetCommerce Unified Checkout is selected, but required CyberSource sandbox/production configuration is incomplete.";
 
   return {
     configured,
     implemented: true,
-    checkout_ready: checkoutReady,
+    checkout_ready: decision.checkout_ready,
     environment: toHostedEnvironment(config.environment),
     guest_message:
       configured
         ? ""
         : "Secure online payment by Credit Libanais / NetCommerce is being prepared.",
-    admin_message: checkoutReady
-      ? "CyberSource Unified Checkout sandbox session creation and transient-token server authorization are configured. Webhook/MLE verification remains required for asynchronous reconciliation and production hardening."
-      : configured && config.environment === "production"
-        ? "CyberSource production credentials are configured, but live checkout remains disabled until webhook/MLE reconciliation and production rollout controls are implemented and approved."
-      : "Credit Libanais / NetCommerce Unified Checkout is selected, but required CyberSource sandbox/production configuration is incomplete.",
-    missing_requirements: [...sessionMissing, ...webhookMissing, ...productionGate],
+    admin_message: adminMessage,
+    missing_requirements: [...decision.missing, ...sandboxAdvisories],
   };
 }
 
@@ -208,10 +238,10 @@ function requireSessionConfig() {
   };
 }
 
-function getReadinessError() {
-  const readiness = getCreditLibanaisReadiness();
+async function getReadinessError() {
+  const readiness = await getCreditLibanaisReadiness();
   return new PaymentProviderConfigurationError(
-    `Credit Libanais / NetCommerce checkout is not configured. Outstanding requirements: ${readiness.missing_requirements.join("; ")}.`,
+    `Credit Libanais / NetCommerce checkout is not ready. Outstanding requirements: ${readiness.missing_requirements.join("; ")}.`,
   );
 }
 
@@ -533,9 +563,9 @@ export const creditLibanaisPaymentProvider: HostedCheckoutProvider = {
   },
 
   async createCheckoutSession(input: CreateCheckoutSessionInput): Promise<CreateCheckoutSessionResult> {
-    const readiness = getCreditLibanaisReadiness();
+    const readiness = await getCreditLibanaisReadiness();
     if (!readiness.checkout_ready) {
-      throw getReadinessError();
+      throw await getReadinessError();
     }
     if (!input.payment_page_url) {
       throw new PaymentProviderConfigurationError("Credit Libanais checkout requires an internal Oraya payment page URL.");
@@ -550,7 +580,12 @@ export const creditLibanaisPaymentProvider: HostedCheckoutProvider = {
   },
 
   async verifyWebhook(): Promise<WebhookVerificationResult> {
-    throw getReadinessError();
+    // Plan 4 Phase 2: credit_libanais webhooks never reach the generic
+    // provider path — webhook-handler.ts routes them to the dedicated
+    // fail-closed handler (lib/payments/credit-libanais-webhook-handler.ts).
+    throw new PaymentProviderConfigurationError(
+      "Credit Libanais webhooks are verified and reconciled by the dedicated webhook handler.",
+    );
   },
 
   mapProviderEventToBookingUpdate(event: PaymentProviderEvent): PaymentBookingDelta {

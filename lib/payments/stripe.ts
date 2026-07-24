@@ -190,7 +190,7 @@ export const stripePaymentProvider: HostedCheckoutProvider = {
   guest_setup_message: null,
   persisted_link_provider: "stripe",
 
-  getReadiness() {
+  async getReadiness() {
     return getStripeReadiness();
   },
 

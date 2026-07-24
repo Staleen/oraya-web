@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import {
   DEFAULT_PAYMENT_PUBLIC_SETTINGS,
   GUEST_MANUAL_PAYMENT_RAILS,
@@ -29,9 +29,21 @@ function textareaStyle(): CSSProperties {
   };
 }
 
+/** Plan 4 Phase 3 (3.2) — state + actions for the Live card payments switch. */
+export type LivePaymentsToggleState = {
+  /** null while loading / unknown. */
+  enabled: boolean | null;
+  saving: boolean;
+  error: string;
+  saved: boolean;
+  /** Enabling requires the current admin password; disabling does not. */
+  onChange: (enabled: boolean, currentPassword?: string) => void;
+};
+
 export default function PaymentSettingsSection({
   value,
   providerStatus,
+  livePayments,
   onChange,
   onSave,
   saving,
@@ -39,11 +51,13 @@ export default function PaymentSettingsSection({
 }: {
   value: PaymentPublicSettings;
   providerStatus: HostedCheckoutAdminStatus | null;
+  livePayments: LivePaymentsToggleState;
   onChange: (next: PaymentPublicSettings) => void;
   onSave: () => void;
   saving: boolean;
   saved: boolean;
 }) {
+  const [liveEnablePassword, setLiveEnablePassword] = useState("");
   const isMobile = typeof window !== "undefined" ? window.innerWidth <= 768 : false;
 
   function patch<K extends keyof PaymentPublicSettings>(key: K, next: PaymentPublicSettings[K]) {
@@ -113,6 +127,109 @@ export default function PaymentSettingsSection({
               </span>
             ))}
           </div>
+        ) : (
+          <p style={{ fontFamily: LATO, fontSize: "11px", color: "#6fcf8a", margin: 0 }}>
+            Zero missing requirements.
+          </p>
+        )}
+      </div>
+
+      {/* Plan 4 Phase 3 (3.2) — Live card payments rollout switch. */}
+      <div
+        style={{
+          border: `0.5px solid ${livePayments.enabled ? "rgba(224,112,112,0.4)" : BORDER}`,
+          padding: "14px 16px",
+          backgroundColor: livePayments.enabled ? "rgba(224,112,112,0.06)" : "rgba(255,255,255,0.02)",
+          marginBottom: "1.5rem",
+        }}
+      >
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center", marginBottom: "10px" }}>
+          <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, margin: 0 }}>
+            Live card payments
+          </p>
+          <span
+            style={{
+              fontFamily: LATO,
+              fontSize: "10px",
+              letterSpacing: "1.5px",
+              textTransform: "uppercase",
+              color: livePayments.enabled === null ? MUTED : livePayments.enabled ? "#f08b8b" : "#6fcf8a",
+            }}
+          >
+            {livePayments.enabled === null ? "Loading..." : livePayments.enabled ? "ENABLED — real cards are being charged" : "Disabled (fail closed)"}
+          </span>
+        </div>
+        <p style={{ fontFamily: LATO, fontSize: "12px", color: WHITE, margin: "0 0 12px", lineHeight: 1.65 }}>
+          Enabling this switch makes guest checkout charge REAL cards immediately (production environment plus complete
+          webhook/MLE configuration still required). Disabling it stops NEW checkouts instantly — the kill switch — but does
+          not affect payments already made.
+        </p>
+        {livePayments.enabled ? (
+          <button
+            type="button"
+            onClick={() => livePayments.onChange(false)}
+            disabled={livePayments.saving}
+            style={{
+              fontFamily: LATO,
+              fontSize: "10px",
+              letterSpacing: "2px",
+              textTransform: "uppercase",
+              color: WHITE,
+              backgroundColor: "rgba(224,112,112,0.2)",
+              border: "0.5px solid rgba(224,112,112,0.45)",
+              padding: "12px 24px",
+              cursor: livePayments.saving ? "not-allowed" : "pointer",
+              opacity: livePayments.saving ? 0.7 : 1,
+            }}
+          >
+            {livePayments.saving ? "Saving..." : "Disable live card payments now"}
+          </button>
+        ) : (
+          <div style={{ display: "grid", gap: "10px", maxWidth: "420px" }}>
+            <input
+              type="password"
+              value={liveEnablePassword}
+              onChange={(event) => setLiveEnablePassword(event.target.value)}
+              placeholder="Current admin password (required to enable)"
+              autoComplete="current-password"
+              style={fieldStyle}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                livePayments.onChange(true, liveEnablePassword);
+                setLiveEnablePassword("");
+              }}
+              disabled={livePayments.saving || livePayments.enabled === null || !liveEnablePassword.trim()}
+              style={{
+                fontFamily: LATO,
+                fontSize: "10px",
+                letterSpacing: "2px",
+                textTransform: "uppercase",
+                color: CHARCOAL,
+                backgroundColor: GOLD,
+                border: "none",
+                padding: "12px 24px",
+                cursor:
+                  livePayments.saving || livePayments.enabled === null || !liveEnablePassword.trim()
+                    ? "not-allowed"
+                    : "pointer",
+                opacity: livePayments.saving || !liveEnablePassword.trim() ? 0.7 : 1,
+              }}
+            >
+              {livePayments.saving ? "Saving..." : "Enable live card payments"}
+            </button>
+          </div>
+        )}
+        {livePayments.error ? (
+          <p style={{ fontFamily: LATO, fontSize: "11px", color: "#e07070", margin: "10px 0 0" }}>
+            {livePayments.error}
+          </p>
+        ) : null}
+        {livePayments.saved ? (
+          <p style={{ fontFamily: LATO, fontSize: "11px", color: "#6fcf8a", margin: "10px 0 0" }}>
+            Saved — the readiness panel above reflects the new state.
+          </p>
         ) : null}
       </div>
 
