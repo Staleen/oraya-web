@@ -21,7 +21,7 @@ import {
   findEventServiceSeedByLabel,
 } from "@/lib/event-service-seed";
 import { supabase } from "@/lib/supabase";
-import { buildBookedRangeList, createEventCalendarRules } from "@/lib/booking/calendar-validity";
+import { buildBookedRangeList, normalizeSelectedRange, createEventCalendarRules } from "@/lib/booking/calendar-validity";
 import { fmtDate, nightCount, toISO } from "@/lib/guest-format";
 import { EMAIL_RE } from "@/lib/guest-validation";
 import { takeBookToEventHandoffIfLock } from "@/lib/event-inquiry-handoff";
@@ -1274,6 +1274,10 @@ function EventInquiryPageInner() {
 
   function handleDateSelect(nextRange: DateRange | undefined, selectedDay: Date) {
     if (availabilityError) return;
+    // react-day-picker v9 returns {from: day, to: day} on the FIRST click in
+    // range mode (v8: {from: day, to: undefined}) — normalize a same-day
+    // range to an in-progress selection so it isn't rejected as a 0-night stay.
+    const range = normalizeSelectedRange(nextRange);
     const startsNewRange =
       !dateRange?.from ||
       Boolean(dateRange.to) ||
@@ -1288,10 +1292,10 @@ function EventInquiryPageInner() {
     }
 
     if (
-      nextRange?.from &&
-      nextRange.to &&
-      (!isValidEventCheckoutFrom(nextRange.from, nextRange.to) ||
-        incomingOperationalOverlapsConfirmed(nextRange.from, nextRange.to))
+      range?.from &&
+      range.to &&
+      (!isValidEventCheckoutFrom(range.from, range.to) ||
+        incomingOperationalOverlapsConfirmed(range.from, range.to))
     ) {
       setDateRange(undefined);
       setError(
@@ -1301,7 +1305,7 @@ function EventInquiryPageInner() {
     }
 
     setError("");
-    setDateRange(nextRange);
+    setDateRange(range);
   }
 
   function focusFieldAfterScroll(scrollEl: HTMLElement | null, field: HTMLElement | null) {

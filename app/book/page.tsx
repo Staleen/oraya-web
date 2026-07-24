@@ -6,7 +6,7 @@ import type { DateRange, Matcher } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 import OrayaLogoFull from "@/components/OrayaLogoFull";
 import { getVillaBasePrice, getVillaEntryPrice, getVillaPricing } from "@/lib/admin-pricing";
-import { buildBookedRangeList, createStayCalendarRules } from "@/lib/booking/calendar-validity";
+import { buildBookedRangeList, normalizeSelectedRange, createStayCalendarRules } from "@/lib/booking/calendar-validity";
 import { fmtDate, formatUsd, nightCount, toISO } from "@/lib/guest-format";
 import { EMAIL_RE } from "@/lib/guest-validation";
 import {
@@ -1722,6 +1722,10 @@ function BookPageInner() {
 
   function handleDateSelect(nextRange: DateRange | undefined, selectedDay: Date) {
     if (availabilityError) return;
+    // react-day-picker v9 returns {from: day, to: day} on the FIRST click in
+    // range mode (v8: {from: day, to: undefined}) — normalize a same-day
+    // range to an in-progress selection so it isn't rejected as a 0-night stay.
+    const range = normalizeSelectedRange(nextRange);
     const startsNewRange =
       !dateRange?.from ||
       Boolean(dateRange.to) ||
@@ -1733,17 +1737,17 @@ function BookPageInner() {
       return;
     }
 
-    if (nextRange?.from && nextRange.to && !isValidCheckoutFrom(nextRange.from, nextRange.to)) {
+    if (range?.from && range.to && !isValidCheckoutFrom(range.from, range.to)) {
       setDateRange(undefined);
       setError("Those dates are not available as a continuous stay. Please choose your dates again.");
       return;
     }
 
     setError("");
-    if (nextRange?.from) {
-      syncCalendarMonthToSelection(nextRange.from);
+    if (range?.from) {
+      syncCalendarMonthToSelection(range.from);
     }
-    setDateRange(nextRange);
+    setDateRange(range);
   }
 
   function validateStep1Basics(): boolean {
