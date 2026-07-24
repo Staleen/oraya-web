@@ -38,10 +38,8 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 // Same checkout-day expiry every transactional view-token mint uses
 // (see lib/send-booking-email.ts / app/api/bookings POST).
 
-export async function GET(
-  request: Request,
-  { params }: { params: { id: string } },
-) {
+export async function GET(request: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const denied = requireAdminAuth(request);
   if (denied) return denied;
 

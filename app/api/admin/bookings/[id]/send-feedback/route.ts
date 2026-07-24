@@ -21,7 +21,8 @@ async function resolveRecipientEmail(booking: {
   return email;
 }
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const denied = requireAdminAuth(request);
   if (denied) return denied;
 

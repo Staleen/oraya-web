@@ -16,6 +16,16 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-07-24 - Plan 3 Phase 5: Next 16 + React 19 upgrade
+
+**Decision:** the stack moved from Next 14.2.35 / React 18 to **Next 16.2.11 (Turbopack build) / React 19.2.8**, with eslint 9 + `eslint-config-next` 16 (flat `eslint.config.mjs`; `next lint` no longer exists, `npm run lint` = `eslint app components lib`), `@types/react(-dom)` 19, and **react-day-picker 9** (v8 peers on React ≤18; `fromDate`→`startMonth`, `modifiersClassNames` keeps the `deadCheckIn` class, calendar CSS in `/book` and `/events/inquiry` mapped to v9 class names). The official `next-async-request-api` codemod converted all dynamic-route params to Promises (9 API routes, 4 server pages, one client page via `React.use()`). The new react-hooks v6 (React Compiler) lint rules are pinned off — the ~35 flagged sites pre-date the upgrade and are separate refactor work. `package.json` **overrides** force patched `sharp@^0.35` and `postcss@^8.5.23` inside next, taking `npm audit` from 5 high (inside next@14) to **0 vulnerabilities**. `next.config.mjs` behavior (Supabase `remotePatterns` derivation + `unoptimized` fallback) is unchanged; tsconfig deltas are Next 16's auto-migration.
+
+**Reason:** the last remaining `npm audit` high findings all lived inside next@14; the upgrade was deliberately sequenced LAST so Plan 3's payment/observability work landed on the stable stack first.
+
+**Impact:** PR #93; David visually verifies homepage, /book calendar flow, both villa pages, admin dashboard + Bookings tab, booking view, and events inquiry on the Vercel Preview before merging. Tests 264/264, tsc/build/lint clean (37 pre-existing `no-img-element` warnings only).
+
+**Reversible?:** yes (single branch), but staying on next@14 re-accepts 5 known high advisories.
+
 ## 2026-07-24 - Plan 3 Phase 4: /api/health config check + email-config observability (KNOWN_BUGS #2)
 
 **Decision:** an unauthenticated `GET /api/health` (pure decision in `lib/health.ts`, route force-dynamic) returns 200 `{ok:true}` when the required production keys are present and 503 with the missing key NAMES (never values, nothing sensitive) otherwise — required set: `RESEND_API_KEY`, `ADMIN_SECRET`, `ADMIN_RECOVERY_EMAIL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`. The seven email senders that silently `console.warn`-skipped on a missing `RESEND_API_KEY` now report through `lib/email-config.ts` `reportMissingResendKey()`: in production a structured `console.error` with the stable grep-able tag `[email-config-missing]`, warn elsewhere (dev legitimately runs without Resend). Senders that already THROW on a missing key (`send-admin-recovery-email`, `send-feedback-request-email`) are unchanged — they were never silent.

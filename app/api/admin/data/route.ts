@@ -42,7 +42,7 @@ export async function GET(request: Request) {
   try {
     let page    = 1;
     const perPage = 1000;
-    // eslint-disable-next-line no-constant-condition
+
     while (true) {
       const { data: authData, error: authError } = await supabaseAdmin.auth.admin.listUsers({
         page,

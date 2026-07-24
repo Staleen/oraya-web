@@ -14,10 +14,8 @@ async function getAuthUser(request: Request) {
 }
 
 // PATCH: cancel or modify a booking (member's own only)
-export async function PATCH(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+export async function PATCH(request: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const user = await getAuthUser(request);
     if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });

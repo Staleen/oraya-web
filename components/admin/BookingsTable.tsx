@@ -1255,7 +1255,7 @@ export default function BookingsTable({
       setFeedbackPrepBookingId(bookingId);
     },
   };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
   const cardActions = useMemo<BookingCardActions>(() => ({
     toggleCardPanel: (...args) => cardActionsRef.current!.toggleCardPanel(...args),
     updatePaymentDraft: (...args) => cardActionsRef.current!.updatePaymentDraft(...args),

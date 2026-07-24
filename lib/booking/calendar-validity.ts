@@ -45,6 +45,25 @@ export function buildBookedRangeList(confirmedRanges: CalendarRange[]): BlockedR
   });
 }
 
+export type SelectedDayRange = { from?: Date | undefined; to?: Date | undefined };
+
+/**
+ * Plan 3 Phase 5 (react-day-picker 8 → 9): in v9's mode="range", the FIRST
+ * click returns { from: day, to: day } — v8 returned { from: day, to:
+ * undefined }. The pages' handleDateSelect treated that same-day range as a
+ * completed 0-night stay and rejected every first click. Normalize a same-day
+ * range (calendar-day comparison, time-of-day ignored) back to the v8
+ * in-progress shape; every other shape passes through untouched.
+ */
+export function normalizeSelectedRange<R extends SelectedDayRange>(
+  range: R | undefined,
+): R | { from: Date; to: undefined } | undefined {
+  if (range?.from && range.to && toLocalISO(range.from) === toLocalISO(range.to)) {
+    return { from: range.from, to: undefined };
+  }
+  return range;
+}
+
 export type StayCalendarRules = {
   isCalendarDateBlocked: (d: Date) => boolean;
   isStayRangeAvailable: (checkInDay: Date, checkOutDay: Date) => boolean;

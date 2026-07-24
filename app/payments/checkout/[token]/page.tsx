@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, use } from "react";
 
 const GOLD = "#C9A45C";
 const WHITE = "#F8F3E7";
@@ -173,7 +173,8 @@ function readTransientToken(value: string | { transientTokenJwt?: string }) {
   throw new Error("CyberSource did not return a transient payment token.");
 }
 
-export default function PaymentCheckoutPage({ params }: { params: { token: string } }) {
+export default function PaymentCheckoutPage(props: { params: Promise<{ token: string }> }) {
+  const params = use(props.params);
   const token = params.token;
   const [state, setState] = useState<SessionState>({ status: "loading" });
   const [summary, setSummary] = useState<SessionResponse["booking_summary"] | null>(null);

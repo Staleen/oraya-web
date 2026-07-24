@@ -286,13 +286,14 @@ function ErrorShell({ title, subtitle }: { title: string; subtitle: string }) {
   );
 }
 
-export default async function BookingViewPage({
-  params,
-  searchParams,
-}: {
-  params: { token: string };
-  searchParams?: { proposal?: string; payment?: string };
-}) {
+export default async function BookingViewPage(
+  props: {
+    params: Promise<{ token: string }>;
+    searchParams?: Promise<{ proposal?: string; payment?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const verified = verifyViewToken(decodeURIComponent(params.token));
 
   if (!verified.ok) {

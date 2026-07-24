@@ -37,10 +37,8 @@ function parseStoredNumber(value: unknown): number | null {
 }
 
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PATCH(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const denied = requireAdminAuth(request);
   if (denied) return denied;
 

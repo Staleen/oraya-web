@@ -12,6 +12,7 @@ import {
   buildBookedRangeList,
   createEventCalendarRules,
   createStayCalendarRules,
+  normalizeSelectedRange,
   parseLocalISO,
 } from "./calendar-validity.ts";
 
@@ -99,4 +100,45 @@ test("event rules: setup day before the event must also be free", () => {
   );
   assert.equal(rules.isDeadEventCheckInDate(parseLocalISO("2026-08-13")), true);
   assert.equal(rules.isDeadEventCheckInDate(parseLocalISO("2026-08-14")), false);
+});
+
+// ── Plan 3 Phase 5 regression: react-day-picker v9 first-click same-day range ──
+
+test("v9 first click {from: d, to: d} normalizes to an in-progress selection", () => {
+  const day = parseLocalISO("2026-08-20");
+  const normalized = normalizeSelectedRange({ from: day, to: day });
+  assert.equal(normalized?.from, day);
+  assert.equal(normalized?.to, undefined);
+  // The regression: the pages' completed-range rejection keys on from && to —
+  // after normalization a first click must NOT look like a 0-night stay.
+  assert.equal(Boolean(normalized?.from && normalized?.to), false);
+});
+
+test("same calendar day at different times still normalizes (date-only comparison)", () => {
+  const from = new Date(2026, 7, 20, 0, 0, 0);
+  const to = new Date(2026, 7, 20, 23, 59, 59);
+  const normalized = normalizeSelectedRange({ from, to });
+  assert.equal(normalized?.to, undefined);
+});
+
+test("a real multi-night range passes through untouched", () => {
+  const range = { from: parseLocalISO("2026-08-20"), to: parseLocalISO("2026-08-23") };
+  assert.equal(normalizeSelectedRange(range), range);
+});
+
+test("in-progress and empty selections pass through untouched", () => {
+  const inProgress = { from: parseLocalISO("2026-08-20"), to: undefined };
+  assert.equal(normalizeSelectedRange(inProgress), inProgress);
+  assert.equal(normalizeSelectedRange(undefined), undefined);
+  const empty = { from: undefined, to: undefined };
+  assert.equal(normalizeSelectedRange(empty), empty);
+});
+
+test("backwards completion {from: earlier, to: anchor} is NOT normalized away", () => {
+  // v9 (like v8) completes the range backwards when clicking a day before the
+  // in-progress anchor — that is a legitimate 2-day range, not a first click.
+  const range = { from: parseLocalISO("2026-08-18"), to: parseLocalISO("2026-08-20") };
+  const normalized = normalizeSelectedRange(range);
+  assert.equal(normalized, range);
+  assert.equal(Boolean(normalized?.from && normalized?.to), true);
 });
