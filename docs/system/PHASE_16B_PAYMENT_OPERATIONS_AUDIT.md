@@ -762,3 +762,22 @@ Do not expand production payment behavior until NetCommerce answers the capture/
 3. Confirm required webhook/MLE event setup.
 4. Decide the minimal data model for `payment_attempts`, `payment_transactions`, `payment_provider_events`, and `payment_audit_log`.
 5. Only then implement provider-integrated admin operations.
+
+---
+
+## Reconciliation addendum — 2026-07-28 (docs-only; the 2026-06-18 audit above is preserved unchanged)
+
+Merged PRs #85–#94 (2026-07-23/24) delivered a large part of this audit's roadmap. Per-phase status against the "Implementation Phases" section:
+
+- **16B.1** — shipped (PR #64, 2026-07-02; recorded above). Exit criteria "declined-card vector" and "capture/sale/auth confirmation" remain open (external — NetCommerce).
+- **16B.2 provider confirmation + declined-card vector** — STILL OUTSTANDING, external. The 30 NetCommerce questions above are still the ask; the declined-card vector is tracked as KNOWN_BUGS #9.
+- **16B.3 webhook architecture** — PARTIALLY SHIPPED (PR #94 Phase 2, commit `6fbedc9`): CyberSource webhook MLE/signature verification fails closed (503 when MLE env unset, 401 on unverifiable payloads); verified webhooks are authoritative and reconcile `payment_attempts` rows (matched by `idempotency_key` = `clientReferenceInformation.code` or provider transaction id) — confirmed success records payment through the idempotent set-paid path, decline/void releases the claim; browser returns remain informational. NOT built: a dedicated webhook event inbox/dedupe table (dedupe currently rides on attempt matching + the idempotent set-paid discipline from remediation 1.6, PR #85).
+- **16B.4 admin payment provider status page** — PARTIALLY SHIPPED (PR #94 Phase 3, commit `561fb1c`): gateway-readiness panel with exact `missing_requirements`, and the production hard gate is now the fail-closed `payments_live_enabled` settings-row rollout switch behind a password-gated admin toggle (stronger than the env-only gate this audit proposed). NOT built: latest-webhook, decline-validation, and settlement status tiles.
+- **16B.5 refunds/voids/captures** — PARTIALLY SHIPPED (PR #94 Phase 1, commit `029eead`): refunds are MANUAL-FIRST by explicit decision (David, 2026-07-24) — the admin action is "Record manual refund", requires the Business Center refund reference (`bookings.refund_provider_reference`, `sql/plan4-refund-provider-reference.sql`), runbook in [REFUND_RUNBOOK.md](REFUND_RUNBOOK.md); KNOWN_BUGS #15 resolved-by-policy. NOT built (explicit separate later plan): provider-API refund/partial refund/void/capture/reversal operations, roles, audit history.
+- **16B.6 deposits + balance links** — PARTIALLY SHIPPED: "durable payment attempts" landed as the `payment_attempts` ledger (PR #91, `sql/plan3-payment-attempts.sql` — atomic pre-provider claim, deterministic merchant reference, row-count-verified writes, ambiguous-state blocking; KNOWN_BUGS #14 resolved). NOT built: deposit/full/balance/add-on/top-up link purposes and the WhatsApp-safe payment-link relay.
+- **16B.7 reconciliation + settlement** — PARTIALLY SHIPPED: webhook-driven attempt reconciliation plus `/api/health` counts of attempts stuck >1h (PRs #92/#94). NOT built: Transaction Search / reporting import, provider-transaction-to-booking matching, settlement exception surfacing.
+- **16B.8 tokenization** — unchanged: deferred by design (NetCommerce requested saved-card omission).
+- **16B.9 fraud / Decision Manager** — STILL OUTSTANDING, blocked on NetCommerce answers (questions 16–17 above).
+- **16B.10 production rollout** — code side COMPLETE (fail-closed rollout switch, readiness surface, kill switch — PR #94); operator/external side OPEN: production credentials, Vercel Production env, webhook/MLE production verification, declined-card validation, the controlled live test. The authoritative execution sequence is the GO-LIVE CHECKLIST in the PR #94 body (mirrored in `REMEDIATION_PLAN_4.md`).
+
+Also relevant from the same wave: webhook `set_paid` double-count fixed and CyberSource authorized amount/currency verified before recording payment (PR #85, remediation 1.6/1.7); `GET /api/health` env-key monitoring (PR #92). Risk-list deltas: "Manual refund risk" is now the honest recorded-manual model; "Production gate risk" is addressed by the dedicated fail-closed rollout switch; "Webhook gap" is closed code-side pending production credential verification; "Settlement blind spot", "Role risk", and "Data model compression risk" remain open.

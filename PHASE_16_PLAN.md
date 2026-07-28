@@ -2,7 +2,7 @@
 
 This document is the forward-looking roadmap. For per-sub-phase implementation detail, see [/docs/phases/PHASE_INDEX.md](docs/phases/PHASE_INDEX.md) and the per-phase plan documents linked below.
 
-**Last updated:** 2026-06-03.
+**Last updated:** 2026-07-28 (16B shipped/outstanding lists reconciled with merged PRs #85–#94).
 
 ---
 
@@ -61,8 +61,9 @@ WhatChimp / Butler invariants:
 - **Production direction:** Credit Libanais / NetCommerce / MPGS — the only approved production provider.
 - **Not production direction:** Stripe — the retained adapter is isolated to local / dev (`PAYMENT_PROVIDER=stripe` is explicitly rejected in production).
 - **Architectural decisions:** hosted-checkout preferred (Oraya does not collect card data directly); verified webhook / server notification is the **authority** for payment receipt; browser redirect to `/booking/view/[token]?payment=...` is informational only; the payment provider must fail closed when its configuration is missing; payment secrets remain server-only env vars; admin settings may contain only guest-safe / non-secret payment controls.
-- **Shipped foundation:** payment-link columns on `bookings`, provider-agnostic adapter contract, hosted-checkout runtime, Credit Libanais readiness foundation + provider-schema compatibility migration ([sql/phase-16b4-credit-libanais-provider-compat.sql](sql/phase-16b4-credit-libanais-provider-compat.sql)), admin payment settings, guest-safe `/api/payments/readiness` admin readiness surface, three-step `/book` flow + dual-CTA Step 3 (primary "Continue to secure payment" + secondary "Reserve now, pay later"), webhook-first authority on `POST /api/payments/webhook/[provider]`.
-- **Outstanding:** live MPGS session creation, callback verification, settlement reconciliation, refunds automation, WhatsApp payment-status replies, Instant Book payment execution.
+- **Shipped foundation:** payment-link columns on `bookings`, provider-agnostic adapter contract, hosted-checkout runtime, Credit Libanais readiness foundation + provider-schema compatibility migration ([sql/phase-16b4-credit-libanais-provider-compat.sql](sql/phase-16b4-credit-libanais-provider-compat.sql)), admin payment settings, guest-safe `/api/payments/readiness` admin readiness surface, three-step `/book` flow + dual-CTA Step 3 (primary "Continue to secure payment" + secondary "Reserve now, pay later"), webhook-first authority on `POST /api/payments/webhook/[provider]`; Unified Checkout sandbox path with official seal + saved-card disablement (PR #64, 2026-07-02).
+- **Shipped go-live readiness (2026-07-24, PRs #91/#92/#94 — Plans 3–4):** durable `payment_attempts` idempotency ledger with atomic pre-provider claim ([sql/plan3-payment-attempts.sql](sql/plan3-payment-attempts.sql), KNOWN_BUGS #14 resolved); fail-closed CyberSource webhook/MLE verification with authoritative attempt reconciliation ([lib/payments/credit-libanais-webhook.ts](lib/payments/credit-libanais-webhook.ts), [lib/payments/webhook-reconciliation.ts](lib/payments/webhook-reconciliation.ts)); `/api/health` stuck-attempt visibility; manual-first refund recording requiring the Business Center reference ([docs/system/REFUND_RUNBOOK.md](docs/system/REFUND_RUNBOOK.md), KNOWN_BUGS #15 resolved-by-policy); fail-closed `payments_live_enabled` rollout switch + password-gated admin "Live card payments" toggle + gateway-readiness panel.
+- **Outstanding:** production activation (external NetCommerce production + webhook/MLE credentials, then the operator go-live checklist in the PR #94 body), declined-card validation (external vector — [/docs/system/KNOWN_BUGS.md](docs/system/KNOWN_BUGS.md) #9), settlement/report reconciliation, payment email lifecycle validation, refunds automation (separate later plan — manual-first is current policy), WhatsApp payment-status replies, Instant Book payment execution.
 - WhatsApp payment-reply branching by booking status is part of this phase, not Phase 16A.
 
 ### 16C — Guest manual

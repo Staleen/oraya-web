@@ -1,6 +1,6 @@
 # Known Bugs & Open Issues
 
-**Updated:** 2026-07-17
+**Updated:** 2026-07-28 (reconciliation pass: #4 and #9 annotated against merged PRs #85–#94; #2/#14/#15 were already updated by their fixing PRs)
 
 Living list of bugs, gaps, and operational pitfalls that are **known** but **not yet fixed** (or accepted as a permanent trade-off). New AI sessions: read this before assuming production is in a clean state.
 
@@ -70,8 +70,8 @@ Living list of bugs, gaps, and operational pitfalls that are **known** but **not
 - **Severity:** 🟠 High (until done)
 - **Area:** Deployment readiness
 - **Description:** [ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md) and [/.env.example](../../.env.example) are accurate, but Vercel's Project → Settings → Environment Variables has not been re-verified against the audit. If a variable is missing or stale in Vercel, a redeploy could hit it with no obvious signal.
-- **Status:** open — human action item.
-- **Recommended fix path:** follow the "Recommended next steps" section of [ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md) — set/verify each variable per environment scope (Production / Preview / Development), mark sensitive ones, then redeploy and check production logs for env-related throws.
+- **Status:** open — human action item. **Partially addressed 2026-07-24:** PR #89 records that David set `ADMIN_RECOVERY_EMAIL` in Vercel Production and ran the new remediation SQL files; and `GET /api/health` (PR #92) now returns 503 naming any missing critical production key (`RESEND_API_KEY`, `ADMIN_SECRET`, `ADMIN_RECOVERY_EMAIL`, Supabase keys), so a missing/stale critical var is no longer silent. A full per-scope (Production/Preview/Development) re-verification against [ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md) has still not been recorded, and the payment go-live checklist (PR #94 body) will add the `NETCOMMERCE_CYBERSOURCE_*` production values when NetCommerce delivers.
+- **Recommended fix path:** follow the "Recommended next steps" section of [ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md) — set/verify each variable per environment scope (Production / Preview / Development), mark sensitive ones, then redeploy and check production logs for env-related throws. Optional: point an uptime monitor at `/api/health` (PR #92 suggestion).
 - **Discovered:** 2026-05-09
 
 ---
@@ -132,12 +132,13 @@ Living list of bugs, gaps, and operational pitfalls that are **known** but **not
 - **Severity:** 🟡 Medium — payment QA / open validation item, not a production bug.
 - **Area:** Phase 16B / NetCommerce / CyberSource Unified Checkout sandbox validation
 - **Description:** PR #64 passed the approved-card sandbox path and NetCommerce confirmed successful testing before the implementation merged on 2026-07-02. Normal behavior leaves `bookings.status` as `PENDING`; the temporary Preview QA auto-confirm exception was removed after external testing. Declined-card validation is still incomplete because the attempted decline-style sandbox card authorized. Oraya needs the official NetCommerce/CyberSource declined-card vector or decline trigger before declaring decline handling validated.
-- **Status:** open — waiting on NetCommerce/CyberSource test vector or trigger.
+- **Status:** open — waiting on NetCommerce/CyberSource test vector or trigger (external; no PR in #85–#94 could close this).
+- **Note (2026-07-28 reconciliation):** the code-side gates step 4 references have since shipped — webhook/MLE reconciliation and idempotency via PRs #91/#94, and "explicit production enablement" is now the fail-closed `payments_live_enabled` admin toggle (PR #94 Phase 3). This entry stays open solely on the provider decline vector; decline handling itself is exercised in tests (a webhook-confirmed decline marks the attempt `failed` and releases the claim — PR #94 Phase 2) but remains unvalidated against a real provider decline.
 - **Recommended fix path:**
   1. Ask NetCommerce/CyberSource for the official declined-card sandbox vector or configured decline trigger.
   2. Re-run the declined-card browser flow on a dedicated sandbox Preview.
   3. Confirm the declined attempt does not mark payment paid and remains retryable.
-  4. Keep production payment disabled until production credentials, webhook/MLE reconciliation, production env setup, and explicit production enablement are complete.
+  4. Keep production payment disabled until production credentials, webhook/MLE production verification, production env setup, and the explicit `payments_live_enabled` enablement are complete.
 - **Discovered:** 2026-06-17 (PR #64 Preview sandbox validation).
 
 ---
