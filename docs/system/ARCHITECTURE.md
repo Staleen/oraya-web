@@ -27,6 +27,7 @@ Next.js App Router (TypeScript)
 ```
 
 - **Hosting:** Vercel. Production from `master`; previews from PR branches.
+- **Web analytics:** `@vercel/analytics@^2.0.1`, mounted once as `<Analytics />` in the root [app/layout.tsx](../../app/layout.tsx), records Vercel Web Analytics page views across App Router navigations. The guest disclosure is in [app/legal/privacy/page.tsx](../../app/legal/privacy/page.tsx).
 - **Background jobs:** Vercel Cron - daily `0 0 * * *` calls `/api/cron/calendar-sync` (config in [/vercel.json](../../vercel.json)). Vercel auto-injects `Authorization: Bearer ${CRON_SECRET}`.
 - **DNS / domain:** `https://stayoraya.com` is the canonical origin (also hardcoded as fallback in [/lib/brand.ts](../../lib/brand.ts) `SITE_URL`).
 

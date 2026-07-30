@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Script from "next/script";
 import { Playfair_Display, Lato } from "next/font/google";
+import { Analytics } from '@vercel/analytics/next';
 import "./globals.css";
 
 /** First visit = light; only `light` / `dark` from localStorage override (no system preference). */
@@ -74,6 +75,7 @@ export default function RootLayout({
       <body>
         <Script id="oraya-theme-init" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: ORAYA_THEME_INIT }} />
         {children}
+        <Analytics />
       </body>
     </html>
   );

@@ -16,6 +16,18 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-07-30 - Adopt Vercel Web Analytics as a durable site dependency
+
+**Decision:** Oraya adopts `@vercel/analytics@^2.0.1` and mounts its Next.js `<Analytics />` component once in the root layout. The integration is a durable production dependency, and the guest privacy notice discloses its purpose and the categories of aggregate traffic information it reports.
+
+**Reason:** Oraya needs first-party platform visibility into page traffic and navigation so the team can improve the website and guest experience. Vercel documents Web Analytics as cookie-free, using a daily-reset request-derived hash and anonymized aggregate reporting; the disclosure describes those documented properties without extending them into unsupported privacy promises.
+
+**Impact:** [app/layout.tsx](../../app/layout.tsx), [package.json](../../package.json), [package-lock.json](../../package-lock.json), [app/legal/privacy/page.tsx](../../app/legal/privacy/page.tsx), and [ARCHITECTURE.md](ARCHITECTURE.md). No schema, environment variable, booking, payment, authentication, email, calendar, admin, Supabase, or Butler behavior changes.
+
+**Reversible?:** yes - remove the root component and package dependency, disable Web Analytics in Vercel, and add a superseding decision entry.
+
+---
+
 ## 2026-07-25 - Plan 4 Phase 3: fail-closed live rollout switch replaces the sandbox-only gate
 
 **Decision:** the hardcoded `checkoutReady = configured && environment === "sandbox"` gate is replaced by an explicit, fail-closed rollout decision (`lib/payments/live-rollout.ts` `decideCreditLibanaisCheckoutReady`): checkout is ready when (a) all session env config is present AND (b) environment is `sandbox`, OR (c) environment is `production` AND all webhook/MLE env vars are present AND the server-side settings row **`payments_live_enabled` reads exactly `"true"`**. Missing row, any other value, or an unreadable settings table ⇒ NOT ready. The row is the kill switch — flipping it away from `"true"` disables live checkout instantly without a deploy. The ONLY writer is the dedicated endpoint `/api/admin/payments/live-toggle`: ENABLING requires the current admin password (same throttle discipline as the password-change flow); DISABLING requires only the admin session so the kill switch is never slowed down. The generic settings POST shields the key exactly like `admin_password`; the admin Settings payments panel gains the toggle (stark copy) and shows the CURRENT readiness verdict with the exact missing items (readiness became async end-to-end: `provider.getReadiness()` now returns a Promise).
