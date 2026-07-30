@@ -64,14 +64,16 @@ The route has no idempotency key or duplicate-submission guard. Calling it twice
 | Full name | non-empty string | `oraya_full_name` (also `full_name` / `name`) | `whatsapp_leads.name` | `full_name` | Supported end-to-end. |
 | Check-in | `YYYY-MM-DD` | `normalized_check_in` (also `oraya_check_in` / `check_in`) | `normalized_check_in` date | `check_in` when the complete range is valid | Supported. Keep as a date-only string; never parse guest text with JavaScript `Date`. |
 | Check-out | `YYYY-MM-DD` | `normalized_check_out` (also `oraya_check_out` / `check_out`) | `normalized_check_out` date | `check_out` when later than check-in | Supported. Invalid/reversed ranges are sanitized to no prefilled range. |
-| Villa | `Villa Mechmech` or `Villa Byblos` | `oraya_villa` (also `villa`) | `villa` | normalized to the two canonical website labels | Supported. Use canonical labels, not arbitrary text. |
-| Exact overnight guests | string `"1"` through `"8"` | `oraya_guest_count` (also `guest_count` / `guests`) | `guest_count` text | `sleeping_guests` | Supported. The existing website accepts 1–8; use discrete choices to keep the count exact. |
+| Villa | `Villa Mechmech`, `Villa Byblos`, or `flexible` | `oraya_villa` (also `villa`) | `villa` | the two canonical villa labels hydrate; `flexible` intentionally leaves villa unselected | Supported. The approved `flexible` option means “Flexible / recommend for me”; it must not be presented as a selected villa on `/book`. |
+| Exact overnight guests | string `"1"` through `"8"`, or `more_than_8` | `oraya_guest_count` (also `guest_count` / `guests`) | `guest_count` text | values 1–8 hydrate `sleeping_guests`; `more_than_8` does not | Supported. Use discrete choices. WhatChimp must route `more_than_8` to human review instead of the standard lead message, mirroring v6. |
 | Bedroom selection | string `"1"`, `"2"`, or `"3"` | No dedicated top-level normalized column. Put `oraya_bedroom_count` in `raw_payload` (a top-level field is also retained when the entire body is used as the fallback raw payload). | `raw_payload.oraya_bedroom_count` | `bedroom_count` accepts `1`, `2`, `3` and `"N bedroom(s)"` | Supported without schema change, provided the submission transformation preserves this key inside `raw_payload`. |
 | Optional requests | trimmed string or omitted | `oraya_special_requests` (also `special_requests`) | `special_requests` text, capped at 4,000 characters | **Not projected by `/api/butler/prefill` and not applied by `/book`** | Lead capture supported; website hydration gap remains. Do not claim full handoff parity. |
 | Request type | `"stay"` | `oraya_request_type` or `request_type` | `request_type` | not guest-hydrated | Set explicitly to protect stay/event separation. |
-| Source | `"whatchimp_meta_flow"` or another agreed stable label | `source` | `source` | returned diagnostically | Supported. Do not use the default `"whatchimp"` if rollout reporting must distinguish native Flow leads from v6. |
+| Source | `"meta_native_flow"` | `source` | `source` | returned diagnostically | Supported. Do not use the default `"whatchimp"` if rollout reporting must distinguish native Flow leads from v6. |
 | Subscriber ID | WhatChimp subscriber ID, if available | `oraya_subscriber_id` or accepted aliases | `whatsapp_subscriber_id` plus raw payload | not guest-hydrated | Recommended for identity continuity; availability depends on WhatChimp's submission context. |
 | Flow/session identity | Meta `flow_token`, Flow ID, message/submission identifiers | unknown keys inside `raw_payload` | `raw_payload` | not guest-hydrated | Preserve for audit and duplicate investigation. It is not currently enforced as an idempotency key. |
+
+The source label is set statically in the Flow's completion payload and forwarded verbatim by the WhatChimp adapter; the adapter must not override it.
 
 ### Exact adapter body
 
@@ -79,7 +81,7 @@ If WhatChimp can transform the terminal response through the existing Lead Submi
 
 ```json
 {
-  "source": "whatchimp_meta_flow",
+  "source": "<response.source>",
   "request_type": "stay",
   "oraya_full_name": "<response.oraya_full_name>",
   "normalized_check_in": "<response.normalized_check_in>",
@@ -254,6 +256,10 @@ The Flow uses a review screen and deterministic choices. Required fields are enf
                   {
                     "id": "Villa Byblos",
                     "title": "Villa Byblos"
+                  },
+                  {
+                    "id": "flexible",
+                    "title": "Flexible / recommend for me"
                   }
                 ]
               },
@@ -270,7 +276,8 @@ The Flow uses a review screen and deterministic choices. Required fields are enf
                   { "id": "5", "title": "5 guests" },
                   { "id": "6", "title": "6 guests" },
                   { "id": "7", "title": "7 guests" },
-                  { "id": "8", "title": "8 guests" }
+                  { "id": "8", "title": "8 guests" },
+                  { "id": "more_than_8", "title": "More than 8 guests" }
                 ]
               },
               {
@@ -391,6 +398,8 @@ The Flow uses a review screen and deterministic choices. Required fields are enf
 
 Implementation validation must use the then-current Meta schema/preview tool. If Meta rejects empty optional interpolation on the review screen, use an explicit `"None"` display value or a conditional review component supported by the current schema; do not make the requests field required merely to satisfy interpolation.
 
+The approved `flexible` villa value is retained on the lead but intentionally does not preselect a villa on `/book`. The approved `more_than_8` guest value must branch in WhatChimp to human review instead of the standard lead message, mirroring v6; it must not be treated as a numeric guest count.
+
 ## New route, secret, schema, and dependency assessment
 
 | Candidate path | New Oraya route | New secret/config | Schema change | Dependency | Assessment |
@@ -415,7 +424,7 @@ The native Flow must run beside v6 without sharing the same trigger.
    - either WhatChimp's Flow webhook, or
    - a post-submit HTTP API integration,
    - never both.
-5. Give native leads `source = whatchimp_meta_flow` so `/admin/leads` and Supabase can distinguish them from v6.
+5. Give native leads `source = meta_native_flow` so `/admin/leads` and Supabase can distinguish them from v6. The value comes from the Flow completion payload and the adapter forwards it verbatim.
 6. Preserve `flow_token` and any message/submission identifier inside `raw_payload` for duplicate investigation.
 7. Do not use retry-on-timeout unless the operator can prove the first call did not insert. The current lead route is not idempotent.
 8. Send the request-safe completion only after the one Lead Submit call succeeds. If `prefill_url` is null, use the existing static `/book` fallback without retrying the lead insert.
@@ -469,8 +478,8 @@ The initial native Flow must not claim availability, quote final pricing, collec
 | Meta JSON validation | Draft validates with the current schema; both screens preview; back/edit/review works. | Builder validation output and Flow draft ID (no secrets). |
 | Required fields | Empty name/date/villa/guest/bedroom cannot submit. Optional requests may be empty. | Screen recording. |
 | Date order | Check-out after check-in succeeds. Same/reversed dates are blocked by the Flow if supported; otherwise Oraya stores no normalized range and `/book` asks for dates again. | Submission payload + lead row. |
-| Canonical villa mapping | Both villa choices persist exact canonical labels and hydrate the correct `/book` villa. | Two lead rows + two opened handoff URLs. |
-| Exact guest count | Every value 1–8 reaches `guest_count` unchanged and hydrates `sleeping_guests`. | Payload/lead samples for boundaries 1 and 8 plus one middle value. |
+| Villa mapping | Both named villa choices persist exact canonical labels and hydrate the correct `/book` villa; `flexible` persists without preselecting a villa. | Three lead rows + three opened handoff URLs. |
+| Exact guest count | Every value 1–8 reaches `guest_count` unchanged and hydrates `sleeping_guests`; `more_than_8` routes to human review and is not treated as numeric. | Payload/lead samples for boundaries 1 and 8 plus the overflow transcript. |
 | Bedrooms | Values 1–3 persist in `raw_payload.oraya_bedroom_count` and hydrate `/book`. | Payload, lead raw payload, `/book` screenshot. |
 | Full name | Name persists to `whatsapp_leads.name` and hydrates guest full name when the field is untouched. | Lead + `/book` screenshot. |
 | Optional requests empty | Lead succeeds, no fabricated `"null"` guest request appears. | Lead row. |
@@ -491,23 +500,22 @@ The initial native Flow must not claim availability, quote final pricing, collec
 
 Required before implementation:
 
-1. The omitted user-supplied candidate Flow JSON, for comparison against the canonical target.
-2. Meta Flow ID, Flow status, first-screen ID, owning WABA, and attached phone-number ID—identifiers only, no access tokens.
-3. A fresh production WhatChimp export/configuration snapshot showing the current v6 triggers and the Lead Submit integration mapping. Do not commit secret values.
-4. Tenant proof or WhatChimp support confirmation that an existing Meta-owned Flow ID can be selected/launched.
-5. One captured test submission showing the complete decoded payload and `flow_token`.
-6. Confirmation of which single WhatChimp mechanism will call Oraya: Flow webhook **or** HTTP API/post-submit integration.
-7. Confirmation that the chosen mechanism can send the existing secret header and map the JSON response `prefill_url` into a follow-up reply.
-8. The desired narrow pilot trigger/postback and test phone(s).
-9. Meta builder validation result for schema version and the date-order behavior.
-10. The operator's acceptance of the known special-requests handoff gap, or a separately scoped approval to extend prefill behavior later.
+1. Meta Flow ID, Flow status, first-screen ID, owning WABA, and attached phone-number ID—identifiers only, no access tokens.
+2. A fresh production WhatChimp export/configuration snapshot showing the current v6 triggers and the Lead Submit integration mapping. Do not commit secret values.
+3. Tenant proof or WhatChimp support confirmation that an existing Meta-owned Flow ID can be selected/launched.
+4. One captured test submission showing the complete decoded payload and `flow_token`.
+5. Confirmation of which single WhatChimp mechanism will call Oraya: Flow webhook **or** HTTP API/post-submit integration.
+6. Confirmation that the chosen mechanism can send the existing secret header and map the JSON response `prefill_url` into a follow-up reply.
+7. The desired narrow pilot trigger/postback and test phone(s).
+8. Meta builder validation result for schema version and the date-order behavior.
+9. The operator's acceptance of the known special-requests handoff gap, or a separately scoped approval to extend prefill behavior later.
 
 No secret value should be requested or supplied to an agent.
 
 ## Smallest implementation sequence
 
-1. Obtain the missing candidate JSON and external identifiers/evidence above.
-2. Validate the canonical static JSON as an unpublished/draft Flow; reconcile only required differences from the candidate.
+1. Obtain the external identifiers/evidence above.
+2. Validate the canonical static JSON as an unpublished/draft Flow; the received candidate comparison is recorded in Appendix A.
 3. In a disposable WhatChimp test bot, prove existing Meta Flow ID launch and full completion-payload access.
 4. Prove one authenticated call to the existing Lead Submit integration and response mapping to `oraya_prefill_url`.
 5. Run the full matrix with a narrow pilot trigger while v6 remains unchanged.
@@ -523,7 +531,6 @@ Objective:
 Validate and pilot the approved static Meta-native Oraya stay Flow beside locked v6.
 
 Inputs supplied by human:
-- candidate Flow JSON
 - Meta Flow/WABA/phone/first-screen identifiers
 - redacted production WhatChimp export
 - proof of existing-Flow-ID selection and decoded submission payload
@@ -558,3 +565,32 @@ Acceptance:
 The repository side is ready for a no-code integration: existing lead ingest, persistence, secure handoff generation, and `/book` hydration cover every required structured field except special-requests hydration. There is no justification for `/api/butler/flow-submit`, a Meta data endpoint, schema work, or new dependencies.
 
 Production work is blocked only on platform evidence: confirm that WhatChimp can launch the existing Meta-owned Flow, expose the complete submission, invoke the existing authenticated Lead Submit integration exactly once, and use the returned `prefill_url`. If any of those fail, stop and scope the direct Meta webhook architecture separately rather than quietly expanding this pilot.
+
+## Appendix A — Candidate v3 draft analysis (received after initial audit)
+
+The candidate v3 Flow JSON was received after the initial audit was written. It is a useful starting draft, not a production artifact. The canonical JSON above remains stay-only and incorporates two approved choices from the candidate/v6 behavior:
+
+- villa option `flexible` — **Flexible / recommend for me**; it is retained on the lead and intentionally leaves `/book` without a preselected villa;
+- guest option `more_than_8` — **More than 8 guests**; WhatChimp routes it to human review instead of the standard lead message, mirroring v6.
+
+The candidate-to-canonical disposition is:
+
+| # | Candidate v3 finding | Canonical disposition |
+|---|---|---|
+| 1 | The request-type selector mixes stay and event intake, so an event guest is forced through stay dates, villa, guest count, and preferences. | **Resolved:** the canonical Flow is stay-only. The existing event route continues directly to `https://stayoraya.com/events/inquiry`. |
+| 2 | Guest count is unrestricted text. | **Resolved:** the canonical Flow uses discrete values 1–8 plus the approved `more_than_8` human-review branch. |
+| 3 | Bedroom selection is missing. | **Resolved:** the canonical Flow requires 1, 2, or 3 bedrooms and preserves the value for the existing prefill reader. |
+| 4 | The terminal screen submits preferences without a review/confirmation screen. | **Resolved:** `STAY_REVIEW` echoes the structured request and states that submission is a request, not a confirmed booking. |
+| 5 | Check-in and check-out have no proven past-date or cross-field ordering constraint. | **Intentionally not papered over:** current Meta-builder support must be verified before publication. The existing lead normalizer safely drops a reversed range so `/book` asks for dates again; no data endpoint is added solely for this validation. |
+| 6 | “Show available add-ons” promises a dynamic list the static Flow does not provide. | **Intentionally dropped:** add-ons remain website-owned and are omitted from the canonical Flow. |
+| 7 | The separately produced candidate review recorded `example` schema keys rather than Meta's `__example__` form; the candidate copy later reproduced in the conversation already used `__example__`. | **Resolved:** the canonical JSON consistently uses `__example__`; the live Meta builder remains the validation authority. |
+| 8 | `flexible` does not map to either canonical website villa and therefore cannot preselect `/book`. | **Retained intentionally:** it is now an approved option meaning Oraya should recommend; the lead preserves it and `/book` correctly remains unselected. |
+| 9 | There is no durable source/`flow_token` provenance strategy. | **Resolved:** the Flow statically emits `source = meta_native_flow`; WhatChimp forwards it verbatim, supplies a launch-time `flow_token`, and preserves the token, Flow ID, and complete decoded submission in `raw_payload`. |
+| 10 | Flow JSON version `7.3` and component behavior were not validated against the live Meta builder. | **Intentionally gated:** implementation must validate the canonical draft using the current Meta schema/preview tool before publication; the audit does not claim builder acceptance. |
+| 11 | The candidate lacks input helper/error copy and a documented label-length check. | **Intentionally deferred to builder validation:** required fields and concise labels are present in the canonical draft; any schema-supported helper/error copy is added only after the live builder confirms the component contract. |
+
+The candidate's completion payload also did not itself save a lead, generate `prefill_url`, or define a single-writer continuation. That responsibility remains outside Flow JSON: WhatChimp must expose the decoded completion, call the existing authenticated `/api/butler/lead` integration exactly once, and map the returned `prefill_url`. The platform proof remains a hard gate.
+
+## Document provenance
+
+This PR version is the authoritative audit. A separate 247-line, session-produced audit of the same scope exists outside the repository; it informed the candidate comparison above but must not be treated as current or used instead of this file.
