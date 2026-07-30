@@ -20,6 +20,7 @@
 | `BOOKING_ACTION_SECRET` | server-only | yes | yes | yes | yes |
 | `CRON_SECRET` | server-only | optional (cron only fires in Vercel) | yes (Vercel auto-injects for Cron) | yes (Vercel auto-injects for Cron) | yes |
 | `ADMIN_SECRET` | server-only | yes (admin login + admin APIs) | yes | yes | yes |
+| `ADMIN_RECOVERY_EMAIL` | server-only | optional (recovery flow testing only) | yes | yes | yes — Sensitive |
 | `BUTLER_WEBHOOK_SECRET` | server-only | optional (only for Butler endpoint testing) | yes (once WhatChimp is wired) | yes (once WhatChimp is wired) | yes — Sensitive |
 | `BUTLER_PREFILL_SECRET` | server-only | optional (only for WhatsApp -> /book prefill testing) | yes (once the handoff is wired) | yes (once the handoff is wired) | yes - Sensitive |
 | `WHATCHIMP_CONFIRMED_STAY_WEBHOOK_URL` | server-only | no (unset = dispatch off) | **no — keep unset** (fail closed) | yes at activation (after Meta template approval + WhatChimp workflow) | yes — Sensitive, Production only |
@@ -40,6 +41,7 @@
 | `STRIPE_WEBHOOK_SECRET` | server-only | optional (Stripe local/dev webhook only) | optional | optional | optional |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | public | optional (Stripe local/dev only) | optional | optional | optional |
 | `NODE_ENV` | system | auto | auto | auto | n/a (Next.js / Vercel sets) |
+| `VERCEL_ENV` | system | auto (absent locally) | auto | auto | n/a (Vercel sets) |
 
 Public vs server-only:
 
@@ -159,7 +161,7 @@ Preview expectations:
 - The webhook/MLE variables are optional for this sandbox server-side completion test. They are required before production live rollout and before asynchronous webhook reconciliation can be trusted.
 - Browser redirects remain informational. Server-side CyberSource authorization and/or a verified webhook are authoritative for payment state.
 - PR #64 passed the approved-card sandbox path, NetCommerce confirmed successful testing, and the implementation was merged on 2026-07-02. Declined-card validation remains pending until NetCommerce/CyberSource provides an official declined-card vector or decline trigger.
-- Production checkout remains code-gated off even if production credentials are later supplied. Webhook/MLE reconciliation and explicit live rollout controls must be implemented and approved before the adapter can report production checkout ready. Never copy Preview sandbox values into Production as a shortcut.
+- Production checkout is fail-closed even when production credentials are supplied: since Plan 4 Phase 3 (2026-07-25), the adapter reports production checkout ready only when all session **and** webhook/MLE env vars are present AND the server-side `payments_live_enabled` settings row reads exactly `"true"` (writable only via `/api/admin/payments/live-toggle`; not an env var). Never copy Preview sandbox values into Production as a shortcut.
 
 ### `BOOKING_ACTION_SECRET`
 
@@ -196,6 +198,19 @@ Preview expectations:
 - **Configure in Vercel:** yes — Production + Preview + Development. Mark as Sensitive.
 - **Risk if missing:** every admin route returns `503 Server misconfiguration: ADMIN_SECRET is not set.` (see [lib/admin-auth.ts:73-77](lib/admin-auth.ts:73)). Admin password verification cannot mint cookies. The whole `/admin` surface area is locked out.
 - **Rotation:** rotating immediately invalidates all live admin sessions (every signed cookie's HMAC fails verification). Force a re-login.
+
+### `ADMIN_RECOVERY_EMAIL`
+
+- **Scope:** server-only. Added by Remediation 2 Phase A (2026-07-23, PR #87).
+- **Used in:**
+  - [app/api/admin/recovery/request/route.ts](../../app/api/admin/recovery/request/route.ts) — destination address for the admin forgot-password recovery email.
+  - [lib/send-admin-recovery-email.ts](../../lib/send-admin-recovery-email.ts) — the recovery email sender.
+  - [lib/health.ts](../../lib/health.ts) — `GET /api/health` lists it among required production keys (503 + key name when missing).
+- **Required:** local optional (only to exercise the recovery flow) · preview yes · production yes.
+- **Where to get it:** the operator-controlled mailbox that should receive admin password recovery links. Must be an address David controls.
+- **Configure in Vercel:** yes — Production + Preview. Mark as Sensitive.
+- **Risk if missing:** admin forgot-password recovery cannot send its email (the flow fails safely; no reset possible), and `GET /api/health` reports 503 with the key name. Normal admin login and password change are unaffected.
+- **Note:** as of 2026-07-30 this variable is **not yet listed in `.env.example`** — see [KNOWN_BUGS.md](KNOWN_BUGS.md) #16.
 
 ### `BUTLER_WEBHOOK_SECRET`
 
@@ -333,7 +348,7 @@ Preview expectations:
 ### `NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_KEY_ID`
 
 - **Scope:** server-only.
-- **Used in:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) readiness contract for CyberSource Unified Checkout webhook/message-level encryption.
+- **Used in:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) readiness contract, and — since Plan 4 Phase 2 (2026-07-25) — [lib/payments/credit-libanais-webhook.ts](../../lib/payments/credit-libanais-webhook.ts): the fail-closed webhook handler returns 503 (payload never processed) while any of the three webhook/MLE vars is unset, and verifies the `v-c-key-id` header against this value. Also part of the production live-rollout env gate ([lib/payments/live-rollout.ts](../../lib/payments/live-rollout.ts)).
 - **Required:** optional for sandbox server-side completion testing; required before production live rollout and before asynchronous webhook reconciliation can be trusted.
 - **Where to get it:** CyberSource Business Center / NetCommerce webhook setup.
 - **Configure in Vercel:** optional in Preview for checkout-only sandbox validation; required in Preview when testing webhooks; required in Production before live rollout. Mark as Sensitive.
@@ -342,7 +357,7 @@ Preview expectations:
 ### `NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_PRIVATE_KEY`
 
 - **Scope:** server-only.
-- **Used in:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) readiness contract for decrypting/verifying CyberSource webhook payloads.
+- **Used in:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) readiness contract, and — since Plan 4 Phase 2 (2026-07-25) — [lib/payments/credit-libanais-webhook.ts](../../lib/payments/credit-libanais-webhook.ts): HMAC-SHA256 signature verification over the raw webhook body is keyed with the Base64-decoded value; unverifiable payloads get 401 and never change state. Also part of the production live-rollout env gate ([lib/payments/live-rollout.ts](../../lib/payments/live-rollout.ts)).
 - **Required:** optional for sandbox server-side completion testing; required before production live rollout and before asynchronous webhook reconciliation can be trusted.
 - **Where to get it:** key material generated/registered for CyberSource webhook MLE.
 - **Configure in Vercel:** optional in Preview for checkout-only sandbox validation; required in Preview when testing webhooks; required in Production before live rollout. Mark as Sensitive.
@@ -351,7 +366,7 @@ Preview expectations:
 ### `NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_CERTIFICATE_ID`
 
 - **Scope:** server-only.
-- **Used in:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) readiness contract for the CyberSource webhook MLE certificate binding.
+- **Used in:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) readiness contract for the CyberSource webhook MLE certificate binding; presence is required by the fail-closed webhook handler ([lib/payments/credit-libanais-webhook.ts](../../lib/payments/credit-libanais-webhook.ts), Plan 4 Phase 2) and by the production live-rollout env gate ([lib/payments/live-rollout.ts](../../lib/payments/live-rollout.ts)).
 - **Required:** optional for sandbox server-side completion testing; required before production live rollout and before asynchronous webhook reconciliation can be trusted.
 - **Where to get it:** CyberSource Business Center / NetCommerce webhook setup.
 - **Configure in Vercel:** optional in Preview for checkout-only sandbox validation; required in Preview when testing webhooks; required in Production before live rollout. Mark as Sensitive.
@@ -414,6 +429,12 @@ Operational note:
 
 - `BUTLER_WEBHOOK_SECRET` and `BUTLER_PREFILL_SECRET` are separate on purpose. Do not reuse one for the other.
 - Rotate them independently unless there is a specific incident reason to rotate both.
+
+### `VERCEL_ENV`
+
+- **Scope:** system; set automatically by Vercel (`production` / `preview` / `development`) — **do not set manually**.
+- **Used in:** [lib/payments/request-origin.ts](../../lib/payments/request-origin.ts) — Preview deployments resolve payment-link/checkout/return URLs from the actual request origin instead of falling back to the production host. (The Phase 16C WhatsApp dispatcher's production check is documented under `WHATSAPP_CONFIRMATION_ALLOW_NONPROD` above.)
+- **Configure in Vercel:** no.
 
 ### `NODE_ENV`
 

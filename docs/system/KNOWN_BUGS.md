@@ -1,6 +1,6 @@
 # Known Bugs & Open Issues
 
-**Updated:** 2026-07-17
+**Updated:** 2026-07-30
 
 Living list of bugs, gaps, and operational pitfalls that are **known** but **not yet fixed** (or accepted as a permanent trade-off). New AI sessions: read this before assuming production is in a clean state.
 
@@ -198,9 +198,10 @@ Living list of bugs, gaps, and operational pitfalls that are **known** but **not
 - **Severity:** 🟠 High (guest trust and payment-state clarity)
 - **Area:** `/booking/view/[token]`, `/book`, and public hosted-checkout failures
 - **Description:** after an authoritative CyberSource sandbox approval, a booking could correctly remain `PENDING` while `payment_status` became `paid_in_full`. The dedicated payment panel then showed "Payment received successfully" and "Paid in full", but a separate booking-status card still said "No payment required yet"; the confirmed variant separately coupled "Payment received / booking confirmed". The page also exposed the raw persisted method `card_manual`, pre-payment copy still implied payment only followed review, and some public checkout failure paths could echo provider/configuration detail. David found the contradiction during Preview verification after merged PR #81. The payment record itself was not forged by the browser return: the server had accepted the CyberSource response as `AUTHORIZED` or `CAPTURED`, while booking confirmation deliberately remained an Oraya operations decision.
-- **Status:** **in-progress (2026-07-17 corrective branch)** — booking-status trust copy is payment-neutral; a pure guest-payment projection owns payment vocabulary and prioritizes recorded paid state over stale link state; payment method labels use the shared formatter; `/book` copy now describes pay-before-confirm correctly; and public checkout errors are guest-safe. Focused state-matrix coverage protects pending+paid, unpaid link states, and browser-return behavior.
-- **Recommended fix path:** merge and Preview-verify the corrective PR. Keep the invariant that `bookings.status` and `payment_status` are independent; do not auto-confirm a paid booking. Separately obtain the official provider declined-card vector, because a sandbox test card authorizing is not evidence that decline handling is validated.
+- **Status:** **closed (resolved 2026-07-17, corrective PR #83 merged)** — booking-status trust copy is payment-neutral; a pure guest-payment projection ([lib/payments/guest-presentation.ts](../../lib/payments/guest-presentation.ts)) owns payment vocabulary and prioritizes recorded paid state over stale link state; payment method labels use the shared formatter; `/book` copy now describes pay-before-confirm correctly; and public checkout errors are guest-safe. Focused state-matrix coverage protects pending+paid, unpaid link states, and browser-return behavior.
+- **Recommended fix path:** n/a — resolved (corrective PR #83). Keep the invariant that `bookings.status` and `payment_status` are independent; do not auto-confirm a paid booking. Separately obtain the official provider declined-card vector, because a sandbox test card authorizing is not evidence that decline handling is validated.
 - **Discovered:** 2026-07-17 (David, PR #81 Vercel Preview screenshot and manual sandbox payment).
+- **Resolved:** 2026-07-17 (PR #83 "Fix guest payment and booking-state consistency").
 
 ---
 
@@ -225,6 +226,17 @@ Living list of bugs, gaps, and operational pitfalls that are **known** but **not
 - **Status:** **RESOLVED-BY-POLICY 2026-07-25 (Plan 4 Phase 1)** — refunds are MANUAL-FIRST by explicit decision (David, 2026-07-24): money moves only by hand in the NetCommerce Business Center, and the admin action is now honestly labeled **"Record manual refund"** ("Execute the refund in the NetCommerce Business Center first — this only records it"). Recording an executed refund REQUIRES the Business Center refund/transaction reference — `lib/payments/manual-refund.ts` validation in the admin bookings PATCH route returns 400 without it (tests: `lib/payments/manual-refund.test.mts`). The reference is stored in `bookings.refund_provider_reference` (`sql/plan4-refund-provider-reference.sql`, additive human-run; pre-migration the route retries without the column and the reference is preserved in `payment_notes`). Operator runbook: `docs/system/REFUND_RUNBOOK.md` (Business Center steps + ambiguous-attempt reconciliation in one doc). **Upgrade path:** automated provider-side refunds (role-gated CyberSource refund/void endpoints with idempotency and audit history) are a separate, later plan — this entry documents the honest manual baseline, not the end state.
 - **Recommended fix path:** ~~before live charging, rename or clearly gate the current action as an internal record-only operation~~ (done, Plan 4 Phase 1), then — as the separate future plan — implement separately approved, role-gated provider refund/void endpoints with idempotency, transaction references, audit history, reconciliation, and explicit partial/full refund semantics. The locked admin route must not be edited without named approval.
 - **Discovered:** 2026-07-17 (full payment-code audit; architectural gap was already described generally in the Phase 16B payment operations audit).
+
+---
+
+### #16 — `ADMIN_RECOVERY_EMAIL` is consumed by code and required by `/api/health` but missing from `.env.example`
+
+- **Severity:** 🟡 Medium — configuration hygiene; a fresh environment set up from `.env.example` silently lacks admin password recovery.
+- **Area:** Environment contract / `.env.example` / admin recovery (Remediation 2 Phase A)
+- **Description:** since PR #87 (2026-07-23), `ADMIN_RECOVERY_EMAIL` is read by [app/api/admin/recovery/request/route.ts](../../app/api/admin/recovery/request/route.ts), [lib/send-admin-recovery-email.ts](../../lib/send-admin-recovery-email.ts), and [lib/health.ts](../../lib/health.ts) (it is one of the required production keys `GET /api/health` checks). As of 2026-07-30 the variable does not appear in `.env.example`, breaking the [ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md) "Audit hygiene" invariant that `.env.example` and the map list the same variables. An operator provisioning a new environment from `.env.example` would miss it; the failure is visible (health returns 503 naming the key) but the recovery flow would be unavailable until fixed. The map itself was also missing the variable until the 2026-07-30 docs audit added it.
+- **Status:** open — `.env.example` is a code-adjacent file outside the 2026-07-30 docs-only audit scope.
+- **Recommended fix path:** add an `ADMIN_RECOVERY_EMAIL=` placeholder line (with a comment pointing at ENVIRONMENT_MAP.md) to `.env.example` in a small follow-up PR, and confirm Vercel Production/Preview have the real value set (Sensitive).
+- **Discovered:** 2026-07-30 (docs/system audit — env grep vs `.env.example` diff).
 
 ---
 

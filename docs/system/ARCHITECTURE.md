@@ -1,6 +1,6 @@
 # Architecture - Oraya Web
 
-**Updated:** 2026-06-03
+**Updated:** 2026-07-30
 **Authority order:** see [PROJECT_STATE.md](PROJECT_STATE.md). This file is the descriptive map; if it conflicts with PROJECT_STATE.md, PROJECT_STATE.md wins.
 
 > Secret model and per-variable risk live in **[ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md)** - this doc only references it.
@@ -26,7 +26,8 @@ Next.js App Router (TypeScript)
    components/ - UI
 ```
 
-- **Hosting:** Vercel. Production from `master`; previews from PR branches.
+- **Framework:** Next.js 16 (App Router, Turbopack build) + React 19 since 2026-07-24 (PR #93). Lint is eslint 9 flat config (`eslint.config.mjs`); tests run via `npm test` (`node --test` over `scripts/*.test.mjs` + `lib/**/*.test.mts`).
+- **Hosting:** Vercel. Production from `master`; previews from PR branches. CI: `.github/workflows/ci.yml` runs type-check, lint, tests, and build on every PR and push to `master` (Remediation 3.1, 2026-07-23).
 - **Background jobs:** Vercel Cron - daily `0 0 * * *` calls `/api/cron/calendar-sync` (config in [/vercel.json](../../vercel.json)). Vercel auto-injects `Authorization: Bearer ${CRON_SECRET}`.
 - **DNS / domain:** `https://stayoraya.com` is the canonical origin (also hardcoded as fallback in [/lib/brand.ts](../../lib/brand.ts) `SITE_URL`).
 
@@ -38,8 +39,9 @@ Next.js App Router (TypeScript)
 - **`components/`** - shared React components. Import from `lib/` freely; do not import API routes.
 - **Inline styles + hardcoded color/font constants** are the visual convention. Tailwind v3 is loaded but used for layout utilities only; **do not** introduce custom Tailwind color/font classes.
 - **SVG logos** are inlined as React components (`OrayaEmblem.tsx`, `OrayaLogoFull.tsx`). Do not switch to `<img>` or `next/image` for SVGs.
-- **`page.tsx`** at the root must remain `"use client"` (mouse handlers).
-- **`next.config.mjs`** - `.ts` is not supported by Next.js 14.
+- **`app/page.tsx`** (homepage) is a **server component** (metadata + server-fetched covers/testimonials) rendering the [components/HomeClient.tsx](../../components/HomeClient.tsx) client island, which owns all mouse-event handlers, auth nav, and client hooks (Remediation 2 Phase B, PR #88, 2026-07-24 — supersedes the earlier "root page must remain `use client`" rule). Keep interactivity in HomeClient; keep data fetching + metadata in the server page.
+- **`next.config.mjs`** remains the config file (Supabase `remotePatterns` derivation + `unoptimized` fallback; behavior unchanged through the Next 16 upgrade).
+- **`app/robots.ts` / `app/sitemap.ts`** serve `/robots.txt` and `/sitemap.xml` for search indexing (2026-07-25, direct commits on master).
 
 ## Public surface (pages)
 
@@ -104,6 +106,11 @@ All routes verified against the current repo. Locked APIs are marked **locked** 
 | `/api/admin/leads` | GET | List WhatsApp leads with optional filters | admin-auth |
 | `/api/admin/leads/[id]` | PATCH | Update a WhatsApp lead's status, labels, admin notes, or `linked_booking_id` | admin-auth |
 | `/api/admin/bookings/[id]/arrival-link` | GET | Mint and return the personalized Arrival Guide URL (`/arrival/<signed-view-token>`, checkout-day expiry) for a **confirmed** booking — admin manual copy/WhatsApp workflow (Phase 16C Stage 4A); refuses pending/cancelled, returns no other booking fields | admin-auth |
+| `/api/admin/change-password` | POST | Admin password change (requires the current password, throttled); stores a scrypt hash in the `settings.admin_password` row via [lib/admin-password.ts](../../lib/admin-password.ts) — never plaintext (Remediation 2 Phase A, 2026-07-23) | admin-auth |
+| `/api/admin/recovery/request` | POST | Admin forgot-password recovery: emails a short-lived reset link to `ADMIN_RECOVERY_EMAIL` via [lib/send-admin-recovery-email.ts](../../lib/send-admin-recovery-email.ts); non-disclosing response, throttled | open w/ guard |
+| `/api/admin/recovery/reset` | POST | Completes admin password recovery with the emailed token; writes the new scrypt hash | open w/ guard |
+| `/api/admin/payments/live-toggle` | GET/POST | The ONLY writer of the `payments_live_enabled` settings row (Plan 4 Phase 3): ENABLING live checkout requires the current admin password (throttled); DISABLING requires only the admin session (instant kill switch); GET returns the current state | admin-auth |
+| `/api/health` | GET | Production config health check (Plan 3 Phase 4): 200 `{ok:true}` when required keys are present, 503 listing missing key NAMES only (never values); also reports counts of payment attempts stuck >1h (Plan 4 Phase 2) | open |
 | `/api/addons` | GET | Public addon list | open |
 | `/api/media` | GET | Public media list | open |
 | `/api/members` | POST | Member create (same-user bearer auth) | open w/ guard |
@@ -127,7 +134,7 @@ All routes verified against the current repo. Locked APIs are marked **locked** 
 | `/api/payments/unified-checkout-session` | POST | Create a CyberSource Unified Checkout capture context for an active signed booking payment link | payment |
 | `/api/payments/unified-checkout-complete` | POST | Server-side CyberSource Payments API authorization from a Unified Checkout transient token | payment |
 | `/api/payments/readiness` | GET | Admin-auth safe provider-readiness summary (configured vs placeholder, no secrets) | payment |
-| `/api/payments/webhook/[provider]` | POST | Verified hosted-payment callback reconciliation for the selected provider | payment |
+| `/api/payments/webhook/[provider]` | POST | Verified hosted-payment callback reconciliation for the selected provider. For `credit_libanais`, a dedicated fail-closed handler (Plan 4 Phase 2, [lib/payments/credit-libanais-webhook.ts](../../lib/payments/credit-libanais-webhook.ts)): 503 when webhook/MLE env is unset, 401 on unverifiable payloads; VERIFIED events are authoritative for `payment_attempts` (auto-resolving most `ambiguous` attempts) and record payment via the idempotent set-paid path | payment |
 | `/api/payments/webhook/stripe` | POST | Stripe dev/test compatibility shim onto the generic hosted-payment callback handler | payment |
 
 `secret-guarded` rows require an `X-Butler-Secret` header matching `BUTLER_WEBHOOK_SECRET`. `/api/butler/lead` is the first Butler write, but it writes only to `whatsapp_leads` and does not touch `bookings` or any locked surface.
@@ -148,7 +155,7 @@ The public Reserve booking flow at [app/book/page.tsx](../../app/book/page.tsx) 
 5. **Server side (`POST /api/bookings`).** The locked booking-creation route validates overlap, pricing snapshot, and addon operational rules. On success, persists a `bookings` row including `pricing_snapshot` and `addons`. Triggers transactional emails and generates signed view + admin-action tokens. Optionally back-links `whatsapp_leads.linked_booking_id` when the request carried a verified `butler_prefill_token`. None of the back-linking can block booking creation.
 6. **Hosted checkout (pay-now path).** `POST /api/payments/checkout` resolves the configured hosted-checkout adapter ([lib/payments/runtime.ts](../../lib/payments/runtime.ts)), persists `payment_link_*` state on the booking row, and returns the payment URL. For Credit Libanais / NetCommerce, that URL is Oraya's internal `/payments/checkout/[token]` page, which requests a CyberSource Unified Checkout capture context from `POST /api/payments/unified-checkout-session`, loads only the CyberSource-returned client library values, displays the official NetCommerce payment/security seal, and sends the returned transient token to `POST /api/payments/unified-checkout-complete` for server-side CyberSource Payments API authorization. After NetCommerce confirmed sandbox testing was successful, PR #64 explicitly disabled Unified Checkout saved-card consent/tokenization for launch: Oraya does not request TMS token creation, persist reusable payment instruments, record saved-card consent, or support credentials-on-file / recurring / merchant-initiated charging. Remaining balances and approved add-ons require a new payment link unless tokenization is later approved. Refunds do not require saved-card tokenization. PR #64 Preview has validated the approved sandbox path for NetCommerce-side testing; production remains disabled until explicit approval and production credentials/env are in place.
 7. **Guest payment projection.** [lib/payments/guest-presentation.ts](../../lib/payments/guest-presentation.ts) is the pure projection from authoritative `payment_status` plus payment-link state to the single guest payment panel. Recorded `paid_in_full` / `deposit_paid` wins over stale link state; a link-only `paid` value remains "being verified" until the recorded payment lifecycle is paid. Booking-status copy is payment-neutral because `bookings.status` and payment state are independent.
-8. **Verified payment authority.** Server-side gateway verification and/or verified provider webhooks are authoritative for payment receipt / expiry updates. `POST /api/payments/unified-checkout-complete` may update booking payment fields to authorized/paid after server-side CyberSource authorization, but it does **not** auto-confirm the stay: `bookings.status` remains `PENDING` until admin/operations confirmation through the existing booking lifecycle. The temporary PR #64 Preview QA auto-confirm exception was removed after NetCommerce completed sandbox testing. Success / cancel redirects on `/booking/view/[token]?payment=success|cancelled` are informational only and never mark payment received by themselves. Credit Libanais / NetCommerce webhook/MLE verification remains required for asynchronous reconciliation and production hardening, and the adapter remains sandbox-only until explicit live rollout controls are implemented and approved.
+8. **Verified payment authority.** Server-side gateway verification and/or verified provider webhooks are authoritative for payment receipt / expiry updates. `POST /api/payments/unified-checkout-complete` may update booking payment fields to authorized/paid after server-side CyberSource authorization, but it does **not** auto-confirm the stay: `bookings.status` remains `PENDING` until admin/operations confirmation through the existing booking lifecycle. The temporary PR #64 Preview QA auto-confirm exception was removed after NetCommerce completed sandbox testing. Success / cancel redirects on `/booking/view/[token]?payment=success|cancelled` are informational only and never mark payment received by themselves. Since Plans 3+4 (2026-07-24/25): completion is durably idempotent via the `payment_attempts` ledger (atomically claimed before any provider call; ambiguous outcomes block further attempts until reconciled), verified Credit Libanais / NetCommerce webhooks are authoritative for asynchronous reconciliation (fail-closed handler), and production checkout readiness is decided by [lib/payments/live-rollout.ts](../../lib/payments/live-rollout.ts): sandbox when env-complete, or production only when webhook/MLE env is complete AND the `payments_live_enabled` settings row reads exactly `"true"` (fail-closed; flipping the row off disables live checkout instantly without a deploy).
 9. **Admin lifecycle.** Admin receives the booking-request email with signed confirm/cancel links → `/api/booking-action` mutates status. When a STAY booking becomes confirmed through either authoritative writer (`/api/booking-action` or the admin `/api/admin/bookings/[id]` PATCH), [lib/whatsapp/confirmed-stay-notification.ts](../../lib/whatsapp/confirmed-stay-notification.ts) additionally fail-closed POSTs one safe payload (`event`, `template`, `guest_name?`, `phone`, `villa`, `check_in`, `check_out`, `booking_reference`, `arrival_guide_url`) to the configured WhatChimp Webhook Workflow URL (`WHATCHIMP_CONFIRMED_STAY_WEBHOOK_URL` — unset means dispatch is off) so WhatChimp can send the approved Utility Template `oraya_booking_confirmed_arrival_guide_v1`. At-most-once via the atomic `bookings.whatsapp_confirmation_sent_at` claim (`sql/phase-16c-whatsapp-confirmation-tracking.sql`); event inquiries, non-production environments (without explicit opt-in), missing phone, already-finished stays, and mint failures all skip safely; a WhatsApp failure never blocks confirmation or the confirmed email; no PIN/access data is ever sent (Phase 16D boundary).
 10. **Guest lifecycle.** Guest can revisit the booking via the signed `/booking/view/[token]` URL (also surfaced through `POST /api/butler/identify` on identity-established branches, and through the member `/profile` "View booking" action via `POST /api/profile/booking-view`).
 
@@ -163,8 +170,8 @@ The public Reserve booking flow at [app/book/page.tsx](../../app/book/page.tsx) 
 
 ## Admin flow
 
-1. Admin enters password at `/admin` -> `/api/admin/verify-password`.
-2. On success, signed `oraya_admin` HMAC cookie issued.
+1. Admin enters password at `/admin` -> `/api/admin/verify-password`. The password is verified against a **scrypt hash** stored in the `settings.admin_password` row ([lib/admin-password.ts](../../lib/admin-password.ts) — never plaintext; 503 if the row is missing or not a valid hash). Password change via `/api/admin/change-password`; forgot-password recovery via `/api/admin/recovery/request|reset` + `ADMIN_RECOVERY_EMAIL` (Remediation waves, 2026-07-23).
+2. On success, signed `oraya_admin` HMAC cookie issued (keyed by `ADMIN_SECRET`).
 3. Every `/api/admin/*` route guards via `requireAdminAuth`.
 4. `AdminDataProvider` polls `/api/admin/data` every 45s and uses best-effort Realtime.
 
@@ -201,7 +208,7 @@ The WhatsApp AI Butler (WhatChimp today; vendor-agnostic by design) talks to Ora
 
 - **Provider:** Resend.
 - **From address:** hardcoded `Oraya Reservations <bookings@stayoraya.com>`.
-- **Senders** (8 total): booking confirmed, booking pending, booking payment, booking request (admin notify), event proposal, event proposal response, event confirmation, feedback request.
+- **Senders** (9 total): booking confirmed, booking pending, booking payment, booking request (admin notify), event proposal, event proposal response, event confirmation, feedback request, admin password recovery ([lib/send-admin-recovery-email.ts](../../lib/send-admin-recovery-email.ts), to `ADMIN_RECOVERY_EMAIL` — Remediation 2 Phase A, 2026-07-23).
 - **Token-protected actions:** confirm/cancel/view all use signed HMAC tokens via `lib/booking-action-token.ts`.
 - **Failure mode:** missing `RESEND_API_KEY` means email is a silent no-op (logs only).
 
@@ -243,9 +250,10 @@ Resolution is intentionally lossy: a Supabase outage or genuinely-missing row bo
 
 ## Database schema (high level)
 
-- `bookings` - primary booking record. Includes `pricing_snapshot` and `addons` (`jsonb`).
+- `bookings` - primary booking record. Includes `pricing_snapshot` and `addons` (`jsonb`). Additive human-run migrations added `whatsapp_confirmation_sent_at` (Phase 16C at-most-once WhatsApp dispatch claim, `sql/phase-16c-whatsapp-confirmation-tracking.sql`) and `refund_provider_reference` (Plan 4 manual-refund Business Center reference, `sql/plan4-refund-provider-reference.sql`).
+- `payment_attempts` - durable payment-attempt/idempotency ledger for Unified Checkout completion (Plan 3 Phase 3, `sql/plan3-payment-attempts.sql`, human-run; partial unique index = at most one in-flight attempt per booking). States: claimed / authorized / recorded / failed / ambiguous. Code fails closed (503) while the table is missing.
 - `addons` - single source of truth for addon definitions.
-- `settings` - key/value store.
+- `settings` - key/value store. Notable protected keys: `admin_password` (scrypt hash) and `payments_live_enabled` (fail-closed live checkout switch; only writable via `/api/admin/payments/live-toggle`).
 - `booking_action_tokens` - issued single-use tokens for admin confirm/cancel.
 - `members` - linked to `auth.users`.
 - `whatsapp_leads` - Phase 16A operational table for WhatsApp / WhatChimp leads collected before any booking exists. Includes `linked_booking_id` for best-effort provenance linkage after website completion.
