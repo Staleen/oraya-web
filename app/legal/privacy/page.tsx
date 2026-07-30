@@ -50,6 +50,11 @@ export default function PrivacyPage() {
         <li>To prepare and follow up on <strong>custom event proposals</strong> when you have requested an event - pricing and scope are agreed in writing, not inferred from the form alone</li>
       </ul>
 
+      <h2 style={subheading}>Website analytics</h2>
+      <p style={body}>
+        We use Vercel Web Analytics to understand aggregate website traffic, such as which pages are visited, how visitors reach the site, and general device, browser, operating-system, and location information. We use these insights to improve the site and guest experience. Vercel states that Web Analytics does not use cookies, represents visitors with a daily-reset hash, and reports anonymized, aggregated data rather than identifying individual visitors.
+      </p>
+
       <h2 style={subheading}>Guest responsibilities</h2>
       <p style={body}>
         You are responsible for the accuracy of the information you submit and for keeping your contact details up to date so we can reach you. Operational and house rules communicated before or during your stay form part of how you use the property. Full contractual responsibilities are summarized in our{" "}
@@ -68,7 +73,7 @@ export default function PrivacyPage() {
 
       <h2 style={subheading}>What we don&apos;t do</h2>
       <p style={body}>
-        We do not sell, rent, or share your personal information with third parties for marketing. Your details are used by Oraya to deliver your reservation and follow-up communication.
+        We do not sell or rent your personal information, or share it with third parties for their own marketing. We use service providers where needed to operate the website and deliver your reservation and follow-up communication.
       </p>
 
       <h2 style={subheading}>Cancellation and refunds</h2>
