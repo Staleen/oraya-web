@@ -275,7 +275,7 @@ The rigid four-step intake (check-in → check-out → guests → villa) is repl
 
 On confirmation the bot calls the existing `POST /api/butler/lead` with the now-complete normalized payload (`normalized_check_in`, `normalized_check_out`, `villa`, `guest_count`, plus the original `stay_text` inside `raw_payload` for audit). The response carries `prefill_url` as today; the bot offers "Continue on website" with that URL.
 
-**Operator wiring — use the validated v6 artifact (2026-07-02).** The hand-wiring steps below are retained for context, but the authoritative operator path is now: import `Oraya_natural_intake_v6.txt` (repo root) into a **test bot**, bind the real `oraya_bedroom_count` field id with `scripts/bind-whatchimp-field.mjs`, and follow [artifacts/whatchimp/V6_ROUNDTRIP_CHECKLIST.md](../../artifacts/whatchimp/V6_ROUNDTRIP_CHECKLIST.md). Re-validate any WhatChimp re-export with `node scripts/validate-whatchimp-flow.mjs <export> --strict-binding --bedroom-field-id <id>` before touching the production bot.
+**Operator wiring — v6 superseded in production 2026-07-31, retained as rollback.** Production Book a Stay now launches the published native WhatsApp Flow "Stay Request" (WhatChimp Flow ID `40377`) through the minimal v7 wrapper and greeting-menu button. The validated v6 Natural Stay Intake remains intact on the tenant with trigger keywords cleared; use it only as the rollback path. Its historical rebuild procedure remains: import `Oraya_natural_intake_v6.txt` (repo root) into a **test bot**, bind the real `oraya_bedroom_count` field id with `scripts/bind-whatchimp-field.mjs`, follow [artifacts/whatchimp/V6_ROUNDTRIP_CHECKLIST.md](../../artifacts/whatchimp/V6_ROUNDTRIP_CHECKLIST.md), and validate any re-export with `node scripts/validate-whatchimp-flow.mjs <export> --strict-binding --bedroom-field-id <id>`.
 
 **Original wiring notes — technical gate passed 2026-06-05, production flow migration still pending** (endpoint callable, nested `extracted.*` field mapping verified; the steps below have not yet been confirmed as wired in the production tenant):
 
@@ -493,16 +493,16 @@ The single intentional exception is the signed `/booking/view/[token]` URL, surf
 
 **Out-of-scope follow-up.** The booking-request flow (whatsapp-bot_1846656_*) does **not** yet send `subscriber_id` to `POST /api/butler/lead`. Until that flow is updated separately, new leads created via the booking-request path won't be auto-resumable by subscriber id from WhatChimp — the orchestrator will fall through to the reference + identity-proof gate. Tracked as a follow-up; the schema and backend already accept the field, only the WhatChimp-side wiring is missing.
 
-## Phase 16A WhatChimp production builder (LOCKED 2026-07-09)
+## Phase 16A WhatChimp production builder (superseded in production 2026-07-31; retained as rollback)
 
-This section preserves the final Phase 16A WhatChimp production wiring so future agents/operators can understand, rebuild, audit, or safely modify the bot without relying on chat memory, screenshots, or committed WhatChimp exports. **Production flow JSON is intentionally NOT committed to this repo** — download the current export from WhatChimp when you need the live node graph. What is durable here is the builder method, the API contract, the trigger strategy, the platform limitations, and the release checklist. David completed this manual wiring on 2026-07-09; see [DECISIONS_LOG.md](DECISIONS_LOG.md) 2026-07-09 "Phase 16A WhatChimp production wiring locked".
+This section preserves the v6 Phase 16A WhatChimp wiring so future agents/operators can understand, rebuild, audit, or restore it without relying on chat memory, screenshots, or committed WhatChimp exports. **Production flow JSON is intentionally NOT committed to this repo** — download the current export from WhatChimp when you need the live node graph. David completed the v6 wiring on 2026-07-09; on 2026-07-31 the native "Stay Request" Flow superseded it for production intake, while v6 remained intact with trigger keywords cleared as the rollback path. See [DECISIONS_LOG.md](DECISIONS_LOG.md) entries for both dates.
 
 ### Active production flow responsibilities
 
 | Flow | Responsibility |
 |---|---|
 | **Greeting / Main Menu** | Entry point. Offers the top-level choices and routes into Book a Stay, Plan an Event, or general help. Booking-support intents no longer route through the menu (see Guest Identification v2 below). |
-| **Book a Stay** | Natural-language stay intake (one message → `POST /api/butler/normalize-stay-intent`) → structured confirmation → `POST /api/butler/lead` → secure website prefill handoff (`prefill_url` → `/book?h=...`). This is the LOCKED v6 natural stay intake — see "Natural stay intake (Phase 16A)" above. |
+| **Book a Stay** | Production launches the published native WhatsApp Flow **"Stay Request"** (WhatChimp Flow ID `40377`) from the minimal v7 wrapper and greeting-menu button. Its terminal submit calls the existing `POST /api/butler/lead` integration unchanged, then sends the existing secure `prefill_url` handoff reply. The v6 natural intake is dormant with trigger keywords cleared and remains the rollback path. |
 | **Plan an Event** | **Direct event-inquiry handoff.** It sends guests straight to `https://stayoraya.com/events/inquiry`, where the website collects event type, villa, dates, setup, services, and details. WhatsApp collects **no** event details — no event-type, villa, attendee, date, setup, or services questions. The event trigger bot may use marketing-friendly text and a "Start Event Request" button/link, but the destination is the website inquiry flow. It does **not** duplicate the website inquiry flow. |
 | **Guest Identification v2** | Booking-support flow for returning guests. **Identify-first** (no menu): the trigger calls Oraya Identify immediately, and the conversation is driven entirely by the orchestrator's `recommended_next_action`. This is the final approved booking-support flow. |
 
@@ -565,7 +565,7 @@ Booking-support triggers should be **specific multi-word phrases** so they canno
 
 Run each on a real WhatsApp thread against the production bot:
 
-1. **Book a Stay** — natural intake message → confirmation → secure `/book?h=...` handoff link appears.
+1. **Book a Stay** — greeting-menu button or v7 wrapper launches the native "Stay Request" Flow; terminal submit creates one lead and the secure `/book?h=...` handoff link appears.
 2. **Plan an Event** — a birthday / private dinner / event-inquiry message routes **directly** to `https://stayoraya.com/events/inquiry` (no event questions asked in WhatsApp).
 3. **Known guest booking-support** — a subscriber already linked to a booking sends a booking-support trigger → bot replies with the safe status directly (no reference ask).
 4. **Unknown guest fallback** — a subscriber with no linked booking → bot asks for the 8-character reference → verifies → safe status.

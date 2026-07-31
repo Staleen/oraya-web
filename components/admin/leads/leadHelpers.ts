@@ -4,6 +4,13 @@
 // `components/admin/leads/` and by `app/admin/leads/page.tsx`.
 
 import type { FollowUpStatus, WhatsappLeadAdminRow } from "@/lib/butler/leads";
+import { formatLeadDateValue } from "@/lib/admin-lead-date-display";
+
+export {
+  formatLeadDateRange,
+  formatLeadDateValue,
+  hasLeadDateValue,
+} from "@/lib/admin-lead-date-display";
 
 // Priority labels are emitted by the AI Butler / WhatChimp side. The exact
 // strings are documented in the 16A.2.f task prompt; keep these in lock-step
@@ -186,11 +193,11 @@ export function buildGuestSummary(lead: WhatsappLeadAdminRow): string {
   const parts: string[] = [`${who} ${intent}`];
   if (lead.villa?.trim()) parts.push(`at ${lead.villa.trim()}`);
 
-  const ci = lead.check_in_text?.trim() ?? "";
-  const co = lead.check_out_text?.trim() ?? "";
-  if (ci && co) parts.push(`for ${ci} → ${co}`);
-  else if (ci) parts.push(`from ${ci}`);
-  else if (co) parts.push(`until ${co}`);
+  const ci = formatLeadDateValue(lead.normalized_check_in, lead.check_in_text);
+  const co = formatLeadDateValue(lead.normalized_check_out, lead.check_out_text);
+  if (ci !== "—" && co !== "—") parts.push(`for ${ci} → ${co}`);
+  else if (ci !== "—") parts.push(`from ${ci}`);
+  else if (co !== "—") parts.push(`until ${co}`);
 
   if (lead.guest_count?.trim()) parts.push(`for ${lead.guest_count.trim()} guests`);
 

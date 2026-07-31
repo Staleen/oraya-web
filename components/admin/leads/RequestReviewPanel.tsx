@@ -3,7 +3,13 @@
 import type { CSSProperties, ReactNode } from "react";
 import { BORDER, GOLD, LATO, MUTED, SURFACE, WHITE } from "@/components/admin/theme";
 import type { WhatsappLeadAdminRow } from "@/lib/butler/leads";
-import { computeNights, nonEmpty, requestKind } from "./leadHelpers";
+import {
+  computeNights,
+  formatLeadDateRange,
+  formatLeadDateValue,
+  nonEmpty,
+  requestKind,
+} from "./leadHelpers";
 
 /**
  * Phase 16A.2.f — pre-filled request review panel.
@@ -191,12 +197,8 @@ function Field({ label, value }: { label: string; value: ReactNode }) {
 
 function StayFields({ lead }: { lead: WhatsappLeadAdminRow }) {
   const nights = computeNights(lead.normalized_check_in, lead.normalized_check_out);
-  const checkIn = lead.normalized_check_in
-    ? `${lead.normalized_check_in} (parsed)`
-    : nonEmpty(lead.check_in_text);
-  const checkOut = lead.normalized_check_out
-    ? `${lead.normalized_check_out} (parsed)`
-    : nonEmpty(lead.check_out_text);
+  const checkIn = formatLeadDateValue(lead.normalized_check_in, lead.check_in_text);
+  const checkOut = formatLeadDateValue(lead.normalized_check_out, lead.check_out_text);
   return (
     <div style={FIELD_LIST}>
       <Field label="Villa" value={nonEmpty(lead.villa)} />
@@ -214,8 +216,7 @@ function EventFields({ lead }: { lead: WhatsappLeadAdminRow }) {
   const eventType = lead.request_type?.trim() && lead.request_type.trim().toLowerCase() !== "event"
     ? lead.request_type.trim()
     : "Event (type not specified)";
-  const dateText =
-    [lead.check_in_text, lead.check_out_text].filter(Boolean).join(" → ") || "—";
+  const dateText = formatLeadDateRange(lead);
   return (
     <div style={FIELD_LIST}>
       <Field label="Event type" value={eventType} />
@@ -235,9 +236,7 @@ function OtherFields({ lead }: { lead: WhatsappLeadAdminRow }) {
       <Field label="Villa" value={nonEmpty(lead.villa)} />
       <Field
         label="Dates mentioned"
-        value={
-          [lead.check_in_text, lead.check_out_text].filter(Boolean).join(" → ") || "—"
-        }
+        value={formatLeadDateRange(lead)}
       />
       <Field label="Guests" value={nonEmpty(lead.guest_count)} />
       <Field label="Add-ons interest" value={nonEmpty(lead.addons_interest)} />
