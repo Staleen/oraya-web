@@ -8,6 +8,8 @@ import {
   STATUS_LABEL,
   computeNights,
   displayName,
+  formatLeadDateRange,
+  hasLeadDateValue,
   formatRelativeTime,
   initialFor,
   nonEmpty,
@@ -283,10 +285,10 @@ export default function LeadCard({
       ? `${nights} night${nights === 1 ? "" : "s"}`
       : null;
 
-  let dateLine = "";
-  if (lead.check_in_text || lead.check_out_text) {
-    dateLine = `${nonEmpty(lead.check_in_text)} → ${nonEmpty(lead.check_out_text)}`;
-  }
+  const hasDates =
+    hasLeadDateValue(lead.normalized_check_in, lead.check_in_text) ||
+    hasLeadDateValue(lead.normalized_check_out, lead.check_out_text);
+  const dateLine = hasDates ? formatLeadDateRange(lead) : "";
 
   const villaLine = lead.villa?.trim() ? lead.villa.trim() : "Villa not yet specified";
   const kindLabel = kind === "stay" ? "Stay" : kind === "event" ? "Event" : "Inquiry";

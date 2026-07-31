@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { BORDER, GOLD, LATO, MIDNIGHT, MUTED, SURFACE, WHITE, fieldStyle } from "@/components/admin/theme";
 import { adminApiFetchInit } from "@/lib/admin-auth";
 import type { WhatsappLeadAdminRow } from "@/lib/butler/leads";
-import { isStayLead } from "./leadHelpers";
+import { formatLeadDateRange, isStayLead } from "./leadHelpers";
 import { EMAIL_RE } from "@/lib/guest-validation";
 
 const ALLOWED_VILLAS = ["Villa Mechmech", "Villa Byblos"] as const;
@@ -342,10 +342,8 @@ export default function LeadConversionModal({
   }, [lead]);
 
   const sourceDateText = useMemo(() => {
-    const checkIn = lead.check_in_text?.trim() || "not captured";
-    const checkOut = lead.check_out_text?.trim() || "not captured";
-    return `${checkIn} -> ${checkOut}`;
-  }, [lead.check_in_text, lead.check_out_text]);
+    return formatLeadDateRange(lead);
+  }, [lead]);
   const dateHelperText = useMemo(() => {
     const hasNormalizedDates =
       strictDateOrBlank(lead.normalized_check_in) && strictDateOrBlank(lead.normalized_check_out);

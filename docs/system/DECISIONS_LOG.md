@@ -16,6 +16,26 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-07-31 - Native WhatsApp Flow becomes the production stay intake; v6 retained as rollback
+
+**Decision:** production Book a Stay now uses the published native WhatsApp Flow **"Stay Request"** (WhatChimp Flow ID `40377`, one terminal screen). The Flow collects full name, ISO check-in/check-out through Meta DatePicker, villa, exact guests (`1`–`8` plus `more_than_8`), bedrooms (`1`–`3`), and optional requests. On terminal submit, WhatChimp calls the existing `POST /api/butler/lead` integration unchanged and sends the existing `prefill_url` website-handoff reply. The v6 Natural Stay Intake remains intact on the tenant with its trigger keywords cleared, making it the immediate rollback path rather than the active production intake.
+
+**Reason:** the native Flow cutover was operator-completed and verified end-to-end twice on 2026-07-31 with real lead-to-booking continuations. DatePicker submitted `YYYY-MM-DD`, the lead rows held the correct normalized dates, and bookings completed through the existing secure website handoff. No repository backend or WhatChimp integration change was required.
+
+**Impact:**
+
+- A minimal **v7** bot flow and the Greeting / Main Menu Book a Stay button launch Flow `40377`; v6 stays dormant for rollback.
+- The guest-facing wrapper/launch message exists in three WhatChimp locations that must remain aligned: the v7 flow, the greeting node, and the **"stay form"** test flow.
+- Native-Flow subscribers receive the `oraya_flow_submitted` label.
+- Accepted platform gaps at cutover: special requests and phone are not currently submitted by the native-Flow path.
+- Native-Flow submissions can carry stale `check_in_text` / `check_out_text` subscriber fields because this path does not run v6's normalization response mappings. The authoritative parsed values are `normalized_check_in` / `normalized_check_out`; admin lead displays must prefer them and use raw text only for dates-pending fallback.
+- Operator verification used leads `121580d1…` and `f39acccb…`, which continued to bookings `6ED26663` and `7D5C4BCD` respectively. These are operational test references, not credentials.
+- No Meta asset, WhatChimp asset, API contract, schema, secret, booking pipeline, payment, email, auth, token, or calendar code changed for the cutover.
+
+**Reversible?:** yes — restore the v6 trigger keywords and point the greeting/menu entry back to v6; disable the v7/native launch entry. The existing lead and secure `/book?h=...` contracts remain unchanged.
+
+**Supersedes:** 2026-07-09 "Phase 16A WhatChimp production wiring locked" for the **production Book a Stay intake only**. v6 remains the documented rollback implementation; Plan an Event and Guest Identification v2 are unchanged.
+
 ## 2026-07-25 - Plan 4 Phase 3: fail-closed live rollout switch replaces the sandbox-only gate
 
 **Decision:** the hardcoded `checkoutReady = configured && environment === "sandbox"` gate is replaced by an explicit, fail-closed rollout decision (`lib/payments/live-rollout.ts` `decideCreditLibanaisCheckoutReady`): checkout is ready when (a) all session env config is present AND (b) environment is `sandbox`, OR (c) environment is `production` AND all webhook/MLE env vars are present AND the server-side settings row **`payments_live_enabled` reads exactly `"true"`**. Missing row, any other value, or an unreadable settings table ⇒ NOT ready. The row is the kill switch — flipping it away from `"true"` disables live checkout instantly without a deploy. The ONLY writer is the dedicated endpoint `/api/admin/payments/live-toggle`: ENABLING requires the current admin password (same throttle discipline as the password-change flow); DISABLING requires only the admin session so the kill switch is never slowed down. The generic settings POST shields the key exactly like `admin_password`; the admin Settings payments panel gains the toggle (stark copy) and shows the CURRENT readiness verdict with the exact missing items (readiness became async end-to-end: `provider.getReadiness()` now returns a Promise).
