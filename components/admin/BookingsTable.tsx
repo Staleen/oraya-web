@@ -335,21 +335,29 @@ export default function BookingsTable({
   }
 
   function updatePaymentDraft(bookingId: string, updates: Partial<PaymentDraft>) {
+    // Audit B-2: the first-edit fallback MUST match what PaymentSection
+    // displays (`draftSlice ?? buildInitialPaymentDraftFromBooking`) — the old
+    // hardcoded blank draft silently discarded every seeded value (deposit,
+    // due date, method, reference) on the first keystroke.
+    const booking = bookings.find((b) => b.id === bookingId);
     setPaymentDrafts((prev) => ({
       ...prev,
       [bookingId]: {
-        ...(prev[bookingId] ?? {
-          depositAmount: "",
-          dueAt: "",
-          requestNote: "",
-          paymentAmount: "",
-          paymentMethod: "whish",
-          paymentReference: "",
-          paymentNotes: "",
-          refundAmount: "",
-          refundNote: "",
-          refundReference: "",
-        }),
+        ...(prev[bookingId] ??
+          (booking
+            ? buildInitialPaymentDraftFromBooking(booking)
+            : {
+                depositAmount: "",
+                dueAt: "",
+                requestNote: "",
+                paymentAmount: "",
+                paymentMethod: "whish",
+                paymentReference: "",
+                paymentNotes: "",
+                refundAmount: "",
+                refundNote: "",
+                refundReference: "",
+              })),
         ...updates,
       },
     }));
@@ -601,6 +609,18 @@ export default function BookingsTable({
 
   async function saveEventProposalDraft(booking: Booking) {
     const draft = getProposalDraft(booking);
+    // Audit B-11: the guest already accepted these terms — overwriting them
+    // must be an explicit decision that names the accepted totals.
+    if (booking.proposal_status === "accepted") {
+      const acceptedTotal = formatMoney(booking.proposal_total_amount ?? 0) ?? "—";
+      const acceptedDeposit =
+        booking.proposal_deposit_amount != null ? formatMoney(booking.proposal_deposit_amount) ?? "—" : "—";
+      const proceed = confirm(
+        `This proposal was ACCEPTED by the guest at ${acceptedTotal} total (deposit ${acceptedDeposit}). ` +
+          `Saving will overwrite the accepted terms with your current draft. Overwrite the accepted proposal?`,
+      );
+      if (!proceed) return;
+    }
     const proposalIncludedServices = serializeProposalLineItems(draft);
     // Phase 15H — total is derived from included line items; admin can no longer drift the total away from the line sum.
     const proposalTotalAmount = sumProposalLineItemDrafts(draft.lineItems);
