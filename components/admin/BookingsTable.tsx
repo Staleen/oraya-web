@@ -184,9 +184,12 @@ export default function BookingsTable({
   // Remediation 5.2 — hold the 45s background poll while a payment edit is in
   // flight so an interleaved poll response can't clobber the optimistic state.
   useEffect(() => {
-    setPollingPaused(paymentUpdatingId !== null);
+    // Audit X-2 — the pause previously covered only payment PATCHes, leaving
+    // add-on resolution and bulk approve-and-confirm exposed to a silent load
+    // landing mid-mutation and clobbering optimistic state.
+    setPollingPaused(paymentUpdatingId !== null || approvingAddonId !== null || confirmGateBusy);
     return () => setPollingPaused(false);
-  }, [paymentUpdatingId, setPollingPaused]);
+  }, [paymentUpdatingId, approvingAddonId, confirmGateBusy, setPollingPaused]);
 
   async function patchAddonResolution(bookingId: string, addonId: string, decision: "approve" | "decline") {
     const addonsSnapshot = await requestAddonResolution(bookingId, addonId, decision);

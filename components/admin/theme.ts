@@ -14,8 +14,6 @@ export const LATO     = "'Lato', system-ui, sans-serif";
 export const SURFACE  = "rgba(255,255,255,0.03)";
 export const BORDER   = "rgba(197,164,109,0.12)";
 
-export const SESSION_KEY = "oraya_admin_auth";
-
 export const thStyle: CSSProperties = {
   fontFamily: LATO, fontSize: "9px", letterSpacing: "2px",
   textTransform: "uppercase", color: GOLD, padding: "12px 16px",
