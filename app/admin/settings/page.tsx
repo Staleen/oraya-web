@@ -39,9 +39,11 @@ export default function AdminSettingsPage() {
   const [testimonialRows, setTestimonialRows] = useState<GuestTestimonialRecord[]>([]);
   const [testimonialSaving, setTestimonialSaving] = useState(false);
   const [testimonialSaved, setTestimonialSaved] = useState(false);
+  // Audit S-2: conservative default — a value only becomes true after a
+  // successful settings load (Save is unreachable until then anyway).
   const [instantBookingAdmin, setInstantBookingAdmin] = useState<InstantBookingFlags>({
-    "Villa Mechmech": true,
-    "Villa Byblos": true,
+    "Villa Mechmech": false,
+    "Villa Byblos": false,
   });
   const [instantBookingSaving, setInstantBookingSaving] = useState(false);
   const [instantBookingSaved, setInstantBookingSaved] = useState(false);
@@ -56,6 +58,11 @@ export default function AdminSettingsPage() {
   const [liveSaving, setLiveSaving] = useState(false);
   const [liveError, setLiveError] = useState("");
   const [liveSaved, setLiveSaved] = useState(false);
+  // Audit S-3: the live-toggle status GET failed — state unknown, error + retry shown.
+  const [liveStatusError, setLiveStatusError] = useState<string | null>(null);
+  // Audit S-2/S-9: fail-closed settings load — saves stay unreachable until it succeeds.
+  const [settingsLoading, setSettingsLoading] = useState(true);
+  const [settingsLoadError, setSettingsLoadError] = useState<string | null>(null);
 
   function refreshPaymentReadiness() {
     fetch("/api/payments/readiness", adminApiFetchInit)
@@ -95,33 +102,64 @@ export default function AdminSettingsPage() {
     }
   }
 
+  // Audit S-2/S-9: rejected promise, non-OK response, and malformed body all
+  // count as a failed load — state stays untouched and every settings-derived
+  // Save remains unreachable until a retry succeeds.
+  async function loadSettings() {
+    setSettingsLoading(true);
+    setSettingsLoadError(null);
+    try {
+      const r = await fetch("/api/admin/settings", adminApiFetchInit);
+      if (!r.ok) throw new Error(`Settings request failed (${r.status}).`);
+      const d = await r.json();
+      if (!Array.isArray(d.settings)) throw new Error("Settings response was malformed.");
+      const rows = d.settings as Array<{ key: string; value: string }>;
+      const wa = rows.find((s) => s.key === "whatsapp_number");
+      if (wa) setWhatsappNum(wa.value);
+      const ne = rows.find((s) => s.key === "notification_emails");
+      if (ne) setNotifEmails(ne.value);
+      setInstantBookingAdmin({
+        "Villa Mechmech": parseInstantBookingSetting(
+          rows.find((s) => s.key === INSTANT_BOOKING_SETTING_KEYS["Villa Mechmech"])?.value,
+        ),
+        "Villa Byblos": parseInstantBookingSetting(
+          rows.find((s) => s.key === INSTANT_BOOKING_SETTING_KEYS["Villa Byblos"])?.value,
+        ),
+      });
+      const gt = rows.find((s) => s.key === GUEST_TESTIMONIALS_SETTINGS_KEY);
+      if (gt?.value != null && String(gt.value).trim() !== "") {
+        setTestimonialRows(parseGuestTestimonialsJson(String(gt.value)));
+      } else {
+        setTestimonialRows([]);
+      }
+      const payment = rows.find((s) => s.key === PAYMENT_PUBLIC_SETTINGS_KEY);
+      setPaymentSettings(parsePaymentPublicSettings(payment?.value ?? null));
+      setSettingsLoading(false);
+    } catch (e) {
+      console.error("[admin] settings fetch error:", e);
+      setSettingsLoadError(e instanceof Error ? e.message : "Network error while loading settings.");
+      setSettingsLoading(false);
+    }
+  }
+
+  // Audit S-3: a failed status GET is surfaced (error + retry) instead of
+  // leaving the kill switch stuck on "Loading..." forever.
+  async function loadLiveStatus() {
+    setLiveStatusError(null);
+    try {
+      const r = await fetch("/api/admin/payments/live-toggle", adminApiFetchInit);
+      if (!r.ok) throw new Error(`Live-payments status request failed (${r.status}).`);
+      const d = await r.json();
+      if (typeof d?.enabled !== "boolean") throw new Error("Live-payments status response was malformed.");
+      setLiveEnabled(d.enabled);
+    } catch (e) {
+      console.error("[admin] live payments fetch error:", e);
+      setLiveStatusError(e instanceof Error ? e.message : "Failed to load the live-payments status.");
+    }
+  }
+
   useEffect(() => {
-    fetch("/api/admin/settings", adminApiFetchInit)
-      .then((r) => r.json())
-      .then((d) => {
-        const rows = d.settings ?? [];
-        const wa = rows.find((s: { key: string; value: string }) => s.key === "whatsapp_number");
-        if (wa) setWhatsappNum(wa.value);
-        const ne = rows.find((s: { key: string; value: string }) => s.key === "notification_emails");
-        if (ne) setNotifEmails(ne.value);
-        setInstantBookingAdmin({
-          "Villa Mechmech": parseInstantBookingSetting(
-            rows.find((s: { key: string; value: string }) => s.key === INSTANT_BOOKING_SETTING_KEYS["Villa Mechmech"])?.value,
-          ),
-          "Villa Byblos": parseInstantBookingSetting(
-            rows.find((s: { key: string; value: string }) => s.key === INSTANT_BOOKING_SETTING_KEYS["Villa Byblos"])?.value,
-          ),
-        });
-        const gt = rows.find((s: { key: string; value: string }) => s.key === GUEST_TESTIMONIALS_SETTINGS_KEY);
-        if (gt?.value != null && String(gt.value).trim() !== "") {
-          setTestimonialRows(parseGuestTestimonialsJson(String(gt.value)));
-        } else {
-          setTestimonialRows([]);
-        }
-        const payment = rows.find((s: { key: string; value: string }) => s.key === PAYMENT_PUBLIC_SETTINGS_KEY);
-        setPaymentSettings(parsePaymentPublicSettings(payment?.value ?? null));
-      })
-      .catch((e) => console.error("[admin] settings fetch error:", e));
+    void loadSettings();
 
     fetch("/api/payments/readiness", adminApiFetchInit)
       .then((r) => r.json())
@@ -130,12 +168,8 @@ export default function AdminSettingsPage() {
       })
       .catch((e) => console.error("[admin] payment readiness fetch error:", e));
 
-    fetch("/api/admin/payments/live-toggle", adminApiFetchInit)
-      .then((r) => r.json())
-      .then((d) => {
-        if (typeof d?.enabled === "boolean") setLiveEnabled(d.enabled);
-      })
-      .catch((e) => console.error("[admin] live payments fetch error:", e));
+    void loadLiveStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function saveWhatsapp() {
@@ -302,6 +336,8 @@ export default function AdminSettingsPage() {
     }
   }
 
+  const settingsNotReady = settingsLoading || settingsLoadError !== null;
+
   return (
     <>
       {error && (
@@ -309,6 +345,47 @@ export default function AdminSettingsPage() {
           Error: {error}
         </p>
       )}
+      {settingsLoadError !== null && (
+        <div
+          style={{
+            border: "0.5px solid rgba(224,112,112,0.34)",
+            backgroundColor: "rgba(224,112,112,0.08)",
+            padding: "14px 16px",
+            marginBottom: "2rem",
+          }}
+        >
+          <p style={{ fontFamily: LATO, fontSize: "12px", color: "#f4b3b3", margin: "0 0 4px", lineHeight: 1.6 }}>
+            Couldn&apos;t load the current settings — editing is disabled so blank or default values can&apos;t overwrite
+            the live configuration.
+          </p>
+          <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "0 0 10px", lineHeight: 1.5 }}>
+            {settingsLoadError}
+          </p>
+          <button
+            type="button"
+            onClick={() => void loadSettings()}
+            style={{
+              fontFamily: LATO,
+              fontSize: "10px",
+              letterSpacing: "2px",
+              textTransform: "uppercase",
+              color: GOLD,
+              backgroundColor: "transparent",
+              border: "0.5px solid rgba(197,164,109,0.35)",
+              padding: "10px 18px",
+              cursor: "pointer",
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
+      {settingsLoading && settingsLoadError === null && (
+        <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, marginBottom: "1.5rem" }}>
+          Loading settings…
+        </p>
+      )}
+      {!settingsNotReady && (
       <SettingsSections
         whatsappNum={whatsappNum}
         setWhatsappNum={(value) => { setWhatsappNum(value); setWhatsappSaved(false); }}
@@ -331,28 +408,36 @@ export default function AdminSettingsPage() {
         notifSaved={notifSaved}
         saveNotifEmails={saveNotifEmails}
       />
+      )}
 
       <PaymentSettingsSection
         value={paymentSettings}
         providerStatus={paymentProviderStatus}
+        settingsUnavailable={settingsNotReady}
         livePayments={{
           enabled: liveEnabled,
           saving: liveSaving,
           error: liveError,
           saved: liveSaved,
+          statusError: liveStatusError,
+          onRetryStatus: () => void loadLiveStatus(),
           onChange: (enabled, currentPassword) => {
             void setLivePayments(enabled, currentPassword);
           },
         }}
         onChange={(next) => {
           setPaymentSaved(false);
-          setPaymentSettings(parsePaymentPublicSettings(next));
+          // Audit S-1: keep the RAW draft while typing — normalization/trim
+          // happens at save time via serializePaymentPublicSettings. Re-parsing
+          // per keystroke stripped trailing spaces and made text untypeable.
+          setPaymentSettings(next);
         }}
         onSave={savePaymentSettings}
         saving={paymentSaving}
         saved={paymentSaved}
       />
 
+      {!settingsNotReady && (
       <div
         style={{
           backgroundColor: SURFACE,
@@ -410,7 +495,9 @@ export default function AdminSettingsPage() {
           )}
         </div>
       </div>
+      )}
 
+      {!settingsNotReady && (
       <TestimonialManager
         rows={testimonialRows}
         setRows={(action) => {
@@ -421,6 +508,7 @@ export default function AdminSettingsPage() {
         saving={testimonialSaving}
         saved={testimonialSaved}
       />
+      )}
     </>
   );
 }
