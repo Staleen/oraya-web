@@ -99,7 +99,7 @@ import {
   renderOperationalBadge,
 } from "./bookings/helpers";
 import { requestAddonResolution } from "./bookings/approve-addon";
-import { bookingMatchesSearch } from "./bookings/booking-ref";
+import { bookingMatchesSearch, formatBookingRef } from "./bookings/booking-ref";
 import ConfirmDialog from "./ConfirmDialog";
 import { buildInitialPaymentDraftFromBooking, buildInitialProposalDraftFromBooking, validateProposalForSend } from "./bookings/drafts";
 import type { BookingCardActions } from "./bookings/actions";
@@ -125,6 +125,7 @@ export default function BookingsTable({
   updatingId,
   updateStatus,
   emailWarnings,
+  reportSendWarning,
 }: {
   loading: boolean;
   filteredBookings: Booking[];
@@ -141,6 +142,7 @@ export default function BookingsTable({
   updatingId: string | null;
   updateStatus: (id: string, status: "confirmed" | "cancelled") => void;
   emailWarnings: Record<string, string>;
+  reportSendWarning: (text: string) => void;
 }) {
   const { bookings, setBookings, setError, loadData, setPollingPaused } = useAdminData();
   const [approvingAddonId, setApprovingAddonId] = useState<string | null>(null);
@@ -156,6 +158,18 @@ export default function BookingsTable({
   const [hiddenCancelledIds, setHiddenCancelledIds] = useState<string[]>([]);
   // Audit G1 (B-1): free-text search over reference / id / name / email / phone.
   const [bookingSearch, setBookingSearch] = useState("");
+  // Audit B-3: ConfirmDialog gate for the confirm direction — names the guest
+  // email + WhatsApp sends before anything fires. `proceed` runs the exact
+  // pre-existing action; the dialog adds disclosure only.
+  const [confirmGate, setConfirmGate] = useState<{
+    booking: Booking;
+    pendingAddonCount: number;
+    proceed: () => Promise<void> | void;
+  } | null>(null);
+  const [confirmGateBusy, setConfirmGateBusy] = useState(false);
+  // Audit B-4: bookings whose latest proposal send returned email_sent=false —
+  // the "sent" status must not present as a successful send for these.
+  const [proposalEmailFailedIds, setProposalEmailFailedIds] = useState<Set<string>>(new Set());
   const [paymentUpdatingId, setPaymentUpdatingId] = useState<string | null>(null);
   const [paymentDrafts, setPaymentDrafts] = useState<Record<string, PaymentDraft>>({});
   const [proposalDrafts, setProposalDrafts] = useState<Record<string, ProposalDraft>>({});
@@ -293,6 +307,25 @@ export default function BookingsTable({
     }
   }
 
+  /** Audit B-3: route confirm requests through the disclosure dialog; cancel keeps its existing prompt. */
+  function requestStatusUpdate(id: string, status: "confirmed" | "cancelled") {
+    if (status === "cancelled") {
+      updateStatus(id, status);
+      return;
+    }
+    const booking = bookings.find((b) => b.id === id);
+    if (!booking) return;
+    setConfirmGate({ booking, pendingAddonCount: 0, proceed: () => updateStatus(id, "confirmed") });
+  }
+
+  /** Audit B-3: the bulk approve-and-confirm action is a confirm action too — same dialog, shown BEFORE any add-on write. */
+  function requestApproveAllAddonsAndConfirm(booking: Booking) {
+    const pendingAddonCount = getAddonSnapshots(booking).filter(
+      (addon) => addon.requires_approval && addon.status === "pending_approval",
+    ).length;
+    setConfirmGate({ booking, pendingAddonCount, proceed: () => approveAllAddonsAndConfirm(booking) });
+  }
+
   function getPaymentDraft(booking: Booking): PaymentDraft {
     return paymentDrafts[booking.id] ?? buildInitialPaymentDraftFromBooking(booking);
   }
@@ -349,6 +382,31 @@ export default function BookingsTable({
       if (!res.ok) {
         setError(data.error ?? "Failed to update booking details.");
         return null;
+      }
+
+      // Audit B-4: these actions are supposed to email the guest — surface a
+      // persistent failure notice when the API reports email_sent=false.
+      // (Other actionKeys legitimately return email_sent=false with no email
+      // attempted, so the check is scoped to the emailing actions.)
+      const emailingActionLabels: Record<string, string> = {
+        "request-deposit": "deposit-request email",
+        "record-payment": "payment-received email",
+        "send-reminder": "payment-reminder email",
+        "send-proposal": "proposal email",
+      };
+      const emailingLabel = emailingActionLabels[actionKey];
+      if (emailingLabel && data.email_sent === false) {
+        reportSendWarning(
+          `Booking ${formatBookingRef(bookingId) ?? bookingId}: the ${emailingLabel} was NOT sent to the guest.`,
+        );
+      }
+      if (actionKey === "send-proposal") {
+        setProposalEmailFailedIds((prev) => {
+          const next = new Set(prev);
+          if (data.email_sent === false) next.add(bookingId);
+          else next.delete(bookingId);
+          return next;
+        });
       }
 
       if (data.booking) {
@@ -1325,6 +1383,7 @@ export default function BookingsTable({
         activeProposalAction={activeProposalAction}
         isMobile={isMobile}
         actions={cardActions}
+        sendEmailFailed={proposalEmailFailedIds.has(booking.id)}
       />
     );
   }
@@ -1340,9 +1399,9 @@ export default function BookingsTable({
         compactMode={compactMode}
         feedbackEmphasis={feedbackEmphasis}
         deps={{
-          approveAllAddonsAndConfirm,
+          approveAllAddonsAndConfirm: requestApproveAllAddonsAndConfirm,
           copyArrivalGuideLink,
-          updateStatus,
+          updateStatus: requestStatusUpdate,
           getMember,
           getBookingDisplayName,
           getConfirmedConflicts,
@@ -1529,6 +1588,50 @@ export default function BookingsTable({
           </ConfirmDialog>
         );
       })() : null}
+
+      {confirmGate && (() => {
+        const gateBooking = confirmGate.booking;
+        const gateRef = formatBookingRef(gateBooking.id);
+        const gateIsEvent = isEventInquiryBooking(gateBooking);
+        const gateName = getBookingDisplayName(gateBooking);
+        return (
+          <ConfirmDialog
+            titleId="confirm-booking-dialog-title"
+            title="Confirm this booking?"
+            confirmLabel={confirmGateBusy ? "Confirming..." : "Confirm & notify guest"}
+            confirmColor="#6fcf8a"
+            busy={confirmGateBusy}
+            isMobile={isMobile}
+            onCancel={() => {
+              if (!confirmGateBusy) setConfirmGate(null);
+            }}
+            onConfirm={async () => {
+              setConfirmGateBusy(true);
+              try {
+                await confirmGate.proceed();
+              } finally {
+                setConfirmGateBusy(false);
+                setConfirmGate(null);
+              }
+            }}
+          >
+            <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, margin: "0 0 10px", lineHeight: 1.6 }}>
+              {gateName}
+              {gateRef ? ` · Ref ${gateRef}` : ""} · {gateBooking.villa}
+            </p>
+            <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "0 0 6px", lineHeight: 1.6 }}>
+              Confirming immediately sends the guest their booking-confirmed email
+              {gateIsEvent ? "" : " and the WhatsApp Arrival Guide message"}.
+              {confirmGate.pendingAddonCount > 0
+                ? ` ${confirmGate.pendingAddonCount} approval-required add-on${confirmGate.pendingAddonCount === 1 ? "" : "s"} will be approved first.`
+                : ""}
+            </p>
+            <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "0 0 18px", lineHeight: 1.55 }}>
+              Nothing is sent if you cancel this dialog.
+            </p>
+          </ConfirmDialog>
+        );
+      })()}
 
       <div style={{ display: "grid", gap: "1rem" }}>
       <div

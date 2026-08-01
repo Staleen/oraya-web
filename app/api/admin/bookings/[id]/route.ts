@@ -619,9 +619,12 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
   // Fail-closed and at-most-once inside the helper (env gates, phone/expired
   // skips, atomic whatsapp_confirmation_sent_at claim — an admin re-confirm
   // does not resend). Never blocks the PATCH response or the email above.
+  // Audit B-3: the dispatch outcome is captured for RESPONSE REPORTING ONLY —
+  // when/whether/how often the dispatch fires is unchanged.
+  let whatsappOutcome: { dispatched: boolean; reason?: string } | null = null;
   if (statusUpdateProvided && status === "confirmed" && !isEventInquiry) {
     try {
-      await dispatchConfirmedStayWhatsAppNotification({
+      whatsappOutcome = await dispatchConfirmedStayWhatsAppNotification({
         booking_id: bookingId,
         status: "confirmed",
         villa: updated.villa,
@@ -635,6 +638,7 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
       });
     } catch (whatsappErr) {
       console.error("[api/admin/bookings] whatsapp dispatch unexpected error:", whatsappErr);
+      whatsappOutcome = { dispatched: false, reason: "unexpected_error" };
     }
   }
 
@@ -784,5 +788,5 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
     }
   }
 
-  return NextResponse.json({ ok: true, booking: updated, email_sent: emailSent });
+  return NextResponse.json({ ok: true, booking: updated, email_sent: emailSent, whatsapp: whatsappOutcome });
 }

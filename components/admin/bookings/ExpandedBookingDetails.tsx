@@ -1820,6 +1820,24 @@ export function ExpandedBookingDetails({
           </div>
         )}
 
+        {/* Audit B-3: WhatsApp Arrival Guide dispatch outcome — visibility only,
+            sourced from the at-most-once whatsapp_confirmation_sent_at claim. */}
+        {booking.status === "confirmed" && !isEventInquiryBooking(booking) && (
+          <p
+            style={{
+              fontFamily: LATO,
+              fontSize: "11px",
+              color: booking.whatsapp_confirmation_sent_at ? "#6fcf8a" : "#e2ab5a",
+              margin: 0,
+              lineHeight: 1.5,
+            }}
+          >
+            {booking.whatsapp_confirmation_sent_at
+              ? `WhatsApp Arrival Guide sent · ${formatDateTimeValue(booking.whatsapp_confirmation_sent_at)}`
+              : "WhatsApp Arrival Guide: not sent — use the Copy Arrival Guide link above to send it manually."}
+          </p>
+        )}
+
         {booking.status === "confirmed" && (
           <div style={{ display: "grid", gap: "8px" }}>
             <button

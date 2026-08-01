@@ -34,6 +34,7 @@ function ProposalSectionImpl({
   activeProposalAction,
   isMobile,
   actions,
+  sendEmailFailed = false,
 }: {
   booking: Booking;
   draftSlice: ProposalDraft | undefined;
@@ -41,6 +42,8 @@ function ProposalSectionImpl({
   activeProposalAction: string | null;
   isMobile: boolean;
   actions: BookingCardActions;
+  /** Audit B-4: the latest proposal send reported email_sent=false — the "sent" status must not read as delivered. */
+  sendEmailFailed?: boolean;
 }) {
     if (!isEventInquiryBooking(booking)) return null;
 
@@ -274,6 +277,23 @@ function ProposalSectionImpl({
             {statusLabel}
           </span>
         </div>
+
+        {sendEmailFailed && (
+          <div
+            role="alert"
+            style={{
+              border: "0.5px solid rgba(224,112,112,0.34)",
+              backgroundColor: "rgba(224,112,112,0.10)",
+              padding: "10px 12px",
+              borderRadius: "6px",
+            }}
+          >
+            <p style={{ fontFamily: LATO, fontSize: "12px", color: "#f4b3b3", margin: 0, lineHeight: 1.6 }}>
+              The proposal is marked sent, but the email to the guest FAILED — the guest has not received it. Use
+              &ldquo;Resend proposal&rdquo; once the issue is resolved.
+            </p>
+          </div>
+        )}
 
         <details
           style={{
