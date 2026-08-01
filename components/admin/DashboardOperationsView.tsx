@@ -18,6 +18,7 @@ import {
   hasResolvedAddonStatus,
 } from "./bookings/helpers";
 import { requestAddonResolution } from "./bookings/approve-addon";
+import { formatBookingRef } from "./bookings/booking-ref";
 
 const DESKTOP_DAY_WIDTH = 92;
 const TIMELINE_DAYS = 90;
@@ -1343,6 +1344,7 @@ export default function DashboardOperationsView({
             })()}
 
             {[
+              ["Reference", formatBookingRef(selectedBooking.id) ?? "—"],
               ["Villa", selectedBooking.villa],
               ["Check-in", fmt(selectedBooking.check_in)],
               ["Check-out", fmt(selectedBooking.check_out)],

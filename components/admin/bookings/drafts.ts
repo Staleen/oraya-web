@@ -206,5 +206,16 @@ export function validateProposalForSend(draft: ProposalDraft): { ok: true } | { 
   if (!draft.validUntil) {
     return { ok: false, error: "Set a payment deadline before sending the proposal." };
   }
+  // Audit B-12: an expired proposal keeps its old deadline in the seeded
+  // draft — sending (or resending) with a deadline that is not in the future
+  // would reach the guest already expired. (datetime-local value; JS Date
+  // parsing is fine here — the date-only check_in/check_out rule is separate.)
+  const validUntilMs = new Date(draft.validUntil).getTime();
+  if (!Number.isFinite(validUntilMs)) {
+    return { ok: false, error: "The payment deadline is not a valid date." };
+  }
+  if (validUntilMs <= Date.now()) {
+    return { ok: false, error: "The payment deadline is in the past — set a new future deadline before sending." };
+  }
   return { ok: true };
 }

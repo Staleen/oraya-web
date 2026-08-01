@@ -50,14 +50,25 @@ function PaymentSectionImpl({
   isMobile: boolean;
   actions: BookingCardActions;
 }) {
-  if (booking.status !== "confirmed") return null;
+  // Audit B-5: a cancelled booking that holds recorded guest money must keep
+  // its payment summary and the manual-refund recorder (REFUND_RUNBOOK Step C
+  // has no status restriction, and neither does the API). Guest-chasing
+  // actions (request deposit / record payment / reminder) stay confirmed-only.
+  const recordedPaid =
+    typeof booking.amount_paid === "number" && Number.isFinite(booking.amount_paid) ? booking.amount_paid : 0;
+  const cancelledWithMoney =
+    booking.status === "cancelled" &&
+    (recordedPaid > 0 ||
+      booking.refund_status != null ||
+      booking.payment_status === "deposit_paid" ||
+      booking.payment_status === "paid_in_full");
+  if (booking.status !== "confirmed" && !cancelledWithMoney) return null;
 
   const draft = draftSlice ?? buildInitialPaymentDraftFromBooking(booking);
   const paymentStatus = getPaymentStatus(booking);
-  const overdue = isPaymentOverdue(booking);
+  const overdue = booking.status === "confirmed" && isPaymentOverdue(booking);
   const paymentTone = getPaymentStatusStyle(paymentStatus, overdue);
-  const amountPaidRaw =
-    typeof booking.amount_paid === "number" && Number.isFinite(booking.amount_paid) ? booking.amount_paid : 0;
+  const amountPaidRaw = recordedPaid;
   const requestSentAt = formatDateTimeValue(booking.payment_requested_at);
   const receivedAt = formatDateTimeValue(booking.payment_received_at);
   const dueAt = formatDateTimeValue(booking.payment_due_at);
@@ -241,13 +252,22 @@ function PaymentSectionImpl({
             </div>
           </details>
 
+      {cancelledWithMoney && (
+        <p style={{ fontFamily: LATO, fontSize: "11px", color: "#e2ab5a", margin: 0, lineHeight: 1.55 }}>
+          Cancelled booking with recorded guest money — execute the refund in the NetCommerce Business Center, then
+          record it below (see REFUND_RUNBOOK).
+        </p>
+      )}
+
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
+          gridTemplateColumns: isMobile || cancelledWithMoney ? "1fr" : "repeat(3, minmax(0, 1fr))",
           gap: "12px",
         }}
       >
+        {booking.status === "confirmed" && (
+        <>
         <div
           style={{
             border: `0.5px solid ${BORDER}`,
@@ -379,6 +399,8 @@ function PaymentSectionImpl({
             {isRecording ? "Saving..." : "Record payment"}
           </button>
         </div>
+        </>
+        )}
 
         <div
           style={{
@@ -438,6 +460,7 @@ function PaymentSectionImpl({
           </button>
         </div>
 
+        {booking.status === "confirmed" && (
         <div
           style={{
             border: `0.5px solid ${paymentStatus === "payment_requested" ? "rgba(197,164,109,0.24)" : BORDER}`,
@@ -475,6 +498,7 @@ function PaymentSectionImpl({
             {isReminderSending ? "Sending..." : "Send payment reminder"}
           </button>
         </div>
+        )}
       </div>
         </>
       )}

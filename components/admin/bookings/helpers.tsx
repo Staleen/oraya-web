@@ -153,6 +153,36 @@ export function StatusBadge({ status }: { status: string }) {
   );
 }
 
+/**
+ * Audit G1.1 — the guest-facing 8-char booking reference as a scannable badge
+ * for collapsed booking rows. Slightly larger than StatusBadge on purpose:
+ * it is the anchor an operator matches against a guest-quoted reference.
+ */
+export function BookingRefBadge({ bookingRef }: { bookingRef: string | null }) {
+  if (!bookingRef) return null;
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontFamily: LATO,
+        fontSize: "12px",
+        fontWeight: 600,
+        letterSpacing: "1.8px",
+        color: GOLD,
+        backgroundColor: "rgba(197,164,109,0.10)",
+        border: `0.5px solid ${GOLD}`,
+        padding: "7px 12px",
+        borderRadius: "999px",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {bookingRef}
+    </span>
+  );
+}
+
 export function getSectionTone(section: BookingSectionKey) {
   if (section === "confirmed") {
     return {

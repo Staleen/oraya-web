@@ -42,6 +42,7 @@ import {
   renderRevenueEstimateRow,
   type DeadDayUpsellOpportunity,
 } from "./helpers";
+import { formatBookingRef } from "./booking-ref";
 import { addDaysToDateOnly } from "@/lib/calendar/event-block";
 import { findAlternativeDateSuggestions, type AlternativeSuggestion } from "@/lib/calendar/alternative-dates";
 import {
@@ -233,6 +234,31 @@ export function ExpandedBookingDetails({
             }}
           />
         )}
+
+        {/* Audit G1 (B-1): the public support reference guests quote from emails/WhatsApp. */}
+        {(() => {
+          const bookingRef = formatBookingRef(booking.id);
+          if (!bookingRef) return null;
+          return (
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+              <span
+                style={{
+                  fontFamily: LATO,
+                  fontSize: "10px",
+                  letterSpacing: "1.6px",
+                  textTransform: "uppercase",
+                  color: MUTED,
+                }}
+              >
+                Booking reference
+              </span>
+              <span style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "1.4px", color: WHITE, fontWeight: 600 }}>
+                {bookingRef}
+              </span>
+              <CopyValueButton value={bookingRef} buttonLabel="Copy" />
+            </div>
+          );
+        })()}
 
         {/* Phase 13N: Best option highlight — only when overlapping pending requests exist */}
         {bestOptionTotal !== null && (
@@ -1792,6 +1818,24 @@ export function ExpandedBookingDetails({
               Personal guest link — paste it to the guest on WhatsApp. Valid until checkout day.
             </span>
           </div>
+        )}
+
+        {/* Audit B-3: WhatsApp Arrival Guide dispatch outcome — visibility only,
+            sourced from the at-most-once whatsapp_confirmation_sent_at claim. */}
+        {booking.status === "confirmed" && !isEventInquiryBooking(booking) && (
+          <p
+            style={{
+              fontFamily: LATO,
+              fontSize: "11px",
+              color: booking.whatsapp_confirmation_sent_at ? "#6fcf8a" : "#e2ab5a",
+              margin: 0,
+              lineHeight: 1.5,
+            }}
+          >
+            {booking.whatsapp_confirmation_sent_at
+              ? `WhatsApp Arrival Guide sent · ${formatDateTimeValue(booking.whatsapp_confirmation_sent_at)}`
+              : "WhatsApp Arrival Guide: not sent — use the Copy Arrival Guide link above to send it manually."}
+          </p>
         )}
 
         {booking.status === "confirmed" && (

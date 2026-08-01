@@ -99,6 +99,7 @@ import {
   renderOperationalBadge,
 } from "./bookings/helpers";
 import { requestAddonResolution } from "./bookings/approve-addon";
+import { bookingMatchesSearch, formatBookingRef } from "./bookings/booking-ref";
 import ConfirmDialog from "./ConfirmDialog";
 import { buildInitialPaymentDraftFromBooking, buildInitialProposalDraftFromBooking, validateProposalForSend } from "./bookings/drafts";
 import type { BookingCardActions } from "./bookings/actions";
@@ -124,6 +125,7 @@ export default function BookingsTable({
   updatingId,
   updateStatus,
   emailWarnings,
+  reportSendWarning,
 }: {
   loading: boolean;
   filteredBookings: Booking[];
@@ -140,6 +142,7 @@ export default function BookingsTable({
   updatingId: string | null;
   updateStatus: (id: string, status: "confirmed" | "cancelled") => void;
   emailWarnings: Record<string, string>;
+  reportSendWarning: (text: string) => void;
 }) {
   const { bookings, setBookings, setError, loadData, setPollingPaused } = useAdminData();
   const [approvingAddonId, setApprovingAddonId] = useState<string | null>(null);
@@ -153,6 +156,20 @@ export default function BookingsTable({
   const [bulkActionBookingId, setBulkActionBookingId] = useState<string | null>(null);
   const [confirmedSort, setConfirmedSort] = useState<ConfirmedSortKey>("created_desc");
   const [hiddenCancelledIds, setHiddenCancelledIds] = useState<string[]>([]);
+  // Audit G1 (B-1): free-text search over reference / id / name / email / phone.
+  const [bookingSearch, setBookingSearch] = useState("");
+  // Audit B-3: ConfirmDialog gate for the confirm direction — names the guest
+  // email + WhatsApp sends before anything fires. `proceed` runs the exact
+  // pre-existing action; the dialog adds disclosure only.
+  const [confirmGate, setConfirmGate] = useState<{
+    booking: Booking;
+    pendingAddonCount: number;
+    proceed: () => Promise<void> | void;
+  } | null>(null);
+  const [confirmGateBusy, setConfirmGateBusy] = useState(false);
+  // Audit B-4: bookings whose latest proposal send returned email_sent=false —
+  // the "sent" status must not present as a successful send for these.
+  const [proposalEmailFailedIds, setProposalEmailFailedIds] = useState<Set<string>>(new Set());
   const [paymentUpdatingId, setPaymentUpdatingId] = useState<string | null>(null);
   const [paymentDrafts, setPaymentDrafts] = useState<Record<string, PaymentDraft>>({});
   const [proposalDrafts, setProposalDrafts] = useState<Record<string, ProposalDraft>>({});
@@ -290,6 +307,25 @@ export default function BookingsTable({
     }
   }
 
+  /** Audit B-3: route confirm requests through the disclosure dialog; cancel keeps its existing prompt. */
+  function requestStatusUpdate(id: string, status: "confirmed" | "cancelled") {
+    if (status === "cancelled") {
+      updateStatus(id, status);
+      return;
+    }
+    const booking = bookings.find((b) => b.id === id);
+    if (!booking) return;
+    setConfirmGate({ booking, pendingAddonCount: 0, proceed: () => updateStatus(id, "confirmed") });
+  }
+
+  /** Audit B-3: the bulk approve-and-confirm action is a confirm action too — same dialog, shown BEFORE any add-on write. */
+  function requestApproveAllAddonsAndConfirm(booking: Booking) {
+    const pendingAddonCount = getAddonSnapshots(booking).filter(
+      (addon) => addon.requires_approval && addon.status === "pending_approval",
+    ).length;
+    setConfirmGate({ booking, pendingAddonCount, proceed: () => approveAllAddonsAndConfirm(booking) });
+  }
+
   function getPaymentDraft(booking: Booking): PaymentDraft {
     return paymentDrafts[booking.id] ?? buildInitialPaymentDraftFromBooking(booking);
   }
@@ -299,21 +335,29 @@ export default function BookingsTable({
   }
 
   function updatePaymentDraft(bookingId: string, updates: Partial<PaymentDraft>) {
+    // Audit B-2: the first-edit fallback MUST match what PaymentSection
+    // displays (`draftSlice ?? buildInitialPaymentDraftFromBooking`) — the old
+    // hardcoded blank draft silently discarded every seeded value (deposit,
+    // due date, method, reference) on the first keystroke.
+    const booking = bookings.find((b) => b.id === bookingId);
     setPaymentDrafts((prev) => ({
       ...prev,
       [bookingId]: {
-        ...(prev[bookingId] ?? {
-          depositAmount: "",
-          dueAt: "",
-          requestNote: "",
-          paymentAmount: "",
-          paymentMethod: "whish",
-          paymentReference: "",
-          paymentNotes: "",
-          refundAmount: "",
-          refundNote: "",
-          refundReference: "",
-        }),
+        ...(prev[bookingId] ??
+          (booking
+            ? buildInitialPaymentDraftFromBooking(booking)
+            : {
+                depositAmount: "",
+                dueAt: "",
+                requestNote: "",
+                paymentAmount: "",
+                paymentMethod: "whish",
+                paymentReference: "",
+                paymentNotes: "",
+                refundAmount: "",
+                refundNote: "",
+                refundReference: "",
+              })),
         ...updates,
       },
     }));
@@ -346,6 +390,31 @@ export default function BookingsTable({
       if (!res.ok) {
         setError(data.error ?? "Failed to update booking details.");
         return null;
+      }
+
+      // Audit B-4: these actions are supposed to email the guest — surface a
+      // persistent failure notice when the API reports email_sent=false.
+      // (Other actionKeys legitimately return email_sent=false with no email
+      // attempted, so the check is scoped to the emailing actions.)
+      const emailingActionLabels: Record<string, string> = {
+        "request-deposit": "deposit-request email",
+        "record-payment": "payment-received email",
+        "send-reminder": "payment-reminder email",
+        "send-proposal": "proposal email",
+      };
+      const emailingLabel = emailingActionLabels[actionKey];
+      if (emailingLabel && data.email_sent === false) {
+        reportSendWarning(
+          `Booking ${formatBookingRef(bookingId) ?? bookingId}: the ${emailingLabel} was NOT sent to the guest.`,
+        );
+      }
+      if (actionKey === "send-proposal") {
+        setProposalEmailFailedIds((prev) => {
+          const next = new Set(prev);
+          if (data.email_sent === false) next.add(bookingId);
+          else next.delete(bookingId);
+          return next;
+        });
       }
 
       if (data.booking) {
@@ -540,6 +609,18 @@ export default function BookingsTable({
 
   async function saveEventProposalDraft(booking: Booking) {
     const draft = getProposalDraft(booking);
+    // Audit B-11: the guest already accepted these terms — overwriting them
+    // must be an explicit decision that names the accepted totals.
+    if (booking.proposal_status === "accepted") {
+      const acceptedTotal = formatMoney(booking.proposal_total_amount ?? 0) ?? "—";
+      const acceptedDeposit =
+        booking.proposal_deposit_amount != null ? formatMoney(booking.proposal_deposit_amount) ?? "—" : "—";
+      const proceed = confirm(
+        `This proposal was ACCEPTED by the guest at ${acceptedTotal} total (deposit ${acceptedDeposit}). ` +
+          `Saving will overwrite the accepted terms with your current draft. Overwrite the accepted proposal?`,
+      );
+      if (!proceed) return;
+    }
     const proposalIncludedServices = serializeProposalLineItems(draft);
     // Phase 15H — total is derived from included line items; admin can no longer drift the total away from the line sum.
     const proposalTotalAmount = sumProposalLineItemDrafts(draft.lineItems);
@@ -692,16 +773,17 @@ export default function BookingsTable({
     return booking.status === "pending" || bookingHasPendingAddonApproval(booking) || bookingHasOperationalAttention(booking);
   }
 
-  const filterActive = villaFilter !== "all" || dateFilter !== "";
+  const filterActive = villaFilter !== "all" || dateFilter !== "" || bookingSearch.trim() !== "";
   const sortActive = confirmedSort !== "created_desc";
 
   const visibleBookings = useMemo(() => {
     return bookings.filter((booking) => {
       if (villaFilter !== "all" && booking.villa !== villaFilter) return false;
       if (dateFilter && booking.check_in !== dateFilter) return false;
+      if (!bookingMatchesSearch(booking, bookingSearch)) return false;
       return true;
     });
-  }, [bookings, villaFilter, dateFilter]);
+  }, [bookings, villaFilter, dateFilter, bookingSearch]);
 
   const pendingOverlapMap = useMemo(() => {
     const pendingOnly = bookings.filter((booking) => booking.status === "pending");
@@ -884,6 +966,7 @@ export default function BookingsTable({
 
   function handleResetView() {
     clearFilters();
+    setBookingSearch("");
     setConfirmedSort("created_desc");
     setHiddenCancelledIds([]);
     setExpandedCompactId(null);
@@ -1320,6 +1403,7 @@ export default function BookingsTable({
         activeProposalAction={activeProposalAction}
         isMobile={isMobile}
         actions={cardActions}
+        sendEmailFailed={proposalEmailFailedIds.has(booking.id)}
       />
     );
   }
@@ -1335,9 +1419,9 @@ export default function BookingsTable({
         compactMode={compactMode}
         feedbackEmphasis={feedbackEmphasis}
         deps={{
-          approveAllAddonsAndConfirm,
+          approveAllAddonsAndConfirm: requestApproveAllAddonsAndConfirm,
           copyArrivalGuideLink,
-          updateStatus,
+          updateStatus: requestStatusUpdate,
           getMember,
           getBookingDisplayName,
           getConfirmedConflicts,
@@ -1525,6 +1609,50 @@ export default function BookingsTable({
         );
       })() : null}
 
+      {confirmGate && (() => {
+        const gateBooking = confirmGate.booking;
+        const gateRef = formatBookingRef(gateBooking.id);
+        const gateIsEvent = isEventInquiryBooking(gateBooking);
+        const gateName = getBookingDisplayName(gateBooking);
+        return (
+          <ConfirmDialog
+            titleId="confirm-booking-dialog-title"
+            title="Confirm this booking?"
+            confirmLabel={confirmGateBusy ? "Confirming..." : "Confirm & notify guest"}
+            confirmColor="#6fcf8a"
+            busy={confirmGateBusy}
+            isMobile={isMobile}
+            onCancel={() => {
+              if (!confirmGateBusy) setConfirmGate(null);
+            }}
+            onConfirm={async () => {
+              setConfirmGateBusy(true);
+              try {
+                await confirmGate.proceed();
+              } finally {
+                setConfirmGateBusy(false);
+                setConfirmGate(null);
+              }
+            }}
+          >
+            <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, margin: "0 0 10px", lineHeight: 1.6 }}>
+              {gateName}
+              {gateRef ? ` · Ref ${gateRef}` : ""} · {gateBooking.villa}
+            </p>
+            <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: "0 0 6px", lineHeight: 1.6 }}>
+              Confirming immediately sends the guest their booking-confirmed email
+              {gateIsEvent ? "" : " and the WhatsApp Arrival Guide message"}.
+              {confirmGate.pendingAddonCount > 0
+                ? ` ${confirmGate.pendingAddonCount} approval-required add-on${confirmGate.pendingAddonCount === 1 ? "" : "s"} will be approved first.`
+                : ""}
+            </p>
+            <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: "0 0 18px", lineHeight: 1.55 }}>
+              Nothing is sent if you cancel this dialog.
+            </p>
+          </ConfirmDialog>
+        );
+      })()}
+
       <div style={{ display: "grid", gap: "1rem" }}>
       <div
         style={{
@@ -1624,6 +1752,29 @@ export default function BookingsTable({
         </div>
 
         <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "flex-end" }}>
+          <div style={{ minWidth: isMobile ? "100%" : "260px", flex: "2 1 260px" }}>
+            <label
+              style={{
+                fontFamily: LATO,
+                fontSize: "10px",
+                letterSpacing: "2px",
+                textTransform: "uppercase",
+                color: MUTED,
+                display: "block",
+                marginBottom: "6px",
+              }}
+            >
+              Search
+            </label>
+            <input
+              type="search"
+              value={bookingSearch}
+              onChange={(event) => setBookingSearch(event.target.value)}
+              placeholder="Reference, name, phone, or email"
+              style={fieldStyle}
+            />
+          </div>
+
           <div style={{ minWidth: isMobile ? "100%" : "220px", flex: "1 1 220px" }}>
             <label
               style={{
@@ -1699,6 +1850,7 @@ export default function BookingsTable({
 
         {(filterActive || (activeSection === "confirmed" && sortActive)) && (
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            {bookingSearch.trim() !== "" && renderFilterChip("Search", bookingSearch.trim(), () => setBookingSearch(""))}
             {villaFilter !== "all" && renderFilterChip("Villa", villaFilter, () => setVillaFilter("all"))}
             {dateFilter && renderFilterChip("Check-in", fmt(dateFilter), () => setDateFilter(""))}
             {activeSection === "confirmed" &&

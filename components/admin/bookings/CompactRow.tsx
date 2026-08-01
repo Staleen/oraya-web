@@ -3,6 +3,7 @@ import { memo, type ReactNode } from "react";
 import type { Booking } from "../types";
 import { BORDER, fmt, GOLD, LATO, MUTED, PLAYFAIR, WHITE } from "../theme";
 import {
+  BookingRefBadge,
   StatusBadge,
   addonHasTrackedOffer,
   completedHistoryFeedbackLine,
@@ -15,6 +16,7 @@ import {
   renderPaymentStatusBadge,
 } from "./helpers";
 import type { BookingCardActions } from "./actions";
+import { formatBookingRef } from "./booking-ref";
 import { parseEventSetupEstimateFromMessage } from "@/lib/event-inquiry-message";
 
 /**
@@ -175,6 +177,7 @@ function CompactRowImpl({
                   {dateLine}
                 </p>
               )}
+            <BookingRefBadge bookingRef={formatBookingRef(booking.id)} />
             <StatusBadge status={booking.status} />
             {section === "confirmed" && renderPaymentStatusBadge(booking)}
             {/* Phase 14A: pending-row payment + conflict badges */}

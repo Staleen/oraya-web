@@ -153,6 +153,8 @@ export interface Booking {
   feedback_requested_at?: string | null;
   feedback_requested_channel?: string | null;
   feedback_request_count?: number | null;
+  /** Phase 16C at-most-once WhatsApp Arrival Guide dispatch claim (audit B-3). */
+  whatsapp_confirmation_sent_at?: string | null;
 }
 
 export interface Member {
