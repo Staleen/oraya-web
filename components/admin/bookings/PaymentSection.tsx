@@ -207,6 +207,44 @@ function PaymentSectionImpl({
             </div>
           </div>
 
+          {/* Audit B-6 (#19): a recorded refund must be readable back — amount, date,
+              and the required Business Center reference — not just a badge. */}
+          {(booking.refund_status != null ||
+            booking.refunded_at != null ||
+            booking.refund_provider_reference?.trim()) && (
+            <div
+              style={{
+                border: "0.5px solid rgba(224,112,112,0.28)",
+                backgroundColor: "rgba(224,112,112,0.07)",
+                padding: "12px 14px",
+                borderRadius: "8px",
+                display: "grid",
+                gap: "10px",
+              }}
+            >
+              <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: "#f08b8b", margin: 0 }}>
+                Recorded refund
+              </p>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
+                  gap: "10px 14px",
+                }}
+              >
+                {renderRevenueEstimateRow("Refunded amount", formatMoney(booking.refund_amount) ?? "Not recorded")}
+                {renderRevenueEstimateRow("Refunded on", refundedAt ?? "Not recorded")}
+                {renderRevenueEstimateRow(
+                  "Business Center reference",
+                  booking.refund_provider_reference?.trim() || "Not recorded",
+                )}
+                {booking.refund_status
+                  ? renderRevenueEstimateRow("Refund status", formatAdvisoryLabel(booking.refund_status.replaceAll("_", " ")))
+                  : null}
+              </div>
+            </div>
+          )}
+
           <details
             style={{
               border: `0.5px solid ${BORDER}`,

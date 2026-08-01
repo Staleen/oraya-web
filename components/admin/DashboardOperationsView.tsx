@@ -85,6 +85,24 @@ function getBookingEmail(booking: Booking, members: Member[]) {
   return members.find((member) => member.id === booking.member_id)?.email ?? "-";
 }
 
+function getBookingPhone(booking: Booking, members: Member[]) {
+  const direct = booking.guest_phone?.trim();
+  if (direct) return direct;
+  if (!booking.member_id) return "-";
+  return members.find((member) => member.id === booking.member_id)?.phone?.trim() || "-";
+}
+
+function getBookingCountry(booking: Booking, members: Member[]) {
+  const direct = booking.guest_country?.trim();
+  if (direct) return direct;
+  if (!booking.member_id) return "-";
+  return members.find((member) => member.id === booking.member_id)?.country?.trim() || "-";
+}
+
+function formatMoneyOrDash(value: number | null | undefined) {
+  return typeof value === "number" && Number.isFinite(value) ? formatMoney(value) : "—";
+}
+
 function getBookingLabel(booking: Booking) {
   return booking.member_id ? "Member" : "Guest";
 }
@@ -1343,6 +1361,8 @@ export default function DashboardOperationsView({
               );
             })()}
 
+            {/* Audit D-5 (#62): contact, guest-count, and payment rows — the data the
+                operator needs right after clicking a calendar block. */}
             {[
               ["Reference", formatBookingRef(selectedBooking.id) ?? "—"],
               ["Villa", selectedBooking.villa],
@@ -1350,17 +1370,37 @@ export default function DashboardOperationsView({
               ["Check-out", fmt(selectedBooking.check_out)],
               ["Status", selectedBooking.status],
               ["Type", getBookingLabel(selectedBooking)],
+              ["Email", getBookingEmail(selectedBooking, members)],
+              ["Phone", getBookingPhone(selectedBooking, members)],
+              ["Country", getBookingCountry(selectedBooking, members)],
+              ["Sleeping guests", String(selectedBooking.sleeping_guests)],
+              ["Day visitors", String(selectedBooking.day_visitors)],
+              ["Payment status", selectedBooking.payment_status ? selectedBooking.payment_status.replaceAll("_", " ") : "—"],
+              ["Amount total", formatMoneyOrDash(selectedBooking.amount_total)],
+              ["Amount paid", formatMoneyOrDash(selectedBooking.amount_paid)],
+              ["Amount due", formatMoneyOrDash(selectedBooking.amount_due)],
               ["Add-ons", getBookingAddons(selectedBooking)],
             ].map(([label, value]) => (
               <div key={label} style={{ display: "flex", justifyContent: "space-between", gap: "16px", padding: "10px 0", borderTop: "0.5px solid rgba(255,255,255,0.05)" }}>
                 <span style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED, flexShrink: 0 }}>
                   {label}
                 </span>
-                <span style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, textAlign: "right", lineHeight: 1.5 }}>
+                <span style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, textAlign: "right", lineHeight: 1.5, overflowWrap: "anywhere" }}>
                   {value}
                 </span>
               </div>
             ))}
+
+            {selectedBooking.message?.trim() && (
+              <div style={{ padding: "10px 0", borderTop: "0.5px solid rgba(255,255,255,0.05)" }}>
+                <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED, margin: "0 0 6px" }}>
+                  Guest message
+                </p>
+                <p style={{ fontFamily: LATO, fontSize: "12px", color: WHITE, margin: 0, lineHeight: 1.6, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+                  {selectedBooking.message.trim()}
+                </p>
+              </div>
+            )}
 
             {(selectedBooking.addons_snapshot ?? []).length > 0 && (
               <div style={{ padding: "10px 0", borderTop: "0.5px solid rgba(255,255,255,0.05)" }}>
