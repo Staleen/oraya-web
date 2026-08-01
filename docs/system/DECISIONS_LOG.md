@@ -16,6 +16,20 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-01 - Phase 16C: confirmed-stay dispatch template renamed to `oraya_arrival_guide_confirmed`; `#!variablename!#` composer rule is mandatory
+
+**Decision:** the WhatsApp Utility Template sent by the confirmed-stay dispatcher is **`oraya_arrival_guide_confirmed`** (en_US, 5 body variables), replacing the never-activated planning name `oraya_booking_confirmed_arrival_guide_v1`. `CONFIRMED_STAY_TEMPLATE_NAME` in [lib/whatsapp/confirmed-stay-notification.ts](../../lib/whatsapp/confirmed-stay-notification.ts) and every doc reference were updated; the 2026-07-17 entry below is historical and intentionally unedited (append-only rule). Final chain: admin confirm → dispatcher (fires only when `WHATCHIMP_CONFIRMED_STAY_WEBHOOK_URL` is set; Production only) → WhatChimp Webhook Workflow "Confirmed booking" → the Meta-approved template. Variable mapping lives inside WhatChimp (`villa`, `check_in`, `check_out`, `booking_reference`, `arrival_guide_url` → body variables; `phone` → recipient; `guest_name` → subscriber name); the payload allow-list is unchanged.
+
+**Reason:** the live, Meta-approved, WhatChimp-linked template carries the new name. The rename surfaced a hard operational lesson: **WhatChimp-sent templates MUST be composed in WhatChimp's composer with `#!variablename!#` registry tokens** (Variables tab: `confirmedvilla`, `confirmedcheckin`, `confirmedcheckout`, `confirmedbookingreference`, `arrivalguideurl`). Templates authored Meta-side with numeric `{{n}}` placeholders have no WhatChimp variable linkage and send with zero parameters (Meta error `#132000`) — this cost weeks. Meta-side sample edits do not break the linkage. Sends are verified via WhatChimp → Workflow Report (message ID = success; `#132000` = broken linkage).
+
+**Impact:** constant + comment in the dispatcher; doc sweep across [BUTLER_PLAYBOOK.md](BUTLER_PLAYBOOK.md) (final architecture + composer hard rule + ops runbook), [ARCHITECTURE.md](ARCHITECTURE.md), [ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md), [CURRENT_PHASE.md](CURRENT_PHASE.md), `.env.example`. No gate, payload field, idempotency (`bookings.whatsapp_confirmation_sent_at`), or logic change.
+
+**Reversible?:** yes — the constant is a single string; but the WhatChimp-side template linkage is authoritative, so the repo must always match the WhatChimp-composed name.
+
+**Supersedes:** template name in the 2026-07-17 "Phase 16C: automatic WhatsApp Arrival Guide dispatch" entry (architecture there unchanged).
+
+---
+
 ## 2026-07-31 - Native WhatsApp Flow becomes the production stay intake; v6 retained as rollback
 
 **Decision:** production Book a Stay now uses the published native WhatsApp Flow **"Stay Request"** (WhatChimp Flow ID `40377`, one terminal screen). The Flow collects full name, ISO check-in/check-out through Meta DatePicker, villa, exact guests (`1`–`8` plus `more_than_8`), bedrooms (`1`–`3`), and optional requests. On terminal submit, WhatChimp calls the existing `POST /api/butler/lead` integration unchanged and sends the existing `prefill_url` website-handoff reply. The v6 Natural Stay Intake remains intact on the tenant with its trigger keywords cleared, making it the immediate rollback path rather than the active production intake.
@@ -208,6 +222,8 @@ Durable architectural and operational decisions. Append-only - never edit a past
 **Reversible?:** yes — unset the env var to deactivate instantly; single-PR revert removes the dispatcher and call sites; the column is inert if unused.
 
 **Supersedes:** none. Extends the 2026-07-15 Stage 4A/4B entries (manual copy + Butler field contract remain unchanged).
+
+**Follow-up (2026-08-01):** the template was renamed to `oraya_arrival_guide_confirmed` — see the 2026-08-01 entry above; `oraya_booking_confirmed_arrival_guide_v1` here is the historical planning name and was never activated.
 ## 2026-07-17 - Guest-facing payment polish before production activation; checkout-unavailable handoff stays pending
 
 **Decision:** Oraya may present a finished guest-facing payment journey before NetCommerce production credentials are available, but live charging stays blocked until the separate production-activation gate. `/book` keeps the primary **Continue to secure payment** CTA and secondary **Reserve now, pay later** CTA. When hosted checkout is not truly ready, the primary CTA creates the booking request through the existing booking pipeline and routes to `/booking/view/[token]?payment=pending`; it does not expose provider readiness, environment, setup-failure details, or technical gateway configuration to the guest. `/booking/view/[token]` shows one clear payment state (`Payment pending`, `Deposit paid`, `Paid in full`, `Payment link expired`, or `Payment could not be completed`) and removes duplicate/noisy payment-status presentation. Admin-only readiness surfaces may continue showing technical truth.
