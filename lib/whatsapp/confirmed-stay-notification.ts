@@ -6,7 +6,7 @@
  * app/api/admin/bookings/[id]/route.ts), this helper fail-closed POSTs one
  * safe payload to a configured WhatChimp Webhook Workflow URL so WhatChimp
  * can send the approved WhatsApp Utility Template
- * (`oraya_booking_confirmed_arrival_guide_v1`). Architecture A: WhatChimp
+ * (`oraya_arrival_guide_confirmed`). Architecture A: WhatChimp
  * owns the template and final delivery — this module never calls Meta/WABA
  * directly and holds no Meta credentials.
  *
@@ -54,7 +54,7 @@
 
 import { buildArrivalGuideUrl } from "../arrival-guide-link.ts";
 
-export const CONFIRMED_STAY_TEMPLATE_NAME = "oraya_booking_confirmed_arrival_guide_v1";
+export const CONFIRMED_STAY_TEMPLATE_NAME = "oraya_arrival_guide_confirmed";
 
 export type ConfirmedStayDispatchSkipReason =
   | "not_confirmed"

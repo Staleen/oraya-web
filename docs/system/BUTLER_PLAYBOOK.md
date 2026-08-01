@@ -431,13 +431,23 @@ If the guest asks for any of the above, the Butler escalates to a human per the 
 
 **Operator note — WhatChimp mapping for the Arrival Guide (Stage 4B, once merged):** confirmed-guest flows may map the response field `arrival_guide_url` to a WhatChimp custom field or message variable and send it to the identified confirmed guest. The field name `arrival_guide_url` and the URL shape `/arrival/<signed-view-token>` are the **permanent contract** — do not invent alternative field names or routes on the tenant. The link is a live guest credential: only ever send it inside the identity-established confirmed-guest branch (where the endpoint returns it), never cache it into a reusable field that could leak across conversations, and never present it as containing access codes. All no-PIN / no-access boundaries above are unchanged.
 
-**Operator activation — automatic WhatsApp Arrival Guide dispatch (Phase 16C, ships dark until activated):** the repo-side dispatcher ([lib/whatsapp/confirmed-stay-notification.ts](../../lib/whatsapp/confirmed-stay-notification.ts)) POSTs one payload per confirmed stay booking to a WhatChimp **Webhook Workflow** URL; WhatChimp owns the Utility Template **`oraya_booking_confirmed_arrival_guide_v1`** (English, Utility; body variables in order: villa, check-in, check-out, booking reference, complete `arrival_guide_url`) and the final WhatsApp delivery. Activation order — do not skip steps:
+**Automatic WhatsApp Arrival Guide dispatch (Phase 16C) — final architecture (WhatChimp side live and verified 2026-08-01):**
 
-1. Wait for **Meta approval** of `oraya_booking_confirmed_arrival_guide_v1` and confirm WhatChimp has synced the approved template.
-2. Run the additive migration [sql/phase-16c-whatsapp-confirmation-tracking.sql](../../sql/phase-16c-whatsapp-confirmation-tracking.sql) once in the Supabase SQL editor (the dispatcher fails closed with a log hint until the column exists).
-3. Create the WhatChimp **Webhook Workflow** that receives the payload (`event`, `template`, `guest_name?`, `phone`, `villa`, `check_in`, `check_out`, `booking_reference`, `arrival_guide_url`) and sends the template to `phone`, mapping `arrival_guide_url` into variable {{5}}. Optionally configure the workflow to verify the `X-Oraya-Webhook-Secret` header.
-4. Set `WHATCHIMP_CONFIRMED_STAY_WEBHOOK_URL` (and the secret, if used) in **Vercel Production only** — presence of the URL is the on switch. Keep Preview unset: Preview shares the production database, so a Preview dispatch would consume a real booking's one-shot claim and can message a real guest (`WHATSAPP_CONFIRMATION_ALLOW_NONPROD=true` exists only for supervised tests against a disposable workflow).
-5. Confirm one test stay booking and verify: confirmed email still sends, the workflow receives exactly one payload, the template sends once with the full working `arrival_guide_url`, and no PIN/access text appears anywhere.
+```
+admin confirm (either authoritative writer)
+  → dispatcher lib/whatsapp/confirmed-stay-notification.ts
+      (fires only when WHATCHIMP_CONFIRMED_STAY_WEBHOOK_URL is set; Production only)
+  → WhatChimp Webhook Workflow "Confirmed booking"
+  → Meta-approved Utility Template `oraya_arrival_guide_confirmed` (en_US, 5 body variables)
+```
+
+The dispatcher POSTs one payload per confirmed stay booking (`event`, `template`, `guest_name?`, `phone`, `villa`, `check_in`, `check_out`, `booking_reference`, `arrival_guide_url`). Variable mapping happens **inside WhatChimp**: webhook fields `villa`, `check_in`, `check_out`, `booking_reference`, `arrival_guide_url` map to the template body variables; `phone` selects the recipient; `guest_name` sets the subscriber name. Idempotency is the atomic `bookings.whatsapp_confirmation_sent_at` claim (column live in the production DB; SQL in [sql/phase-16c-whatsapp-confirmation-tracking.sql](../../sql/phase-16c-whatsapp-confirmation-tracking.sql)).
+
+**HARD RULE — WhatChimp templates MUST be composed in WhatChimp's composer with `#!variablename!#` registry tokens** (Variables tab: `confirmedvilla`, `confirmedcheckin`, `confirmedcheckout`, `confirmedbookingreference`, `arrivalguideurl`). A template authored Meta-side with numeric `{{n}}` placeholders has **no WhatChimp variable linkage**: WhatChimp sends it with **zero parameters** and Meta rejects it with error `#132000` (parameter-count mismatch). This failure mode cost weeks to diagnose — never author a WhatChimp-sent template outside WhatChimp's composer. Meta-side sample edits (adding review samples in WhatsApp Manager) do **not** break the WhatChimp linkage and are safe.
+
+**Ops runbook — verifying sends:** WhatChimp → **Workflow Report** shows the per-event Meta API response for every dispatch. A message ID = success; error `#132000` = broken variable linkage (recompose the template in WhatChimp per the hard rule above).
+
+Remaining activation switch: set `WHATCHIMP_CONFIRMED_STAY_WEBHOOK_URL` (and the optional secret) in **Vercel Production only** — presence of the URL is the on switch. Keep Preview unset: Preview shares the production database, so a Preview dispatch would consume a real booking's one-shot claim and can message a real guest (`WHATSAPP_CONFIRMATION_ALLOW_NONPROD=true` exists only for supervised tests against a disposable workflow). After setting it, confirm one test stay booking and verify: confirmed email still sends, the Workflow Report shows exactly one event with a message ID, the message carries the full working `arrival_guide_url`, and no PIN/access text appears anywhere.
 
 The message must never claim the guide contains access codes; a failed dispatch is not retried automatically — use the admin "Copy Arrival Guide link" (Stage 4A) as the manual fallback.
 
