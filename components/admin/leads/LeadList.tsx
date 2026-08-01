@@ -22,6 +22,8 @@ export interface LeadListProps {
   onSelect: (id: string) => void;
   loading: boolean;
   totalLoaded: number;
+  /** Audit L-4: the last fetch failed — an empty list must not claim the DB is empty. */
+  loadFailed?: boolean;
   hasFiltersActive: boolean;
   onClearFilters: () => void;
   // 16A.2.g: empty-state branching for the Open inbox.
@@ -99,6 +101,7 @@ export default function LeadList({
   onSelect,
   loading,
   totalLoaded,
+  loadFailed = false,
   hasFiltersActive,
   onClearFilters,
   isOpenInbox,
@@ -125,6 +128,18 @@ export default function LeadList({
 
   if (leads.length === 0) {
     if (totalLoaded === 0) {
+      // Audit L-4: a failed load must not present as a genuinely empty DB.
+      if (loadFailed) {
+        return (
+          <div style={EMPTY_WRAPPER}>
+            <p style={{ ...EMPTY_TITLE, color: "#e07070" }}>Couldn&apos;t load leads</p>
+            <p style={EMPTY_TEXT}>
+              The leads list could not be fetched — this is an error, not an empty inbox. Use Retry in the banner
+              above.
+            </p>
+          </div>
+        );
+      }
       // True empty — no leads exist in the DB yet.
       return (
         <div style={EMPTY_WRAPPER}>

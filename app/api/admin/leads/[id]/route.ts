@@ -97,14 +97,19 @@ export async function PATCH(request: Request, props: { params: Promise<{ id: str
   // here so the response reflects the post-update value without a re-read.
   const update: Record<string, unknown> = { ...parsed, updated_at: new Date().toISOString() };
 
+  // Audit L-6: setting a non-null conversion link must never overwrite an
+  // existing one — the update below is conditioned on the current value being
+  // null, and a zero-row result on a still-existing lead becomes a 409.
+  const settingNonNullLink =
+    typeof (update as { linked_booking_id?: unknown }).linked_booking_id === "string" &&
+    (update as { linked_booking_id?: string }).linked_booking_id !== "";
+
   try {
-    const runUpdate = async (selectColumns: string) =>
-      supabaseAdmin
-        .from("whatsapp_leads")
-        .update(update)
-        .eq("id", id)
-        .select(selectColumns)
-        .maybeSingle();
+    const runUpdate = async (selectColumns: string) => {
+      const base = supabaseAdmin.from("whatsapp_leads").update(update).eq("id", id);
+      const guarded = settingNonNullLink ? base.is("linked_booking_id", null) : base;
+      return guarded.select(selectColumns).maybeSingle();
+    };
 
     let { data, error } = await runUpdate(SELECT_COLUMNS_FULL);
 
@@ -122,6 +127,19 @@ export async function PATCH(request: Request, props: { params: Promise<{ id: str
       return serverError();
     }
     if (!data) {
+      if (settingNonNullLink) {
+        const { data: existing } = await supabaseAdmin
+          .from("whatsapp_leads")
+          .select("id, linked_booking_id")
+          .eq("id", id)
+          .maybeSingle();
+        if (existing && existing.linked_booking_id) {
+          return NextResponse.json(
+            { ok: false, error: "already_linked" },
+            { status: 409, headers: NO_STORE_HEADERS },
+          );
+        }
+      }
       return NextResponse.json(
         { ok: false, error: "not_found" },
         { status: 404, headers: NO_STORE_HEADERS },

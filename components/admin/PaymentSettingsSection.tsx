@@ -36,6 +36,10 @@ export type LivePaymentsToggleState = {
   saving: boolean;
   error: string;
   saved: boolean;
+  /** Audit S-3: set when the status GET failed — the switch state is unknown. */
+  statusError?: string | null;
+  /** Audit S-3: re-run the status GET. */
+  onRetryStatus?: () => void;
   /** Enabling requires the current admin password; disabling does not. */
   onChange: (enabled: boolean, currentPassword?: string) => void;
 };
@@ -48,6 +52,7 @@ export default function PaymentSettingsSection({
   onSave,
   saving,
   saved,
+  settingsUnavailable = false,
 }: {
   value: PaymentPublicSettings;
   providerStatus: HostedCheckoutAdminStatus | null;
@@ -56,6 +61,8 @@ export default function PaymentSettingsSection({
   onSave: () => void;
   saving: boolean;
   saved: boolean;
+  /** Audit S-2/S-9: the settings load has not succeeded — hide the editable form so stale defaults can't be saved. */
+  settingsUnavailable?: boolean;
 }) {
   const [liveEnablePassword, setLiveEnablePassword] = useState("");
   const isMobile = typeof window !== "undefined" ? window.innerWidth <= 768 : false;
@@ -156,15 +163,52 @@ export default function PaymentSettingsSection({
               color: livePayments.enabled === null ? MUTED : livePayments.enabled ? "#f08b8b" : "#6fcf8a",
             }}
           >
-            {livePayments.enabled === null ? "Loading..." : livePayments.enabled ? "ENABLED — real cards are being charged" : "Disabled (fail closed)"}
+            {livePayments.enabled === null
+              ? livePayments.statusError
+                ? "STATUS UNKNOWN — failed to load"
+                : "Loading..."
+              : livePayments.enabled
+                ? "ENABLED — real cards are being charged"
+                : "Disabled (fail closed)"}
           </span>
         </div>
+        {/* Audit S-3: a failed status fetch must never hide the kill switch —
+            show the error with retry, and keep the disable path below reachable. */}
+        {livePayments.enabled === null && livePayments.statusError ? (
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "12px" }}>
+            <p style={{ fontFamily: LATO, fontSize: "11px", color: "#e07070", margin: 0, lineHeight: 1.5 }}>
+              {livePayments.statusError} Live payments may still be enabled.
+            </p>
+            {livePayments.onRetryStatus ? (
+              <button
+                type="button"
+                onClick={livePayments.onRetryStatus}
+                style={{
+                  fontFamily: LATO,
+                  fontSize: "10px",
+                  letterSpacing: "2px",
+                  textTransform: "uppercase",
+                  color: GOLD,
+                  backgroundColor: "transparent",
+                  border: "0.5px solid rgba(197,164,109,0.35)",
+                  padding: "8px 14px",
+                  cursor: "pointer",
+                }}
+              >
+                Retry
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         <p style={{ fontFamily: LATO, fontSize: "12px", color: WHITE, margin: "0 0 12px", lineHeight: 1.65 }}>
           Enabling this switch makes guest checkout charge REAL cards immediately (production environment plus complete
           webhook/MLE configuration still required). Disabling it stops NEW checkouts instantly — the kill switch — but does
           not affect payments already made.
         </p>
-        {livePayments.enabled ? (
+        {/* Audit S-3 fail-safe: the DISABLE direction renders whenever the switch
+            is not known-off (true OR unknown), so the kill switch is always
+            reachable; ENABLING with unknown status stays blocked below. */}
+        {livePayments.enabled !== false ? (
           <button
             type="button"
             onClick={() => livePayments.onChange(false)}
@@ -233,6 +277,15 @@ export default function PaymentSettingsSection({
         ) : null}
       </div>
 
+      {/* Audit S-2/S-9: fail closed — no editable guest payment settings (and no
+          Save) until the settings load succeeds; the kill switch above stays. */}
+      {settingsUnavailable ? (
+        <p style={{ fontFamily: LATO, fontSize: "12px", color: "#e7b66d", margin: 0, lineHeight: 1.6 }}>
+          Guest payment settings are unavailable — the settings load has not succeeded, so editing is disabled to
+          protect the live configuration. Use the retry above.
+        </p>
+      ) : (
+        <>
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "16px", marginBottom: "1.5rem" }}>
         <div>
           <label style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: MUTED, display: "block", marginBottom: "6px" }}>
@@ -389,6 +442,8 @@ export default function PaymentSettingsSection({
           </span>
         ) : null}
       </div>
+        </>
+      )}
     </div>
   );
 }

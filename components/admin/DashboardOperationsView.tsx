@@ -18,6 +18,7 @@ import {
   hasResolvedAddonStatus,
 } from "./bookings/helpers";
 import { requestAddonResolution } from "./bookings/approve-addon";
+import { formatBookingRef } from "./bookings/booking-ref";
 
 const DESKTOP_DAY_WIDTH = 92;
 const TIMELINE_DAYS = 90;
@@ -82,6 +83,24 @@ function getBookingName(booking: Booking, members: Member[]) {
 function getBookingEmail(booking: Booking, members: Member[]) {
   if (!booking.member_id) return booking.guest_email ?? "-";
   return members.find((member) => member.id === booking.member_id)?.email ?? "-";
+}
+
+function getBookingPhone(booking: Booking, members: Member[]) {
+  const direct = booking.guest_phone?.trim();
+  if (direct) return direct;
+  if (!booking.member_id) return "-";
+  return members.find((member) => member.id === booking.member_id)?.phone?.trim() || "-";
+}
+
+function getBookingCountry(booking: Booking, members: Member[]) {
+  const direct = booking.guest_country?.trim();
+  if (direct) return direct;
+  if (!booking.member_id) return "-";
+  return members.find((member) => member.id === booking.member_id)?.country?.trim() || "-";
+}
+
+function formatMoneyOrDash(value: number | null | undefined) {
+  return typeof value === "number" && Number.isFinite(value) ? formatMoney(value) : "—";
 }
 
 function getBookingLabel(booking: Booking) {
@@ -285,25 +304,45 @@ export default function DashboardOperationsView({
 }) {
   const { setBookings, setError } = useAdminData();
   const [isMobile, setIsMobile] = useState(false);
-  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  // Audit D-2 (#43): store the selected booking ID and derive the booking from
+  // the live array on render, so the 45s poll/Realtime refresh can't leave the
+  // modal showing a stale click-time copy.
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [approvingAddonId, setApprovingAddonId] = useState<string | null>(null);
+  // Audit D-3 (#60): approve/decline failures must be visible inside the modal,
+  // not only in the page-level error hidden beneath the overlay.
+  const [addonActionError, setAddonActionError] = useState<string | null>(null);
+
+  const selectedBooking = selectedBookingId
+    ? bookings.find((booking) => booking.id === selectedBookingId) ?? null
+    : null;
+
+  function openBookingModal(bookingId: string) {
+    setAddonActionError(null);
+    setSelectedBookingId(bookingId);
+  }
+
+  function closeBookingModal() {
+    setAddonActionError(null);
+    setSelectedBookingId(null);
+  }
 
   async function resolveAddon(bookingId: string, addonId: string, decision: "approve" | "decline") {
     const key = `${bookingId}-${addonId}-${decision}`;
     setApprovingAddonId(key);
+    setAddonActionError(null);
     try {
       const addonsSnapshot = await requestAddonResolution(bookingId, addonId, decision);
-      // Update booking in global context so list views reflect persisted state.
+      // Update booking in global context so list views (and the modal, which
+      // derives from the live array) reflect persisted state.
       setBookings((prev) =>
         prev.map((b) => b.id === bookingId ? { ...b, addons_snapshot: addonsSnapshot } : b)
       );
-      // Also update the open modal's local booking reference.
-      setSelectedBooking((prev) =>
-        prev?.id === bookingId ? { ...prev, addons_snapshot: addonsSnapshot } : prev
-      );
     } catch (err) {
       console.error("[admin] resolve-addon network error:", err);
-      setError(err instanceof Error ? err.message : "Failed to update add-on state.");
+      const message = err instanceof Error ? err.message : "Failed to update add-on state.";
+      setError(message);
+      setAddonActionError(message);
     } finally {
       setApprovingAddonId(null);
     }
@@ -893,7 +932,7 @@ export default function DashboardOperationsView({
                                       <button
                                         key={item.id}
                                         type="button"
-                                        onClick={() => setSelectedBooking(item.booking)}
+                                        onClick={() => openBookingModal(item.booking.id)}
                                         style={{ appearance: "none", border: "none", background: "transparent", padding: 0, textAlign: "left", cursor: "pointer", width: "100%" }}
                                       >
                                         {content}
@@ -1036,7 +1075,7 @@ export default function DashboardOperationsView({
                             <button
                               key={item.id}
                               type="button"
-                              onClick={() => setSelectedBooking(item.booking)}
+                              onClick={() => openBookingModal(item.booking.id)}
                               title={title}
                               style={{ ...blockStyle, cursor: "pointer", textAlign: "left" }}
                             >
@@ -1263,6 +1302,56 @@ export default function DashboardOperationsView({
 
       </section>
 
+      {/* Audit D-2 (#43): the selected booking can leave the live array between the
+          click and a poll refresh — say so instead of showing stale data. */}
+      {selectedBookingId && !selectedBooking && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 300,
+            backgroundColor: "rgba(10,14,18,0.72)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+          }}
+          onClick={closeBookingModal}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "480px",
+              backgroundColor: SURFACE,
+              border: `0.5px solid ${BORDER}`,
+              padding: isMobile ? "1rem" : "1.5rem",
+              boxShadow: "0 24px 80px rgba(0,0,0,0.32)",
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "16px", marginBottom: "1rem" }}>
+              <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+                Booking details
+              </p>
+              <button
+                type="button"
+                onClick={closeBookingModal}
+                style={{ fontFamily: LATO, fontSize: "18px", color: MUTED, background: "transparent", border: "none", cursor: "pointer", lineHeight: 1 }}
+                aria-label="Close booking details"
+              >
+                x
+              </button>
+            </div>
+            <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, margin: 0, lineHeight: 1.6 }}>
+              This booking is no longer in the current data — it may have been removed or updated since you
+              opened it. Check the bookings console for its latest state.
+            </p>
+          </div>
+        </div>
+      )}
+
       {selectedBooking && (
         <div
           role="dialog"
@@ -1277,7 +1366,7 @@ export default function DashboardOperationsView({
             justifyContent: "center",
             padding: "20px",
           }}
-          onClick={() => setSelectedBooking(null)}
+          onClick={closeBookingModal}
         >
           <div
             style={{
@@ -1301,7 +1390,7 @@ export default function DashboardOperationsView({
               </div>
               <button
                 type="button"
-                onClick={() => setSelectedBooking(null)}
+                onClick={closeBookingModal}
                 style={{ fontFamily: LATO, fontSize: "18px", color: MUTED, background: "transparent", border: "none", cursor: "pointer", lineHeight: 1 }}
                 aria-label="Close booking details"
               >
@@ -1342,23 +1431,46 @@ export default function DashboardOperationsView({
               );
             })()}
 
+            {/* Audit D-5 (#62): contact, guest-count, and payment rows — the data the
+                operator needs right after clicking a calendar block. */}
             {[
+              ["Reference", formatBookingRef(selectedBooking.id) ?? "—"],
               ["Villa", selectedBooking.villa],
               ["Check-in", fmt(selectedBooking.check_in)],
               ["Check-out", fmt(selectedBooking.check_out)],
               ["Status", selectedBooking.status],
               ["Type", getBookingLabel(selectedBooking)],
+              ["Email", getBookingEmail(selectedBooking, members)],
+              ["Phone", getBookingPhone(selectedBooking, members)],
+              ["Country", getBookingCountry(selectedBooking, members)],
+              ["Sleeping guests", String(selectedBooking.sleeping_guests)],
+              ["Day visitors", String(selectedBooking.day_visitors)],
+              ["Payment status", selectedBooking.payment_status ? selectedBooking.payment_status.replaceAll("_", " ") : "—"],
+              ["Amount total", formatMoneyOrDash(selectedBooking.amount_total)],
+              ["Amount paid", formatMoneyOrDash(selectedBooking.amount_paid)],
+              ["Amount due", formatMoneyOrDash(selectedBooking.amount_due)],
               ["Add-ons", getBookingAddons(selectedBooking)],
             ].map(([label, value]) => (
               <div key={label} style={{ display: "flex", justifyContent: "space-between", gap: "16px", padding: "10px 0", borderTop: "0.5px solid rgba(255,255,255,0.05)" }}>
                 <span style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED, flexShrink: 0 }}>
                   {label}
                 </span>
-                <span style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, textAlign: "right", lineHeight: 1.5 }}>
+                <span style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, textAlign: "right", lineHeight: 1.5, overflowWrap: "anywhere" }}>
                   {value}
                 </span>
               </div>
             ))}
+
+            {selectedBooking.message?.trim() && (
+              <div style={{ padding: "10px 0", borderTop: "0.5px solid rgba(255,255,255,0.05)" }}>
+                <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: MUTED, margin: "0 0 6px" }}>
+                  Guest message
+                </p>
+                <p style={{ fontFamily: LATO, fontSize: "12px", color: WHITE, margin: 0, lineHeight: 1.6, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+                  {selectedBooking.message.trim()}
+                </p>
+              </div>
+            )}
 
             {(selectedBooking.addons_snapshot ?? []).length > 0 && (
               <div style={{ padding: "10px 0", borderTop: "0.5px solid rgba(255,255,255,0.05)" }}>
@@ -1512,6 +1624,27 @@ export default function DashboardOperationsView({
                         </div>
                       );
                     })}
+                    {/* Audit D-3 (#60): approve/decline failure rendered where the
+                        operator is looking — inside the modal. */}
+                    {addonActionError && (
+                      <p
+                        role="alert"
+                        style={{
+                          fontFamily: LATO,
+                          fontSize: "11px",
+                          color: "#f4b3b3",
+                          backgroundColor: "rgba(224,112,112,0.12)",
+                          border: "0.5px solid rgba(224,112,112,0.4)",
+                          padding: "8px 10px",
+                          borderRadius: "4px",
+                          margin: "4px 0 0",
+                          lineHeight: 1.5,
+                          textAlign: "right",
+                        }}
+                      >
+                        Add-on update failed — the change was not saved. {addonActionError}
+                      </p>
+                    )}
                     <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: "4px 0 0", lineHeight: 1.5, textAlign: "right" }}>
                       Approvals are saved to the booking record.
                     </p>

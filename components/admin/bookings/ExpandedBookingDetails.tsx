@@ -42,6 +42,7 @@ import {
   renderRevenueEstimateRow,
   type DeadDayUpsellOpportunity,
 } from "./helpers";
+import { formatBookingRef } from "./booking-ref";
 import { addDaysToDateOnly } from "@/lib/calendar/event-block";
 import { findAlternativeDateSuggestions, type AlternativeSuggestion } from "@/lib/calendar/alternative-dates";
 import {
@@ -233,6 +234,31 @@ export function ExpandedBookingDetails({
             }}
           />
         )}
+
+        {/* Audit G1 (B-1): the public support reference guests quote from emails/WhatsApp. */}
+        {(() => {
+          const bookingRef = formatBookingRef(booking.id);
+          if (!bookingRef) return null;
+          return (
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+              <span
+                style={{
+                  fontFamily: LATO,
+                  fontSize: "10px",
+                  letterSpacing: "1.6px",
+                  textTransform: "uppercase",
+                  color: MUTED,
+                }}
+              >
+                Booking reference
+              </span>
+              <span style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "1.4px", color: WHITE, fontWeight: 600 }}>
+                {bookingRef}
+              </span>
+              <CopyValueButton value={bookingRef} buttonLabel="Copy" />
+            </div>
+          );
+        })()}
 
         {/* Phase 13N: Best option highlight — only when overlapping pending requests exist */}
         {bestOptionTotal !== null && (
@@ -1760,6 +1786,93 @@ export function ExpandedBookingDetails({
           );
         })()}
 
+        {/* Audit B-7 (#46): hosted-checkout payment-link state is fetched but was never
+            displayed. Rendered here (not inside PaymentSection) so it is visible for
+            pending bookings too — hosted links are issued while the booking is pending. */}
+        {(() => {
+          const linkStatus =
+            booking.payment_link_status && booking.payment_link_status !== "none"
+              ? booking.payment_link_status
+              : null;
+          const linkUrl = booking.payment_link_url?.trim() || null;
+          if (!linkStatus && !linkUrl) return null;
+          const issuedAt = formatDateTimeValue(booking.payment_link_issued_at);
+          const expiresAtRaw = booking.payment_link_expires_at;
+          const expiresAt = formatDateTimeValue(expiresAtRaw);
+          const linkExpired =
+            !!expiresAtRaw &&
+            !Number.isNaN(new Date(expiresAtRaw).getTime()) &&
+            new Date(expiresAtRaw).getTime() < Date.now() &&
+            linkStatus !== "paid";
+          const statusLabel = (linkStatus ?? "issued").replaceAll("_", " ");
+          const statusColor = linkStatus === "paid" ? "#6fcf8a" : linkExpired || linkStatus === "expired" || linkStatus === "failed" || linkStatus === "cancelled" ? "#f08b8b" : GOLD;
+          return (
+            <div
+              style={{
+                border: "0.5px solid rgba(197,164,109,0.22)",
+                backgroundColor: "rgba(197,164,109,0.05)",
+                padding: "12px 14px",
+                borderRadius: "8px",
+                display: "grid",
+                gap: "8px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+                  Payment link
+                </p>
+                <span
+                  style={{
+                    fontFamily: LATO,
+                    fontSize: "9px",
+                    letterSpacing: "1.4px",
+                    textTransform: "uppercase",
+                    color: statusColor,
+                    border: `0.5px solid ${statusColor}`,
+                    padding: "3px 8px",
+                    borderRadius: "2px",
+                  }}
+                >
+                  {statusLabel}
+                  {linkExpired && linkStatus !== "expired" ? " (past expiry)" : ""}
+                </span>
+              </div>
+              <div style={{ display: "grid", gap: "4px" }}>
+                {issuedAt && (
+                  <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+                    Issued: <span style={{ color: WHITE }}>{issuedAt}</span>
+                  </p>
+                )}
+                {expiresAt && (
+                  <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
+                    Expires: <span style={{ color: linkExpired ? "#f08b8b" : WHITE }}>{expiresAt}{linkExpired ? " — expired" : ""}</span>
+                  </p>
+                )}
+              </div>
+              {linkUrl && (
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                  <span
+                    style={{
+                      fontFamily: LATO,
+                      fontSize: "11px",
+                      color: WHITE,
+                      maxWidth: "100%",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      direction: "ltr",
+                    }}
+                    title={linkUrl}
+                  >
+                    {linkUrl}
+                  </span>
+                  <CopyValueButton value={linkUrl} buttonLabel="Copy link" />
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         {deps.renderPaymentSection(booking)}
 
         {booking.status === "confirmed" && (
@@ -1792,6 +1905,24 @@ export function ExpandedBookingDetails({
               Personal guest link — paste it to the guest on WhatsApp. Valid until checkout day.
             </span>
           </div>
+        )}
+
+        {/* Audit B-3: WhatsApp Arrival Guide dispatch outcome — visibility only,
+            sourced from the at-most-once whatsapp_confirmation_sent_at claim. */}
+        {booking.status === "confirmed" && !isEventInquiryBooking(booking) && (
+          <p
+            style={{
+              fontFamily: LATO,
+              fontSize: "11px",
+              color: booking.whatsapp_confirmation_sent_at ? "#6fcf8a" : "#e2ab5a",
+              margin: 0,
+              lineHeight: 1.5,
+            }}
+          >
+            {booking.whatsapp_confirmation_sent_at
+              ? `WhatsApp Arrival Guide sent · ${formatDateTimeValue(booking.whatsapp_confirmation_sent_at)}`
+              : "WhatsApp Arrival Guide: not sent — use the Copy Arrival Guide link above to send it manually."}
+          </p>
         )}
 
         {booking.status === "confirmed" && (

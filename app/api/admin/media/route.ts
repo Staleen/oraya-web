@@ -36,8 +36,11 @@ export async function POST(request: NextRequest) {
 
     if (!file || !villa) return NextResponse.json({ error: "file and villa required" }, { status: 400 });
 
-    // Remediation 2.4: only known villa slugs may become storage path segments.
-    if (!resolveVillaFromSlug(villa)) {
+    // Remediation 2.4: only explicitly allowlisted values may become storage
+    // path segments. "general" is the site-wide hero/general media bucket the
+    // admin UI and /book already use (audit ME-1); everything else must
+    // resolve to a known villa slug — arbitrary strings are still refused.
+    if (villa !== "general" && !resolveVillaFromSlug(villa)) {
       return NextResponse.json({ error: "Invalid villa." }, { status: 400 });
     }
 
@@ -103,10 +106,21 @@ export async function DELETE(request: NextRequest) {
     const { id, file_name } = await request.json();
     if (!id || !file_name) return NextResponse.json({ error: "id and file_name required" }, { status: 400 });
 
-    await supabaseAdmin.storage.from("villa-images").remove([file_name]);
-
+    // Audit ME-5: delete the DB row FIRST so live pages can never keep
+    // referencing a removed storage object. A storage failure afterwards
+    // only orphans the object (harmless to guests) — log it and tell the
+    // operator instead of failing silently.
     const { error } = await supabaseAdmin.from("villa_media").delete().eq("id", id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    const { error: storageErr } = await supabaseAdmin.storage.from("villa-images").remove([file_name]);
+    if (storageErr) {
+      console.error("[api/admin/media] DELETE orphaned storage object:", file_name, storageErr);
+      return NextResponse.json({
+        ok: true,
+        warning: `Photo removed from the site, but the storage file could not be deleted (orphaned object: ${file_name}).`,
+      });
+    }
 
     return NextResponse.json({ ok: true });
   } catch (err) {

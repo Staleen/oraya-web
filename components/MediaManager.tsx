@@ -46,6 +46,12 @@ export default function MediaManager() {
 
   }, [activeVilla]);
 
+  /** Audit ME-2: force-refetch a villa's media from the server (cache-busting). */
+  async function reloadMedia(villa: VillaKey) {
+    loaded.current[villa] = false;
+    await loadMedia(villa);
+  }
+
   async function loadMedia(villa: VillaKey) {
     if (loaded.current[villa]) return;
     setLoading(true);
@@ -161,12 +167,28 @@ export default function MediaManager() {
     setMedia((prev) => ({ ...prev, [activeVilla]: reordered }));
     resetDrag();
 
+    // Audit ME-2: a failed persist must not leave the admin view diverged from
+    // the live gallery — surface the error and snap back to server truth.
     fetch("/api/admin/media", {
       ...adminApiFetchInit,
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ updates: reordered.map((m) => ({ id: m.id, display_order: m.display_order })) }),
-    }).catch(() => {});
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({}));
+          setErrors((prev) => [
+            ...prev,
+            `Reorder was NOT saved — restoring the live order. ${typeof d.error === "string" ? d.error : ""}`.trim(),
+          ]);
+          await reloadMedia(activeVilla);
+        }
+      })
+      .catch(async () => {
+        setErrors((prev) => [...prev, "Reorder was NOT saved (network error) — restoring the live order."]);
+        await reloadMedia(activeVilla);
+      });
   }
   function resetDrag() { setDraggingId(null); setDragOverId(null); }
 
@@ -181,6 +203,12 @@ export default function MediaManager() {
       body: JSON.stringify({ id, file_name }),
     });
     if (res.ok) {
+      // Audit ME-5: the route may report an orphaned storage object after the
+      // DB row was removed — surface it instead of swallowing.
+      const d = await res.json().catch(() => ({}));
+      if (typeof d.warning === "string" && d.warning) {
+        setErrors((prev) => [...prev, d.warning]);
+      }
       setMedia((prev) => ({
         ...prev,
         [activeVilla]: (prev[activeVilla] ?? []).filter((m) => m.id !== id),

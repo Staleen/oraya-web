@@ -153,20 +153,19 @@ export default function AdminLeadsPage() {
     try {
       const res = await fetch(`/api/admin/leads?limit=${FETCH_LIMIT}`, adminApiFetchInit);
       if (!res.ok) {
+        // Audit L-4: keep the previously loaded list on a failed refresh —
+        // clearing it made a transient error look like an empty database.
         setError(res.status === 401 ? "Not authenticated. Sign in again." : "Failed to load leads.");
-        setLeads([]);
         return;
       }
       const data = (await res.json()) as { ok?: boolean; leads?: WhatsappLeadAdminRow[]; error?: string };
       if (!data.ok || !Array.isArray(data.leads)) {
         setError(data.error ?? "Failed to load leads.");
-        setLeads([]);
         return;
       }
       setLeads(data.leads);
     } catch {
       setError("Failed to load leads.");
-      setLeads([]);
     } finally {
       setLoading(false);
     }
@@ -476,6 +475,7 @@ export default function AdminLeadsPage() {
               onSelect={setSelectedLeadId}
               loading={loading}
               totalLoaded={leads.length}
+              loadFailed={error !== ""}
               hasFiltersActive={hasFiltersActive}
               onClearFilters={clearAllFilters}
               isOpenInbox={isOpenInbox}

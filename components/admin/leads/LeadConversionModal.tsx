@@ -334,11 +334,16 @@ export default function LeadConversionModal({
   const [draft, setDraft] = useState<ConversionDraft>(() => initialDraftForLead(lead));
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  // Audit L-1: booking id already created in THIS modal session. Once set, a
+  // retry must ONLY re-attempt the lead-link PATCH — never re-POST
+  // /api/bookings, which would create a duplicate real booking.
+  const [createdBookingId, setCreatedBookingId] = useState<string | null>(null);
 
   useEffect(() => {
     setDraft(initialDraftForLead(lead));
     setError("");
     setSubmitting(false);
+    setCreatedBookingId(null);
   }, [lead]);
 
   const sourceDateText = useMemo(() => {
@@ -356,7 +361,61 @@ export default function LeadConversionModal({
     setDraft((current) => ({ ...current, [key]: value }));
   }
 
+  /** Audit L-1/L-6: link the lead to an already-created booking. Safe to retry. */
+  async function linkLeadToBooking(bookingId: string) {
+    const shortRef = bookingId.slice(0, 8).toUpperCase();
+    try {
+      const patchRes = await fetch(`/api/admin/leads/${lead.id}`, {
+        ...adminApiFetchInit,
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          linked_booking_id: bookingId,
+          follow_up_status: "converted",
+        }),
+      });
+      const patchJson = (await patchRes.json().catch(() => ({}))) as {
+        ok?: boolean;
+        lead?: WhatsappLeadAdminRow;
+      };
+      if (patchRes.status === 409) {
+        // Audit L-6: another session already converted this lead.
+        setError(
+          `This lead was already converted and linked to a different booking by another session. ` +
+            `The booking request created here (Ref ${shortRef}) exists but is NOT linked to this lead — review it on /admin/bookings.`,
+        );
+        return;
+      }
+      if (!patchRes.ok || !patchJson.ok || !patchJson.lead) {
+        setError(
+          `Booking request was created (Ref ${shortRef}), but the lead could not be linked. ` +
+            `Retry will ONLY re-link — it will not create another booking.`,
+        );
+        return;
+      }
+      onConverted(patchJson.lead);
+    } catch {
+      setError(
+        `Booking request was created (Ref ${shortRef}), but linking failed (network). ` +
+          `Retry will ONLY re-link — it will not create another booking.`,
+      );
+    }
+  }
+
   async function submit() {
+    // Audit L-1: a booking already exists for this modal session — retry the
+    // link only. No validation, no second booking POST.
+    if (createdBookingId) {
+      setSubmitting(true);
+      setError("");
+      try {
+        await linkLeadToBooking(createdBookingId);
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
     const validationError = validateDraft(lead, draft);
     if (validationError) {
       setError(validationError);
@@ -397,25 +456,9 @@ export default function LeadConversionModal({
         return;
       }
 
-      const patchRes = await fetch(`/api/admin/leads/${lead.id}`, {
-        ...adminApiFetchInit,
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          linked_booking_id: bookingId,
-          follow_up_status: "converted",
-        }),
-      });
-      const patchJson = (await patchRes.json().catch(() => ({}))) as {
-        ok?: boolean;
-        lead?: WhatsappLeadAdminRow;
-      };
-      if (!patchRes.ok || !patchJson.ok || !patchJson.lead) {
-        setError(`Booking request was created (${bookingId}), but the lead could not be linked.`);
-        return;
-      }
-
-      onConverted(patchJson.lead);
+      // From this point on, retries must never create a second booking.
+      setCreatedBookingId(bookingId);
+      await linkLeadToBooking(bookingId);
     } catch {
       setError("Could not create booking request. Please try again.");
     } finally {
@@ -584,7 +627,13 @@ export default function LeadConversionModal({
               cursor: submitting ? "wait" : "pointer",
             }}
           >
-            {submitting ? "Creating..." : "Create pending request"}
+            {submitting
+              ? createdBookingId
+                ? "Linking..."
+                : "Creating..."
+              : createdBookingId
+                ? "Retry linking (no new booking)"
+                : "Create pending request"}
           </button>
         </div>
       </div>
