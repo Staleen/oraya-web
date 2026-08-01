@@ -10,7 +10,7 @@ export default function AdminMembersPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   async function deleteMember(id: string, name: string) {
-    if (!confirm(`Delete member "${name}"? This will permanently remove their account and they will not be able to sign in again.`)) return;
+    if (!confirm(`Delete member "${name}"? This permanently removes their account (they will not be able to sign in again). Their bookings are kept but detached from the member profile — they become guest bookings.`)) return;
     setError("");
     setDeletingId(id);
     try {

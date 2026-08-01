@@ -41,7 +41,10 @@ export default function CalendarSyncPanel({
             Calendar Sync
           </p>
           <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0 }}>
-            Export confirmed Oraya bookings per villa and review external feed sync status. Sync also runs automatically every 10 minutes.
+            {/* Audit C-1: the cron in vercel.json is `0 0 * * *` — once a day. The old
+                "every 10 minutes" claim invited double-booking confidence. */}
+            Export confirmed Oraya bookings per villa and review external feed sync status. Automatic sync runs once a
+            day (midnight UTC) — external feeds can be up to 24h stale, so use Run sync before trusting availability.
           </p>
         </div>
         <button
@@ -76,11 +79,22 @@ export default function CalendarSyncPanel({
         ))}
       </div>
 
-      {syncMessage && (
-        <p style={{ fontFamily: LATO, fontSize: "12px", color: "#6fcf8a", marginBottom: "1rem" }}>
-          {syncMessage}
-        </p>
-      )}
+      {syncMessage && (() => {
+        // Audit C-4: the summary string from the page reports failures as
+        // "…, N failed." — anything other than "0 failed" must not render in
+        // success-green.
+        const failedMatch = syncMessage.match(/(\d+)\s+failed/);
+        const hadFailures = failedMatch !== null && Number(failedMatch[1]) > 0;
+        return (
+          <p
+            role={hadFailures ? "alert" : undefined}
+            style={{ fontFamily: LATO, fontSize: "12px", color: hadFailures ? "#e07070" : "#6fcf8a", marginBottom: "1rem" }}
+          >
+            {syncMessage}
+            {hadFailures ? " Check the source rows below for the failing feed." : ""}
+          </p>
+        );
+      })()}
 
       {calendarSources.length === 0 ? (
         <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0 }}>
