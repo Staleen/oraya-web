@@ -99,6 +99,7 @@ import {
   renderOperationalBadge,
 } from "./bookings/helpers";
 import { requestAddonResolution } from "./bookings/approve-addon";
+import { bookingMatchesSearch } from "./bookings/booking-ref";
 import ConfirmDialog from "./ConfirmDialog";
 import { buildInitialPaymentDraftFromBooking, buildInitialProposalDraftFromBooking, validateProposalForSend } from "./bookings/drafts";
 import type { BookingCardActions } from "./bookings/actions";
@@ -153,6 +154,8 @@ export default function BookingsTable({
   const [bulkActionBookingId, setBulkActionBookingId] = useState<string | null>(null);
   const [confirmedSort, setConfirmedSort] = useState<ConfirmedSortKey>("created_desc");
   const [hiddenCancelledIds, setHiddenCancelledIds] = useState<string[]>([]);
+  // Audit G1 (B-1): free-text search over reference / id / name / email / phone.
+  const [bookingSearch, setBookingSearch] = useState("");
   const [paymentUpdatingId, setPaymentUpdatingId] = useState<string | null>(null);
   const [paymentDrafts, setPaymentDrafts] = useState<Record<string, PaymentDraft>>({});
   const [proposalDrafts, setProposalDrafts] = useState<Record<string, ProposalDraft>>({});
@@ -692,16 +695,17 @@ export default function BookingsTable({
     return booking.status === "pending" || bookingHasPendingAddonApproval(booking) || bookingHasOperationalAttention(booking);
   }
 
-  const filterActive = villaFilter !== "all" || dateFilter !== "";
+  const filterActive = villaFilter !== "all" || dateFilter !== "" || bookingSearch.trim() !== "";
   const sortActive = confirmedSort !== "created_desc";
 
   const visibleBookings = useMemo(() => {
     return bookings.filter((booking) => {
       if (villaFilter !== "all" && booking.villa !== villaFilter) return false;
       if (dateFilter && booking.check_in !== dateFilter) return false;
+      if (!bookingMatchesSearch(booking, bookingSearch)) return false;
       return true;
     });
-  }, [bookings, villaFilter, dateFilter]);
+  }, [bookings, villaFilter, dateFilter, bookingSearch]);
 
   const pendingOverlapMap = useMemo(() => {
     const pendingOnly = bookings.filter((booking) => booking.status === "pending");
@@ -884,6 +888,7 @@ export default function BookingsTable({
 
   function handleResetView() {
     clearFilters();
+    setBookingSearch("");
     setConfirmedSort("created_desc");
     setHiddenCancelledIds([]);
     setExpandedCompactId(null);
@@ -1624,6 +1629,29 @@ export default function BookingsTable({
         </div>
 
         <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "flex-end" }}>
+          <div style={{ minWidth: isMobile ? "100%" : "260px", flex: "2 1 260px" }}>
+            <label
+              style={{
+                fontFamily: LATO,
+                fontSize: "10px",
+                letterSpacing: "2px",
+                textTransform: "uppercase",
+                color: MUTED,
+                display: "block",
+                marginBottom: "6px",
+              }}
+            >
+              Search
+            </label>
+            <input
+              type="search"
+              value={bookingSearch}
+              onChange={(event) => setBookingSearch(event.target.value)}
+              placeholder="Reference, name, phone, or email"
+              style={fieldStyle}
+            />
+          </div>
+
           <div style={{ minWidth: isMobile ? "100%" : "220px", flex: "1 1 220px" }}>
             <label
               style={{
@@ -1699,6 +1727,7 @@ export default function BookingsTable({
 
         {(filterActive || (activeSection === "confirmed" && sortActive)) && (
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            {bookingSearch.trim() !== "" && renderFilterChip("Search", bookingSearch.trim(), () => setBookingSearch(""))}
             {villaFilter !== "all" && renderFilterChip("Villa", villaFilter, () => setVillaFilter("all"))}
             {dateFilter && renderFilterChip("Check-in", fmt(dateFilter), () => setDateFilter(""))}
             {activeSection === "confirmed" &&

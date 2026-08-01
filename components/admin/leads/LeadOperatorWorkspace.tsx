@@ -3,6 +3,7 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { BORDER, GOLD, LATO, MIDNIGHT, MUTED, SURFACE, WHITE, fieldStyle } from "@/components/admin/theme";
 import { FOLLOW_UP_STATUSES, type FollowUpStatus, type WhatsappLeadAdminRow } from "@/lib/butler/leads";
+import { formatBookingRef } from "../bookings/booking-ref";
 import { STATUS_LABEL, formatDateTime } from "./leadHelpers";
 
 /**
@@ -400,15 +401,21 @@ export default function LeadOperatorWorkspace({
       >
         <div>
           <p style={LABEL_STYLE}>Linked booking</p>
+          {/* Audit G1 (#44): show the guest-facing reference, not the raw UUID
+              (full id kept on hover for support escalations). */}
           <p
+            title={lead.linked_booking_id ?? undefined}
             style={{
               ...VALUE_STYLE,
               color: lead.linked_booking_id ? WHITE : MUTED,
               fontSize: "11px",
+              letterSpacing: lead.linked_booking_id ? "1.2px" : undefined,
               wordBreak: "break-all",
             }}
           >
-            {lead.linked_booking_id ?? "—"}
+            {lead.linked_booking_id
+              ? `Ref ${formatBookingRef(lead.linked_booking_id) ?? lead.linked_booking_id}`
+              : "—"}
           </p>
         </div>
         <div>

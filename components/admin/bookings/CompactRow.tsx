@@ -15,6 +15,7 @@ import {
   renderPaymentStatusBadge,
 } from "./helpers";
 import type { BookingCardActions } from "./actions";
+import { formatBookingRef } from "./booking-ref";
 import { parseEventSetupEstimateFromMessage } from "@/lib/event-inquiry-message";
 
 /**
@@ -128,6 +129,7 @@ function CompactRowImpl({
               </p>
               <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.5 }}>
                 {booking.villa}
+                {formatBookingRef(booking.id) ? ` · Ref ${formatBookingRef(booking.id)}` : ""}
               </p>
               {pendingSummaryLine && (
                 <p
