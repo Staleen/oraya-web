@@ -30,22 +30,38 @@ export interface QueueItem {
   amount?: number;
 }
 
+/** Mirrors the column list selected by GET /api/ops/data. */
 export interface QueueBooking {
   id: string;
   villa: string | null;
   check_in: string | null;
   check_out: string | null;
   status: string | null;
-  guest_name: string | null;
   created_at: string | null;
+  guest_name: string | null;
+  guest_email: string | null;
+  guest_phone: string | null;
+  guest_country: string | null;
+  sleeping_guests: number | null;
+  day_visitors: number | null;
+  message: string | null;
+  event_type: string | null;
+  addons_snapshot: unknown;
+  payment_status: string | null;
+  payment_method: string | null;
+  payment_due_at: string | null;
+  payment_reference: string | null;
+  payment_received_at: string | null;
+  payment_marked_by: string | null;
+  deposit_amount: number | null;
   amount_total: number | null;
   amount_paid: number | null;
-  payment_due_at: string | null;
+  amount_due: number | null;
   refund_status: string | null;
   refund_amount: number | null;
   refunded_at: string | null;
+  refund_provider_reference: string | null;
   whatsapp_confirmation_sent_at: string | null;
-  addons_snapshot: unknown;
 }
 
 export interface QueueLead {
