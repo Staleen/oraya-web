@@ -11,8 +11,16 @@ export interface CalendarSource {
 
 type Status = "checking" | "signed-out" | "unreachable" | "ready";
 
+/**
+ * Why the session check failed, in the server's own words where it gave them.
+ * "Can't reach Oraya" is true for a dropped connection but actively misleading
+ * for a 503 that told us exactly what was wrong — e.g. a missing ADMIN_SECRET.
+ */
+export type BlockedReason = { kind: "offline" } | { kind: "server"; message: string; status: number };
+
 interface Ctx {
   status: Status;
+  blocked: BlockedReason | null;
   me: Me | null;
   bookings: QueueBooking[];
   leads: QueueLead[];
@@ -45,6 +53,7 @@ export function OpsProvider({ children }: { children: React.ReactNode }) {
   const [loadError, setLoadError] = useState("");
   const [loading, setLoading] = useState(true);
   const [signOutError, setSignOutError] = useState("");
+  const [blocked, setBlocked] = useState<BlockedReason | null>(null);
   const pausedRef = useRef(false);
 
   const pausePolling = useCallback((p: boolean) => { pausedRef.current = p; }, []);
@@ -81,13 +90,25 @@ export function OpsProvider({ children }: { children: React.ReactNode }) {
         const r = await fetch("/api/ops/me", INIT);
         if (cancelled) return;
         if (r.status === 401) { setStatus("signed-out"); setLoading(false); return; }
-        if (!r.ok) { setStatus("unreachable"); setLoading(false); return; }
+        if (!r.ok) {
+          let message = "";
+          try {
+            const body = (await r.json()) as { error?: string };
+            if (typeof body.error === "string") message = body.error;
+          } catch {
+            /* non-JSON error body — fall back to the generic wording */
+          }
+          setBlocked({ kind: "server", message, status: r.status });
+          setStatus("unreachable");
+          setLoading(false);
+          return;
+        }
         const body = (await r.json()) as { staff: Me };
         setMe(body.staff);
         await refresh();
       } catch {
         // A network blip is not a sign-out — never show the login form for it.
-        if (!cancelled) { setStatus("unreachable"); setLoading(false); }
+        if (!cancelled) { setBlocked({ kind: "offline" }); setStatus("unreachable"); setLoading(false); }
       }
     })();
     return () => { cancelled = true; };
@@ -115,9 +136,9 @@ export function OpsProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo<Ctx>(() => ({
-    status, me, bookings, leads, calendarSources, loadError, loading,
+    status, blocked, me, bookings, leads, calendarSources, loadError, loading,
     refresh, signIn, signOut, signOutError, pausePolling,
-  }), [status, me, bookings, leads, calendarSources, loadError, loading, refresh, signIn, signOut, signOutError, pausePolling]);
+  }), [status, blocked, me, bookings, leads, calendarSources, loadError, loading, refresh, signIn, signOut, signOutError, pausePolling]);
 
   return <OpsCtx.Provider value={value}>{children}</OpsCtx.Provider>;
 }

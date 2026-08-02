@@ -18,7 +18,7 @@ const NAV: NavItem[] = [
 ];
 
 export default function OpsShell({ children }: { children: React.ReactNode }) {
-  const { status, me, signOut, signOutError, loadError, refresh } = useOps();
+  const { status, blocked, me, signOut, signOutError, loadError, refresh } = useOps();
   const pathname = usePathname();
   const router = useRouter();
   const isMobile = useIsMobile();
@@ -37,8 +37,19 @@ export default function OpsShell({ children }: { children: React.ReactNode }) {
     return (
       <main style={{ background: T.navyDeep, minHeight: "100vh", display: "grid", placeItems: "center", padding: "24px" }}>
         <div style={{ width: "min(460px,100%)" }}>
-          <Banner tone="bad" title="Can't reach Oraya" onRetry={() => window.location.reload()}>
-            We couldn&apos;t check your session. This is a connection problem — you have not been signed out.
+          <Banner
+            tone="bad"
+            title={blocked?.kind === "server" ? "Oraya couldn't answer" : "Can't reach Oraya"}
+            onRetry={() => window.location.reload()}
+          >
+            {blocked?.kind === "server" ? (
+              <>
+                {blocked.message || `The server replied with an error (${blocked.status}).`}{" "}
+                You have not been signed out.
+              </>
+            ) : (
+              <>We couldn&apos;t check your session. This is a connection problem — you have not been signed out.</>
+            )}
           </Banner>
         </div>
       </main>
