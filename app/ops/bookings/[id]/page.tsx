@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { formatBookingRef, type QueueBooking } from "@/lib/ops-queue";
 import { useOps } from "@/components/ops/OpsProvider";
@@ -32,7 +32,20 @@ function currentStep(b: QueueBooking, now: number): number {
   return 2;
 }
 
-export default function BookingDetail() {
+/**
+ * Next 16 requires useSearchParams() to sit inside a Suspense boundary, or the
+ * build fails. The ?do=payment / ?do=refund deep link from the Today queue is
+ * what needs it, so the reading component is wrapped rather than dropped.
+ */
+export default function BookingDetailPage() {
+  return (
+    <Suspense fallback={<p style={{ color: T.faint, fontSize: "13px" }}>Loading…</p>}>
+      <BookingDetail />
+    </Suspense>
+  );
+}
+
+function BookingDetail() {
   const { id } = useParams<{ id: string }>();
   const search = useSearchParams();
   const router = useRouter();
