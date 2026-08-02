@@ -120,7 +120,16 @@ export function OpsProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(id);
   }, [status, refresh]);
 
-  const signIn = useCallback((who: Me) => { setMe(who); void refresh(); }, [refresh]);
+  const signIn = useCallback((who: Me) => {
+    // The login call already proved the session is valid, so authentication is
+    // settled here. Leaving status at "signed-out" until the first data load
+    // succeeded meant any failure in /api/ops/data silently returned the
+    // person to the login form — looking exactly like a rejected password.
+    setMe(who);
+    setBlocked(null);
+    setStatus("ready");
+    void refresh();
+  }, [refresh]);
 
   const signOut = useCallback(async () => {
     setSignOutError("");

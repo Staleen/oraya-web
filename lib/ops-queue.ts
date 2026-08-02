@@ -64,13 +64,23 @@ export interface QueueBooking {
   whatsapp_confirmation_sent_at: string | null;
 }
 
+/** Mirrors the whatsapp_leads columns selected by GET /api/ops/data. */
 export interface QueueLead {
   id: string;
-  guest_name: string | null;
+  name: string | null;
+  phone: string | null;
   villa: string | null;
-  status: string | null;
+  request_type: string | null;
+  follow_up_status: string | null;
   created_at: string | null;
   special_requests: string | null;
+  admin_notes: string | null;
+  normalized_check_in: string | null;
+  normalized_check_out: string | null;
+  check_in_text: string | null;
+  check_out_text: string | null;
+  guest_count: number | null;
+  labels: unknown;
   linked_booking_id: string | null;
 }
 
@@ -126,7 +136,8 @@ export function buildQueue(
 
   for (const lead of leads) {
     if (lead.linked_booking_id) continue;
-    const status = (lead.status ?? "new").toLowerCase();
+    // Live values are: new, contacted, converted.
+    const status = (lead.follow_up_status ?? "new").toLowerCase();
     if (status !== "new") continue;
     const age = lead.created_at ? now - Date.parse(lead.created_at) : 0;
     items.push({
@@ -134,7 +145,7 @@ export function buildQueue(
       kind: "new_lead",
       group: "attention",
       weight: 60 + Math.min(20, Math.floor(age / DAY_MS) * 5),
-      title: `New enquiry from ${lead.guest_name ?? "someone"} on WhatsApp`,
+      title: `New enquiry from ${lead.name ?? "someone"} on WhatsApp`,
       detail: lead.special_requests?.trim()
         ? `“${lead.special_requests.trim().slice(0, 120)}”`
         : villaName(lead.villa),
