@@ -17,6 +17,7 @@ import {
   type ReconciliationDeps,
   type ReconciliationEvent,
 } from "./webhook-reconciliation.ts";
+import type { AttemptTransitionResult } from "./unified-checkout-completion.ts";
 
 function attempt(overrides: Partial<ReconciliationAttempt> = {}): ReconciliationAttempt {
   return {
@@ -47,7 +48,7 @@ type Call = { method: string; args: unknown[] };
 function makeDeps(options: {
   attempt: ReconciliationAttempt | null;
   bookingWrite?: "recorded" | "already_paid" | "failed";
-  markOk?: boolean;
+  markResult?: AttemptTransitionResult;
 }) {
   const calls: Call[] = [];
   const deps: ReconciliationDeps = {
@@ -59,9 +60,9 @@ function makeDeps(options: {
       calls.push({ method: "recordPaymentOnBooking", args: [att.id, ev.provider_transaction_id] });
       return options.bookingWrite ?? "recorded";
     },
-    async markAttempt(attemptId, patch) {
-      calls.push({ method: "markAttempt", args: [attemptId, patch] });
-      return { ok: options.markOk ?? true };
+    async markAttempt(attemptId, expectedStatuses, patch) {
+      calls.push({ method: "markAttempt", args: [attemptId, expectedStatuses, patch] });
+      return options.markResult ?? { ok: true };
     },
     log(message, detail) {
       calls.push({ method: "log", args: [message, detail] });
@@ -82,6 +83,7 @@ test("success + ambiguous attempt: records payment and marks attempt recorded (a
   const [markCall] = callsTo(calls, "markAttempt");
   assert.deepEqual(markCall.args, [
     "att-1",
+    ["claimed", "authorized", "ambiguous"],
     { status: "recorded", provider_transaction_id: "tx-9" },
   ]);
 });
@@ -130,6 +132,7 @@ test("success but booking write fails: claimed attempt becomes ambiguous, outcom
   const [markCall] = callsTo(calls, "markAttempt");
   assert.deepEqual(markCall.args, [
     "att-1",
+    ["claimed", "authorized"],
     { status: "ambiguous", provider_transaction_id: "tx-9" },
   ]);
 });
@@ -143,7 +146,8 @@ test("decline + in-flight attempt: marked failed (claim released)", async () => 
     );
     assert.deepEqual(outcome, { kind: "marked_failed", attempt_id: "att-1" }, status);
     const [markCall] = callsTo(calls, "markAttempt");
-    assert.equal((markCall.args[1] as { status: string }).status, "failed");
+    assert.deepEqual(markCall.args[1], ["claimed", "authorized", "ambiguous"]);
+    assert.equal((markCall.args[2] as { status: string }).status, "failed");
     assert.equal(callsTo(calls, "recordPaymentOnBooking").length, 0);
   }
 });
@@ -156,6 +160,31 @@ test("decline + attempt already recorded as paid: conflict logged, NO state chan
   );
   assert.deepEqual(outcome, { kind: "conflict", attempt_id: "att-1" });
   assert.equal(callsTo(calls, "markAttempt").length, 0);
+});
+
+test("stale failure webhook cannot regress an attempt that became recorded", async () => {
+  const { deps, calls } = makeDeps({
+    attempt: attempt({ status: "claimed" }),
+    markResult: { ok: false, reason: "conflict", current_status: "recorded" },
+  });
+  const outcome = await reconcileWebhookEvent(
+    deps,
+    successEvent({ outcome: "failure", event_type: "payments.payments.reject" }),
+  );
+  assert.deepEqual(outcome, { kind: "conflict", attempt_id: "att-1" });
+  assert.equal(callsTo(calls, "recordPaymentOnBooking").length, 0);
+  const [markCall] = callsTo(calls, "markAttempt");
+  assert.deepEqual(markCall.args[1], ["claimed", "authorized", "ambiguous"]);
+});
+
+test("stale success webhook observes a concurrent recorded winner idempotently", async () => {
+  const { deps } = makeDeps({
+    attempt: attempt({ status: "authorized" }),
+    bookingWrite: "already_paid",
+    markResult: { ok: false, reason: "conflict", current_status: "recorded" },
+  });
+  const outcome = await reconcileWebhookEvent(deps, successEvent());
+  assert.deepEqual(outcome, { kind: "already_final", attempt_id: "att-1", status: "recorded" });
 });
 
 test("no matching attempt: nothing changes", async () => {

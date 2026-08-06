@@ -16,6 +16,20 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-06 - Payment attempts are monotonic; only explicit terminal declines are retry-safe
+
+**Decision:** Unified Checkout completion classifies provider results as `approved`, `declined`, or `unknown`. Only an HTTP-success response with the explicit provider status `DECLINED` is a retry-safe terminal decline and may transition an attempt to `failed`, releasing the one-in-flight claim. HTTP errors, missing/malformed response data, pending/review/unknown statuses, and apparent approvals whose server-authoritative amount/currency echo cannot be verified are `unknown`; they transition to `ambiguous` and block another attempt. All durable attempt mutations are compare-and-set/status-guarded and must follow this graph: `claimed -> authorized|recorded|failed|ambiguous`, `authorized -> recorded|failed|ambiguous`, `ambiguous -> recorded|failed`; `recorded` and `failed` have no outgoing transitions. When a verified webhook records before the browser completion resumes, the browser accepts the terminal `recorded` winner, does not write the booking charge again, and returns idempotent success.
+
+**Reason:** the prior completion path collapsed every non-approved provider result into `failed`, including HTTP and verification failures, which released the claim even though a charge could have occurred. Attempt updates were unconditional by row id, so browser/webhook interleaving could regress `recorded -> authorized -> ambiguous`. The guest page then replaced the route's reconciliation warning with generic retry copy. Together these failures could invite a second charge and erase the ledger's authoritative terminal state.
+
+**Impact:** `lib/payments/credit-libanais.ts` emits the three-way outcome; `lib/payments/unified-checkout-completion.ts` orchestrates retry-safe decline versus ambiguous handling and recognizes an already-recorded winner; `lib/payments/payment-attempts-store.ts` enforces the allowed graph with expected-status filters; webhook reconciliation uses the same guarded store; the completion route exposes idempotent already-recorded success; and the checkout client renders the server's safe message while treating post-submission client exceptions as unknown/do-not-retry. Focused tests cover provider response classification, terminal-state ordering, webhook-before-browser return, duplicate/concurrent behavior, decline retry, timeout/unknown blocking, missing-ledger fail-closed behavior, stale webhook races, and guest messaging. No schema, dependency, environment, credential, live gate, booking-confirmation, saved-card/tokenization, or refund-policy change.
+
+**Reversible?:** technically yes, but reverting would reintroduce a duplicate-charge and ledger-regression risk. Any replacement must preserve the three-way outcome contract and monotonic terminal-state guarantees.
+
+**Supersedes:** narrows the 2026-07-24 Plan 3 rule that described all provider non-approvals as `failed`; extends the 2026-07-25 verified-webhook authority decision with durable CAS/status guards.
+
+---
+
 ## 2026-08-02 - Phase 16A native Flow closeout: 2026-08-01 funnel hardening recorded; canonical Flow artifacts committed
 
 **Decision:** the Phase 16A native-Flow cutover (decided 2026-07-31, entry below) is closed out with three additions.

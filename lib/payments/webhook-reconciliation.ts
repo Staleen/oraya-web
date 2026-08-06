@@ -1,5 +1,8 @@
 // Relative .ts imports so node:test can load this module (repo test convention).
-import type { PaymentAttemptStatus } from "./unified-checkout-completion.ts";
+import type {
+  AttemptTransitionResult,
+  PaymentAttemptStatus,
+} from "./unified-checkout-completion.ts";
 import type { CreditLibanaisWebhookEvent } from "./credit-libanais-webhook.ts";
 
 /**
@@ -56,8 +59,9 @@ export type ReconciliationDeps = {
   ): Promise<"recorded" | "already_paid" | "failed">;
   markAttempt(
     attemptId: string,
+    expectedStatuses: readonly PaymentAttemptStatus[],
     patch: { status: PaymentAttemptStatus; provider_transaction_id?: string | null },
-  ): Promise<{ ok: boolean }>;
+  ): Promise<AttemptTransitionResult>;
   log(message: string, detail?: Record<string, unknown>): void;
 };
 
@@ -131,22 +135,29 @@ export async function reconcileWebhookEvent(
         },
       );
       if (attempt.status !== "ambiguous") {
-        await deps.markAttempt(attempt.id, {
+        const ambiguousMark = await deps.markAttempt(attempt.id, ["claimed", "authorized"], {
           status: "ambiguous",
           provider_transaction_id: transactionId,
         });
+        if (!ambiguousMark.ok && ambiguousMark.current_status === "recorded") {
+          return { kind: "recorded", attempt_id: attempt.id };
+        }
       }
       return { kind: "error", attempt_id: attempt.id };
     }
 
-    const marked = await deps.markAttempt(attempt.id, {
+    const marked = await deps.markAttempt(attempt.id, IN_FLIGHT, {
       status: "recorded",
       provider_transaction_id: transactionId,
     });
     if (!marked.ok) {
+      if (marked.current_status === "recorded") {
+        return { kind: "already_final", attempt_id: attempt.id, status: "recorded" };
+      }
       deps.log("payment recorded on booking but attempt row could not be marked recorded", {
         attempt_id: attempt.id,
         booking_id: attempt.booking_id,
+        current_status: marked.current_status,
       });
       return { kind: "error", attempt_id: attempt.id };
     }
@@ -180,14 +191,25 @@ export async function reconcileWebhookEvent(
     return { kind: "already_final", attempt_id: attempt.id, status: attempt.status };
   }
 
-  const markedFailed = await deps.markAttempt(attempt.id, {
+  const markedFailed = await deps.markAttempt(attempt.id, IN_FLIGHT, {
     status: "failed",
     provider_transaction_id: transactionId,
   });
   if (!markedFailed.ok) {
+    if (markedFailed.current_status === "failed") {
+      return { kind: "already_final", attempt_id: attempt.id, status: "failed" };
+    }
+    if (markedFailed.current_status === "recorded") {
+      deps.log(
+        "RECONCILIATION REQUIRED: recorded attempt won a race with a failure webhook - no state change",
+        { attempt_id: attempt.id, booking_id: attempt.booking_id },
+      );
+      return { kind: "conflict", attempt_id: attempt.id };
+    }
     deps.log("webhook-confirmed decline could not be persisted on the attempt", {
       attempt_id: attempt.id,
       booking_id: attempt.booking_id,
+      current_status: markedFailed.current_status,
     });
     return { kind: "error", attempt_id: attempt.id };
   }

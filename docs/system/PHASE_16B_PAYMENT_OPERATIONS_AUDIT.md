@@ -4,7 +4,7 @@
 **Scope:** docs-only audit and design roadmap for Oraya payment operations.
 **Branch audited:** `agent/phase-16b-cybersource-unified-checkout-test`
 **PR audited:** #64 - NetCommerce / CyberSource Unified Checkout sandbox implementation
-**Production status:** PR #64 merged to `master` on 2026-07-02, but production checkout remains disabled and the adapter is code-gated to sandbox readiness only.
+**Production status:** PR #64 merged to `master` on 2026-07-02, but production checkout remains disabled and is not production-ready. The current webhook receiver is a temporary fail-closed raw-body HMAC compatibility mechanism, not final CyberSource production verification; it must not be enabled or subscribed in production.
 
 This document is an architecture audit. It is not an implementation plan approval, migration, production enablement, or merge decision.
 
@@ -18,15 +18,19 @@ PR #64 is a credible first hosted-payment foundation: it creates a booking first
 
 **2026-07-02 closeout addendum:** NetCommerce completed sandbox testing, PR #64 merged, and the temporary QA bypass/auto-confirm code was removed from the production-bound codebase. Normal review-before-payment behavior is restored and successful payment does not change `bookings.status`. The adapter now reports checkout ready only for the sandbox environment; production remains fail-closed until webhook/MLE reconciliation and explicit live rollout controls are implemented and approved.
 
-**2026-06-22 saved-card addendum:** NetCommerce confirmed PR #64 sandbox testing was successful and requested omission of the "Save card for future payment" option before account activation. PR #64 now explicitly disables saved-card consent/tokenization for the launch while keeping one-time Unified Checkout payments. Oraya does not request TMS token creation, persist reusable customer/payment-instrument tokens, record saved-card consent, or support credentials-on-file / recurring / merchant-initiated payments. Remaining balances and approved add-ons require new payment links unless tokenization is later approved by NetCommerce with consent design and security review. Refunds do not require saved-card tokenization. Production credentials remain pending and production payment remains disabled.
+**2026-06-22 saved-card addendum:** NetCommerce confirmed PR #64 sandbox testing was successful and requested omission of the "Save card for future payment" option before account activation. PR #64 now explicitly disables saved-card consent/tokenization for the launch while keeping one-time Unified Checkout payments. Oraya does not request TMS token creation, persist reusable customer/payment-instrument tokens, record saved-card consent, or support credentials-on-file / recurring / merchant-initiated payments. Remaining balances and approved add-ons require new payment links. The historical omission remains in force and saved cards remain outside Phase 16B; any future reconsideration requires a separate Oraya-approved consent and security design. Refunds do not require saved-card tokenization. NetCommerce has completed its activation responsibility, production payment remains disabled for Oraya-owned implementation and validation work, and no further NetCommerce contact, answer, or approval is a Phase 16B prerequisite.
+
+**2026-08-06 Phase 16B-2A payment-state safety addendum (PR #104; baseline `43712e1138547ba31f62ecf0f06f44fcc9ca20c4`):** the completion/provider boundary now classifies exactly three outcomes. A server-verified `AUTHORIZED`/`CAPTURED` response with matching amount and currency is approved; an HTTP-success explicit `DECLINED` response is the only retry-safe decline; every HTTP error, malformed/missing payload, pending/review/unknown status, or apparent approval whose amount/currency cannot be verified is unknown. Unknown outcomes transition the durable attempt to `ambiguous` and block a second attempt. Attempt mutations now use expected-status filters plus an explicit allowed transition graph; `recorded` and `failed` have no outgoing transitions. If webhook reconciliation advances `claimed|authorized|ambiguous -> recorded` before browser completion resumes, the browser observes the terminal winner, skips its booking write, and returns idempotent success. Guest checkout shows the completion route's authoritative safe message, including explicit do-not-retry wording for unknown/reconciliation-required outcomes, and separates pre-submission startup errors from post-submission unknown exceptions. PR #104 completes this payment-attempt state-safety work only. It does not make the current temporary HMAC webhook receiver production-ready and changes no schema, dependency, credentials, live-payment gate, booking confirmation, tokenization, refund policy, or browser-return authority.
+
+**Remaining Phase 16B blockers after this addendum:** production JWT request authentication, response MLE, webhook JWE decryption, timestamped digital-signature verification, replay protection, provider webhook subscription/setup, production credentials and Vercel Production env setup, human-run approved migrations where not already applied, declined-flow validation, settlement reconciliation, payment email lifecycle validation, deliberate live-toggle activation, WhatsApp payment-status replies, and Instant Book execution. These are Oraya-owned tasks to complete from official CyberSource documentation, Business Center configuration, available sandbox/test tooling, and internally approved business decisions; further NetCommerce contact is not a blocker. Do not enable or subscribe production webhooks using the current placeholder configuration. Refund automation remains deferred under the manual-first policy.
 
 **2026-07-17 guest-payment polish addendum:** The guest-facing Reserve payment journey may look complete before production credentials arrive, but live charging remains blocked. When production checkout is unavailable, `/book` creates the booking request through the existing booking pipeline and routes the guest to a polished pending-payment `/booking/view/[token]` state instead of exposing provider readiness, environment, or setup-failure details. `/booking/view/[token]` presents one clear payment status using guest vocabulary (`Payment pending`, `Deposit paid`, `Paid in full`, `Payment link expired`, `Payment could not be completed`). Payment is never presented as received without authoritative CyberSource server-side approval. Technical readiness remains admin-only. PR #57 and older MPGS/placeholder payment branches are obsolete and must not be merged or revived.
 
 **2026-07-17 full-code corrective audit addendum:** after David observed a Preview booking that correctly remained `PENDING` after an authoritative sandbox payment but simultaneously displayed "No payment required yet" and "Paid in full", every payment reader/writer and guest/admin presentation path was re-audited. The backend state is intentional: `bookings.status` is Oraya approval and payment never auto-confirms; CyberSource completion records money state only after the server receives `AUTHORIZED` or `CAPTURED`. The defect was duplicate presentation ownership. Booking-status trust copy is now payment-neutral, a pure guest-payment projection owns all payment vocabulary and method labels, recorded paid state wins over stale link state, and browser return parameters cannot manufacture success. `/book` pre-payment copy now matches pay-before-confirm behavior, and public checkout failures no longer echo provider/configuration detail. Focused state-matrix tests cover pending+paid, link-state variants, and informational returns. The audit also reconfirmed that the current browser-driven completion endpoint lacks a durable payment-attempt/idempotency claim before authorization; concurrent completion requests could therefore submit duplicate provider operations. Webhook/MLE, official declined-card vector, settlement/reconciliation, provider-side refunds/voids/captures, payment-email validation, and production rollout controls are still missing. These remain explicit production blockers and are not disguised as presentation work.
 
-The current implementation is not yet a full payment operating system. It lacks verified CyberSource webhooks/MLE processing, provider-side refund/partial-refund/void/capture APIs, settlement/reconciliation ingestion, durable payment-attempt and transaction tables, tokenization/saved-card consent, fraud review handling, role-based money-movement controls, and a provider-grade payment timeline in admin.
+The current implementation is not yet a full payment operating system. It has a durable `payment_attempts` ledger and retry-safe state transitions, but lacks the production CyberSource request/response and webhook-security contract, provider-side refund/partial-refund/void/capture APIs, settlement/reconciliation ingestion, durable transaction/event tables, tokenization/saved-card consent, fraud review handling, role-based money-movement controls, and a provider-grade payment timeline in admin.
 
-The current CyberSource completion request sends `processingInformation.capture: true` in `lib/payments/credit-libanais.ts`. Based on CyberSource's public payment docs, a sale combines authorization and capture in one transaction, while capture is otherwise a follow-on transaction to an authorization. Therefore the PR #64 browser completion should be treated as "authorization plus capture requested / sale-like" until NetCommerce confirms the merchant configuration and response semantics. It is not a clean auth-only/manual-capture flow today.
+The current CyberSource completion request sends `processingInformation.capture: true` in `lib/payments/credit-libanais.ts`. Based on CyberSource's public payment docs, a sale combines authorization and capture in one transaction, while capture is otherwise a follow-on transaction to an authorization. Therefore the PR #64 browser completion should be treated as "authorization plus capture requested / sale-like" while Oraya verifies the activated Business Center configuration and response semantics against official CyberSource documentation and sandbox/test evidence. Whether to keep immediate capture or adopt auth-only/manual capture is an Oraya business and architecture decision, not a NetCommerce-contact blocker.
 
 Admin has useful payment foundations already: `/admin/settings` exposes guest-safe payment settings and provider readiness, and `/admin/bookings` exposes manual request-deposit, record-payment, issue-refund, and reminder controls. These are partial/manual operating controls, not provider-integrated money movement. The next production-grade increment should preserve those foundations while moving provider operations into dedicated, audited admin payment endpoints and tables.
 
@@ -109,17 +113,17 @@ Credit Libanais / NetCommerce / CyberSource implementation:
 - It uses `PANENTRY` as the allowed payment type.
 - It explicitly disables Unified Checkout saved-card credential consent for the launch.
 - It authorizes the transient token through `/pts/v2/payments`.
-- It sends `processingInformation.capture: true`, so current behavior should be treated as capture-requested / sale-like until NetCommerce confirms.
+- It sends `processingInformation.capture: true`, so current behavior should be treated as capture-requested / sale-like while Oraya verifies the behavior against official CyberSource documentation, Business Center configuration, and sandbox/test evidence.
 - It marks responses with status `AUTHORIZED` or `CAPTURED` as approved.
 - It returns a CyberSource transaction ID as `payment.reference` when present.
-- It does not implement CyberSource webhook/MLE verification yet; `verifyWebhook()` currently throws a readiness/configuration error.
+- Its dedicated webhook path currently verifies a raw-body HMAC with placeholder `WEBHOOK_MLE_*`-named configuration. This fails closed but is not the final CyberSource production contract.
 
 Hosted checkout routes:
 
 - `POST /api/payments/checkout` validates the signed booking token, payment settings, booking state, amount, and provider readiness; then writes `payment_link_*`, amount, and payment-request fields on `bookings`.
 - `POST /api/payments/unified-checkout-session` validates the signed booking token and active link, creates a fresh capture context, and updates `bookings.payment_provider_session_id` to an Oraya-generated `oraya_*` reference.
 - `POST /api/payments/unified-checkout-complete` validates the token, active link, and transient token; calls CyberSource Payments API; and, on approved payment, updates booking payment fields to `deposit_paid` or `paid_in_full` and `payment_link_status = paid`.
-- `POST /api/payments/webhook/[provider]` exists as a generic route, but Credit Libanais/CyberSource verification is not implemented.
+- `POST /api/payments/webhook/[provider]` routes Credit Libanais events through the temporary fail-closed raw-body HMAC receiver and the monotonic reconciliation core. Production JWT/JWE/MLE/signature/replay verification and provider subscription/setup are not implemented.
 - `POST /api/payments/webhook/stripe` exists as a dev/test compatibility shim.
 - `GET /api/payments/readiness` exposes admin-safe provider status.
 
@@ -241,7 +245,7 @@ Recommended split:
 
 - Env-only: provider credentials, provider environment, API base URL, webhook/MLE key material, production hard enablement flag, secret rotation metadata.
 - Database/admin settings: guest-safe payment mode, public copy, deposit policy, manual rails, safe provider display label, non-secret status snapshots.
-- Provider portal / NetCommerce: merchant onboarding, settlement accounts, risk/fraud rules, Pay by Link/Invoicing enablement, recurring billing enablement, Decision Manager rules, webhook subscriptions if provider-owned.
+- CyberSource Business Center / provider portal: settlement accounts, risk/fraud rules, Pay by Link/Invoicing enablement, recurring billing enablement, Decision Manager rules, webhook subscriptions, and other account capabilities exposed there.
 
 ## Professional Payment Architecture Patterns
 
@@ -268,30 +272,30 @@ Patterns Oraya should follow:
 
 ## Capability Matrix
 
-| Capability | Current Oraya status | Provider/NetCommerce status | Recommendation |
+| Capability | Current Oraya status | CyberSource / internal verification | Recommendation |
 |---|---|---|---|
 | Unified Checkout | Partly implemented; sandbox approved-card path passed | Confirmed as current integration direction | Keep as PR #64 foundation |
 | Capture context creation | Implemented for session API | Needs production credentials before live | Keep server-only |
 | Transient token handling | Implemented; transient token posted server-side, not stored | CyberSource transient tokens are short-lived references to payment data | Keep; never store transient tokens |
-| Payments authorization | Partly implemented through `/pts/v2/payments` | Needs NetCommerce confirmation of merchant behavior | Confirm status semantics and decline vectors |
-| Sale / immediate capture | Current code requests `capture: true`; status handling accepts `AUTHORIZED` or `CAPTURED` | Needs NetCommerce confirmation | Treat as sale-like until confirmed; decide if this is acceptable for pending bookings |
+| Payments authorization | Partly implemented through `/pts/v2/payments` | Verify status semantics through official CyberSource documentation, Business Center configuration, and sandbox/test evidence | Validate approved and terminal-decline behavior internally |
+| Sale / immediate capture | Current code requests `capture: true`; status handling accepts `AUTHORIZED` or `CAPTURED` | CyberSource supports documented authorization/capture patterns; Oraya must verify its configured behavior | Treat the current path as sale-like, then make and test the Oraya capture-versus-authorization decision |
 | Manual capture | Not implemented | Likely available if account supports auth-only + capture | Recommended if Oraya wants admin approval before capture |
 | Authorization reversal | Not implemented | CyberSource supports reversals for authorizations | Recommended if auth-only is used |
 | Void | Not implemented | CyberSource supports voids for unprocessed capture/credit requests | Recommended for pre-settlement operational recovery |
 | Refund | Manual admin record only; no provider call | CyberSource supports follow-on refunds | Required before production operations |
 | Partial refund | Enum exists but UI always records full `refunded`; no provider call | CyberSource refund amount can be specified | Required for hospitality policies |
-| Webhooks | Generic scaffold exists; Stripe dev verification exists; Credit Libanais throws | CyberSource payment and Unified Checkout events require MLE | Required before production hardening |
-| MLE webhook decryption/verification | Not implemented | Required for relevant events | Required before trusting asynchronous events |
-| Settlement/reconciliation | Not implemented | Reporting and Transaction Search APIs exist; bank settlement process must be confirmed | Required after webhooks |
-| Tokenization / TMS | Intentionally disabled for launch; no token creation request | CyberSource TMS supports token management but NetCommerce requested saved-card omission | Defer until explicit NetCommerce approval, consent design, and security review |
+| Webhooks | Monotonic reconciliation core exists behind a temporary fail-closed raw-body HMAC receiver | CyberSource payment and Unified Checkout events require the delivered production security contract and subscription | Do not enable the placeholder in production; implement and validate the final contract first |
+| Production request/response and webhook security | JWT request authentication, response MLE, webhook JWE decryption, timestamped digital-signature verification, replay protection, and provider subscription/setup are not implemented | Required for the production integration | Required before trusting asynchronous events or enabling live checkout |
+| Settlement/reconciliation | Not implemented | Reporting and Transaction Search APIs and Business Center reports are available for internal validation | Required after webhooks |
+| Tokenization / TMS | Intentionally disabled for launch; no token creation request | CyberSource TMS exists, but the historical NetCommerce saved-card omission remains in force | Out of Phase 16B; any future work requires a separate Oraya-approved consent and security scope |
 | Saved cards | Intentionally disabled for launch; no consent storage or token UI | Depends on TMS/COF enablement; NetCommerce requested omission | Do not enable for production launch |
 | Token management | Not implemented | TMS supports create/retrieve/update/delete payment instruments | Later phase |
-| Decision Manager / fraud | Not implemented | Decision can return `REVIEW` when Decision Manager is used | Confirm enablement; surface read-only first |
-| Payer authentication / 3DS | Not explicitly modeled | May be configured through provider/CyberSource | Ask NetCommerce; surface status if enabled |
+| Decision Manager / fraud | Not implemented | Decision can return `REVIEW` when Decision Manager is used | Inspect Business Center configuration; surface read-only first if enabled |
+| Payer authentication / 3DS | Not explicitly modeled | May be configured through CyberSource | Verify through official documentation, Business Center configuration, and test evidence before surfacing status |
 | Digital wallets | Not explicitly implemented | May be available through Unified Checkout configuration | Confirm before advertising |
 | Pay by Link | Oraya has internal signed payment page links; CyberSource Pay by Link not implemented | CyberSource has Pay by Link APIs, requires enablement | Not needed for first production if Oraya internal links suffice; useful later |
 | Invoicing | Not implemented | CyberSource Invoicing API exists | Later, useful for event proposals/add-ons |
-| Installments | Not implemented | Needs NetCommerce confirmation | Not recommended until core card operations are stable |
+| Installments | Not implemented | Not required for Phase 16B; evaluate CyberSource capabilities internally only if separately scoped | Not recommended until core card operations are stable |
 | Recurring billing | Not implemented | CyberSource Recurring Billing requires TMS and account enablement | Not recommended for villa bookings now |
 | BIN lookup | Not implemented | CyberSource BIN Lookup exists and may be limited availability | Not recommended unless needed for routing/installments/eligibility |
 | Reporting | Not implemented | CyberSource Reporting API supports report subscriptions/downloads/one-time reports | Recommended for reconciliation |
@@ -327,7 +331,7 @@ Add-ons and top-ups:
 - Approval-based add-ons and special requests are reviewed after booking creation.
 - Once approved, admin should create an add-on/top-up payment link with its own attempt and transaction records.
 - Add-on payment should not overwrite the stay deposit/full-payment transaction.
-- Add-ons and top-ups must use a new payment link for the current launch unless NetCommerce later approves tokenization.
+- Add-ons and top-ups must use a new payment link for Phase 16B. Tokenization remains out of scope unless Oraya approves a separate future consent and security design.
 
 WhatsApp payment links:
 
@@ -548,7 +552,7 @@ Provider status page:
 - Latest webhook received.
 - Declined-card test status.
 - Settlement report status.
-- NetCommerce approval checklist.
+- CyberSource production verification checklist.
 
 Payment configuration panel:
 
@@ -616,7 +620,9 @@ Disabled-state warnings:
 - Saved-card consent/tokenization is disabled for the current NetCommerce launch.
 - Token-only storage if TMS/saved cards are approved.
 - Saved-card consent must be explicit, versioned, and revocable.
-- CyberSource webhook MLE must be implemented before asynchronous events are trusted.
+- Production JWT request authentication and response MLE must be implemented before live payment requests are trusted.
+- CyberSource webhook JWE decryption, timestamped digital-signature verification, replay protection, and provider subscription/setup must be implemented before asynchronous events are trusted.
+- The temporary raw-body HMAC receiver and its placeholder configuration must not be enabled or subscribed in production.
 - Webhook processing must be idempotent and deduped.
 - Admin money movement must be audited.
 - Refunds/voids/captures must be admin-only and permission-controlled.
@@ -642,39 +648,40 @@ Status: partly implemented on PR #64 Preview.
 
 Exit criteria still open:
 
-- NetCommerce review.
-- Declined-card vector.
-- Confirmation of capture/sale/auth behavior.
+- Map the activated account's payment behavior to the official CyberSource contract.
+- Validate a terminal declined flow with official CyberSource test documentation or available sandbox tooling.
+- Make and verify Oraya's capture/sale/auth architecture decision.
 
-### 16B.2 - Provider confirmation and declined-card vector
+### 16B.2 - CyberSource contract and declined-flow validation
 
-- Ask NetCommerce the exact questions in this document.
-- Validate approved and declined paths.
-- Decide sale/immediate-capture vs auth-only/manual-capture.
-- Confirm webhook/MLE, refund, void, capture, settlement, and portal/API boundaries.
+- Use official CyberSource documentation, Business Center configuration, and available sandbox/test tooling to validate approved and terminal-declined paths.
+- Decide sale/immediate-capture vs auth-only/manual-capture as an Oraya business and architecture decision, then verify it against official CyberSource capabilities.
+- Verify webhook/MLE, refund, void, capture, settlement, and portal/API boundaries internally.
+- Treat NetCommerce activation as complete; no further NetCommerce contact, answer, or approval is an exit criterion.
 
-### 16B.3 - Webhook architecture
+### 16B.3 - Production request/response and webhook architecture
 
-- Implement CyberSource webhook MLE verification.
+- Implement CyberSource JWT request authentication and response MLE.
+- Replace the temporary raw-body HMAC receiver with webhook JWE decryption, timestamped digital-signature verification, and replay protection.
 - Add webhook event inbox/dedupe table.
-- Subscribe to payment, capture, refund, void, and Unified Checkout events as supported.
+- Complete provider webhook subscription/setup for payment, capture, refund, void, and Unified Checkout events as supported; do not subscribe the current placeholder receiver.
 - Keep browser returns informational.
 
 ### 16B.4 - Admin payment provider status/settings page
 
 - Expand current `/admin/settings` readiness panel into a payment provider status area.
 - Add production checklist status, latest webhook, decline validation, settlement status.
-- Add env-only production hard gate.
+- Retain the existing fail-closed live switch, but do not allow readiness to pass until the final request/response and webhook-security contract is implemented and validated.
 
 ### 16B.5 - Refunds, voids, captures, and reversals
 
 - Add provider transaction table and admin operations.
 - Add role/permission and audit requirements.
-- Implement provider refund, partial refund, void, capture, and auth reversal only after NetCommerce confirms support.
+- Implement provider refund, partial refund, void, capture, and auth reversal only after Oraya verifies support through official CyberSource documentation, Business Center configuration, and safe test evidence.
 
 ### 16B.6 - Deposits and balance links
 
-- Add durable payment attempts.
+- Extend the existing durable `payment_attempts` ledger for balance, add-on, and top-up purposes as approved.
 - Support deposit, full, balance, add-on, and top-up link purposes.
 - Add WhatsApp-safe payment link relay after identity verification.
 
@@ -687,9 +694,8 @@ Exit criteria still open:
 
 ### 16B.8 - Tokenization and saved cards
 
-- Only if NetCommerce enables TMS and Oraya wants saved cards.
-- Deferred for the current launch after NetCommerce requested omission of saved-card consent.
-- Implement explicit consent, token storage, revocation, and token lifecycle management.
+- Saved cards and TMS remain outside Phase 16B after NetCommerce's historical omission request.
+- Any future reconsideration requires a separate Oraya-approved scope with explicit consent, token storage, revocation, security review, and token lifecycle management.
 
 ### 16B.9 - Fraud/risk and Decision Manager
 
@@ -699,66 +705,51 @@ Exit criteria still open:
 
 ### 16B.10 - Production rollout
 
-- NetCommerce sandbox approval.
+- Complete: NetCommerce activation responsibility and original sandbox approval.
 - Production credentials.
 - Vercel Production env setup.
-- Webhook/MLE production verification.
+- Production JWT request authentication and response MLE verification.
+- Production webhook JWE decryption, timestamped digital-signature verification, replay protection, and subscription/setup.
 - Declined-card validation.
 - Controlled live/payment-readiness test.
 - Final code review and human merge/release decision.
 
-## NetCommerce Questions
+## Oraya-Owned CyberSource Verification Checklist
 
-1. Is this merchant configured for authorization only, sale/automatic capture, or capture-on-request?
-2. With the current Payments API request using `processingInformation.capture: true`, should Oraya expect `AUTHORIZED`, `CAPTURED`, or another status?
-3. Should Oraya switch to auth-only and capture after admin confirmation, or is immediate capture the intended operating model?
-4. Are captures enabled through API for this merchant?
-5. Are authorization reversals enabled through API?
-6. Are voids enabled through API, and what is the time window before settlement/batch submission?
-7. Are refunds enabled through API?
-8. Are partial refunds enabled through API?
-9. What provider transaction ID should Oraya store for authorization, capture, sale, refund, void, and reversal?
-10. Are webhooks enabled for this merchant?
-11. Which webhook event types should Oraya subscribe to for Unified Checkout, payment authorization, capture, refund, void, failure, and settlement updates?
-12. What MLE setup is required: key ID, private key handling, certificate ID, and rotation process?
-13. What is the official declined-card sandbox vector or decline trigger?
-14. Is tokenization / Token Management Service enabled?
-15. If TMS is enabled, which token types should Oraya store for future guest-consented payments?
-16. Is Decision Manager or any fraud/risk product enabled?
-17. If fraud review is enabled, what statuses and webhooks indicate `REVIEW`, `ACCEPT`, or `REJECT`?
-18. Is payer authentication / 3-D Secure enabled or required for this merchant?
-19. Are digital wallets enabled inside Unified Checkout?
-20. Are installments enabled for Lebanese cards or this acquiring setup?
-21. Is recurring billing enabled, or irrelevant for this merchant?
-22. Is CyberSource Pay by Link enabled for this merchant?
-23. Is CyberSource Invoicing enabled, and should Oraya use it for event proposals/add-ons?
-24. Is BIN Lookup enabled, and is it recommended for Oraya's use case?
-25. How are settlement and reconciliation reports accessed: Business Center, Reporting API, Transaction Search, SFTP, or bank portal?
-26. What settlement batch IDs, acquirer references, fees, and payout/deposit fields are available?
-27. Which operations should Oraya perform by API versus through the NetCommerce/CyberSource portal?
-28. What admin/payment actions require bank/provider approval?
-29. What production credentials and activation process will be used?
-30. Are there any Lebanon/Credit Libanais-specific currency, settlement, refund, or card-network constraints Oraya must model?
+NetCommerce activation is complete. Oraya resolves this checklist from official CyberSource documentation, the activated Business Center configuration, available sandbox/test tooling, and internally approved business decisions. Further NetCommerce contact, confirmation, answers, or approval are not prerequisites.
+
+1. Determine the activated account's authorization, sale/automatic-capture, and capture-on-request capabilities and record the expected `AUTHORIZED`, `CAPTURED`, and related status semantics.
+2. Decide whether Oraya keeps immediate capture or adopts auth-only/manual capture, then verify the decision against official CyberSource capabilities and controlled test evidence.
+3. Verify API support and safe operating windows for capture, authorization reversal, void, refund, and partial refund.
+4. Define which provider transaction identifiers Oraya stores for authorization, capture, sale, refund, void, and reversal.
+5. Configure the required webhook event subscriptions through available Business Center capabilities and implement JWT request authentication, response MLE, webhook JWE decryption, timestamped digital-signature verification, replay protection, certificate/key handling, and rotation.
+6. Use official CyberSource test documentation or available sandbox capabilities to produce and validate approved and terminal-declined flows.
+7. Inspect Business Center for Decision Manager, payer authentication/3DS, and wallet configuration; model only capabilities needed for the approved launch.
+8. Keep TMS, saved cards, installments, recurring billing, Pay by Link, Invoicing, and BIN Lookup outside Phase 16B unless Oraya separately approves a later scope. The historical NetCommerce saved-card omission remains in force.
+9. Validate settlement and reconciliation through Business Center, Reporting API, Transaction Search, or other activated reporting surfaces, including batch IDs, acquirer references, fees, and payout/deposit fields.
+10. Decide which supported operations Oraya performs by API versus Business Center and define internal approval requirements for each admin money-movement action.
+11. Configure and validate the activated production credentials and Vercel environment without committing or printing secret values.
+12. Validate Lebanon/Credit Libanais currency, settlement, refund, and card-network constraints through official documentation, Business Center data, and controlled test evidence.
 
 ## Risks
 
 - Captured payment before admin approval: current `capture: true` behavior may capture funds while the booking remains pending.
 - Declined path unvalidated: attempted decline-style sandbox card authorized.
-- Webhook gap: CyberSource MLE verification is not implemented, so asynchronous reconciliation is not production-ready.
+- Production security gap: JWT request authentication, response MLE, webhook JWE decryption, timestamped digital-signature verification, replay protection, and provider subscription/setup are not implemented. The temporary raw-body HMAC receiver is fail-closed but must not be enabled or subscribed in production.
 - Manual refund risk: admin UI records refunds without provider execution.
 - Generic booking PATCH risk: admin API can update provider link/session fields directly; future implementation should centralize provider state mutations.
 - Data model compression risk: booking summary fields are not enough for refunds, captures, settlement, or audits.
 - Production gate risk: a database `online_payment_enabled` toggle should not be the only production safety gate once production credentials exist.
 - Settlement blind spot: payment success is not the same as settled funds.
 - Role risk: all admin users currently share the same auth boundary.
-- Saved-card risk: tokenization must remain disabled for launch and must not be added without explicit NetCommerce approval, consent UX, security review, and token lifecycle management.
+- Saved-card risk: the historical NetCommerce omission remains in force; tokenization must remain disabled for Phase 16B and must not be added without a separate Oraya-approved scope, consent UX, security review, and token lifecycle management.
 
 ## Recommended Next Step
 
-Do not expand production payment behavior until NetCommerce answers the capture/sale/auth, refund/void/capture, webhook/MLE, decline-vector, and settlement questions. The immediate next implementation should be a narrow 16B.2 provider-confirmation and webhook-design step:
+NetCommerce activation is complete and no further NetCommerce contact, answer, confirmation, or approval blocks Phase 16B. Oraya should preserve PR #104's completed state-safety controls while closing the production contract through official CyberSource documentation, Business Center configuration, available sandbox/test tooling, and internally approved decisions:
 
-1. Obtain the official declined-card sandbox vector.
-2. Confirm whether PR #64 should remain sale/immediate-capture or switch to auth-only/manual capture.
-3. Confirm required webhook/MLE event setup.
+1. Use official CyberSource test documentation or available sandbox capabilities to trigger and validate a terminal decline.
+2. Make the Oraya business/architecture decision whether PR #64 remains sale/immediate-capture or switches to auth-only/manual capture, then verify it against official CyberSource capabilities and test evidence.
+3. Confirm and implement JWT request authentication, response MLE, webhook JWE decryption, timestamped digital-signature verification, replay protection, and provider webhook subscription/setup. Do not enable the current placeholder receiver.
 4. Decide the minimal data model for `payment_attempts`, `payment_transactions`, `payment_provider_events`, and `payment_audit_log`.
 5. Only then implement provider-integrated admin operations.
