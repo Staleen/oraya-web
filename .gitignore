@@ -43,3 +43,5 @@ _to_delete/
 
 # Machine-specific admin password helper (never commit: credential in filename)
 scripts/hash-admin-password-*.mjs
+
+.env*
