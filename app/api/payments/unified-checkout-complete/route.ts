@@ -231,7 +231,7 @@ export async function POST(request: Request) {
         return NextResponse.json(
           {
             error:
-              "A previous payment attempt for this booking needs manual review before another charge can be made. Please contact Oraya.",
+              "A previous payment attempt needs manual review. Do NOT retry or pay again; please contact Oraya.",
           },
           { status: 409 },
         );
@@ -264,10 +264,19 @@ export async function POST(request: Request) {
             paid: false,
             error: "reconciliation_required",
             message:
-              "Your payment was received, but the booking could not be updated automatically. Please do NOT pay again — Oraya will reconcile this manually and confirm your booking.",
+              "Your payment was received, but the booking could not be updated automatically. Please do NOT retry or pay again — Oraya will reconcile this manually and confirm your booking.",
           },
           { status: 500 },
         );
+      case "already_recorded":
+        return NextResponse.json({
+          ok: true,
+          paid: true,
+          idempotent: true,
+          status: outcome.provider?.status,
+          reference: outcome.provider?.reference,
+          booking_view_url: `${viewUrl}?payment=success`,
+        });
       case "approved_recorded":
         return NextResponse.json({
           ok: true,

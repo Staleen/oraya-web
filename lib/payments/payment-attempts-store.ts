@@ -1,8 +1,9 @@
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import type {
-  NewPaymentAttempt,
-  PaymentAttemptStatus,
-  PaymentAttemptStore,
+import {
+  isAllowedAttemptTransition,
+  type NewPaymentAttempt,
+  type PaymentAttemptStatus,
+  type PaymentAttemptStore,
 } from "@/lib/payments/unified-checkout-completion";
 import type { ReconciliationAttempt } from "@/lib/payments/webhook-reconciliation";
 
@@ -67,18 +68,54 @@ export const supabasePaymentAttemptStore: PaymentAttemptStore = {
     return data ?? null;
   },
 
-  async updateAttempt(attemptId, patch) {
+  async transitionAttempt(attemptId, expectedStatuses, patch) {
+    if (
+      expectedStatuses.length === 0 ||
+      expectedStatuses.some((status) => !isAllowedAttemptTransition(status, patch.status))
+    ) {
+      console.error("[payments/attempts] refused invalid attempt transition", {
+        attemptId,
+        expectedStatuses,
+        nextStatus: patch.status,
+      });
+      return { ok: false as const, reason: "error" as const, current_status: null };
+    }
+
     const { data, error } = await supabaseAdmin
       .from("payment_attempts")
       .update({ ...patch, updated_at: new Date().toISOString() })
       .eq("id", attemptId)
+      .in("status", [...expectedStatuses])
       .select("id");
 
     if (error) {
-      console.error("[payments/attempts] attempt update failed:", { attemptId, patch, error });
-      return { ok: false };
+      console.error("[payments/attempts] attempt transition failed:", {
+        attemptId,
+        expectedStatuses,
+        patch,
+        error,
+      });
+      return { ok: false as const, reason: "error" as const, current_status: null };
     }
-    return { ok: (data?.length ?? 0) === 1 };
+    if ((data?.length ?? 0) === 1) return { ok: true as const };
+
+    const { data: current, error: lookupError } = await supabaseAdmin
+      .from("payment_attempts")
+      .select("status")
+      .eq("id", attemptId)
+      .maybeSingle<{ status: PaymentAttemptStatus }>();
+    if (lookupError) {
+      console.error("[payments/attempts] attempt transition conflict lookup failed:", {
+        attemptId,
+        lookupError,
+      });
+      return { ok: false as const, reason: "error" as const, current_status: null };
+    }
+    return {
+      ok: false as const,
+      reason: "conflict" as const,
+      current_status: current?.status ?? null,
+    };
   },
 };
 

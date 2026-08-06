@@ -186,6 +186,7 @@ export default function PaymentCheckoutPage(props: { params: Promise<{ token: st
     let cleanup: (() => void) | undefined;
 
     async function startCheckout() {
+      let completionRequestSubmitted = false;
       try {
         const response = await fetch("/api/payments/unified-checkout-session", {
           method: "POST",
@@ -256,6 +257,7 @@ export default function PaymentCheckoutPage(props: { params: Promise<{ token: st
         if (cancelled) return;
 
         setState({ status: "processing", bookingViewUrl });
+        completionRequestSubmitted = true;
         const completionResponse = await fetch("/api/payments/unified-checkout-complete", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -274,14 +276,19 @@ export default function PaymentCheckoutPage(props: { params: Promise<{ token: st
 
         setState({
           status: "blocked",
-          message: "Payment was not approved. No booking payment was recorded. Please try again or contact Oraya.",
+          message:
+            typeof completion.message === "string" && completion.message.trim()
+              ? completion.message.trim()
+              : "We could not confirm the payment outcome. Do NOT retry or pay again; please contact Oraya.",
           bookingViewUrl: completion.booking_view_url ?? bookingViewUrl,
         });
       } catch {
         console.error("[payments/checkout] secure checkout failed.");
         setState({
           status: "blocked",
-          message: "Secure payment could not be started. No booking payment was recorded. Please return to your booking and try again.",
+          message: completionRequestSubmitted
+            ? "We could not confirm the payment outcome. Do NOT retry or pay again; Oraya must verify it first."
+            : "Secure payment could not be started. No charge was submitted. Please return to your booking and try again.",
           bookingViewUrl: bookingViewFallback,
         });
       }

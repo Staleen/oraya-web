@@ -60,8 +60,31 @@ test("booking-status trust copy does not make payment claims", () => {
 
 test("public checkout failures do not echo provider or configuration detail", () => {
   assert.doesNotMatch(checkoutPage, /message:\s*payload\.error/);
-  assert.doesNotMatch(checkoutPage, /completion\.(message|error)\s*\|\|/);
+  assert.match(checkoutPage, /typeof completion\.message === "string"/);
+  assert.doesNotMatch(checkoutPage, /message:\s*completion\.error/);
   assert.doesNotMatch(checkoutRoute, /\{\s*error:\s*message\s*\}/);
   assert.doesNotMatch(sessionRoute, /\{\s*error:\s*error\.message\s*\}/);
   assert.doesNotMatch(completionRoute, /\{\s*error:\s*error\.message\s*\}/);
+});
+
+test("checkout preserves authoritative do-not-retry messages after payment submission", () => {
+  assert.match(
+    checkoutPage,
+    /completionRequestSubmitted = true;\s*const completionResponse = await fetch\("\/api\/payments\/unified-checkout-complete"/,
+  );
+  assert.match(checkoutPage, /completionRequestSubmitted\s*\?\s*"We could not confirm the payment outcome\. Do NOT retry or pay again/);
+  assert.match(checkoutPage, /completion\.message\.trim\(\)/);
+
+  const unknownCase = completionRoute.slice(
+    completionRoute.indexOf('case "provider_unknown"'),
+    completionRoute.indexOf('case "approved_unrecorded"'),
+  );
+  const reconciliationCase = completionRoute.slice(
+    completionRoute.indexOf('case "approved_unrecorded"'),
+    completionRoute.indexOf('case "already_recorded"'),
+  );
+  for (const safeCase of [unknownCase, reconciliationCase]) {
+    assert.match(safeCase, /do NOT retry|Do NOT retry/);
+    assert.doesNotMatch(safeCase, /try again/i);
+  }
 });
