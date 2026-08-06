@@ -4,7 +4,7 @@
 **Scope:** docs-only audit and design roadmap for Oraya payment operations.
 **Branch audited:** `agent/phase-16b-cybersource-unified-checkout-test`
 **PR audited:** #64 - NetCommerce / CyberSource Unified Checkout sandbox implementation
-**Production status:** PR #64 merged to `master` on 2026-07-02, but production checkout remains disabled and the adapter is code-gated to sandbox readiness only.
+**Production status:** PR #64 merged to `master` on 2026-07-02, but production checkout remains disabled and is not production-ready. The current webhook receiver is a temporary fail-closed raw-body HMAC compatibility mechanism, not final CyberSource production verification; it must not be enabled or subscribed in production.
 
 This document is an architecture audit. It is not an implementation plan approval, migration, production enablement, or merge decision.
 
@@ -20,15 +20,15 @@ PR #64 is a credible first hosted-payment foundation: it creates a booking first
 
 **2026-06-22 saved-card addendum:** NetCommerce confirmed PR #64 sandbox testing was successful and requested omission of the "Save card for future payment" option before account activation. PR #64 now explicitly disables saved-card consent/tokenization for the launch while keeping one-time Unified Checkout payments. Oraya does not request TMS token creation, persist reusable customer/payment-instrument tokens, record saved-card consent, or support credentials-on-file / recurring / merchant-initiated payments. Remaining balances and approved add-ons require new payment links unless tokenization is later approved by NetCommerce with consent design and security review. Refunds do not require saved-card tokenization. Production credentials remain pending and production payment remains disabled.
 
-**2026-08-06 Phase 16B-2A payment-state safety addendum (baseline `43712e1138547ba31f62ecf0f06f44fcc9ca20c4`):** the completion/provider boundary now classifies exactly three outcomes. A server-verified `AUTHORIZED`/`CAPTURED` response with matching amount and currency is approved; an HTTP-success explicit `DECLINED` response is the only retry-safe decline; every HTTP error, malformed/missing payload, pending/review/unknown status, or apparent approval whose amount/currency cannot be verified is unknown. Unknown outcomes transition the durable attempt to `ambiguous` and block a second attempt. Attempt mutations now use expected-status filters plus an explicit allowed transition graph; `recorded` and `failed` have no outgoing transitions. A verified webhook may advance `claimed|authorized|ambiguous -> recorded`; if it records before the browser completion resumes, the browser observes the terminal winner, skips its booking write, and returns idempotent success. Guest checkout shows the completion route's authoritative safe message, including explicit do-not-retry wording for unknown/reconciliation-required outcomes, and separates pre-submission startup errors from post-submission unknown exceptions. This repair changes no schema, dependency, credentials, live-payment gate, booking confirmation, tokenization, refund policy, or browser-return authority.
+**2026-08-06 Phase 16B-2A payment-state safety addendum (PR #104; baseline `43712e1138547ba31f62ecf0f06f44fcc9ca20c4`):** the completion/provider boundary now classifies exactly three outcomes. A server-verified `AUTHORIZED`/`CAPTURED` response with matching amount and currency is approved; an HTTP-success explicit `DECLINED` response is the only retry-safe decline; every HTTP error, malformed/missing payload, pending/review/unknown status, or apparent approval whose amount/currency cannot be verified is unknown. Unknown outcomes transition the durable attempt to `ambiguous` and block a second attempt. Attempt mutations now use expected-status filters plus an explicit allowed transition graph; `recorded` and `failed` have no outgoing transitions. If webhook reconciliation advances `claimed|authorized|ambiguous -> recorded` before browser completion resumes, the browser observes the terminal winner, skips its booking write, and returns idempotent success. Guest checkout shows the completion route's authoritative safe message, including explicit do-not-retry wording for unknown/reconciliation-required outcomes, and separates pre-submission startup errors from post-submission unknown exceptions. PR #104 completes this payment-attempt state-safety work only. It does not make the current temporary HMAC webhook receiver production-ready and changes no schema, dependency, credentials, live-payment gate, booking confirmation, tokenization, refund policy, or browser-return authority.
 
-**Remaining Phase 16B blockers after this addendum:** production credentials and Vercel Production env setup, human-run approved migrations where not already applied, declined-card vector validation, settlement reconciliation, payment email lifecycle validation, deliberate live-toggle activation, WhatsApp payment-status replies, and Instant Book execution. Refund automation remains deferred under the manual-first policy.
+**Remaining Phase 16B blockers after this addendum:** production JWT request authentication, response MLE, webhook JWE decryption, timestamped digital-signature verification, replay protection, provider webhook subscription/setup, production credentials and Vercel Production env setup, human-run approved migrations where not already applied, declined-card vector validation, settlement reconciliation, payment email lifecycle validation, deliberate live-toggle activation, WhatsApp payment-status replies, and Instant Book execution. Do not enable or subscribe production webhooks using the current placeholder configuration. Refund automation remains deferred under the manual-first policy.
 
 **2026-07-17 guest-payment polish addendum:** The guest-facing Reserve payment journey may look complete before production credentials arrive, but live charging remains blocked. When production checkout is unavailable, `/book` creates the booking request through the existing booking pipeline and routes the guest to a polished pending-payment `/booking/view/[token]` state instead of exposing provider readiness, environment, or setup-failure details. `/booking/view/[token]` presents one clear payment status using guest vocabulary (`Payment pending`, `Deposit paid`, `Paid in full`, `Payment link expired`, `Payment could not be completed`). Payment is never presented as received without authoritative CyberSource server-side approval. Technical readiness remains admin-only. PR #57 and older MPGS/placeholder payment branches are obsolete and must not be merged or revived.
 
 **2026-07-17 full-code corrective audit addendum:** after David observed a Preview booking that correctly remained `PENDING` after an authoritative sandbox payment but simultaneously displayed "No payment required yet" and "Paid in full", every payment reader/writer and guest/admin presentation path was re-audited. The backend state is intentional: `bookings.status` is Oraya approval and payment never auto-confirms; CyberSource completion records money state only after the server receives `AUTHORIZED` or `CAPTURED`. The defect was duplicate presentation ownership. Booking-status trust copy is now payment-neutral, a pure guest-payment projection owns all payment vocabulary and method labels, recorded paid state wins over stale link state, and browser return parameters cannot manufacture success. `/book` pre-payment copy now matches pay-before-confirm behavior, and public checkout failures no longer echo provider/configuration detail. Focused state-matrix tests cover pending+paid, link-state variants, and informational returns. The audit also reconfirmed that the current browser-driven completion endpoint lacks a durable payment-attempt/idempotency claim before authorization; concurrent completion requests could therefore submit duplicate provider operations. Webhook/MLE, official declined-card vector, settlement/reconciliation, provider-side refunds/voids/captures, payment-email validation, and production rollout controls are still missing. These remain explicit production blockers and are not disguised as presentation work.
 
-The current implementation is not yet a full payment operating system. It lacks verified CyberSource webhooks/MLE processing, provider-side refund/partial-refund/void/capture APIs, settlement/reconciliation ingestion, durable payment-attempt and transaction tables, tokenization/saved-card consent, fraud review handling, role-based money-movement controls, and a provider-grade payment timeline in admin.
+The current implementation is not yet a full payment operating system. It has a durable `payment_attempts` ledger and retry-safe state transitions, but lacks the production CyberSource request/response and webhook-security contract, provider-side refund/partial-refund/void/capture APIs, settlement/reconciliation ingestion, durable transaction/event tables, tokenization/saved-card consent, fraud review handling, role-based money-movement controls, and a provider-grade payment timeline in admin.
 
 The current CyberSource completion request sends `processingInformation.capture: true` in `lib/payments/credit-libanais.ts`. Based on CyberSource's public payment docs, a sale combines authorization and capture in one transaction, while capture is otherwise a follow-on transaction to an authorization. Therefore the PR #64 browser completion should be treated as "authorization plus capture requested / sale-like" until NetCommerce confirms the merchant configuration and response semantics. It is not a clean auth-only/manual-capture flow today.
 
@@ -116,14 +116,14 @@ Credit Libanais / NetCommerce / CyberSource implementation:
 - It sends `processingInformation.capture: true`, so current behavior should be treated as capture-requested / sale-like until NetCommerce confirms.
 - It marks responses with status `AUTHORIZED` or `CAPTURED` as approved.
 - It returns a CyberSource transaction ID as `payment.reference` when present.
-- It does not implement CyberSource webhook/MLE verification yet; `verifyWebhook()` currently throws a readiness/configuration error.
+- Its dedicated webhook path currently verifies a raw-body HMAC with placeholder `WEBHOOK_MLE_*`-named configuration. This fails closed but is not the final CyberSource production contract.
 
 Hosted checkout routes:
 
 - `POST /api/payments/checkout` validates the signed booking token, payment settings, booking state, amount, and provider readiness; then writes `payment_link_*`, amount, and payment-request fields on `bookings`.
 - `POST /api/payments/unified-checkout-session` validates the signed booking token and active link, creates a fresh capture context, and updates `bookings.payment_provider_session_id` to an Oraya-generated `oraya_*` reference.
 - `POST /api/payments/unified-checkout-complete` validates the token, active link, and transient token; calls CyberSource Payments API; and, on approved payment, updates booking payment fields to `deposit_paid` or `paid_in_full` and `payment_link_status = paid`.
-- `POST /api/payments/webhook/[provider]` exists as a generic route, but Credit Libanais/CyberSource verification is not implemented.
+- `POST /api/payments/webhook/[provider]` routes Credit Libanais events through the temporary fail-closed raw-body HMAC receiver and the monotonic reconciliation core. Production JWT/JWE/MLE/signature/replay verification and provider subscription/setup are not implemented.
 - `POST /api/payments/webhook/stripe` exists as a dev/test compatibility shim.
 - `GET /api/payments/readiness` exposes admin-safe provider status.
 
@@ -284,8 +284,8 @@ Patterns Oraya should follow:
 | Void | Not implemented | CyberSource supports voids for unprocessed capture/credit requests | Recommended for pre-settlement operational recovery |
 | Refund | Manual admin record only; no provider call | CyberSource supports follow-on refunds | Required before production operations |
 | Partial refund | Enum exists but UI always records full `refunded`; no provider call | CyberSource refund amount can be specified | Required for hospitality policies |
-| Webhooks | Generic scaffold exists; Stripe dev verification exists; Credit Libanais throws | CyberSource payment and Unified Checkout events require MLE | Required before production hardening |
-| MLE webhook decryption/verification | Not implemented | Required for relevant events | Required before trusting asynchronous events |
+| Webhooks | Monotonic reconciliation core exists behind a temporary fail-closed raw-body HMAC receiver | CyberSource payment and Unified Checkout events require the delivered production security contract and subscription | Do not enable the placeholder in production; implement and validate the final contract first |
+| Production request/response and webhook security | JWT request authentication, response MLE, webhook JWE decryption, timestamped digital-signature verification, replay protection, and provider subscription/setup are not implemented | Required for the production integration | Required before trusting asynchronous events or enabling live checkout |
 | Settlement/reconciliation | Not implemented | Reporting and Transaction Search APIs exist; bank settlement process must be confirmed | Required after webhooks |
 | Tokenization / TMS | Intentionally disabled for launch; no token creation request | CyberSource TMS supports token management but NetCommerce requested saved-card omission | Defer until explicit NetCommerce approval, consent design, and security review |
 | Saved cards | Intentionally disabled for launch; no consent storage or token UI | Depends on TMS/COF enablement; NetCommerce requested omission | Do not enable for production launch |
@@ -620,7 +620,9 @@ Disabled-state warnings:
 - Saved-card consent/tokenization is disabled for the current NetCommerce launch.
 - Token-only storage if TMS/saved cards are approved.
 - Saved-card consent must be explicit, versioned, and revocable.
-- CyberSource webhook MLE must be implemented before asynchronous events are trusted.
+- Production JWT request authentication and response MLE must be implemented before live payment requests are trusted.
+- CyberSource webhook JWE decryption, timestamped digital-signature verification, replay protection, and provider subscription/setup must be implemented before asynchronous events are trusted.
+- The temporary raw-body HMAC receiver and its placeholder configuration must not be enabled or subscribed in production.
 - Webhook processing must be idempotent and deduped.
 - Admin money movement must be audited.
 - Refunds/voids/captures must be admin-only and permission-controlled.
@@ -657,18 +659,19 @@ Exit criteria still open:
 - Decide sale/immediate-capture vs auth-only/manual-capture.
 - Confirm webhook/MLE, refund, void, capture, settlement, and portal/API boundaries.
 
-### 16B.3 - Webhook architecture
+### 16B.3 - Production request/response and webhook architecture
 
-- Implement CyberSource webhook MLE verification.
+- Implement CyberSource JWT request authentication and response MLE.
+- Replace the temporary raw-body HMAC receiver with webhook JWE decryption, timestamped digital-signature verification, and replay protection.
 - Add webhook event inbox/dedupe table.
-- Subscribe to payment, capture, refund, void, and Unified Checkout events as supported.
+- Complete provider webhook subscription/setup for payment, capture, refund, void, and Unified Checkout events as supported; do not subscribe the current placeholder receiver.
 - Keep browser returns informational.
 
 ### 16B.4 - Admin payment provider status/settings page
 
 - Expand current `/admin/settings` readiness panel into a payment provider status area.
 - Add production checklist status, latest webhook, decline validation, settlement status.
-- Add env-only production hard gate.
+- Retain the existing fail-closed live switch, but do not allow readiness to pass until the final request/response and webhook-security contract is implemented and validated.
 
 ### 16B.5 - Refunds, voids, captures, and reversals
 
@@ -678,7 +681,7 @@ Exit criteria still open:
 
 ### 16B.6 - Deposits and balance links
 
-- Add durable payment attempts.
+- Extend the existing durable `payment_attempts` ledger for balance, add-on, and top-up purposes as approved.
 - Support deposit, full, balance, add-on, and top-up link purposes.
 - Add WhatsApp-safe payment link relay after identity verification.
 
@@ -706,7 +709,8 @@ Exit criteria still open:
 - NetCommerce sandbox approval.
 - Production credentials.
 - Vercel Production env setup.
-- Webhook/MLE production verification.
+- Production JWT request authentication and response MLE verification.
+- Production webhook JWE decryption, timestamped digital-signature verification, replay protection, and subscription/setup.
 - Declined-card validation.
 - Controlled live/payment-readiness test.
 - Final code review and human merge/release decision.
@@ -748,7 +752,7 @@ Exit criteria still open:
 
 - Captured payment before admin approval: current `capture: true` behavior may capture funds while the booking remains pending.
 - Declined path unvalidated: attempted decline-style sandbox card authorized.
-- Webhook gap: CyberSource MLE verification is not implemented, so asynchronous reconciliation is not production-ready.
+- Production security gap: JWT request authentication, response MLE, webhook JWE decryption, timestamped digital-signature verification, replay protection, and provider subscription/setup are not implemented. The temporary raw-body HMAC receiver is fail-closed but must not be enabled or subscribed in production.
 - Manual refund risk: admin UI records refunds without provider execution.
 - Generic booking PATCH risk: admin API can update provider link/session fields directly; future implementation should centralize provider state mutations.
 - Data model compression risk: booking summary fields are not enough for refunds, captures, settlement, or audits.
@@ -759,10 +763,10 @@ Exit criteria still open:
 
 ## Recommended Next Step
 
-Do not expand production payment behavior until NetCommerce answers the capture/sale/auth, refund/void/capture, webhook/MLE, decline-vector, and settlement questions. The immediate next implementation should be a narrow 16B.2 provider-confirmation and webhook-design step:
+Do not expand production payment behavior until NetCommerce answers the capture/sale/auth, refund/void/capture, request JWT/response MLE, webhook JWE/signature/replay, subscription, decline-vector, and settlement questions. The immediate next implementation should preserve PR #104's completed state-safety controls while closing the production contract:
 
 1. Obtain the official declined-card sandbox vector.
 2. Confirm whether PR #64 should remain sale/immediate-capture or switch to auth-only/manual capture.
-3. Confirm required webhook/MLE event setup.
+3. Confirm and implement JWT request authentication, response MLE, webhook JWE decryption, timestamped digital-signature verification, replay protection, and provider webhook subscription/setup. Do not enable the current placeholder receiver.
 4. Decide the minimal data model for `payment_attempts`, `payment_transactions`, `payment_provider_events`, and `payment_audit_log`.
 5. Only then implement provider-integrated admin operations.
