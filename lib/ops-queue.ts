@@ -6,6 +6,9 @@
  * work out what needed doing; this decides, and orders by consequence.
  */
 
+// Relative + .ts so the node:test runner can resolve it without the tsconfig alias.
+import { bookingMoneyView } from "./ops-booking-display.ts";
+
 export type QueueKind =
   | "new_lead"
   | "booking_request"
@@ -30,7 +33,14 @@ export interface QueueItem {
   amount?: number;
 }
 
-/** Mirrors the column list selected by GET /api/ops/data. */
+/** Contact resolved from the member account for member bookings. */
+export interface MemberContact {
+  full_name: string | null;
+  email: string | null;
+  phone: string | null;
+}
+
+/** Mirrors the column list selected (and enrichment added) by GET /api/ops/data. */
 export interface QueueBooking {
   id: string;
   villa: string | null;
@@ -38,6 +48,8 @@ export interface QueueBooking {
   check_out: string | null;
   status: string | null;
   created_at: string | null;
+  member_id: string | null;
+  member_contact: MemberContact | null;
   guest_name: string | null;
   guest_email: string | null;
   guest_phone: string | null;
@@ -47,6 +59,8 @@ export interface QueueBooking {
   message: string | null;
   event_type: string | null;
   addons_snapshot: unknown;
+  pricing_subtotal: number | string | null;
+  pricing_snapshot: { subtotal?: number | string | null } | null;
   payment_status: string | null;
   payment_method: string | null;
   payment_due_at: string | null;
@@ -93,6 +107,11 @@ export function formatBookingRef(id: string): string {
 
 function money(n: number): string {
   return `$${Math.round(n).toLocaleString("en-US")}`;
+}
+
+/** The person's name: booking guest fields first, then the member account. */
+export function bookingGuestName(b: Pick<QueueBooking, "guest_name" | "member_contact">): string {
+  return b.guest_name?.trim() || b.member_contact?.full_name?.trim() || "Guest";
 }
 
 function daysBetween(from: number, to: number): number {
@@ -161,13 +180,18 @@ export function buildQueue(
   for (const b of bookings) {
     const status = (b.status ?? "").toLowerCase();
     const ref = formatBookingRef(b.id);
-    const guest = b.guest_name ?? "Guest";
+    const guest = bookingGuestName(b);
     const paid = b.amount_paid ?? 0;
     const total = b.amount_total ?? 0;
     const outstanding = Math.max(0, total - paid);
 
     if (status === "pending") {
       const waited = b.created_at ? daysBetween(Date.parse(b.created_at), now) : 0;
+      // A fresh request has no recorded money yet — show the snapshot estimate
+      // rather than a false $0 (display only; never fed into payment records).
+      const view = bookingMoneyView(b);
+      const moneyLabel =
+        view.amount === null ? "price to confirm" : `${money(view.amount)}${view.estimated ? " est." : ""}`;
       items.push({
         id: `req:${b.id}`,
         kind: "booking_request",
@@ -176,9 +200,9 @@ export function buildQueue(
         // who books elsewhere. Age raises it fast.
         weight: 100 + waited * 12,
         title: `${guest} wants to book ${villaName(b.villa)}`,
-        detail: `${stayDates(b)} · ${b.sleeping_guests ?? "?"} guests · ${money(total)} · waiting ${waited === 0 ? "since today" : `${waited} day${waited === 1 ? "" : "s"}`}`,
+        detail: `${stayDates(b)} · ${b.sleeping_guests ?? "?"} guests · ${moneyLabel} · waiting ${waited === 0 ? "since today" : `${waited} day${waited === 1 ? "" : "s"}`}`,
         bookingId: b.id,
-        amount: total,
+        amount: view.amount ?? 0,
       });
     }
 

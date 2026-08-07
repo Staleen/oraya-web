@@ -1,7 +1,8 @@
 "use client";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { formatBookingRef } from "@/lib/ops-queue";
+import { bookingGuestName, formatBookingRef } from "@/lib/ops-queue";
+import { bookingMoneyView } from "@/lib/ops-booking-display";
 import { useOps } from "@/components/ops/OpsProvider";
 import { Badge, Button, EmptyState, Field, PageHead, QueueRow, Ref, type Tone } from "@/components/ops/ui";
 
@@ -40,10 +41,14 @@ export default function BookingsPage() {
       if (!term) return true;
       // B-1: reference, name, email and phone are all searchable — the old
       // admin could not find a booking by the reference it emails to guests.
+      // Member bookings match on the member's contact too.
       return [
         formatBookingRef(b.id).toLowerCase(), b.id.toLowerCase(),
         (b.guest_name ?? "").toLowerCase(), (b.guest_email ?? "").toLowerCase(),
         (b.guest_phone ?? "").replace(/\D/g, ""),
+        (b.member_contact?.full_name ?? "").toLowerCase(),
+        (b.member_contact?.email ?? "").toLowerCase(),
+        (b.member_contact?.phone ?? "").replace(/\D/g, ""),
       ].some((h) => h.includes(term) || (/^\d+$/.test(term) && h.includes(term)));
     });
   }, [bookings, tab, q]);
@@ -87,12 +92,13 @@ export default function BookingsPage() {
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
           {filtered.map((b) => {
             const s = statusBadge(b);
+            const view = bookingMoneyView(b);
             return (
               <QueueRow
                 key={b.id}
                 accent={s.tone === "bad" ? "bad" : s.tone === "warn" ? "bad" : "info"}
-                title={<><b>{b.guest_name ?? "Guest"}</b> <Ref id={formatBookingRef(b.id)} /></>}
-                detail={<>{b.villa ?? "—"} · {b.check_in?.slice(0, 10)} → {b.check_out?.slice(0, 10)} · {money(b.amount_paid)} of {money(b.amount_total)} · <Badge tone={s.tone}>{s.label}</Badge></>}
+                title={<><b>{bookingGuestName(b)}</b> <Ref id={formatBookingRef(b.id)} />{b.member_id && <> <Badge tone="gold">Member</Badge></>}</>}
+                detail={<>{b.villa ?? "—"} · {b.check_in?.slice(0, 10)} → {b.check_out?.slice(0, 10)} · {money(b.amount_paid)} of {view.amount === null ? "—" : `${money(view.amount)}${view.estimated ? " est." : ""}`} · <Badge tone={s.tone}>{s.label}</Badge></>}
                 actions={<Button small variant="primary" onClick={() => router.push(`/ops/bookings/${b.id}`)}>Open</Button>}
               />
             );

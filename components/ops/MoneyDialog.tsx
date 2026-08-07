@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import type { QueueBooking } from "@/lib/ops-queue";
+import { bookingMoneyView } from "@/lib/ops-booking-display";
 import { Banner, Button, Field, Row, Rows, T } from "@/components/ops/ui";
 
 function money(n: number) { return `$${Math.round(n).toLocaleString("en-US")}`; }
@@ -22,7 +23,13 @@ export default function MoneyDialog({
   onOpen: () => void;
   onDone: (message: string) => void | Promise<void>;
 }) {
-  const total = booking.amount_total ?? 0;
+  // Narration and prefill use the estimated total when nothing is recorded yet
+  // (a fresh approval otherwise reads "that is more than they owe" for ANY
+  // amount). The optimistic-concurrency guard below still uses only RECORDED
+  // values — estimates never enter what is written.
+  const moneyView = bookingMoneyView(booking);
+  const total = moneyView.amount ?? 0;
+  const isEstimate = moneyView.estimated;
   const paid = booking.amount_paid ?? 0;
   const alreadyRefunded = booking.refund_amount ?? 0;
   const target = mode === "payment" ? Math.max(0, total - paid) : Math.max(0, paid - alreadyRefunded);
@@ -133,9 +140,9 @@ export default function MoneyDialog({
             <Rows>
               {mode === "payment" ? (
                 <>
-                  <Row k="Stay total" v={money(total)} />
+                  <Row k={isEstimate ? "Stay total (estimated)" : "Stay total"} v={money(total)} />
                   <Row k="Already received" v={money(paid)} />
-                  <Row k={<b>Still outstanding</b>} v={<b>{money(Math.max(0, total - paid))}</b>} />
+                  <Row k={<b>{isEstimate ? "Expected" : "Still outstanding"}</b>} v={<b>{money(Math.max(0, total - paid))}</b>} />
                 </>
               ) : (
                 <>

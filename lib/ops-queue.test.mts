@@ -38,6 +38,8 @@ function booking(overrides: Partial<QueueBooking>): QueueBooking {
     check_out: dateOnly(13),
     status: "confirmed",
     created_at: iso(-1),
+    member_id: null,
+    member_contact: null,
     guest_name: "Nadia",
     guest_email: "nadia@example.com",
     guest_phone: "+961 3 123456",
@@ -47,6 +49,8 @@ function booking(overrides: Partial<QueueBooking>): QueueBooking {
     message: null,
     event_type: null,
     addons_snapshot: null,
+    pricing_subtotal: null,
+    pricing_snapshot: null,
     payment_status: null,
     payment_method: null,
     payment_due_at: null,
@@ -221,6 +225,34 @@ test("pending add-on approvals on a confirmed stay need attention", () => {
   const addons = items.filter((i) => i.kind === "addon_approval");
   assert.equal(addons.length, 1);
   assert.equal(addons[0].amount, 150);
+});
+
+test("member bookings use the member's name, not 'Guest'", () => {
+  const items = buildQueue(
+    [booking({
+      status: "pending",
+      guest_name: null,
+      member_id: "99999999-9999-9999-9999-999999999999",
+      member_contact: { full_name: "Mehdi Chamsedine", email: "m@example.com", phone: null },
+    })],
+    [],
+    NOW,
+  );
+  assert.ok(items[0].title.includes("Mehdi Chamsedine"));
+});
+
+test("a pending request without recorded money shows the snapshot estimate, marked est.", () => {
+  const items = buildQueue(
+    [booking({
+      status: "pending",
+      amount_total: null,
+      pricing_snapshot: { subtotal: 600 },
+      addons_snapshot: [{ label: "Fireplace Diesel", price: 20 }],
+    })],
+    [],
+    NOW,
+  );
+  assert.ok(items[0].detail.includes("$620 est."), items[0].detail);
 });
 
 // ── grouping ────────────────────────────────────────────────────────────────

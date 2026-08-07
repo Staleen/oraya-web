@@ -16,6 +16,18 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-07 - /ops display truth: member contact, estimated totals, parsed stay-setup messages, add-on resolution; A-1 fixed
+
+**Decision:** first production use of /ops showed the console reading the booking row too literally (live evidence: ref 574D64A5 — a member booking rendered as "Guest" with blank contact and a $0 total while the legacy admin showed the person and a $620 estimate). Fixes, all display/ops-scoped: `GET /api/ops/data` resolves member contact for member bookings (bounded distinct-id set; auth emails behind a process-lifetime cache) as an additive `member_contact`; `lib/ops-booking-display.ts` provides `bookingMoneyView` (recorded `amount_total` first, else the confirmation email's estimate = snapshot subtotal + priced add-ons, always labelled estimated, never fed into payment records) and `parseStaySetupMessage` (machine "[Stay Setup]" blocks become honest rows; the "[Booking Protocol]" system section is dropped; human messages render raw); the /ops booking detail gains an add-ons card with approve/decline via the new ops-guarded `PATCH /api/ops/bookings/[id]/addons` (mirrors the admin route's optimistic-concurrency write; resolved rows keep a "Change" affordance — audit B-14 ops-side); and audit **A-1** is fixed in `components/admin/PasswordGate.tsx` (a 429 lockout surfaces the server's throttle message instead of "Incorrect password" — the exact failure that locked the owner out on 2026-08-07). Focused tests: `lib/ops-booking-display.test.mts` (9) + 2 new queue tests.
+
+**Reason:** the operator console must show the person and the money truthfully for ALL bookings, member ones included; estimates must be visible but never masquerade as recorded money; and the login must not lie about lockouts.
+
+**Impact:** new `lib/ops-booking-display.ts` (+ tests), `app/api/ops/bookings/[id]/addons/route.ts`; extended `app/api/ops/data/route.ts`, `lib/ops-queue.ts` (member name + estimate in queue items), `app/ops/bookings/page.tsx`, `app/ops/bookings/[id]/page.tsx`, `components/admin/PasswordGate.tsx` (A-1 only). No schema change, no locked-route change, no new dependency; guest messaging untouched.
+
+**Reversible?:** yes.
+
+---
+
 ## 2026-08-07 - /ops Team + accept-invite + read-only Availability; invite delivery is link-only
 
 **Decision:** the /ops **Team** screen ships over the existing owner-only `/api/ops/staff` API (invite, role change, disable/re-enable, remove), with invite delivery deliberately **link-only**: creating an invite shows a one-time `https://…/ops-invite/<token>` link exactly once (the server stores only a scrypt hash), and the owner sends it by WhatsApp or in person. `app/ops-invite/[token]` (outside the /ops auth shell, so the sign-in gate cannot bounce an invitee) + `POST /api/ops/invite/accept` redeem it: same IP throttle as login, one indistinguishable 400 for unknown/expired/used/deactivated invites, min-12-char password (house rule), single-use via a `password_hash IS NULL` write guard, session cookie attached on success. The **Availability** screen ships read-only: per-villa 3-month occupancy from confirmed stays (events include their setup day via the shared `getOperationalRange`) plus active `external_blocks` (now returned by `GET /api/ops/data`), and per-feed freshness staged honestly against the real 10-minute cron-job.org schedule (fresh / limping ≥1h / dead ≥24h / failing). Feed CRUD stays with G13. `lib/ops-queue.test.mts` (12 tests) pins the queue's inclusion/ordering rules and the `villaName` fix (canonical "Villa X" values were double-prefixed to "Villa Villa X" on queue rows).
