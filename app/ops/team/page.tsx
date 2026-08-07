@@ -106,6 +106,30 @@ export default function TeamPage() {
     }
   }
 
+  async function reinvite(s: StaffRow) {
+    setBusyId(s.id);
+    setActionError("");
+    try {
+      const r = await fetch(`/api/ops/staff/${s.id}`, {
+        method: "PATCH", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reinvite: true }),
+      });
+      const body = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; invite_token?: string };
+      if (!r.ok || !body.ok || !body.invite_token) {
+        setActionError(body.error ?? "Could not create a new invite link.");
+        return;
+      }
+      setInviteLink({ name: s.full_name, url: `${window.location.origin}/ops-invite/${body.invite_token}` });
+      setCopied(false);
+      await load();
+    } catch {
+      setActionError("Couldn't reach Oraya. Nothing was changed.");
+    } finally {
+      setBusyId("");
+    }
+  }
+
   async function removeStaff(s: StaffRow) {
     setBusyId(s.id);
     setActionError("");
@@ -250,6 +274,11 @@ export default function TeamPage() {
                             Re-enable
                           </Button>
                         )}
+                        {s.status === "invited" && (
+                          <Button small disabled={busy} onClick={() => void reinvite(s)}>
+                            New invite link
+                          </Button>
+                        )}
                         {(s.status === "invited" || s.status === "disabled") && (
                           <Button small variant="danger" disabled={busy} onClick={() => void removeStaff(s)}>
                             Remove
@@ -262,6 +291,30 @@ export default function TeamPage() {
               })}
             </div>
           )}
+
+          <div style={{ marginTop: "26px", maxWidth: "560px" }}>
+            <Card title="What an operator can do">
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                {([
+                  ["Enquiries, bookings, availability", true],
+                  ["Approve, decline and message guests", true],
+                  ["Record payments and refunds", true],
+                  ["Change pricing or extras", false],
+                  ["Payment settings, live card payments", false],
+                  ["Add or remove people", false],
+                ] as Array<[string, boolean]>).map(([label, yes]) => (
+                  <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", padding: "9px 0", borderBottom: `1px solid ${T.borderFaint}`, fontSize: "14px" }}>
+                    <span>{label}</span>
+                    <Badge tone={yes ? "ok" : "bad"}>{yes ? "Yes" : "No"}</Badge>
+                  </div>
+                ))}
+              </div>
+              <p style={{ margin: "12px 0 0", fontSize: "12px", color: T.faint, lineHeight: 1.6 }}>
+                These aren&apos;t just hidden menus — the owner-only areas refuse an operator&apos;s
+                account at the server.
+              </p>
+            </Card>
+          </div>
         </>
       )}
 
