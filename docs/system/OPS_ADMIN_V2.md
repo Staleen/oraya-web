@@ -76,6 +76,7 @@ Migration: `sql/ops-staff-accounts.sql`. **Already applied** to project `nxsdgjt
 | `PATCH /api/ops/leads/[id]` | any staff | follow-up status, notes, conversion link (L-6 guard: non-null link only writes over null, else 409 `already_linked`) |
 | `GET/POST /api/ops/staff` | **owner only** | team list, invite |
 | `PATCH/DELETE /api/ops/staff/[id]` | **owner only** | role, enable/disable, remove |
+| `POST /api/ops/invite/accept` | public | redeem a one-time invite: prove the token (scrypt-verified against pending invites), set a min-12-char password, sign in. Same IP throttle as login; one indistinguishable 400 for unknown/expired/used/deactivated; single-use via a `password_hash IS NULL` write guard |
 
 **Approve / decline** write the same status values the legacy admin writes, race-guarded on the status the operator was shown (else 409), run the same pre-write availability-conflict check + exclusion-violation handling on approve, and hand guest messaging to **`lib/booking-guest-dispatch.ts`** — the ONE copy of "message the guest about a status change", extracted verbatim from the admin PATCH route (which now calls it too; explicitly authorized edit). Event inquiries are refused by the API — their proposal flow stays in the legacy admin until the /ops event screens exist.
 
@@ -90,7 +91,8 @@ Login returns one indistinguishable 401 for unknown account, not-yet-activated, 
 - `components/ops/ConvertLeadDialog.tsx` — lead → pending booking request through the locked `POST /api/bookings`; remembers the created booking id so a retry only re-links (L-1).
 - `lib/ops-queue.ts` — **pure** derivation of the work queue, `now` passed in for deterministic testing.
 - `lib/booking-guest-dispatch.ts` — the shared guest-messaging module both `/admin` and `/ops` call.
-- Screens: **Today** (queue), **Enquiries** (list + detail, notes, WhatsApp reply link, conversion; the guest's raw date words always shown beside normalised dates — L-5), **Bookings** (searchable list), **Booking detail** (lifecycle + money + approve/decline/cancel behind previews). Availability, Pricing, Extras, Payments, Team are placeholder pages.
+- Screens: **Today** (queue), **Enquiries** (list + detail, notes, WhatsApp reply link, conversion; the guest's raw date words always shown beside normalised dates — L-5), **Bookings** (searchable list), **Booking detail** (lifecycle + money + approve/decline/cancel behind previews), **Team** (owner-only: invite via one-time copyable link shown exactly once, role change, disable/re-enable, remove; the API's last-owner lockout guard surfaces as its own message), **Availability** (read-only: 3-month per-villa occupancy from confirmed stays — events include their setup day — plus external blocks, with per-feed sync freshness honestly staged fresh / limping / dead against the real 10-minute schedule). `app/ops-invite/[token]` (deliberately outside the /ops auth shell) is where an invite link lands: set password → signed in. Pricing, Extras, Payments are placeholder pages.
+- `GET /api/ops/data` additionally returns active `external_blocks` (ending within the last month or later) for the Availability screen.
 
 ### Queue ranking
 Booking requests climb fastest with age (a guest who books elsewhere is the most expensive thing to miss), then refunds owed, overdue payments, add-on approvals, unsent arrival guides. Grouped as *Needs you now* / *Money* / *Arriving soon*.
@@ -114,11 +116,12 @@ Rather than as copy or warnings:
 
 1. ~~**Enquiries** + lead → booking conversion~~ — built 2026-08-07 (with the L-1 + L-6 guards).
 2. ~~**Approve / decline / messaging**, with the message previews~~ — built 2026-08-07. The dispatch logic was extracted into `lib/booking-guest-dispatch.ts`, called by both admins. Note: the email preview mirrors `lib/send-booking-email.ts` content display-only; if that locked email ever changes substantively, the preview copy in `app/api/ops/bookings/[id]/message-preview/route.ts` must be updated alongside it (the SEND cannot drift — only the preview styling can). `/ops` events remain excluded (proposal flow stays legacy-admin).
-3. **Team** screen (API is done; UI is not) — needed before an operator account can be created.
-4. **Availability**, and the owner screens: Pricing, Extras, Payments.
+3. ~~**Team** screen~~ — built 2026-08-07, with the accept-invite flow (`/ops-invite/[token]` + `POST /api/ops/invite/accept`). Invite delivery is deliberately **link-only** (owner copies the one-time link and sends it by WhatsApp); a Resend invite email remains future work.
+4. ~~**Availability**~~ — built 2026-08-07 as read-only occupancy + feed freshness. The owner screens: **Pricing, Extras, Payments** — still open.
 5. **Business** screen (owner-only) — revenue, occupancy, add-on uptake, lead conversion. Owner information, deliberately not on the operator's landing page.
-6. Unit tests for `lib/ops-queue.ts` (the repo convention is `*.test.mts`).
+6. ~~Unit tests for `lib/ops-queue.ts`~~ — `lib/ops-queue.test.mts` added 2026-08-07 (12 tests; also pins the `villaName` double-prefix fix — queue rows previously rendered "Villa Villa Mechmech" for canonical booking villa values).
 7. **Event enquiry handling in /ops** — proposals, event approval, and event lead conversion (all deliberately refused by the /ops API today).
+8. **Calendar-source CRUD + sync monitoring fix** (G13) — the Availability screen shows feed freshness but cannot add/edit/disable feeds, and `/api/cron/calendar-sync` still returns 200 when every feed fails.
 
 ---
 

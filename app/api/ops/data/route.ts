@@ -29,7 +29,10 @@ export async function GET(request: Request) {
     "whatsapp_confirmation_sent_at",
   ].join(", ");
 
-  const [bookingsResult, leadsResult, sourcesResult] = await Promise.all([
+  // Blocks that ended more than a month ago are history, not availability.
+  const blocksHorizon = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  const [bookingsResult, leadsResult, sourcesResult, blocksResult] = await Promise.all([
     supabaseAdmin.from("bookings").select(bookingColumns).order("created_at", { ascending: false }),
     supabaseAdmin
       .from("whatsapp_leads")
@@ -41,6 +44,12 @@ export async function GET(request: Request) {
     supabaseAdmin
       .from("external_calendar_sources")
       .select("id, villa, source_name, is_enabled, last_synced_at, last_sync_status, last_error"),
+    supabaseAdmin
+      .from("external_blocks")
+      .select("id, villa, source_id, starts_on, ends_on, summary")
+      .eq("is_active", true)
+      .gte("ends_on", blocksHorizon)
+      .order("starts_on", { ascending: true }),
   ]);
 
   // D-4 lesson: a failed load must never be served as an empty one. Any failure
@@ -50,6 +59,7 @@ export async function GET(request: Request) {
     ["bookings", bookingsResult],
     ["leads", leadsResult],
     ["calendar sources", sourcesResult],
+    ["external blocks", blocksResult],
   ] as const) {
     if (result.error) {
       console.error(`${LOG_TAG} ${label} query failed:`, result.error.message);
@@ -61,6 +71,7 @@ export async function GET(request: Request) {
     bookings: bookingsResult.data ?? [],
     leads: leadsResult.data ?? [],
     calendar_sources: sourcesResult.data ?? [],
+    external_blocks: blocksResult.data ?? [],
     me: auth.staff,
     fetched_at: new Date().toISOString(),
   });

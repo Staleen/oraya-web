@@ -8,6 +8,10 @@ export interface CalendarSource {
   id: string; villa: string | null; source_name: string | null; is_enabled: boolean;
   last_synced_at: string | null; last_sync_status: string | null; last_error: string | null;
 }
+export interface ExternalBlock {
+  id: string; villa: string | null; source_id: string | null;
+  starts_on: string; ends_on: string; summary: string | null;
+}
 
 type Status = "checking" | "signed-out" | "unreachable" | "ready";
 
@@ -25,6 +29,7 @@ interface Ctx {
   bookings: QueueBooking[];
   leads: QueueLead[];
   calendarSources: CalendarSource[];
+  externalBlocks: ExternalBlock[];
   loadError: string;
   loading: boolean;
   refresh: () => Promise<void>;
@@ -50,6 +55,7 @@ export function OpsProvider({ children }: { children: React.ReactNode }) {
   const [bookings, setBookings] = useState<QueueBooking[]>([]);
   const [leads, setLeads] = useState<QueueLead[]>([]);
   const [calendarSources, setCalendarSources] = useState<CalendarSource[]>([]);
+  const [externalBlocks, setExternalBlocks] = useState<ExternalBlock[]>([]);
   const [loadError, setLoadError] = useState("");
   const [loading, setLoading] = useState(true);
   const [signOutError, setSignOutError] = useState("");
@@ -73,6 +79,7 @@ export function OpsProvider({ children }: { children: React.ReactNode }) {
       setBookings((body.bookings as QueueBooking[]) ?? []);
       setLeads((body.leads as QueueLead[]) ?? []);
       setCalendarSources((body.calendar_sources as CalendarSource[]) ?? []);
+      setExternalBlocks((body.external_blocks as ExternalBlock[]) ?? []);
       if (body.me) setMe(body.me as Me);
       setLoadError("");
       setStatus("ready");
@@ -140,14 +147,14 @@ export function OpsProvider({ children }: { children: React.ReactNode }) {
       setSignOutError("Sign out couldn't reach the server — you may still be signed in. Try again.");
       return;
     }
-    setMe(null); setBookings([]); setLeads([]); setCalendarSources([]);
+    setMe(null); setBookings([]); setLeads([]); setCalendarSources([]); setExternalBlocks([]);
     setStatus("signed-out");
   }, []);
 
   const value = useMemo<Ctx>(() => ({
-    status, blocked, me, bookings, leads, calendarSources, loadError, loading,
+    status, blocked, me, bookings, leads, calendarSources, externalBlocks, loadError, loading,
     refresh, signIn, signOut, signOutError, pausePolling,
-  }), [status, blocked, me, bookings, leads, calendarSources, loadError, loading, refresh, signIn, signOut, signOutError, pausePolling]);
+  }), [status, blocked, me, bookings, leads, calendarSources, externalBlocks, loadError, loading, refresh, signIn, signOut, signOutError, pausePolling]);
 
   return <OpsCtx.Provider value={value}>{children}</OpsCtx.Provider>;
 }

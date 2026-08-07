@@ -120,9 +120,13 @@ function stayDates(b: QueueBooking): string {
   return `${fmt(b.check_in)}–${fmt(b.check_out)}`;
 }
 
-function villaName(v: string | null): string {
+export function villaName(v: string | null): string {
   if (!v) return "Villa";
-  return `Villa ${v.charAt(0).toUpperCase()}${v.slice(1)}`;
+  const trimmed = v.trim();
+  // bookings.villa already holds the canonical "Villa Mechmech" form — the old
+  // unconditional prefix rendered "Villa Villa Mechmech" on every queue row.
+  if (/^villa\b/i.test(trimmed)) return trimmed;
+  return `Villa ${trimmed.charAt(0).toUpperCase()}${trimmed.slice(1)}`;
 }
 
 /**
