@@ -125,6 +125,16 @@ Rather than as copy or warnings:
 
 ---
 
+## 6b. Display truth follow-up (2026-08-07, branch `claude/ops-display-truth`)
+
+First production use surfaced that /ops read the booking row too literally (live evidence: ref 574D64A5):
+
+- **Member bookings** carry no `guest_*` contact — `GET /api/ops/data` now resolves the bounded set of distinct `member_id`s (names/phones from `members` in one query; auth emails per-id behind a process-lifetime cache) into an additive `member_contact`, used by the detail page, list, queue titles, and search. A gold "Member" badge marks them.
+- **`amount_total` is empty until payment activity** — `lib/ops-booking-display.ts` `bookingMoneyView` computes the same estimate the confirmation email shows (snapshot subtotal + priced add-ons) wherever money renders, always labelled *estimated* and never fed into `record_payment` expected values.
+- **The machine "[Stay Setup]" message no longer renders raw** — `parseStaySetupMessage` splits it into bedrooms / estimated guests / add-ons interest / the guest's actual words, and drops the "[Booking Protocol]" system block. Unparseable messages render as-is.
+- **Add-ons are now resolvable in /ops** — an add-ons card on the booking detail plus `PATCH /api/ops/bookings/[id]/addons` (own ops-guarded route; mirrors the admin approve-addon optimistic-concurrency write; resolved rows keep a "Change" affordance per audit B-14).
+- **Audit A-1 fixed** on the legacy /admin login: a 429 lockout now surfaces the server's throttle message instead of "Incorrect password".
+
 ## 7. Gotchas discovered — read before continuing
 
 **Verify column names against the live database.** `whatsapp_leads` uses `name`, `follow_up_status`, `guest_count`, `normalized_check_in/out` — *not* `guest_name`, `status`, `guests`, `check_in/out`. Guessing these cost a debugging cycle in which a 503 presented as a rejected password. `follow_up_status` values in use: `new`, `contacted`, `converted`.

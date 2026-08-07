@@ -45,6 +45,10 @@ export default function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
         onSuccess();
       } else if (res.status === 503) {
         setError(data.error ?? "Server is not configured for admin access.");
+      } else if (res.status === 429) {
+        // Audit A-1: a lockout is not a wrong password. Reporting it as one
+        // sends people into futile retries that keep extending the lockout.
+        setError(data.error ?? "Too many attempts. Wait a few minutes, then try once.");
       } else {
         setError("Incorrect password. Please try again.");
       }

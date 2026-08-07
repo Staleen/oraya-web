@@ -6,6 +6,29 @@ export const dynamic = "force-dynamic";
 const LOG_TAG = "[api/ops/data]";
 
 /**
+ * Member emails live in auth.users and cost one admin-API call each, so they
+ * are cached for the process lifetime — a member's login email changing is
+ * rare enough that a redeploy-freshness cache is honest. Names/phones come
+ * from the members table in one query per request.
+ */
+const memberEmailCache = new Map<string, string | null>();
+
+async function resolveMemberEmails(memberIds: string[]): Promise<Map<string, string | null>> {
+  const missing = memberIds.filter((id) => !memberEmailCache.has(id));
+  await Promise.all(
+    missing.map(async (id) => {
+      try {
+        const { data } = await supabaseAdmin.auth.admin.getUserById(id);
+        memberEmailCache.set(id, data?.user?.email ?? null);
+      } catch {
+        // Leave uncached so the next poll retries.
+      }
+    }),
+  );
+  return memberEmailCache;
+}
+
+/**
  * Operator-safe read for the /ops interface.
  *
  * Deliberately NOT `/api/admin/data`. Letting an ops session through the admin
@@ -18,10 +41,10 @@ export async function GET(request: Request) {
   if (!auth.ok) return auth.response;
 
   const bookingColumns = [
-    "id", "villa", "check_in", "check_out", "status", "created_at",
+    "id", "villa", "check_in", "check_out", "status", "created_at", "member_id",
     "guest_name", "guest_email", "guest_phone", "guest_country",
     "sleeping_guests", "day_visitors", "message", "event_type",
-    "addons_snapshot",
+    "addons_snapshot", "pricing_subtotal", "pricing_snapshot",
     "payment_status", "payment_method", "payment_due_at", "payment_reference",
     "deposit_amount", "amount_paid", "amount_total", "amount_due",
     "payment_received_at", "payment_marked_by",
@@ -67,8 +90,46 @@ export async function GET(request: Request) {
     }
   }
 
+  // Member bookings carry no guest_* contact — the identity lives on the
+  // member account. Resolve the bounded set of distinct member_ids so the
+  // operator sees a person, not "Guest" with dashes (live evidence: 574D64A5).
+  type BookingRow = { member_id: string | null; [key: string]: unknown };
+  const bookingRows = (bookingsResult.data ?? []) as unknown as BookingRow[];
+  const memberIds = [...new Set(bookingRows.map((b) => b.member_id).filter((v): v is string => Boolean(v)))];
+
+  let memberContacts = new Map<string, { full_name: string | null; phone: string | null }>();
+  if (memberIds.length > 0) {
+    const { data: members, error: membersError } = await supabaseAdmin
+      .from("members")
+      .select("id, full_name, phone")
+      .in("id", memberIds);
+    if (membersError) {
+      // Enrichment is additive; a failed members read must not blank the console.
+      console.error(`${LOG_TAG} members lookup failed:`, membersError.message);
+    } else {
+      memberContacts = new Map(
+        (members ?? []).map((m) => [m.id as string, { full_name: m.full_name ?? null, phone: m.phone ?? null }]),
+      );
+    }
+    await resolveMemberEmails(memberIds);
+  }
+
+  const bookings = bookingRows.map((b) => {
+    if (!b.member_id) return { ...b, member_contact: null };
+    const contact = memberContacts.get(b.member_id);
+    const email = memberEmailCache.get(b.member_id) ?? null;
+    return {
+      ...b,
+      member_contact: {
+        full_name: contact?.full_name ?? null,
+        email,
+        phone: contact?.phone ?? null,
+      },
+    };
+  });
+
   return NextResponse.json({
-    bookings: bookingsResult.data ?? [],
+    bookings,
     leads: leadsResult.data ?? [],
     calendar_sources: sourcesResult.data ?? [],
     external_blocks: blocksResult.data ?? [],

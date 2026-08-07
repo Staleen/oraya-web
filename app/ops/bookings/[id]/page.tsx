@@ -1,7 +1,8 @@
 "use client";
 import { Suspense, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { formatBookingRef, type QueueBooking } from "@/lib/ops-queue";
+import { bookingGuestName, formatBookingRef, type QueueBooking } from "@/lib/ops-queue";
+import { bookingMoneyView, parseStaySetupMessage } from "@/lib/ops-booking-display";
 import { useOps } from "@/components/ops/OpsProvider";
 import MoneyDialog from "@/components/ops/MoneyDialog";
 import MessagePreviewDialog, { type PreviewAction } from "@/components/ops/MessagePreviewDialog";
@@ -46,6 +47,105 @@ export default function BookingDetailPage() {
   );
 }
 
+interface AddonRow {
+  id: string | null;
+  label: string;
+  price: number | null;
+  status: string;
+  requiresApproval: boolean;
+}
+
+function addonRows(snapshot: unknown): AddonRow[] {
+  if (!Array.isArray(snapshot)) return [];
+  return snapshot
+    .filter((a): a is Record<string, unknown> => Boolean(a) && typeof a === "object")
+    .map((a) => ({
+      id: typeof a.id === "string" ? a.id : null,
+      label: typeof a.label === "string" ? a.label : typeof a.name === "string" ? a.name : "Add-on",
+      price: typeof a.price === "number" ? a.price : null,
+      status: typeof a.status === "string" ? a.status : "confirmed",
+      requiresApproval: a.requires_approval === true,
+    }));
+}
+
+/**
+ * The add-ons the guest asked for, with approve/decline where a decision is
+ * pending — previously only visible in the legacy admin. A resolved add-on
+ * keeps a "Change" affordance (audit B-14: a mis-click must be reversible).
+ */
+function AddonsCard({ booking, onChanged }: { booking: QueueBooking; onChanged: () => Promise<void> }) {
+  const [busyId, setBusyId] = useState("");
+  const [error, setError] = useState("");
+  const [changingId, setChangingId] = useState("");
+
+  const rows = addonRows(booking.addons_snapshot);
+  if (rows.length === 0) return null;
+
+  async function resolve(addonId: string, decision: "approve" | "decline") {
+    setBusyId(addonId);
+    setError("");
+    try {
+      const r = await fetch(`/api/ops/bookings/${booking.id}/addons`, {
+        method: "PATCH", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ addon_id: addonId, decision }),
+      });
+      const body = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!r.ok || !body.ok) {
+        setError(body.error ?? "That decision didn't save.");
+        return;
+      }
+      setChangingId("");
+      await onChanged();
+    } catch {
+      setError("Couldn't reach Oraya. Nothing was changed.");
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  function badgeFor(status: string): { tone: "ok" | "bad" | "warn" | "neutral"; label: string } {
+    if (status === "approved" || status === "confirmed") return { tone: "ok", label: status === "approved" ? "Approved" : "Included" };
+    if (status === "declined") return { tone: "bad", label: "Declined" };
+    if (status === "pending_approval") return { tone: "warn", label: "Needs your decision" };
+    return { tone: "neutral", label: status };
+  }
+
+  return (
+    <Card title="Add-ons">
+      {error && <Banner tone="bad" title="Not saved" onDismiss={() => setError("")}>{error}</Banner>}
+      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+        {rows.map((a) => {
+          const b = badgeFor(a.status);
+          const pending = a.status === "pending_approval";
+          const changing = changingId === a.id;
+          const busy = busyId === a.id;
+          return (
+            <div key={a.id ?? a.label} style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap", paddingBottom: "12px", borderBottom: `1px solid ${T.borderFaint}` }}>
+              <div style={{ flex: 1, minWidth: "min(100%,180px)", fontSize: "14px" }}>
+                {a.label}
+                <span style={{ display: "block", fontSize: "12px", color: T.muted }}>
+                  {a.price === null ? "Price on request" : `$${a.price.toLocaleString("en-US")}`}
+                </span>
+              </div>
+              <Badge tone={b.tone}>{b.label}</Badge>
+              {a.id && (pending || changing) && (
+                <div style={{ display: "flex", gap: "6px" }}>
+                  <Button small disabled={busy} onClick={() => void resolve(a.id!, "approve")}>Approve</Button>
+                  <Button small variant="danger" disabled={busy} onClick={() => void resolve(a.id!, "decline")}>Decline</Button>
+                </div>
+              )}
+              {a.id && !pending && !changing && a.requiresApproval && (
+                <Button small variant="ghost" onClick={() => setChangingId(a.id!)}>Change</Button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
 function BookingDetail() {
   const { id } = useParams<{ id: string }>();
   const search = useSearchParams();
@@ -82,13 +182,16 @@ function BookingDetail() {
   const isEvent = Boolean(
     booking.event_type && typeof booking.message === "string" && booking.message.includes("[Event Inquiry]"),
   );
+  const staySetup = parseStaySetupMessage(booking.message);
+  const moneyView = bookingMoneyView(booking);
   const total = booking.amount_total ?? 0;
   const paid = booking.amount_paid ?? 0;
   const outstanding = Math.max(0, total - paid);
   const refunded = booking.refund_amount ?? 0;
   const owedBack = status === "cancelled" ? Math.max(0, paid - refunded) : 0;
   const step = currentStep(booking, Date.now());
-  const pct = total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0;
+  const denominator = moneyView.amount ?? 0;
+  const pct = denominator > 0 ? Math.min(100, Math.round((paid / denominator) * 100)) : 0;
 
   async function afterAction(message: string) {
     // The dialog paused polling while open; a success path that skips onClose
@@ -105,11 +208,14 @@ function BookingDetail() {
 
       <div style={{ marginTop: "14px" }}>
         <PageHead
-          title={booking.guest_name ?? "Guest"}
+          title={bookingGuestName(booking)}
           sub={`${booking.villa ?? "—"} · ${day(booking.check_in)} → ${day(booking.check_out)}`}
         />
       </div>
-      <div style={{ marginTop: "-18px", marginBottom: "22px" }}><Ref id={formatBookingRef(booking.id)} /></div>
+      <div style={{ marginTop: "-18px", marginBottom: "22px", display: "flex", gap: "10px", alignItems: "center" }}>
+        <Ref id={formatBookingRef(booking.id)} />
+        {booking.member_id && <Badge tone="gold">Member</Badge>}
+      </div>
 
       {flash && <Banner tone="ok" title="Done" onDismiss={() => setFlash("")}>{flash}</Banner>}
 
@@ -140,13 +246,26 @@ function BookingDetail() {
         <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
           <Card title="Guest">
             <Rows>
-              <Row k="Phone" v={booking.guest_phone ?? "—"} />
-              <Row k="Email" v={booking.guest_email ?? "—"} />
+              <Row k="Phone" v={booking.guest_phone ?? booking.member_contact?.phone ?? "—"} />
+              <Row k="Email" v={booking.guest_email ?? booking.member_contact?.email ?? "—"} />
               <Row k="Coming from" v={booking.guest_country ?? "—"} />
               <Row k="Guests" v={`${booking.sleeping_guests ?? "?"} sleeping${booking.day_visitors ? ` · ${booking.day_visitors} day visitors` : ""}`} />
-              {booking.message && <Row k="Their message" v={<span style={{ display: "inline-block", maxWidth: "280px" }}>&ldquo;{booking.message}&rdquo;</span>} />}
+              {staySetup ? (
+                <>
+                  {staySetup.bedrooms && <Row k="Bedrooms" v={staySetup.bedrooms} />}
+                  {staySetup.estimatedGuests && <Row k="Estimated guests" v={staySetup.estimatedGuests} />}
+                  {staySetup.addonsInterest && <Row k="Extras they asked about" v={staySetup.addonsInterest} />}
+                  {staySetup.guestNotes && (
+                    <Row k="Their message" v={<span style={{ display: "inline-block", maxWidth: "280px", whiteSpace: "pre-line" }}>&ldquo;{staySetup.guestNotes}&rdquo;</span>} />
+                  )}
+                </>
+              ) : booking.message ? (
+                <Row k="Their message" v={<span style={{ display: "inline-block", maxWidth: "280px" }}>&ldquo;{booking.message}&rdquo;</span>} />
+              ) : null}
             </Rows>
           </Card>
+
+          <AddonsCard booking={booking} onChanged={refresh} />
 
           {isEvent ? (
             <Card title="Event enquiry">
@@ -184,15 +303,26 @@ function BookingDetail() {
 
         <Card title="Money">
           <div style={{ display: "flex", alignItems: "baseline", gap: "10px", margin: "2px 0 18px" }}>
-            <span style={{ fontFamily: T.serif, fontSize: "34px" }}>{money(total)}</span>
-            <span style={{ fontSize: "12px", letterSpacing: "1.6px", textTransform: "uppercase", color: T.muted }}>total</span>
+            <span style={{ fontFamily: T.serif, fontSize: "34px" }}>{money(moneyView.amount)}</span>
+            <span style={{ fontSize: "12px", letterSpacing: "1.6px", textTransform: "uppercase", color: T.muted }}>
+              {moneyView.estimated ? "total · estimated" : "total"}
+            </span>
           </div>
+          {moneyView.estimated && (
+            <p style={{ fontSize: "12px", color: T.faint, margin: "-12px 0 16px" }}>
+              From the request&apos;s pricing — becomes recorded money once payments start.
+            </p>
+          )}
           <div style={{ height: "6px", borderRadius: "999px", background: "rgba(255,255,255,.09)", overflow: "hidden", marginBottom: "8px" }}>
             <div style={{ height: "100%", width: `${pct}%`, background: T.ok, borderRadius: "999px" }} />
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: T.muted, marginBottom: "20px" }}>
             <span>{money(paid)} received</span>
-            <span>{outstanding > 0 ? `${money(outstanding)} outstanding` : "nothing outstanding"}</span>
+            <span>
+              {moneyView.estimated
+                ? "nothing requested yet"
+                : outstanding > 0 ? `${money(outstanding)} outstanding` : "nothing outstanding"}
+            </span>
           </div>
 
           <Rows>
