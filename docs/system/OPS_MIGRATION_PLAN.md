@@ -32,7 +32,9 @@ Shipped: ops feedback-request action (admin rules mirrored: confirmed + past-che
 
 **Acceptance:** each item usable end-to-end from /ops; feedback + arrival-guide rules byte-equivalent to the admin routes; no admin route edited.
 
-## Batch 2 — Extras, the deep half
+## Batch 2 — Extras, the deep half ✅ DONE 2026-08-07 (`claude/ops-migration-batch-2`)
+
+Shipped: every `AddonOperationalFields` value is editable from /ops via a per-row **Rules** panel (villas, applies-to, category, advance notice + cutoff, enforcement, price basis + percentage with the "reprices live quotes" warning, recommended, display order, quantity + unit + min/max, event price unit, description). Server-side strict validation in `PUT /api/ops/setup/addons` (unknown villa/event-type/enum refused; percentage requires 0–100; min ≤ max). The screen's owned keys are stripped from the stored blob before merging so CLEARING a value actually clears it; unknown/future fields still round-trip. R-2 wipe guard and partial-failure reporting unchanged.
 
 **Objective:** end the last reason to open `/admin/rates`.
 

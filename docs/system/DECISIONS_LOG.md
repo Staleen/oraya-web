@@ -16,6 +16,18 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-07 - Ops migration Batch 2: the full add-on rule set moves to /ops
+
+**Decision:** the /ops Extras screen now edits **every** `AddonOperationalFields` value (`lib/addon-operations.ts`) through a per-row "Rules" panel — per-villa applicability, applies-to (stay/event/both), category, advance notice + cutoff type, enforcement mode, price basis (fixed/percentage + percentage value), recommended, display order, quantity enablement + unit label + min/max, event pricing unit, and the guest-facing description. `PUT /api/ops/setup/addons` validates all of it strictly server-side (unknown villa, event type, or enum value is refused; a percentage basis requires a 0–100 value; min ≤ max) because the shared parser is lenient by design for READS and would silently drop bad input on a write. The keys the screen owns are stripped from the stored blob before the merge, so clearing a value (e.g. deleting a description) actually clears it rather than the old value resurfacing; keys the screen does not send still round-trip untouched. The R-2 all-addon-wipe guard and the R-6 partial-failure reporting are unchanged. Audit R-5's warning is honoured in the UI: percentage pricing states that it reprices live guest quotes.
+
+**Reason:** `/admin/rates` was the last place these rules could be changed. With this, the rates page has no unique capability left.
+
+**Impact:** extended `app/api/ops/setup/addons/route.ts` and `app/ops/extras/page.tsx`. No schema change, no locked-route edit, no new dependency.
+
+**Reversible?:** yes.
+
+---
+
 ## 2026-08-07 - Ops migration plan adopted; Batch 1 (booking odds and ends) shipped
 
 **Decision:** retiring `/admin` in favour of `/ops` is now a written, nine-batch plan — [OPS_MIGRATION_PLAN.md](OPS_MIGRATION_PLAN.md) — with each batch pre-written as a self-contained, dispatchable task prompt, plus two hard gates: a DECISION gate before Batch 8 (moving the live-payments switch ritual into /ops supersedes the 2026-07-25 single-writer decision, and the /ops password-recovery policy needs David's choice) and a SOAK gate before Batch 9 (at least one week of real operation entirely inside /ops before any deletion). Deliberately NOT executed as one mega-task: a single PR spanning money, auth, media and a 20k-line deletion is unreviewable and un-bisectable, and two of the batches depend on human decisions and lived verification that no prompt can fast-forward.
