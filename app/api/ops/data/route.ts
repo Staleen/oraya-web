@@ -35,7 +35,7 @@ export async function GET(request: Request) {
       .from("whatsapp_leads")
       // Column names verified against the live table — this is `name`, not
       // `guest_name`, and `follow_up_status`, not `status`.
-      .select("id, name, phone, villa, request_type, follow_up_status, admin_notes, special_requests, normalized_check_in, normalized_check_out, check_in_text, check_out_text, guest_count, labels, linked_booking_id, created_at")
+      .select("id, name, phone, villa, request_type, follow_up_status, admin_notes, special_requests, addons_interest, normalized_check_in, normalized_check_out, check_in_text, check_out_text, guest_count, labels, linked_booking_id, created_at")
       .order("created_at", { ascending: false })
       .limit(500),
     supabaseAdmin

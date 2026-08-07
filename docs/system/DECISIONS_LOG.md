@@ -16,6 +16,18 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-07 - One shared guest-dispatch module for booking status changes; /ops gains Enquiries + approve/decline behind message previews
+
+**Decision:** the confirm/cancel guest email block and the Phase 16C WhatsApp Arrival Guide dispatch block were extracted verbatim from `app/api/admin/bookings/[id]/route.ts` into **[lib/booking-guest-dispatch.ts](../../lib/booking-guest-dispatch.ts)** (`dispatchBookingStatusGuestMessages` + `isEventInquiryBooking`). Both `/admin` (the locked PATCH route, edit explicitly authorized in the task prompt) and the new `/ops` approve/decline actions call this one copy — guest messaging for a status change must never exist in two copies. On top of it, `/ops` shipped: the **Enquiries** screen with lead→booking conversion (L-1 duplicate-booking guard client-side, L-6 `already_linked` 409 server-side in the new `PATCH /api/ops/leads/[id]`), and **approve / decline / cancel** on a booking, gated behind a server-rendered preview of the actual messages (`GET /api/ops/bookings/[id]/message-preview`) instead of an "Are you sure?" dialog. Status writes are race-guarded (`.eq("status", <what the operator saw>)` → 409), and `/ops` approve runs the same pre-write availability-conflict check and exclusion-violation handling as the admin confirm. Event inquiries are refused by the `/ops` API (proposal flow stays in the legacy admin until the event screens exist).
+
+**Reason:** OPS_ADMIN_V2 §6 named these as the next build and required the extraction ("two copies of 'message the guest' is how guests get double-messaged"). Preview-over-confirmation is the standing owner design rule.
+
+**Impact:** new `lib/booking-guest-dispatch.ts`, `app/api/ops/leads/[id]/route.ts`, `app/api/ops/bookings/[id]/message-preview/route.ts`, `components/ops/MessagePreviewDialog.tsx`, `components/ops/ConvertLeadDialog.tsx`; rewritten `app/ops/enquiries/page.tsx`; extended `app/api/ops/bookings/[id]/route.ts` (approve/decline actions) and `app/ops/bookings/[id]/page.tsx` (action card + dialogs); `GET /api/ops/data` additionally selects `whatsapp_leads.addons_interest`. The admin route's behaviour is preserved exactly (same recipients, same emails, same WhatsApp gating, same log tag). The email preview is a display-only mirror of `lib/send-booking-email.ts` content; the send itself always goes through the shared module, so preview drift can only ever be cosmetic.
+
+**Reversible?:** yes for the /ops surfaces; the extraction should not be reversed (it is the anti-double-messaging invariant).
+
+---
+
 ## 2026-08-01 - Phase 16C: confirmed-stay dispatch template renamed to `oraya_arrival_guide_confirmed`; `#!variablename!#` composer rule is mandatory
 
 **Decision:** the WhatsApp Utility Template sent by the confirmed-stay dispatcher is **`oraya_arrival_guide_confirmed`** (en_US, 5 body variables), replacing the never-activated planning name `oraya_booking_confirmed_arrival_guide_v1`. `CONFIRMED_STAY_TEMPLATE_NAME` in [lib/whatsapp/confirmed-stay-notification.ts](../../lib/whatsapp/confirmed-stay-notification.ts) and every doc reference were updated; the 2026-07-17 entry below is historical and intentionally unedited (append-only rule). Final chain: admin confirm → dispatcher (fires only when `WHATCHIMP_CONFIRMED_STAY_WEBHOOK_URL` is set; Production only) → WhatChimp Webhook Workflow "Confirmed booking" → the Meta-approved template. Variable mapping lives inside WhatChimp (`villa`, `check_in`, `check_out`, `booking_reference`, `arrival_guide_url` → body variables; `phone` → recipient; `guest_name` → subscriber name); the payload allow-list is unchanged.

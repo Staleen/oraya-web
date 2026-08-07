@@ -75,11 +75,12 @@ export interface QueueLead {
   created_at: string | null;
   special_requests: string | null;
   admin_notes: string | null;
+  addons_interest: string | null;
   normalized_check_in: string | null;
   normalized_check_out: string | null;
   check_in_text: string | null;
   check_out_text: string | null;
-  guest_count: number | null;
+  guest_count: number | string | null;
   labels: unknown;
   linked_booking_id: string | null;
 }

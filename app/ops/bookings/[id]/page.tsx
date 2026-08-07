@@ -4,6 +4,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { formatBookingRef, type QueueBooking } from "@/lib/ops-queue";
 import { useOps } from "@/components/ops/OpsProvider";
 import MoneyDialog from "@/components/ops/MoneyDialog";
+import MessagePreviewDialog, { type PreviewAction } from "@/components/ops/MessagePreviewDialog";
 import { Badge, Banner, Button, Card, EmptyState, PageHead, Ref, Row, Rows, T } from "@/components/ops/ui";
 
 const STEPS = ["Requested", "Your approval", "Deposit", "Paid", "Staying", "Done"] as const;
@@ -53,6 +54,7 @@ function BookingDetail() {
   const [dialog, setDialog] = useState<"payment" | "refund" | null>(
     search.get("do") === "payment" ? "payment" : search.get("do") === "refund" ? "refund" : null,
   );
+  const [previewAction, setPreviewAction] = useState<PreviewAction | null>(null);
   const [flash, setFlash] = useState("");
 
   // Derived from the live array on every render, so the 45s refresh is
@@ -77,6 +79,9 @@ function BookingDetail() {
   }
 
   const status = (booking.status ?? "").toLowerCase();
+  const isEvent = Boolean(
+    booking.event_type && typeof booking.message === "string" && booking.message.includes("[Event Inquiry]"),
+  );
   const total = booking.amount_total ?? 0;
   const paid = booking.amount_paid ?? 0;
   const outstanding = Math.max(0, total - paid);
@@ -86,6 +91,9 @@ function BookingDetail() {
   const pct = total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0;
 
   async function afterAction(message: string) {
+    // The dialog paused polling while open; a success path that skips onClose
+    // must unpause too, or the page silently stops refreshing.
+    pausePolling(false);
     setFlash(message);
     setDialog(null);
     await refresh();
@@ -140,12 +148,38 @@ function BookingDetail() {
             </Rows>
           </Card>
 
-          <Card title="Approving, declining and messaging">
-            <p style={{ margin: 0, fontSize: "14px", color: T.muted, lineHeight: 1.6 }}>
-              These move next, together with the message previews from the prototype. They send real email and
-              WhatsApp, so they reuse the existing sending code rather than a second copy of it.
-            </p>
-          </Card>
+          {isEvent ? (
+            <Card title="Event enquiry">
+              <p style={{ margin: 0, fontSize: "14px", color: T.muted, lineHeight: 1.6 }}>
+                Events are agreed through a proposal, which lives in the legacy admin until the event screens
+                are built here. Nothing on this page emails the guest.
+              </p>
+            </Card>
+          ) : status === "pending" ? (
+            <Card title="Your approval">
+              <p style={{ margin: "0 0 16px", fontSize: "14px", color: T.muted, lineHeight: 1.6 }}>
+                Both choices show you the exact messages before anything is sent.
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                <Button variant="primary" wide onClick={() => setPreviewAction({ kind: "approve" })}>
+                  Approve this stay…
+                </Button>
+                <Button variant="danger" wide onClick={() => setPreviewAction({ kind: "decline", expectedStatus: "pending" })}>
+                  Decline this request…
+                </Button>
+              </div>
+            </Card>
+          ) : status === "confirmed" ? (
+            <Card title="Changing this stay">
+              <p style={{ margin: "0 0 16px", fontSize: "14px", color: T.muted, lineHeight: 1.6 }}>
+                Cancelling shows you the guest&apos;s cancellation email before it is sent.
+                {paid > 0 && " Money already received will appear here as owed back afterwards."}
+              </p>
+              <Button variant="danger" wide onClick={() => setPreviewAction({ kind: "decline", expectedStatus: "confirmed" })}>
+                Cancel this stay…
+              </Button>
+            </Card>
+          ) : null}
         </div>
 
         <Card title="Money">
@@ -206,6 +240,21 @@ function BookingDetail() {
           onClose={() => { pausePolling(false); setDialog(null); }}
           onOpen={() => pausePolling(true)}
           onDone={afterAction}
+        />
+      )}
+
+      {previewAction && (
+        <MessagePreviewDialog
+          action={previewAction}
+          booking={booking}
+          onClose={() => { pausePolling(false); setPreviewAction(null); }}
+          onOpen={() => pausePolling(true)}
+          onDone={async (message) => {
+            pausePolling(false);
+            setPreviewAction(null);
+            setFlash(message);
+            await refresh();
+          }}
         />
       )}
     </>

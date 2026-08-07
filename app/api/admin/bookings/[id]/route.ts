@@ -3,14 +3,15 @@ import { requireAdminAuth } from "@/lib/admin-auth";
 // Remediation 2.4: shared service-role client (carries the Data-Cache
 // no-store workaround) instead of a route-local createClient.
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { sendBookingEmail } from "@/lib/send-booking-email";
-import { dispatchConfirmedStayWhatsAppNotification } from "@/lib/whatsapp/confirmed-stay-notification";
+import {
+  dispatchBookingStatusGuestMessages,
+  isEventInquiryBooking,
+} from "@/lib/booking-guest-dispatch";
 import {
   sendBookingPaymentReceivedEmail,
   sendBookingPaymentReminderEmail,
   sendBookingPaymentRequestedEmail,
 } from "@/lib/send-booking-payment-email";
-import { sendEventConfirmationEmail } from "@/lib/send-event-confirmation-email";
 import { parseEventSetupEstimateFromMessage } from "@/lib/event-inquiry-message";
 import { buildProposalEmailLineItems } from "@/lib/event-proposal-line-items";
 import { sendEventProposalEmail } from "@/lib/send-event-proposal-email";
@@ -564,82 +565,24 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
   }
 
   let emailSent = false;
-  const isEventInquiry = Boolean(
-    updated.event_type &&
-    typeof updated.message === "string" &&
-    updated.message.includes("[Event Inquiry]")
-  );
+  const isEventInquiry = isEventInquiryBooking(updated);
 
-  if (statusUpdateProvided && (status === "confirmed" || status === "cancelled")) {
-    try {
-      const { email: recipientEmail, name: recipientName } = await resolveBookingRecipient(db, updated);
-
-      if (!recipientEmail) {
-        console.warn(`[api/admin/bookings] no email address for booking ${bookingId} — skipping notification`);
-      } else {
-        if (isEventInquiry && status === "confirmed") {
-          await sendEventConfirmationEmail({
-            to: recipientEmail,
-            name: recipientName,
-            booking_id: bookingId,
-            villa: updated.villa,
-            check_in: updated.check_in,
-            check_out: updated.check_out,
-            event_type: updated.event_type ?? null,
-            proposal_total_amount: updated.proposal_total_amount ?? null,
-          });
-        } else {
-          await sendBookingEmail({
-            to: recipientEmail,
-            name: recipientName,
-            status: status as "confirmed" | "cancelled",
-            villa: updated.villa,
-            check_in: updated.check_in,
-            check_out: updated.check_out,
-            booking_id: bookingId,
-            sleeping_guests: updated.sleeping_guests,
-            day_visitors: updated.day_visitors,
-            event_type: updated.event_type ?? null,
-            message: updated.message ?? null,
-            addons: Array.isArray(updated.addons) ? updated.addons : [],
-            addons_snapshot: Array.isArray(updated.addons_snapshot) ? updated.addons_snapshot : null,
-            pricing_subtotal: updated.pricing_subtotal ?? null,
-            pricing_snapshot: updated.pricing_snapshot ?? null,
-          });
-        }
-        emailSent = true;
-      }
-    } catch (emailErr) {
-      console.error("[api/admin/bookings] email notification error:", emailErr);
-    }
-  }
-
-  // Phase 16C — automatic WhatsApp Arrival Guide dispatch for confirmed STAY
-  // bookings only (event inquiries use their own email path and are excluded).
-  // Fail-closed and at-most-once inside the helper (env gates, phone/expired
-  // skips, atomic whatsapp_confirmation_sent_at claim — an admin re-confirm
-  // does not resend). Never blocks the PATCH response or the email above.
-  // Audit B-3: the dispatch outcome is captured for RESPONSE REPORTING ONLY —
-  // when/whether/how often the dispatch fires is unchanged.
+  // The confirm/cancel guest email + Phase 16C WhatsApp Arrival Guide dispatch
+  // live in lib/booking-guest-dispatch.ts — the ONE copy shared with /ops.
+  // Behaviour-preserving extraction: same recipients, same emails, same
+  // WhatsApp gating, same log lines (the historical tag is passed through).
+  // Audit B-3: the WhatsApp outcome remains RESPONSE REPORTING ONLY.
   let whatsappOutcome: { dispatched: boolean; reason?: string } | null = null;
-  if (statusUpdateProvided && status === "confirmed" && !isEventInquiry) {
-    try {
-      whatsappOutcome = await dispatchConfirmedStayWhatsAppNotification({
-        booking_id: bookingId,
-        status: "confirmed",
-        villa: updated.villa,
-        check_in: updated.check_in,
-        check_out: updated.check_out,
-        event_type: updated.event_type ?? null,
-        message: updated.message ?? null,
-        guest_name: updated.guest_name ?? null,
-        guest_phone: updated.guest_phone ?? null,
-        member_id: updated.member_id ?? null,
-      });
-    } catch (whatsappErr) {
-      console.error("[api/admin/bookings] whatsapp dispatch unexpected error:", whatsappErr);
-      whatsappOutcome = { dispatched: false, reason: "unexpected_error" };
-    }
+  if (statusUpdateProvided && (status === "confirmed" || status === "cancelled")) {
+    const dispatch = await dispatchBookingStatusGuestMessages(
+      db,
+      bookingId,
+      status as "confirmed" | "cancelled",
+      updated,
+      { logTag: "[api/admin/bookings]" },
+    );
+    emailSent = dispatch.emailSent;
+    whatsappOutcome = dispatch.whatsapp;
   }
 
   const paymentStatusChanged =
