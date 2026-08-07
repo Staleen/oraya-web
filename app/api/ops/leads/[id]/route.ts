@@ -57,6 +57,19 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     else return NextResponse.json({ error: "Invalid notes." }, { status: 400 });
   }
 
+  if (Object.prototype.hasOwnProperty.call(body, "labels")) {
+    const value = body.labels;
+    // The label vocabulary the legacy admin established (leadHelpers.ts):
+    // free text is allowed, but everything must be a short plain string.
+    if (
+      !Array.isArray(value) ||
+      !value.every((l) => typeof l === "string" && l.trim().length > 0 && l.length <= 40)
+    ) {
+      return NextResponse.json({ error: "Invalid labels." }, { status: 400 });
+    }
+    update.labels = value.map((l) => (l as string).trim());
+  }
+
   let settingLink = false;
   if (Object.prototype.hasOwnProperty.call(body, "linked_booking_id")) {
     const value = body.linked_booking_id;

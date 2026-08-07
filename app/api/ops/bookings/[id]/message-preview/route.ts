@@ -90,14 +90,14 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
 
   const url = new URL(request.url);
   const action = url.searchParams.get("action");
-  if (action !== "approve" && action !== "decline") {
+  if (action !== "approve" && action !== "decline" && action !== "request_deposit" && action !== "send_reminder") {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
   const { data: booking, error } = await supabaseAdmin
     .from("bookings")
     .select(
-      "id, status, villa, check_in, check_out, event_type, message, guest_name, guest_email, guest_phone, member_id, sleeping_guests, day_visitors, addons, addons_snapshot, pricing_subtotal, pricing_snapshot, whatsapp_confirmation_sent_at",
+      "id, status, villa, check_in, check_out, event_type, message, guest_name, guest_email, guest_phone, member_id, sleeping_guests, day_visitors, addons, addons_snapshot, pricing_subtotal, pricing_snapshot, whatsapp_confirmation_sent_at, payment_status, payment_method, deposit_amount, amount_paid, amount_total, payment_due_at",
     )
     .eq("id", id)
     .maybeSingle();
@@ -129,16 +129,63 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     pricing_subtotal: number | string | null;
     pricing_snapshot: { subtotal?: number | string | null } | null;
     whatsapp_confirmation_sent_at: string | null;
+    payment_status: string | null;
+    payment_method: string | null;
+    deposit_amount: number | null;
+    amount_paid: number | null;
+    amount_total: number | null;
+    payment_due_at: string | null;
   };
 
-  if (isEventInquiryBooking(b)) {
-    return NextResponse.json(
-      { error: "Event enquiries are handled through their proposal in the legacy admin for now." },
-      { status: 400 },
-    );
-  }
+  // Events are supported now; their confirmation email is the dedicated event
+  // one, and no WhatsApp arrival guide is dispatched for them.
+  const isEvent = isEventInquiryBooking(b);
 
   const recipient = await resolveBookingRecipient(supabaseAdmin, b);
+
+  // ── Payment email previews (16B senders' content, mirrored) ────────────────
+  if (action === "request_deposit" || action === "send_reminder") {
+    const isRequest = action === "request_deposit";
+    const firstName = (recipient.name || "Guest").split(" ")[0];
+    const deposit = isRequest
+      ? Number(url.searchParams.get("deposit") ?? "") || b.deposit_amount || null
+      : b.deposit_amount;
+    const dueAt = isRequest ? url.searchParams.get("due_at") || b.payment_due_at : b.payment_due_at;
+    const fmtDue = (iso: string | null) => {
+      if (!iso || Number.isNaN(Date.parse(iso))) return "Not provided";
+      return new Date(iso).toLocaleString("en-GB", {
+        day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Beirut",
+      });
+    };
+    return NextResponse.json({
+      ok: true,
+      action,
+      recipient,
+      email: {
+        will_send: Boolean(recipient.email),
+        subject: isRequest
+          ? "Payment requested for your Oraya booking"
+          : "Reminder: payment pending for your Oraya booking",
+        heading: isRequest
+          ? `A payment request has been prepared for your stay, ${firstName}.`
+          : "A friendly reminder for your Oraya booking.",
+        intro: isRequest
+          ? "Please review the requested deposit below and use the secure booking link for the latest booking and payment instructions."
+          : "This is a reminder that payment is still pending for your stay. Please review the requested amount and due date below.",
+        summary_rows: [
+          ["Deposit amount", deposit === null ? "—" : `USD ${Math.round(deposit).toLocaleString("en-US")}`],
+          ["Due date", fmtDue(dueAt)],
+        ] as Array<[string, string]>,
+        addons: [],
+        payment_rows: [] as Array<[string, string]>,
+        note: "Includes your manual payment methods (Whish, bank transfer, cash) and the secure link to their booking.",
+        includes_view_link: true,
+        includes_arrival_guide: false,
+      },
+      whatsapp: { applicable: false },
+    });
+  }
+
   const isConfirm = action === "approve";
   const ref = b.id.replace(/-/g, "").slice(0, 8).toUpperCase();
   const firstName = (recipient.name || "Guest").split(" ")[0];
@@ -165,8 +212,12 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
 
   const email = {
     will_send: Boolean(recipient.email),
-    subject: isConfirm ? "Oraya - Booking Confirmed" : "Oraya - Booking Cancelled",
-    heading: isConfirm ? `Your stay is confirmed, ${firstName}.` : "Your booking has been cancelled.",
+    subject: isEvent && isConfirm
+      ? "Oraya — Your event is confirmed"
+      : isConfirm ? "Oraya - Booking Confirmed" : "Oraya - Booking Cancelled",
+    heading: isEvent && isConfirm
+      ? `Your event is confirmed, ${firstName}.`
+      : isConfirm ? `Your stay is confirmed, ${firstName}.` : "Your booking has been cancelled.",
     intro: isConfirm
       ? "This is a transactional confirmation for your Oraya booking. We look forward to welcoming you, and you can reply to this email if you need anything before arrival."
       : "This is a transactional update for your Oraya booking. Your booking has been cancelled. If you believe this is an error, please reply to this email.",
@@ -196,7 +247,8 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
         fields: { guest_name: string | null; villa: string | null; check_in: string | null; check_out: string | null; booking_reference: string } | null;
       };
 
-  if (!isConfirm) {
+  if (!isConfirm || isEvent) {
+    // Events are excluded from the Phase 16C arrival-guide dispatch by design.
     whatsapp = { applicable: false };
   } else {
     let phone = normalizeWhatsAppPhone(b.guest_phone);

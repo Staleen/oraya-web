@@ -16,6 +16,50 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-07 - Ops migration Batch 2: the full add-on rule set moves to /ops
+
+**Decision:** the /ops Extras screen now edits **every** `AddonOperationalFields` value (`lib/addon-operations.ts`) through a per-row "Rules" panel — per-villa applicability, applies-to (stay/event/both), category, advance notice + cutoff type, enforcement mode, price basis (fixed/percentage + percentage value), recommended, display order, quantity enablement + unit label + min/max, event pricing unit, and the guest-facing description. `PUT /api/ops/setup/addons` validates all of it strictly server-side (unknown villa, event type, or enum value is refused; a percentage basis requires a 0–100 value; min ≤ max) because the shared parser is lenient by design for READS and would silently drop bad input on a write. The keys the screen owns are stripped from the stored blob before the merge, so clearing a value (e.g. deleting a description) actually clears it rather than the old value resurfacing; keys the screen does not send still round-trip untouched. The R-2 all-addon-wipe guard and the R-6 partial-failure reporting are unchanged. Audit R-5's warning is honoured in the UI: percentage pricing states that it reprices live guest quotes.
+
+**Reason:** `/admin/rates` was the last place these rules could be changed. With this, the rates page has no unique capability left.
+
+**Impact:** extended `app/api/ops/setup/addons/route.ts` and `app/ops/extras/page.tsx`. No schema change, no locked-route edit, no new dependency.
+
+**Reversible?:** yes.
+
+---
+
+## 2026-08-07 - Ops migration plan adopted; Batch 1 (booking odds and ends) shipped
+
+**Decision:** retiring `/admin` in favour of `/ops` is now a written, nine-batch plan — [OPS_MIGRATION_PLAN.md](OPS_MIGRATION_PLAN.md) — with each batch pre-written as a self-contained, dispatchable task prompt, plus two hard gates: a DECISION gate before Batch 8 (moving the live-payments switch ritual into /ops supersedes the 2026-07-25 single-writer decision, and the /ops password-recovery policy needs David's choice) and a SOAK gate before Batch 9 (at least one week of real operation entirely inside /ops before any deletion). Deliberately NOT executed as one mega-task: a single PR spanning money, auth, media and a 20k-line deletion is unreviewable and un-bisectable, and two of the batches depend on human decisions and lived verification that no prompt can fast-forward.
+
+**Batch 1 shipped in the same session:** the ops feedback-request action mirrors `app/api/admin/bookings/[id]/send-feedback/route.ts` rule-for-rule (confirmed only, past-checkout only via `isPastCheckoutForFeedbackEmail`, cooldown → 409 via `isFeedbackEmailCooldownActive`, recipient via `resolveBookingRecipient`, same `sendFeedbackRequestEmail`, same `feedback_requested_at/channel/count` bookkeeping); `GET /api/ops/bookings/[id]/arrival-link` mirrors the Stage 4A admin mint (confirmed only, same signed view token at checkout-day expiry, returns nothing else); the Money card shows hosted payment-link state with an expiry-aware badge and copy; Enquiries shows and toggles the established `oraya_vip_lead` / `oraya_needs_human` labels (undo-over-confirm), with `labels` validated in the ops leads route. No admin route was edited.
+
+**Reason:** David wants one console. The plan makes the remaining migration mechanical and resumable by any future session; Batch 1 removes the last booking-level reasons to open `/admin`.
+
+**Impact:** new `docs/system/OPS_MIGRATION_PLAN.md`, `app/api/ops/bookings/[id]/arrival-link/route.ts`; extended `app/api/ops/bookings/[id]/route.ts`, `app/api/ops/leads/[id]/route.ts`, `app/api/ops/data/route.ts`, `lib/ops-queue.ts`(+test fixture), `app/ops/bookings/[id]/page.tsx`, `app/ops/enquiries/page.tsx`. No schema change, no locked-route edit, no new dependency.
+
+**Reversible?:** yes.
+
+---
+
+## 2026-08-07 - /ops asks for money as Phase 16B continuity, and runs event proposals
+
+**Decision:** /ops gains the ask-for-money half of the payment lifecycle and the event proposal flow — both as continuations of the existing systems, never as parallel ones.
+
+**Money (16B continuity):** `request_deposit` writes `payment_status = "payment_requested"` with `payment_requested_at`, `deposit_amount`, `payment_due_at` and refreshes `amount_total`/`amount_due`/`payment_stage` through the shared `lib/payment-foundation.ts` helpers, then sends the SAME `sendBookingPaymentRequestedEmail`; `send_reminder` re-sends `sendBookingPaymentReminderEmail` and appends the same `appendPaymentReminderNote` trail; and `record_payment` now also advances `payment_status` to `deposit_paid`/`paid_in_full` with the same foundation math and sends `sendBookingPaymentReceivedEmail`. Every action is race-guarded on the lifecycle value the operator was shown (409 `changed_elsewhere`), preconditions match the admin's (confirmed stays only; reminders only while a request is open; refuses asking for more than is owed), and each is gated behind a rendered preview of the guest's email (`?action=request_deposit|send_reminder` on the message-preview route). Hosted-checkout payment links remain untouched — /ops asks and records; the 16B provider layer stays the only thing that charges a card.
+
+**Events:** `save_proposal` / `send_proposal` write the Phase 15H proposal fields and send the existing `sendEventProposalEmail` (with `buildProposalEmailLineItems` over the stored included services), keeping the audit B-11 rule (an **accepted** proposal is a contract — /ops refuses to edit it, in the UI and at the API with a `.neq("proposal_status","accepted")` guard) and B-12 (no sending an already-expired validity date). Event **approval** is now allowed in /ops but only when `proposal_status === "accepted"` — the same rule the locked admin route enforces — and the availability conflict check passes `incomingIsEvent: true` so the Phase 14J setup-day block applies. The event confirmation email is the dedicated event one and no WhatsApp arrival guide is dispatched for events (16C boundary unchanged). The Today queue gained `event_proposal_needed` and `event_accepted_unconfirmed` so an accepted proposal cannot sit unnoticed.
+
+**Reason:** the owner is handing day-to-day work to an operator; asking for money and running events were the last flows that still forced everyone back into the legacy admin. Events are real business (a stay can become a catered/decorated occasion), so they must live where the work happens.
+
+**Impact:** extended `app/api/ops/bookings/[id]/route.ts` (+5 actions), `app/api/ops/bookings/[id]/message-preview/route.ts` (payment previews, event-aware), `app/api/ops/data/route.ts` + `lib/ops-queue.ts` (+proposal fields, +2 queue kinds, 5 new tests), `app/ops/bookings/[id]/page.tsx`, `app/ops/page.tsx`, `app/ops/enquiries/page.tsx`; new `components/ops/RequestMoneyDialog.tsx`, `components/ops/ProposalCard.tsx`. No schema change, no locked-route edit, no new dependency, no new email template.
+
+**Open design question (named, not silently resolved):** converting an existing STAY into an event (catering/decoration on a booked stay) is not implemented — today that means either add-ons on the stay or a separate event enquiry. Which of the two should become the supported path is an owner decision.
+
+**Reversible?:** yes.
+
+---
+
 ## 2026-08-07 - /ops owner screens: Pricing, Extras, Payments per the approved prototype; setup writes are guarded
 
 **Decision:** the owner half of /ops ships (branch `claude/ops-owner-screens`), built to the approved `oraya-admin-prototype` design: Live-now banners, a pending-changes bar that names every unsaved edit in a human sentence ("Villa Byblos weekend night: $700 → $750"), and strike-through removal with "Keep it". New owner-only API surface (`requireOps({requiredRole:"owner"})` — an ops session never passes an /api/admin guard, and the operator role is refused by the API): `GET /api/ops/setup` and `PUT /api/ops/setup/{pricing,addons,payments}`, writing the SAME stores the website reads (`villa_base_pricing`, the `addons` table + `addon_operational_settings`, `payment_public_settings`). Write discipline: strict server-side pricing validation (the shared lenient parser falls back to DEFAULTS and must never gate a write) + the shared `validatePricing` error gate; compare-and-set on both settings blobs via `expected_raw` (409 `changed_elsewhere` instead of the S-8 silent whole-blob overwrite); the R-2 all-addon-wipe guard preserved; the add-ons write round-trips unedited operational fields and overlays only `requires_approval`, reporting a second-phase failure explicitly (`code: "partial"` — R-6 lesson). **The fail-closed live-payments switch is read-only in /ops**; its only writer remains `/api/admin/payments/live-toggle` (2026-07-25 decision reaffirmed). Prototype deviations recorded: no cleaning fee (engine has none), minimum nights per villa/season. Team additionally gains re-invite (fresh one-time link, `password_hash IS NULL` guard) and the operator-capabilities panel.

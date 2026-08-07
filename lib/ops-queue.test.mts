@@ -66,8 +66,31 @@ function booking(overrides: Partial<QueueBooking>): QueueBooking {
     refunded_at: null,
     refund_provider_reference: null,
     whatsapp_confirmation_sent_at: null,
+    payment_link_url: null,
+    payment_link_provider: null,
+    payment_link_status: null,
+    payment_link_expires_at: null,
+    payment_link_issued_at: null,
+    feedback_requested_at: null,
+    feedback_request_count: null,
+    proposal_status: null,
+    proposal_total_amount: null,
+    proposal_deposit_amount: null,
+    proposal_valid_until: null,
+    proposal_payment_methods: null,
+    proposal_notes: null,
     ...overrides,
   };
+}
+
+/** An event booking is detected by event_type + the [Event Inquiry] marker. */
+function eventBooking(overrides: Partial<QueueBooking>): QueueBooking {
+  return booking({
+    event_type: "Birthday",
+    message: "[Event Inquiry] 30 guests",
+    status: "pending",
+    ...overrides,
+  });
 }
 
 function lead(overrides: Partial<QueueLead>): QueueLead {
@@ -253,6 +276,40 @@ test("a pending request without recorded money shows the snapshot estimate, mark
     NOW,
   );
   assert.ok(items[0].detail.includes("$620 est."), items[0].detail);
+});
+
+// ── events ───────────────────────────────────────────────────────────────────
+
+test("a pending event without a proposal asks for one, not for plain approval", () => {
+  const items = buildQueue([eventBooking({ proposal_status: null })], [], NOW);
+  assert.equal(items.length, 1);
+  assert.equal(items[0].kind, "event_proposal_needed");
+  assert.ok(!items.some((i) => i.kind === "booking_request"));
+});
+
+test("a sent proposal waits quietly; an accepted one demands confirmation", () => {
+  assert.equal(buildQueue([eventBooking({ proposal_status: "sent" })], [], NOW).length, 0);
+
+  const accepted = buildQueue(
+    [eventBooking({ proposal_status: "accepted", proposal_total_amount: 4200 })],
+    [],
+    NOW,
+  );
+  assert.equal(accepted[0].kind, "event_accepted_unconfirmed");
+  assert.equal(accepted[0].amount, 4200);
+  assert.ok(accepted[0].title.includes("accepted"));
+});
+
+test("an accepted event outranks a waiting stay request", () => {
+  const items = buildQueue(
+    [
+      booking({ id: "11111111-2222-3333-4444-00000000000a", status: "pending", created_at: iso(-1) }),
+      eventBooking({ id: "11111111-2222-3333-4444-00000000000b", proposal_status: "accepted" }),
+    ],
+    [],
+    NOW,
+  );
+  assert.equal(items[0].kind, "event_accepted_unconfirmed");
 });
 
 // ── grouping ────────────────────────────────────────────────────────────────

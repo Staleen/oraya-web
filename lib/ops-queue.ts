@@ -12,6 +12,8 @@ import { bookingMoneyView } from "./ops-booking-display.ts";
 export type QueueKind =
   | "new_lead"
   | "booking_request"
+  | "event_proposal_needed"
+  | "event_accepted_unconfirmed"
   | "addon_approval"
   | "deposit_overdue"
   | "payment_expected"
@@ -76,6 +78,22 @@ export interface QueueBooking {
   refunded_at: string | null;
   refund_provider_reference: string | null;
   whatsapp_confirmation_sent_at: string | null;
+  /** Hosted payment-link state (16B) — display only in /ops. */
+  payment_link_url: string | null;
+  payment_link_provider: string | null;
+  payment_link_status: string | null;
+  payment_link_expires_at: string | null;
+  payment_link_issued_at: string | null;
+  /** Feedback trail. */
+  feedback_requested_at: string | null;
+  feedback_request_count: number | null;
+  /** Event proposals (Phase 15H) — null on stays. */
+  proposal_status: string | null;
+  proposal_total_amount: number | null;
+  proposal_deposit_amount: number | null;
+  proposal_valid_until: string | null;
+  proposal_payment_methods: unknown;
+  proposal_notes: string | null;
 }
 
 /** Mirrors the whatsapp_leads columns selected by GET /api/ops/data. */
@@ -184,6 +202,40 @@ export function buildQueue(
     const paid = b.amount_paid ?? 0;
     const total = b.amount_total ?? 0;
     const outstanding = Math.max(0, total - paid);
+
+    const isEvent = Boolean(
+      b.event_type && typeof b.message === "string" && b.message.includes("[Event Inquiry]"),
+    );
+
+    // Events move on their proposal, not on a plain approve — so they need
+    // their own queue lines, or an accepted proposal sits unnoticed.
+    if (isEvent && status === "pending") {
+      const waited = b.created_at ? daysBetween(Date.parse(b.created_at), now) : 0;
+      const proposal = (b.proposal_status ?? "draft").toLowerCase();
+      if (proposal === "accepted") {
+        items.push({
+          id: `eventok:${b.id}`,
+          kind: "event_accepted_unconfirmed",
+          group: "attention",
+          weight: 130,
+          title: `${guest} accepted your event proposal — confirm it`,
+          detail: `${villaName(b.villa)} · ${stayDates(b)} · ${b.event_type ?? "event"} · ${money(b.proposal_total_amount ?? 0)}`,
+          bookingId: b.id,
+          amount: b.proposal_total_amount ?? undefined,
+        });
+      } else if (proposal !== "sent") {
+        items.push({
+          id: `eventprop:${b.id}`,
+          kind: "event_proposal_needed",
+          group: "attention",
+          weight: 105 + waited * 10,
+          title: `${guest} wants an event at ${villaName(b.villa)} — send a proposal`,
+          detail: `${stayDates(b)} · ${b.event_type ?? "event"} · waiting ${waited === 0 ? "since today" : `${waited} day${waited === 1 ? "" : "s"}`}`,
+          bookingId: b.id,
+        });
+      }
+      continue;
+    }
 
     if (status === "pending") {
       const waited = b.created_at ? daysBetween(Date.parse(b.created_at), now) : 0;
