@@ -9,7 +9,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  classifyProviderAuthorizationOutcome,
   deriveMerchantReference,
+  isAllowedAttemptTransition,
   runUnifiedCheckoutCompletion,
   type CompletionDeps,
   type CompletionInput,
@@ -51,9 +53,15 @@ function makeFakeStore(options: { unavailable?: boolean } = {}) {
       );
       return blocking ? { id: blocking.id, status: blocking.status } : null;
     },
-    async updateAttempt(attemptId, patch) {
+    async transitionAttempt(attemptId, expectedStatuses, patch) {
       const row = rows.find((candidate) => candidate.id === attemptId);
-      if (!row) return { ok: false };
+      if (!row) return { ok: false, reason: "conflict", current_status: null };
+      if (!expectedStatuses.includes(row.status)) {
+        return { ok: false, reason: "conflict", current_status: row.status };
+      }
+      if (!isAllowedAttemptTransition(row.status, patch.status)) {
+        return { ok: false, reason: "error", current_status: null };
+      }
       Object.assign(row, patch);
       return { ok: true };
     },
@@ -64,6 +72,7 @@ function makeFakeStore(options: { unavailable?: boolean } = {}) {
 const APPROVED: ProviderAuthorizationResult = {
   ok: true,
   approved: true,
+  outcome: "approved",
   status: "AUTHORIZED",
   transaction_id: "txn-1",
   reference: "txn-1",
@@ -73,10 +82,21 @@ const APPROVED: ProviderAuthorizationResult = {
 const DECLINED: ProviderAuthorizationResult = {
   ok: true,
   approved: false,
+  outcome: "declined",
   status: "DECLINED",
   transaction_id: "txn-declined",
   reference: "txn-declined",
   message: "declined",
+};
+
+const UNKNOWN: ProviderAuthorizationResult = {
+  ok: false,
+  approved: false,
+  outcome: "unknown",
+  status: null,
+  transaction_id: null,
+  reference: "oraya_session-1",
+  message: "unknown",
 };
 
 function makeInput(overrides: Partial<CompletionInput> = {}): CompletionInput {
@@ -122,6 +142,36 @@ test("merchant reference is deterministic per attempt id and provider-safe", () 
   assert.throws(() => deriveMerchantReference("  "));
 });
 
+test("provider response classification only releases retry on an explicit terminal decline", () => {
+  const classify = (overrides: Partial<Parameters<typeof classifyProviderAuthorizationOutcome>[0]> = {}) =>
+    classifyProviderAuthorizationOutcome({
+      response_ok: true,
+      status: "AUTHORIZED",
+      approved_statuses: ["AUTHORIZED", "CAPTURED"],
+      retry_safe_decline_statuses: ["DECLINED"],
+      approval_verified: true,
+      ...overrides,
+    });
+
+  assert.equal(classify(), "approved");
+  assert.equal(classify({ status: "DECLINED", approval_verified: false }), "declined");
+  assert.equal(classify({ response_ok: false, status: "DECLINED" }), "unknown", "HTTP errors stay unknown");
+  assert.equal(classify({ status: null }), "unknown", "missing/malformed payload stays unknown");
+  assert.equal(classify({ status: "PENDING", approval_verified: false }), "unknown");
+  assert.equal(classify({ status: "REVIEW", approval_verified: false }), "unknown");
+  assert.equal(
+    classify({ status: "AUTHORIZED", approval_verified: false }),
+    "unknown",
+    "an apparent approval with unverifiable amount/currency stays unknown",
+  );
+});
+
+test("recorded is terminal in the attempt transition graph", () => {
+  for (const next of ["authorized", "failed", "ambiguous"] as const) {
+    assert.equal(isAllowedAttemptTransition("recorded", next), false, next);
+  }
+});
+
 test("happy path: claim → authorize → row-count-verified record → recorded", async () => {
   const { store, rows } = makeFakeStore();
   const deps = makeDeps(store);
@@ -154,6 +204,39 @@ test("concurrent double completion: second claim conflicts, provider called exac
   assert.equal(secondOutcome.kind, "already_processing");
   assert.equal(deps.providerCalls.length, 1, "provider must be called exactly once");
   assert.equal(rows.length, 1, "loser must not insert an attempt row");
+});
+
+test("webhook records first: browser return preserves recorded and does not add the charge twice", async () => {
+  const { store, rows } = makeFakeStore();
+  let webhookBookingWrites = 0;
+  let browserBookingWrites = 0;
+  const deps = makeDeps(store, {
+    authorize: async (merchantReference) => {
+      deps.providerCalls.push(merchantReference);
+      webhookBookingWrites += 1;
+      const marked = await store.transitionAttempt("attempt-a", ["claimed"], {
+        status: "recorded",
+        provider_transaction_id: "txn-1",
+        provider_reference: "txn-1",
+      });
+      assert.equal(marked.ok, true, "verified webhook must win while the browser awaits the provider");
+      return APPROVED;
+    },
+    recordApprovedPayment: async () => {
+      browserBookingWrites += 1;
+      return { ok: true, matched: 1 };
+    },
+  });
+
+  const outcome = await runUnifiedCheckoutCompletion(
+    deps,
+    makeInput({ attempt_id: "attempt-a" }),
+  );
+
+  assert.equal(outcome.kind, "already_recorded");
+  assert.equal(rows[0].status, "recorded");
+  assert.equal(webhookBookingWrites, 1);
+  assert.equal(browserBookingWrites, 0, "browser must not record the already-webhook-recorded charge");
 });
 
 test("zero-row booking update after approval → ambiguous, NOT success", async () => {
@@ -198,6 +281,25 @@ test("decline marks the attempt failed (claim released) and a retry succeeds wit
   assert.equal(rows[1].id, "attempt-b");
   assert.equal(rows[1].status, "recorded");
   assert.notEqual(rows[0].idempotency_key, rows[1].idempotency_key);
+});
+
+test("HTTP/malformed/pending/unverified provider result becomes ambiguous and blocks retry", async () => {
+  const { store, rows } = makeFakeStore();
+  const unknownDeps = makeDeps(store, { authorize: async () => UNKNOWN });
+  const outcome = await runUnifiedCheckoutCompletion(
+    unknownDeps,
+    makeInput({ attempt_id: "attempt-a" }),
+  );
+  assert.equal(outcome.kind, "provider_unknown");
+  assert.equal(rows[0].status, "ambiguous");
+
+  const retryDeps = makeDeps(store);
+  const retry = await runUnifiedCheckoutCompletion(
+    retryDeps,
+    makeInput({ attempt_id: "attempt-b" }),
+  );
+  assert.equal(retry.kind, "blocked_ambiguous");
+  assert.equal(retryDeps.providerCalls.length, 0);
 });
 
 test("provider timeout/unknown outcome → ambiguous; further attempts are BLOCKED until reconciled", async () => {

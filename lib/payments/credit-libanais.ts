@@ -1,6 +1,10 @@
 import crypto from "crypto";
 import { roundMoney } from "@/lib/money";
 import { verifyAuthorizedAmountDetails } from "@/lib/payments/authorized-amount";
+import {
+  classifyProviderAuthorizationOutcome,
+  type ProviderAuthorizationOutcome,
+} from "@/lib/payments/unified-checkout-completion";
 import { decideCreditLibanaisCheckoutReady } from "@/lib/payments/live-rollout";
 import { readPaymentsLiveSetting } from "@/lib/payments/live-rollout-setting";
 import type {
@@ -65,6 +69,7 @@ export interface CreditLibanaisTransientTokenPaymentInput {
 export interface CreditLibanaisTransientTokenPaymentResult {
   ok: boolean;
   approved: boolean;
+  outcome: ProviderAuthorizationOutcome;
   status: string | null;
   transaction_id: string | null;
   reference: string;
@@ -452,22 +457,21 @@ export async function authorizeCreditLibanaisTransientToken(
 
   const status = typeof payload?.status === "string" ? payload.status : null;
   const transactionId = typeof payload?.id === "string" ? payload.id : null;
-  let approved = response.ok && (status === "AUTHORIZED" || status === "CAPTURED");
-  let message = approved
-    ? "Payment was approved by the gateway."
-    : "Payment was not approved by the gateway.";
+  const apparentApproval = response.ok && (status === "AUTHORIZED" || status === "CAPTURED");
+  let approvalVerified = false;
 
   // Remediation 1.7: never record a payment whose authorized amount/currency
   // differs from the requested charge (fail closed on missing details too).
-  if (approved) {
+  if (apparentApproval) {
     const verification = verifyAuthorizedAmountDetails({
       requested_amount: input.amount_due,
       requested_currency: input.currency,
       response_amount_details: payload?.orderInformation?.amountDetails,
     });
+    approvalVerified = verification.ok;
     if (!verification.ok) {
       console.error(
-        "[payments/credit-libanais] authorized amount verification failed — treating as failed payment:",
+        "[payments/credit-libanais] authorized amount verification failed - outcome is ambiguous:",
         {
           reason: verification.reason,
           booking_id: input.booking_id,
@@ -475,14 +479,29 @@ export async function authorizeCreditLibanaisTransientToken(
           transaction_id: transactionId,
         },
       );
-      approved = false;
-      message = "Payment could not be verified with the gateway. No payment was recorded.";
     }
   }
+
+  const outcome = classifyProviderAuthorizationOutcome({
+    response_ok: response.ok,
+    status,
+    approved_statuses: ["AUTHORIZED", "CAPTURED"],
+    // Only the provider's explicit terminal decline is proven retry-safe.
+    retry_safe_decline_statuses: ["DECLINED"],
+    approval_verified: approvalVerified,
+  });
+  const approved = outcome === "approved";
+  const message =
+    outcome === "approved"
+      ? "Payment was approved by the gateway."
+      : outcome === "declined"
+        ? "Payment was declined by the gateway."
+        : "Payment outcome could not be verified with the gateway.";
 
   return {
     ok: response.ok,
     approved,
+    outcome,
     status,
     transaction_id: transactionId,
     reference: transactionId ?? input.provider_session_id,

@@ -28,6 +28,38 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-06 - Payment attempts are monotonic; only explicit terminal declines are retry-safe
+
+**Decision:** Unified Checkout completion classifies provider results as `approved`, `declined`, or `unknown`. Only an HTTP-success response with the explicit provider status `DECLINED` is a retry-safe terminal decline and may transition an attempt to `failed`, releasing the one-in-flight claim. HTTP errors, missing/malformed response data, pending/review/unknown statuses, and apparent approvals whose server-authoritative amount/currency echo cannot be verified are `unknown`; they transition to `ambiguous` and block another attempt. All durable attempt mutations are compare-and-set/status-guarded and must follow this graph: `claimed -> authorized|recorded|failed|ambiguous`, `authorized -> recorded|failed|ambiguous`, `ambiguous -> recorded|failed`; `recorded` and `failed` have no outgoing transitions. When a verified webhook records before the browser completion resumes, the browser accepts the terminal `recorded` winner, does not write the booking charge again, and returns idempotent success.
+
+**Reason:** the prior completion path collapsed every non-approved provider result into `failed`, including HTTP and verification failures, which released the claim even though a charge could have occurred. Attempt updates were unconditional by row id, so browser/webhook interleaving could regress `recorded -> authorized -> ambiguous`. The guest page then replaced the route's reconciliation warning with generic retry copy. Together these failures could invite a second charge and erase the ledger's authoritative terminal state.
+
+**Impact:** `lib/payments/credit-libanais.ts` emits the three-way outcome; `lib/payments/unified-checkout-completion.ts` orchestrates retry-safe decline versus ambiguous handling and recognizes an already-recorded winner; `lib/payments/payment-attempts-store.ts` enforces the allowed graph with expected-status filters; webhook reconciliation uses the same guarded store; the completion route exposes idempotent already-recorded success; and the checkout client renders the server's safe message while treating post-submission client exceptions as unknown/do-not-retry. Focused tests cover provider response classification, terminal-state ordering, webhook-before-browser return, duplicate/concurrent behavior, decline retry, timeout/unknown blocking, missing-ledger fail-closed behavior, stale webhook races, and guest messaging. No schema, dependency, environment, credential, live gate, booking-confirmation, saved-card/tokenization, or refund-policy change.
+
+**Reversible?:** technically yes, but reverting would reintroduce a duplicate-charge and ledger-regression risk. Any replacement must preserve the three-way outcome contract and monotonic terminal-state guarantees.
+
+**Supersedes:** narrows the 2026-07-24 Plan 3 rule that described all provider non-approvals as `failed`; extends the 2026-07-25 verified-webhook authority decision with durable CAS/status guards.
+
+---
+
+## 2026-08-02 - Phase 16A native Flow closeout: 2026-08-01 funnel hardening recorded; canonical Flow artifacts committed
+
+**Decision:** the Phase 16A native-Flow cutover (decided 2026-07-31, entry below) is closed out with three additions.
+
+1. **2026-08-01 funnel hardening (operator-side, WhatChimp tenant only):** the guest-facing wrapper/launch message was rewritten around a **"Book now"** button and the direct-booking link was **removed from the wrapper** — the static `https://stayoraya.com/book` fallback now lives only in the post-submit handoff reply ("Stay Request - Website Handoff"). Multilingual trigger keywords were added to the greeting flow. The AI Agent **"Booking request" intent was repointed** from an empty/legacy target to the v7 bot flow, so AI-classified booking intent now launches Flow `40377`.
+2. **Verification completed:** end-to-end test bookings on 2026-07-31 — `6ED26663` (keyword path) and `7D5C4BCD` (menu path) — and real guest traffic through the native Flow on 2026-08-01.
+3. **Canonical artifacts committed:** [`artifacts/whatchimp/native-flow/`](../../artifacts/whatchimp/native-flow/) now holds the canonical Flow JSON v4 (the published, immutable Flow "Stay Request" = WhatChimp Flow ID `40377`; this JSON is the re-import source for any future v2), the v7 bot-flow export (carrying v6's **90 trigger phrases verbatim**), the "stay form" launcher export (**"stay form" is kept as the permanent private test entrance**), the handoff-reply export, the Flow banner image, and a README describing each file. The **archived v6 full export is intentionally not committed** — the operator's copy contains a live `X-Butler-Secret` and must never enter the repo; v6 remains intact on the tenant (triggers cleared) as the rollback path.
+
+**Reason:** the 2026-07-31 entry recorded the cutover decision but predates the funnel hardening and the real-guest verification, and the canonical Flow source lived only on the operator's machine. A published Meta Flow is immutable, so losing the JSON would force a from-scratch rebuild for any v2.
+
+**Impact:** docs and artifacts only — no product code, schema, secret, or WhatChimp/Meta asset changed. Standing operational rule reaffirmed: the wrapper text exists in THREE tenant locations that must always change together (v7 flow, greeting node, "stay form" launcher); the committed v7/launcher exports predate the 2026-08-01 wrapper rewrite, so the live tenant is authoritative for current wrapper copy. [PROJECT_STATE.md](PROJECT_STATE.md) updated to the post-cutover state; the pre-cutover audit is preserved at [PHASE_16A_NATIVE_WHATSAPP_FLOW_AUDIT.md](PHASE_16A_NATIVE_WHATSAPP_FLOW_AUDIT.md) with outcome lines updated (supersedes PR #97).
+
+**Reversible?:** yes — the rollback path is unchanged from the 2026-07-31 entry (restore v6 triggers, repoint greeting/menu). Deleting the artifacts would only lose the canonical re-import source; not recommended.
+
+**Supersedes:** nothing. Extends the 2026-07-31 "Native WhatsApp Flow becomes the production stay intake; v6 retained as rollback" entry below via its follow-up link.
+
+---
+
 ## 2026-08-01 - Phase 16C: confirmed-stay dispatch template renamed to `oraya_arrival_guide_confirmed`; `#!variablename!#` composer rule is mandatory
 
 **Decision:** the WhatsApp Utility Template sent by the confirmed-stay dispatcher is **`oraya_arrival_guide_confirmed`** (en_US, 5 body variables), replacing the never-activated planning name `oraya_booking_confirmed_arrival_guide_v1`. `CONFIRMED_STAY_TEMPLATE_NAME` in [lib/whatsapp/confirmed-stay-notification.ts](../../lib/whatsapp/confirmed-stay-notification.ts) and every doc reference were updated; the 2026-07-17 entry below is historical and intentionally unedited (append-only rule). Final chain: admin confirm → dispatcher (fires only when `WHATCHIMP_CONFIRMED_STAY_WEBHOOK_URL` is set; Production only) → WhatChimp Webhook Workflow "Confirmed booking" → the Meta-approved template. Variable mapping lives inside WhatChimp (`villa`, `check_in`, `check_out`, `booking_reference`, `arrival_guide_url` → body variables; `phone` → recipient; `guest_name` → subscriber name); the payload allow-list is unchanged.
@@ -61,6 +93,8 @@ Durable architectural and operational decisions. Append-only - never edit a past
 **Reversible?:** yes — restore the v6 trigger keywords and point the greeting/menu entry back to v6; disable the v7/native launch entry. The existing lead and secure `/book?h=...` contracts remain unchanged.
 
 **Supersedes:** 2026-07-09 "Phase 16A WhatChimp production wiring locked" for the **production Book a Stay intake only**. v6 remains the documented rollback implementation; Plan an Event and Guest Identification v2 are unchanged.
+
+**Follow-up 2026-08-02:** see the 2026-08-02 "Phase 16A native Flow closeout" entry above — records the 2026-08-01 funnel hardening (wrapper "Book now" rewrite, multilingual greeting keywords, AI Agent "Booking request" intent repointed to v7), the real-guest verification of 2026-08-01, and the commit of the canonical Flow artifacts to `artifacts/whatchimp/native-flow/`.
 
 ## 2026-07-25 - Plan 4 Phase 3: fail-closed live rollout switch replaces the sandbox-only gate
 

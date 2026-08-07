@@ -51,31 +51,84 @@ export type AttemptClaimResult =
   /** Any other storage failure. */
   | { ok: false; reason: "error" };
 
+export type PaymentAttemptPatch = {
+  status: PaymentAttemptStatus;
+  provider_request_id?: string | null;
+  provider_transaction_id?: string | null;
+  provider_reference?: string | null;
+};
+
+export type AttemptTransitionResult =
+  | { ok: true }
+  | {
+      ok: false;
+      reason: "conflict";
+      current_status: PaymentAttemptStatus | null;
+    }
+  | { ok: false; reason: "error"; current_status: null };
+
+const ALLOWED_ATTEMPT_TRANSITIONS: Readonly<
+  Record<PaymentAttemptStatus, readonly PaymentAttemptStatus[]>
+> = {
+  claimed: ["authorized", "recorded", "failed", "ambiguous"],
+  authorized: ["recorded", "failed", "ambiguous"],
+  ambiguous: ["recorded", "failed"],
+  recorded: [],
+  failed: [],
+};
+
+/** Durable state-ordering rule shared by the real store and its tests. */
+export function isAllowedAttemptTransition(
+  from: PaymentAttemptStatus,
+  to: PaymentAttemptStatus,
+): boolean {
+  return ALLOWED_ATTEMPT_TRANSITIONS[from].includes(to);
+}
+
 export type PaymentAttemptStore = {
   claimAttempt(attempt: NewPaymentAttempt): Promise<AttemptClaimResult>;
   /** The most recent in-flight (claimed/authorized/ambiguous) attempt, if any. */
   findBlockingAttempt(
     bookingId: string,
   ): Promise<{ id: string; status: PaymentAttemptStatus } | null>;
-  updateAttempt(
+  transitionAttempt(
     attemptId: string,
-    patch: {
-      status?: PaymentAttemptStatus;
-      provider_request_id?: string | null;
-      provider_transaction_id?: string | null;
-      provider_reference?: string | null;
-    },
-  ): Promise<{ ok: boolean }>;
+    expectedStatuses: readonly PaymentAttemptStatus[],
+    patch: PaymentAttemptPatch,
+  ): Promise<AttemptTransitionResult>;
 };
+
+export type ProviderAuthorizationOutcome = "approved" | "declined" | "unknown";
 
 export type ProviderAuthorizationResult = {
   ok: boolean;
   approved: boolean;
+  outcome: ProviderAuthorizationOutcome;
   status: string | null;
   transaction_id: string | null;
   reference: string;
   message: string;
 };
+
+/**
+ * Classifies the provider response without treating a merely non-approved
+ * response as a decline. The adapter supplies explicit allow-lists; HTTP
+ * errors, missing/unknown statuses, and unverified approvals stay unknown.
+ */
+export function classifyProviderAuthorizationOutcome(input: {
+  response_ok: boolean;
+  status: string | null;
+  approved_statuses: readonly string[];
+  retry_safe_decline_statuses: readonly string[];
+  approval_verified: boolean;
+}): ProviderAuthorizationOutcome {
+  if (!input.response_ok || !input.status) return "unknown";
+  if (input.approved_statuses.includes(input.status)) {
+    return input.approval_verified ? "approved" : "unknown";
+  }
+  if (input.retry_safe_decline_statuses.includes(input.status)) return "declined";
+  return "unknown";
+}
 
 export type CompletionDeps = {
   store: PaymentAttemptStore;
@@ -109,6 +162,7 @@ export type CompletionOutcome =
   | { kind: "blocked_ambiguous" }
   | { kind: "declined"; provider: ProviderAuthorizationResult }
   | { kind: "provider_unknown"; attempt_id: string }
+  | { kind: "already_recorded"; provider?: ProviderAuthorizationResult }
   | { kind: "approved_recorded"; provider: ProviderAuthorizationResult }
   | { kind: "approved_unrecorded"; attempt_id: string; provider: ProviderAuthorizationResult };
 
@@ -180,7 +234,14 @@ export async function runUnifiedCheckoutCompletion(
       idempotency_key: merchantReference,
       error: error instanceof Error ? error.message : String(error),
     });
-    await deps.store.updateAttempt(input.attempt_id, { status: "ambiguous" });
+    const ambiguousMark = await deps.store.transitionAttempt(
+      input.attempt_id,
+      ["claimed"],
+      { status: "ambiguous" },
+    );
+    if (!ambiguousMark.ok && ambiguousMark.current_status === "recorded") {
+      return { kind: "already_recorded" };
+    }
     return { kind: "provider_unknown", attempt_id: input.attempt_id };
   }
 
@@ -191,17 +252,40 @@ export async function runUnifiedCheckoutCompletion(
     provider_reference: provider.reference,
   };
 
-  if (!provider.approved) {
-    // Decline is terminal for this attempt and releases the claim (failed is
-    // outside the partial unique index) so the guest can retry.
-    const marked = await deps.store.updateAttempt(input.attempt_id, {
+  if (provider.outcome === "unknown") {
+    const marked = await deps.store.transitionAttempt(input.attempt_id, ["claimed"], {
+      status: "ambiguous",
+      ...providerIds,
+    });
+    if (!marked.ok && marked.current_status === "recorded") {
+      return { kind: "already_recorded", provider };
+    }
+    deps.log("provider returned an unproven outcome - attempt blocked for reconciliation", {
+      attempt_id: input.attempt_id,
+      provider_status: provider.status,
+      http_ok: provider.ok,
+    });
+    return { kind: "provider_unknown", attempt_id: input.attempt_id };
+  }
+
+  if (provider.outcome === "declined") {
+    // Only an explicitly classified, retry-safe terminal decline releases the
+    // claim. Every unproven non-approval takes the ambiguous path above.
+    const marked = await deps.store.transitionAttempt(input.attempt_id, ["claimed"], {
       status: "failed",
       ...providerIds,
     });
     if (!marked.ok) {
-      deps.log("failed to mark declined attempt as failed — claim may linger", {
-        attempt_id: input.attempt_id,
-      });
+      if (marked.current_status === "recorded") {
+        return { kind: "already_recorded", provider };
+      }
+      if (marked.current_status !== "failed") {
+        deps.log("failed to persist retry-safe decline - retry remains blocked", {
+          attempt_id: input.attempt_id,
+          current_status: marked.current_status,
+        });
+        return { kind: "provider_unknown", attempt_id: input.attempt_id };
+      }
     }
     if (deps.touchDeclined) {
       try {
@@ -213,15 +297,20 @@ export async function runUnifiedCheckoutCompletion(
     return { kind: "declined", provider };
   }
 
-  const authorizedMark = await deps.store.updateAttempt(input.attempt_id, {
+  const authorizedMark = await deps.store.transitionAttempt(input.attempt_id, ["claimed"], {
     status: "authorized",
     ...providerIds,
   });
   if (!authorizedMark.ok) {
-    deps.log("failed to persist provider ids on authorized attempt (continuing to booking write)", {
+    if (authorizedMark.current_status === "recorded") {
+      return { kind: "already_recorded", provider };
+    }
+    deps.log("approved response could not advance the attempt to authorized", {
       attempt_id: input.attempt_id,
       provider_transaction_id: provider.transaction_id,
+      current_status: authorizedMark.current_status,
     });
+    return { kind: "approved_unrecorded", attempt_id: input.attempt_id, provider };
   }
 
   // 4. Row-count-verified booking update. Zero rows after an approved charge
@@ -230,11 +319,20 @@ export async function runUnifiedCheckoutCompletion(
   //    NEVER a success response.
   const recorded = await deps.recordApprovedPayment(provider);
   if (recorded.ok && recorded.matched === 1) {
-    const recordedMark = await deps.store.updateAttempt(input.attempt_id, { status: "recorded" });
+    const recordedMark = await deps.store.transitionAttempt(
+      input.attempt_id,
+      ["authorized"],
+      { status: "recorded" },
+    );
     if (!recordedMark.ok) {
+      if (recordedMark.current_status === "recorded") {
+        return { kind: "already_recorded", provider };
+      }
       deps.log("payment recorded on booking but attempt row could not be marked recorded", {
         attempt_id: input.attempt_id,
+        current_status: recordedMark.current_status,
       });
+      return { kind: "approved_unrecorded", attempt_id: input.attempt_id, provider };
     }
     return { kind: "approved_recorded", provider };
   }
@@ -249,6 +347,13 @@ export async function runUnifiedCheckoutCompletion(
       matched: recorded.ok ? recorded.matched : "update_error",
     },
   );
-  await deps.store.updateAttempt(input.attempt_id, { status: "ambiguous", ...providerIds });
+  const ambiguousMark = await deps.store.transitionAttempt(
+    input.attempt_id,
+    ["authorized"],
+    { status: "ambiguous", ...providerIds },
+  );
+  if (!ambiguousMark.ok && ambiguousMark.current_status === "recorded") {
+    return { kind: "already_recorded", provider };
+  }
   return { kind: "approved_unrecorded", attempt_id: input.attempt_id, provider };
 }

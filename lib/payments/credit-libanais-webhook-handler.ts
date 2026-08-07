@@ -130,7 +130,8 @@ export async function handleCreditLibanaisWebhook(request: Request) {
     {
       findAttempt: findPaymentAttemptByReference,
       recordPaymentOnBooking,
-      markAttempt: (attemptId, patch) => supabasePaymentAttemptStore.updateAttempt(attemptId, patch),
+      markAttempt: (attemptId, expectedStatuses, patch) =>
+        supabasePaymentAttemptStore.transitionAttempt(attemptId, expectedStatuses, patch),
       log: (message, detail) => console.error(`${LOG_TAG} ${message}`, detail ?? {}),
     },
     event,
