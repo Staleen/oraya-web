@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { requireOps } from "@/lib/ops-auth";
+import { hashAdminPassword } from "@/lib/admin-password";
+import { createInviteToken, requireOps } from "@/lib/ops-auth";
 
 export const dynamic = "force-dynamic";
 const LOG_TAG = "[api/ops/staff/[id]]";
@@ -27,13 +28,48 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
 
   let role: "owner" | "operator" | undefined;
   let isActive: boolean | undefined;
+  let reinvite = false;
   try {
-    const body = (await request.json()) as { role?: string; is_active?: boolean };
+    const body = (await request.json()) as { role?: string; is_active?: boolean; reinvite?: boolean };
     if (body.role === "owner" || body.role === "operator") role = body.role;
     if (typeof body.is_active === "boolean") isActive = body.is_active;
+    reinvite = body.reinvite === true;
   } catch {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
+
+  // Re-invite: a fresh one-time link for someone who never set a password
+  // (lost or expired link). The old link stops working immediately; the write
+  // is guarded on password_hash IS NULL so an activated account can never be
+  // silently reset back to an invite.
+  if (reinvite) {
+    const invite = createInviteToken();
+    const { data, error } = await supabaseAdmin
+      .from("staff")
+      .update({
+        invite_token_hash: hashAdminPassword(invite.token),
+        invite_expires_at: invite.expiresAt,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .is("password_hash", null)
+      .select("id, email, full_name, role")
+      .maybeSingle();
+
+    if (error) {
+      console.error(`${LOG_TAG} reinvite failed:`, error.message);
+      return NextResponse.json({ error: "Could not create a new invite link." }, { status: 503 });
+    }
+    if (!data) {
+      return NextResponse.json(
+        { error: "This person already set their password — there is nothing to re-invite." },
+        { status: 409 },
+      );
+    }
+    // Returned once, never stored in readable form — the owner sends it.
+    return NextResponse.json({ ok: true, staff: data, invite_token: invite.token });
+  }
+
   if (role === undefined && isActive === undefined) {
     return NextResponse.json({ error: "Nothing to change." }, { status: 400 });
   }
