@@ -1,0 +1,21 @@
+# Normalize all text files to LF inside the repository.
+# Prevents the CRLF/LF churn that made 455 files show as modified with
+# zero actual content change when the repo is touched from both Windows and Linux.
+* text=auto eol=lf
+
+# Windows scripts must keep CRLF to run correctly.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary assets — never converted.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.pdf  binary
+*.woff binary
+*.woff2 binary
+*.ttf  binary
+*.otf  binary

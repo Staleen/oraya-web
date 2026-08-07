@@ -41,10 +41,14 @@ export default function CalendarSyncPanel({
             Calendar Sync
           </p>
           <p style={{ fontFamily: LATO, fontSize: "12px", color: MUTED, margin: 0 }}>
-            {/* Audit C-1: the cron in vercel.json is `0 0 * * *` — once a day. The old
-                "every 10 minutes" claim invited double-booking confidence. */}
-            Export confirmed Oraya bookings per villa and review external feed sync status. Automatic sync runs once a
-            day (midnight UTC) — external feeds can be up to 24h stale, so use Run sync before trusting availability.
+            {/* Audit C-1 WITHDRAWN 2026-08-01 — the finding was wrong. The real scheduler is an
+                external cron-job.org job calling /api/cron/calendar-sync every 10 minutes, documented
+                at PROJECT_STATE.md:137 and confirmed against the cron-job.org run log. The
+                vercel.json `0 0 * * *` entry is only the backup (Vercel Hobby caps crons at daily).
+                Do NOT "correct" this copy to daily from vercel.json alone. */}
+            Export confirmed Oraya bookings per villa and review external feed sync status. Automatic sync runs every
+            10 minutes (external scheduler), with a daily Vercel cron as backup. A run can report success while an
+            individual feed fails — check each source&apos;s status below before trusting availability.
           </p>
         </div>
         <button

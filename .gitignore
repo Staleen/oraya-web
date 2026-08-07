@@ -37,3 +37,11 @@ Thumbs.db
 
 # Claude Code
 .claude/
+
+# Local scratch — files staged for manual deletion
+_to_delete/
+
+# Machine-specific admin password helper (never commit: credential in filename)
+scripts/hash-admin-password-*.mjs
+
+.env*

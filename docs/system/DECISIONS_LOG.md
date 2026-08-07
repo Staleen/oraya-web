@@ -16,6 +16,30 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-07 - /ops Team + accept-invite + read-only Availability; invite delivery is link-only
+
+**Decision:** the /ops **Team** screen ships over the existing owner-only `/api/ops/staff` API (invite, role change, disable/re-enable, remove), with invite delivery deliberately **link-only**: creating an invite shows a one-time `https://…/ops-invite/<token>` link exactly once (the server stores only a scrypt hash), and the owner sends it by WhatsApp or in person. `app/ops-invite/[token]` (outside the /ops auth shell, so the sign-in gate cannot bounce an invitee) + `POST /api/ops/invite/accept` redeem it: same IP throttle as login, one indistinguishable 400 for unknown/expired/used/deactivated invites, min-12-char password (house rule), single-use via a `password_hash IS NULL` write guard, session cookie attached on success. The **Availability** screen ships read-only: per-villa 3-month occupancy from confirmed stays (events include their setup day via the shared `getOperationalRange`) plus active `external_blocks` (now returned by `GET /api/ops/data`), and per-feed freshness staged honestly against the real 10-minute cron-job.org schedule (fresh / limping ≥1h / dead ≥24h / failing). Feed CRUD stays with G13. `lib/ops-queue.test.mts` (12 tests) pins the queue's inclusion/ordering rules and the `villaName` fix (canonical "Villa X" values were double-prefixed to "Villa Villa X" on queue rows).
+
+**Reason:** the Team screen is the gate to creating the operator's account (OPS_ADMIN_V2 §6); a Resend invite email is deliberate future work because one person is being hired, not fifty. Availability gives the operator the calendar truth the old admin scattered, without touching sync logic.
+
+**Impact:** new `app/api/ops/invite/accept/route.ts`, `app/ops-invite/[token]/page.tsx`, `lib/ops-queue.test.mts`; rewritten `app/ops/team/page.tsx`, `app/ops/availability/page.tsx`; extended `app/api/ops/data/route.ts` (external_blocks), `components/ops/OpsProvider.tsx` (externalBlocks), `lib/ops-queue.ts` (villaName export + fix). No schema change, no locked-surface touch, no new dependency.
+
+**Reversible?:** yes.
+
+---
+
+## 2026-08-07 - One shared guest-dispatch module for booking status changes; /ops gains Enquiries + approve/decline behind message previews
+
+**Decision:** the confirm/cancel guest email block and the Phase 16C WhatsApp Arrival Guide dispatch block were extracted verbatim from `app/api/admin/bookings/[id]/route.ts` into **[lib/booking-guest-dispatch.ts](../../lib/booking-guest-dispatch.ts)** (`dispatchBookingStatusGuestMessages` + `isEventInquiryBooking`). Both `/admin` (the locked PATCH route, edit explicitly authorized in the task prompt) and the new `/ops` approve/decline actions call this one copy — guest messaging for a status change must never exist in two copies. On top of it, `/ops` shipped: the **Enquiries** screen with lead→booking conversion (L-1 duplicate-booking guard client-side, L-6 `already_linked` 409 server-side in the new `PATCH /api/ops/leads/[id]`), and **approve / decline / cancel** on a booking, gated behind a server-rendered preview of the actual messages (`GET /api/ops/bookings/[id]/message-preview`) instead of an "Are you sure?" dialog. Status writes are race-guarded (`.eq("status", <what the operator saw>)` → 409), and `/ops` approve runs the same pre-write availability-conflict check and exclusion-violation handling as the admin confirm. Event inquiries are refused by the `/ops` API (proposal flow stays in the legacy admin until the event screens exist).
+
+**Reason:** OPS_ADMIN_V2 §6 named these as the next build and required the extraction ("two copies of 'message the guest' is how guests get double-messaged"). Preview-over-confirmation is the standing owner design rule.
+
+**Impact:** new `lib/booking-guest-dispatch.ts`, `app/api/ops/leads/[id]/route.ts`, `app/api/ops/bookings/[id]/message-preview/route.ts`, `components/ops/MessagePreviewDialog.tsx`, `components/ops/ConvertLeadDialog.tsx`; rewritten `app/ops/enquiries/page.tsx`; extended `app/api/ops/bookings/[id]/route.ts` (approve/decline actions) and `app/ops/bookings/[id]/page.tsx` (action card + dialogs); `GET /api/ops/data` additionally selects `whatsapp_leads.addons_interest`. The admin route's behaviour is preserved exactly (same recipients, same emails, same WhatsApp gating, same log tag). The email preview is a display-only mirror of `lib/send-booking-email.ts` content; the send itself always goes through the shared module, so preview drift can only ever be cosmetic.
+
+**Reversible?:** yes for the /ops surfaces; the extraction should not be reversed (it is the anti-double-messaging invariant).
+
+---
+
 ## 2026-08-06 - Payment attempts are monotonic; only explicit terminal declines are retry-safe
 
 **Decision:** Unified Checkout completion classifies provider results as `approved`, `declined`, or `unknown`. Only an HTTP-success response with the explicit provider status `DECLINED` is a retry-safe terminal decline and may transition an attempt to `failed`, releasing the one-in-flight claim. HTTP errors, missing/malformed response data, pending/review/unknown statuses, and apparent approvals whose server-authoritative amount/currency echo cannot be verified are `unknown`; they transition to `ambiguous` and block another attempt. All durable attempt mutations are compare-and-set/status-guarded and must follow this graph: `claimed -> authorized|recorded|failed|ambiguous`, `authorized -> recorded|failed|ambiguous`, `ambiguous -> recorded|failed`; `recorded` and `failed` have no outgoing transitions. When a verified webhook records before the browser completion resumes, the browser accepts the terminal `recorded` winner, does not write the booking charge again, and returns idempotent success.
