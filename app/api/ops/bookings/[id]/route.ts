@@ -76,7 +76,10 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
         payment_method: method || undefined,
         payment_reference: reference,
         payment_received_at: now,
-        payment_marked_by: who,
+        // Live-verified 2026-08-07: payment_marked_by is a uuid column — writing
+        // the person's NAME made every /ops payment recording fail with 503.
+        // The id is the attribution; the response carries the name for display.
+        payment_marked_by: auth.staff.id,
       })
       .eq("id", id);
     // PostgREST does not match NULL with .eq, so a first payment against a
@@ -123,7 +126,8 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
         refund_status: "refunded",
         refunded_at: now,
         refund_provider_reference: reference,
-        payment_marked_by: who,
+        // uuid column — see record_payment above.
+        payment_marked_by: auth.staff.id,
       })
       .eq("id", id);
     q = expected === 0 ? q.or("refund_amount.is.null,refund_amount.eq.0") : q.eq("refund_amount", expected);
