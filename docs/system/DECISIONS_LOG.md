@@ -16,6 +16,20 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-07 - Ops migration plan adopted; Batch 1 (booking odds and ends) shipped
+
+**Decision:** retiring `/admin` in favour of `/ops` is now a written, nine-batch plan — [OPS_MIGRATION_PLAN.md](OPS_MIGRATION_PLAN.md) — with each batch pre-written as a self-contained, dispatchable task prompt, plus two hard gates: a DECISION gate before Batch 8 (moving the live-payments switch ritual into /ops supersedes the 2026-07-25 single-writer decision, and the /ops password-recovery policy needs David's choice) and a SOAK gate before Batch 9 (at least one week of real operation entirely inside /ops before any deletion). Deliberately NOT executed as one mega-task: a single PR spanning money, auth, media and a 20k-line deletion is unreviewable and un-bisectable, and two of the batches depend on human decisions and lived verification that no prompt can fast-forward.
+
+**Batch 1 shipped in the same session:** the ops feedback-request action mirrors `app/api/admin/bookings/[id]/send-feedback/route.ts` rule-for-rule (confirmed only, past-checkout only via `isPastCheckoutForFeedbackEmail`, cooldown → 409 via `isFeedbackEmailCooldownActive`, recipient via `resolveBookingRecipient`, same `sendFeedbackRequestEmail`, same `feedback_requested_at/channel/count` bookkeeping); `GET /api/ops/bookings/[id]/arrival-link` mirrors the Stage 4A admin mint (confirmed only, same signed view token at checkout-day expiry, returns nothing else); the Money card shows hosted payment-link state with an expiry-aware badge and copy; Enquiries shows and toggles the established `oraya_vip_lead` / `oraya_needs_human` labels (undo-over-confirm), with `labels` validated in the ops leads route. No admin route was edited.
+
+**Reason:** David wants one console. The plan makes the remaining migration mechanical and resumable by any future session; Batch 1 removes the last booking-level reasons to open `/admin`.
+
+**Impact:** new `docs/system/OPS_MIGRATION_PLAN.md`, `app/api/ops/bookings/[id]/arrival-link/route.ts`; extended `app/api/ops/bookings/[id]/route.ts`, `app/api/ops/leads/[id]/route.ts`, `app/api/ops/data/route.ts`, `lib/ops-queue.ts`(+test fixture), `app/ops/bookings/[id]/page.tsx`, `app/ops/enquiries/page.tsx`. No schema change, no locked-route edit, no new dependency.
+
+**Reversible?:** yes.
+
+---
+
 ## 2026-08-07 - /ops asks for money as Phase 16B continuity, and runs event proposals
 
 **Decision:** /ops gains the ask-for-money half of the payment lifecycle and the event proposal flow — both as continuations of the existing systems, never as parallel ones.

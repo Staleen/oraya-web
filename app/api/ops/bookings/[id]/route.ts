@@ -17,6 +17,8 @@ import {
 } from "@/lib/send-booking-payment-email";
 import { appendPaymentReminderNote } from "@/lib/payment-reminders";
 import { sendEventProposalEmail } from "@/lib/send-event-proposal-email";
+import { sendFeedbackRequestEmail } from "@/lib/send-feedback-request-email";
+import { isFeedbackEmailCooldownActive, isPastCheckoutForFeedbackEmail } from "@/lib/booking-feedback-eligibility";
 import { parseEventSetupEstimateFromMessage } from "@/lib/event-inquiry-message";
 import { buildProposalEmailLineItems } from "@/lib/event-proposal-line-items";
 import {
@@ -428,6 +430,75 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       );
     }
     return NextResponse.json({ ok: true, booking: data, recorded_by: who });
+  }
+
+  // ── Feedback request — mirror of the admin send-feedback rules ────────────
+
+  if (action === "request_feedback") {
+    const { data: rowData, error: rowError } = await supabaseAdmin
+      .from("bookings")
+      .select("id, status, check_out, member_id, guest_email, guest_name, event_type, message, feedback_requested_at, feedback_requested_channel, feedback_request_count")
+      .eq("id", id)
+      .maybeSingle();
+    if (rowError) {
+      console.error(`${LOG_TAG} request_feedback load failed:`, rowError.message);
+      return NextResponse.json({ error: "Could not load this booking." }, { status: 503 });
+    }
+    if (!rowData) {
+      return NextResponse.json({ error: "This booking no longer exists." }, { status: 404 });
+    }
+    const row = rowData as unknown as {
+      id: string; status: string | null; check_out: string | null;
+      member_id: string | null; guest_email: string | null; guest_name: string | null;
+      event_type: string | null; message: string | null;
+      feedback_requested_at: string | null; feedback_request_count: number | null;
+    };
+
+    if (row.status !== "confirmed") {
+      return NextResponse.json({ error: "Feedback is only asked after a confirmed stay." }, { status: 400 });
+    }
+    if (!isPastCheckoutForFeedbackEmail(row.check_out)) {
+      return NextResponse.json({ error: "Wait until the stay has ended before asking for feedback." }, { status: 400 });
+    }
+    if (isFeedbackEmailCooldownActive(row.feedback_requested_at)) {
+      return NextResponse.json({ error: "Feedback was already requested recently." }, { status: 409 });
+    }
+
+    const recipient = await resolveBookingRecipient(supabaseAdmin, row);
+    if (!recipient.email) {
+      return NextResponse.json({ error: "This booking has no email address." }, { status: 400 });
+    }
+
+    try {
+      await sendFeedbackRequestEmail({
+        to: recipient.email,
+        guestName: recipient.name,
+        isEvent: isEventInquiryBooking(row),
+      });
+    } catch (emailErr) {
+      console.error(`${LOG_TAG} feedback email failed:`, emailErr);
+      return NextResponse.json({ error: "The feedback email could not be sent." }, { status: 503 });
+    }
+
+    const prevCount = typeof row.feedback_request_count === "number" && Number.isFinite(row.feedback_request_count)
+      ? row.feedback_request_count
+      : 0;
+    const { data, error } = await supabaseAdmin
+      .from("bookings")
+      .update({
+        feedback_requested_at: now,
+        feedback_requested_channel: "email",
+        feedback_request_count: prevCount + 1,
+      })
+      .eq("id", id)
+      .select(RETURN_COLUMNS)
+      .maybeSingle();
+    if (error || !data) {
+      console.error(`${LOG_TAG} feedback bookkeeping failed:`, error?.message);
+      return NextResponse.json({ ok: true, booking: null, acted_by: who, email_sent: true, note_saved: false });
+    }
+
+    return NextResponse.json({ ok: true, booking: data, acted_by: who, email_sent: true });
   }
 
   // ── Event proposal — draft and send (Phase 15H contract, unchanged) ───────

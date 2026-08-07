@@ -159,6 +159,8 @@ function BookingDetail() {
   const [previewAction, setPreviewAction] = useState<PreviewAction | null>(null);
   const [moneyRequest, setMoneyRequest] = useState<MoneyRequestMode | null>(null);
   const [flash, setFlash] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [feedbackBusy, setFeedbackBusy] = useState(false);
 
   // Derived from the live array on every render, so the 45s refresh is
   // reflected immediately instead of freezing at click time (audit D-2).
@@ -196,6 +198,49 @@ function BookingDetail() {
   const denominator = moneyView.amount ?? 0;
   const pct = denominator > 0 ? Math.min(100, Math.round((paid / denominator) * 100)) : 0;
 
+  const isPastStay = booking.check_out ? booking.check_out.slice(0, 10) < new Date().toISOString().slice(0, 10) : false;
+  // Captured so the async handlers below don't re-narrow the derived booking.
+  const bookingId = booking.id;
+
+  async function copyArrivalLink() {
+    try {
+      const r = await fetch(`/api/ops/bookings/${bookingId}/arrival-link`, { credentials: "include", cache: "no-store" });
+      const body = (await r.json().catch(() => ({}))) as { ok?: boolean; arrival_guide_url?: string; error?: string };
+      if (!r.ok || !body.ok || !body.arrival_guide_url) {
+        setFlash("");
+        setActionError(body.error === "booking_not_confirmed" ? "Only confirmed stays have an Arrival Guide." : "Couldn't create the link.");
+        return;
+      }
+      await navigator.clipboard.writeText(body.arrival_guide_url);
+      setFlash("Arrival Guide link copied — paste it to the guest on WhatsApp.");
+    } catch {
+      setActionError("Couldn't reach Oraya.");
+    }
+  }
+
+  async function requestFeedback() {
+    setFeedbackBusy(true);
+    setActionError("");
+    try {
+      const r = await fetch(`/api/ops/bookings/${bookingId}`, {
+        method: "PATCH", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "request_feedback" }),
+      });
+      const body = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!r.ok || !body.ok) {
+        setActionError(body.error ?? "That didn't send.");
+        return;
+      }
+      setFlash("Feedback request emailed to the guest.");
+      await refresh();
+    } catch {
+      setActionError("Couldn't reach Oraya.");
+    } finally {
+      setFeedbackBusy(false);
+    }
+  }
+
   async function afterAction(message: string) {
     // The dialog paused polling while open; a success path that skips onClose
     // must unpause too, or the page silently stops refreshing.
@@ -221,6 +266,7 @@ function BookingDetail() {
       </div>
 
       {flash && <Banner tone="ok" title="Done" onDismiss={() => setFlash("")}>{flash}</Banner>}
+      {actionError && <Banner tone="bad" title="Not done" onDismiss={() => setActionError("")}>{actionError}</Banner>}
 
       <div style={{
         display: "flex", background: T.surface, border: `1px solid ${T.borderFaint}`,
@@ -320,15 +366,39 @@ function BookingDetail() {
               </div>
             </Card>
           ) : status === "confirmed" ? (
-            <Card title="Changing this stay">
-              <p style={{ margin: "0 0 16px", fontSize: "14px", color: T.muted, lineHeight: 1.6 }}>
-                Cancelling shows you the guest&apos;s cancellation email before it is sent.
-                {paid > 0 && " Money already received will appear here as owed back afterwards."}
-              </p>
-              <Button variant="danger" wide onClick={() => setPreviewAction({ kind: "decline", expectedStatus: "confirmed" })}>
-                Cancel this stay…
-              </Button>
-            </Card>
+            <>
+              <Card title="Guest care">
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  {!isEvent && (
+                    <Button wide onClick={() => void copyArrivalLink()}>
+                      Copy their Arrival Guide link
+                    </Button>
+                  )}
+                  {isPastStay && (
+                    <>
+                      <Button wide disabled={feedbackBusy} onClick={() => void requestFeedback()}>
+                        {feedbackBusy ? "Sending…" : "Ask for feedback — emails the guest"}
+                      </Button>
+                      {booking.feedback_requested_at && (
+                        <p style={{ margin: 0, fontSize: "12px", color: T.faint, textAlign: "center" }}>
+                          Last asked {day(booking.feedback_requested_at)}
+                          {booking.feedback_request_count ? ` · ${booking.feedback_request_count} time${booking.feedback_request_count === 1 ? "" : "s"}` : ""}
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
+              </Card>
+              <Card title="Changing this stay">
+                <p style={{ margin: "0 0 16px", fontSize: "14px", color: T.muted, lineHeight: 1.6 }}>
+                  Cancelling shows you the guest&apos;s cancellation email before it is sent.
+                  {paid > 0 && " Money already received will appear here as owed back afterwards."}
+                </p>
+                <Button variant="danger" wide onClick={() => setPreviewAction({ kind: "decline", expectedStatus: "confirmed" })}>
+                  Cancel this stay…
+                </Button>
+              </Card>
+            </>
           ) : null}
         </div>
 
@@ -364,6 +434,24 @@ function BookingDetail() {
             {booking.payment_marked_by && <Row k="Recorded by" v={booking.payment_marked_by} />}
             {refunded > 0 && <Row k="Refunded" v={<>{money(refunded)} <Badge tone="ok">Returned</Badge></>} />}
             {booking.refund_provider_reference && <Row k="Refund reference" v={booking.refund_provider_reference} />}
+            {booking.payment_link_url && (
+              <Row k="Payment link" v={
+                <span style={{ display: "inline-flex", gap: "8px", alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                  <Badge tone={
+                    booking.payment_link_status === "paid" ? "ok"
+                    : booking.payment_link_expires_at && Date.parse(booking.payment_link_expires_at) < Date.now() ? "bad"
+                    : booking.payment_link_status === "active" ? "info" : "neutral"
+                  }>
+                    {booking.payment_link_expires_at && Date.parse(booking.payment_link_expires_at) < Date.now() && booking.payment_link_status === "active"
+                      ? "Expired"
+                      : (booking.payment_link_status ?? "link")}
+                  </Badge>
+                  <Button small variant="ghost" onClick={() => { void navigator.clipboard.writeText(booking.payment_link_url!); setFlash("Payment link copied."); }}>
+                    Copy
+                  </Button>
+                </span>
+              } />
+            )}
           </Rows>
 
           <div style={{ marginTop: "22px", display: "flex", flexDirection: "column", gap: "10px" }}>

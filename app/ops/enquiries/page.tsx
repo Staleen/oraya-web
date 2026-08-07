@@ -59,6 +59,20 @@ function phoneDigits(lead: QueueLead): string | null {
   return digits.length > 0 ? digits : null;
 }
 
+// Same label vocabulary the legacy admin established (leadHelpers.ts).
+const LABEL_VIP = "oraya_vip_lead";
+const LABEL_NEEDS_HUMAN = "oraya_needs_human";
+
+function leadLabels(lead: QueueLead): string[] {
+  return Array.isArray(lead.labels)
+    ? (lead.labels as unknown[]).filter((l): l is string => typeof l === "string")
+    : [];
+}
+
+function hasLabel(lead: QueueLead, label: string): boolean {
+  return leadLabels(lead).some((l) => l.trim().toLowerCase() === label);
+}
+
 export default function EnquiriesPage() {
   return (
     <Suspense fallback={<p style={{ color: T.faint, fontSize: "13px" }}>Loading…</p>}>
@@ -159,6 +173,8 @@ function Enquiries() {
             {status === "new" ? "Waiting for a reply" : status === "converted" ? "Converted" : "In conversation"}
           </Badge>
           {event && <Badge tone="gold">Event</Badge>}
+          {hasLabel(selected, LABEL_VIP) && <Badge tone="gold">VIP</Badge>}
+          {hasLabel(selected, LABEL_NEEDS_HUMAN) && <Badge tone="bad">Needs a human</Badge>}
         </div>
 
         {flash && (
@@ -242,6 +258,31 @@ function Enquiries() {
                   Mark as in conversation
                 </Button>
               )}
+
+              <div style={{ display: "flex", gap: "8px" }}>
+                {([
+                  [LABEL_VIP, "VIP"],
+                  [LABEL_NEEDS_HUMAN, "Needs a human"],
+                ] as Array<[string, string]>).map(([label, text]) => {
+                  const on = hasLabel(selected, label);
+                  return (
+                    <Button key={label} small variant={on ? "primary" : "secondary"} disabled={busy}
+                      onClick={() => {
+                        const next = on
+                          ? leadLabels(selected).filter((l) => l.trim().toLowerCase() !== label)
+                          : [...leadLabels(selected), label];
+                        void patchLead(selected.id, { labels: next }).then((ok) => {
+                          if (ok) setFlash({
+                            message: on ? `${text} removed.` : `Marked ${text}.`,
+                            undo: async () => { await patchLead(selected.id, { labels: leadLabels(selected) }); },
+                          });
+                        });
+                      }}>
+                      {text}
+                    </Button>
+                  );
+                })}
+              </div>
 
               {selected.linked_booking_id ? (
                 <div style={{ fontSize: "13px", color: T.muted, lineHeight: 1.7 }}>

@@ -78,6 +78,15 @@ export interface QueueBooking {
   refunded_at: string | null;
   refund_provider_reference: string | null;
   whatsapp_confirmation_sent_at: string | null;
+  /** Hosted payment-link state (16B) — display only in /ops. */
+  payment_link_url: string | null;
+  payment_link_provider: string | null;
+  payment_link_status: string | null;
+  payment_link_expires_at: string | null;
+  payment_link_issued_at: string | null;
+  /** Feedback trail. */
+  feedback_requested_at: string | null;
+  feedback_request_count: number | null;
   /** Event proposals (Phase 15H) — null on stays. */
   proposal_status: string | null;
   proposal_total_amount: number | null;

@@ -50,6 +50,10 @@ export async function GET(request: Request) {
     "payment_received_at", "payment_marked_by",
     "refund_status", "refund_amount", "refunded_at", "refund_provider_reference",
     "whatsapp_confirmation_sent_at",
+    // Hosted payment-link state (16B) + feedback trail — display surfaces.
+    "payment_link_url", "payment_link_provider", "payment_link_status",
+    "payment_link_expires_at", "payment_link_issued_at",
+    "feedback_requested_at", "feedback_request_count",
     // Event proposals — the /ops event flow reads these.
     "proposal_status", "proposal_total_amount", "proposal_deposit_amount",
     "proposal_valid_until", "proposal_payment_methods", "proposal_notes",
