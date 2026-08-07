@@ -256,8 +256,11 @@ function Enquiries() {
                 </div>
               ) : event ? (
                 <p style={{ margin: 0, fontSize: "13px", color: T.muted, lineHeight: 1.7 }}>
-                  Event enquiries are planned through a proposal, which lives in the legacy admin for now.
-                  This screen keeps the conversation and notes.
+                  Event enquiries become bookings through the website event form — send them{" "}
+                  <a href="https://stayoraya.com/events/inquiry" target="_blank" rel="noopener noreferrer" style={{ color: T.gold }}>
+                    stayoraya.com/events/inquiry
+                  </a>{" "}
+                  on WhatsApp. Once it arrives you can build and send the proposal from Bookings.
                 </p>
               ) : convertible ? (
                 <Button wide variant="primary" onClick={() => { pausePolling(true); setConverting(true); }}>

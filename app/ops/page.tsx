@@ -7,7 +7,12 @@ import { Button, EmptyState, Kicker, PageHead, QueueRow } from "@/components/ops
 
 function accentFor(item: QueueItem): "bad" | "gold" | "info" {
   if (item.group === "money") return "gold";
-  if (item.kind === "booking_request" || item.kind === "addon_approval") return "bad";
+  if (
+    item.kind === "booking_request" ||
+    item.kind === "addon_approval" ||
+    item.kind === "event_accepted_unconfirmed" ||
+    item.kind === "event_proposal_needed"
+  ) return "bad";
   return "info";
 }
 
@@ -43,6 +48,10 @@ export default function TodayPage() {
         return <Button variant="primary" small onClick={() => router.push(`/ops/bookings/${item.bookingId}?do=refund`)}>Record refund</Button>;
       case "arrival_guide_unsent":
         return <Button variant="primary" small onClick={() => router.push(`/ops/bookings/${item.bookingId}?do=guide`)}>Send arrival guide</Button>;
+      case "event_proposal_needed":
+        return <Button variant="primary" small onClick={open}>Build the proposal</Button>;
+      case "event_accepted_unconfirmed":
+        return <Button variant="primary" small onClick={open}>Confirm the event</Button>;
       default:
         return <Button variant="primary" small onClick={open}>Open</Button>;
     }

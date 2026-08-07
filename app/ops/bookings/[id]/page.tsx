@@ -6,6 +6,8 @@ import { bookingMoneyView, parseStaySetupMessage } from "@/lib/ops-booking-displ
 import { useOps } from "@/components/ops/OpsProvider";
 import MoneyDialog from "@/components/ops/MoneyDialog";
 import MessagePreviewDialog, { type PreviewAction } from "@/components/ops/MessagePreviewDialog";
+import RequestMoneyDialog, { type MoneyRequestMode } from "@/components/ops/RequestMoneyDialog";
+import ProposalCard from "@/components/ops/ProposalCard";
 import { Badge, Banner, Button, Card, EmptyState, PageHead, Ref, Row, Rows, T } from "@/components/ops/ui";
 
 const STEPS = ["Requested", "Your approval", "Deposit", "Paid", "Staying", "Done"] as const;
@@ -155,6 +157,7 @@ function BookingDetail() {
     search.get("do") === "payment" ? "payment" : search.get("do") === "refund" ? "refund" : null,
   );
   const [previewAction, setPreviewAction] = useState<PreviewAction | null>(null);
+  const [moneyRequest, setMoneyRequest] = useState<MoneyRequestMode | null>(null);
   const [flash, setFlash] = useState("");
 
   // Derived from the live array on every render, so the 45s refresh is
@@ -267,12 +270,40 @@ function BookingDetail() {
 
           <AddonsCard booking={booking} onChanged={refresh} />
 
-          {isEvent ? (
-            <Card title="Event enquiry">
-              <p style={{ margin: 0, fontSize: "14px", color: T.muted, lineHeight: 1.6 }}>
-                Events are agreed through a proposal, which lives in the legacy admin until the event screens
-                are built here. Nothing on this page emails the guest.
-              </p>
+          {isEvent && status !== "cancelled" && (
+            <ProposalCard
+              booking={booking}
+              onChanged={async (message) => { setFlash(message); await refresh(); }}
+            />
+          )}
+
+          {isEvent && status === "pending" ? (
+            <Card title="Your approval">
+              {booking.proposal_status === "accepted" ? (
+                <>
+                  <p style={{ margin: "0 0 16px", fontSize: "14px", color: T.muted, lineHeight: 1.6 }}>
+                    The guest accepted the proposal — confirming books the villa for these dates
+                    (including the setup day before).
+                  </p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    <Button variant="primary" wide onClick={() => setPreviewAction({ kind: "approve" })}>
+                      Confirm this event…
+                    </Button>
+                    <Button variant="danger" wide onClick={() => setPreviewAction({ kind: "decline", expectedStatus: "pending" })}>
+                      Decline it…
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p style={{ margin: "0 0 16px", fontSize: "14px", color: T.muted, lineHeight: 1.6 }}>
+                    An event is confirmed only after the guest accepts the proposal above.
+                  </p>
+                  <Button variant="danger" wide onClick={() => setPreviewAction({ kind: "decline", expectedStatus: "pending" })}>
+                    Decline this enquiry…
+                  </Button>
+                </>
+              )}
             </Card>
           ) : status === "pending" ? (
             <Card title="Your approval">
@@ -357,7 +388,24 @@ function BookingDetail() {
                 </p>
               </>
             ) : (
-              <Button variant="primary" wide onClick={() => setDialog("payment")}>Record a payment</Button>
+              <>
+                <Button variant="primary" wide onClick={() => setDialog("payment")}>Record a payment</Button>
+                {/* Phase 16B asking-for-money, same lifecycle + same emails. */}
+                {!isEvent && outstanding > 0 && (
+                  <Button wide onClick={() => setMoneyRequest("request")}>
+                    {booking.payment_status === "payment_requested" ? "Ask again for a different amount…" : "Ask the guest to pay…"}
+                  </Button>
+                )}
+                {!isEvent && booking.payment_status === "payment_requested" && (
+                  <Button wide onClick={() => setMoneyRequest("reminder")}>Send a reminder…</Button>
+                )}
+                {!isEvent && booking.payment_status === "payment_requested" && (
+                  <p style={{ margin: 0, fontSize: "12px", color: T.faint, textAlign: "center" }}>
+                    {booking.deposit_amount ? `${money(booking.deposit_amount)} requested` : "Payment requested"}
+                    {booking.payment_due_at ? ` · due ${day(booking.payment_due_at)}` : ""}
+                  </p>
+                )}
+              </>
             )}
           </div>
         </Card>
@@ -370,6 +418,21 @@ function BookingDetail() {
           onClose={() => { pausePolling(false); setDialog(null); }}
           onOpen={() => pausePolling(true)}
           onDone={afterAction}
+        />
+      )}
+
+      {moneyRequest && (
+        <RequestMoneyDialog
+          mode={moneyRequest}
+          booking={booking}
+          onClose={() => { pausePolling(false); setMoneyRequest(null); }}
+          onOpen={() => pausePolling(true)}
+          onDone={async (message) => {
+            pausePolling(false);
+            setMoneyRequest(null);
+            setFlash(message);
+            await refresh();
+          }}
         />
       )}
 

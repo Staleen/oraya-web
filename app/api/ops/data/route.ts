@@ -50,6 +50,9 @@ export async function GET(request: Request) {
     "payment_received_at", "payment_marked_by",
     "refund_status", "refund_amount", "refunded_at", "refund_provider_reference",
     "whatsapp_confirmation_sent_at",
+    // Event proposals — the /ops event flow reads these.
+    "proposal_status", "proposal_total_amount", "proposal_deposit_amount",
+    "proposal_valid_until", "proposal_payment_methods", "proposal_notes",
   ].join(", ");
 
   // Blocks that ended more than a month ago are history, not availability.
