@@ -43,6 +43,7 @@
 | `NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_CERTIFICATE_ID` | server-only | optional for sandbox completion; required for webhook reconciliation | optional for sandbox checkout; yes for webhook test | yes before live rollout | yes - Sensitive |
 | `NETCOMMERCE_CYBERSOURCE_WEBHOOK_SIGNATURE_KEY_ID` | server-only | optional for sandbox completion; required for verified webhooks | optional for sandbox checkout; yes for webhook test | yes before live rollout | yes - Sensitive |
 | `NETCOMMERCE_CYBERSOURCE_WEBHOOK_SIGNATURE_SECRET` | server-only | optional for sandbox completion; required for verified webhooks | optional for sandbox checkout; yes for webhook test | yes before live rollout | yes - Sensitive |
+| `NETCOMMERCE_CYBERSOURCE_APPLE_PAY_ENABLED` | server-only | no (default false) | only after Apple sandbox enrollment/domain/device proof | only after production merchant/domain approval | yes |
 | `STRIPE_SECRET_KEY` | server-only | optional (Stripe local/dev test only) | optional | optional | optional |
 | `STRIPE_WEBHOOK_SECRET` | server-only | optional (Stripe local/dev webhook only) | optional | optional | optional |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | public | optional (Stripe local/dev only) | optional | optional | optional |
@@ -435,6 +436,15 @@ Preview expectations:
 - **Where to get it:** the Base64 `keyInformation.key` returned with the CyberSource digital-signature key. Never reuse the MLE private key or the REST API shared secret.
 - **Configure in Vercel:** Preview when testing webhooks and Production before live rollout. Mark Sensitive.
 - **Risk if missing or invalid:** webhook delivery fails closed and cannot reconcile ambiguous payment attempts.
+
+### `NETCOMMERCE_CYBERSOURCE_APPLE_PAY_ENABLED`
+
+- **Scope:** server-only; exact string `true` is required to opt in.
+- **Used in:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) to add CyberSource Unified Checkout payment type `APPLEPAY`; [app/api/ops/payments/requests/route.ts](../../app/api/ops/payments/requests/route.ts) keeps Apple Pay unavailable otherwise.
+- **Required:** no for card checkout. Set in Preview only after the merchant is enrolled for Apple Pay in CyberSource/NetCommerce, the exact preview/production test domain is registered where required, and an Apple sandbox device is ready. Set in Production only after `stayoraya.com` is verified and the full Apple Pay payment/webhook/refund path passes.
+- **Where to get it:** this is an Oraya activation flag, not a secret from Apple. The prerequisite enablement and domain approval come from the CyberSource Business Center / NetCommerce merchant account.
+- **Configure in Vercel:** `false` or absent by default. Exact `true` only in the environment that has completed the prerequisites.
+- **Risk if enabled early:** Unified Checkout may advertise a wallet the merchant/domain cannot process. The code therefore never infers Apple Pay from ordinary card readiness.
 
 ### `STRIPE_SECRET_KEY`
 

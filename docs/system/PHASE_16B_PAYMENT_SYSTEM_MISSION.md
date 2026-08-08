@@ -24,7 +24,7 @@ Production activation remains a separate, deliberate decision for each integrate
 
 ## Current reality
 
-**Implementation checkpoint, 2026-08-09:** PR #110 shipped F1/F2 and the core F3 link path; PR #112 shipped CyberSource webhook JWE, separate timestamped signature verification, and replay claiming. The live schema now supports request-scoped attempts and an atomic provider-payment RPC. The active card bridge makes booking-time and standalone `/pay/[token]` requests use the same Unified Checkout and immutable ledger path; the card action stays hidden unless readiness is genuinely open. Provider-issued credentials, subscription approval, and delivered sandbox evidence remain activation gates. Direct send/reminder/reissue/late-association controls, settlement reporting, Apple Pay, native wallet APIs, and saved cards remain later checkpoints.
+**Implementation checkpoint, 2026-08-09:** PR #110 shipped F1/F2 and the core F3 link path; PR #112 shipped CyberSource webhook JWE, separate timestamped signature verification, and replay claiming; PR #113 shipped the canonical booking/standalone card bridge. The live schema supports request-scoped attempts and an atomic provider-payment RPC. `/ops/payments` exposes provider readiness, reconciliation attention, and gross/fee/net ledger totals. Apple Pay capture-context support exists behind a separate exact flag and records as a wallet only on an Apple-only request; it cannot activate until merchant enrollment, domain verification, and device testing are proven. Provider-issued card/webhook credentials, subscription approval, delivered sandbox evidence, native-wallet contracts, and TMS/legal approval remain external gates.
 
 The repository now has both a strong card-security foundation and the first complete-system foundation:
 
@@ -37,7 +37,7 @@ The repository now has both a strong card-security foundation and the first comp
 - atomic manual receipt/reversal projections for requests and bookings;
 - an operations collection workspace and public standalone `/pay/[token]` front door.
 
-It is not yet a complete payment operating system. Native provider checkout still has to be routed through the canonical request/transaction model; webhook credentials/subscription/delivery evidence and provider activation remain open; direct send/reminder/reissue, automated receipts, settlement/reporting, Apple Pay, native wallets, and the saved-card instrument/consent model remain. The `bookings.amount_*` and `bookings.payment_*` fields are now compatibility summaries; the immutable transaction ledger is the durable history for new manual receipts.
+The provider-independent payment operating system is implemented. Remaining work cannot be truthfully completed without external artifacts: card/webhook credentials and delivered provider tests, Apple Pay enrollment/domain/device proof, official Whish/OMT/Suyool merchant contracts, and CyberSource TMS plus legal/consent approval. The `bookings.amount_*` and `bookings.payment_*` fields are compatibility summaries; the immutable transaction ledger is the durable money history.
 
 ## Canonical model
 

@@ -6,6 +6,7 @@ import { createPaymentRequestToken, encryptPaymentRequestToken, hashPaymentReque
 import { expireDuePaymentRequests, PAYMENT_REQUEST_COLUMNS, paymentRequestUrl } from "@/lib/payments/ledger-server";
 import { resolvePaymentRequestOrigin } from "@/lib/payments/request-origin";
 import { getHostedCheckoutAdminStatus } from "@/lib/payments/runtime";
+import { getCreditLibanaisPaymentCapabilities } from "@/lib/payments/credit-libanais";
 
 export const dynamic = "force-dynamic";
 
@@ -14,15 +15,33 @@ export async function GET(request: Request) {
   if (!auth.ok) return auth.response;
   await expireDuePaymentRequests();
 
-  const [{ data: requests, error: requestError }, { data: transactions, error: transactionError }, checkout] = await Promise.all([
+  const [
+    { data: requests, error: requestError },
+    { data: transactions, error: transactionError },
+    { data: attempts, error: attemptError },
+    { data: providerEvents, error: eventError },
+    checkout,
+  ] = await Promise.all([
     supabaseAdmin.from("payment_requests").select(PAYMENT_REQUEST_COLUMNS).order("created_at", { ascending: false }).limit(100),
     supabaseAdmin.from("payment_transactions")
       .select("id, payment_request_id, booking_id, transaction_type, status, amount, currency, applied_amount, applied_currency, exchange_rate, method, provider, wallet_presentation, provider_reference, receipt_reference, gross_amount, fee_amount, net_amount, verified_source, effective_at, created_by, reverses_transaction_id, notes, created_at")
       .order("effective_at", { ascending: false }).limit(250),
+    supabaseAdmin.from("payment_attempts")
+      .select("id, booking_id, payment_request_id, idempotency_key, status, provider_transaction_id, provider_reference, amount, currency, created_at, updated_at")
+      .order("created_at", { ascending: false }).limit(250),
+    supabaseAdmin.from("payment_provider_events")
+      .select("id, provider, provider_event_id, payment_request_id, payment_transaction_id, received_at, occurred_at, verification_status, processing_status, processed_at, error_code")
+      .order("received_at", { ascending: false }).limit(250),
     getHostedCheckoutAdminStatus(),
   ]);
-  if (requestError || transactionError) {
-    console.error("[ops/payment-requests] load failed", requestError?.message, transactionError?.message);
+  if (requestError || transactionError || attemptError || eventError) {
+    console.error(
+      "[ops/payment-requests] load failed",
+      requestError?.message,
+      transactionError?.message,
+      attemptError?.message,
+      eventError?.message,
+    );
     return NextResponse.json({ error: "Could not load the payment ledger." }, { status: 503 });
   }
 
@@ -34,10 +53,19 @@ export async function GET(request: Request) {
       payment_url: paymentRequestUrl(origin, String(row.public_token_ciphertext)),
     })),
     transactions: transactions ?? [],
+    attempts: attempts ?? [],
+    provider_events: providerEvents ?? [],
     checkout: {
       checkout_ready: checkout.checkout_ready && checkout.provider_key === "credit_libanais",
+      apple_pay_ready:
+        checkout.checkout_ready &&
+        checkout.provider_key === "credit_libanais" &&
+        getCreditLibanaisPaymentCapabilities().apple_pay_enabled,
       provider_display_name: checkout.provider_display_name,
       guest_message: checkout.guest_message,
+      environment: checkout.environment,
+      admin_message: checkout.admin_message,
+      missing_requirements: checkout.missing_requirements,
     },
   });
 }
@@ -54,10 +82,23 @@ export async function POST(request: Request) {
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
   const input = parsed.value;
 
-  if (input.allowed_methods.includes("card")) {
+  if (input.allowed_methods.includes("card") && input.allowed_methods.includes("apple_pay")) {
+    return NextResponse.json(
+      { error: "Create separate card and Apple Pay links so the payment method remains auditable." },
+      { status: 400 },
+    );
+  }
+
+  if (input.allowed_methods.includes("card") || input.allowed_methods.includes("apple_pay")) {
     const checkout = await getHostedCheckoutAdminStatus();
     if (!checkout.checkout_ready || checkout.provider_key !== "credit_libanais") {
-      return NextResponse.json({ error: "Card payment is not ready yet. Finish NetCommerce setup before adding card to a link." }, { status: 409 });
+      return NextResponse.json({ error: "Online payment is not ready yet. Finish NetCommerce setup before adding it to a link." }, { status: 409 });
+    }
+    if (
+      input.allowed_methods.includes("apple_pay") &&
+      !getCreditLibanaisPaymentCapabilities().apple_pay_enabled
+    ) {
+      return NextResponse.json({ error: "Apple Pay is not enrolled and verified for this merchant/domain yet." }, { status: 409 });
     }
   }
 

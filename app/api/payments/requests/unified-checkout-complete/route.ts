@@ -68,6 +68,10 @@ export async function POST(request: Request) {
     const attemptId = crypto.randomUUID();
     const merchantReference = deriveMerchantReference(attemptId);
     const providerSessionId = payment.payment_provider_session_id;
+    const walletPresentation =
+      payment.allowed_methods.includes("apple_pay") && !payment.allowed_methods.includes("card")
+        ? "apple_pay" as const
+        : null;
     const outcome = await runUnifiedCheckoutCompletion(
       {
         store: supabasePaymentAttemptStore,
@@ -88,6 +92,7 @@ export async function POST(request: Request) {
             currency: payment.currency,
             provider_reference: provider.reference,
             idempotency_key: merchantReference,
+            wallet_presentation: walletPresentation,
           });
           return recorded.ok ? { ok: true as const, matched: 1 } : { ok: false as const };
         },
