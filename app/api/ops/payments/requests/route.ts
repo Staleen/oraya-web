@@ -3,7 +3,7 @@ import { requireOps } from "@/lib/ops-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { parseCreatePaymentRequestInput } from "@/lib/payments/ledger";
 import { createPaymentRequestToken, encryptPaymentRequestToken, hashPaymentRequestToken } from "@/lib/payments/ledger-token";
-import { PAYMENT_REQUEST_COLUMNS, paymentRequestUrl } from "@/lib/payments/ledger-server";
+import { expireDuePaymentRequests, PAYMENT_REQUEST_COLUMNS, paymentRequestUrl } from "@/lib/payments/ledger-server";
 import { resolvePaymentRequestOrigin } from "@/lib/payments/request-origin";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const auth = await requireOps(request);
   if (!auth.ok) return auth.response;
+  await expireDuePaymentRequests();
 
   const [{ data: requests, error: requestError }, { data: transactions, error: transactionError }] = await Promise.all([
     supabaseAdmin.from("payment_requests").select(PAYMENT_REQUEST_COLUMNS).order("created_at", { ascending: false }).limit(100),

@@ -12,6 +12,15 @@ export function paymentRequestUrl(origin: string, encryptedToken: string) {
   return token ? `${origin}/pay/${encodeURIComponent(token)}` : null;
 }
 
+export async function expireDuePaymentRequests() {
+  const now = new Date().toISOString();
+  const { error } = await supabaseAdmin.from("payment_requests")
+    .update({ status: "expired", updated_at: now })
+    .in("status", ["active", "partially_paid"])
+    .lt("expires_at", now);
+  if (error) console.error("[payment-requests] expiry projection failed", error.message);
+}
+
 export async function findPublicPaymentRequest(token: string) {
   if (!token || token.length > 160) return null;
   const { data, error } = await supabaseAdmin
@@ -23,6 +32,19 @@ export async function findPublicPaymentRequest(token: string) {
   if (!data) return null;
 
   const row = data as unknown as PaymentRequestRow;
+  if (
+    row.expires_at && Date.parse(row.expires_at) <= Date.now() &&
+    (row.status === "active" || row.status === "partially_paid")
+  ) {
+    const now = new Date().toISOString();
+    const { data: expired } = await supabaseAdmin.from("payment_requests")
+      .update({ status: "expired", updated_at: now })
+      .eq("id", row.id)
+      .in("status", ["active", "partially_paid"])
+      .select("id")
+      .maybeSingle();
+    if (expired) row.status = "expired";
+  }
   return {
     id: row.id,
     payer_name: row.payer_name,
