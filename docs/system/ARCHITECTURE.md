@@ -5,7 +5,7 @@
 
 > Secret model and per-variable risk live in **[ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md)** - this doc only references it.
 
-> **Phase 16B target architecture (approved 2026-08-09; foundation implemented, provider workstreams incomplete):** Oraya's complete payment system separates payment requests, immutable money transactions, provider attempts/events, and later consented tokenized member instruments. `payment_requests`, `payment_transactions`, and `payment_provider_events` are installed server-only; payment requests may be booking-linked or standalone and power safe Oraya `/pay/[token]` links. Existing `bookings.payment_*` fields are atomic summary projections rather than the only ledger; `payment_attempts` remains the NetCommerce provider-call safety boundary. Cash/manual rails and standalone links are the first implemented scenario. Native providers, cards through the new request ledger, Apple Pay, saved instruments, and settlement operations remain gated. See [PHASE_16B_PAYMENT_SYSTEM_MISSION.md](PHASE_16B_PAYMENT_SYSTEM_MISSION.md).
+> **Phase 16B target architecture (approved 2026-08-09; foundation and canonical card bridge implemented, provider workstreams incomplete):** Oraya's complete payment system separates payment requests, immutable money transactions, provider attempts/events, and later consented tokenized member instruments. `payment_requests`, `payment_transactions`, and `payment_provider_events` are server-only; booking-linked or standalone requests power `/pay/[token]`. Existing `bookings.payment_*` fields are atomic summary projections rather than the only ledger. NetCommerce completion claims one in-flight attempt per request, and an approved result is recorded atomically in the immutable ledger before the attempt becomes terminal. Apple Pay, native wallet APIs, saved instruments, and settlement operations remain gated. See [PHASE_16B_PAYMENT_SYSTEM_MISSION.md](PHASE_16B_PAYMENT_SYSTEM_MISSION.md).
 
 ---
 
@@ -62,7 +62,7 @@ Next.js App Router (TypeScript)
 | `/join`, `/login`, `/forgot-password`, `/reset-password`, `/welcome`, `/profile` | `app/*/page.tsx` | Member auth + dashboard. `/profile` "My Bookings" cards open the canonical signed `/booking/view/[token]` page via a member-authenticated server mint (no duplicate booking-details UI). |
 | `/legal/{terms,payment,refund,privacy}` | `app/legal/*/page.tsx` | Trust + legal hub |
 | `/payments/checkout/[token]` | `app/payments/checkout/[token]/page.tsx` | Internal Credit Libanais / NetCommerce Unified Checkout payment page |
-| `/pay/[token]` | `app/pay/[token]/page.tsx` | Public branded payment-request front door; opaque token lookup, safe request summary, manual instructions, and integrated-method readiness without exposing internal IDs or secrets |
+| `/pay/[token]` | `app/pay/[token]/page.tsx` | Public branded payment-request front door; opaque token lookup, safe request summary, manual instructions, and a card action only when NetCommerce readiness is open |
 
 ## Admin surface
 
@@ -133,7 +133,9 @@ All routes verified against the current repo. Locked APIs are marked **locked** 
 | `/api/butler/booking-lookup` | POST | Reference-based booking lookup (returns safe-state envelope, never sensitive fields) | secret-guarded |
 | `/api/butler/identify` | POST | WhatsApp identity orchestration — subscriber-id / phone continuity → booking-reference fallback → identity-verification gate, one call per turn. Optional `message_text` body field lets the route derive `booking_reference` from the inbound WhatsApp message via a bounded `\b[0-9A-Fa-f]{8}\b` extraction when no explicit reference was provided. | secret-guarded |
 | `/api/butler/confirmed-guest-info` | POST | Confirmed-guest-only info boundary — narrow Phase 16A allow-list (reference / villa / dates / view URL / check-in guidance / location-access safety note) plus `arrival_guide_url` for identity-established confirmed bookings (Phase 16C Stage 4B — `/arrival/<signed-view-token>`, checkout-day expiry, null on every refusal branch); refuses pending / cancelled / unverified | secret-guarded |
-| `/api/payments/checkout` | POST | Create a hosted checkout session for an existing booking via the selected provider adapter | payment |
+| `/api/payments/checkout` | POST | Create or reuse a canonical card payment request after an existing booking is created | payment |
+| `/api/payments/requests/unified-checkout-session` | POST | Validate an opaque request token and mint/persist a request-scoped CyberSource capture context | payment |
+| `/api/payments/requests/unified-checkout-complete` | POST | Claim one request-scoped attempt, authorize the transient token, and atomically append the provider transaction plus projections | payment |
 | `/api/payments/unified-checkout-session` | POST | Create a CyberSource Unified Checkout capture context for an active signed booking payment link | payment |
 | `/api/payments/unified-checkout-complete` | POST | Server-side CyberSource Payments API authorization from a Unified Checkout transient token | payment |
 | `/api/payments/readiness` | GET | Admin-auth safe provider-readiness summary (configured vs placeholder, no secrets) | payment |
@@ -258,7 +260,7 @@ Resolution is intentionally lossy: a Supabase outage or genuinely-missing row bo
 ## Database schema (high level)
 
 - `bookings` - primary booking record. Includes `pricing_snapshot` and `addons` (`jsonb`). Additive human-run migrations added `whatsapp_confirmation_sent_at` (Phase 16C at-most-once WhatsApp dispatch claim, `sql/phase-16c-whatsapp-confirmation-tracking.sql`) and `refund_provider_reference` (Plan 4 manual-refund Business Center reference, `sql/plan4-refund-provider-reference.sql`).
-- `payment_attempts` - durable payment-attempt/idempotency ledger for Unified Checkout completion (Plan 3 Phase 3, `sql/plan3-payment-attempts.sql`, human-run; partial unique index = at most one in-flight attempt per booking). States: claimed / authorized / recorded / failed / ambiguous. Code fails closed (503) while the table is missing.
+- `payment_attempts` - durable payment-attempt/idempotency ledger for Unified Checkout completion (partial unique indexes = at most one in-flight attempt per canonical request, or per legacy booking-only subject). States: claimed / authorized / recorded / failed / ambiguous. Code fails closed (503) while the table is missing.
 - `payment_requests` - canonical booking-linked or standalone collection intent; unguessable public token is stored as a lookup hash plus server-only encrypted recoverable copy, supports USD/LBP, methods, partial-paid projection, expiry/cancel, and attributable creation.
 - `payment_transactions` - append-only money facts (payment/refund/reversal/adjustment), received and applied currencies, method/provider/presentation, gross/fee/net, source, actor, idempotency key, and exact pre-projection snapshot. A database trigger makes financial facts immutable; corrections are linked rows.
 - `payment_provider_events` - server-only durable verified-event/replay ledger. Credit Libanais/CyberSource claims each verified delivery here before reconciliation; a provider delivery ID and a stable semantic replay key prevent both exact and retry-delivery duplicates.

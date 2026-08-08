@@ -24,7 +24,7 @@ Production activation remains a separate, deliberate decision for each integrate
 
 ## Current reality
 
-**Implementation checkpoint, 2026-08-09:** PR #110 shipped F1/F2 and the core F3 link path after CI and deployed Preview verification; the additive ledger migration is installed on live ORAYA Supabase. Operations can create booking-linked or standalone links, copy/cancel them, record partial or full manual receipts for cash/bank/Whish/OMT/Western Union/Suyool, and reverse the latest booking receipt with exact state restoration. `/pay/[token]` safely presents the request and configured manual instructions. The active 16B-NC work adds CyberSource webhook JWE decryption, distinct timestamped digital-signature verification, durable replay claiming, and the additive attempt-to-request link; provider-issued credentials, subscription approval, and delivered sandbox evidence remain activation gates. Native card checkout through the canonical request object, direct send/reminder/reissue/late-association controls, automated standalone receipts, settlement reporting, Apple Pay, and saved cards remain later checkpoints.
+**Implementation checkpoint, 2026-08-09:** PR #110 shipped F1/F2 and the core F3 link path; PR #112 shipped CyberSource webhook JWE, separate timestamped signature verification, and replay claiming. The live schema now supports request-scoped attempts and an atomic provider-payment RPC. The active card bridge makes booking-time and standalone `/pay/[token]` requests use the same Unified Checkout and immutable ledger path; the card action stays hidden unless readiness is genuinely open. Provider-issued credentials, subscription approval, and delivered sandbox evidence remain activation gates. Direct send/reminder/reissue/late-association controls, settlement reporting, Apple Pay, native wallet APIs, and saved cards remain later checkpoints.
 
 The repository now has both a strong card-security foundation and the first complete-system foundation:
 
@@ -79,7 +79,7 @@ Confirmed history is corrected by a linked reversal or adjustment, never silentl
 
 ### 3. Provider attempt and event records
 
-The existing `payment_attempts` table remains the idempotency and ambiguous-outcome boundary for provider calls. It should eventually reference a payment request as well as a booking.
+The existing `payment_attempts` table remains the idempotency and ambiguous-outcome boundary for provider calls. It references a canonical payment request when present and retains booking linkage for projections and legacy links.
 
 Verified asynchronous messages belong in a durable `payment_provider_events` ledger with provider event ID, receipt time, verification result, processing result, replay key, and safe metadata. A browser redirect is never proof of payment.
 

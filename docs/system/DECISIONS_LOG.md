@@ -16,6 +16,18 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-09 - Card authorization records through canonical payment requests
+
+**Decision:** booking-time and standalone NetCommerce card payments share the canonical `payment_requests` front door, request-scoped `payment_attempts`, and atomic `oraya_record_provider_payment` ledger writer. `/pay/[token]` renders a card action only when server readiness is open. Browser return and verified webhook reconciliation use the same provider-attempt idempotency key; the immutable transaction is the money fact and booking fields are projections. Apple Pay is not implied or activated by card readiness.
+
+**Reason:** a booking-only card path would duplicate payment truth and leave standalone links unable to use the bank gateway. The request ledger already represents what is owed, while attempt uniqueness, provider idempotency, and an atomic transaction/projection write prevent double charging and partial state updates.
+
+**Impact:** [sql/phase-16b-card-payment-requests.sql](../../sql/phase-16b-card-payment-requests.sql) is installed on live Supabase. It permits standalone request attempts, enforces one in-flight attempt per request, serializes browser/webhook recording, and blocks operator receipts during a claimed provider call. New request-scoped session/completion routes reuse the existing bank-controlled Unified Checkout page. Production remains fail-closed and no card data is stored by Oraya.
+
+**Reversible?:** application routing is reversible before live use; immutable provider transactions and their audit history must be retained once real payments exist.
+
+---
+
 ## 2026-08-08 - Ops migration Batches 3–7: media, site settings, members, calendar feeds, business numbers
 
 **Decision:** five batches shipped together so the owner can test a complete `/ops` in one pass rather than verifying each batch separately (David's explicit request).

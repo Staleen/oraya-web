@@ -5,12 +5,15 @@ import { Badge, Banner, Button, Card, Field, T } from "@/components/ops/ui";
 import { PAYMENT_ALLOWED_METHODS, formatPaymentAmount, remainingRequestAmount, type PaymentAllowedMethod, type PaymentCurrency, type PaymentRequestRow, type PaymentTransactionRow } from "@/lib/payments/ledger";
 
 type RequestView = PaymentRequestRow & { payment_url: string | null };
-type LedgerData = { requests: RequestView[]; transactions: PaymentTransactionRow[] };
+type LedgerData = {
+  requests: RequestView[];
+  transactions: PaymentTransactionRow[];
+  checkout?: { checkout_ready: boolean; provider_display_name: string | null; guest_message: string };
+};
 const methodLabels: Record<PaymentAllowedMethod, string> = {
-  cash: "Cash", bank_transfer: "Bank transfer", card: "Card (not active yet)", apple_pay: "Apple Pay (not active yet)",
+  cash: "Cash", bank_transfer: "Bank transfer", card: "Credit or debit card", apple_pay: "Apple Pay (not active yet)",
   whish: "Whish", omt: "OMT", western_union: "Western Union", suyool: "Suyool",
 };
-const activeRequestMethods = PAYMENT_ALLOWED_METHODS.filter((method) => method !== "card" && method !== "apple_pay");
 const inputStyle = { width: "100%", boxSizing: "border-box" as const, background: "rgba(255,255,255,.05)", border: `1px solid ${T.borderStrong}`, borderRadius: T.rSm, padding: "12px 13px", color: T.ink, fontSize: "14px", fontFamily: T.sans };
 
 function paymentTone(status: string): "ok" | "warn" | "bad" | "neutral" {
@@ -59,6 +62,11 @@ export default function PaymentWorkspace() {
   useEffect(() => { void load(); }, [load]);
 
   const chosenBooking = useMemo(() => bookings.find((booking) => booking.id === bookingId), [bookings, bookingId]);
+  const activeRequestMethods = useMemo(
+    () => PAYMENT_ALLOWED_METHODS.filter((method) =>
+      method !== "apple_pay" && (method !== "card" || ledger.checkout?.checkout_ready)),
+    [ledger.checkout?.checkout_ready],
+  );
   function chooseBooking(id: string) {
     setBookingId(id);
     const booking = bookings.find((item) => item.id === id);
@@ -159,6 +167,7 @@ export default function PaymentWorkspace() {
       </div>
       <p style={{ color: T.muted, fontSize: 12, margin: "8px 0" }}>Ways this person may pay</p>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>{activeRequestMethods.map((method) => { const on = methods.includes(method); return <Button small key={method} variant={on ? "primary" : "secondary"} onClick={() => setMethods((current) => on ? current.filter((item) => item !== method) : [...current, method])}>{methodLabels[method]}</Button>; })}</div>
+      {!ledger.checkout?.checkout_ready && <p style={{ color: T.muted, fontSize: 12, margin: "-8px 0 18px" }}>Card links will appear here automatically after NetCommerce sandbox or live setup is ready. Apple Pay remains separately gated.</p>}
       <Button variant="primary" disabled={busy || !payerName.trim() || !description.trim() || !amount || methods.length === 0} onClick={() => void createRequest()}>{busy ? "Creating…" : "Create secure link"}</Button>
     </Card>}
 
