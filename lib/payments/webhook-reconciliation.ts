@@ -29,6 +29,7 @@ import type { CreditLibanaisWebhookEvent } from "./credit-libanais-webhook.ts";
 export type ReconciliationAttempt = {
   id: string;
   booking_id: string;
+  payment_request_id: string | null;
   status: PaymentAttemptStatus;
   amount: number;
   currency: string;

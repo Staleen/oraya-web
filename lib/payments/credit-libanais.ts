@@ -48,6 +48,8 @@ interface NetCommerceConfig {
   webhookMleKeyId: string | null;
   webhookMlePrivateKey: string | null;
   webhookMleCertificateId: string | null;
+  webhookSignatureKeyId: string | null;
+  webhookSignatureSecret: string | null;
 }
 
 export interface CreditLibanaisUnifiedCheckoutSession {
@@ -135,6 +137,8 @@ function readNetCommerceConfig(): NetCommerceConfig {
     webhookMleKeyId: readEnv("NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_KEY_ID"),
     webhookMlePrivateKey: readEnv("NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_PRIVATE_KEY"),
     webhookMleCertificateId: readEnv("NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_CERTIFICATE_ID"),
+    webhookSignatureKeyId: readEnv("NETCOMMERCE_CYBERSOURCE_WEBHOOK_SIGNATURE_KEY_ID"),
+    webhookSignatureSecret: readEnv("NETCOMMERCE_CYBERSOURCE_WEBHOOK_SIGNATURE_SECRET"),
   };
 }
 
@@ -180,6 +184,12 @@ function getWebhookMissingRequirements(config: NetCommerceConfig) {
   }
   if (!config.webhookMleCertificateId) {
     missing.push("NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_CERTIFICATE_ID is not configured");
+  }
+  if (!config.webhookSignatureKeyId) {
+    missing.push("NETCOMMERCE_CYBERSOURCE_WEBHOOK_SIGNATURE_KEY_ID is not configured");
+  }
+  if (!config.webhookSignatureSecret) {
+    missing.push("NETCOMMERCE_CYBERSOURCE_WEBHOOK_SIGNATURE_SECRET is not configured");
   }
   return missing;
 }

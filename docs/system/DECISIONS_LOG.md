@@ -16,6 +16,20 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-09 - CyberSource webhook MLE and digital-signature keys are separate
+
+**Decision:** payment and Unified Checkout webhooks must decrypt the compact-JWE payload first, then verify the timestamped `v-c-signature` over `timestamp + "." + decryptedPayload` using a separately issued Base64 digital-signature secret and key ID. The delivery timestamp must be within five minutes. A verified delivery must claim both its provider delivery ID and a stable semantic replay key in `payment_provider_events` before any attempt or booking state can change.
+
+**Reason:** CyberSource's current Webhooks guide requires MLE for payment/Unified Checkout events and documents a distinct digital-signature key from `/kms/egress/v2/keys-sym`. The earlier temporary receiver incorrectly used the webhook MLE private key as an HMAC secret over the raw request body and did not durably claim retries before reconciliation.
+
+**Impact:** [lib/payments/credit-libanais-webhook.ts](../../lib/payments/credit-libanais-webhook.ts) now owns JWE decryption, protected-key checks, signature parsing/tolerance, event parsing, and replay-key derivation. The dedicated handler persists verified claims before reconciliation. Two new server-only Vercel variables hold the digital-signature key ID and secret; they are never reused for MLE or REST API authentication. [sql/phase-16b-nc-provider-events.sql](../../sql/phase-16b-nc-provider-events.sql) additively links `payment_attempts` to canonical requests. No provider was activated.
+
+**Reversible?:** no for production security posture; the deployment can be rolled back, but the temporary raw-body/MLE-key HMAC scheme must not be restored or subscribed.
+
+**Supersedes:** the temporary webhook signature scheme documented in the 2026-07-25 Plan 4 foundation. It does not supersede the monotonic attempt/reconciliation model.
+
+---
+
 ## 2026-08-09 - Canonical payment ledger is server-only, append-only, and projection-safe
 
 **Decision:** introduce `payment_requests`, `payment_transactions`, and `payment_provider_events` as the canonical Phase 16B foundation. Client roles receive no table access; authenticated `/ops` routes use the server service role. Financial transaction facts cannot be edited after insertion. A correction appends one linked reversal, and a booking-linked reversal restores the exact pre-receipt booking projection. Booking-linked requests use USD because the existing booking balance columns are USD; standalone requests may use USD or LBP, and a received amount may retain a distinct applied amount/exchange rate.
