@@ -87,6 +87,10 @@ export async function GET(request: Request) {
     payment_settings: parsePaymentPublicSettings(paymentsRaw),
     payment_settings_raw: paymentsRaw,
     testimonials: parseGuestTestimonialsJson(byKey.get(GUEST_TESTIMONIALS_SETTINGS_KEY)),
+    // Raw stored value, so a save can prove it edited THIS version and not one
+    // someone else has since replaced. Same compare-and-set the other Setup
+    // screens use.
+    testimonials_raw: byKey.get(GUEST_TESTIMONIALS_SETTINGS_KEY) ?? null,
     site: {
       whatsapp_number: byKey.get("whatsapp_number") ?? "",
       notification_emails: byKey.get("notification_emails") ?? "",
