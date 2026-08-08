@@ -34,6 +34,10 @@
 | `NETCOMMERCE_CYBERSOURCE_API_BASE_URL` | server-only | yes (sandbox test) | yes | yes | yes |
 | `NETCOMMERCE_CYBERSOURCE_COUNTRY` | server-only | yes (sandbox test) | yes | yes | yes |
 | `NETCOMMERCE_CYBERSOURCE_LOCALE` | server-only | yes (sandbox test) | yes | yes | yes |
+| `NETCOMMERCE_CYBERSOURCE_REQUEST_MLE_CERTIFICATE` | server-only | yes (sandbox payment test) | yes | yes | yes - Sensitive |
+| `NETCOMMERCE_CYBERSOURCE_REQUEST_MLE_KEY_ID` | server-only | yes (sandbox payment test) | yes | yes | yes - Sensitive |
+| `NETCOMMERCE_CYBERSOURCE_RESPONSE_MLE_KEY_ID` | server-only | yes (sandbox payment test) | yes | yes | yes - Sensitive |
+| `NETCOMMERCE_CYBERSOURCE_RESPONSE_MLE_PRIVATE_KEY` | server-only | yes (sandbox payment test) | yes | yes | yes - Sensitive |
 | `NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_KEY_ID` | server-only | optional for sandbox completion; required for webhook reconciliation | optional for sandbox checkout; yes for webhook test | yes before live rollout | yes - Sensitive |
 | `NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_PRIVATE_KEY` | server-only | optional for sandbox completion; required for webhook reconciliation | optional for sandbox checkout; yes for webhook test | yes before live rollout | yes - Sensitive |
 | `NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_CERTIFICATE_ID` | server-only | optional for sandbox completion; required for webhook reconciliation | optional for sandbox checkout; yes for webhook test | yes before live rollout | yes - Sensitive |
@@ -147,6 +151,10 @@ For a Draft PR / Preview deployment that validates the NetCommerce / Credit Liba
 - `NETCOMMERCE_CYBERSOURCE_API_BASE_URL`
 - `NETCOMMERCE_CYBERSOURCE_COUNTRY`
 - `NETCOMMERCE_CYBERSOURCE_LOCALE`
+- `NETCOMMERCE_CYBERSOURCE_REQUEST_MLE_CERTIFICATE`
+- `NETCOMMERCE_CYBERSOURCE_REQUEST_MLE_KEY_ID`
+- `NETCOMMERCE_CYBERSOURCE_RESPONSE_MLE_KEY_ID`
+- `NETCOMMERCE_CYBERSOURCE_RESPONSE_MLE_PRIVATE_KEY`
 - `NEXT_PUBLIC_SITE_URL`
 
 Preview expectations:
@@ -158,7 +166,7 @@ Preview expectations:
 - `NETCOMMERCE_CYBERSOURCE_LOCALE` should be the bank-confirmed locale, currently expected as `en_US`.
 - `NEXT_PUBLIC_SITE_URL` should be the HTTPS Vercel Preview origin used for the payment page, because CyberSource validates the capture-context target origin.
 - Payment checkout routes use the actual Vercel Preview request origin for payment-link generation, so the tested branch alias and generated checkout links should stay on the same HTTPS host.
-- The webhook/MLE variables are optional for this sandbox server-side completion test. They are required before production live rollout and before asynchronous webhook reconciliation can be trusted.
+- The four request/response MLE variables are required for sandbox payment completion. The separate webhook MLE variables remain optional for checkout-only sandbox validation, but are required before production rollout and before asynchronous webhook reconciliation can be trusted.
 - Browser redirects remain informational. Server-side CyberSource authorization and/or a verified webhook are authoritative for payment state.
 - PR #64 passed the approved-card sandbox path, NetCommerce confirmed successful testing, and the implementation was merged on 2026-07-02. Declined-card validation remains pending until NetCommerce/CyberSource provides an official declined-card vector or decline trigger.
 - Production checkout is fail-closed even when production credentials are supplied: since Plan 4 Phase 3 (2026-07-25), the adapter reports production checkout ready only when all session **and** webhook/MLE env vars are present AND the server-side `payments_live_enabled` settings row reads exactly `"true"` (writable only via `/api/admin/payments/live-toggle`; not an env var). Never copy Preview sandbox values into Production as a shortcut.
@@ -294,7 +302,7 @@ Preview expectations:
 ### `NETCOMMERCE_CYBERSOURCE_MERCHANT_ID`
 
 - **Scope:** server-only.
-- **Used in:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) - `v-c-merchant-id` and CyberSource HTTP Signature authentication.
+- **Used in:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) - `iss`, `v-c-merchant-id`, and CyberSource JWT/JWS authentication.
 - **Required:** local yes for sandbox testing - preview yes with sandbox value - production yes only after production credentials and explicit production enablement are approved.
 - **Where to get it:** NetCommerce / CyberSource merchant credential package.
 - **Configure in Vercel:** yes - Production + Preview, marked Sensitive.
@@ -303,7 +311,7 @@ Preview expectations:
 ### `NETCOMMERCE_CYBERSOURCE_KEY_ID`
 
 - **Scope:** server-only.
-- **Used in:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) - CyberSource HTTP Signature `keyid`.
+- **Used in:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) - CyberSource JWT/JWS protected-header `kid`.
 - **Required:** local yes for sandbox testing - preview yes with sandbox value - production yes only after production credentials and explicit production enablement are approved.
 - **Where to get it:** NetCommerce / CyberSource key material package.
 - **Configure in Vercel:** yes - Production + Preview, marked Sensitive.
@@ -312,7 +320,7 @@ Preview expectations:
 ### `NETCOMMERCE_CYBERSOURCE_SHARED_SECRET`
 
 - **Scope:** server-only.
-- **Used in:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) - HMAC signing for CyberSource session creation. Never expose to browser code.
+- **Used in:** [lib/payments/cybersource-jwt-mle.ts](../../lib/payments/cybersource-jwt-mle.ts) - Base64-decoded HMAC key for HS256 JWT/JWS signing. Never expose to browser code.
 - **Required:** local yes for sandbox testing - preview yes with sandbox value - production yes only after production credentials and explicit production enablement are approved.
 - **Where to get it:** NetCommerce / CyberSource key material package.
 - **Configure in Vercel:** yes - Production + Preview, marked Sensitive.
@@ -344,6 +352,42 @@ Preview expectations:
 - **Where to get it:** NetCommerce / CyberSource technical package. Current English checkout expectation is `en_US` unless the bank specifies otherwise.
 - **Configure in Vercel:** yes - Production + Preview.
 - **Risk if missing:** the adapter fails readiness because CyberSource locale is part of the gateway request contract.
+
+### `NETCOMMERCE_CYBERSOURCE_REQUEST_MLE_CERTIFICATE`
+
+- **Scope:** server-only.
+- **Used in:** [lib/payments/cybersource-jwt-mle.ts](../../lib/payments/cybersource-jwt-mle.ts) - CyberSource SJC public certificate used to encrypt the `/pts/v2/payments` request as compact JWE.
+- **Required:** yes for sandbox and production payment completion.
+- **Where to get it:** extract the `CyberSource_SJC_US` public PEM certificate from the REST-API Response MLE package in CyberSource Business Center, following the official MLE setup guide.
+- **Configure in Vercel:** yes - Production + Preview, marked Sensitive. Multiline PEM and literal `\\n` separators are accepted.
+- **Risk if missing:** checkout fails closed before a payment authorization request is sent.
+
+### `NETCOMMERCE_CYBERSOURCE_REQUEST_MLE_KEY_ID`
+
+- **Scope:** server-only.
+- **Used in:** [lib/payments/cybersource-jwt-mle.ts](../../lib/payments/cybersource-jwt-mle.ts) - JWE protected-header `kid` for the SJC request-encryption certificate.
+- **Required:** yes for sandbox and production payment completion.
+- **Where to get it:** the SJC certificate serial/key identifier supplied by CyberSource.
+- **Configure in Vercel:** yes - Production + Preview, marked Sensitive.
+- **Risk if missing:** Oraya cannot bind the encrypted payment request to CyberSource's request-encryption key.
+
+### `NETCOMMERCE_CYBERSOURCE_RESPONSE_MLE_KEY_ID`
+
+- **Scope:** server-only.
+- **Used in:** [lib/payments/cybersource-jwt-mle.ts](../../lib/payments/cybersource-jwt-mle.ts) - JWT claim `v-c-response-mle-kid` and strict response-JWE `kid` verification.
+- **Required:** yes for sandbox and production payment completion.
+- **Where to get it:** the REST-API Response MLE key ID shown in CyberSource Business Center.
+- **Configure in Vercel:** yes - Production + Preview, marked Sensitive.
+- **Risk if missing:** CyberSource cannot target its encrypted response to Oraya's response key and checkout stays blocked.
+
+### `NETCOMMERCE_CYBERSOURCE_RESPONSE_MLE_PRIVATE_KEY`
+
+- **Scope:** server-only.
+- **Used in:** [lib/payments/cybersource-jwt-mle.ts](../../lib/payments/cybersource-jwt-mle.ts) - PKCS#8 PEM private key for decrypting `/pts/v2/payments` responses.
+- **Required:** yes for sandbox and production payment completion.
+- **Where to get it:** securely extract the private key from the REST-API Response MLE package generated in CyberSource Business Center; never commit it.
+- **Configure in Vercel:** yes - Production + Preview, marked Sensitive. Multiline PEM and literal `\\n` separators are accepted.
+- **Risk if missing or invalid:** the post-submission outcome cannot be verified, so the existing payment-attempt state machine marks it ambiguous and blocks retry pending reconciliation.
 
 ### `NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_KEY_ID`
 

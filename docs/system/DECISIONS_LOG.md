@@ -34,6 +34,9 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+
+---
+
 ## 2026-08-07 - Ops migration Batch 2: the full add-on rule set moves to /ops
 
 **Decision:** the /ops Extras screen now edits **every** `AddonOperationalFields` value (`lib/addon-operations.ts`) through a per-row "Rules" panel — per-villa applicability, applies-to (stay/event/both), category, advance notice + cutoff type, enforcement mode, price basis (fixed/percentage + percentage value), recommended, display order, quantity enablement + unit label + min/max, event pricing unit, and the guest-facing description. `PUT /api/ops/setup/addons` validates all of it strictly server-side (unknown villa, event type, or enum value is refused; a percentage basis requires a 0–100 value; min ≤ max) because the shared parser is lenient by design for READS and would silently drop bad input on a write. The keys the screen owns are stripped from the stored blob before the merge, so clearing a value (e.g. deleting a description) actually clears it rather than the old value resurfacing; keys the screen does not send still round-trip untouched. The R-2 all-addon-wipe guard and the R-6 partial-failure reporting are unchanged. Audit R-5's warning is honoured in the UI: percentage pricing states that it reprices live guest quotes.
