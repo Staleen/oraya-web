@@ -1,0 +1,19 @@
+.page { min-height: 100vh; background: #1f2b38; color: #fff; padding: 36px 18px; font-family: var(--font-lato), sans-serif; }
+.shell { width: min(680px, 100%); margin: 0 auto; }
+.logo { display: block; margin: 0 auto 24px; width: 118px; height: 118px; object-fit: contain; }
+.card { background: #fff; color: #1f2b38; border-radius: 18px; padding: clamp(24px, 5vw, 44px); box-shadow: 0 24px 70px rgba(0,0,0,.24); }
+.eyebrow { color: #9b7744; text-transform: uppercase; letter-spacing: .22em; font-size: 11px; margin: 0 0 10px; }
+.title { font-family: var(--font-playfair), serif; font-size: clamp(30px, 6vw, 44px); font-weight: 400; margin: 0 0 8px; }
+.for { color: #6b7280; margin: 0 0 28px; }
+.amount { border-top: 1px solid #e6ded2; border-bottom: 1px solid #e6ded2; padding: 24px 0; margin: 0 0 26px; display: flex; justify-content: space-between; gap: 20px; align-items: end; }
+.amountLabel { color: #6b7280; font-size: 12px; text-transform: uppercase; letter-spacing: .14em; }
+.amountValue { font-family: var(--font-playfair), serif; font-size: 32px; }
+.methods { display: grid; gap: 12px; }
+.method { border: 1px solid #ded5c7; border-radius: 10px; padding: 16px; }
+.methodTitle { font-weight: 700; margin: 0 0 5px; }
+.muted { color: #6b7280; font-size: 14px; line-height: 1.55; margin: 0; white-space: pre-wrap; }
+.secure { margin: 22px 0 0; color: #6b7280; text-align: center; font-size: 12px; }
+.closed { text-align: center; padding: 16px 0; }
+.closed h2 { font-family: var(--font-playfair), serif; font-weight: 400; font-size: 32px; }
+.footer { text-align: center; margin: 20px 0 0; color: rgba(255,255,255,.62); font-size: 12px; }
+@media (max-width: 520px) { .amount { align-items: start; flex-direction: column; } .card { border-radius: 14px; } }

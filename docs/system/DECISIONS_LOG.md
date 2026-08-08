@@ -16,6 +16,20 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-09 - Canonical payment ledger is server-only, append-only, and projection-safe
+
+**Decision:** introduce `payment_requests`, `payment_transactions`, and `payment_provider_events` as the canonical Phase 16B foundation. Client roles receive no table access; authenticated `/ops` routes use the server service role. Financial transaction facts cannot be edited after insertion. A correction appends one linked reversal, and a booking-linked reversal restores the exact pre-receipt booking projection. Booking-linked requests use USD because the existing booking balance columns are USD; standalone requests may use USD or LBP, and a received amount may retain a distinct applied amount/exchange rate.
+
+**Reason:** cash and Lebanese manual rails need an attributable history that cannot be silently overwritten, while the pre-existing booking columns must remain compatible for all current guest/admin screens. Exact pre-projection snapshots avoid corrupting older bookings whose legacy status fields predate the new balance lifecycle.
+
+**Impact:** [sql/phase-16b-f1-payment-ledger.sql](../../sql/phase-16b-f1-payment-ledger.sql) was applied additively to the live ORAYA Supabase project and tested with rolled-back request/booking receipt and reversal transactions. New operations and public routes are described in [ARCHITECTURE.md](ARCHITECTURE.md). No provider was activated and no PAN/CVV/token is stored.
+
+**Reversible?:** hard after real receipts exist; the application code is reversible, but ledger history must be retained for audit.
+
+**Supersedes:** no security decision. It supersedes the architectural assumption that mutable `bookings.payment_*` columns alone are the payment history.
+
+---
+
 ## 2026-08-09 - Phase 16B is Oraya's complete payment system
 
 **Decision:** define Phase 16B as Oraya's complete business payment system, not as a synonym for NetCommerce/CyberSource card checkout. The phase includes cash, bank/manual transfer, credit/debit cards, Apple Pay, Whish, OMT Pay, Western Union, the provider provisionally identified as Suyool/"Sunbook Pay", standalone Oraya payment links, booking-linked requests, partial/multiple payments, refunds/reversals/reconciliation, and tokenized saved cards for members. The canonical target is a payment-request layer plus an immutable transaction ledger; `bookings.payment_*` fields remain summaries rather than the only money history. Delivery starts with the ledger foundation and complete cash workflow. Provider integrations and saved-card activation remain independently gated.
