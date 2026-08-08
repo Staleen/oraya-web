@@ -1,10 +1,11 @@
 "use client";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { addDaysToDateOnly, getOperationalRange } from "@/lib/calendar/event-block";
 import { formatBookingRef, type QueueBooking } from "@/lib/ops-queue";
 import { useOps, type CalendarSource, type ExternalBlock } from "@/components/ops/OpsProvider";
-import { Badge, EmptyState, Kicker, PageHead, T, type Tone } from "@/components/ops/ui";
+import { Badge, Banner, Button, EmptyState, Kicker, PageHead, T, type Tone } from "@/components/ops/ui";
+import { CellInput, CellSelect } from "@/components/ops/setup-shared";
 
 /**
  * Read-only availability: what is taken, by whom, and whether the external
@@ -106,8 +107,54 @@ function freshness(source: CalendarSource): { tone: Tone; label: string } {
 }
 
 export default function AvailabilityPage() {
-  const { bookings, calendarSources, externalBlocks, loading, loadError, refresh } = useOps();
+  const { bookings, calendarSources, externalBlocks, loading, loadError, refresh, me } = useOps();
   const router = useRouter();
+
+  // Feed management (owner only) — G13.
+  const [feedBusy, setFeedBusy] = useState("");
+  const [feedError, setFeedError] = useState("");
+  const [feedFlash, setFeedFlash] = useState("");
+  const [addingFeed, setAddingFeed] = useState(false);
+  const [editingFeed, setEditingFeed] = useState<string | null>(null);
+  const [feedUrl, setFeedUrl] = useState("");
+  const [newFeed, setNewFeed] = useState({ villa: "", source_name: "", feed_url: "" });
+
+  async function feedRequest(method: string, body: unknown, done: string) {
+    setFeedBusy(method);
+    setFeedError("");
+    try {
+      const r = await fetch("/api/ops/calendar-sources", {
+        method, credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const res = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!r.ok || !res.ok) { setFeedError(res.error ?? "That didn't save."); return false; }
+      setFeedFlash(done);
+      await refresh();
+      return true;
+    } catch {
+      setFeedError("Couldn't reach Oraya.");
+      return false;
+    } finally {
+      setFeedBusy("");
+    }
+  }
+
+  async function addFeed() {
+    const ok = await feedRequest("POST", newFeed, "Calendar connected — it syncs within 10 minutes.");
+    if (ok) { setAddingFeed(false); setNewFeed({ villa: "", source_name: "", feed_url: "" }); }
+  }
+  async function saveFeedUrl(id: string) {
+    const ok = await feedRequest("PATCH", { id, feed_url: feedUrl }, "New link saved.");
+    if (ok) { setEditingFeed(null); setFeedUrl(""); }
+  }
+  async function toggleFeed(id: string, enabled: boolean) {
+    await feedRequest("PATCH", { id, is_enabled: enabled }, enabled ? "Feed resumed." : "Feed paused.");
+  }
+  async function removeFeed(id: string) {
+    await feedRequest("DELETE", { id }, "Feed removed — the dates it blocked are bookable again.");
+  }
 
   const today = todayBeirut();
 
@@ -167,9 +214,64 @@ export default function AvailabilityPage() {
             })}
           </div>
         )}
-        <p style={{ fontSize: "12px", color: T.faint, margin: "10px 0 0" }}>
-          Changing or adding feeds isn&apos;t possible here yet — it needs the calendar-source task still in the plan.
-        </p>
+        {me?.role === "owner" && (
+          <div style={{ marginTop: "12px" }}>
+            {feedError && <Banner tone="bad" title="Not saved" onDismiss={() => setFeedError("")}>{feedError}</Banner>}
+            {feedFlash && <Banner tone="ok" title="Done" onDismiss={() => setFeedFlash("")}>{feedFlash}</Banner>}
+
+            {calendarSources.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "12px" }}>
+                {calendarSources.map((s) => (
+                  <div key={s.id} style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap", fontSize: "13px" }}>
+                    <span style={{ flex: 1, minWidth: "min(100%,200px)", color: T.muted }}>
+                      {s.source_name ?? "Feed"} · {s.villa ?? "—"}
+                    </span>
+                    <Button small disabled={feedBusy !== ""} onClick={() => void toggleFeed(s.id, !s.is_enabled)}>
+                      {s.is_enabled ? "Pause" : "Resume"}
+                    </Button>
+                    <Button small variant="ghost" disabled={feedBusy !== ""} onClick={() => setEditingFeed(s.id)}>
+                      New link
+                    </Button>
+                    <Button small variant="danger" disabled={feedBusy !== ""} onClick={() => void removeFeed(s.id)}>
+                      Remove
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {editingFeed && (
+              <div style={{ display: "flex", gap: "8px", alignItems: "flex-end", flexWrap: "wrap", marginBottom: "12px" }}>
+                <div style={{ flex: 1, minWidth: "min(100%,260px)" }}>
+                  <CellInput placeholder="Paste the new calendar link" value={feedUrl} onChange={(e) => setFeedUrl(e.target.value)} />
+                </div>
+                <Button small onClick={() => { setEditingFeed(null); setFeedUrl(""); }}>Cancel</Button>
+                <Button small variant="primary" disabled={feedBusy !== "" || !feedUrl.trim()} onClick={() => void saveFeedUrl(editingFeed)}>
+                  Save link
+                </Button>
+              </div>
+            )}
+
+            {addingFeed ? (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: "8px", alignItems: "end" }}>
+                <CellSelect value={newFeed.villa} onChange={(e) => setNewFeed({ ...newFeed, villa: e.target.value })}>
+                  <option value="">Choose a villa…</option>
+                  {VILLAS.map((v) => <option key={v} value={v}>{v}</option>)}
+                </CellSelect>
+                <CellInput placeholder="Name (e.g. Airbnb)" value={newFeed.source_name}
+                  onChange={(e) => setNewFeed({ ...newFeed, source_name: e.target.value })} />
+                <CellInput placeholder="Calendar link (.ics)" value={newFeed.feed_url}
+                  onChange={(e) => setNewFeed({ ...newFeed, feed_url: e.target.value })} />
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <Button small onClick={() => setAddingFeed(false)}>Cancel</Button>
+                  <Button small variant="primary" disabled={feedBusy !== ""} onClick={() => void addFeed()}>Add</Button>
+                </div>
+              </div>
+            ) : (
+              <Button small onClick={() => setAddingFeed(true)}>Connect another calendar</Button>
+            )}
+          </div>
+        )}
       </div>
 
       {VILLAS.map((villa) => {

@@ -16,6 +16,24 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-08 - Ops migration Batches 3–7: media, site settings, members, calendar feeds, business numbers
+
+**Decision:** five batches shipped together so the owner can test a complete `/ops` in one pass rather than verifying each batch separately (David's explicit request).
+
+- **Photos (B3):** owner-only screen over the new `/api/ops/media`, mirroring the admin route's rules — storage-path allowlist (`general` + villa slugs), DB row deleted BEFORE the storage object (ME-5, so a partial failure can only orphan a file), and **button-based reordering** because the legacy manager was HTML5-drag only and cover images could not be changed from a phone at all (ME-6). A failed reorder force-refetches so the screen shows server truth (ME-2). Testimonials edit/approve/hide via `PUT /api/ops/setup/testimonials`; an approved testimonial must have a guest and a quote (the site would otherwise render an empty card).
+- **Site (B4):** WhatsApp number, notification emails, per-villa instant booking, Butler check-in guidance. `PUT /api/ops/setup/site` ALLOWLISTS exactly those keys, so the protected rows (admin password, recovery jti, live-payments switch) are unreachable by construction, not by filtering. Audit S-10 fixed: the number is validated (8–15 digits) instead of accepting any string — including empty — and still reporting success.
+- **Members (B5):** search (M-4), booking count shown before deletion (M-5), and **edit** via the new `PATCH /api/ops/members/[id]` — the admin API had DELETE only, so fixing a phone number required SQL (M-6). Deletion revokes the auth account first (G8 ordering) and reports partial failure honestly; the dialog names the consequence (bookings survive, detached).
+- **Calendar feeds (B6, partial):** owner-only CRUD at `/api/ops/calendar-sources` — connect, rotate a link, pause/resume, remove — closing audit C-2 (rotating an Airbnb URL previously required hand-written SQL). URLs are validated to http(s); rotating one clears the stale sync verdict. **Deliberately not done:** `/api/cron/calendar-sync` still returns 200 when every feed fails; it is a LOCKED route and editing it needs its own named approval. Feed staleness remains visible in /ops meanwhile.
+- **Business (B7):** owner-only screen over pure, unit-tested `lib/ops-business.ts` (6 tests). Audit D-8 is the governing rule: cancelled bookings are excluded from revenue, occupancy and add-on uptake — appearing only in "refunds owed" — and every metric states its population. Revenue means money RECORDED; contracted-but-unpaid is reported separately as "still expected", never blended.
+
+**Reason:** the operator is starting and David wants one console. After these, the only remaining reasons to open `/admin` are the auth flows (Batch 8, decision-gated) and the deletion itself (Batch 9, soak-gated).
+
+**Impact:** new `app/api/ops/{media,members,members/[id],calendar-sources}/route.ts`, `app/api/ops/setup/{testimonials,site}/route.ts`, `app/ops/{media,site,members,business}/page.tsx`, `lib/ops-business.ts` + tests; extended `app/api/ops/setup/route.ts`, `components/ops/{setup-shared,OpsShell}.tsx`, `app/ops/availability/page.tsx`. No schema change, no locked-route edit, no new dependency.
+
+**Reversible?:** yes.
+
+---
+
 ## 2026-08-07 - Ops migration Batch 2: the full add-on rule set moves to /ops
 
 **Decision:** the /ops Extras screen now edits **every** `AddonOperationalFields` value (`lib/addon-operations.ts`) through a per-row "Rules" panel — per-villa applicability, applies-to (stay/event/both), category, advance notice + cutoff type, enforcement mode, price basis (fixed/percentage + percentage value), recommended, display order, quantity enablement + unit label + min/max, event pricing unit, and the guest-facing description. `PUT /api/ops/setup/addons` validates all of it strictly server-side (unknown villa, event type, or enum value is refused; a percentage basis requires a 0–100 value; min ≤ max) because the shared parser is lenient by design for READS and would silently drop bad input on a write. The keys the screen owns are stripped from the stored blob before the merge, so clearing a value (e.g. deleting a description) actually clears it rather than the old value resurfacing; keys the screen does not send still round-trip untouched. The R-2 all-addon-wipe guard and the R-6 partial-failure reporting are unchanged. Audit R-5's warning is honoured in the UI: percentage pricing states that it reprices live guest quotes.
