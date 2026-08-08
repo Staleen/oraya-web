@@ -66,6 +66,15 @@ export async function POST(request: Request) {
   });
   if (error) {
     console.error("[ops/payment-transactions] record failed", error.message);
+    if (error.code === "23505") {
+      const { data: existing } = await supabaseAdmin.from("payment_transactions")
+        .select("id, payment_request_id, booking_id, status")
+        .eq("idempotency_key", idempotencyKey)
+        .maybeSingle();
+      if (existing) {
+        return NextResponse.json({ ok: true, idempotent: true, result: { transaction_id: existing.id }, email_sent: false });
+      }
+    }
     const [friendly, status] = rpcError(error.message, error.code);
     return NextResponse.json({ error: friendly }, { status });
   }

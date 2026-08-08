@@ -41,6 +41,7 @@ export default function PaymentWorkspace() {
   const [receiptAmount, setReceiptAmount] = useState("");
   const [receiptMethod, setReceiptMethod] = useState("Cash");
   const [receiptReference, setReceiptReference] = useState("");
+  const [receiptIdempotencyKey, setReceiptIdempotencyKey] = useState("");
   const [reverseFor, setReverseFor] = useState<PaymentTransactionRow | null>(null);
   const [reverseReason, setReverseReason] = useState("");
 
@@ -105,7 +106,7 @@ export default function PaymentWorkspace() {
   function openReceipt(request: RequestView) {
     setReceiptFor(request);
     setReceiptAmount(String(remainingRequestAmount(Number(request.amount), Number(request.amount_paid))));
-    setReceiptReference(""); setReceiptMethod("Cash"); setError("");
+    setReceiptReference(""); setReceiptMethod("Cash"); setReceiptIdempotencyKey(crypto.randomUUID()); setError("");
   }
 
   async function recordReceipt() {
@@ -114,7 +115,7 @@ export default function PaymentWorkspace() {
     const booking = bookings.find((item) => item.id === receiptFor.booking_id);
     const response = await fetch("/api/ops/payments/transactions", {
       method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ payment_request_id: receiptFor.id, booking_id: receiptFor.booking_id, amount: receiptAmount, applied_amount: receiptAmount, currency: receiptFor.currency, method: receiptMethod, reference: receiptReference, expected_booking_amount_paid: booking?.amount_paid ?? null, idempotency_key: crypto.randomUUID() }),
+      body: JSON.stringify({ payment_request_id: receiptFor.id, booking_id: receiptFor.booking_id, amount: receiptAmount, applied_amount: receiptAmount, currency: receiptFor.currency, method: receiptMethod, reference: receiptReference, expected_booking_amount_paid: booking?.amount_paid ?? null, idempotency_key: receiptIdempotencyKey }),
     });
     const body = await response.json() as { error?: string; email_sent?: boolean };
     if (!response.ok) setError(body.error ?? "Could not record that receipt.");
