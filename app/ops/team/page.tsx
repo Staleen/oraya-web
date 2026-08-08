@@ -130,6 +130,44 @@ export default function TeamPage() {
     }
   }
 
+  /**
+   * Reset someone who is locked out. This is destructive on purpose: their
+   * password is cleared, which ends any session they still have open, and the
+   * only way back in is the one-time link produced here. Because the link is
+   * shown once and never stored readably, it is confirmed before it is issued.
+   */
+  async function resetPassword(s: StaffRow) {
+    const sure = window.confirm(
+      `Reset the password for ${s.full_name}?\n\n` +
+      `They will be signed out everywhere immediately and will not be able to sign in ` +
+      `until they use the one-time link you are about to be shown. The link is shown ` +
+      `once — pass it on before closing it.`,
+    );
+    if (!sure) return;
+
+    setBusyId(s.id);
+    setActionError("");
+    try {
+      const r = await fetch(`/api/ops/staff/${s.id}`, {
+        method: "PATCH", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reset_password: true }),
+      });
+      const body = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; invite_token?: string };
+      if (!r.ok || !body.ok || !body.invite_token) {
+        setActionError(body.error ?? "Could not reset that password.");
+        return;
+      }
+      setInviteLink({ name: s.full_name, url: `${window.location.origin}/ops-invite/${body.invite_token}` });
+      setCopied(false);
+      await load();
+    } catch {
+      setActionError("Couldn't reach Oraya. Nothing was changed.");
+    } finally {
+      setBusyId("");
+    }
+  }
+
   async function removeStaff(s: StaffRow) {
     setBusyId(s.id);
     setActionError("");
@@ -259,6 +297,9 @@ export default function TeamPage() {
                                 `${s.full_name} is now ${s.role === "owner" ? "an operator" : "an owner"}.`)
                             }>
                               Make {s.role === "owner" ? "operator" : "owner"}
+                            </Button>
+                            <Button small disabled={busy} onClick={() => void resetPassword(s)}>
+                              Reset password
                             </Button>
                             <Button small variant="danger" disabled={busy} onClick={() =>
                               void patchStaff(s.id, { is_active: false }, `${s.full_name} can no longer sign in.`)

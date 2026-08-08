@@ -9,6 +9,29 @@ export default function SignIn() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [recoverySent, setRecoverySent] = useState(false);
+  const [recoveryBusy, setRecoveryBusy] = useState(false);
+
+  /**
+   * Owner recovery. The endpoint always answers the same way — it never says
+   * whether a mail was sent, whether recovery is configured, or whether an
+   * owner exists — so this button cannot be used to probe the account list.
+   * The message below therefore describes what WOULD happen, and does not
+   * claim an email went out.
+   */
+  async function requestRecovery() {
+    setRecoveryBusy(true);
+    setError("");
+    try {
+      await fetch("/api/ops/recovery/request", { method: "POST", cache: "no-store" });
+    } catch {
+      // Deliberately ignored: the response carries no information either way,
+      // so a network failure must not be reported differently from success.
+    } finally {
+      setRecoveryBusy(false);
+      setRecoverySent(true);
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -52,6 +75,31 @@ export default function SignIn() {
           <Button type="submit" variant="primary" wide disabled={busy}>
             {busy ? "Signing in…" : "Sign in"}
           </Button>
+
+          <div style={{ marginTop: "18px", paddingTop: "16px", borderTop: `1px solid ${T.borderFaint}`, textAlign: "center" }}>
+            {recoverySent ? (
+              <p style={{ margin: 0, fontSize: "12px", lineHeight: 1.7, color: T.muted }}>
+                If the owner account can be recovered, a link is on its way to the recovery
+                mailbox. It works once and expires in 30 minutes.
+                <br />
+                <b style={{ color: T.ink2 }}>Not the owner?</b> Ask the owner to reset you from the Team screen.
+              </p>
+            ) : (
+              <button
+                type="button"
+                onClick={() => void requestRecovery()}
+                disabled={recoveryBusy}
+                style={{
+                  background: "none", border: 0, padding: 0,
+                  color: T.muted, fontFamily: T.sans, fontSize: "12px",
+                  textDecoration: "underline", textUnderlineOffset: "3px",
+                  cursor: recoveryBusy ? "default" : "pointer",
+                }}
+              >
+                {recoveryBusy ? "Sending…" : "Forgot your password?"}
+              </button>
+            )}
+          </div>
         </div>
       </form>
     </main>

@@ -13,6 +13,7 @@ import {
   CellInput, CellSelect, LiveBanner, PendingBar, SetupGate, useSetupData,
 } from "@/components/ops/setup-shared";
 import PaymentWorkspace from "@/components/ops/PaymentWorkspace";
+import LivePaymentsSwitch from "@/components/ops/LivePaymentsSwitch";
 
 /**
  * Owner view of how guests pay — prototype faithful: card-payment status up
@@ -130,15 +131,10 @@ export default function PaymentsPage() {
 
       {gate ?? (working && data && (
         <>
-          <LiveBanner>
-            <b>Card payments on the website:</b>{" "}
-            {live === true
-              ? "switched ON — the fail-closed live switch reads true."
-              : live === false
-                ? "switched OFF — the live switch is off, so no card is ever charged."
-                : "state unknown — the switch could not be read, which means charging is blocked (it fails closed)."}
-            {" "}Flipping it stays behind the password-confirmed control in the legacy admin Settings — one switch, one ritual.
-          </LiveBanner>
+          {/* The switch itself, not a description of where the switch lives.
+              /admin keeps its own copy while it is dormant — both write the
+              same settings row, so the row stays the single source of truth. */}
+          <LivePaymentsSwitch live={live ?? null} onChanged={reload} />
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: "20px", alignItems: "start" }}>
             <Card title="Ready to take card payments?">

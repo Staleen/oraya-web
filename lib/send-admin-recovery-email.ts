@@ -16,7 +16,15 @@ const FROM_EMAIL = "Oraya Reservations <bookings@stayoraya.com>";
 export async function sendAdminRecoveryEmail(payload: {
   to: string;
   resetUrl: string;
+  /**
+   * Which console the link opens. Defaults to the legacy admin wording so
+   * existing callers are unchanged; /ops recovery passes its own so the
+   * recipient can tell the two apart at a glance. Purely cosmetic — the
+   * destination address and the token are decided by the calling route.
+   */
+  consoleName?: string;
 }): Promise<void> {
+  const consoleName = payload.consoleName?.trim() || "admin";
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     throw new Error("RESEND_API_KEY is not configured.");
@@ -24,7 +32,7 @@ export async function sendAdminRecoveryEmail(payload: {
 
   const html = `<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>Oraya admin password reset</title></head>
+<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>Oraya ${consoleName} password reset</title></head>
 <body style="margin:0;padding:0;background-color:${MIDNIGHT};font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background-color:${MIDNIGHT};padding:48px 24px;">
     <tr><td align="center">
@@ -34,14 +42,14 @@ export async function sendAdminRecoveryEmail(payload: {
         </td></tr>
         <tr><td align="center" style="padding-bottom:16px;"><div style="width:40px;height:1px;background-color:${GOLD};opacity:0.5;"></div></td></tr>
         <tr><td align="center" style="padding-bottom:12px;">
-          <p style="margin:0;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:${GOLD};">Admin access</p>
+          <p style="margin:0;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:${GOLD};">${consoleName === "admin" ? "Admin access" : "Console access"}</p>
         </td></tr>
         <tr><td align="center" style="padding-bottom:20px;">
-          <h1 style="margin:0;font-size:26px;font-weight:400;color:${WHITE};">Reset your admin password</h1>
+          <h1 style="margin:0;font-size:26px;font-weight:400;color:${WHITE};">Reset your ${consoleName} password</h1>
         </td></tr>
         <tr><td align="center" style="padding-bottom:26px;">
           <p style="margin:0;font-size:14px;line-height:1.7;color:${MUTED};">
-            A password reset was requested for the Oraya admin console.<br />
+            A password reset was requested for the Oraya ${consoleName} console.<br />
             This link works once and expires in 30 minutes.
           </p>
         </td></tr>
@@ -60,7 +68,7 @@ export async function sendAdminRecoveryEmail(payload: {
 </html>`;
 
   const text =
-    "A password reset was requested for the Oraya admin console.\n\n" +
+    `A password reset was requested for the Oraya ${consoleName} console.\n\n` +
     "This link works once and expires in 30 minutes:\n" +
     `${payload.resetUrl}\n\n` +
     "If you did not request this, ignore this email — your password stays unchanged.";
@@ -69,7 +77,7 @@ export async function sendAdminRecoveryEmail(payload: {
   const { error } = await resend.emails.send({
     from: FROM_EMAIL,
     to: payload.to,
-    subject: "Oraya admin — password reset link",
+    subject: `Oraya ${consoleName} — password reset link`,
     html,
     text,
   });
