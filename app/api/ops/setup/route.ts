@@ -13,6 +13,11 @@ import {
 } from "@/lib/payments/settings";
 import { getHostedCheckoutAdminStatus } from "@/lib/payments/runtime";
 import { readPaymentsLiveSetting } from "@/lib/payments/live-rollout-setting";
+import {
+  GUEST_TESTIMONIALS_SETTINGS_KEY,
+  parseGuestTestimonialsJson,
+} from "@/lib/guest-testimonials";
+import { INSTANT_BOOKING_SETTING_KEYS } from "@/lib/instant-booking-settings";
 
 export const dynamic = "force-dynamic";
 const LOG_TAG = "[api/ops/setup]";
@@ -37,7 +42,17 @@ export async function GET(request: Request) {
     supabaseAdmin
       .from("settings")
       .select("key, value")
-      .in("key", [VILLA_BASE_PRICING_KEY, ADDON_OPERATIONAL_SETTINGS_KEY, PAYMENT_PUBLIC_SETTINGS_KEY]),
+      .in("key", [
+        VILLA_BASE_PRICING_KEY,
+        ADDON_OPERATIONAL_SETTINGS_KEY,
+        PAYMENT_PUBLIC_SETTINGS_KEY,
+        GUEST_TESTIMONIALS_SETTINGS_KEY,
+        "whatsapp_number",
+        "notification_emails",
+        "butler_checkin_guidance",
+        INSTANT_BOOKING_SETTING_KEYS["Villa Mechmech"],
+        INSTANT_BOOKING_SETTING_KEYS["Villa Byblos"],
+      ]),
     supabaseAdmin
       .from("addons")
       .select("id, label, enabled, currency, price, pricing_model")
@@ -71,6 +86,14 @@ export async function GET(request: Request) {
     addons,
     payment_settings: parsePaymentPublicSettings(paymentsRaw),
     payment_settings_raw: paymentsRaw,
+    testimonials: parseGuestTestimonialsJson(byKey.get(GUEST_TESTIMONIALS_SETTINGS_KEY)),
+    site: {
+      whatsapp_number: byKey.get("whatsapp_number") ?? "",
+      notification_emails: byKey.get("notification_emails") ?? "",
+      butler_checkin_guidance: byKey.get("butler_checkin_guidance") ?? "",
+      instant_mechmech: byKey.get(INSTANT_BOOKING_SETTING_KEYS["Villa Mechmech"]) === "true",
+      instant_byblos: byKey.get(INSTANT_BOOKING_SETTING_KEYS["Villa Byblos"]) === "true",
+    },
     readiness,
     // The fail-closed live switch is READ-ONLY here: its only writer is the
     // dedicated password-confirmed /api/admin/payments/live-toggle endpoint

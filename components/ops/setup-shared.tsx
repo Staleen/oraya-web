@@ -23,12 +23,21 @@ export interface SetupAddon {
   operational: AddonOperationalFields;
 }
 
+export interface SiteSettings {
+  whatsapp_number: string;
+  notification_emails: string;
+  butler_checkin_guidance: string;
+  instant_mechmech: boolean;
+  instant_byblos: boolean;
+}
+
 export interface SetupData {
   pricing: VillaBasePricing[];
   pricing_raw: string | null;
   addons: SetupAddon[];
   payment_settings: PaymentPublicSettings;
   payment_settings_raw: string | null;
+  site: SiteSettings;
   readiness: {
     provider_display_name: string | null;
     configured: boolean;

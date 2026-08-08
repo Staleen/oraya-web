@@ -42,7 +42,9 @@ Extend the /ops Extras screen + `PUT /api/ops/setup/addons` to edit the remainin
 
 **Acceptance:** every operational field editable from /ops with named pending-changes sentences; a save from /ops then a read from the legacy rates page shows identical data.
 
-## Batch 3 — Media
+## Batch 3 — Media ✅ DONE 2026-08-08 (`claude/ops-migration-batch-3-7`)
+
+Shipped: owner-only Photos screen (per-gallery upload, category/cover, **button reorder that works on a phone** — ME-6 — with snap-back to server truth on failure per ME-2, delete with ME-5 ordering) over the new ops-guarded `/api/ops/media`; testimonials approve/hide/edit via `PUT /api/ops/setup/testimonials`.
 
 **Objective:** replace `/admin/media` + testimonials.
 
@@ -50,7 +52,9 @@ New owner-only /ops "Media" screen: per-villa photo list + hero/general bucket, 
 
 **Acceptance:** full media lifecycle from a phone; guest pages reflect changes; legacy media page untouched.
 
-## Batch 4 — Settings-misc
+## Batch 4 — Settings-misc ✅ DONE 2026-08-08
+
+Shipped: /ops **Site** screen — WhatsApp number (validated, 8–15 digits — audit S-10), notification emails (each validated), per-villa instant-booking flags, Butler check-in guidance. `PUT /api/ops/setup/site` allowlists exactly these keys; protected rows are unreachable by construction.
 
 **Objective:** the small owner switches leave `/admin/settings`.
 
@@ -58,7 +62,9 @@ Owner-only "Site" card(s) in /ops Setup: sitewide WhatsApp number (validated —
 
 **Acceptance:** each value editable from /ops and visibly live; protected keys unreachable from the new route.
 
-## Batch 5 — Members
+## Batch 5 — Members ✅ DONE 2026-08-08
+
+Shipped: /ops **Members** — search (M-4), booking count per member shown before delete (M-5), **edit name/phone** via the new `PATCH /api/ops/members/[id]` (M-6: this needed SQL before), delete with auth-account-first ordering and explicit partial-failure messages (G8 pattern) plus a dialog naming the detach consequence.
 
 **Objective:** replace `/admin/members`.
 
@@ -66,7 +72,9 @@ Owner-only Members screen: list with search (M-4), booking count per member show
 
 **Acceptance:** find/edit/delete a member wholly from /ops; a deleted member cannot sign in; their bookings survive detached.
 
-## Batch 6 — Calendar sources (G13)
+## Batch 6 — Calendar sources (G13) ✅ PARTLY DONE 2026-08-08
+
+Shipped: owner-only feed CRUD from Availability (`/api/ops/calendar-sources`) — connect a calendar, rotate a link, pause/resume, remove; URL validated to http(s); rotating a link clears the stale sync verdict. **Still open:** the locked `/api/cron/calendar-sync` still returns 200 when every feed fails (needs its own named approval to edit a locked route), and a manual "sync now" trigger.
 
 **Objective:** feeds manageable without SQL; failures visible.
 
@@ -74,7 +82,9 @@ Ops-guarded CRUD for `external_calendar_sources` (`id, villa, source_name, feed_
 
 **Acceptance:** rotate a feed URL, disable a feed, trigger a sync, and see honest freshness — all from /ops.
 
-## Batch 7 — Business screen
+## Batch 7 — Business screen ✅ DONE 2026-08-08
+
+Shipped: owner-only Business screen over pure, unit-tested `lib/ops-business.ts` (6 tests) — money received (recorded only), still-expected (contracted minus received), refunds owed, occupancy per villa in a 30/90/365-day window, add-on uptake, lead conversion. D-8 honoured: cancelled bookings are excluded everywhere except the refunds-owed line, and every metric states its population.
 
 **Objective:** owner analytics replacing the legacy dashboard's numbers.
 

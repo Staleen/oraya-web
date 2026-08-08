@@ -11,9 +11,13 @@ const NAV: NavItem[] = [
   { href: "/ops/enquiries", label: "Enquiries" },
   { href: "/ops/bookings", label: "Bookings" },
   { href: "/ops/availability", label: "Availability" },
+  { href: "/ops/business", label: "Business", ownerOnly: true },
   { href: "/ops/pricing", label: "Pricing", ownerOnly: true, group: "setup" },
   { href: "/ops/extras", label: "Extras", ownerOnly: true, group: "setup" },
   { href: "/ops/payments", label: "Payments", ownerOnly: true, group: "setup" },
+  { href: "/ops/media", label: "Photos", ownerOnly: true, group: "setup" },
+  { href: "/ops/site", label: "Site", ownerOnly: true, group: "setup" },
+  { href: "/ops/members", label: "Members", ownerOnly: true, group: "setup" },
   { href: "/ops/team", label: "Team", ownerOnly: true, group: "setup" },
 ];
 
