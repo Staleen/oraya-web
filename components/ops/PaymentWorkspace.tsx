@@ -8,10 +8,25 @@ type RequestView = PaymentRequestRow & { payment_url: string | null };
 type LedgerData = {
   requests: RequestView[];
   transactions: PaymentTransactionRow[];
-  checkout?: { checkout_ready: boolean; provider_display_name: string | null; guest_message: string };
+  attempts: Array<{
+    id: string; booking_id: string | null; payment_request_id: string | null;
+    idempotency_key: string;
+    status: string; provider_transaction_id: string | null; provider_reference: string | null;
+    amount: number; currency: PaymentCurrency; created_at: string; updated_at: string;
+  }>;
+  provider_events: Array<{
+    id: string; provider: string; provider_event_id: string; payment_request_id: string | null;
+    payment_transaction_id: string | null; verification_status: string; processing_status: string;
+    received_at: string; processed_at: string | null; error_code: string | null;
+  }>;
+  checkout?: {
+    checkout_ready: boolean; apple_pay_ready: boolean; provider_display_name: string | null;
+    guest_message: string; environment: string | null; admin_message: string;
+    missing_requirements: string[];
+  };
 };
 const methodLabels: Record<PaymentAllowedMethod, string> = {
-  cash: "Cash", bank_transfer: "Bank transfer", card: "Credit or debit card", apple_pay: "Apple Pay (not active yet)",
+  cash: "Cash", bank_transfer: "Bank transfer", card: "Credit or debit card", apple_pay: "Apple Pay",
   whish: "Whish", omt: "OMT", western_union: "Western Union", suyool: "Suyool",
 };
 const inputStyle = { width: "100%", boxSizing: "border-box" as const, background: "rgba(255,255,255,.05)", border: `1px solid ${T.borderStrong}`, borderRadius: T.rSm, padding: "12px 13px", color: T.ink, fontSize: "14px", fontFamily: T.sans };
@@ -25,7 +40,7 @@ function paymentTone(status: string): "ok" | "warn" | "bad" | "neutral" {
 
 export default function PaymentWorkspace() {
   const { bookings } = useOps();
-  const [ledger, setLedger] = useState<LedgerData>({ requests: [], transactions: [] });
+  const [ledger, setLedger] = useState<LedgerData>({ requests: [], transactions: [], attempts: [], provider_events: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [flash, setFlash] = useState("");
@@ -53,7 +68,13 @@ export default function PaymentWorkspace() {
       const response = await fetch("/api/ops/payments/requests", { credentials: "include", cache: "no-store" });
       const body = await response.json() as LedgerData & { error?: string };
       if (!response.ok) { setError(body.error ?? "Could not load payments."); return; }
-      setLedger({ requests: body.requests ?? [], transactions: body.transactions ?? [] });
+      setLedger({
+        requests: body.requests ?? [],
+        transactions: body.transactions ?? [],
+        attempts: body.attempts ?? [],
+        provider_events: body.provider_events ?? [],
+        checkout: body.checkout,
+      });
       setError("");
     } catch { setError("Could not reach Oraya payments."); }
     finally { setLoading(false); }
@@ -64,9 +85,32 @@ export default function PaymentWorkspace() {
   const chosenBooking = useMemo(() => bookings.find((booking) => booking.id === bookingId), [bookings, bookingId]);
   const activeRequestMethods = useMemo(
     () => PAYMENT_ALLOWED_METHODS.filter((method) =>
-      method !== "apple_pay" && (method !== "card" || ledger.checkout?.checkout_ready)),
-    [ledger.checkout?.checkout_ready],
+      (method !== "card" || ledger.checkout?.checkout_ready) &&
+      (method !== "apple_pay" || ledger.checkout?.apple_pay_ready)),
+    [ledger.checkout?.apple_pay_ready, ledger.checkout?.checkout_ready],
   );
+  const attentionAttempts = useMemo(
+    () => ledger.attempts.filter((attempt) => ["claimed", "authorized", "ambiguous"].includes(attempt.status)),
+    [ledger.attempts],
+  );
+  const attentionEvents = useMemo(
+    () => ledger.provider_events.filter((event) =>
+      event.verification_status !== "verified" || ["pending", "failed"].includes(event.processing_status)),
+    [ledger.provider_events],
+  );
+  const settlementTotals = useMemo(() => {
+    const totals = new Map<string, { gross: number; fees: number; net: number }>();
+    for (const transaction of ledger.transactions) {
+      if (transaction.transaction_type !== "payment" || transaction.status !== "confirmed") continue;
+      const key = `${transaction.provider}:${transaction.currency}`;
+      const current = totals.get(key) ?? { gross: 0, fees: 0, net: 0 };
+      current.gross += Number(transaction.gross_amount ?? transaction.amount);
+      current.fees += Number(transaction.fee_amount ?? 0);
+      current.net += Number(transaction.net_amount ?? transaction.amount);
+      totals.set(key, current);
+    }
+    return [...totals.entries()];
+  }, [ledger.transactions]);
   function chooseBooking(id: string) {
     setBookingId(id);
     const booking = bookings.find((item) => item.id === id);
@@ -154,6 +198,46 @@ export default function PaymentWorkspace() {
       </div>
     </Card>
 
+    <Card title="Provider readiness and reconciliation" style={{ marginTop: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 14 }}>
+        <div>
+          <p style={{ margin: 0, fontSize: 14 }}>NetCommerce card checkout</p>
+          <Badge tone={ledger.checkout?.checkout_ready ? "ok" : "warn"}>{ledger.checkout?.checkout_ready ? "ready" : "not ready"}</Badge>
+          <p style={{ color: T.muted, fontSize: 12 }}>{ledger.checkout?.admin_message ?? "Checking provider setup…"}</p>
+        </div>
+        <div>
+          <p style={{ margin: 0, fontSize: 14 }}>Apple Pay</p>
+          <Badge tone={ledger.checkout?.apple_pay_ready ? "ok" : "warn"}>{ledger.checkout?.apple_pay_ready ? "ready" : "provider-gated"}</Badge>
+          <p style={{ color: T.muted, fontSize: 12 }}>Enabled only after merchant enrollment, domain verification, and an Apple sandbox-device test.</p>
+        </div>
+        <div>
+          <p style={{ margin: 0, fontSize: 14 }}>Items needing reconciliation</p>
+          <Badge tone={attentionAttempts.length + attentionEvents.length > 0 ? "bad" : "ok"}>{attentionAttempts.length + attentionEvents.length}</Badge>
+          <p style={{ color: T.muted, fontSize: 12 }}>Ambiguous/in-flight attempts and unprocessed or rejected provider events.</p>
+        </div>
+      </div>
+      {(ledger.checkout?.missing_requirements?.length ?? 0) > 0 && <details style={{ marginTop: 12 }}>
+        <summary style={{ cursor: "pointer", color: T.muted, fontSize: 12 }}>Show provider setup checklist</summary>
+        <ul style={{ color: T.muted, fontSize: 12 }}>{ledger.checkout?.missing_requirements.map((item) => <li key={item}>{item}</li>)}</ul>
+      </details>}
+      {attentionAttempts.map((attempt) => <div key={attempt.id} style={{ borderTop: `1px solid ${T.borderFaint}`, paddingTop: 10, marginTop: 10 }}>
+        <Badge tone="bad">{attempt.status}</Badge>
+        <p style={{ color: T.muted, fontSize: 12, margin: "6px 0" }}>Attempt {attempt.id.slice(0, 8).toUpperCase()} · {formatPaymentAmount(Number(attempt.amount), attempt.currency)} · {new Date(attempt.updated_at).toLocaleString()}</p>
+        <p style={{ color: T.muted, fontSize: 12, margin: "6px 0" }}>Merchant reference: {attempt.provider_reference ?? attempt.idempotency_key}</p>
+        <p style={{ color: T.muted, fontSize: 12, margin: 0 }}>Check the matching merchant reference in CyberSource Business Center before allowing any retry.</p>
+      </div>)}
+      {attentionEvents.map((event) => <div key={event.id} style={{ borderTop: `1px solid ${T.borderFaint}`, paddingTop: 10, marginTop: 10 }}>
+        <Badge tone="bad">{event.verification_status} / {event.processing_status}</Badge>
+        <p style={{ color: T.muted, fontSize: 12, margin: "6px 0" }}>{event.provider.replaceAll("_", " ")} event {event.provider_event_id} · {new Date(event.received_at).toLocaleString()}</p>
+        {event.error_code && <p style={{ color: T.muted, fontSize: 12, margin: 0 }}>Error code: {event.error_code}</p>}
+      </div>)}
+      {attentionAttempts.length === 0 && attentionEvents.length === 0 && <p style={{ color: T.muted, fontSize: 12, margin: "12px 0 0" }}>No provider item currently needs attention.</p>}
+      {settlementTotals.length > 0 && <div style={{ borderTop: `1px solid ${T.borderFaint}`, marginTop: 14, paddingTop: 12 }}>
+        <p style={{ margin: "0 0 8px", fontSize: 14 }}>Recorded settlement totals</p>
+        {settlementTotals.map(([key, totals]) => { const [provider, currency] = key.split(":"); return <p key={key} style={{ color: T.muted, fontSize: 12, margin: "5px 0" }}>{provider.replaceAll("_", " ")} · gross {formatPaymentAmount(totals.gross, currency as PaymentCurrency)} · fees {formatPaymentAmount(totals.fees, currency as PaymentCurrency)} · net {formatPaymentAmount(totals.net, currency as PaymentCurrency)}</p>; })}
+      </div>}
+    </Card>
+
     {showCreate && <Card title="New payment request" style={{ marginTop: 14 }}>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14 }}>
         <label style={{ fontSize: 12, color: T.muted }}>Link to a booking (optional)<select style={{ ...inputStyle, marginTop: 6 }} value={bookingId} onChange={(event) => chooseBooking(event.target.value)}><option value="">Standalone — no booking</option>{bookings.map((booking) => <option key={booking.id} value={booking.id}>{booking.guest_name ?? "Guest"} · {booking.villa} · {booking.id.slice(0, 8).toUpperCase()}</option>)}</select></label>
@@ -167,7 +251,8 @@ export default function PaymentWorkspace() {
       </div>
       <p style={{ color: T.muted, fontSize: 12, margin: "8px 0" }}>Ways this person may pay</p>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>{activeRequestMethods.map((method) => { const on = methods.includes(method); return <Button small key={method} variant={on ? "primary" : "secondary"} onClick={() => setMethods((current) => on ? current.filter((item) => item !== method) : [...current, method])}>{methodLabels[method]}</Button>; })}</div>
-      {!ledger.checkout?.checkout_ready && <p style={{ color: T.muted, fontSize: 12, margin: "-8px 0 18px" }}>Card links will appear here automatically after NetCommerce sandbox or live setup is ready. Apple Pay remains separately gated.</p>}
+      {!ledger.checkout?.checkout_ready && <p style={{ color: T.muted, fontSize: 12, margin: "-8px 0 18px" }}>Card links will appear here automatically after NetCommerce sandbox or live setup is ready.</p>}
+      {ledger.checkout?.checkout_ready && !ledger.checkout.apple_pay_ready && <p style={{ color: T.muted, fontSize: 12, margin: "-8px 0 18px" }}>Apple Pay will appear only after merchant enrollment, domain verification, and device testing.</p>}
       <Button variant="primary" disabled={busy || !payerName.trim() || !description.trim() || !amount || methods.length === 0} onClick={() => void createRequest()}>{busy ? "Creating…" : "Create secure link"}</Button>
     </Card>}
 

@@ -45,6 +45,24 @@ async function recordPaymentOnBooking(
   event: ReconciliationEvent,
 ): Promise<"recorded" | "already_paid" | "failed"> {
   if (attempt.payment_request_id) {
+    const { data: paymentRequest, error: requestError } = await supabaseAdmin
+      .from("payment_requests")
+      .select("allowed_methods")
+      .eq("id", attempt.payment_request_id)
+      .maybeSingle<{ allowed_methods: string[] }>();
+    if (requestError || !paymentRequest) {
+      console.error(`${LOG_TAG} payment request lookup for method classification failed:`, {
+        attempt_id: attempt.id,
+        payment_request_id: attempt.payment_request_id,
+        error: requestError?.message ?? "not_found",
+      });
+      return "failed";
+    }
+    const walletPresentation =
+      paymentRequest.allowed_methods.includes("apple_pay") &&
+      !paymentRequest.allowed_methods.includes("card")
+        ? "apple_pay" as const
+        : null;
     const recorded = await recordProviderPayment({
       payment_request_id: attempt.payment_request_id,
       amount: attempt.amount,
@@ -52,6 +70,7 @@ async function recordPaymentOnBooking(
       provider_reference:
         event.provider_transaction_id ?? attempt.provider_transaction_id ?? attempt.idempotency_key,
       idempotency_key: attempt.idempotency_key,
+      wallet_presentation: walletPresentation,
     });
     return recorded.ok
       ? recorded.result.idempotent ? "already_paid" : "recorded"

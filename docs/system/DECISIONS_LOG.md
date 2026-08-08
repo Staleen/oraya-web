@@ -16,6 +16,18 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-09 - Provider capabilities require separate proof and activation
+
+**Decision:** a configured card gateway does not implicitly activate Apple Pay, saved cards, or any Lebanese wallet. Apple Pay uses CyberSource Unified Checkout `APPLEPAY` only for an Apple-only payment request and only when `NETCOMMERCE_CYBERSOURCE_APPLE_PAY_ENABLED` is exactly `true`. Operations must create separate card and Apple Pay links so the immutable ledger can classify the method without guessing. The flag stays absent/off until merchant enrollment, exact-domain verification, and an Apple sandbox-device payment are proven. Whish, OMT, Suyool, and saved cards remain disabled as native rails until official merchant/TMS contracts, credentials, webhook/reconciliation behavior, and required policy approval are supplied.
+
+**Reason:** a consumer app or a provider name is not proof that Oraya can initiate and reconcile merchant payments. Advertising an unapproved capability can strand guests, misclassify money, or create an unauditable settlement gap. Separate, fail-closed capability gates preserve accurate payment history and let manual receipt flows continue safely meanwhile.
+
+**Impact:** Apple Pay capture-context support is dark by default, public payment pages do not show an actionable wallet button until both ordinary checkout readiness and the Apple-specific flag are true, and `/ops/payments` exposes the card/Apple readiness split plus ambiguous attempts, failed provider events, merchant references, and recorded gross/fee/net totals. [sql/phase-16b-apple-pay-provider-ledger.sql](../../sql/phase-16b-apple-pay-provider-ledger.sql) makes the canonical provider writer accept Apple-only requests, records them as `wallet` / `apple_pay`, protects against a duplicate active booking collection, and was installed with a rolled-back live proof. No provider is activated by this decision.
+
+**Reversible?:** the individual capability flags are deliberately reversible after their evidence gates pass; the requirement for auditable provider proof is not.
+
+---
+
 ## 2026-08-09 - Card authorization records through canonical payment requests
 
 **Decision:** booking-time and standalone NetCommerce card payments share the canonical `payment_requests` front door, request-scoped `payment_attempts`, and atomic `oraya_record_provider_payment` ledger writer. `/pay/[token]` renders a card action only when server readiness is open. Browser return and verified webhook reconciliation use the same provider-attempt idempotency key; the immutable transaction is the money fact and booking fields are projections. Apple Pay is not implied or activated by card readiness.

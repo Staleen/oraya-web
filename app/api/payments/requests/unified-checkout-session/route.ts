@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { createCreditLibanaisUnifiedCheckoutSession } from "@/lib/payments/credit-libanais";
+import {
+  createCreditLibanaisUnifiedCheckoutSession,
+  getCreditLibanaisPaymentCapabilities,
+} from "@/lib/payments/credit-libanais";
 import { findPaymentRequestByPublicToken } from "@/lib/payments/ledger-server";
 import { isPublicRequestPayable, remainingRequestAmount } from "@/lib/payments/ledger";
 import { PaymentProviderConfigurationError, type PaymentLinkPurpose } from "@/lib/payments/provider";
@@ -27,8 +30,14 @@ export async function POST(request: Request) {
     if (!isPublicRequestPayable(payment)) {
       return NextResponse.json({ error: "This payment request is no longer payable." }, { status: 409 });
     }
-    if (!payment.allowed_methods.includes("card")) {
-      return NextResponse.json({ error: "Card payment is not enabled for this request." }, { status: 400 });
+    const capabilities = getCreditLibanaisPaymentCapabilities();
+    const allowedOnlineMethods: Array<"card" | "apple_pay"> = [];
+    if (payment.allowed_methods.includes("card")) allowedOnlineMethods.push("card");
+    if (payment.allowed_methods.includes("apple_pay") && capabilities.apple_pay_enabled) {
+      allowedOnlineMethods.push("apple_pay");
+    }
+    if (allowedOnlineMethods.length === 0) {
+      return NextResponse.json({ error: "Online payment is not enabled for this request." }, { status: 400 });
     }
 
     const provider = getHostedCheckoutProviderByKey("credit_libanais");
@@ -57,6 +66,7 @@ export async function POST(request: Request) {
       cancel_url: `${requestUrl}?payment=cancelled`,
       payment_page_url: paymentPageUrl,
       expires_at: payment.expires_at ?? undefined,
+      allowed_payment_methods: allowedOnlineMethods,
     });
 
     const now = new Date().toISOString();
@@ -70,7 +80,7 @@ export async function POST(request: Request) {
       })
       .eq("id", payment.id)
       .in("status", ["active", "partially_paid"])
-      .contains("allowed_methods", ["card"])
+      .overlaps("allowed_methods", allowedOnlineMethods)
       .select("id");
     if (error) {
       console.error("[payment-request/session] provider session persistence failed", error.message);
