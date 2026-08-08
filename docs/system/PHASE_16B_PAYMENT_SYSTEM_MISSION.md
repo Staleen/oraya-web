@@ -24,15 +24,20 @@ Production activation remains a separate, deliberate decision for each integrate
 
 ## Current reality
 
-The repository currently has a strong but narrow card-payment foundation:
+**Implementation checkpoint, 2026-08-09:** F1/F2 and the core F3 link path are now implemented on the active branch, and the additive ledger migration is installed on the live ORAYA Supabase project. The database provides default-deny/RLS-protected payment requests, immutable transaction facts, linked reversals, provider-event storage, and atomic request/booking projections. Operations can create booking-linked or standalone links, copy/cancel them, record partial or full manual receipts for cash/bank/Whish/OMT/Western Union/Suyool, and reverse the latest booking receipt with exact state restoration. `/pay/[token]` safely presents the request and configured manual instructions. Native provider checkout through this new request object, direct send/reminder/reissue/late-association controls, automated standalone receipts, settlement reporting, Apple Pay, and saved cards remain later checkpoints.
+
+The repository now has both a strong card-security foundation and the first complete-system foundation:
 
 - booking-linked payment summary and payment-link fields on `bookings`;
 - manual booking payment actions in operations;
 - a durable `payment_attempts` state machine for NetCommerce/CyberSource calls;
 - Unified Checkout sandbox support and the Phase 16B-2B1 JWT/JWS plus payment request/response MLE implementation;
 - server-authoritative card outcomes, informational browser returns, and a fail-closed production switch.
+- canonical payment-request, immutable transaction/reversal, and provider-event tables;
+- atomic manual receipt/reversal projections for requests and bookings;
+- an operations collection workspace and public standalone `/pay/[token]` front door.
 
-It does not yet have a complete payment operating system. In particular, there is no durable standalone payment-request object, no multi-transaction business ledger, no provider-event ledger, no saved-card instrument/consent model, and no complete cash receipt/correction flow. The `bookings.amount_*` and `bookings.payment_*` fields are useful summaries, but one mutable booking row cannot be the long-term history of every money movement.
+It is not yet a complete payment operating system. Native provider checkout still has to be routed through the canonical request/transaction model; production webhook security and provider activation remain open; direct send/reminder/reissue, automated receipts, settlement/reporting, Apple Pay, native wallets, and the saved-card instrument/consent model remain. The `bookings.amount_*` and `bookings.payment_*` fields are now compatibility summaries; the immutable transaction ledger is the durable history for new manual receipts.
 
 ## Canonical model
 
