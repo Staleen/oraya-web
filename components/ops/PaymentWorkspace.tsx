@@ -10,6 +10,7 @@ const methodLabels: Record<PaymentAllowedMethod, string> = {
   cash: "Cash", bank_transfer: "Bank transfer", card: "Card (not active yet)", apple_pay: "Apple Pay (not active yet)",
   whish: "Whish", omt: "OMT", western_union: "Western Union", suyool: "Suyool",
 };
+const activeRequestMethods = PAYMENT_ALLOWED_METHODS.filter((method) => method !== "card" && method !== "apple_pay");
 const inputStyle = { width: "100%", boxSizing: "border-box" as const, background: "rgba(255,255,255,.05)", border: `1px solid ${T.borderStrong}`, borderRadius: T.rSm, padding: "12px 13px", color: T.ink, fontSize: "14px", fontFamily: T.sans };
 
 function paymentTone(status: string): "ok" | "warn" | "bad" | "neutral" {
@@ -156,7 +157,7 @@ export default function PaymentWorkspace() {
         <label style={{ fontSize: 12, color: T.muted }}>Currency<select style={{ ...inputStyle, marginTop: 6 }} value={currency} disabled={Boolean(chosenBooking)} onChange={(event) => setCurrency(event.target.value as PaymentCurrency)}><option>USD</option><option>LBP</option></select></label>
       </div>
       <p style={{ color: T.muted, fontSize: 12, margin: "8px 0" }}>Ways this person may pay</p>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>{PAYMENT_ALLOWED_METHODS.map((method) => { const on = methods.includes(method); return <Button small key={method} variant={on ? "primary" : "secondary"} onClick={() => setMethods((current) => on ? current.filter((item) => item !== method) : [...current, method])}>{methodLabels[method]}</Button>; })}</div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>{activeRequestMethods.map((method) => { const on = methods.includes(method); return <Button small key={method} variant={on ? "primary" : "secondary"} onClick={() => setMethods((current) => on ? current.filter((item) => item !== method) : [...current, method])}>{methodLabels[method]}</Button>; })}</div>
       <Button variant="primary" disabled={busy || !payerName.trim() || !description.trim() || !amount || methods.length === 0} onClick={() => void createRequest()}>{busy ? "Creating…" : "Create secure link"}</Button>
     </Card>}
 
