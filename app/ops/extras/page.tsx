@@ -286,7 +286,17 @@ export default function ExtrasPage() {
             for villas, advance notice, categories and event pricing.
           </LiveBanner>
 
-          <Card title="For stays and events">
+          {/* Grouped by who can actually request them: a chef dinner offered
+              only at events should not sit in the same list as bedding. */}
+          {([
+            ["stay", "For stays"],
+            ["event", "For events"],
+            ["both", "For both"],
+          ] as Array<[string, string]>).map(([group, title]) => {
+            const groupRows = working.filter((a) => (a.rules.applies_to || "stay") === group);
+            if (groupRows.length === 0) return null;
+            return (
+          <Card key={group} title={title}>
             <div style={{ display: "grid", gridTemplateColumns: "minmax(140px,1.6fr) minmax(90px,1fr) minmax(130px,1.2fr) minmax(90px,1fr) minmax(90px,1fr) auto", gap: "10px 12px", alignItems: "center" }} suppressHydrationWarning>
               <ColHead>Extra</ColHead>
               <ColHead>Price</ColHead>
@@ -294,7 +304,7 @@ export default function ExtrasPage() {
               <ColHead>Shown</ColHead>
               <ColHead>Needs approval</ColHead>
               <span />
-              {working.map((a) => (
+              {groupRows.map((a) => (
                 <div key={a.id} style={{ display: "contents" }}>
                   {a.removed ? (
                     <div>
@@ -484,6 +494,17 @@ export default function ExtrasPage() {
               <Button small onClick={addExtra}>Add an extra</Button>
             </div>
           </Card>
+            );
+          })}
+
+          {working.length === 0 && (
+            <Card title="Extras">
+              <p style={{ margin: "0 0 14px", fontSize: "14px", color: T.muted }}>
+                No extras yet.
+              </p>
+              <Button small onClick={addExtra}>Add an extra</Button>
+            </Card>
+          )}
 
           <PendingBar
             changes={changes}
