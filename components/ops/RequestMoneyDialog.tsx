@@ -46,7 +46,14 @@ export default function RequestMoneyDialog({
   onDone: (message: string) => void | Promise<void>;
 }) {
   const isRequest = mode === "request";
-  const view = bookingMoneyView(booking);
+  // An event's contract is its accepted proposal — not a stay estimate. An
+  // event is also a single day: there is no check-out to price against.
+  const isEvent = Boolean(
+    booking.event_type && typeof booking.message === "string" && booking.message.includes("[Event Inquiry]"),
+  );
+  const view = isEvent
+    ? { amount: booking.proposal_total_amount ?? booking.amount_total ?? null, estimated: false }
+    : bookingMoneyView(booking);
   const total = view.amount ?? 0;
   const paid = booking.amount_paid ?? 0;
   const outstanding = Math.max(0, total - paid);
@@ -111,7 +118,9 @@ export default function RequestMoneyDialog({
       outcomeDetail = `${money(outstanding)} is outstanding on this stay.`;
     } else if (afterRequest >= total && total > 0) {
       outcomeTitle = `Asking for the full remaining ${money(value)}`;
-      outcomeDetail = "Once paid, nothing will be outstanding.";
+      outcomeDetail = isEvent
+        ? "Once paid, the event is settled in full."
+        : "Once paid, nothing will be outstanding.";
     } else {
       outcomeTitle = `Asking for ${money(value)} now`;
       outcomeDetail = `${money(Math.max(0, outstanding - value))} would still be outstanding after this.`;
@@ -185,7 +194,10 @@ export default function RequestMoneyDialog({
             <>
               <div style={{ marginBottom: "18px" }}>
                 <Rows>
-                  <Row k={view.estimated ? "Stay total (estimated)" : "Stay total"} v={money(total)} />
+                  <Row
+                    k={isEvent ? "Event total (agreed)" : view.estimated ? "Stay total (estimated)" : "Stay total"}
+                    v={money(total)}
+                  />
                   <Row k="Already received" v={money(paid)} />
                   <Row k={<b>Still outstanding</b>} v={<b>{money(outstanding)}</b>} />
                 </Rows>

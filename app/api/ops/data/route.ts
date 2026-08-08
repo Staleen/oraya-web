@@ -57,6 +57,7 @@ export async function GET(request: Request) {
     // Event proposals — the /ops event flow reads these.
     "proposal_status", "proposal_total_amount", "proposal_deposit_amount",
     "proposal_valid_until", "proposal_payment_methods", "proposal_notes",
+    "proposal_included_services",
   ].join(", ");
 
   // Blocks that ended more than a month ago are history, not availability.

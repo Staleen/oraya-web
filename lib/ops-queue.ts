@@ -94,6 +94,8 @@ export interface QueueBooking {
   proposal_valid_until: string | null;
   proposal_payment_methods: unknown;
   proposal_notes: string | null;
+  /** Phase 15H line items — what an event's price actually covers. */
+  proposal_included_services: unknown;
 }
 
 /** Mirrors the whatsapp_leads columns selected by GET /api/ops/data. */

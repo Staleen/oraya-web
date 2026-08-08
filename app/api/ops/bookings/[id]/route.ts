@@ -248,12 +248,8 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     }
     const row = rowData as unknown as PaymentRow;
 
-    if (isEventInquiryBooking(row)) {
-      return NextResponse.json(
-        { error: "Event money follows the proposal flow." },
-        { status: 400 },
-      );
-    }
+    // Events use the SAME payment lifecycle once confirmed — their contract
+    // total is the accepted proposal rather than the stay estimate.
     if ((row.status ?? "").toLowerCase() !== "confirmed") {
       return NextResponse.json(
         { error: "Approve the stay before asking for money." },
@@ -516,6 +512,44 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       ? body.payment_methods.filter((m): m is string => typeof m === "string" && m.trim().length > 0)
       : [];
 
+    // Line items — what the guest is actually being offered. Same shape the
+    // locked admin route stores and the proposal email renders (Phase 15H).
+    let includedServices: Array<Record<string, unknown>> | null = null;
+    if (Object.prototype.hasOwnProperty.call(body, "included_services")) {
+      if (!Array.isArray(body.included_services)) {
+        return NextResponse.json({ error: "Invalid line items." }, { status: 400 });
+      }
+      try {
+        includedServices = body.included_services.map((item) => {
+          if (!item || typeof item !== "object") throw new Error("Invalid line item.");
+          const s = item as Record<string, unknown>;
+          const label = typeof s.label === "string" ? s.label.trim() : "";
+          if (!label) throw new Error("Every line needs a name.");
+          const num = (v: unknown, field: string): number | null => {
+            if (v === null || v === undefined || v === "") return null;
+            if (typeof v !== "number" || !Number.isFinite(v) || v < 0) throw new Error(`"${label}" has an invalid ${field}.`);
+            return v;
+          };
+          return {
+            ...(typeof s.id === "string" && s.id.trim() ? { id: s.id.trim() } : {}),
+            label,
+            unit_label: typeof s.unit_label === "string" && s.unit_label.trim() ? s.unit_label.trim() : null,
+            quantity: num(s.quantity, "quantity"),
+            unit_price: num(s.unit_price, "unit price"),
+            line_total: num(s.line_total, "line total"),
+            admin_status: s.admin_status === "approved" || s.admin_status === "declined" ? s.admin_status : null,
+            source: s.source === "requested" || s.source === "custom" ? s.source : null,
+            notes: typeof s.notes === "string" && s.notes.trim() ? s.notes.trim() : null,
+          };
+        });
+      } catch (err) {
+        return NextResponse.json(
+          { error: err instanceof Error ? err.message : "Invalid line items." },
+          { status: 400 },
+        );
+      }
+    }
+
     const { data: rowData, error: rowError } = await supabaseAdmin
       .from("bookings")
       .select(`${PAYMENT_COLUMNS}, proposal_status, proposal_valid_until, proposal_included_services, proposal_payment_methods, proposal_notes`)
@@ -568,6 +602,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       proposal_valid_until: validUntil,
       proposal_payment_methods: methods,
       proposal_notes: notes,
+      ...(includedServices ? { proposal_included_services: includedServices } : {}),
     };
     if (sending) {
       patch.proposal_status = "sent";

@@ -188,7 +188,11 @@ function BookingDetail() {
     booking.event_type && typeof booking.message === "string" && booking.message.includes("[Event Inquiry]"),
   );
   const staySetup = parseStaySetupMessage(booking.message);
-  const moneyView = bookingMoneyView(booking);
+  // An event's contract is the accepted proposal, not a stay estimate.
+  const moneyView = isEvent
+    ? { amount: booking.proposal_total_amount ?? booking.amount_total ?? null, estimated: false }
+    : bookingMoneyView(booking);
+  const contractOutstanding = Math.max(0, (moneyView.amount ?? 0) - (booking.amount_paid ?? 0));
   const total = booking.amount_total ?? 0;
   const paid = booking.amount_paid ?? 0;
   const outstanding = Math.max(0, total - paid);
@@ -478,16 +482,17 @@ function BookingDetail() {
             ) : (
               <>
                 <Button variant="primary" wide onClick={() => setDialog("payment")}>Record a payment</Button>
-                {/* Phase 16B asking-for-money, same lifecycle + same emails. */}
-                {!isEvent && outstanding > 0 && (
+                {/* Phase 16B asking-for-money, same lifecycle + same emails.
+                    Events use their agreed proposal total as the contract. */}
+                {contractOutstanding > 0 && (
                   <Button wide onClick={() => setMoneyRequest("request")}>
                     {booking.payment_status === "payment_requested" ? "Ask again for a different amount…" : "Ask the guest to pay…"}
                   </Button>
                 )}
-                {!isEvent && booking.payment_status === "payment_requested" && (
+                {booking.payment_status === "payment_requested" && (
                   <Button wide onClick={() => setMoneyRequest("reminder")}>Send a reminder…</Button>
                 )}
-                {!isEvent && booking.payment_status === "payment_requested" && (
+                {booking.payment_status === "payment_requested" && (
                   <p style={{ margin: 0, fontSize: "12px", color: T.faint, textAlign: "center" }}>
                     {booking.deposit_amount ? `${money(booking.deposit_amount)} requested` : "Payment requested"}
                     {booking.payment_due_at ? ` · due ${day(booking.payment_due_at)}` : ""}

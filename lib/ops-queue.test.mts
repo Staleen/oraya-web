@@ -78,7 +78,7 @@ function booking(overrides: Partial<QueueBooking>): QueueBooking {
     proposal_deposit_amount: null,
     proposal_valid_until: null,
     proposal_payment_methods: null,
-    proposal_notes: null,
+    proposal_notes: null, proposal_included_services: null,
     ...overrides,
   };
 }

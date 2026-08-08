@@ -31,7 +31,7 @@ function booking(o: Partial<QueueBooking>): QueueBooking {
     payment_link_expires_at: null, payment_link_issued_at: null,
     feedback_requested_at: null, feedback_request_count: null,
     proposal_status: null, proposal_total_amount: null, proposal_deposit_amount: null,
-    proposal_valid_until: null, proposal_payment_methods: null, proposal_notes: null,
+    proposal_valid_until: null, proposal_payment_methods: null, proposal_notes: null, proposal_included_services: null,
     ...o,
   };
 }
