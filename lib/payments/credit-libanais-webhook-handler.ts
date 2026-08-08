@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import {
+  buildCreditLibanaisWebhookReplayKey,
+  decryptCreditLibanaisWebhookPayload,
   parseCreditLibanaisWebhookEvent,
   readCreditLibanaisWebhookConfig,
   verifyCreditLibanaisWebhookSignature,
+  WEBHOOK_ID_HEADER,
+  WEBHOOK_TRACE_ID_HEADER,
 } from "@/lib/payments/credit-libanais-webhook";
 import {
   findPaymentAttemptByReference,
@@ -107,9 +111,24 @@ export async function handleCreditLibanaisWebhook(request: Request) {
   }
 
   const rawBody = await request.text();
+  const headers = lowerCaseHeaders(request);
+  let decryptedPayload: Awaited<ReturnType<typeof decryptCreditLibanaisWebhookPayload>>;
+  try {
+    decryptedPayload = await decryptCreditLibanaisWebhookPayload({
+      rawBody,
+      config: configResult.config,
+    });
+  } catch (error) {
+    console.error(`${LOG_TAG} webhook REFUSED: MLE decryption failed (fail closed):`, {
+      reason: error instanceof Error ? error.message : "decrypt_failed",
+      body_length: rawBody.length,
+    });
+    return NextResponse.json({ error: "Invalid encrypted webhook payload." }, { status: 401 });
+  }
+
   const verification = verifyCreditLibanaisWebhookSignature({
-    rawBody,
-    headers: lowerCaseHeaders(request),
+    payload: decryptedPayload.signature_payload,
+    headers,
     config: configResult.config,
   });
   if (!verification.ok) {
@@ -120,15 +139,102 @@ export async function handleCreditLibanaisWebhook(request: Request) {
     return NextResponse.json({ error: "Invalid webhook signature." }, { status: 401 });
   }
 
-  const event = parseCreditLibanaisWebhookEvent(rawBody);
+  const event = parseCreditLibanaisWebhookEvent(decryptedPayload.event_payload);
   if (!event) {
     console.error(`${LOG_TAG} verified webhook payload is not a JSON object — ignored`);
     return NextResponse.json({ received: true, ignored: true });
   }
 
+  const attempt = await findPaymentAttemptByReference({
+    idempotency_key: event.idempotency_key,
+    provider_transaction_id: event.provider_transaction_id,
+  });
+  const replayKey = buildCreditLibanaisWebhookReplayKey(event);
+  const providerEventId =
+    headers[WEBHOOK_ID_HEADER]?.trim() ||
+    headers[WEBHOOK_TRACE_ID_HEADER]?.trim() ||
+    event.transaction_trace_id ||
+    `replay-${replayKey}`;
+  const occurredAt = event.occurred_at && Number.isFinite(Date.parse(event.occurred_at))
+    ? new Date(event.occurred_at).toISOString()
+    : null;
+  const { data: insertedProviderEvent, error: providerEventError } = await supabaseAdmin
+    .from("payment_provider_events")
+    .insert({
+      provider: "credit_libanais",
+      provider_event_id: providerEventId,
+      payment_request_id: attempt?.payment_request_id ?? null,
+      occurred_at: occurredAt,
+      verification_status: "verified",
+      processing_status: "pending",
+      replay_key: replayKey,
+      safe_metadata: {
+        event_type: event.event_type,
+        raw_status: event.raw_status,
+        outcome: event.outcome,
+        signature_key_id: verification.key_id,
+      },
+    })
+    .select("id")
+    .single<{ id: string }>();
+
+  let providerEvent = insertedProviderEvent;
+
+  if (providerEventError) {
+    if (providerEventError.code === "23505") {
+      const { data: existingReplay, error: replayLookupError } = await supabaseAdmin
+        .from("payment_provider_events")
+        .select("id, provider_event_id, processing_status")
+        .eq("provider", "credit_libanais")
+        .eq("replay_key", replayKey)
+        .maybeSingle<{ id: string; provider_event_id: string; processing_status: string }>();
+      if (replayLookupError) {
+        console.error(`${LOG_TAG} duplicate replay lookup failed:`, replayLookupError);
+        return NextResponse.json({ error: "Webhook replay state is unavailable." }, { status: 500 });
+      }
+      if (existingReplay) {
+        if (existingReplay.processing_status === "processed" || existingReplay.processing_status === "ignored") {
+          return NextResponse.json({ received: true, idempotent: true });
+        }
+        // A pending row may be a concurrent delivery or a previous invocation
+        // that stopped after the durable insert. Reconciliation is monotonic
+        // and idempotent, so replaying it is the safe recovery path.
+        providerEvent = existingReplay;
+      } else {
+        const { data: conflictingDelivery, error: deliveryLookupError } = await supabaseAdmin
+          .from("payment_provider_events")
+          .select("id")
+          .eq("provider", "credit_libanais")
+          .eq("provider_event_id", providerEventId)
+          .maybeSingle<{ id: string }>();
+        if (deliveryLookupError) {
+          console.error(`${LOG_TAG} duplicate delivery lookup failed:`, deliveryLookupError);
+          return NextResponse.json({ error: "Webhook delivery state is unavailable." }, { status: 500 });
+        }
+        if (conflictingDelivery) {
+          console.error(`${LOG_TAG} provider delivery id was reused with different event content:`, {
+            provider_event_id: providerEventId,
+          });
+          return NextResponse.json({ error: "Conflicting webhook delivery." }, { status: 409 });
+        }
+        return NextResponse.json({ error: "Webhook event could not be claimed." }, { status: 500 });
+      }
+    } else {
+      console.error(`${LOG_TAG} verified event could not be claimed durably:`, {
+        provider_event_id: providerEventId,
+        error: providerEventError,
+      });
+      return NextResponse.json({ error: "Webhook event could not be recorded." }, { status: 500 });
+    }
+  }
+
+  if (!providerEvent) {
+    return NextResponse.json({ error: "Webhook event could not be recorded." }, { status: 500 });
+  }
+
   const outcome = await reconcileWebhookEvent(
     {
-      findAttempt: findPaymentAttemptByReference,
+      findAttempt: async () => attempt,
       recordPaymentOnBooking,
       markAttempt: (attemptId, expectedStatuses, patch) =>
         supabasePaymentAttemptStore.transitionAttempt(attemptId, expectedStatuses, patch),
@@ -136,6 +242,26 @@ export async function handleCreditLibanaisWebhook(request: Request) {
     },
     event,
   );
+
+  const processing = outcome.kind === "recorded" || outcome.kind === "marked_failed"
+    ? { processing_status: "processed", error_code: null }
+    : outcome.kind === "conflict"
+      ? { processing_status: "failed", error_code: "reconciliation_conflict" }
+      : outcome.kind === "error"
+        ? { processing_status: "failed", error_code: "reconciliation_failed" }
+        : { processing_status: "ignored", error_code: null };
+  const { error: eventUpdateError } = await supabaseAdmin
+    .from("payment_provider_events")
+    .update({ ...processing, processed_at: new Date().toISOString() })
+    .eq("id", providerEvent.id);
+  if (eventUpdateError) {
+    console.error(`${LOG_TAG} provider event outcome could not be persisted:`, {
+      provider_event_id: providerEventId,
+      outcome: outcome.kind,
+      error: eventUpdateError,
+    });
+    return NextResponse.json({ error: "Webhook event outcome could not be recorded." }, { status: 500 });
+  }
 
   switch (outcome.kind) {
     case "recorded":

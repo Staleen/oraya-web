@@ -120,7 +120,7 @@ export const supabasePaymentAttemptStore: PaymentAttemptStore = {
 };
 
 const ATTEMPT_RECONCILIATION_COLUMNS =
-  "id, booking_id, status, amount, currency, idempotency_key, provider_transaction_id";
+  "id, booking_id, payment_request_id, status, amount, currency, idempotency_key, provider_transaction_id";
 
 /**
  * Plan 4 Phase 2 (2.1) — match a webhook event to its attempt row by
