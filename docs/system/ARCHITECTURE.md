@@ -5,7 +5,7 @@
 
 > Secret model and per-variable risk live in **[ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md)** - this doc only references it.
 
-> **Phase 16B target architecture (approved 2026-08-09, not yet fully implemented):** Oraya's complete payment system will separate payment requests, immutable money transactions, provider attempts/events, and consented tokenized member instruments. Payment requests may be booking-linked or standalone and will power safe Oraya payment links for callers/WhatsApp contacts. Existing `bookings.payment_*` fields become summary projections rather than the only ledger; the current `payment_attempts` table remains the NetCommerce provider-call safety boundary. Cash is the first end-to-end implementation scenario, followed by standalone links and provider integrations. See [PHASE_16B_PAYMENT_SYSTEM_MISSION.md](PHASE_16B_PAYMENT_SYSTEM_MISSION.md). Current routes/schema below continue to describe what is shipped today.
+> **Phase 16B target architecture (approved 2026-08-09; foundation implemented, provider workstreams incomplete):** Oraya's complete payment system separates payment requests, immutable money transactions, provider attempts/events, and later consented tokenized member instruments. `payment_requests`, `payment_transactions`, and `payment_provider_events` are installed server-only; payment requests may be booking-linked or standalone and power safe Oraya `/pay/[token]` links. Existing `bookings.payment_*` fields are atomic summary projections rather than the only ledger; `payment_attempts` remains the NetCommerce provider-call safety boundary. Cash/manual rails and standalone links are the first implemented scenario. Native providers, cards through the new request ledger, Apple Pay, saved instruments, and settlement operations remain gated. See [PHASE_16B_PAYMENT_SYSTEM_MISSION.md](PHASE_16B_PAYMENT_SYSTEM_MISSION.md).
 
 ---
 
@@ -62,6 +62,7 @@ Next.js App Router (TypeScript)
 | `/join`, `/login`, `/forgot-password`, `/reset-password`, `/welcome`, `/profile` | `app/*/page.tsx` | Member auth + dashboard. `/profile` "My Bookings" cards open the canonical signed `/booking/view/[token]` page via a member-authenticated server mint (no duplicate booking-details UI). |
 | `/legal/{terms,payment,refund,privacy}` | `app/legal/*/page.tsx` | Trust + legal hub |
 | `/payments/checkout/[token]` | `app/payments/checkout/[token]/page.tsx` | Internal Credit Libanais / NetCommerce Unified Checkout payment page |
+| `/pay/[token]` | `app/pay/[token]/page.tsx` | Public branded payment-request front door; opaque token lookup, safe request summary, manual instructions, and integrated-method readiness without exposing internal IDs or secrets |
 
 ## Admin surface
 
@@ -138,6 +139,10 @@ All routes verified against the current repo. Locked APIs are marked **locked** 
 | `/api/payments/readiness` | GET | Admin-auth safe provider-readiness summary (configured vs placeholder, no secrets) | payment |
 | `/api/payments/webhook/[provider]` | POST | Verified hosted-payment callback reconciliation for the selected provider. For `credit_libanais`, a dedicated fail-closed handler (Plan 4 Phase 2, [lib/payments/credit-libanais-webhook.ts](../../lib/payments/credit-libanais-webhook.ts)): 503 when webhook/MLE env is unset, 401 on unverifiable payloads; VERIFIED events are authoritative for `payment_attempts` (auto-resolving most `ambiguous` attempts) and record payment via the idempotent set-paid path | payment |
 | `/api/payments/webhook/stripe` | POST | Stripe dev/test compatibility shim onto the generic hosted-payment callback handler | payment |
+| `/api/ops/payments/requests` | GET/POST | Ops-auth canonical payment-request list/create; returns copyable opaque links only to authenticated operations | ops-auth |
+| `/api/ops/payments/requests/[id]` | PATCH | Cancel an active canonical payment request | ops-auth |
+| `/api/ops/payments/transactions` | POST | Record an operator-authoritative manual receipt through the atomic immutable ledger RPC | ops-auth |
+| `/api/ops/payments/transactions/[id]/reverse` | POST | Append a reasoned reversal and exactly restore request/booking projections | ops-auth |
 
 `secret-guarded` rows require an `X-Butler-Secret` header matching `BUTLER_WEBHOOK_SECRET`. `/api/butler/lead` is the first Butler write, but it writes only to `whatsapp_leads` and does not touch `bookings` or any locked surface.
 
@@ -254,6 +259,9 @@ Resolution is intentionally lossy: a Supabase outage or genuinely-missing row bo
 
 - `bookings` - primary booking record. Includes `pricing_snapshot` and `addons` (`jsonb`). Additive human-run migrations added `whatsapp_confirmation_sent_at` (Phase 16C at-most-once WhatsApp dispatch claim, `sql/phase-16c-whatsapp-confirmation-tracking.sql`) and `refund_provider_reference` (Plan 4 manual-refund Business Center reference, `sql/plan4-refund-provider-reference.sql`).
 - `payment_attempts` - durable payment-attempt/idempotency ledger for Unified Checkout completion (Plan 3 Phase 3, `sql/plan3-payment-attempts.sql`, human-run; partial unique index = at most one in-flight attempt per booking). States: claimed / authorized / recorded / failed / ambiguous. Code fails closed (503) while the table is missing.
+- `payment_requests` - canonical booking-linked or standalone collection intent; unguessable public token is stored as a lookup hash plus server-only encrypted recoverable copy, supports USD/LBP, methods, partial-paid projection, expiry/cancel, and attributable creation.
+- `payment_transactions` - append-only money facts (payment/refund/reversal/adjustment), received and applied currencies, method/provider/presentation, gross/fee/net, source, actor, idempotency key, and exact pre-projection snapshot. A database trigger makes financial facts immutable; corrections are linked rows.
+- `payment_provider_events` - server-only durable verified-event/replay ledger reserved for integrated provider webhook processing.
 - `addons` - single source of truth for addon definitions.
 - `settings` - key/value store. Notable protected keys: `admin_password` (scrypt hash) and `payments_live_enabled` (fail-closed live checkout switch; only writable via `/api/admin/payments/live-toggle`).
 - `booking_action_tokens` - issued single-use tokens for admin confirm/cancel.

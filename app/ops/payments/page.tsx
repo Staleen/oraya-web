@@ -12,6 +12,7 @@ import { Badge, Banner, Button, Card, PageHead, Row, Rows, T } from "@/component
 import {
   CellInput, CellSelect, LiveBanner, PendingBar, SetupGate, useSetupData,
 } from "@/components/ops/setup-shared";
+import PaymentWorkspace from "@/components/ops/PaymentWorkspace";
 
 /**
  * Owner view of how guests pay — prototype faithful: card-payment status up
@@ -122,6 +123,8 @@ export default function PaymentsPage() {
   return (
     <>
       <PageHead title="Payments" sub="How guests pay you" />
+
+      <PaymentWorkspace />
 
       {flash && <Banner tone="ok" title="Live" onDismiss={() => setFlash("")}>{flash}</Banner>}
 

@@ -172,7 +172,7 @@ export default function MoneyDialog({
                   borderRadius: T.rSm, padding: "12px 13px", color: T.ink, fontSize: "15px", fontFamily: T.sans, outline: "none",
                 }}
               >
-                {["Bank transfer", "Whish", "Cash", "Card"].map((m) => <option key={m} value={m}>{m}</option>)}
+                {["Bank transfer", "Whish", "OMT", "Western Union", "Suyool", "Cash"].map((m) => <option key={m} value={m}>{m}</option>)}
               </select>
             </div>
           )}

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createHash } from "crypto";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireOps } from "@/lib/ops-auth";
 import { roundMoney } from "@/lib/money";
@@ -16,6 +17,7 @@ import {
   sendBookingPaymentRequestedEmail,
 } from "@/lib/send-booking-payment-email";
 import { appendPaymentReminderNote } from "@/lib/payment-reminders";
+import { manualRailToLedger } from "@/lib/payments/ledger";
 import { sendEventProposalEmail } from "@/lib/send-event-proposal-email";
 import { sendFeedbackRequestEmail } from "@/lib/send-feedback-request-email";
 import { isFeedbackEmailCooldownActive, isPastCheckoutForFeedbackEmail } from "@/lib/booking-feedback-eligibility";
@@ -138,6 +140,13 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     if (!reference) {
       return NextResponse.json({ error: "A bank or receipt reference is required." }, { status: 400 });
     }
+    const rail = manualRailToLedger(method);
+    if (!rail) {
+      return NextResponse.json(
+        { error: "Card payments must be verified by secure checkout. Choose the method that actually delivered the money." },
+        { status: 400 },
+      );
+    }
 
     // 16B continuity: recording money moves the SAME lifecycle the payment
     // system reads — payment_status, payment_stage, amount_total/amount_due
@@ -157,7 +166,39 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     }
     const row = rowData as unknown as PaymentRow;
 
-    const next = roundMoney(expected + amount);
+    const idempotencyKey = `legacy-${createHash("sha256")
+      .update(`${id}|${expected}|${amount}|${method}|${reference}`)
+      .digest("hex")}`;
+    const { data: ledgerRows, error: ledgerError } = await supabaseAdmin.rpc("oraya_record_manual_payment", {
+      p_request_id: null,
+      p_booking_id: id,
+      p_amount: amount,
+      p_currency: "USD",
+      p_applied_amount: amount,
+      p_method: rail.method,
+      p_provider: rail.provider,
+      p_reference: reference,
+      p_notes: "Recorded from the booking payment dialog.",
+      p_effective_at: now,
+      p_staff_id: auth.staff.id,
+      p_expected_booking_amount_paid: expected,
+      p_idempotency_key: idempotencyKey,
+    });
+    if (ledgerError) {
+      console.error(`${LOG_TAG} record_payment ledger failed:`, ledgerError.message);
+      if (ledgerError.message.includes("changed_elsewhere")) {
+        return NextResponse.json(
+          { error: "Someone else changed this booking's payments while you were typing. Open it again to see where it stands.", code: "changed_elsewhere" },
+          { status: 409 },
+        );
+      }
+      if (ledgerError.code === "23505") {
+        return NextResponse.json({ error: "This payment was already recorded." }, { status: 409 });
+      }
+      return NextResponse.json({ error: "Could not record that payment." }, { status: 503 });
+    }
+    const ledgerResult = Array.isArray(ledgerRows) ? ledgerRows[0] : ledgerRows;
+    const next = roundMoney(Number(ledgerResult?.booking_amount_paid ?? expected + amount));
     const foundationTotal = row.amount_total ?? getFoundationAmountTotal(row as never);
     const nextStatus =
       typeof foundationTotal === "number" && next >= foundationTotal ? "paid_in_full" : "deposit_paid";
@@ -182,21 +223,26 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       .eq("id", id);
     // PostgREST does not match NULL with .eq, so a first payment against a
     // null column has to be matched explicitly.
-    q = expected === 0 ? q.or("amount_paid.is.null,amount_paid.eq.0") : q.eq("amount_paid", expected);
+    q = q.eq("amount_paid", next);
 
-    const { data, error } = await q.select(RETURN_COLUMNS).maybeSingle();
+    const { data: updatedData, error } = await q.select(RETURN_COLUMNS).maybeSingle();
     if (error) {
       console.error(`${LOG_TAG} record_payment failed:`, error.message);
       return NextResponse.json({ error: "Could not record that payment." }, { status: 503 });
     }
+    let data = updatedData;
     if (!data) {
-      return NextResponse.json(
-        {
-          error: "Someone else changed this booking's payments while you were typing. Open it again to see where it stands.",
-          code: "changed_elsewhere",
-        },
-        { status: 409 },
-      );
+      // The ledger write already committed. A later concurrent receipt may
+      // have won before this compatibility projection refresh; never tell the
+      // operator to retry a payment that is already safely recorded.
+      const refreshed = await supabaseAdmin.from("bookings").select(RETURN_COLUMNS).eq("id", id).maybeSingle();
+      if (refreshed.error || !refreshed.data) {
+        return NextResponse.json(
+          { error: "Payment was recorded, but the booking could not be refreshed. Reload before doing anything else.", code: "recorded_refresh_failed" },
+          { status: 503 },
+        );
+      }
+      data = refreshed.data;
     }
 
     // Same receipt email the admin record-payment sends (B-10 lesson: the UI
