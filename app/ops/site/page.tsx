@@ -119,19 +119,24 @@ export default function SitePage() {
                   Villa Mechmech
                   <CellSelect style={{ marginTop: "6px" }} value={working.instant_mechmech ? "yes" : "no"}
                     onChange={(e) => update({ instant_mechmech: e.target.value === "yes" })}>
-                    <option value="no">Request to book</option>
-                    <option value="yes">Instant booking</option>
+                    <option value="no">Standard — &ldquo;request to book&rdquo;</option>
+                    <option value="yes">Show the instant-booking lane</option>
                   </CellSelect>
                 </label>
                 <label style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: T.muted }}>
                   Villa Byblos
                   <CellSelect style={{ marginTop: "6px" }} value={working.instant_byblos ? "yes" : "no"}
                     onChange={(e) => update({ instant_byblos: e.target.value === "yes" })}>
-                    <option value="no">Request to book</option>
-                    <option value="yes">Instant booking</option>
+                    <option value="no">Standard — &ldquo;request to book&rdquo;</option>
+                    <option value="yes">Show the instant-booking lane</option>
                   </CellSelect>
                 </label>
               </div>
+              <p style={{ margin: "-6px 0 18px", fontSize: "12px", color: T.warn, lineHeight: 1.6 }}>
+                This changes what the booking page <b>shows</b>, not how a booking is made. Every
+                booking still arrives here for your approval — instant confirmation isn&apos;t built yet
+                (it waits on Phase 16B payments).
+              </p>
 
               <label style={{ display: "block", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: T.muted, marginBottom: "6px" }}>
                 Check-in guidance the WhatsApp assistant gives
