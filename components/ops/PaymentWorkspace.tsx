@@ -7,7 +7,7 @@ import { PAYMENT_ALLOWED_METHODS, formatPaymentAmount, remainingRequestAmount, t
 type RequestView = PaymentRequestRow & { payment_url: string | null };
 type LedgerData = { requests: RequestView[]; transactions: PaymentTransactionRow[] };
 const methodLabels: Record<PaymentAllowedMethod, string> = {
-  cash: "Cash", bank_transfer: "Bank transfer", card: "Card", apple_pay: "Apple Pay",
+  cash: "Cash", bank_transfer: "Bank transfer", card: "Card (not active yet)", apple_pay: "Apple Pay (not active yet)",
   whish: "Whish", omt: "OMT", western_union: "Western Union", suyool: "Suyool",
 };
 const inputStyle = { width: "100%", boxSizing: "border-box" as const, background: "rgba(255,255,255,.05)", border: `1px solid ${T.borderStrong}`, borderRadius: T.rSm, padding: "12px 13px", color: T.ink, fontSize: "14px", fontFamily: T.sans };
@@ -35,7 +35,7 @@ export default function PaymentWorkspace() {
   const [purpose, setPurpose] = useState("deposit");
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState<PaymentCurrency>("USD");
-  const [methods, setMethods] = useState<PaymentAllowedMethod[]>(["card", "cash"]);
+  const [methods, setMethods] = useState<PaymentAllowedMethod[]>(["cash"]);
   const [receiptFor, setReceiptFor] = useState<RequestView | null>(null);
   const [receiptAmount, setReceiptAmount] = useState("");
   const [receiptMethod, setReceiptMethod] = useState("Cash");
