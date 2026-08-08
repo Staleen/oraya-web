@@ -8,6 +8,8 @@
 
 This document is an architecture audit. It is not an implementation plan approval, migration, production enablement, or merge decision.
 
+> **2026-08-09 scope addendum:** the owner has defined Phase 16B as Oraya's complete business payment system, including cash, cards, Apple Pay, Whish, OMT Pay, Western Union, the provisionally identified Suyool/"Sunbook Pay" rail, standalone payment links, and later consent-gated saved cards for members. The canonical forward-looking scope and delivery order are now [PHASE_16B_PAYMENT_SYSTEM_MISSION.md](PHASE_16B_PAYMENT_SYSTEM_MISSION.md). This older audit remains authoritative evidence about the NetCommerce/CyberSource implementation and its production blockers, but it no longer defines the Phase 16B product boundary. In particular, its statement that saved cards remain permanently outside Phase 16B and its assumption that a booking is the only payment-link object are superseded. The present NetCommerce launch still omits saved-card/tokenization behavior.
+
 ---
 
 ## Executive Summary

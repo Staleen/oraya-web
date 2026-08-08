@@ -6,7 +6,9 @@
 
 **Authority order:** [/docs/system/PROJECT_STATE.md](../system/PROJECT_STATE.md) > [/docs/system/AGENT_RULES.md](../system/AGENT_RULES.md) > [/docs/system/DECISIONS_LOG.md](../system/DECISIONS_LOG.md) > this file. If this file conflicts with any of those, the more conservative reading wins.
 
-**Last updated:** 2026-06-03.
+**Last updated:** 2026-08-09.
+
+> **2026-08-09 scope addendum:** this file preserves the original booking-linked payment architecture and implementation history. It is no longer the complete Phase 16B product boundary. The owner-approved umbrella mission is [PHASE_16B_PAYMENT_SYSTEM_MISSION.md](../system/PHASE_16B_PAYMENT_SYSTEM_MISSION.md): cash-first operations, a payment-request and immutable transaction ledger, standalone Oraya payment links, NetCommerce cards, Apple Pay, Whish, OMT Pay, Western Union, provisional Suyool/"Sunbook Pay", and later consent-gated saved cards for members. Older statements below that recommend one live link per booking/no request table, or permanently exclude saved cards, are superseded for forward work. Current shipped behavior remains accurately historical until the new stages are implemented.
 
 > **2026-06-03 reconciliation note.** This document was originally drafted as planning context only ("⏳ provisioned, no implementation"). Phase 16B is now actively shipping: provider-agnostic hosted-checkout architecture, payment-link columns, admin payment settings, three-step booking flow with dual-CTA Step 3, Credit Libanais readiness foundation, and verified webhook callback surface are all live. The roadmap sub-phase headers below now annotate shipped vs outstanding state. The original prose (provider list, schema design rationale, WhatsApp branching table) carries forward unchanged because the decisions it documents remain authoritative — only the implementation status has moved.
 >

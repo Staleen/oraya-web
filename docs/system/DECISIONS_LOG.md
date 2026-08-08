@@ -16,6 +16,20 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-09 - Phase 16B is Oraya's complete payment system
+
+**Decision:** define Phase 16B as Oraya's complete business payment system, not as a synonym for NetCommerce/CyberSource card checkout. The phase includes cash, bank/manual transfer, credit/debit cards, Apple Pay, Whish, OMT Pay, Western Union, the provider provisionally identified as Suyool/"Sunbook Pay", standalone Oraya payment links, booking-linked requests, partial/multiple payments, refunds/reversals/reconciliation, and tokenized saved cards for members. The canonical target is a payment-request layer plus an immutable transaction ledger; `bookings.payment_*` fields remain summaries rather than the only money history. Delivery starts with the ledger foundation and complete cash workflow. Provider integrations and saved-card activation remain independently gated.
+
+**Reason:** Oraya must collect money outside website booking checkout, including from callers/WhatsApp contacts with no booking, and must accurately operate several Lebanese payment rails. A single mutable payment summary and link stored on a booking cannot safely represent multiple payments, standalone requests, manual receipts, provider events, corrections, or reusable member instruments.
+
+**Impact:** [PHASE_16B_PAYMENT_SYSTEM_MISSION.md](PHASE_16B_PAYMENT_SYSTEM_MISSION.md) is the canonical product/architecture mission. Existing NetCommerce security work, including PR #104 and PR #109/16B-2B1, remains valid as one workstream and must not be duplicated or discarded. The current NetCommerce launch's saved-card omission remains in force, but saved cards are now a later Phase 16B workstream requiring provider tokenization, explicit member consent, revoke controls, and security/legal approval. "Sunbook Pay" is not treated as a confirmed provider name; Suyool is only a provisional match pending owner confirmation. Public consumer features for Whish/OMT/Suyool do not prove an Oraya merchant API, so native integrations require official contracts and technical documentation.
+
+**Reversible?:** hard - this is the owner's stated business-system boundary; changing it would alter the product mission.
+
+**Supersedes:** the permanent-scope portion of the 2026-06-22 saved-card omission decision and older Phase 16B plans that use booking-linked NetCommerce/hosted checkout as the phase boundary. It does not supersede the current one-time-card launch constraint or any payment security control.
+
+---
+
 ## 2026-08-08 - Phase 16B-2B1 replaces HTTP Signature with JWT and encrypts Payments API messages
 
 **Decision:** authenticate CyberSource `/uc/v1/sessions` and `/pts/v2/payments` requests with shared-secret HS256 JWT/JWS v2. Apply compact-JWE request and response MLE to `/pts/v2/payments` only: request encryption uses the CyberSource SJC public certificate (`RSA-OAEP` + `A256GCM`), and response decryption requires the configured REST-API Response MLE key (`RSA-OAEP-256` + `A256GCM`) with an exact `kid` match. A missing, plaintext, malformed, wrongly keyed, or undecryptable post-submission response throws into the existing ambiguous/do-not-retry attempt path. Keep capture-context creation JWT-authenticated without unsupported request MLE.
