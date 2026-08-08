@@ -1,9 +1,11 @@
 # Architecture - Oraya Web
 
-**Updated:** 2026-07-30
+**Updated:** 2026-08-09
 **Authority order:** see [PROJECT_STATE.md](PROJECT_STATE.md). This file is the descriptive map; if it conflicts with PROJECT_STATE.md, PROJECT_STATE.md wins.
 
 > Secret model and per-variable risk live in **[ENVIRONMENT_MAP.md](ENVIRONMENT_MAP.md)** - this doc only references it.
+
+> **Phase 16B target architecture (approved 2026-08-09, not yet fully implemented):** Oraya's complete payment system will separate payment requests, immutable money transactions, provider attempts/events, and consented tokenized member instruments. Payment requests may be booking-linked or standalone and will power safe Oraya payment links for callers/WhatsApp contacts. Existing `bookings.payment_*` fields become summary projections rather than the only ledger; the current `payment_attempts` table remains the NetCommerce provider-call safety boundary. Cash is the first end-to-end implementation scenario, followed by standalone links and provider integrations. See [PHASE_16B_PAYMENT_SYSTEM_MISSION.md](PHASE_16B_PAYMENT_SYSTEM_MISSION.md). Current routes/schema below continue to describe what is shipped today.
 
 ---
 

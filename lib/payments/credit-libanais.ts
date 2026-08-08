@@ -7,6 +7,11 @@ import {
 } from "@/lib/payments/unified-checkout-completion";
 import { decideCreditLibanaisCheckoutReady } from "@/lib/payments/live-rollout";
 import { readPaymentsLiveSetting } from "@/lib/payments/live-rollout-setting";
+import {
+  buildCyberSourceJwtAuthorization,
+  decryptCyberSourceResponse,
+  encryptCyberSourceRequest,
+} from "@/lib/payments/cybersource-jwt-mle";
 import type {
   CreateCheckoutSessionInput,
   CreateCheckoutSessionResult,
@@ -36,6 +41,10 @@ interface NetCommerceConfig {
   apiBaseUrl: string | null;
   country: string | null;
   locale: string | null;
+  requestMleCertificate: string | null;
+  requestMleKeyId: string | null;
+  responseMleKeyId: string | null;
+  responseMlePrivateKey: string | null;
   webhookMleKeyId: string | null;
   webhookMlePrivateKey: string | null;
   webhookMleCertificateId: string | null;
@@ -119,6 +128,10 @@ function readNetCommerceConfig(): NetCommerceConfig {
     apiBaseUrl: readEnv("NETCOMMERCE_CYBERSOURCE_API_BASE_URL"),
     country: readEnv("NETCOMMERCE_CYBERSOURCE_COUNTRY"),
     locale: readEnv("NETCOMMERCE_CYBERSOURCE_LOCALE"),
+    requestMleCertificate: readEnv("NETCOMMERCE_CYBERSOURCE_REQUEST_MLE_CERTIFICATE"),
+    requestMleKeyId: readEnv("NETCOMMERCE_CYBERSOURCE_REQUEST_MLE_KEY_ID"),
+    responseMleKeyId: readEnv("NETCOMMERCE_CYBERSOURCE_RESPONSE_MLE_KEY_ID"),
+    responseMlePrivateKey: readEnv("NETCOMMERCE_CYBERSOURCE_RESPONSE_MLE_PRIVATE_KEY"),
     webhookMleKeyId: readEnv("NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_KEY_ID"),
     webhookMlePrivateKey: readEnv("NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_PRIVATE_KEY"),
     webhookMleCertificateId: readEnv("NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_CERTIFICATE_ID"),
@@ -142,6 +155,18 @@ function getSessionMissingRequirements(config: NetCommerceConfig) {
   if (!config.apiBaseUrl) missing.push("NETCOMMERCE_CYBERSOURCE_API_BASE_URL is not configured");
   if (!config.country) missing.push("NETCOMMERCE_CYBERSOURCE_COUNTRY is not configured");
   if (!config.locale) missing.push("NETCOMMERCE_CYBERSOURCE_LOCALE is not configured");
+  if (!config.requestMleCertificate) {
+    missing.push("NETCOMMERCE_CYBERSOURCE_REQUEST_MLE_CERTIFICATE is not configured");
+  }
+  if (!config.requestMleKeyId) {
+    missing.push("NETCOMMERCE_CYBERSOURCE_REQUEST_MLE_KEY_ID is not configured");
+  }
+  if (!config.responseMleKeyId) {
+    missing.push("NETCOMMERCE_CYBERSOURCE_RESPONSE_MLE_KEY_ID is not configured");
+  }
+  if (!config.responseMlePrivateKey) {
+    missing.push("NETCOMMERCE_CYBERSOURCE_RESPONSE_MLE_PRIVATE_KEY is not configured");
+  }
   return missing;
 }
 
@@ -227,7 +252,11 @@ function requireSessionConfig() {
     !config.sharedSecret ||
     !config.apiBaseUrl ||
     !config.country ||
-    !config.locale
+    !config.locale ||
+    !config.requestMleCertificate ||
+    !config.requestMleKeyId ||
+    !config.responseMleKeyId ||
+    !config.responseMlePrivateKey
   ) {
     throw new PaymentProviderConfigurationError(
       `Credit Libanais / NetCommerce Unified Checkout is not configured: ${missing.join("; ")}.`,
@@ -240,6 +269,10 @@ function requireSessionConfig() {
     apiBaseUrl: config.apiBaseUrl.replace(/\/+$/, ""),
     country: config.country,
     locale: config.locale,
+    requestMleCertificate: config.requestMleCertificate,
+    requestMleKeyId: config.requestMleKeyId,
+    responseMleKeyId: config.responseMleKeyId,
+    responseMlePrivateKey: config.responseMlePrivateKey,
   };
 }
 
@@ -248,46 +281,6 @@ async function getReadinessError() {
   return new PaymentProviderConfigurationError(
     `Credit Libanais / NetCommerce checkout is not ready. Outstanding requirements: ${readiness.missing_requirements.join("; ")}.`,
   );
-}
-
-function buildDigest(body: string) {
-  return `SHA-256=${crypto.createHash("sha256").update(body, "utf8").digest("base64")}`;
-}
-
-function buildCyberSourceSignature({
-  body,
-  date,
-  host,
-  keyId,
-  merchantId,
-  path,
-  sharedSecret,
-}: {
-  body: string;
-  date: string;
-  host: string;
-  keyId: string;
-  merchantId: string;
-  path: string;
-  sharedSecret: string;
-}) {
-  const digest = buildDigest(body);
-  const signedHeaders = [
-    `host: ${host}`,
-    `date: ${date}`,
-    `(request-target): post ${path}`,
-    `digest: ${digest}`,
-    `v-c-merchant-id: ${merchantId}`,
-  ].join("\n");
-  const signature = crypto
-    .createHmac("sha256", Buffer.from(sharedSecret, "base64"))
-    .update(signedHeaders, "utf8")
-    .digest("base64");
-
-  return {
-    digest,
-    signature: `keyid="${keyId}", algorithm="HmacSHA256", headers="host date (request-target) digest v-c-merchant-id", signature="${signature}"`,
-  };
 }
 
 function decodeJwtPayload(jwt: string): Record<string, unknown> | null {
@@ -420,15 +413,19 @@ export async function authorizeCreditLibanaisTransientToken(
 ): Promise<CreditLibanaisTransientTokenPaymentResult> {
   const config = requireSessionConfig();
   const apiUrl = new URL(CYBERSOURCE_PAYMENTS_PATH, `${config.apiBaseUrl}/`);
-  const body = JSON.stringify(buildPaymentRequest(input, { country: config.country }));
-  const date = new Date().toUTCString();
-  const { digest, signature } = buildCyberSourceSignature({
+  const paymentRequest = JSON.stringify(buildPaymentRequest(input, { country: config.country }));
+  const body = await encryptCyberSourceRequest({
+    payload: paymentRequest,
+    requestMleCertificate: config.requestMleCertificate,
+    requestMleKeyId: config.requestMleKeyId,
+  });
+  const authorization = await buildCyberSourceJwtAuthorization({
     body,
-    date,
     host: apiUrl.host,
     keyId: config.keyId,
     merchantId: config.merchantId,
     path: apiUrl.pathname,
+    responseMleKeyId: config.responseMleKeyId,
     sharedSecret: config.sharedSecret,
   });
 
@@ -436,11 +433,8 @@ export async function authorizeCreditLibanaisTransientToken(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Date: date,
-      Digest: digest,
+      Authorization: authorization,
       Host: apiUrl.host,
-      Signature: signature,
-      "v-c-merchant-id": config.merchantId,
     },
     body,
     cache: "no-store",
@@ -448,12 +442,12 @@ export async function authorizeCreditLibanaisTransientToken(
     signal: AbortSignal.timeout(15_000),
   });
 
-  let payload: CyberSourcePaymentResponse | null = null;
-  try {
-    payload = (await response.json()) as CyberSourcePaymentResponse;
-  } catch {
-    payload = null;
-  }
+  const responseBody = await response.text();
+  const payload = await decryptCyberSourceResponse<CyberSourcePaymentResponse>({
+    body: responseBody,
+    expectedKeyId: config.responseMleKeyId,
+    responseMlePrivateKey: config.responseMlePrivateKey,
+  });
 
   const status = typeof payload?.status === "string" ? payload.status : null;
   const transactionId = typeof payload?.id === "string" ? payload.id : null;
@@ -521,10 +515,8 @@ export async function createCreditLibanaisUnifiedCheckoutSession(
       locale: config.locale,
     }),
   );
-  const date = new Date().toUTCString();
-  const { digest, signature } = buildCyberSourceSignature({
+  const authorization = await buildCyberSourceJwtAuthorization({
     body,
-    date,
     host: apiUrl.host,
     keyId: config.keyId,
     merchantId: config.merchantId,
@@ -536,11 +528,8 @@ export async function createCreditLibanaisUnifiedCheckoutSession(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Date: date,
-      Digest: digest,
+      Authorization: authorization,
       Host: apiUrl.host,
-      Signature: signature,
-      "v-c-merchant-id": config.merchantId,
     },
     body,
     cache: "no-store",
