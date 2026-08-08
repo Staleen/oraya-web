@@ -55,6 +55,19 @@ test("booking-linked requests stay in the booking ledger currency", () => {
   assert.equal(parsed.ok, false);
 });
 
+test("payment request rejects malformed booking identifiers before storage", () => {
+  const parsed = parseCreatePaymentRequestInput({
+    booking_id: "not-a-booking-id",
+    payer_name: "D",
+    description: "Deposit",
+    purpose: "deposit",
+    amount: 100,
+    currency: "USD",
+    allowed_methods: ["cash"],
+  });
+  assert.deepEqual(parsed, { ok: false, error: "Choose a valid booking." });
+});
+
 test("manual rails map provider and method independently", () => {
   assert.deepEqual(manualRailToLedger("Cash"), { method: "cash", provider: "manual" });
   assert.deepEqual(manualRailToLedger("Whish"), { method: "wallet", provider: "whish" });

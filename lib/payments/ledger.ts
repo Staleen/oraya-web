@@ -92,6 +92,8 @@ export interface CreatePaymentRequestInput {
   expires_at: string | null;
 }
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 function oneOf<T extends readonly string[]>(values: T, value: unknown): value is T[number] {
   return typeof value === "string" && values.includes(value as T[number]);
 }
@@ -127,6 +129,9 @@ export function parseCreatePaymentRequestInput(value: unknown):
   if (allowed.length === 0) return { ok: false, error: "Choose at least one way to pay." };
 
   const bookingId = nullableText(raw.booking_id, 64);
+  if (bookingId && !UUID_PATTERN.test(bookingId)) {
+    return { ok: false, error: "Choose a valid booking." };
+  }
   if (bookingId && raw.currency !== "USD") {
     return {
       ok: false,

@@ -56,6 +56,11 @@ export async function POST(request: Request) {
     if (error) return NextResponse.json({ error: "Could not verify that booking." }, { status: 503 });
     if (!booking) return NextResponse.json({ error: "That booking no longer exists." }, { status: 404 });
     input.member_id = booking.member_id ?? null;
+  } else {
+    // Standalone requests do not accept an arbitrary auth-user id from the
+    // browser. Member association is derived from a verified booking until a
+    // dedicated member picker/ownership check is introduced.
+    input.member_id = null;
   }
 
   const secret = process.env.ADMIN_SECRET!.trim();
