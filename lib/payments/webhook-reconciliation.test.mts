@@ -23,6 +23,7 @@ function attempt(overrides: Partial<ReconciliationAttempt> = {}): Reconciliation
   return {
     id: "att-1",
     booking_id: "bk-1",
+    payment_request_id: null,
     status: "ambiguous",
     amount: 400,
     currency: "USD",

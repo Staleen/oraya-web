@@ -1,41 +1,32 @@
 import crypto from "crypto";
+import { compactDecrypt, decodeProtectedHeader, importPKCS8 } from "jose";
 
 /**
- * Plan 4 Phase 2 — CyberSource/NetCommerce webhook verification and event
- * parsing (pure; the Supabase wiring lives in
- * lib/payments/credit-libanais-webhook-handler.ts).
- *
- * Fail-closed contract (the part that is GUARANTEED regardless of the final
- * NetCommerce delivery spec):
- *   - verification config incomplete  ⇒ the endpoint refuses (503) and never
- *     processes the payload;
- *   - missing / mismatched signature  ⇒ 401 + structured log, no state change;
- *   - only a VERIFIED payload may transition any payment attempt or booking.
- *
- * Signature scheme implemented today: `v-c-signature` = Base64(
- * HMAC-SHA256(rawBody) ) keyed with the Base64-decoded
- * NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_PRIVATE_KEY, plus an exact
- * `v-c-key-id` match when that header is present. If NetCommerce's delivered
- * production spec differs (e.g. JWS over the body), adapt THIS module only —
- * the fail-closed contract and the reconciliation layer stay unchanged.
- *
- * Relative .ts imports so node:test can load this module (repo test convention).
+ * CyberSource webhook security follows the current Webhooks implementation
+ * guide: payment/Unified Checkout payloads are compact JWE, and the
+ * `v-c-signature` header signs `timestamp + "." + decryptedPayload` with a
+ * separate Base64-encoded digital-signature secret.
  */
 
 export const WEBHOOK_SIGNATURE_HEADER = "v-c-signature";
-export const WEBHOOK_KEY_ID_HEADER = "v-c-key-id";
+export const WEBHOOK_TRACE_ID_HEADER = "v-c-transaction-trace-id";
+export const WEBHOOK_ID_HEADER = "v-c-webhook-id";
+export const WEBHOOK_SIGNATURE_TOLERANCE_MS = 5 * 60 * 1000;
 
 export const CREDIT_LIBANAIS_WEBHOOK_ENV_KEYS = [
   "NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_KEY_ID",
   "NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_PRIVATE_KEY",
   "NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_CERTIFICATE_ID",
+  "NETCOMMERCE_CYBERSOURCE_WEBHOOK_SIGNATURE_KEY_ID",
+  "NETCOMMERCE_CYBERSOURCE_WEBHOOK_SIGNATURE_SECRET",
 ] as const;
 
 export type CreditLibanaisWebhookConfig = {
-  keyId: string;
-  /** Base64 secret material used as the HMAC verification key. */
-  privateKey: string;
-  certificateId: string;
+  mleKeyId: string;
+  mlePrivateKey: string;
+  mleCertificateId: string;
+  signatureKeyId: string;
+  signatureSecret: string;
 };
 
 export type WebhookConfigResult =
@@ -49,58 +40,195 @@ export function readCreditLibanaisWebhookConfig(
     const value = env[key];
     return typeof value !== "string" || value.trim() === "";
   });
-  if (missing.length > 0) {
-    return { ok: false, missing: [...missing] };
-  }
+  if (missing.length > 0) return { ok: false, missing: [...missing] };
   return {
     ok: true,
     config: {
-      keyId: env.NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_KEY_ID!.trim(),
-      privateKey: env.NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_PRIVATE_KEY!.trim(),
-      certificateId: env.NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_CERTIFICATE_ID!.trim(),
+      mleKeyId: env.NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_KEY_ID!.trim(),
+      mlePrivateKey: env.NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_PRIVATE_KEY!.trim(),
+      mleCertificateId: env.NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_CERTIFICATE_ID!.trim(),
+      signatureKeyId: env.NETCOMMERCE_CYBERSOURCE_WEBHOOK_SIGNATURE_KEY_ID!.trim(),
+      signatureSecret: env.NETCOMMERCE_CYBERSOURCE_WEBHOOK_SIGNATURE_SECRET!.trim(),
     },
   };
 }
 
-export type WebhookSignatureVerification =
-  | { ok: true }
-  | { ok: false; reason: "missing_signature" | "key_id_mismatch" | "signature_mismatch" };
-
-export function computeWebhookSignature(rawBody: string, privateKeyBase64: string): string {
-  return crypto
-    .createHmac("sha256", Buffer.from(privateKeyBase64, "base64"))
-    .update(rawBody, "utf8")
-    .digest("base64");
+function normalizePem(value: string) {
+  return value.replace(/\\n/g, "\n").trim();
 }
 
-export function verifyCreditLibanaisWebhookSignature({
+function readCompactJwe(rawBody: string) {
+  const trimmed = rawBody.trim();
+  if (/^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]*){4}$/.test(trimmed)) {
+    return { compactJwe: trimmed, envelope: null, nestedPayload: false };
+  }
+
+  let envelope: unknown;
+  try {
+    envelope = JSON.parse(trimmed);
+  } catch {
+    throw new Error("webhook_mle_invalid_envelope");
+  }
+  if (!envelope || typeof envelope !== "object" || Array.isArray(envelope)) {
+    throw new Error("webhook_mle_invalid_envelope");
+  }
+  const record = envelope as Record<string, unknown>;
+  for (const key of ["encryptedPayload", "encryptedResponse", "encryptedRequest"]) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim().split(".").length === 5) {
+      return { compactJwe: value.trim(), envelope: record, nestedPayload: false };
+    }
+  }
+  const nestedPayload = record.payload;
+  if (typeof nestedPayload === "string" && nestedPayload.trim().split(".").length === 5) {
+    return { compactJwe: nestedPayload.trim(), envelope: record, nestedPayload: true };
+  }
+  throw new Error("webhook_mle_missing_jwe");
+}
+
+export async function decryptCreditLibanaisWebhookPayload({
   rawBody,
-  headers,
   config,
 }: {
   rawBody: string;
-  /** Header names must already be lower-cased. */
-  headers: Record<string, string>;
   config: CreditLibanaisWebhookConfig;
-}): WebhookSignatureVerification {
-  const signature = headers[WEBHOOK_SIGNATURE_HEADER]?.trim();
-  if (!signature) {
-    return { ok: false, reason: "missing_signature" };
+}) {
+  const encrypted = readCompactJwe(rawBody);
+  const decodedHeader = decodeProtectedHeader(encrypted.compactJwe);
+  if (decodedHeader.alg !== "RSA-OAEP" && decodedHeader.alg !== "RSA-OAEP-256") {
+    throw new Error("webhook_mle_unexpected_algorithm");
+  }
+  if (decodedHeader.enc !== "A256GCM") {
+    throw new Error("webhook_mle_unexpected_encryption");
+  }
+  const privateKey = await importPKCS8(normalizePem(config.mlePrivateKey), decodedHeader.alg);
+  const { plaintext, protectedHeader } = await compactDecrypt(encrypted.compactJwe, privateKey, {
+    keyManagementAlgorithms: ["RSA-OAEP", "RSA-OAEP-256"],
+    contentEncryptionAlgorithms: ["A256GCM"],
+  });
+  if (
+    protectedHeader.kid &&
+    protectedHeader.kid !== config.mleKeyId &&
+    protectedHeader.kid !== config.mleCertificateId
+  ) {
+    throw new Error("webhook_mle_key_id_mismatch");
+  }
+  const signaturePayload = new TextDecoder().decode(plaintext);
+  if (!encrypted.nestedPayload || !encrypted.envelope) {
+    return { signature_payload: signaturePayload, event_payload: signaturePayload };
   }
 
-  const keyIdHeader = headers[WEBHOOK_KEY_ID_HEADER]?.trim();
-  if (keyIdHeader && keyIdHeader !== config.keyId) {
+  let decryptedNode: unknown;
+  try {
+    decryptedNode = JSON.parse(signaturePayload);
+  } catch {
+    throw new Error("webhook_mle_decrypted_payload_invalid_json");
+  }
+  return {
+    signature_payload: signaturePayload,
+    event_payload: JSON.stringify({ ...encrypted.envelope, payload: decryptedNode }),
+  };
+}
+
+type ParsedSignature = { timestamp: string; keyId: string; signature: string };
+
+export function parseWebhookSignatureHeader(value: string | undefined): ParsedSignature | null {
+  if (!value?.trim()) return null;
+  const fields = new Map<string, string>();
+  for (const part of value.trim().replace(/^v-c-signature:\s*/i, "").split(";")) {
+    const separator = part.indexOf("=");
+    if (separator <= 0) continue;
+    fields.set(part.slice(0, separator).trim(), part.slice(separator + 1).trim().replace(/^"|"$/g, ""));
+  }
+  const timestamp = fields.get("t");
+  const keyId = fields.get("keyId");
+  const signature = fields.get("sig");
+  return timestamp && keyId && signature ? { timestamp, keyId, signature } : null;
+}
+
+export function computeWebhookSignature(
+  payload: string,
+  signatureSecretBase64: string,
+  timestamp: string | number,
+) {
+  return crypto
+    .createHmac("sha256", Buffer.from(signatureSecretBase64, "base64"))
+    .update(`${timestamp}.${payload}`, "utf8")
+    .digest("base64");
+}
+
+export function formatWebhookSignatureHeader({
+  payload,
+  keyId,
+  signatureSecret,
+  timestamp,
+}: {
+  payload: string;
+  keyId: string;
+  signatureSecret: string;
+  timestamp: string | number;
+}) {
+  return `t=${timestamp};keyId=${keyId};sig=${computeWebhookSignature(payload, signatureSecret, timestamp)}`;
+}
+
+export type WebhookSignatureVerification =
+  | { ok: true; timestamp: string; key_id: string }
+  | {
+      ok: false;
+      reason:
+        | "missing_signature"
+        | "malformed_signature"
+        | "key_id_mismatch"
+        | "timestamp_out_of_tolerance"
+        | "signature_mismatch";
+    };
+
+function timestampToMilliseconds(value: string) {
+  if (!/^\d{10,16}$/.test(value)) return null;
+  const numeric = Number(value);
+  if (!Number.isSafeInteger(numeric)) return null;
+  return value.length <= 10 ? numeric * 1000 : numeric;
+}
+
+export function verifyCreditLibanaisWebhookSignature({
+  payload,
+  headers,
+  config,
+  now = Date.now(),
+  toleranceMs = WEBHOOK_SIGNATURE_TOLERANCE_MS,
+}: {
+  payload: string;
+  headers: Record<string, string>;
+  config: CreditLibanaisWebhookConfig;
+  now?: number;
+  toleranceMs?: number;
+}): WebhookSignatureVerification {
+  const headerValue = headers[WEBHOOK_SIGNATURE_HEADER]?.trim();
+  if (!headerValue) return { ok: false, reason: "missing_signature" };
+  const parsed = parseWebhookSignatureHeader(headerValue);
+  if (!parsed) return { ok: false, reason: "malformed_signature" };
+  if (parsed.keyId !== config.signatureKeyId) {
     return { ok: false, reason: "key_id_mismatch" };
   }
 
-  const expected = computeWebhookSignature(rawBody, config.privateKey);
-  const provided = Buffer.from(signature, "utf8");
-  const wanted = Buffer.from(expected, "utf8");
-  if (provided.length !== wanted.length || !crypto.timingSafeEqual(provided, wanted)) {
-    return { ok: false, reason: "signature_mismatch" };
+  const timestampMs = timestampToMilliseconds(parsed.timestamp);
+  if (timestampMs === null || Math.abs(now - timestampMs) > toleranceMs) {
+    return { ok: false, reason: "timestamp_out_of_tolerance" };
   }
 
-  return { ok: true };
+  const expected = Buffer.from(
+    computeWebhookSignature(payload, config.signatureSecret, parsed.timestamp),
+    "base64",
+  );
+  const provided = Buffer.from(parsed.signature, "base64");
+  if (
+    provided.length === 0 ||
+    provided.length !== expected.length ||
+    !crypto.timingSafeEqual(provided, expected)
+  ) {
+    return { ok: false, reason: "signature_mismatch" };
+  }
+  return { ok: true, timestamp: parsed.timestamp, key_id: parsed.keyId };
 }
 
 // ---------------------------------------------------------------------------
@@ -111,11 +239,12 @@ export type CreditLibanaisWebhookOutcome = "success" | "failure" | "unknown";
 
 export type CreditLibanaisWebhookEvent = {
   outcome: CreditLibanaisWebhookOutcome;
-  /** clientReferenceInformation.code — our attempt-derived merchant reference. */
   idempotency_key: string | null;
   provider_transaction_id: string | null;
   event_type: string | null;
   raw_status: string | null;
+  occurred_at: string | null;
+  transaction_trace_id: string | null;
 };
 
 const SUCCESS_STATUSES = new Set(["AUTHORIZED", "CAPTURED", "TRANSMITTED", "SETTLED"]);
@@ -125,12 +254,7 @@ function readTrimmedString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-/** Bounded recursive search for the first string value at `path`-like keys. */
-function findFirstString(
-  node: unknown,
-  keys: readonly string[],
-  depth: number,
-): string | null {
+function findFirstString(node: unknown, keys: readonly string[], depth: number): string | null {
   if (depth < 0 || !node || typeof node !== "object") return null;
   const record = node as Record<string, unknown>;
   if (!Array.isArray(node)) {
@@ -167,46 +291,34 @@ function findClientReferenceCode(payload: unknown, depth: number): string | null
 
 function classifyOutcome(eventType: string | null, status: string | null): CreditLibanaisWebhookOutcome {
   const type = (eventType ?? "").toLowerCase();
-
-  // Refund/credit notifications never resolve a CHARGE attempt — refunds are
-  // manual-first (docs/system/REFUND_RUNBOOK.md) and handled by a human.
   if (/refund|credit/.test(type)) return "unknown";
-
-  if (/reject|decline|void|reversal|fail/.test(type)) return "failure";
-  if (/accept|capture|settle/.test(type)) return "success";
-
   const normalizedStatus = (status ?? "").toUpperCase();
-  if (SUCCESS_STATUSES.has(normalizedStatus)) return "success";
+  // Unified Checkout uses one transaction-results event type for both
+  // approvals and declines, so an explicit provider status must win over the
+  // generic event name.
   if (FAILURE_STATUSES.has(normalizedStatus)) return "failure";
-
+  if (SUCCESS_STATUSES.has(normalizedStatus)) return "success";
+  if (/reject|decline|void|reversal|fail/.test(type)) return "failure";
+  if (/accept|capture|settle|transactionresults/.test(type)) return "success";
   return "unknown";
 }
 
-/**
- * Defensive parse of a VERIFIED webhook payload. Returns null when the body is
- * not a JSON object at all; otherwise always returns an event (possibly with
- * outcome "unknown" and null references — the reconciliation layer ignores
- * those without any state change).
- */
-export function parseCreditLibanaisWebhookEvent(rawBody: string): CreditLibanaisWebhookEvent | null {
-  let payload: unknown;
+export function parseCreditLibanaisWebhookEvent(payload: string): CreditLibanaisWebhookEvent | null {
+  let parsed: unknown;
   try {
-    payload = JSON.parse(rawBody);
+    parsed = JSON.parse(payload);
   } catch {
     return null;
   }
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
-
-  const record = payload as Record<string, unknown>;
-  const eventType = readTrimmedString(record.eventType) ?? findFirstString(payload, ["eventType"], 4);
-  const status = findFirstString(payload, ["status"], 5);
-  const idempotencyKey = findClientReferenceCode(payload, 6);
-  // Whole-tree pass per key so a specific `transactionId` anywhere beats a
-  // shallower generic `id` (webhook envelopes carry their own notification id).
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  const record = parsed as Record<string, unknown>;
+  const eventType = readTrimmedString(record.eventType) ?? findFirstString(parsed, ["eventType"], 4);
+  const status = findFirstString(parsed, ["status"], 5);
+  const idempotencyKey = findClientReferenceCode(parsed, 6);
   const transactionId =
-    findFirstString(payload, ["transactionId"], 5) ??
-    findFirstString(payload, ["requestId"], 5) ??
-    findFirstString(payload, ["id"], 5);
+    findFirstString(parsed, ["transactionId"], 5) ??
+    findFirstString(parsed, ["requestId"], 5) ??
+    findFirstString(parsed, ["id"], 5);
 
   return {
     outcome: classifyOutcome(eventType, status),
@@ -214,5 +326,17 @@ export function parseCreditLibanaisWebhookEvent(rawBody: string): CreditLibanais
     provider_transaction_id: transactionId,
     event_type: eventType,
     raw_status: status,
+    occurred_at: readTrimmedString(record.eventDate),
+    transaction_trace_id: readTrimmedString(record.transactionTraceId),
   };
+}
+
+export function buildCreditLibanaisWebhookReplayKey(event: CreditLibanaisWebhookEvent) {
+  return crypto.createHash("sha256").update(JSON.stringify({
+    event_type: event.event_type,
+    idempotency_key: event.idempotency_key,
+    provider_transaction_id: event.provider_transaction_id,
+    outcome: event.outcome,
+    raw_status: event.raw_status,
+  })).digest("hex");
 }

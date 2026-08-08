@@ -41,6 +41,8 @@
 | `NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_KEY_ID` | server-only | optional for sandbox completion; required for webhook reconciliation | optional for sandbox checkout; yes for webhook test | yes before live rollout | yes - Sensitive |
 | `NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_PRIVATE_KEY` | server-only | optional for sandbox completion; required for webhook reconciliation | optional for sandbox checkout; yes for webhook test | yes before live rollout | yes - Sensitive |
 | `NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_CERTIFICATE_ID` | server-only | optional for sandbox completion; required for webhook reconciliation | optional for sandbox checkout; yes for webhook test | yes before live rollout | yes - Sensitive |
+| `NETCOMMERCE_CYBERSOURCE_WEBHOOK_SIGNATURE_KEY_ID` | server-only | optional for sandbox completion; required for verified webhooks | optional for sandbox checkout; yes for webhook test | yes before live rollout | yes - Sensitive |
+| `NETCOMMERCE_CYBERSOURCE_WEBHOOK_SIGNATURE_SECRET` | server-only | optional for sandbox completion; required for verified webhooks | optional for sandbox checkout; yes for webhook test | yes before live rollout | yes - Sensitive |
 | `STRIPE_SECRET_KEY` | server-only | optional (Stripe local/dev test only) | optional | optional | optional |
 | `STRIPE_WEBHOOK_SECRET` | server-only | optional (Stripe local/dev webhook only) | optional | optional | optional |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | public | optional (Stripe local/dev only) | optional | optional | optional |
@@ -392,7 +394,7 @@ Preview expectations:
 ### `NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_KEY_ID`
 
 - **Scope:** server-only.
-- **Used in:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) readiness contract, and — since Plan 4 Phase 2 (2026-07-25) — [lib/payments/credit-libanais-webhook.ts](../../lib/payments/credit-libanais-webhook.ts): the fail-closed webhook handler returns 503 (payload never processed) while any of the three webhook/MLE vars is unset, and verifies the `v-c-key-id` header against this value. Also part of the production live-rollout env gate ([lib/payments/live-rollout.ts](../../lib/payments/live-rollout.ts)).
+- **Used in:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) readiness contract and [lib/payments/credit-libanais-webhook.ts](../../lib/payments/credit-libanais-webhook.ts) to validate the compact-JWE protected `kid` before accepting the decrypted payload. Signature-key validation uses the separate webhook signature key ID. Also part of the production live-rollout env gate ([lib/payments/live-rollout.ts](../../lib/payments/live-rollout.ts)).
 - **Required:** optional for sandbox server-side completion testing; required before production live rollout and before asynchronous webhook reconciliation can be trusted.
 - **Where to get it:** CyberSource Business Center / NetCommerce webhook setup.
 - **Configure in Vercel:** optional in Preview for checkout-only sandbox validation; required in Preview when testing webhooks; required in Production before live rollout. Mark as Sensitive.
@@ -401,7 +403,7 @@ Preview expectations:
 ### `NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_PRIVATE_KEY`
 
 - **Scope:** server-only.
-- **Used in:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) readiness contract, and — since Plan 4 Phase 2 (2026-07-25) — [lib/payments/credit-libanais-webhook.ts](../../lib/payments/credit-libanais-webhook.ts): HMAC-SHA256 signature verification over the raw webhook body is keyed with the Base64-decoded value; unverifiable payloads get 401 and never change state. Also part of the production live-rollout env gate ([lib/payments/live-rollout.ts](../../lib/payments/live-rollout.ts)).
+- **Used in:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) readiness contract and [lib/payments/credit-libanais-webhook.ts](../../lib/payments/credit-libanais-webhook.ts) to decrypt the compact-JWE notification payload. It is not the webhook signature secret. Also part of the production live-rollout env gate ([lib/payments/live-rollout.ts](../../lib/payments/live-rollout.ts)).
 - **Required:** optional for sandbox server-side completion testing; required before production live rollout and before asynchronous webhook reconciliation can be trusted.
 - **Where to get it:** key material generated/registered for CyberSource webhook MLE.
 - **Configure in Vercel:** optional in Preview for checkout-only sandbox validation; required in Preview when testing webhooks; required in Production before live rollout. Mark as Sensitive.
@@ -415,6 +417,24 @@ Preview expectations:
 - **Where to get it:** CyberSource Business Center / NetCommerce webhook setup.
 - **Configure in Vercel:** optional in Preview for checkout-only sandbox validation; required in Preview when testing webhooks; required in Production before live rollout. Mark as Sensitive.
 - **Risk if missing:** Oraya cannot safely trust asynchronous Unified Checkout webhook payloads; browser redirects remain informational and server-side authorization must carry the sandbox test.
+
+### `NETCOMMERCE_CYBERSOURCE_WEBHOOK_SIGNATURE_KEY_ID`
+
+- **Scope:** server-only.
+- **Used in:** [lib/payments/credit-libanais-webhook.ts](../../lib/payments/credit-libanais-webhook.ts) to require the `keyId` embedded in CyberSource's `v-c-signature` header to match Oraya's separately issued digital-signature key.
+- **Required:** required for webhook testing and before production live rollout; not needed for checkout-only sandbox work.
+- **Where to get it:** the `keyInformation.keyId` returned when the CyberSource Webhooks API creates the digital signature key (`/kms/egress/v2/keys-sym`). This is separate from all MLE key IDs.
+- **Configure in Vercel:** Preview when testing webhooks and Production before live rollout. Mark Sensitive.
+- **Risk if missing:** webhook delivery fails closed with 503 and never changes payment state.
+
+### `NETCOMMERCE_CYBERSOURCE_WEBHOOK_SIGNATURE_SECRET`
+
+- **Scope:** server-only.
+- **Used in:** [lib/payments/credit-libanais-webhook.ts](../../lib/payments/credit-libanais-webhook.ts) to verify HMAC-SHA256 over `timestamp + "." + decryptedPayload`, including a five-minute timestamp tolerance.
+- **Required:** required for webhook testing and before production live rollout; not needed for checkout-only sandbox work.
+- **Where to get it:** the Base64 `keyInformation.key` returned with the CyberSource digital-signature key. Never reuse the MLE private key or the REST API shared secret.
+- **Configure in Vercel:** Preview when testing webhooks and Production before live rollout. Mark Sensitive.
+- **Risk if missing or invalid:** webhook delivery fails closed and cannot reconcile ambiguous payment attempts.
 
 ### `STRIPE_SECRET_KEY`
 
