@@ -18,6 +18,7 @@ import {
   type ReconciliationEvent,
 } from "@/lib/payments/webhook-reconciliation";
 import { decideSetPaidUpdate, type SetPaidBookingState } from "@/lib/payments/webhook-set-paid";
+import { recordProviderPayment } from "@/lib/payments/ledger-server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 /**
@@ -43,6 +44,23 @@ async function recordPaymentOnBooking(
   attempt: ReconciliationAttempt,
   event: ReconciliationEvent,
 ): Promise<"recorded" | "already_paid" | "failed"> {
+  if (attempt.payment_request_id) {
+    const recorded = await recordProviderPayment({
+      payment_request_id: attempt.payment_request_id,
+      amount: attempt.amount,
+      currency: attempt.currency === "LBP" ? "LBP" : "USD",
+      provider_reference:
+        event.provider_transaction_id ?? attempt.provider_transaction_id ?? attempt.idempotency_key,
+      idempotency_key: attempt.idempotency_key,
+    });
+    return recorded.ok
+      ? recorded.result.idempotent ? "already_paid" : "recorded"
+      : "failed";
+  }
+  if (!attempt.booking_id) {
+    console.error(`${LOG_TAG} attempt has no payable subject:`, { attempt_id: attempt.id });
+    return "failed";
+  }
   const { data: booking, error } = await supabaseAdmin
     .from("bookings")
     .select(BOOKING_COLUMNS)
@@ -250,9 +268,22 @@ export async function handleCreditLibanaisWebhook(request: Request) {
       : outcome.kind === "error"
         ? { processing_status: "failed", error_code: "reconciliation_failed" }
         : { processing_status: "ignored", error_code: null };
+  let paymentTransactionId: string | null = null;
+  if (attempt?.payment_request_id && (outcome.kind === "recorded" || outcome.kind === "already_final")) {
+    const { data: transaction } = await supabaseAdmin
+      .from("payment_transactions")
+      .select("id")
+      .eq("idempotency_key", attempt.idempotency_key)
+      .maybeSingle<{ id: string }>();
+    paymentTransactionId = transaction?.id ?? null;
+  }
   const { error: eventUpdateError } = await supabaseAdmin
     .from("payment_provider_events")
-    .update({ ...processing, processed_at: new Date().toISOString() })
+    .update({
+      ...processing,
+      payment_transaction_id: paymentTransactionId,
+      processed_at: new Date().toISOString(),
+    })
     .eq("id", providerEvent.id);
   if (eventUpdateError) {
     console.error(`${LOG_TAG} provider event outcome could not be persisted:`, {

@@ -8,6 +8,8 @@ const checkoutPage = readFileSync("app/payments/checkout/[token]/page.tsx", "utf
 const checkoutRoute = readFileSync("app/api/payments/checkout/route.ts", "utf8");
 const sessionRoute = readFileSync("app/api/payments/unified-checkout-session/route.ts", "utf8");
 const completionRoute = readFileSync("app/api/payments/unified-checkout-complete/route.ts", "utf8");
+const requestCompletionRoute = readFileSync("app/api/payments/requests/unified-checkout-complete/route.ts", "utf8");
+const cardRequestMigration = readFileSync("sql/phase-16b-card-payment-requests.sql", "utf8");
 const guestPresentation = readFileSync("lib/payments/guest-presentation.ts", "utf8");
 const trustMessaging = readFileSync("lib/booking-trust-messaging.ts", "utf8");
 
@@ -70,8 +72,10 @@ test("public checkout failures do not echo provider or configuration detail", ()
 test("checkout preserves authoritative do-not-retry messages after payment submission", () => {
   assert.match(
     checkoutPage,
-    /completionRequestSubmitted = true;\s*const completionResponse = await fetch\("\/api\/payments\/unified-checkout-complete"/,
+    /completionRequestSubmitted = true;\s*const completionResponse = await fetch\(\s*isPaymentRequest/,
   );
+  assert.match(checkoutPage, /"\/api\/payments\/requests\/unified-checkout-complete"/);
+  assert.match(checkoutPage, /"\/api\/payments\/unified-checkout-complete"/);
   assert.match(checkoutPage, /completionRequestSubmitted\s*\?\s*"We could not confirm the payment outcome\. Do NOT retry or pay again/);
   assert.match(checkoutPage, /completion\.message\.trim\(\)/);
 
@@ -87,4 +91,14 @@ test("checkout preserves authoritative do-not-retry messages after payment submi
     assert.match(safeCase, /do NOT retry|Do NOT retry/);
     assert.doesNotMatch(safeCase, /try again/i);
   }
+  assert.match(requestCompletionRoute, /Do NOT retry or pay again/);
+  assert.doesNotMatch(requestCompletionRoute, /approved but needs reconciliation[^\n]*try again/i);
+});
+
+test("booking pay-now retries cannot create two active card requests", () => {
+  assert.match(cardRequestMigration, /payment_requests_one_active_card_collection/);
+  assert.match(cardRequestMigration, /status in \('active', 'partially_paid'\)/);
+  assert.match(checkoutRoute, /createRequestError\?\.code === "23505"/);
+  assert.match(checkoutRoute, /concurrent canonical request recovery failed/);
+  assert.match(checkoutRoute, /createdNewRequest/);
 });

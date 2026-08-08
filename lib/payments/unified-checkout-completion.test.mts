@@ -33,7 +33,7 @@ const IN_FLIGHT: PaymentAttemptStatus[] = ["claimed", "authorized", "ambiguous"]
 /**
  * In-memory store that enforces the same semantics as the partial unique
  * index in sql/plan3-payment-attempts.sql: at most one in-flight attempt
- * (claimed | authorized | ambiguous) per booking.
+ * (claimed | authorized | ambiguous) per booking or payment request.
  */
 function makeFakeStore(options: { unavailable?: boolean } = {}) {
   const rows: StoredAttempt[] = [];
@@ -41,15 +41,23 @@ function makeFakeStore(options: { unavailable?: boolean } = {}) {
     async claimAttempt(attempt) {
       if (options.unavailable) return { ok: false, reason: "unavailable" };
       const blocking = rows.find(
-        (row) => row.booking_id === attempt.booking_id && IN_FLIGHT.includes(row.status),
+        (row) => IN_FLIGHT.includes(row.status) && (
+          attempt.payment_request_id
+            ? row.payment_request_id === attempt.payment_request_id
+            : row.booking_id === attempt.booking_id
+        ),
       );
       if (blocking) return { ok: false, reason: "conflict" };
       rows.push({ ...attempt });
       return { ok: true };
     },
-    async findBlockingAttempt(bookingId) {
+    async findBlockingAttempt(subject) {
       const blocking = rows.find(
-        (row) => row.booking_id === bookingId && IN_FLIGHT.includes(row.status),
+        (row) => IN_FLIGHT.includes(row.status) && (
+          subject.payment_request_id
+            ? row.payment_request_id === subject.payment_request_id
+            : row.booking_id === subject.booking_id
+        ),
       );
       return blocking ? { id: blocking.id, status: blocking.status } : null;
     },
@@ -109,6 +117,18 @@ function makeInput(overrides: Partial<CompletionInput> = {}): CompletionInput {
     ...overrides,
   };
 }
+
+test("standalone payment requests use the same atomic completion discipline", async () => {
+  const { store, rows } = makeFakeStore();
+  const deps = makeDeps(store);
+  const outcome = await runUnifiedCheckoutCompletion(deps, makeInput({
+    booking_id: null,
+    payment_request_id: "request-1",
+  }));
+  assert.equal(outcome.kind, "approved_recorded");
+  assert.equal(rows[0]?.payment_request_id, "request-1");
+  assert.equal(rows[0]?.booking_id, null);
+});
 
 function makeDeps(
   store: PaymentAttemptStore,

@@ -49,6 +49,9 @@ export interface PaymentRequestRow {
   created_at: string;
   updated_at: string;
   public_token_ciphertext?: string;
+  payment_provider?: "credit_libanais" | null;
+  payment_provider_session_id?: string | null;
+  checkout_started_at?: string | null;
 }
 
 export interface PaymentTransactionRow {

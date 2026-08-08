@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { findPublicPaymentRequest } from "@/lib/payments/ledger-server";
 import { formatPaymentAmount, remainingRequestAmount, type PaymentAllowedMethod } from "@/lib/payments/ledger";
 import { PAYMENT_PUBLIC_SETTINGS_KEY, parsePaymentPublicSettings } from "@/lib/payments/settings";
+import { getHostedCheckoutPublicStatus } from "@/lib/payments/runtime";
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -17,9 +18,13 @@ export default async function PaymentRequestPage({ params }: { params: Promise<{
   const { token } = await params;
   const payment = await findPublicPaymentRequest(token).catch(() => null);
   if (!payment) notFound();
-  const { data: settingRow } = await supabaseAdmin.from("settings").select("value").eq("key", PAYMENT_PUBLIC_SETTINGS_KEY).maybeSingle();
+  const [{ data: settingRow }, checkoutStatus] = await Promise.all([
+    supabaseAdmin.from("settings").select("value").eq("key", PAYMENT_PUBLIC_SETTINGS_KEY).maybeSingle(),
+    getHostedCheckoutPublicStatus(),
+  ]);
   const settings = parsePaymentPublicSettings(settingRow?.value ?? null);
   const remaining = remainingRequestAmount(payment.amount, payment.amount_paid);
+  const cardCheckoutReady = checkoutStatus.online_checkout_ready && checkoutStatus.provider_key === "credit_libanais";
 
   return <main className={styles.page}>
     <div className={styles.shell}>
@@ -44,11 +49,16 @@ export default async function PaymentRequestPage({ params }: { params: Promise<{
                 {method === "bank_transfer" && settings.bank_transfer_public_details
                   ? settings.bank_transfer_public_details
                   : method === "cash" ? "Arrange payment with the Oraya team. A receipt will be recorded against this request."
-                    : method === "card" || method === "apple_pay" ? "Secure online checkout will appear here when the payment provider is enabled."
+                    : method === "card" && cardCheckoutReady ? "Pay securely through Credit Libanais / NetCommerce."
+                      : method === "card" || method === "apple_pay" ? "Secure online checkout will appear here when the payment provider is enabled."
                       : `Contact the Oraya team to complete this payment through ${labels[method]}.`}
               </p>
             </div>)}
           </div>
+          {payment.allowed_methods.includes("card") && cardCheckoutReady ?
+            <a className={styles.payButton} href={`/payments/checkout/${encodeURIComponent(token)}?subject=request`}>
+              Pay securely by card
+            </a> : null}
           {settings.payment_instructions && <p className={styles.muted} style={{ marginTop: 20 }}>{settings.payment_instructions}</p>}
           <p className={styles.secure}>Your card details are never entered on or stored by Oraya.</p>
         </>}

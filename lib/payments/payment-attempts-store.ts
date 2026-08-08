@@ -34,6 +34,7 @@ export const supabasePaymentAttemptStore: PaymentAttemptStore = {
     const { error } = await supabaseAdmin.from("payment_attempts").insert({
       id: attempt.id,
       booking_id: attempt.booking_id,
+      payment_request_id: attempt.payment_request_id ?? null,
       provider_session_id: attempt.provider_session_id,
       idempotency_key: attempt.idempotency_key,
       status: attempt.status,
@@ -51,15 +52,17 @@ export const supabasePaymentAttemptStore: PaymentAttemptStore = {
     return { ok: false as const, reason: "error" as const };
   },
 
-  async findBlockingAttempt(bookingId: string) {
-    const { data, error } = await supabaseAdmin
+  async findBlockingAttempt(subject) {
+    let query = supabaseAdmin
       .from("payment_attempts")
       .select("id, status")
-      .eq("booking_id", bookingId)
       .in("status", ["claimed", "authorized", "ambiguous"])
       .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle<{ id: string; status: PaymentAttemptStatus }>();
+      .limit(1);
+    query = subject.payment_request_id
+      ? query.eq("payment_request_id", subject.payment_request_id)
+      : query.eq("booking_id", subject.booking_id!);
+    const { data, error } = await query.maybeSingle<{ id: string; status: PaymentAttemptStatus }>();
 
     if (error) {
       console.error("[payments/attempts] blocking-attempt lookup failed:", error);
