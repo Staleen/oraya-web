@@ -16,6 +16,18 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-08 - Phase 16B-2B1 replaces HTTP Signature with JWT and encrypts Payments API messages
+
+**Decision:** authenticate CyberSource `/uc/v1/sessions` and `/pts/v2/payments` requests with shared-secret HS256 JWT/JWS v2. Apply compact-JWE request and response MLE to `/pts/v2/payments` only: request encryption uses the CyberSource SJC public certificate (`RSA-OAEP` + `A256GCM`), and response decryption requires the configured REST-API Response MLE key (`RSA-OAEP-256` + `A256GCM`) with an exact `kid` match. A missing, plaintext, malformed, wrongly keyed, or undecryptable post-submission response throws into the existing ambiguous/do-not-retry attempt path. Keep capture-context creation JWT-authenticated without unsupported request MLE.
+
+**Reason:** CyberSource is deprecating HTTP Signature and requires the current JWT construction contract by September 2026. Payment request/response encryption closes the synchronous authorization confidentiality gap while preserving Oraya's already-merged duplicate-charge and monotonic state protections.
+
+**Impact:** adds pinned server-only `jose@6.2.8`, [lib/payments/cybersource-jwt-mle.ts](../../lib/payments/cybersource-jwt-mle.ts), deterministic crypto contract tests, and four server-only MLE credential names. `capture: true`, `oraya_...` provider session IDs, `oraya-att-<attempt-id>` merchant references, booking/payment state separation, and the live kill switch are unchanged. No provider call, real credential, Vercel configuration, schema, webhook subscription, or production activation is included. Production remains blocked on final webhook JWE/signature/replay work plus the documented human gates.
+
+**Reversible?:** yes at code level, but returning to HTTP Signature would violate the current provider migration direction.
+
+---
+
 ## 2026-08-07 - Ops migration Batch 2: the full add-on rule set moves to /ops
 
 **Decision:** the /ops Extras screen now edits **every** `AddonOperationalFields` value (`lib/addon-operations.ts`) through a per-row "Rules" panel — per-villa applicability, applies-to (stay/event/both), category, advance notice + cutoff type, enforcement mode, price basis (fixed/percentage + percentage value), recommended, display order, quantity enablement + unit label + min/max, event pricing unit, and the guest-facing description. `PUT /api/ops/setup/addons` validates all of it strictly server-side (unknown villa, event type, or enum value is refused; a percentage basis requires a 0–100 value; min ≤ max) because the shared parser is lenient by design for READS and would silently drop bad input on a write. The keys the screen owns are stripped from the stored blob before the merge, so clearing a value (e.g. deleting a description) actually clears it rather than the old value resurfacing; keys the screen does not send still round-trip untouched. The R-2 all-addon-wipe guard and the R-6 partial-failure reporting are unchanged. Audit R-5's warning is honoured in the UI: percentage pricing states that it reprices live guest quotes.
