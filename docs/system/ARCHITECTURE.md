@@ -113,7 +113,7 @@ All routes verified against the current repo. Locked APIs are marked **locked** 
 | `/api/admin/recovery/request` | POST | Admin forgot-password recovery: emails a short-lived reset link to `ADMIN_RECOVERY_EMAIL` via [lib/send-admin-recovery-email.ts](../../lib/send-admin-recovery-email.ts); non-disclosing response, throttled | open w/ guard |
 | `/api/admin/recovery/reset` | POST | Completes admin password recovery with the emailed token; writes the new scrypt hash | open w/ guard |
 | `/api/admin/payments/live-toggle` | GET/POST | The ONLY writer of the `payments_live_enabled` settings row (Plan 4 Phase 3): ENABLING live checkout requires the current admin password (throttled); DISABLING requires only the admin session (instant kill switch); GET returns the current state | admin-auth |
-| `/api/health` | GET | Production config health check (Plan 3 Phase 4): 200 `{ok:true}` when required keys are present, 503 listing missing key NAMES only (never values); also reports counts of payment attempts stuck >1h (Plan 4 Phase 2) | open |
+| `/api/health` | GET, POST | Production config health check (Plan 3 Phase 4): 200 `{ok:true}` when required keys are present, 503 listing missing key NAMES only (never values); also reports counts of payment attempts stuck >1h (Plan 4 Phase 2). POST mirrors GET for CyberSource webhook health-check validation. | open |
 | `/api/addons` | GET | Public addon list | open |
 | `/api/media` | GET | Public media list | open |
 | `/api/members` | POST | Member create (same-user bearer auth) | open w/ guard |
