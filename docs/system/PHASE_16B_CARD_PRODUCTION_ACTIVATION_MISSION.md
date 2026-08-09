@@ -68,7 +68,7 @@ Required inventory:
 
 ### 3. Configure production while charging stays off
 
-**Status:** in progress; configuration installed, deployment pending
+**Status:** complete on 2026-08-09
 
 - Enter the complete production configuration directly into Vercel Production scope.
 - Keep Apple Pay absent/false.
@@ -80,7 +80,7 @@ Required inventory:
 
 ### 4. Configure and prove production webhooks
 
-**Status:** in progress; security provisioned, subscription pending deployment
+**Status:** in progress; production subscription created and awaiting CyberSource URL approval
 
 - Generate the separate CyberSource webhook digital-signature key.
 - Register the production webhook MLE certificate/key as required.
@@ -89,9 +89,11 @@ Required inventory:
 
 **Exit evidence:** CyberSource subscription ID/status, successful health check, one verified delivery recorded by Oraya, and safe rejection/replay test results. Secret values are excluded from evidence.
 
+**Current evidence (2026-08-09):** PR #116 is merged and deployed. CyberSource accepted exactly one production `unifiedCheckout` / `uc.orders.transactionresults` subscription for Oraya and returned `PENDING_REVIEW`; the official status lookup still returns `PENDING_REVIEW`. Both `GET` and `POST` to `https://www.stayoraya.com/api/health` return HTTP 200. No delivered provider test notification exists yet, so this step remains incomplete and the live switch stays off.
+
 ### 5. Run non-charging production-readiness verification
 
-**Status:** pending step 4
+**Status:** in progress; production capture-context smoke passed, full verification awaits step 4
 
 - Create a production capture context without submitting card data.
 - Render Unified Checkout on the effective production checkout host.
@@ -143,4 +145,4 @@ Verify:
 
 ## Current next action
 
-Review, merge, and deploy the narrow `/api/health` GET+POST compatibility change required by CyberSource automatic webhook validation. Confirm both methods return 200 on `www.stayoraya.com`, then create exactly one production subscription for `unifiedCheckout` / `uc.orders.transactionresults` with the encrypted, signature-verified Oraya webhook URL. The live payment switch stays off.
+Poll the existing CyberSource subscription without creating a duplicate. While it remains `PENDING_REVIEW`, keep the live switch off. When it becomes `ACTIVE` (or reaches the approved `INACTIVE` stage before health-check activation), run CyberSource's non-charging subscription configuration test and prove one encrypted, signed, replay-safe delivery in Oraya before opening any real-card test window.
