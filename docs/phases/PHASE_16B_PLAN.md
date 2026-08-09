@@ -32,7 +32,7 @@
 
 - ❌ Smart-lock PIN issuance, access-code delivery, gate-code generation — **Phase 16D**.
 - ❌ Member ↔ phone linkage / verified guest identity from WhatsApp — later phase.
-- ❌ Membership points / rewards — Phase 16E.
+- ❌ Membership, loyalty, and CRM — Phase 16F under the consolidated 2026-08-09 roadmap (historically numbered 16E).
 - ❌ Booking schema-rewrite or new booking state model — out of scope; we layer on top of `bookings`.
 - ❌ Migrating the locked `/api/bookings` POST overlap / pricing / addon pipeline.
 - ❌ Replacing the existing `payment_status` / `payment_stage` / `payment_method` / `amount_*` columns introduced in Phase 13L.1 / 15I.1.

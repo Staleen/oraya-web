@@ -1,4 +1,14 @@
-# Current Phase - Phase 16A closeout (COMPLETE) / Phase 16B complete payment system
+# Current Phase — Phase 16B Complete Payment System active closeout
+
+## Authoritative phase-status and roadmap correction (2026-08-09)
+
+- **16A — WhatsApp AI Butler & Guest Identification:** complete for its approved production scope.
+- **16B — Complete Payment System:** the active numbered workstream, now in closeout at the remaining provider/configuration/evidence/activation gates described below.
+- **16C — Guest Experience & Arrival Guide:** complete for its approved scope. The Stage 1–4 and pre-dispatch "not complete" statements retained later in this file are dated implementation history and are superseded for current status by this correction and the 2026-08-09 decision-log entry.
+- **16D–16J:** planned in the canonical sequence in [/PHASE_16_PLAN.md](../../PHASE_16_PLAN.md): Smart Access & Arrival Automation; Guest Operations & Automated Hospitality; Membership, Loyalty & CRM; SEO & Organic Growth; Multilingual & International Guest Experience; Reputation, Reviews & Guest Retention; Revenue & Business Intelligence.
+- **Ops migration:** a cross-phase closeout, not a numbered Phase 16 workstream. See [OPS_MIGRATION_PLAN.md](OPS_MIGRATION_PLAN.md).
+
+The detailed status paragraph and dated implementation entries below are retained for evidence. Where older wording calls Phase 16C open, treats the old A–E map as current, or frames Phase 16A operator enhancements as remaining closeout, this correction wins. Planned phases do not authorize implementation.
 
 **Active card-production mission (2026-08-09):** NetCommerce onboarding and live merchant activation for Visa/Mastercard Unified Checkout are verified complete from the owner's activation and Business Center emails. Do not reopen onboarding as a blocker. The remaining card work is tracked in [PHASE_16B_CARD_PRODUCTION_ACTIVATION_MISSION.md](PHASE_16B_CARD_PRODUCTION_ACTIVATION_MISSION.md): secure production key configuration, webhook subscription/proof, non-charging readiness, a controlled real-card transaction, refund/reconciliation/settlement evidence, and deliberate monitored activation. Real charging remains off until those evidence gates pass.
 
@@ -25,7 +35,7 @@ This file is rewritten at every phase transition. Treat it as a snapshot, not a 
 
 ## Active phase
 
-**Phase 16A closeout (COMPLETE for approved scope) + Phase 16B complete payment system (active; NetCommerce is one workstream).**
+**Phase 16B Complete Payment System — active closeout. Phase 16A and Phase 16C are complete for their approved scopes; NetCommerce is one Phase 16B workstream.**
 
 Phase 16A's approved production scope is complete (WhatChimp production wiring locked 2026-07-09 — natural stay intake, secure website handoff, event redirect, Guest Identification v2; see [BUTLER_PLAYBOOK.md](BUTLER_PLAYBOOK.md) "Phase 16A WhatChimp production builder (LOCKED 2026-07-09)"). The shipped foundation is:
 
@@ -70,7 +80,7 @@ The current closeout work around those shipped Phase 16A surfaces is operational
 
 ## Active objective
 
-Keep the shipped Reserve payment flow stable while Phase 16A operator-side closeout continues and Phase 16B execution work proceeds:
+Keep the shipped 16A and 16C surfaces stable while Phase 16B closes its remaining provider, configuration, evidence, reconciliation, settlement, and deliberate-activation gates:
 
 1. **Hosted-checkout execution hardening.** Ensure `POST /api/payments/checkout` and fully production-authenticated provider callbacks remain the only payment execution authority for Reserve bookings after the booking row exists.
 2. **Server-side payment truth.** Guest return URLs on `/booking/view/[token]` stay informational; payment state comes from server-side gateway verification and, once the remaining security work is complete, verified webhook updates only.

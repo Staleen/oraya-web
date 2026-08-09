@@ -16,6 +16,33 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-09 - Consolidated Phase 16 roadmap becomes the canonical general roadmap
+
+**Decision:** adopt one canonical Phase 16 business roadmap across the repository:
+
+1. **16A — WhatsApp AI Butler & Guest Identification:** complete.
+2. **16B — Complete Payment System:** active closeout.
+3. **16C — Guest Experience & Arrival Guide:** complete.
+4. **16D — Smart Access & Arrival Automation:** planned.
+5. **16E — Guest Operations & Automated Hospitality:** planned.
+6. **16F — Membership, Loyalty & CRM:** planned.
+7. **16G — SEO & Organic Growth:** planned.
+8. **16H — Multilingual & International Guest Experience:** planned.
+9. **16I — Reputation, Reviews & Guest Retention:** planned.
+10. **16J — Revenue & Business Intelligence:** planned.
+
+The `/admin` → `/ops` migration remains a **cross-phase closeout**, not a numbered Phase 16 workstream. The Operational Messaging layer that disappeared when WhatsApp expanded into the larger 16A program is restored as **16E — Guest Operations & Automated Hospitality**. The old **16E Membership** workstream moves to **16F — Membership, Loyalty & CRM**.
+
+**Reason:** the older forward A–E map no longer represented the systems Oraya has shipped or the remaining business work. It still described 16A and 16C as open/planned, treated NetCommerce checkout as the practical Phase 16B boundary, omitted the broader hospitality-operations layer, and stopped before the approved growth, internationalization, reputation, and business-intelligence workstreams. The consolidated sequence makes the general roadmap discoverable without chat memory while keeping implementation detail in the existing source-of-truth documents.
+
+**Impact:** [/PHASE_16_PLAN.md](../../PHASE_16_PLAN.md) becomes the canonical forward-looking roadmap; [PROJECT_STATE.md](PROJECT_STATE.md), [CURRENT_PHASE.md](CURRENT_PHASE.md), [/docs/phases/PHASE_INDEX.md](../phases/PHASE_INDEX.md), and [OPS_MIGRATION_PLAN.md](OPS_MIGRATION_PLAN.md) expose the same sequence and classification. Historical delivery records remain intact and receive supersession notes where they could otherwise be mistaken for current planning. Existing technical SEO/indexing, member accounts, Phase 16C delivery paths, `/ops` business metrics, and Phase 16B provider/evidence gates remain current technical truth. This decision is documentation-only and does **not** authorize implementation, schema, dependency, environment, provider, or behavior changes for any planned phase.
+
+**Reversible?:** only through a later explicit owner roadmap decision recorded here; historical phase evidence remains append-only either way.
+
+**Supersedes:** the forward-looking A–E roadmap in `/PHASE_16_PLAN.md` last updated 2026-06-03 and matching current/general roadmap references. It does not supersede historical implementation decisions or the current technical boundaries of completed and active work.
+
+---
+
 ## 2026-08-09 - The live card-payments switch also lives in /ops, confirmed by the owner's own password
 
 **Decision:** `POST /api/ops/setup/payments-live` becomes a second writer of the `payments_live_enabled` settings row. Enabling requires the signed-in **owner's own** password and shares the login throttle; disabling requires only an owner session. `/api/admin/payments/live-toggle` is left exactly as it is.

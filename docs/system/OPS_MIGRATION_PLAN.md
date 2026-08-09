@@ -3,6 +3,8 @@
 **Created:** 2026-08-07 · **Owner decision:** David wants one console. `/admin` is deleted at the end of this plan.
 **Companion docs:** `OPS_ADMIN_V2.md` (design record), `ADMIN_UI_AUDIT.md` (findings), `AGENT_RULES.md` (mandatory).
 
+**Roadmap classification (2026-08-09):** this migration is a **cross-phase operational closeout**, not a numbered Phase 16 workstream. Its shipped capabilities and remaining gates stay governed by this plan; they are not reclassified as future 16E or 16J scope. The canonical numbered roadmap is [/PHASE_16_PLAN.md](../../PHASE_16_PLAN.md).
+
 Each batch below is a SELF-CONTAINED task prompt. Dispatch one at a time ("batch N go"), one PR per batch, in order unless a batch says otherwise. Every batch inherits these rules without restating them:
 
 - Read first: `PROJECT_STATE.md`, `CURRENT_PHASE.md`, `AGENT_RULES.md`, `OPS_ADMIN_V2.md`, this file.
