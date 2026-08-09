@@ -1,6 +1,6 @@
 # Legacy Doc Map — Root-Level Markdown Files
 
-**Updated:** 2026-05-09
+**Updated:** 2026-08-09
 **Purpose:** explain what each pre-`/docs/system/` root-level Markdown file is for, what is still authoritative, what is historical only, and where future updates should go. New AI sessions should read this once before treating any root-level doc as canonical.
 
 ---
@@ -13,7 +13,7 @@
 | [/CLAUDE.md](../../CLAUDE.md) | ⚠️ partially superseded | Brand/tooling conventions = authoritative. "Auto-backup rule (MANDATORY)" snippet (`git push origin master`) is **legacy** — overridden by [/docs/system/AGENT_RULES.md](../system/AGENT_RULES.md) §5. | Edit the snippet on next doc-cleanup pass (KNOWN_BUGS #5). Keep brand/conventions block. |
 | [/AGENTS.md](../../AGENTS.md) | ⚠️ partially superseded | "Multi-agent workflow" coordination rules = authoritative. "Auto-backup rule (MANDATORY)" snippet = legacy (same problem as CLAUDE.md). | Same as CLAUDE.md — edit the snippet, keep the coordination rules. |
 | [/DESIGN_SYSTEM.md](../../DESIGN_SYSTEM.md) | ✅ authoritative for design | Yes — guest-facing visual + UX conventions. `app/globals.css` is the source-of-truth for token *values*; this doc explains *how* to use them. | Stays at root. Cross-link from [/docs/system/ARCHITECTURE.md](../system/ARCHITECTURE.md). |
-| [/PHASE_16_PLAN.md](../../PHASE_16_PLAN.md) | ✅ authoritative (planning context only) | Yes — Phase 16 roadmap, dependencies, risk notes, and explicit "must NOT be implemented yet" list. | Stays at root until Phase 16 begins. At kickoff, fold into a new [/docs/system/CURRENT_PHASE.md](../system/CURRENT_PHASE.md) for that phase. |
+| [/PHASE_16_PLAN.md](../../PHASE_16_PLAN.md) | ✅ authoritative general roadmap | Yes — the consolidated 16A–16J roadmap and cross-phase Ops classification; current implementation truth remains in `/docs/system/`. | Stays at root as the canonical forward-looking roadmap; status changes must also update the system docs and decision log. |
 | [/README.md](../../README.md) | ✅ authoritative (developer onboarding) | Yes — minimal: stack, dev server, brand pointers. | Stays at root. Update only if dev-server commands or stack change. |
 | [/.env.example](../../.env.example) | ✅ authoritative | Yes — single tracked env file. Every `process.env.*` read in the repo must be reflected here. | Stays at root. The audit doc is [/docs/system/ENVIRONMENT_MAP.md](../system/ENVIRONMENT_MAP.md). |
 | [/.gitignore](../../.gitignore) | ✅ authoritative | Yes — explicit per-variant `.env*` protection (2026-05-09 audit). | Stays at root. |
@@ -53,9 +53,9 @@
 
 ### [/PHASE_16_PLAN.md](../../PHASE_16_PLAN.md) — Phase 16 roadmap
 
-- **What it is:** the planning context for Phase 16 — five sub-phases (16A WhatsApp, 16B Payments, 16C Manual, 16D Smart Lock, 16E Rewards), dependencies, risk notes, and a "Must NOT be implemented yet" boundary.
-- **Authoritative:** yes. The "Must NOT be implemented yet" list is enforced by [/docs/system/PROJECT_STATE.md](../system/PROJECT_STATE.md) constraint #9 and [/docs/system/AGENT_RULES.md](../system/AGENT_RULES.md) §3.
-- **Migration direction:** stays at root for now. When Phase 16A actually starts, the kickoff replaces [/docs/system/CURRENT_PHASE.md](../system/CURRENT_PHASE.md) and PHASE_16_PLAN.md becomes a historical reference.
+- **What it is:** the owner-approved consolidated Phase 16 roadmap — 16A and 16C complete, 16B active closeout, 16D–16J planned, with Ops migration classified as cross-phase rather than numbered.
+- **Authoritative:** yes for the general forward sequence and workstream boundaries. Current technical truth and detailed active gates remain in [/docs/system/PROJECT_STATE.md](../system/PROJECT_STATE.md) and [/docs/system/CURRENT_PHASE.md](../system/CURRENT_PHASE.md). Planned phases still require the architecture/audit gate enforced by PROJECT_STATE constraint #9 and [/docs/system/AGENT_RULES.md](../system/AGENT_RULES.md) §3.
+- **Migration direction:** stays at root as the canonical general roadmap. Historical A–E snapshots remain preserved elsewhere with explicit supersession notes.
 
 ### [/README.md](../../README.md) — developer onboarding
 

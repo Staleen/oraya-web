@@ -748,7 +748,9 @@ Phase 15 is now officially closed and complete for production scope.
 
 **Do not reopen Phase 15 unless there is a production blocker.**
 
-### Phase 16 roadmap (planning context only - no implementation yet)
+### Phase 16 roadmap (historical planning snapshot — superseded 2026-08-09)
+
+> **Historical record only.** The A–E map below captures the original pre-implementation plan and is intentionally preserved. It is superseded by the canonical A–J roadmap in [PHASE_16_PLAN.md](PHASE_16_PLAN.md) and the 2026-08-09 decision in [docs/system/DECISIONS_LOG.md](docs/system/DECISIONS_LOG.md). Current status: 16A complete, 16B active closeout, 16C complete; Ops migration is cross-phase; 16D–16J are planned. Do not use the old numbering below for new work.
 
 #### 16A — WhatsApp AI Butler
 
