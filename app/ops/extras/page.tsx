@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import { Banner, Button, Card, PageHead, T } from "@/components/ops/ui";
+import { Banner, Button, Card, PageHead, T, useIsMobile } from "@/components/ops/ui";
 import {
   CellInput, CellSelect, ColHead, LiveBanner, PendingBar, SetupGate,
   numFromInput, numToInput, useSetupData, type SetupAddon,
@@ -77,6 +77,26 @@ const EVENT_UNIT_LABELS: Record<string, string> = {
 const LBL: React.CSSProperties = {
   fontSize: "10px", letterSpacing: "1.6px", textTransform: "uppercase", color: T.muted,
 };
+
+/**
+ * A table cell that grows a label when the table stops being a table.
+ *
+ * The six-column grid needs 540px of column minimums; a phone offers about
+ * 326px, so on mobile each row becomes a stacked card. Once the header row is
+ * gone, an unlabelled dropdown reading "Yes" is meaningless — so the header
+ * text moves down beside its own field.
+ */
+function Cell({ label, stacked, children }: {
+  label: string; stacked: boolean; children: React.ReactNode;
+}) {
+  if (!stacked) return <>{children}</>;
+  return (
+    <label style={{ display: "block" }}>
+      <span style={{ ...LBL, display: "block", marginBottom: "5px" }}>{label}</span>
+      {children}
+    </label>
+  );
+}
 
 type Rules = {
   requires_approval: boolean;
@@ -205,6 +225,8 @@ function describeChanges(before: Map<string, DraftAddon>, after: DraftAddon[]): 
 
 export default function ExtrasPage() {
   const { data, loading, loadError, ownerOnly, reload } = useSetupData();
+  /** Below 768px the six-column table becomes one card per extra. */
+  const stacked = useIsMobile();
   const [draft, setDraft] = useState<DraftAddon[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [saveError, setSaveError] = useState("");
@@ -333,15 +355,34 @@ export default function ExtrasPage() {
             if (groupRows.length === 0) return null;
             return (
           <Card key={group} title={title}>
-            <div style={{ display: "grid", gridTemplateColumns: "minmax(140px,1.6fr) minmax(90px,1fr) minmax(130px,1.2fr) minmax(90px,1fr) minmax(90px,1fr) auto", gap: "10px 12px", alignItems: "center" }} suppressHydrationWarning>
-              <ColHead>Extra</ColHead>
-              <ColHead>Price</ColHead>
-              <ColHead>Type</ColHead>
-              <ColHead>Shown</ColHead>
-              <ColHead>Needs approval</ColHead>
-              <span />
+            <div
+              style={stacked
+                ? { display: "grid", gridTemplateColumns: "1fr", gap: "14px" }
+                : { display: "grid", gridTemplateColumns: "minmax(140px,1.6fr) minmax(90px,1fr) minmax(130px,1.2fr) minmax(90px,1fr) minmax(90px,1fr) auto", gap: "10px 12px", alignItems: "center" }}
+              suppressHydrationWarning
+            >
+              {/* The header row only makes sense while the columns exist. */}
+              {!stacked && (
+                <>
+                  <ColHead>Extra</ColHead>
+                  <ColHead>Price</ColHead>
+                  <ColHead>Type</ColHead>
+                  <ColHead>Shown</ColHead>
+                  <ColHead>Needs approval</ColHead>
+                  <span />
+                </>
+              )}
               {groupRows.map((a) => (
-                <div key={a.id} style={{ display: "contents" }}>
+                <div
+                  key={a.id}
+                  style={stacked
+                    ? {
+                        display: "grid", gap: "11px", background: T.surface,
+                        border: `1px solid ${T.borderFaint}`, borderRadius: T.r, padding: "14px",
+                      }
+                    : { display: "contents" }}
+                >
+                  <Cell label="Extra" stacked={stacked}>
                   {a.removed ? (
                     <div>
                       <p style={{ margin: 0, fontSize: "14px", textDecoration: "line-through", color: T.muted }}>{a.label || a.id}</p>
@@ -351,22 +392,31 @@ export default function ExtrasPage() {
                     <CellInput value={a.label} placeholder="Name guests will see"
                       onChange={(e) => update(a.id, { label: e.target.value })} />
                   )}
-                  <CellInput inputMode="numeric" disabled={a.removed} value={numToInput(a.price)} placeholder="on request"
-                    onChange={(e) => update(a.id, { price: numFromInput(e.target.value) })} />
-                  <CellSelect disabled={a.removed} value={a.pricing_model}
-                    onChange={(e) => update(a.id, { pricing_model: e.target.value as DraftAddon["pricing_model"] })}>
-                    {Object.entries(MODEL_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                  </CellSelect>
-                  <CellSelect disabled={a.removed} value={a.enabled ? "yes" : "no"}
-                    onChange={(e) => update(a.id, { enabled: e.target.value === "yes" })}>
-                    <option value="yes">Yes</option>
-                    <option value="no">Hidden</option>
-                  </CellSelect>
-                  <CellSelect disabled={a.removed} value={a.rules.requires_approval ? "yes" : "no"}
-                    onChange={(e) => updateRules(a.id, { requires_approval: e.target.value === "yes" })}>
-                    <option value="yes">Yes</option>
-                    <option value="no">No</option>
-                  </CellSelect>
+                  </Cell>
+                  <Cell label="Price" stacked={stacked}>
+                    <CellInput inputMode="numeric" disabled={a.removed} value={numToInput(a.price)} placeholder="on request"
+                      onChange={(e) => update(a.id, { price: numFromInput(e.target.value) })} />
+                  </Cell>
+                  <Cell label="Type" stacked={stacked}>
+                    <CellSelect disabled={a.removed} value={a.pricing_model}
+                      onChange={(e) => update(a.id, { pricing_model: e.target.value as DraftAddon["pricing_model"] })}>
+                      {Object.entries(MODEL_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                    </CellSelect>
+                  </Cell>
+                  <Cell label="Shown to guests" stacked={stacked}>
+                    <CellSelect disabled={a.removed} value={a.enabled ? "yes" : "no"}
+                      onChange={(e) => update(a.id, { enabled: e.target.value === "yes" })}>
+                      <option value="yes">Yes</option>
+                      <option value="no">Hidden</option>
+                    </CellSelect>
+                  </Cell>
+                  <Cell label="Needs approval" stacked={stacked}>
+                    <CellSelect disabled={a.removed} value={a.rules.requires_approval ? "yes" : "no"}
+                      onChange={(e) => updateRules(a.id, { requires_approval: e.target.value === "yes" })}>
+                      <option value="yes">Yes</option>
+                      <option value="no">No</option>
+                    </CellSelect>
+                  </Cell>
                   <span style={{ display: "flex", gap: "6px" }}>
                     {!a.removed && (
                       <Button small variant="ghost" onClick={() => setOpenRules((cur) => (cur === a.id ? null : a.id))}>
@@ -381,7 +431,7 @@ export default function ExtrasPage() {
                   </span>
 
                   {openRules === a.id && !a.removed && (
-                    <div style={{ gridColumn: "1 / -1", background: "rgba(0,0,0,.18)", border: `1px solid ${T.borderFaint}`, borderRadius: T.r, padding: "16px", margin: "4px 0 12px" }}>
+                    <div style={{ gridColumn: stacked ? "auto" : "1 / -1", background: "rgba(0,0,0,.18)", border: `1px solid ${T.borderFaint}`, borderRadius: T.r, padding: "16px", margin: "4px 0 12px" }}>
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: "14px" }}>
                         <label style={LBL}>Offered at
                           <div style={{ display: "flex", gap: "6px", marginTop: "6px", flexWrap: "wrap" }}>
