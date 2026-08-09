@@ -6,6 +6,8 @@
 
 **Authority:** this mission supersedes older Phase 16B language that treats the phase as only NetCommerce/CyberSource hosted card checkout or excludes member saved cards from the phase.
 
+**Active card activation:** NetCommerce onboarding and live Visa/Mastercard Unified Checkout merchant activation are verified complete. The remaining production connection and evidence gates are governed by [PHASE_16B_CARD_PRODUCTION_ACTIVATION_MISSION.md](PHASE_16B_CARD_PRODUCTION_ACTIVATION_MISSION.md). Do not reopen merchant onboarding as unfinished work.
+
 ## Mission
 
 Phase 16B delivers Oraya's complete business payment system. NetCommerce/CyberSource is one provider workstream inside the phase; it is not the definition of the phase.

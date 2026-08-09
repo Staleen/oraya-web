@@ -16,6 +16,18 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-09 - Card production completion is an evidence-gated activation mission
+
+**Decision:** NetCommerce onboarding and live merchant activation for one-time Visa/Mastercard Unified Checkout are verified complete and must not be represented as future work. The remaining card-production work follows the seven evidence gates in [PHASE_16B_CARD_PRODUCTION_ACTIVATION_MISSION.md](PHASE_16B_CARD_PRODUCTION_ACTIVATION_MISSION.md): baseline reconciliation, Business Center security material, disabled production configuration, verified webhooks, non-charging readiness, one controlled real-card transaction, and refund/reconciliation/settlement plus deliberate monitored activation. Code completion, an activation email, a deployment, a browser success page, or a provider transaction by itself cannot close the mission.
+
+**Reason:** the earlier planning language conflated provider onboarding, application engineering, credential configuration, and operational proof. That allowed completed NetCommerce activation to be described as missing while completed engineering sounded like live payment operation. An explicit evidence ladder makes ownership and completion objectively verifiable across future sessions and machines.
+
+**Impact:** the card workstream starts from the existing PR #115 `master` baseline and preserves all implemented security/ledger controls. Production charging remains fail-closed. Every step records non-secret evidence, and the final result requires agreement among CyberSource, Oraya's immutable ledger/projections, verified webhook history, refund/reconciliation, and settlement/remittance. Apple Pay, saved cards, and native wallets retain separate activation gates.
+
+**Reversible?:** the sequencing can be amended with new provider evidence; the rule against claiming completion without end-to-end money evidence is not reversible.
+
+---
+
 ## 2026-08-09 - Provider capabilities require separate proof and activation
 
 **Decision:** a configured card gateway does not implicitly activate Apple Pay, saved cards, or any Lebanese wallet. Apple Pay uses CyberSource Unified Checkout `APPLEPAY` only for an Apple-only payment request and only when `NETCOMMERCE_CYBERSOURCE_APPLE_PAY_ENABLED` is exactly `true`. Operations must create separate card and Apple Pay links so the immutable ledger can classify the method without guessing. The flag stays absent/off until merchant enrollment, exact-domain verification, and an Apple sandbox-device payment are proven. Whish, OMT, Suyool, and saved cards remain disabled as native rails until official merchant/TMS contracts, credentials, webhook/reconciliation behavior, and required policy approval are supplied.
