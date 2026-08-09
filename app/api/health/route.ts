@@ -28,7 +28,7 @@ async function readPaymentAttemptVisibility() {
   };
 }
 
-export async function GET() {
+async function healthResponse() {
   const decision = evaluateHealth(process.env);
   const paymentAttempts = await readPaymentAttemptVisibility();
   if (decision.ok) {
@@ -38,4 +38,16 @@ export async function GET() {
     { ok: false, missing: decision.missing, payment_attempts: paymentAttempts },
     { status: 503 },
   );
+}
+
+export async function GET() {
+  return healthResponse();
+}
+
+// CyberSource webhook automatic validation probes the configured health-check
+// URL with both GET and POST. Keep both methods on the same fail-closed health
+// decision so a subscription cannot become active while core production
+// configuration is incomplete.
+export async function POST() {
+  return healthResponse();
 }

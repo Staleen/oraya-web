@@ -15,7 +15,7 @@ These facts are complete and must not be reopened as future onboarding work:
 - CyberSource created the production Business Center organization and sent the owner an administrator-registration invitation.
 - NetCommerce supplied the production API host and instructed the owner to create production REST Shared Secret credentials in Business Center.
 - The Oraya card application, payment-request bridge, immutable provider ledger, JWT/JWS, request/response MLE, verified webhook receiver, replay protection, reconciliation queue, and fail-closed live switch are implemented and deployed.
-- Production Vercel has no active CyberSource credential set, and live Supabase has no enabled `payments_live_enabled` row. Real charging is therefore deliberately off.
+- Production Vercel now contains the CyberSource session, Payments MLE, and webhook security variables as hidden/sensitive values. Live Supabase still has no enabled `payments_live_enabled` row, so real charging remains deliberately off.
 
 NetCommerce onboarding and merchant activation are **complete**. The remaining mission is Oraya-owned production credential configuration, webhook subscription, controlled verification, and activation.
 
@@ -49,7 +49,7 @@ Application tests, a successful deployment, provider activation email, or a brow
 
 ### 2. Establish Business Center access and inventory production security material
 
-**Status:** pending owner-authenticated portal access
+**Status:** complete on 2026-08-09
 
 **Owner action:** complete or renew the CyberSource administrator invitation, sign in, retain account recovery access, and generate/download production credentials when instructed. Passwords, shared secrets, private keys, card data, and downloaded credential files must never be pasted into chat, committed, photographed, or emailed.
 
@@ -64,11 +64,11 @@ Required inventory:
 - separate webhook digital-signature key ID and secret;
 - production product/event permissions required for Unified Checkout and Payments webhooks.
 
-**Exit evidence:** every required configuration name has a securely stored production value or a precise, evidenced provider/API action; no secret is present in Git or chat.
+**Exit evidence:** Business Center administrator access is active; the compromised initial REST key was revoked and replaced; REST, request/response MLE, webhook MLE, and webhook digital-signature material was generated or registered; CyberSource's production product inventory exposes `unifiedCheckout` / `uc.orders.transactionresults`; zero existing subscriptions were confirmed; no secret is present in Git or chat.
 
 ### 3. Configure production while charging stays off
 
-**Status:** pending step 2
+**Status:** in progress; configuration installed, deployment pending
 
 - Enter the complete production configuration directly into Vercel Production scope.
 - Keep Apple Pay absent/false.
@@ -80,7 +80,7 @@ Required inventory:
 
 ### 4. Configure and prove production webhooks
 
-**Status:** pending step 3
+**Status:** in progress; security provisioned, subscription pending deployment
 
 - Generate the separate CyberSource webhook digital-signature key.
 - Register the production webhook MLE certificate/key as required.
@@ -143,4 +143,4 @@ Verify:
 
 ## Current next action
 
-The owner signs in to the production CyberSource Business Center. If the administrator-registration link has expired, it is renewed. Step 2 then continues from the authenticated Key Management page without sharing credentials or secrets with Codex.
+Review, merge, and deploy the narrow `/api/health` GET+POST compatibility change required by CyberSource automatic webhook validation. Confirm both methods return 200 on `www.stayoraya.com`, then create exactly one production subscription for `unifiedCheckout` / `uc.orders.transactionresults` with the encrypted, signature-verified Oraya webhook URL. The live payment switch stays off.
