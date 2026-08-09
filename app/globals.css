@@ -491,3 +491,63 @@ a.oraya-villa-card-link:focus-visible {
     opacity: 0.45;
   }
 }
+
+/* =====================================================================
+   Operations console (/ops) — phone usability
+   ---------------------------------------------------------------------
+   /ops is always dark, but `color-scheme` is bound to html[data-theme],
+   which the public site toggles. With the site in light mode the OS drew
+   native <select> popups on a white sheet while the options inherited the
+   console's near-white text: white on white, unreadable, on every dropdown
+   in the console. Pinning the scheme here decouples /ops from the public
+   theme, and the explicit option colours cover browsers that ignore it.
+
+   The !important on font-size is deliberate. Every field in /ops is styled
+   inline, so a media query cannot otherwise reach it, and iOS zooms the
+   whole page whenever a focused field is under 16px — which made editing a
+   price on a phone a pinch-and-scroll exercise.
+   ===================================================================== */
+
+.ops-scope {
+  color-scheme: dark;
+}
+
+.ops-scope select,
+.ops-scope input,
+.ops-scope textarea {
+  color-scheme: dark;
+}
+
+/* The popup list itself. Rendered by the OS, so it needs real colours -- not
+   the translucent rgba() surfaces the rest of the console uses, which
+   composite against white and wash out. */
+.ops-scope option,
+.ops-scope optgroup {
+  background-color: #26333f;
+  color: rgba(255, 255, 255, 0.94);
+}
+
+@media (max-width: 768px) {
+  /* 16px is the threshold below which iOS Safari zooms on focus. */
+  .ops-scope input:not([type="checkbox"]):not([type="radio"]),
+  .ops-scope select,
+  .ops-scope textarea {
+    font-size: 16px !important;
+  }
+
+  /* Comfortable targets. 44px is Apple's minimum; buttons and rows in the
+     console were sitting at 30-34px. */
+  .ops-scope select,
+  .ops-scope input:not([type="checkbox"]):not([type="radio"]) {
+    min-height: 44px;
+  }
+
+  .ops-scope button {
+    min-height: 44px;
+  }
+
+  /* Nav buttons manage their own height and must not be stretched. */
+  .ops-scope nav button {
+    min-height: 0;
+  }
+}
