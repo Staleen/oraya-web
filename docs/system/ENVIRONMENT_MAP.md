@@ -45,7 +45,7 @@
 | `NETCOMMERCE_CYBERSOURCE_WEBHOOK_SIGNATURE_SECRET` | server-only | optional for sandbox completion; required for verified webhooks | optional for sandbox checkout; yes for webhook test | yes before live rollout | yes - Sensitive |
 | `NETCOMMERCE_CYBERSOURCE_APPLE_PAY_ENABLED` | server-only | no (default false) | only after Apple sandbox enrollment/domain/device proof | only after production merchant/domain approval | yes |
 | `ACCESS_PIN_VAULT_KEYS` | server-only | no (Phase 16D dark; vault fails closed while unset) | **no — keep unset until Stage B approval** | **no — keep unset until Stage B approval** | later — Sensitive, at Stage B activation |
-| `ACCESS_PIN_FINGERPRINT_KEY` | server-only | no (Phase 16D dark; vault fails closed while unset) | **no — keep unset until Stage B approval** | **no — keep unset until Stage B approval** | later — Sensitive, at Stage B activation |
+| `ACCESS_PIN_FINGERPRINT_KEYS` | server-only | no (Phase 16D dark; vault fails closed while unset) | **no — keep unset until Stage B approval** | **no — keep unset until Stage B approval** | later — Sensitive, at Stage B activation |
 | `STRIPE_SECRET_KEY` | server-only | optional (Stripe local/dev test only) | optional | optional | optional |
 | `STRIPE_WEBHOOK_SECRET` | server-only | optional (Stripe local/dev webhook only) | optional | optional | optional |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | public | optional (Stripe local/dev only) | optional | optional | optional |
@@ -458,14 +458,15 @@ Preview expectations:
 - **Rotation/backup risk:** removing a key that a live envelope still references makes that credential **unrecoverable** — the only remedy is quarantine → dual-lock deletion → destroy → reload. Back the value up (password manager) before every change. This key is deliberately NOT `ADMIN_SECRET` or any other existing secret, so rotating web-session or payment secrets can never orphan door credentials.
 - **Risk if missing:** none today (dark). Later: the vault refuses to encrypt/decrypt (fail closed); no PIN can be loaded or revealed.
 
-### `ACCESS_PIN_FINGERPRINT_KEY`
+### `ACCESS_PIN_FINGERPRINT_KEYS`
 
 - **Scope:** server-only. **Never expose in a `"use client"` component or any `NEXT_PUBLIC_*` variable. Never log the value.**
 - **Status:** Phase 16D Stage A — **DARK**, same posture as `ACCESS_PIN_VAULT_KEYS`.
-- **Used in:** [lib/access/pin-vault.ts](../../lib/access/pin-vault.ts) — sole reader (`getAccessPinFingerprintKeyFromEnv`). HMAC-SHA256 key for `access_credentials.pin_fingerprint`, the keyed historical fingerprint that prevents any six-digit PIN from ever being issued twice (including after destruction, when the ciphertext is erased but the fingerprint row is retained forever). A keyed HMAC is mandatory here: a six-digit PIN has ~20 bits of entropy, so any unkeyed hash would be trivially brute-forceable.
-- **Format:** single `<base64-32-bytes>` value (`openssl rand -base64 32`). Must differ from every `ACCESS_PIN_VAULT_KEYS` entry — the vault reports `fingerprint_key_reuses_vault_key` and refuses to operate on reuse.
+- **Used in:** [lib/access/pin-vault.ts](../../lib/access/pin-vault.ts) — sole reader (`getAccessPinFingerprintKeyringFromEnv`). Versioned HMAC-SHA256 keyring for `access_credentials.pin_fingerprint` + `pin_fingerprint_key_id`, the keyed historical fingerprints that prevent any six-digit PIN from ever being issued twice (including after destruction, when the ciphertext is erased but the fingerprint row is retained forever). A keyed HMAC is mandatory here: a six-digit PIN has ~20 bits of entropy, so any unkeyed hash would be trivially brute-forceable.
+- **Format:** same ordered keyring as the vault — `f1:<base64-32-bytes>[,f2:...]` (`openssl rand -base64 32` per key). Every entry must differ from every `ACCESS_PIN_VAULT_KEYS` entry — the vault reports `fingerprint_key_reuses_vault_key` and refuses to operate on reuse.
 - **Required:** no in every environment today. At Stage B activation: yes, Production, marked Sensitive.
-- **Rotation:** effectively **never**. Rotating it breaks duplicate detection against every historical fingerprint; it is intentionally independent of the encryption keyring so vault-key rotation cannot touch it. Back it up alongside the keyring.
+- **Rotation (planned):** prepend a new key as the first (active) entry. New credentials fingerprint under it and store its key id; duplicate detection stays intact because candidates are fingerprinted under **every retained entry** (`fingerprintAccessPinAllKeys`) and compared against the full stored history. **Never drop an entry while any retained fingerprint row still carries its key id** — those historical PINs would silently become re-issuable.
+- **Rotation (emergency compromise):** a leaked fingerprint key **plus database read access** lets an attacker brute-force the 10⁶ PIN space against stored fingerprints and recover the plaintext of active credentials — treat it as a leak of the PINs themselves. Response: quarantine every active credential, delete from both locks, destroy, prepend a fresh key, reload a new batch. The compromised key stays in the keyring (position > 1) purely so historical duplicate detection keeps working; afterwards its fingerprints protect only already-destroyed PINs.
 - **Risk if missing:** none today (dark). Later: generation/loading refuses to run (fail closed).
 
 ### `STRIPE_SECRET_KEY`

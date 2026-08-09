@@ -43,12 +43,14 @@ export interface AccessPinGenerationContext {
   /**
    * Keyed fingerprints of every current AND historical credential
    * (access_credentials.pin_fingerprint — retained even after destruction),
-   * plus a fingerprint function using the dedicated fingerprint key.
-   * Candidates whose fingerprint is already present are rejected, so a
-   * destroyed PIN can never be issued again.
+   * plus a function that fingerprints a candidate under EVERY retained
+   * fingerprint-key version (lib/access/pin-vault.ts
+   * fingerprintAccessPinAllKeys). A candidate is rejected when ANY of its
+   * per-key fingerprints is already present, so duplicate detection survives
+   * fingerprint-key rotation and a destroyed PIN can never be issued again.
    */
   existingFingerprints?: ReadonlySet<string>;
-  fingerprint?: (pin: string) => string;
+  fingerprints?: (pin: string) => readonly string[];
 }
 
 export type AccessPinRejectionReason =
@@ -177,8 +179,10 @@ export function rejectAccessPin(
       if (pin.includes(window)) return "context_digits";
     }
   }
-  if (context.existingFingerprints && context.fingerprint) {
-    if (context.existingFingerprints.has(context.fingerprint(pin))) return "already_used";
+  if (context.existingFingerprints && context.fingerprints) {
+    for (const candidateFingerprint of context.fingerprints(pin)) {
+      if (context.existingFingerprints.has(candidateFingerprint)) return "already_used";
+    }
   }
   return null;
 }

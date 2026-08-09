@@ -5,22 +5,34 @@ import {
   canBecomeAvailable,
   canBeDestroyed,
   ciphertextLifecycleHolds,
+  confirmationPairsHold,
   isAllowedAccessCredentialTransition,
   type AccessCredentialLockState,
   type AccessCredentialStatus,
 } from "./pin-lifecycle.ts";
 
 const T = "2026-08-10T00:00:00Z";
+const STAFF = "00000000-0000-0000-0000-000000000001";
 
 function locks(partial: Partial<AccessCredentialLockState>): AccessCredentialLockState {
   return {
     installedFrontAt: null,
+    installedFrontBy: null,
     installedGateAt: null,
+    installedGateBy: null,
     deletedFrontAt: null,
+    deletedFrontBy: null,
     deletedGateAt: null,
+    deletedGateBy: null,
     ...partial,
   };
 }
+
+/** A complete (timestamp + actor) confirmation pair. */
+const frontInstalled = { installedFrontAt: T, installedFrontBy: STAFF };
+const gateInstalled = { installedGateAt: T, installedGateBy: STAFF };
+const frontDeleted = { deletedFrontAt: T, deletedFrontBy: STAFF };
+const gateDeleted = { deletedGateAt: T, deletedGateBy: STAFF };
 
 test("transition graph: exactly the allowed edges, nothing else", () => {
   const allowed = new Set([
@@ -62,29 +74,52 @@ test("quarantine cannot be skipped on the way to deletion", () => {
   assert.equal(isAllowedAccessCredentialTransition("installing", "disclosed"), false);
 });
 
-test("available requires BOTH lock installation confirmations — one is never enough", () => {
+test("available requires COMPLETE (timestamp + actor) installation pairs for BOTH locks", () => {
   assert.equal(canBecomeAvailable(locks({})), false);
-  assert.equal(canBecomeAvailable(locks({ installedFrontAt: T })), false);
-  assert.equal(canBecomeAvailable(locks({ installedGateAt: T })), false);
-  assert.equal(canBecomeAvailable(locks({ installedFrontAt: T, installedGateAt: T })), true);
-});
-
-test("destroyed requires deletion confirmation for every INSTALLED lock only", () => {
-  // Fully installed: both deletions required.
+  assert.equal(canBecomeAvailable(locks({ ...frontInstalled })), false);
+  assert.equal(canBecomeAvailable(locks({ ...gateInstalled })), false);
+  // Timestamp without its actor is never a complete confirmation.
   assert.equal(
-    canBeDestroyed(locks({ installedFrontAt: T, installedGateAt: T, deletedFrontAt: T })),
+    canBecomeAvailable(locks({ installedFrontAt: T, ...gateInstalled })),
     false
   );
   assert.equal(
-    canBeDestroyed(locks({ installedFrontAt: T, installedGateAt: T, deletedFrontAt: T, deletedGateAt: T })),
+    canBecomeAvailable(locks({ ...frontInstalled, installedGateAt: T })),
+    false
+  );
+  assert.equal(canBecomeAvailable(locks({ ...frontInstalled, ...gateInstalled })), true);
+});
+
+test("destroyed requires COMPLETE deletion pairs for every INSTALLED lock only", () => {
+  // Fully installed: both complete deletion pairs required.
+  assert.equal(
+    canBeDestroyed(locks({ ...frontInstalled, ...gateInstalled, ...frontDeleted })),
+    false
+  );
+  // Deletion timestamp without its actor does not count.
+  assert.equal(
+    canBeDestroyed(locks({ ...frontInstalled, ...gateInstalled, ...frontDeleted, deletedGateAt: T })),
+    false
+  );
+  assert.equal(
+    canBeDestroyed(locks({ ...frontInstalled, ...gateInstalled, ...frontDeleted, ...gateDeleted })),
     true
   );
   // Partially installed (interrupted loading): only the reached lock needs a
-  // deletion confirmation.
-  assert.equal(canBeDestroyed(locks({ installedFrontAt: T })), false);
-  assert.equal(canBeDestroyed(locks({ installedFrontAt: T, deletedFrontAt: T })), true);
+  // complete deletion pair.
+  assert.equal(canBeDestroyed(locks({ ...frontInstalled })), false);
+  assert.equal(canBeDestroyed(locks({ ...frontInstalled, ...frontDeleted })), true);
   // Never installed anywhere: destroyable without deletion confirmations.
   assert.equal(canBeDestroyed(locks({})), true);
+});
+
+test("confirmation pairs: timestamp and actor are present or absent together", () => {
+  assert.equal(confirmationPairsHold(locks({})), true);
+  assert.equal(confirmationPairsHold(locks({ ...frontInstalled, ...gateInstalled })), true);
+  assert.equal(confirmationPairsHold(locks({ installedFrontAt: T })), false);
+  assert.equal(confirmationPairsHold(locks({ installedFrontBy: STAFF })), false);
+  assert.equal(confirmationPairsHold(locks({ ...frontInstalled, deletedFrontAt: T })), false);
+  assert.equal(confirmationPairsHold(locks({ ...frontInstalled, ...frontDeleted })), true);
 });
 
 test("ciphertext exists exactly while not destroyed (erasure invariant)", () => {

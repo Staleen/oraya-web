@@ -6,8 +6,8 @@ import {
   decryptAccessPin,
   encryptAccessPin,
   fingerprintAccessPin,
+  fingerprintAccessPinAllKeys,
   isValidAccessPinFormat,
-  parseAccessPinFingerprintKey,
   parseAccessPinKeyring,
 } from "./pin-vault.ts";
 
@@ -22,7 +22,8 @@ const keyringOf = (raw: string) => {
 
 const K1 = key();
 const K2 = key();
-const FP = key();
+const F1 = key();
+const F2 = key();
 const TEST_PIN = "482915";
 
 test("keyring parsing: single key, active = first entry", () => {
@@ -48,14 +49,6 @@ test("keyring parsing fails closed on every malformed shape", () => {
   assert.equal(parseAccessPinKeyring(`k1:${randomBytes(16).toString("base64")}`), null); // 16 bytes, not 32
   assert.equal(parseAccessPinKeyring(`K1:${K1}`), null); // uppercase key id
   assert.equal(parseAccessPinKeyring(`k1:${K1},k1:${K2}`), null); // duplicate id
-});
-
-test("fingerprint key parsing fails closed on malformed material", () => {
-  assert.ok(parseAccessPinFingerprintKey(FP));
-  assert.equal(parseAccessPinFingerprintKey(undefined), null);
-  assert.equal(parseAccessPinFingerprintKey(""), null);
-  assert.equal(parseAccessPinFingerprintKey("short"), null);
-  assert.equal(parseAccessPinFingerprintKey(randomBytes(16).toString("base64")), null);
 });
 
 test("PIN format guard", () => {
@@ -116,7 +109,7 @@ test("wrong key and unknown key-version rejection", () => {
   assert.equal(decryptAccessPin(envelope, ringC), null);
 });
 
-test("rotation: old envelopes stay decryptable, new encryptions use the new active key", () => {
+test("vault rotation: old envelopes stay decryptable, new encryptions use the new active key", () => {
   const before = keyringOf(`k1:${K1}`);
   const oldEnvelope = encryptAccessPin(TEST_PIN, before);
   // Rotate: new key prepended as active, old key retained for decryption.
@@ -131,16 +124,35 @@ test("rotation: old envelopes stay decryptable, new encryptions use the new acti
   assert.equal(decryptAccessPin(oldEnvelope, dropped), null);
 });
 
-test("fingerprint: deterministic, keyed, PIN-validated, independent of vault-key rotation", () => {
-  const fpKey = parseAccessPinFingerprintKey(FP)!;
-  const first = fingerprintAccessPin(TEST_PIN, fpKey);
-  assert.equal(first, fingerprintAccessPin(TEST_PIN, fpKey));
-  assert.match(first, /^[0-9a-f]{64}$/);
-  assert.equal(first.includes(TEST_PIN), false);
-  assert.notEqual(first, fingerprintAccessPin("739024", fpKey));
-  const otherKey = parseAccessPinFingerprintKey(key())!;
-  assert.notEqual(first, fingerprintAccessPin(TEST_PIN, otherKey));
-  assert.throws(() => fingerprintAccessPin("12345", fpKey));
+test("fingerprint: active-key result carries its key id; deterministic, keyed, PIN-validated", () => {
+  const fpRing = keyringOf(`f1:${F1}`);
+  const first = fingerprintAccessPin(TEST_PIN, fpRing);
+  assert.equal(first.keyId, "f1");
+  assert.match(first.fingerprint, /^[0-9a-f]{64}$/);
+  assert.equal(first.fingerprint.includes(TEST_PIN), false);
+  assert.equal(first.fingerprint, fingerprintAccessPin(TEST_PIN, fpRing).fingerprint);
+  assert.notEqual(first.fingerprint, fingerprintAccessPin("739024", fpRing).fingerprint);
+  const otherRing = keyringOf(`f1:${key()}`);
+  assert.notEqual(first.fingerprint, fingerprintAccessPin(TEST_PIN, otherRing).fingerprint);
+  assert.throws(() => fingerprintAccessPin("12345", fpRing));
+});
+
+test("fingerprint keyring rotation: duplicate detection survives via all-keys fingerprints", () => {
+  const before = keyringOf(`f1:${F1}`);
+  // A historical credential fingerprinted under f1 (its stored value).
+  const stored = fingerprintAccessPin(TEST_PIN, before);
+  assert.equal(stored.keyId, "f1");
+  // Rotate: f2 prepended as active; f1 retained.
+  const after = keyringOf(`f2:${F2},f1:${F1}`);
+  // New credentials fingerprint under the new active key...
+  assert.equal(fingerprintAccessPin(TEST_PIN, after).keyId, "f2");
+  // ...but the all-keys set still reproduces the f1-era value, so the stored
+  // history still recognizes the same PIN as taken.
+  const all = fingerprintAccessPinAllKeys(TEST_PIN, after);
+  assert.equal(all.length, 2);
+  assert.ok(all.some((entry) => entry.keyId === "f1" && entry.fingerprint === stored.fingerprint));
+  assert.ok(all.some((entry) => entry.keyId === "f2" && entry.fingerprint !== stored.fingerprint));
+  assert.throws(() => fingerprintAccessPinAllKeys("12345", after));
 });
 
 test("encrypt refuses non-PIN values and never echoes the value in the error", () => {
@@ -155,10 +167,10 @@ test("encrypt refuses non-PIN values and never echoes the value in the error", (
 
 test("config problem detection: missing pieces and fingerprint/vault key reuse", () => {
   const ring = keyringOf(`k1:${K1}`);
-  const fpKey = parseAccessPinFingerprintKey(FP)!;
-  assert.equal(accessPinVaultConfigProblem(null, fpKey), "missing_vault_keys");
-  assert.equal(accessPinVaultConfigProblem(ring, null), "missing_fingerprint_key");
-  const reused = parseAccessPinFingerprintKey(K1)!;
+  const fpRing = keyringOf(`f1:${F1}`);
+  assert.equal(accessPinVaultConfigProblem(null, fpRing), "missing_vault_keys");
+  assert.equal(accessPinVaultConfigProblem(ring, null), "missing_fingerprint_keys");
+  const reused = keyringOf(`f1:${F1},f2:${K1}`); // second entry reuses a vault key
   assert.equal(accessPinVaultConfigProblem(ring, reused), "fingerprint_key_reuses_vault_key");
-  assert.equal(accessPinVaultConfigProblem(ring, fpKey), null);
+  assert.equal(accessPinVaultConfigProblem(ring, fpRing), null);
 });

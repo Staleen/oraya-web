@@ -64,29 +64,63 @@ export function isAllowedAccessCredentialTransition(
   return (ALLOWED_TRANSITIONS[from] ?? []).includes(to);
 }
 
-/** Per-lock confirmation facts, as stored on the credential row. */
+/**
+ * Per-lock confirmation facts, as stored on the credential row. Every
+ * confirmation is a timestamp + actor PAIR (DB CHECKs
+ * access_credentials_install_*_pair / access_credentials_deletion_*_pair) —
+ * a timestamp without its actor, or vice versa, is invalid.
+ */
 export interface AccessCredentialLockState {
   installedFrontAt: string | null;
+  installedFrontBy: string | null;
   installedGateAt: string | null;
+  installedGateBy: string | null;
   deletedFrontAt: string | null;
+  deletedFrontBy: string | null;
   deletedGateAt: string | null;
-}
-
-/** 'available' requires installation confirmed on BOTH locks — never one. */
-export function canBecomeAvailable(locks: AccessCredentialLockState): boolean {
-  return locks.installedFrontAt !== null && locks.installedGateAt !== null;
+  deletedGateBy: string | null;
 }
 
 /**
- * 'destroyed' requires deletion confirmed on every lock that was actually
- * installed. A partially installed credential (interrupted loading) needs a
- * deletion confirmation only for the lock(s) it reached; one never installed
- * on either lock can be destroyed without any.
+ * 'available' requires a COMPLETE (timestamp + actor) installation
+ * confirmation for BOTH locks — one lock, or a confirmation missing its
+ * actor attribution, is never enough.
+ */
+export function canBecomeAvailable(locks: AccessCredentialLockState): boolean {
+  return (
+    locks.installedFrontAt !== null &&
+    locks.installedFrontBy !== null &&
+    locks.installedGateAt !== null &&
+    locks.installedGateBy !== null
+  );
+}
+
+/**
+ * 'destroyed' requires a COMPLETE (timestamp + actor) deletion confirmation
+ * for every lock that was actually installed. A partially installed
+ * credential (interrupted loading) needs a deletion confirmation only for
+ * the lock(s) it reached; one never installed on either lock can be
+ * destroyed without any.
  */
 export function canBeDestroyed(locks: AccessCredentialLockState): boolean {
   return (
-    (locks.installedFrontAt === null || locks.deletedFrontAt !== null) &&
-    (locks.installedGateAt === null || locks.deletedGateAt !== null)
+    (locks.installedFrontAt === null ||
+      (locks.deletedFrontAt !== null && locks.deletedFrontBy !== null)) &&
+    (locks.installedGateAt === null ||
+      (locks.deletedGateAt !== null && locks.deletedGateBy !== null))
+  );
+}
+
+/**
+ * Confirmation-pair invariant: each timestamp and its actor are present or
+ * absent together (mirrors the four DB pair CHECKs).
+ */
+export function confirmationPairsHold(locks: AccessCredentialLockState): boolean {
+  return (
+    (locks.installedFrontAt === null) === (locks.installedFrontBy === null) &&
+    (locks.installedGateAt === null) === (locks.installedGateBy === null) &&
+    (locks.deletedFrontAt === null) === (locks.deletedFrontBy === null) &&
+    (locks.deletedGateAt === null) === (locks.deletedGateBy === null)
   );
 }
 
