@@ -4,7 +4,7 @@ import { decryptPaymentRequestToken, hashPaymentRequestToken } from "@/lib/payme
 import { isPublicRequestPayable, type PaymentRequestRow } from "@/lib/payments/ledger";
 
 export const PAYMENT_REQUEST_COLUMNS =
-  "id, booking_id, member_id, payer_name, payer_email, payer_phone, description, purpose, amount, currency, allowed_methods, status, amount_paid, amount_refunded, expires_at, cancelled_at, created_by, created_at, updated_at, public_token_ciphertext";
+  "id, booking_id, member_id, payer_name, payer_email, payer_phone, description, purpose, amount, currency, allowed_methods, status, amount_paid, amount_refunded, expires_at, cancelled_at, created_by, created_at, updated_at, public_token_ciphertext, payment_provider, payment_provider_session_id, checkout_started_at";
 
 export function paymentRequestUrl(origin: string, encryptedToken: string) {
   const secret = process.env.ADMIN_SECRET?.trim();
@@ -21,7 +21,7 @@ export async function expireDuePaymentRequests() {
   if (error) console.error("[payment-requests] expiry projection failed", error.message);
 }
 
-export async function findPublicPaymentRequest(token: string) {
+export async function findPaymentRequestByPublicToken(token: string) {
   if (!token || token.length > 160) return null;
   const { data, error } = await supabaseAdmin
     .from("payment_requests")
@@ -45,6 +45,12 @@ export async function findPublicPaymentRequest(token: string) {
       .maybeSingle();
     if (expired) row.status = "expired";
   }
+  return row;
+}
+
+export async function findPublicPaymentRequest(token: string) {
+  const row = await findPaymentRequestByPublicToken(token);
+  if (!row) return null;
   return {
     id: row.id,
     payer_name: row.payer_name,
@@ -59,4 +65,36 @@ export async function findPublicPaymentRequest(token: string) {
     expires_at: row.expires_at,
     payable: isPublicRequestPayable(row),
   };
+}
+
+export async function recordProviderPayment(input: {
+  payment_request_id: string;
+  amount: number;
+  currency: "USD" | "LBP";
+  provider_reference: string;
+  idempotency_key: string;
+  effective_at?: string;
+  wallet_presentation?: "apple_pay" | "google_pay" | null;
+}) {
+  const { data, error } = await supabaseAdmin.rpc("oraya_record_provider_payment", {
+    p_request_id: input.payment_request_id,
+    p_amount: input.amount,
+    p_currency: input.currency,
+    p_provider_reference: input.provider_reference,
+    p_effective_at: input.effective_at ?? new Date().toISOString(),
+    p_idempotency_key: input.idempotency_key,
+    p_wallet_presentation: input.wallet_presentation ?? null,
+  });
+  if (error) {
+    console.error("[payment-requests] provider payment projection failed", {
+      payment_request_id: input.payment_request_id,
+      code: error.code,
+      message: error.message,
+    });
+    return { ok: false as const };
+  }
+  const result = Array.isArray(data) ? data[0] : data;
+  return result?.transaction_id
+    ? { ok: true as const, result }
+    : { ok: false as const };
 }

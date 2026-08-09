@@ -1,0 +1,170 @@
+import crypto from "crypto";
+import { NextResponse } from "next/server";
+import {
+  authorizeCreditLibanaisTransientToken,
+  getCreditLibanaisReadiness,
+} from "@/lib/payments/credit-libanais";
+import {
+  findPaymentRequestByPublicToken,
+  recordProviderPayment,
+} from "@/lib/payments/ledger-server";
+import { isPublicRequestPayable, remainingRequestAmount } from "@/lib/payments/ledger";
+import { sendLedgerBookingReceipt } from "@/lib/payments/ledger-receipt";
+import { supabasePaymentAttemptStore } from "@/lib/payments/payment-attempts-store";
+import {
+  deriveMerchantReference,
+  runUnifiedCheckoutCompletion,
+} from "@/lib/payments/unified-checkout-completion";
+import { PaymentProviderConfigurationError } from "@/lib/payments/provider";
+import { resolvePaymentRequestOrigin } from "@/lib/payments/request-origin";
+import { supabaseAdmin } from "@/lib/supabase-admin";
+
+function readString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : "";
+}
+
+function readTransientToken(body: Record<string, unknown>) {
+  const direct = readString(body.transient_token);
+  if (direct) return direct;
+  const result = body.unified_checkout_result;
+  return result && typeof result === "object" && !Array.isArray(result)
+    ? readString((result as Record<string, unknown>).transientTokenJwt)
+    : "";
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json() as Record<string, unknown>;
+    const token = readString(body.payment_request_token);
+    const transientToken = readTransientToken(body);
+    if (!token) return NextResponse.json({ error: "payment_request_token is required." }, { status: 400 });
+    if (!transientToken) return NextResponse.json({ error: "transient_token is required." }, { status: 400 });
+
+    const payment = await findPaymentRequestByPublicToken(token);
+    if (!payment) return NextResponse.json({ error: "Payment request not found." }, { status: 404 });
+    const origin = resolvePaymentRequestOrigin(request);
+    const requestUrl = `${origin}/pay/${encodeURIComponent(token)}`;
+    if (payment.status === "paid") {
+      return NextResponse.json({ ok: true, paid: true, idempotent: true, payment_request_url: `${requestUrl}?payment=success` });
+    }
+    if (!isPublicRequestPayable(payment)) {
+      return NextResponse.json({ error: "This payment request is no longer payable." }, { status: 409 });
+    }
+    if (!payment.allowed_methods.includes("card")) {
+      return NextResponse.json({ error: "Card payment is not enabled for this request." }, { status: 400 });
+    }
+    if (payment.payment_provider !== "credit_libanais") {
+      return NextResponse.json({ error: "This payment request is not configured for NetCommerce checkout." }, { status: 400 });
+    }
+    if (!payment.payment_provider_session_id?.startsWith("oraya_")) {
+      return NextResponse.json({ error: "Payment session is not ready. Refresh and try again." }, { status: 400 });
+    }
+
+    const readiness = await getCreditLibanaisReadiness();
+    if (!readiness.checkout_ready) throw new PaymentProviderConfigurationError(readiness.admin_message);
+    const amount = remainingRequestAmount(Number(payment.amount), Number(payment.amount_paid));
+    if (amount <= 0) return NextResponse.json({ error: "This payment request has already been paid." }, { status: 409 });
+
+    const attemptId = crypto.randomUUID();
+    const merchantReference = deriveMerchantReference(attemptId);
+    const providerSessionId = payment.payment_provider_session_id;
+    const walletPresentation =
+      payment.allowed_methods.includes("apple_pay") && !payment.allowed_methods.includes("card")
+        ? "apple_pay" as const
+        : null;
+    const outcome = await runUnifiedCheckoutCompletion(
+      {
+        store: supabasePaymentAttemptStore,
+        authorize: (reference) => authorizeCreditLibanaisTransientToken({
+          booking_id: payment.booking_id ?? payment.id,
+          provider_session_id: providerSessionId,
+          transient_token: transientToken,
+          amount_due: amount,
+          currency: payment.currency,
+          guest_name: payment.payer_name,
+          guest_email: payment.payer_email,
+          merchant_reference: reference,
+        }),
+        recordApprovedPayment: async (provider) => {
+          const recorded = await recordProviderPayment({
+            payment_request_id: payment.id,
+            amount,
+            currency: payment.currency,
+            provider_reference: provider.reference,
+            idempotency_key: merchantReference,
+            wallet_presentation: walletPresentation,
+          });
+          return recorded.ok ? { ok: true as const, matched: 1 } : { ok: false as const };
+        },
+        touchDeclined: async () => {
+          const { error } = await supabaseAdmin.from("payment_requests")
+            .update({ updated_at: new Date().toISOString() })
+            .eq("id", payment.id)
+            .eq("payment_provider_session_id", providerSessionId);
+          if (error) console.error("[payment-request/complete] decline touch failed", error.message);
+        },
+        log: (message, detail) => console.error(`[payment-request/complete] ${message}`, detail ?? {}),
+      },
+      {
+        attempt_id: attemptId,
+        booking_id: payment.booking_id,
+        payment_request_id: payment.id,
+        provider_session_id: providerSessionId,
+        amount,
+        currency: payment.currency,
+      },
+    );
+
+    switch (outcome.kind) {
+      case "store_unavailable":
+        return NextResponse.json({ error: "Secure payment is temporarily unavailable." }, { status: 503 });
+      case "store_error":
+        return NextResponse.json({ error: "Payment could not be started safely. No charge was made." }, { status: 500 });
+      case "already_processing":
+        return NextResponse.json({ error: "This payment is already being processed. Please wait." }, { status: 409 });
+      case "blocked_ambiguous":
+        return NextResponse.json({
+          error: "A previous payment needs review. Do NOT retry or pay again; please contact Oraya.",
+        }, { status: 409 });
+      case "declined":
+        return NextResponse.json({
+          ok: false,
+          paid: false,
+          message: "Payment was not approved. No payment was recorded. You may try again or contact Oraya.",
+          payment_request_url: `${requestUrl}?payment=failed`,
+        }, { status: outcome.provider.ok ? 402 : 502 });
+      case "provider_unknown":
+        return NextResponse.json({
+          ok: false,
+          paid: false,
+          message: "We could not confirm the outcome. Do NOT retry or pay again; Oraya will verify it.",
+        }, { status: 502 });
+      case "approved_unrecorded":
+        return NextResponse.json({
+          ok: false,
+          paid: false,
+          message: "Payment was approved but needs reconciliation. Do NOT retry or pay again; Oraya will confirm it.",
+        }, { status: 500 });
+      case "already_recorded":
+      case "approved_recorded":
+        if (payment.booking_id) {
+          try { await sendLedgerBookingReceipt(payment.booking_id); }
+          catch (emailError) { console.error("[payment-request/complete] receipt email failed", emailError); }
+        }
+        return NextResponse.json({
+          ok: true,
+          paid: true,
+          idempotent: outcome.kind === "already_recorded",
+          reference: outcome.provider?.reference,
+          payment_request_url: `${requestUrl}?payment=success`,
+        });
+    }
+  } catch (error) {
+    if (error instanceof PaymentProviderConfigurationError) {
+      console.error("[payment-request/complete] configuration error", error.message);
+      return NextResponse.json({ error: "Payment could not be verified. No payment was recorded." }, { status: error.statusCode });
+    }
+    console.error("[payment-request/complete] unexpected error", error);
+    return NextResponse.json({ error: "Payment could not be verified." }, { status: 500 });
+  }
+}

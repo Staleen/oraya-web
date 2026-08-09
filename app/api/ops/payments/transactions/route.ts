@@ -22,6 +22,7 @@ function rpcError(message: string, code?: string) {
     request_not_payable: ["That request is no longer payable.", 409], request_expired: ["That payment request has expired.", 409],
     overpayment: ["That is more than the payment request still needs.", 409], booking_mismatch: ["The payment request belongs to a different booking.", 409],
     changed_elsewhere: ["Someone else changed this booking's payments. Refresh and check it again.", 409],
+    provider_payment_in_progress: ["A card payment is being processed for this request. Wait for it to finish before recording another receipt.", 409],
     booking_request_currency_must_be_usd: ["Booking-linked requests must use USD.", 400],
   };
   for (const [needle, result] of Object.entries(known)) if (message.includes(needle)) return result;

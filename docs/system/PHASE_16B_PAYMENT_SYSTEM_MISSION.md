@@ -6,6 +6,8 @@
 
 **Authority:** this mission supersedes older Phase 16B language that treats the phase as only NetCommerce/CyberSource hosted card checkout or excludes member saved cards from the phase.
 
+**Active card activation:** NetCommerce onboarding and live Visa/Mastercard Unified Checkout merchant activation are verified complete. The remaining production connection and evidence gates are governed by [PHASE_16B_CARD_PRODUCTION_ACTIVATION_MISSION.md](PHASE_16B_CARD_PRODUCTION_ACTIVATION_MISSION.md). Do not reopen merchant onboarding as unfinished work.
+
 ## Mission
 
 Phase 16B delivers Oraya's complete business payment system. NetCommerce/CyberSource is one provider workstream inside the phase; it is not the definition of the phase.
@@ -24,7 +26,7 @@ Production activation remains a separate, deliberate decision for each integrate
 
 ## Current reality
 
-**Implementation checkpoint, 2026-08-09:** PR #110 shipped F1/F2 and the core F3 link path after CI and deployed Preview verification; the additive ledger migration is installed on live ORAYA Supabase. Operations can create booking-linked or standalone links, copy/cancel them, record partial or full manual receipts for cash/bank/Whish/OMT/Western Union/Suyool, and reverse the latest booking receipt with exact state restoration. `/pay/[token]` safely presents the request and configured manual instructions. The active 16B-NC work adds CyberSource webhook JWE decryption, distinct timestamped digital-signature verification, durable replay claiming, and the additive attempt-to-request link; provider-issued credentials, subscription approval, and delivered sandbox evidence remain activation gates. Native card checkout through the canonical request object, direct send/reminder/reissue/late-association controls, automated standalone receipts, settlement reporting, Apple Pay, and saved cards remain later checkpoints.
+**Implementation checkpoint, 2026-08-09:** PR #110 shipped F1/F2 and the core F3 link path; PR #112 shipped CyberSource webhook JWE, separate timestamped signature verification, and replay claiming; PR #113 shipped the canonical booking/standalone card bridge; PR #114 shipped provider-gated Apple Pay capture context plus the operations reconciliation/settlement view. The live schema supports request-scoped attempts and an atomic provider-payment RPC. `/ops/payments` exposes provider readiness, reconciliation attention, merchant references, and gross/fee/net ledger totals. Apple Pay support exists behind a separate exact flag and records as a wallet only on an Apple-only request; it cannot activate until merchant enrollment, verification of the effective checkout host (currently `www.stayoraya.com` after the bare-domain redirect), and device testing are proven. Provider-issued card/webhook credentials, subscription approval, delivered sandbox evidence, native-wallet contracts, and TMS/legal approval remain external gates.
 
 The repository now has both a strong card-security foundation and the first complete-system foundation:
 
@@ -37,7 +39,7 @@ The repository now has both a strong card-security foundation and the first comp
 - atomic manual receipt/reversal projections for requests and bookings;
 - an operations collection workspace and public standalone `/pay/[token]` front door.
 
-It is not yet a complete payment operating system. Native provider checkout still has to be routed through the canonical request/transaction model; webhook credentials/subscription/delivery evidence and provider activation remain open; direct send/reminder/reissue, automated receipts, settlement/reporting, Apple Pay, native wallets, and the saved-card instrument/consent model remain. The `bookings.amount_*` and `bookings.payment_*` fields are now compatibility summaries; the immutable transaction ledger is the durable history for new manual receipts.
+The provider-independent payment operating system is implemented. Remaining work cannot be truthfully completed without external artifacts: card/webhook credentials and delivered provider tests, Apple Pay enrollment/domain/device proof, official Whish/OMT/Suyool merchant contracts, and CyberSource TMS plus legal/consent approval. The `bookings.amount_*` and `bookings.payment_*` fields are compatibility summaries; the immutable transaction ledger is the durable money history.
 
 ## Canonical model
 
@@ -79,7 +81,7 @@ Confirmed history is corrected by a linked reversal or adjustment, never silentl
 
 ### 3. Provider attempt and event records
 
-The existing `payment_attempts` table remains the idempotency and ambiguous-outcome boundary for provider calls. It should eventually reference a payment request as well as a booking.
+The existing `payment_attempts` table remains the idempotency and ambiguous-outcome boundary for provider calls. It references a canonical payment request when present and retains booking linkage for projections and legacy links.
 
 Verified asynchronous messages belong in a durable `payment_provider_events` ledger with provider event ID, receipt time, verification result, processing result, replay key, and safe metadata. A browser redirect is never proof of payment.
 

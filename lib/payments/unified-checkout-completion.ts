@@ -33,7 +33,8 @@ export type PaymentAttemptStatus =
 
 export type NewPaymentAttempt = {
   id: string;
-  booking_id: string;
+  booking_id: string | null;
+  payment_request_id?: string | null;
   provider_session_id: string;
   idempotency_key: string;
   status: "claimed";
@@ -89,7 +90,7 @@ export type PaymentAttemptStore = {
   claimAttempt(attempt: NewPaymentAttempt): Promise<AttemptClaimResult>;
   /** The most recent in-flight (claimed/authorized/ambiguous) attempt, if any. */
   findBlockingAttempt(
-    bookingId: string,
+    subject: { booking_id: string | null; payment_request_id: string | null },
   ): Promise<{ id: string; status: PaymentAttemptStatus } | null>;
   transitionAttempt(
     attemptId: string,
@@ -149,7 +150,8 @@ export type CompletionDeps = {
 
 export type CompletionInput = {
   attempt_id: string;
-  booking_id: string;
+  booking_id: string | null;
+  payment_request_id?: string | null;
   provider_session_id: string;
   amount: number;
   currency: string;
@@ -184,12 +186,21 @@ export async function runUnifiedCheckoutCompletion(
   input: CompletionInput,
 ): Promise<CompletionOutcome> {
   const merchantReference = deriveMerchantReference(input.attempt_id);
+  const subject = {
+    booking_id: input.booking_id,
+    payment_request_id: input.payment_request_id ?? null,
+  };
+  if (!subject.booking_id && !subject.payment_request_id) {
+    deps.log("payment attempt has no booking or payment-request subject");
+    return { kind: "store_error" };
+  }
 
   // 1. Atomic claim BEFORE the provider call. A conflict means another
   //    attempt is in flight — the provider is NOT called.
   const claim = await deps.store.claimAttempt({
     id: input.attempt_id,
     booking_id: input.booking_id,
+    payment_request_id: input.payment_request_id ?? null,
     provider_session_id: input.provider_session_id,
     idempotency_key: merchantReference,
     status: "claimed",
@@ -210,7 +221,7 @@ export async function runUnifiedCheckoutCompletion(
     if (claim.reason === "error") {
       return { kind: "store_error" };
     }
-    const blocking = await deps.store.findBlockingAttempt(input.booking_id);
+    const blocking = await deps.store.findBlockingAttempt(subject);
     if (blocking?.status === "ambiguous") {
       deps.log("attempt blocked by ambiguous prior attempt — manual reconciliation required", {
         booking_id: input.booking_id,

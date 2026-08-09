@@ -29,7 +29,8 @@ const CYBERSOURCE_SESSIONS_PATH = "/uc/v1/sessions";
 const CYBERSOURCE_PAYMENTS_PATH = "/pts/v2/payments";
 const CYBERSOURCE_UNIFIED_CHECKOUT_LIBRARY_PATH = "/uc/v1/assets/1.0.0/UnifiedCheckout.js";
 const DEFAULT_CAPTURE_CONTEXT_TTL_MINUTES = 20;
-const CYBERSOURCE_ALLOWED_PAYMENT_TYPES = ["PANENTRY"] as const;
+const CYBERSOURCE_CARD_PAYMENT_TYPE = "PANENTRY" as const;
+const CYBERSOURCE_APPLE_PAY_PAYMENT_TYPE = "APPLEPAY" as const;
 
 type NetCommerceEnvironment = "sandbox" | "production";
 
@@ -50,6 +51,7 @@ interface NetCommerceConfig {
   webhookMleCertificateId: string | null;
   webhookSignatureKeyId: string | null;
   webhookSignatureSecret: string | null;
+  applePayEnabled: boolean;
 }
 
 export interface CreditLibanaisUnifiedCheckoutSession {
@@ -139,7 +141,15 @@ function readNetCommerceConfig(): NetCommerceConfig {
     webhookMleCertificateId: readEnv("NETCOMMERCE_CYBERSOURCE_WEBHOOK_MLE_CERTIFICATE_ID"),
     webhookSignatureKeyId: readEnv("NETCOMMERCE_CYBERSOURCE_WEBHOOK_SIGNATURE_KEY_ID"),
     webhookSignatureSecret: readEnv("NETCOMMERCE_CYBERSOURCE_WEBHOOK_SIGNATURE_SECRET"),
+    // Exact opt-in only. Set this after Business Center enrollment, domain
+    // verification, and a successful Apple sandbox-device test.
+    applePayEnabled: readEnv("NETCOMMERCE_CYBERSOURCE_APPLE_PAY_ENABLED") === "true",
   };
+}
+
+export function getCreditLibanaisPaymentCapabilities() {
+  const config = readNetCommerceConfig();
+  return { apple_pay_enabled: config.applePayEnabled } as const;
 }
 
 function toHostedEnvironment(environment: NetCommerceEnvironment | null): HostedCheckoutEnvironment {
@@ -283,6 +293,7 @@ function requireSessionConfig() {
     requestMleKeyId: config.requestMleKeyId,
     responseMleKeyId: config.responseMleKeyId,
     responseMlePrivateKey: config.responseMlePrivateKey,
+    applePayEnabled: config.applePayEnabled,
   };
 }
 
@@ -332,7 +343,7 @@ function readUnifiedCheckoutContextData(payload: Record<string, unknown> | null)
 
 function buildCaptureContextRequest(
   input: CreateCheckoutSessionInput,
-  config: { country: string; locale: string },
+  config: { country: string; locale: string; applePayEnabled: boolean },
 ) {
   const targetOrigin = new URL(input.payment_page_url ?? input.return_url).origin;
   if (!targetOrigin.startsWith("https://")) {
@@ -341,11 +352,28 @@ function buildCaptureContextRequest(
     );
   }
 
+  const requestedMethods = input.allowed_payment_methods?.length
+    ? [...new Set(input.allowed_payment_methods)]
+    : ["card" as const];
+  const allowedPaymentTypes: Array<"PANENTRY" | "APPLEPAY"> = [];
+  if (requestedMethods.includes("card")) allowedPaymentTypes.push(CYBERSOURCE_CARD_PAYMENT_TYPE);
+  if (requestedMethods.includes("apple_pay")) {
+    if (!config.applePayEnabled) {
+      throw new PaymentProviderConfigurationError(
+        "Apple Pay is not enrolled and verified for this CyberSource merchant/domain.",
+      );
+    }
+    allowedPaymentTypes.push(CYBERSOURCE_APPLE_PAY_PAYMENT_TYPE);
+  }
+  if (allowedPaymentTypes.length === 0) {
+    throw new PaymentProviderConfigurationError("No enabled online payment method was requested.");
+  }
+
   return {
     targetOrigins: [targetOrigin],
     country: config.country,
     locale: config.locale,
-    allowedPaymentTypes: CYBERSOURCE_ALLOWED_PAYMENT_TYPES,
+    allowedPaymentTypes,
     captureMandate: {
       billingType: "FULL",
       requestEmail: true,
@@ -523,6 +551,7 @@ export async function createCreditLibanaisUnifiedCheckoutSession(
     buildCaptureContextRequest(input, {
       country: config.country,
       locale: config.locale,
+      applePayEnabled: config.applePayEnabled,
     }),
   );
   const authorization = await buildCyberSourceJwtAuthorization({

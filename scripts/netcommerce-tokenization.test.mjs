@@ -12,6 +12,14 @@ test("NetCommerce capture context disables saved-card consent", () => {
   assert.doesNotMatch(source, /requestSaveCredentials:\s*true/);
 });
 
+test("Apple Pay is an exact, separate provider-enrollment opt-in", () => {
+  assert.match(source, /NETCOMMERCE_CYBERSOURCE_APPLE_PAY_ENABLED/);
+  assert.match(source, /=== "true"/);
+  assert.match(source, /CYBERSOURCE_APPLE_PAY_PAYMENT_TYPE = "APPLEPAY"/);
+  assert.match(source, /if \(requestedMethods\.includes\("apple_pay"\)\)/);
+  assert.match(source, /Apple Pay is not enrolled and verified/);
+});
+
 test("NetCommerce checkout does not request reusable token creation", () => {
   assert.doesNotMatch(source, /completeMandate\s*:/);
   assert.doesNotMatch(source, /tokenCreate\s*:\s*true/);

@@ -49,10 +49,17 @@ interface SessionResponse {
   return_url?: string;
   cancel_url?: string;
   booking_view_url?: string;
+  payment_request_url?: string;
   booking_summary?: {
     villa?: string;
     check_in?: string;
     check_out?: string;
+    amount?: number;
+    currency?: string;
+  };
+  payment_summary?: {
+    description?: string;
+    payer_name?: string;
     amount?: number;
     currency?: string;
   };
@@ -64,6 +71,17 @@ interface CompleteResponse {
   error?: string;
   message?: string;
   booking_view_url?: string;
+  payment_request_url?: string;
+}
+
+type CheckoutSummary =
+  | NonNullable<SessionResponse["booking_summary"]>
+  | NonNullable<SessionResponse["payment_summary"]>;
+
+function isPaymentRequestSummary(
+  summary: CheckoutSummary,
+): summary is NonNullable<SessionResponse["payment_summary"]> {
+  return "description" in summary;
 }
 
 function formatDate(value?: string) {
@@ -173,13 +191,21 @@ function readTransientToken(value: string | { transientTokenJwt?: string }) {
   throw new Error("CyberSource did not return a transient payment token.");
 }
 
-export default function PaymentCheckoutPage(props: { params: Promise<{ token: string }> }) {
+export default function PaymentCheckoutPage(props: {
+  params: Promise<{ token: string }>;
+  searchParams: Promise<{ subject?: string | string[] }>;
+}) {
   const params = use(props.params);
+  const searchParams = use(props.searchParams);
   const token = params.token;
+  const isPaymentRequest = searchParams.subject === "request";
   const [state, setState] = useState<SessionState>({ status: "loading" });
-  const [summary, setSummary] = useState<SessionResponse["booking_summary"] | null>(null);
+  const [summary, setSummary] = useState<CheckoutSummary | null>(null);
 
-  const bookingViewFallback = useMemo(() => `/booking/view/${token}`, [token]);
+  const bookingViewFallback = useMemo(
+    () => isPaymentRequest ? `/pay/${token}` : `/booking/view/${token}`,
+    [isPaymentRequest, token],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -188,17 +214,25 @@ export default function PaymentCheckoutPage(props: { params: Promise<{ token: st
     async function startCheckout() {
       let completionRequestSubmitted = false;
       try {
-        const response = await fetch("/api/payments/unified-checkout-session", {
+        const response = await fetch(
+          isPaymentRequest
+            ? "/api/payments/requests/unified-checkout-session"
+            : "/api/payments/unified-checkout-session",
+          {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ booking_token: token }),
+          body: JSON.stringify(isPaymentRequest
+            ? { payment_request_token: token }
+            : { booking_token: token }),
         });
         const payload = (await response.json()) as SessionResponse;
         if (!response.ok || !payload.ok) {
           setState({
             status: "blocked",
-            message: "Secure payment is not available for this booking right now. Please return to your booking for the next step.",
-            bookingViewUrl: payload.booking_view_url ?? bookingViewFallback,
+            message: isPaymentRequest
+              ? "Secure card payment is not available for this request right now. Please return to the payment request for another option."
+              : "Secure payment is not available for this booking right now. Please return to your booking for the next step.",
+            bookingViewUrl: payload.payment_request_url ?? payload.booking_view_url ?? bookingViewFallback,
           });
           return;
         }
@@ -212,7 +246,7 @@ export default function PaymentCheckoutPage(props: { params: Promise<{ token: st
           throw new Error("Payment session response was incomplete.");
         }
 
-        setSummary(payload.booking_summary ?? null);
+        setSummary(payload.booking_summary ?? payload.payment_summary ?? null);
         await loadScript(payload.client_library, payload.client_library_integrity);
 
         const checkoutWindow = window as UnifiedCheckoutWindow;
@@ -220,7 +254,7 @@ export default function PaymentCheckoutPage(props: { params: Promise<{ token: st
           throw new Error("CyberSource payment client did not initialize.");
         }
 
-        const bookingViewUrl = payload.booking_view_url ?? bookingViewFallback;
+        const bookingViewUrl = payload.payment_request_url ?? payload.booking_view_url ?? bookingViewFallback;
         setState({
           status: "ready",
           bookingViewUrl,
@@ -258,19 +292,24 @@ export default function PaymentCheckoutPage(props: { params: Promise<{ token: st
 
         setState({ status: "processing", bookingViewUrl });
         completionRequestSubmitted = true;
-        const completionResponse = await fetch("/api/payments/unified-checkout-complete", {
+        const completionResponse = await fetch(
+          isPaymentRequest
+            ? "/api/payments/requests/unified-checkout-complete"
+            : "/api/payments/unified-checkout-complete",
+          {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            booking_token: token,
-            transient_token: transientToken,
-          }),
+          body: JSON.stringify(isPaymentRequest
+            ? { payment_request_token: token, transient_token: transientToken }
+            : { booking_token: token, transient_token: transientToken }),
         });
         const completion = (await completionResponse.json()) as CompleteResponse;
         if (cancelled) return;
 
         if (completionResponse.ok && completion.ok && completion.paid) {
-          window.location.assign(completion.booking_view_url ?? payload.return_url);
+          window.location.assign(
+            completion.payment_request_url ?? completion.booking_view_url ?? payload.return_url,
+          );
           return;
         }
 
@@ -280,7 +319,7 @@ export default function PaymentCheckoutPage(props: { params: Promise<{ token: st
             typeof completion.message === "string" && completion.message.trim()
               ? completion.message.trim()
               : "We could not confirm the payment outcome. Do NOT retry or pay again; please contact Oraya.",
-          bookingViewUrl: completion.booking_view_url ?? bookingViewUrl,
+          bookingViewUrl: completion.payment_request_url ?? completion.booking_view_url ?? bookingViewUrl,
         });
       } catch {
         console.error("[payments/checkout] secure checkout failed.");
@@ -299,7 +338,7 @@ export default function PaymentCheckoutPage(props: { params: Promise<{ token: st
       cancelled = true;
       cleanup?.();
     };
-  }, [bookingViewFallback, token]);
+  }, [bookingViewFallback, isPaymentRequest, token]);
 
   return (
     <main
@@ -358,9 +397,14 @@ export default function PaymentCheckoutPage(props: { params: Promise<{ token: st
               marginBottom: "18px",
             }}
           >
-            <Summary label="Villa" value={summary.villa ?? "-"} />
-            <Summary label="Check-in" value={formatDate(summary.check_in)} />
-            <Summary label="Check-out" value={formatDate(summary.check_out)} />
+            {isPaymentRequestSummary(summary) ? <>
+              <Summary label="Payment for" value={summary.description ?? "Oraya payment"} />
+              <Summary label="Prepared for" value={summary.payer_name ?? "Guest"} />
+            </> : <>
+              <Summary label="Villa" value={summary.villa ?? "-"} />
+              <Summary label="Check-in" value={formatDate(summary.check_in)} />
+              <Summary label="Check-out" value={formatDate(summary.check_out)} />
+            </>}
             <Summary label="Payment" value={formatMoney(summary.amount, summary.currency)} />
           </div>
         ) : null}
@@ -374,14 +418,14 @@ export default function PaymentCheckoutPage(props: { params: Promise<{ token: st
                 Verifying payment with the gateway...
               </p>
               <a href={state.bookingViewUrl} style={{ ...buttonStyle, background: "transparent", color: GOLD, border: `1px solid ${GOLD}` }}>
-                Return to booking
+                {isPaymentRequest ? "Return to payment request" : "Return to booking"}
               </a>
             </div>
           ) : state.status === "blocked" ? (
             <div style={{ display: "grid", gap: "14px" }}>
               <p style={{ color: WHITE, lineHeight: 1.7, margin: 0 }}>{state.message}</p>
               <a href={state.bookingViewUrl ?? bookingViewFallback} style={buttonStyle}>
-                Return to booking
+                {isPaymentRequest ? "Return to payment request" : "Return to booking"}
               </a>
             </div>
           ) : (
