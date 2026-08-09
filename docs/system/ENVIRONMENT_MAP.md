@@ -44,6 +44,8 @@
 | `NETCOMMERCE_CYBERSOURCE_WEBHOOK_SIGNATURE_KEY_ID` | server-only | optional for sandbox completion; required for verified webhooks | optional for sandbox checkout; yes for webhook test | yes before live rollout | yes - Sensitive |
 | `NETCOMMERCE_CYBERSOURCE_WEBHOOK_SIGNATURE_SECRET` | server-only | optional for sandbox completion; required for verified webhooks | optional for sandbox checkout; yes for webhook test | yes before live rollout | yes - Sensitive |
 | `NETCOMMERCE_CYBERSOURCE_APPLE_PAY_ENABLED` | server-only | no (default false) | only after Apple sandbox enrollment/domain/device proof | only after production merchant/domain approval | yes |
+| `ACCESS_PIN_VAULT_KEYS` | server-only | no (Phase 16D dark; vault fails closed while unset) | **no — keep unset until Stage B approval** | **no — keep unset until Stage B approval** | later — Sensitive, at Stage B activation |
+| `ACCESS_PIN_FINGERPRINT_KEY` | server-only | no (Phase 16D dark; vault fails closed while unset) | **no — keep unset until Stage B approval** | **no — keep unset until Stage B approval** | later — Sensitive, at Stage B activation |
 | `STRIPE_SECRET_KEY` | server-only | optional (Stripe local/dev test only) | optional | optional | optional |
 | `STRIPE_WEBHOOK_SECRET` | server-only | optional (Stripe local/dev webhook only) | optional | optional | optional |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | public | optional (Stripe local/dev only) | optional | optional | optional |
@@ -445,6 +447,26 @@ Preview expectations:
 - **Where to get it:** this is an Oraya activation flag, not a secret from Apple. The prerequisite enablement and domain approval come from the CyberSource Business Center / NetCommerce merchant account.
 - **Configure in Vercel:** `false` or absent by default. Exact `true` only in the environment that has completed the prerequisites.
 - **Risk if enabled early:** Unified Checkout may advertise a wallet the merchant/domain cannot process. The code therefore never infers Apple Pay from ordinary card readiness.
+
+### `ACCESS_PIN_VAULT_KEYS`
+
+- **Scope:** server-only. **Never expose in a `"use client"` component or any `NEXT_PUBLIC_*` variable. Never log the value.**
+- **Status:** Phase 16D Stage A — **DARK**. The vault module exists ([lib/access/pin-vault.ts](../../lib/access/pin-vault.ts)) but has no runtime consumer; the human-run migration `sql/phase-16d-access-magazine.sql` is committed as reviewable text and unapplied. Nothing reads this variable until Stage B is separately approved.
+- **Used in:** [lib/access/pin-vault.ts](../../lib/access/pin-vault.ts) — sole reader (`getAccessPinKeyringFromEnv`). AES-256-GCM keyring for the encrypted six-digit door-PIN magazine.
+- **Format:** ordered keyring `k1:<base64-32-bytes>[,k2:<base64-32-bytes>...]`. The FIRST entry is the active encryption key; every entry can decrypt. Envelopes (`apv1.<key-id>.<iv>.<tag>.<ciphertext>`) embed the key id, so rotation is: generate a new key (`openssl rand -base64 32`), PREPEND it as the new first entry, keep old entries until no live (non-destroyed) credential's envelope references them, then drop them. Any parse defect makes the whole keyring invalid (fail closed).
+- **Required:** no in every environment today. At Stage B activation: yes, Production (and Preview only if a supervised test is approved), marked Sensitive.
+- **Rotation/backup risk:** removing a key that a live envelope still references makes that credential **unrecoverable** — the only remedy is quarantine → dual-lock deletion → destroy → reload. Back the value up (password manager) before every change. This key is deliberately NOT `ADMIN_SECRET` or any other existing secret, so rotating web-session or payment secrets can never orphan door credentials.
+- **Risk if missing:** none today (dark). Later: the vault refuses to encrypt/decrypt (fail closed); no PIN can be loaded or revealed.
+
+### `ACCESS_PIN_FINGERPRINT_KEY`
+
+- **Scope:** server-only. **Never expose in a `"use client"` component or any `NEXT_PUBLIC_*` variable. Never log the value.**
+- **Status:** Phase 16D Stage A — **DARK**, same posture as `ACCESS_PIN_VAULT_KEYS`.
+- **Used in:** [lib/access/pin-vault.ts](../../lib/access/pin-vault.ts) — sole reader (`getAccessPinFingerprintKeyFromEnv`). HMAC-SHA256 key for `access_credentials.pin_fingerprint`, the keyed historical fingerprint that prevents any six-digit PIN from ever being issued twice (including after destruction, when the ciphertext is erased but the fingerprint row is retained forever). A keyed HMAC is mandatory here: a six-digit PIN has ~20 bits of entropy, so any unkeyed hash would be trivially brute-forceable.
+- **Format:** single `<base64-32-bytes>` value (`openssl rand -base64 32`). Must differ from every `ACCESS_PIN_VAULT_KEYS` entry — the vault reports `fingerprint_key_reuses_vault_key` and refuses to operate on reuse.
+- **Required:** no in every environment today. At Stage B activation: yes, Production, marked Sensitive.
+- **Rotation:** effectively **never**. Rotating it breaks duplicate detection against every historical fingerprint; it is intentionally independent of the encryption keyring so vault-key rotation cannot touch it. Back it up alongside the keyring.
+- **Risk if missing:** none today (dark). Later: generation/loading refuses to run (fail closed).
 
 ### `STRIPE_SECRET_KEY`
 
