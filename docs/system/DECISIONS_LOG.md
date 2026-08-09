@@ -16,6 +16,49 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-09 - The live card-payments switch also lives in /ops, confirmed by the owner's own password
+
+**Decision:** `POST /api/ops/setup/payments-live` becomes a second writer of the `payments_live_enabled` settings row. Enabling requires the signed-in **owner's own** password and shares the login throttle; disabling requires only an owner session. `/api/admin/payments/live-toggle` is left exactly as it is.
+
+**Reason:** the 2026-07-25 decision placed the switch behind a single password-confirmed control in /admin Settings. That was right while /admin was the console. It stops being right the moment /admin goes dormant, because the only kill switch would live in a console nobody opens. Two writers of one row is acceptable here in a way it is not elsewhere: the row remains the single source of truth, both paths demand a password to enable, and neither can be reached without an authenticated session.
+
+Requiring the owner's *own* password rather than a shared admin secret is a strengthening, not a relaxation: the log now records which person turned real card charging on, instead of recording that somebody who knew the admin password did.
+
+The asymmetry is deliberate and is surfaced in the UI rather than hidden: turning payments **on** asks for a password, turning them **off** is one click. A kill switch that is slow at the moment it is needed is not a kill switch.
+
+**Impact:** [app/api/ops/setup/payments-live/route.ts](../../app/api/ops/setup/payments-live/route.ts) added; [components/ops/LivePaymentsSwitch.tsx](../../components/ops/LivePaymentsSwitch.tsx) added and rendered on /ops/payments, replacing the banner that used to point at /admin. `/api/ops/setup` still exposes the value read-only.
+
+**Reversible?:** yes — deleting the /ops route restores the single-writer arrangement.
+
+**Supersedes:** 2026-07-25 "one switch, one ritual" insofar as it named /admin Settings as the sole writer. The ritual itself is unchanged.
+
+---
+
+## 2026-08-09 - Owner recovery for /ops is a parallel token system, not a shared one
+
+**Decision:** `lib/ops-recovery.ts` duplicates the structure of `lib/admin-recovery.ts` with a distinct `ops_recovery` purpose claim and its own `ops_recovery_token_jti` settings row, rather than parameterising the existing helper. Operator lockout is handled by owner reset from the Team screen; only the owner gets a self-service email route.
+
+**Reason:** both systems sign with `ADMIN_SECRET`, so the purpose claim is the only thing preventing an admin recovery link from resetting an /ops account and vice versa. Making one helper serve both would put that separation behind a parameter that a future caller can forget to pass. Two modules that each hardcode their own purpose cannot be misused that way. Cross-redemption is covered by tests in both directions.
+
+Operators are excluded on purpose: an owner reset needs no mailbox, leaves a human in the loop, and avoids giving every staff member an emailed path to a console that can move money.
+
+**Impact:** [lib/ops-recovery.ts](../../lib/ops-recovery.ts), [lib/ops-recovery.test.mts](../../lib/ops-recovery.test.mts), [app/api/ops/recovery/request/route.ts](../../app/api/ops/recovery/request/route.ts), [app/api/ops/recovery/reset/route.ts](../../app/api/ops/recovery/reset/route.ts), [app/ops-reset-password/page.tsx](../../app/ops-reset-password/page.tsx) added. `sendAdminRecoveryEmail` gained an optional `consoleName` (default preserves existing wording).
+
+**Reversible?:** yes.
+
+---
+
+## 2026-08-09 - An /ops session ends when the staff row loses its password
+
+**Decision:** `requireOps` now refuses any session whose staff row has `password_hash IS NULL`, in addition to the existing checks for a missing row and a deactivated account.
+
+**Reason:** /ops sessions are stateless HMAC tokens with a 12-hour life and no server-side session table. Without this, an owner resetting a compromised account would clear the password while the intruder's cookie stayed valid for the rest of the day — the reset would look like it worked and would not have. Tying revocation to the row is what makes "Reset password" an actual containment action.
+
+Consequence worth stating: changing your **own** password does not end your other sessions, because the row still has a password. Ending every session for a person requires the owner reset, or a schema change to add a token version. That limitation is documented in the change-password route rather than hidden.
+
+**Impact:** [lib/ops-auth.ts](../../lib/ops-auth.ts), [app/api/ops/staff/[id]/route.ts](../../app/api/ops/staff/[id]/route.ts) (`reset_password` action), [app/api/ops/change-password/route.ts](../../app/api/ops/change-password/route.ts), [app/ops/account/page.tsx](../../app/ops/account/page.tsx).
+
+**Reversible?:** yes, but reversing reintroduces the containment hole.
 ## 2026-08-09 - Card production completion is an evidence-gated activation mission
 
 **Decision:** NetCommerce onboarding and live merchant activation for one-time Visa/Mastercard Unified Checkout are verified complete and must not be represented as future work. The remaining card-production work follows the seven evidence gates in [PHASE_16B_CARD_PRODUCTION_ACTIVATION_MISSION.md](PHASE_16B_CARD_PRODUCTION_ACTIVATION_MISSION.md): baseline reconciliation, Business Center security material, disabled production configuration, verified webhooks, non-charging readiness, one controlled real-card transaction, and refund/reconciliation/settlement plus deliberate monitored activation. Code completion, an activation email, a deployment, a browser success page, or a provider transaction by itself cannot close the mission.

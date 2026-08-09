@@ -46,6 +46,8 @@ export default function MediaPage() {
   const [testimonials, setTestimonials] = useState<GuestTestimonialRecord[] | null>(null);
   const [testimonialsDraft, setTestimonialsDraft] = useState<GuestTestimonialRecord[] | null>(null);
   const [testimonialsBusy, setTestimonialsBusy] = useState(false);
+  /** The exact stored value this draft was built from — proof for the save. */
+  const [testimonialsRaw, setTestimonialsRaw] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -62,8 +64,11 @@ export default function MediaPage() {
         return;
       }
       setRows(mediaBody.media ?? []);
-      const setupBody = (await setupRes.json().catch(() => ({}))) as { testimonials?: GuestTestimonialRecord[] };
+      const setupBody = (await setupRes.json().catch(() => ({}))) as {
+        testimonials?: GuestTestimonialRecord[]; testimonials_raw?: string | null;
+      };
       if (Array.isArray(setupBody.testimonials)) setTestimonials(setupBody.testimonials);
+      setTestimonialsRaw(setupBody.testimonials_raw ?? null);
     } catch {
       setLoadError("Couldn't reach Oraya.");
     } finally {
@@ -170,12 +175,24 @@ export default function MediaPage() {
       const r = await fetch("/api/ops/setup/testimonials", {
         method: "PUT", credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ testimonials: testimonialsDraft }),
+        // expected_raw is what makes this a compare-and-set: the whole list is
+        // one settings row, so without it a second editor's save would wipe
+        // the first one's work with no error shown to anybody.
+        body: JSON.stringify({ testimonials: testimonialsDraft, expected_raw: testimonialsRaw }),
       });
-      const body = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-      if (!r.ok || !body.ok) { setError(body.error ?? "Testimonials didn't save."); return; }
+      const body = (await r.json().catch(() => ({}))) as {
+        ok?: boolean; error?: string; code?: string; testimonials_raw?: string;
+      };
+      if (!r.ok || !body.ok) {
+        setError(body.error ?? "Testimonials didn't save.");
+        // Their draft is stale — reload so they can see what is actually there
+        // before deciding what to redo.
+        if (body.code === "changed_elsewhere") await load();
+        return;
+      }
       setTestimonials(testimonialsDraft);
       setTestimonialsDraft(null);
+      setTestimonialsRaw(body.testimonials_raw ?? null);
       setFlash("Testimonials saved.");
     } catch {
       setError("Couldn't reach Oraya.");

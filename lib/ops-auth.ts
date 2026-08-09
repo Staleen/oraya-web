@@ -28,6 +28,11 @@ export interface StaffRecord {
   is_active: boolean;
 }
 
+/** Shape re-read on every request; password_hash is only tested for presence. */
+interface StaffAuthRow extends StaffRecord {
+  password_hash: string | null;
+}
+
 interface OpsSessionPayload {
   sub: string;
   role: StaffRole;
@@ -121,7 +126,7 @@ export async function requireOps(
 
   const { data, error } = await supabaseAdmin
     .from("staff")
-    .select("id, email, full_name, role, is_active")
+    .select("id, email, full_name, role, is_active, password_hash")
     .eq("id", payload.sub)
     .maybeSingle();
 
@@ -133,11 +138,26 @@ export async function requireOps(
       response: NextResponse.json({ error: "Could not verify your account." }, { status: 503 }),
     };
   }
-  if (!data || !data.is_active) {
+
+  const row = data as StaffAuthRow | null;
+
+  // A session token is stateless and lives for 12 hours, so revocation has to
+  // come from the row. Three things end a session at the next request:
+  // the row is gone, the account is deactivated, or the password has been
+  // cleared by an owner-initiated reset. Without the last check, resetting the
+  // password of a compromised account would leave the intruder signed in for
+  // the remainder of the session.
+  if (!row || !row.is_active || !row.password_hash) {
     return { ok: false, response: NextResponse.json({ error: "Not signed in" }, { status: 401 }) };
   }
 
-  const staff = data as StaffRecord;
+  const staff: StaffRecord = {
+    id: row.id,
+    email: row.email,
+    full_name: row.full_name,
+    role: row.role,
+    is_active: row.is_active,
+  };
 
   if (options?.requiredRole === "owner" && staff.role !== "owner") {
     return {

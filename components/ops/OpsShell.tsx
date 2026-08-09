@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Banner, Button, T, useIsMobile } from "@/components/ops/ui";
 import { useOps } from "@/components/ops/OpsProvider";
@@ -19,6 +20,7 @@ const NAV: NavItem[] = [
   { href: "/ops/site", label: "Site", ownerOnly: true, group: "setup" },
   { href: "/ops/members", label: "Members", ownerOnly: true, group: "setup" },
   { href: "/ops/team", label: "Team", ownerOnly: true, group: "setup" },
+  { href: "/ops/account", label: "Your account", group: "setup" },
 ];
 
 export default function OpsShell({ children }: { children: React.ReactNode }) {
@@ -26,6 +28,7 @@ export default function OpsShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const isMobile = useIsMobile();
+  const [moreOpen, setMoreOpen] = useState(false);
 
   if (status === "checking") {
     return (
@@ -131,27 +134,101 @@ export default function OpsShell({ children }: { children: React.ReactNode }) {
         </main>
       </div>
 
-      {isMobile && (
-        <nav style={{
-          position: "fixed", bottom: 0, left: 0, right: 0, background: T.navy,
-          borderTop: `1px solid ${T.borderFaint}`, display: "grid",
-          gridTemplateColumns: `repeat(${Math.min(visible.length, 5)},1fr)`, zIndex: 60,
-        }}>
-          {visible.slice(0, 5).map((n) => (
-            <button
-              key={n.href}
-              onClick={() => router.push(n.href)}
-              aria-current={isActive(n.href) ? "page" : undefined}
-              style={{
-                background: "none", border: 0, color: isActive(n.href) ? T.gold : T.muted,
-                fontSize: "11px", padding: "13px 4px", cursor: "pointer",
-              }}
-            >
-              {n.label}
-            </button>
-          ))}
-        </nav>
-      )}
+      {/*
+        Mobile navigation. The bar previously showed `visible.slice(0, 5)`,
+        which silently hid everything after the fifth item — for an owner that
+        was every Setup screen, so Pricing, Extras, Payments, Photos, Site,
+        Members and Team were unreachable from a phone. The bar now carries the
+        day-to-day screens and a "More" sheet holds the rest, so nothing the
+        role can see is unreachable on the device it is most often used on.
+      */}
+      {isMobile && (() => {
+        const bar = primary.slice(0, 4);
+        const rest = [...primary.slice(4), ...setup];
+        const columns = bar.length + (rest.length > 0 ? 1 : 0);
+        return (
+          <>
+            {moreOpen && rest.length > 0 && (
+              <div
+                onClick={(e) => { if (e.target === e.currentTarget) setMoreOpen(false); }}
+                style={{ position: "fixed", inset: 0, background: "rgba(10,15,20,.72)", zIndex: 70, display: "flex", alignItems: "flex-end" }}
+              >
+                <div style={{
+                  background: T.navyLift, borderTop: `1px solid ${T.border}`,
+                  borderRadius: `${T.rLg} ${T.rLg} 0 0`, width: "100%",
+                  padding: "20px 16px calc(78px + env(safe-area-inset-bottom,0px))",
+                  maxHeight: "72vh", overflowY: "auto",
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                    <span style={{ fontSize: "10px", letterSpacing: "2.4px", textTransform: "uppercase", color: T.gold }}>More</span>
+                    <button onClick={() => setMoreOpen(false)} aria-label="Close"
+                      style={{ background: "none", border: 0, color: T.muted, fontSize: "24px", lineHeight: 1, cursor: "pointer" }}>&times;</button>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                    {rest.map((n) => (
+                      <button
+                        key={n.href}
+                        onClick={() => { setMoreOpen(false); router.push(n.href); }}
+                        aria-current={isActive(n.href) ? "page" : undefined}
+                        style={{
+                          display: "flex", alignItems: "center", width: "100%",
+                          background: isActive(n.href) ? "rgba(197,164,109,.14)" : "none", border: 0,
+                          color: isActive(n.href) ? T.gold : T.ink2, fontSize: "15px",
+                          padding: "14px 12px", borderRadius: T.rSm, cursor: "pointer", textAlign: "left",
+                        }}
+                      >
+                        {n.label}
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => { setMoreOpen(false); void signOut(); }}
+                      style={{
+                        marginTop: "10px", background: "none", border: `1px solid ${T.borderStrong}`,
+                        color: T.ink2, fontSize: "14px", padding: "13px 12px", borderRadius: T.rSm, cursor: "pointer",
+                      }}
+                    >
+                      Sign out
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <nav style={{
+              position: "fixed", bottom: 0, left: 0, right: 0, background: T.navy,
+              borderTop: `1px solid ${T.borderFaint}`, display: "grid",
+              gridTemplateColumns: `repeat(${columns},1fr)`, zIndex: 80,
+            }}>
+              {bar.map((n) => (
+                <button
+                  key={n.href}
+                  onClick={() => { setMoreOpen(false); router.push(n.href); }}
+                  aria-current={isActive(n.href) ? "page" : undefined}
+                  style={{
+                    background: "none", border: 0, color: isActive(n.href) ? T.gold : T.muted,
+                    fontSize: "11px", padding: "13px 4px", cursor: "pointer",
+                  }}
+                >
+                  {n.label}
+                </button>
+              ))}
+              {rest.length > 0 && (
+                <button
+                  onClick={() => setMoreOpen((v) => !v)}
+                  aria-expanded={moreOpen}
+                  style={{
+                    background: "none", border: 0,
+                    color: moreOpen || rest.some((n) => isActive(n.href)) ? T.gold : T.muted,
+                    fontSize: "11px", padding: "13px 4px", cursor: "pointer",
+                  }}
+                >
+                  More
+                </button>
+              )}
+            </nav>
+          </>
+        );
+      })()}
     </div>
   );
 }

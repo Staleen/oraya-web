@@ -29,13 +29,62 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   let role: "owner" | "operator" | undefined;
   let isActive: boolean | undefined;
   let reinvite = false;
+  let resetPassword = false;
   try {
-    const body = (await request.json()) as { role?: string; is_active?: boolean; reinvite?: boolean };
+    const body = (await request.json()) as {
+      role?: string; is_active?: boolean; reinvite?: boolean; reset_password?: boolean;
+    };
     if (body.role === "owner" || body.role === "operator") role = body.role;
     if (typeof body.is_active === "boolean") isActive = body.is_active;
     reinvite = body.reinvite === true;
+    resetPassword = body.reset_password === true;
   } catch {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+  }
+
+  // Password reset: the person is locked out, so their password is cleared and
+  // a fresh one-time link is issued. Clearing password_hash is what makes this
+  // safe rather than merely convenient — `requireOps` refuses any session
+  // whose row has no password, so an existing 12-hour session dies at the next
+  // request instead of outliving the reset.
+  //
+  // Resetting yourself is refused: the link is shown once, and an owner who
+  // loses it would have locked themselves out of their own console. Changing
+  // your own password is the supported path, and forgetting it is what the
+  // recovery email is for.
+  if (resetPassword) {
+    if (id === auth.staff.id) {
+      return NextResponse.json(
+        {
+          error: "You can't reset your own password here — use Change password. If you're locked out, use the recovery link on the sign-in page.",
+          code: "self_reset",
+        },
+        { status: 409 },
+      );
+    }
+
+    const invite = createInviteToken();
+    const { data, error } = await supabaseAdmin
+      .from("staff")
+      .update({
+        password_hash: null,
+        invite_token_hash: hashAdminPassword(invite.token),
+        invite_expires_at: invite.expiresAt,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .select("id, email, full_name, role")
+      .maybeSingle();
+
+    if (error) {
+      console.error(`${LOG_TAG} password reset failed:`, error.message);
+      return NextResponse.json({ error: "Could not reset that password." }, { status: 503 });
+    }
+    if (!data) return NextResponse.json({ error: "That person no longer exists." }, { status: 404 });
+
+    console.log(`${LOG_TAG} password reset for ${id} by ${auth.staff.id}`);
+    // Returned once, never stored in readable form — the owner passes it on.
+    return NextResponse.json({ ok: true, staff: data, invite_token: invite.token });
   }
 
   // Re-invite: a fresh one-time link for someone who never set a password

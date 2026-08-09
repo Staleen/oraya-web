@@ -141,6 +141,42 @@ export default function AvailabilityPage() {
     }
   }
 
+  /**
+   * Pull the feeds again, now. Available to operators as well as owners: the
+   * person who needs it is whoever is staring at availability they don't
+   * trust, and making them find the owner defeats the point.
+   *
+   * A run that failed and changed nothing answers 502, and that is surfaced as
+   * an error rather than a green tick — a stale calendar reported as fresh is
+   * how a villa gets double-booked.
+   */
+  async function syncNow() {
+    setFeedBusy("sync");
+    setFeedError("");
+    setFeedFlash("");
+    try {
+      const r = await fetch("/api/ops/calendar-sync/run", { method: "POST", credentials: "include" });
+      const res = (await r.json().catch(() => ({}))) as {
+        ok?: boolean; error?: string; sources_failed?: number; blocks_upserted?: number; partial?: boolean;
+      };
+      if (!r.ok || !res.ok) {
+        setFeedError(res.error ?? "The sync could not run. Nothing was updated.");
+        await refresh();
+        return;
+      }
+      setFeedFlash(
+        res.partial
+          ? `Synced, but ${res.sources_failed} feed${res.sources_failed === 1 ? "" : "s"} failed — the rows below say which.`
+          : "Calendars are up to date.",
+      );
+      await refresh();
+    } catch {
+      setFeedError("Couldn't reach Oraya. Nothing was updated.");
+    } finally {
+      setFeedBusy("");
+    }
+  }
+
   async function addFeed() {
     const ok = await feedRequest("POST", newFeed, "Calendar connected — it syncs within 10 minutes.");
     if (ok) { setAddingFeed(false); setNewFeed({ villa: "", source_name: "", feed_url: "" }); }
@@ -190,7 +226,20 @@ export default function AvailabilityPage() {
       <PageHead title="Availability" sub="What is taken, and whether the feeds keeping it honest are alive" />
 
       <div style={{ marginBottom: "30px" }}>
-        <Kicker count={calendarSources.length}>Calendar feeds</Kicker>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
+          <Kicker count={calendarSources.length}>Calendar feeds</Kicker>
+          {calendarSources.length > 0 && (
+            <Button small disabled={feedBusy === "sync"} onClick={() => void syncNow()}>
+              {feedBusy === "sync" ? "Syncing…" : "Sync now"}
+            </Button>
+          )}
+        </div>
+
+        {/* Outside the owner block on purpose: an operator can run a sync, so
+            an operator has to be able to see whether it worked. */}
+        {feedError && <div style={{ marginTop: "10px" }}><Banner tone="bad" title="Not synced" onDismiss={() => setFeedError("")}>{feedError}</Banner></div>}
+        {feedFlash && <div style={{ marginTop: "10px" }}><Banner tone="ok" title="Done" onDismiss={() => setFeedFlash("")}>{feedFlash}</Banner></div>}
+
         {calendarSources.length === 0 ? (
           <p style={{ fontSize: "13px", color: T.faint, margin: 0 }}>
             {loading ? "Loading…" : "No external calendar feeds are configured."}
@@ -216,9 +265,6 @@ export default function AvailabilityPage() {
         )}
         {me?.role === "owner" && (
           <div style={{ marginTop: "12px" }}>
-            {feedError && <Banner tone="bad" title="Not saved" onDismiss={() => setFeedError("")}>{feedError}</Banner>}
-            {feedFlash && <Banner tone="ok" title="Done" onDismiss={() => setFeedFlash("")}>{feedFlash}</Banner>}
-
             {calendarSources.length > 0 && (
               <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "12px" }}>
                 {calendarSources.map((s) => (

@@ -25,11 +25,41 @@ const MODEL_LABELS: Record<SetupAddon["pricing_model"], string> = {
 };
 
 const VILLAS = ["Villa Mechmech", "Villa Byblos"] as const;
-const CATEGORIES = ["comfort", "experience", "logistics", "service", "essentials"] as const;
-const CATEGORY_LABELS: Record<string, string> = {
-  comfort: "Comfort", experience: "Experience", logistics: "Logistics",
-  service: "Service", essentials: "Essentials",
-};
+
+/**
+ * Categories are free text in storage, and production already uses a
+ * vocabulary this screen never knew about ("Setup & Seating", "Production &
+ * Atmosphere", "Food & Hospitality", …).
+ *
+ * This list is only a set of SUGGESTIONS. It is never used to validate or to
+ * look a value up: an unrecognised category is shown exactly as stored, and
+ * the owner can type a new one. The previous fixed dropdown could not
+ * represent any real value, so every event service displayed "None" and one
+ * touch of the control would have overwritten a live category with a token
+ * the guest-facing event page does not group on.
+ */
+const CATEGORY_SUGGESTIONS = [
+  "Setup & Seating",
+  "Decoration & Styling",
+  "Catering & Dining",
+  "Staffing & Service",
+  "Entertainment & Music",
+  "Lighting & Ambience",
+  "Coordination & Logistics",
+  "Comfort",
+  "Experience",
+  "Services",
+] as const;
+
+/** Every category actually in use, plus the suggestions, de-duplicated. */
+function categoryOptions(rows: Array<{ rules: { category: string | null } }>): string[] {
+  const seen = new Set<string>(CATEGORY_SUGGESTIONS);
+  for (const r of rows) {
+    const c = r.rules.category?.trim();
+    if (c) seen.add(c);
+  }
+  return [...seen].sort((a, b) => a.localeCompare(b));
+}
 const ENFORCEMENT_LABELS: Record<string, string> = {
   strict: "Strict — block the booking if the rule isn't met",
   soft: "Soft — warn, but allow",
@@ -155,7 +185,7 @@ function describeChanges(before: Map<string, DraftAddon>, after: DraftAddon[]): 
     }
     if (p.cutoff_type !== n.cutoff_type) out.push(`${a.label} notice is counted ${n.cutoff_type === "before_booking" ? "before booking" : "before check-in"}`);
     if (p.enforcement_mode !== n.enforcement_mode) out.push(`${a.label} enforcement: ${n.enforcement_mode ?? "default"}`);
-    if (p.category !== n.category) out.push(`${a.label} category: ${n.category ? CATEGORY_LABELS[n.category] ?? n.category : "none"}`);
+    if (p.category !== n.category) out.push(`${a.label} category: ${n.category ?? "none"}`);
     if (p.description !== n.description) out.push(`${a.label} description updated`);
     if (p.display_order !== n.display_order) out.push(`${a.label} display order: ${n.display_order ?? "default"}`);
     if (p.pricing_type !== n.pricing_type || p.percentage_value !== n.percentage_value) {
@@ -281,6 +311,12 @@ export default function ExtrasPage() {
 
       {gate ?? (working && (
         <>
+          {/* Suggestions for the category field: the canonical list plus every
+              value already in use, so nothing stored can be lost by editing. */}
+          <datalist id="ops-addon-categories">
+            {categoryOptions(working).map((c) => <option key={c} value={c} />)}
+          </datalist>
+
           <LiveBanner right={`${working.filter((a) => !a.removed).length} extras`}>
             <b>Live now</b> — shown on the booking page in this order. Open <b>Rules</b> on any row
             for villas, advance notice, categories and event pricing.
@@ -376,11 +412,13 @@ export default function ExtrasPage() {
                         </label>
 
                         <label style={LBL}>Category
-                          <CellSelect style={{ marginTop: "6px" }} value={a.rules.category ?? ""}
-                            onChange={(e) => updateRules(a.id, { category: e.target.value || null })}>
-                            <option value="">None</option>
-                            {CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
-                          </CellSelect>
+                          <CellInput
+                            style={{ marginTop: "6px" }}
+                            list="ops-addon-categories"
+                            value={a.rules.category ?? ""}
+                            placeholder="None"
+                            onChange={(e) => updateRules(a.id, { category: e.target.value.trim() || null })}
+                          />
                         </label>
 
                         <label style={LBL}>Advance notice (hours)
