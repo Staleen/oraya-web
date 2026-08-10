@@ -18,13 +18,13 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ## 2026-08-10 - Easy one-click card refunds from Ops
 
-**Decision:** card refunds are executed from Ops → Payments with a **Refund card** action. Oraya calls CyberSource `POST /pts/v2/payments/{id}/refunds`, then records an immutable ledger `refund` via `oraya_record_provider_refund`. A secondary **Already refunded in Business Center?** path records an existing BC refund reference without calling the gateway. Manual Business Center–first refunds remain the fallback, not the default happy path.
+**Decision:** card refunds are executed from Ops → Payments with a **Refund card** action for **owners**. Oraya **claims a pending refund first**, then calls CyberSource `POST /pts/v2/payments/{id}/refunds`, verifies response amount/currency, and confirms the ledger row. Ambiguous outcomes leave the pending claim in place and **block another provider retry**. A record-only path confirms a pending claim (or records a BC refund) without calling the gateway again. Unique confirmed refund provider references prevent double-counting the same BC id.
 
-**Reason:** the owner required a very easy refund path after live card activation. The prior manual-first flow had no honest surface for standalone payment-request charges (including the $1 activation test), so activation evidence and day-to-day refunds were blocked on a Business Center + booking-only admin dance.
+**Reason:** the owner required a very easy refund path after live card activation, but the first implementation called the bank before any durable claim and could double-refund under concurrency/retry. Production-grade money safety requires claim-before-provider, amount verification, and do-not-retry discipline matching charge completion.
 
-**Impact:** [sql/phase-16b-provider-refund.sql](../../sql/phase-16b-provider-refund.sql) (human-run once), [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) `refundCreditLibanaisPayment`, [app/api/ops/payments/transactions/[id]/refund/route.ts](../../app/api/ops/payments/transactions/%5Bid%5D/refund/route.ts), Ops [PaymentWorkspace](../../components/ops/PaymentWorkspace.tsx), [docs/system/REFUND_RUNBOOK.md](REFUND_RUNBOOK.md). Cash/manual **Reverse** remains bookkeeping-only and is no longer shown on card receipts.
+**Impact:** [sql/phase-16b-provider-refund.sql](../../sql/phase-16b-provider-refund.sql) (human-run once), [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) `refundCreditLibanaisPayment`, [lib/payments/provider-refund.ts](../../lib/payments/provider-refund.ts), [app/api/ops/payments/transactions/[id]/refund/route.ts](../../app/api/ops/payments/transactions/%5Bid%5D/refund/route.ts), Ops [PaymentWorkspace](../../components/ops/PaymentWorkspace.tsx), [docs/system/REFUND_RUNBOOK.md](REFUND_RUNBOOK.md). Cash/manual **Reverse** remains bookkeeping-only and is no longer shown on card receipts.
 
-**Reversible?:** yes — hide the provider button and keep record-only / Business Center. Do not remove ledger immutability.
+**Reversible?:** yes — hide the provider button and keep record-only / Business Center. Do not remove ledger immutability or claim-before-provider.
 
 **Supersedes:** 2026-07-25 Plan 4 Phase 1 manual-first refunds **for card payments only**. Booking admin “Record manual refund” remains for legacy booking fields.
 

@@ -51,9 +51,22 @@ test("operations exposes one-click card refund for NetCommerce receipts", () => 
   assert.match(workspace, /\/api\/ops\/payments\/transactions\/\$\{refundFor\.id\}\/refund/);
   assert.match(workspace, /Refund now/);
   assert.match(workspace, /Already refunded in Business Center\?/);
+  assert.match(workspace, /provider_blocked/);
+  assert.match(workspace, /Do not retry the card refund/);
+  assert.match(workspace, /Resolve refund/);
   assert.match(workspace, /transaction\.provider === "credit_libanais"/);
   // Cash/manual reverse stays available; card receipts use Refund card instead.
   assert.match(workspace, /transaction\.provider === "manual"/);
+});
+
+test("card refund route claims before provider and owner-gates live refunds", () => {
+  const refundRoute = readFileSync("app/api/ops/payments/transactions/[id]/refund/route.ts", "utf8");
+  assert.match(refundRoute, /requiredRole: "owner"/);
+  assert.match(refundRoute, /claimProviderRefund/);
+  assert.match(refundRoute, /confirmProviderRefund/);
+  assert.match(refundRoute, /failProviderRefund/);
+  assert.match(refundRoute, /provider_blocked: true/);
+  assert.match(refundRoute, /Do NOT retry/);
 });
 
 test("provider ledger accepts Apple Pay only for an Apple-enabled request", () => {

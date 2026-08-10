@@ -1,116 +1,48 @@
 # Oraya — Refund Runbook
 
-**Decision (David, 2026-08-10):** card refunds are **one-click from Ops** whenever
-possible. Oraya calls NetCommerce / CyberSource, then records the ledger.
-Business Center remains the fallback when the gateway call fails or money was
-already returned outside Oraya.
+**Decision (David, 2026-08-10):** card refunds are **one-click from Ops** for
+owners, with money-safe claim-before-provider semantics. Business Center remains
+the reconciliation path when the gateway outcome is unclear.
 
-This document covers:
+## Preferred path — Refund card
 
-1. [Easy card refund (preferred)](#1-easy-card-refund-preferred)
-2. [Record a Business Center refund](#2-record-a-business-center-refund)
-3. [Booking-only manual refund (legacy admin)](#3-booking-only-manual-refund-legacy-admin)
-4. [Ambiguous payment-attempt reconciliation](#4-ambiguous-payment-attempt-reconciliation)
+1. Apply once in Supabase SQL editor: `sql/phase-16b-provider-refund.sql`
+2. Open **Ops → Payments** as an **owner**
+3. Find the card receipt → **Refund card** → **Refund now**
 
----
+Oraya will:
 
-## 1. Easy card refund (preferred)
+1. Claim a `pending` refund row (blocks concurrent retries)
+2. Call CyberSource `POST /pts/v2/payments/{id}/refunds`
+3. Verify amount/currency on the response
+4. Confirm the ledger refund (or leave pending / fail safely)
 
-Use this for the activation test and normal card payments (standalone or
-booking-linked).
+### Outcomes
 
-### Steps
+| Gateway result | Oraya behavior |
+|---|---|
+| Approved + amount verified | Confirm ledger; done |
+| Clear decline (4xx, no refund id) | Mark claim failed; you may retry |
+| Timeout / decrypt fail / amount mismatch / unknown | Leave pending; **do not retry**; record BC reference |
 
-1. Open **Ops → Payments** (`/ops/payments`).
-2. Find the paid payment request / card receipt.
-3. Click **Refund card**.
-4. Confirm the amount (defaults to the full remaining refundable amount).
-5. Click **Refund now**.
+## Resolve / record path
 
-Oraya:
+If Oraya says do not retry:
 
-1. Calls CyberSource `POST /pts/v2/payments/{id}/refunds`
-2. Records an immutable `refund` ledger row
-3. Updates `payment_requests.amount_refunded`
-4. When the payment is booking-linked, also updates booking `refund_*` fields
+1. Check CyberSource Business Center
+2. Ops → **Resolve refund** (or Refund card → record mode)
+3. Paste the BC refund id → **Record refund**
 
-No Business Center login is required for the happy path.
+This confirms the pending claim. It does not call the bank again.
 
-### SQL prerequisite (once)
+## Booking admin legacy
 
-Run in the Supabase SQL editor if not already applied:
+Admin → Bookings → **Record manual refund** still writes booking `refund_*`
+fields only. Prefer Ops → Refund card for card money so the ledger stays complete.
 
-- `sql/phase-16b-provider-refund.sql`
+## Activation test
 
-Without that RPC, the gateway refund may succeed but Oraya cannot record it —
-do **not** retry the card refund; use section 2 with the CyberSource refund id.
-
----
-
-## 2. Record a Business Center refund
-
-Use only when:
-
-- the easy refund button failed after money may have moved, or
-- you already refunded in Business Center
-
-1. Ops → Payments → **Refund card** on the payment
-2. Choose **Already refunded in Business Center?**
-3. Paste the CyberSource refund / transaction reference
-4. **Record refund**
-
----
-
-## 3. Booking-only manual refund (legacy admin)
-
-Still available for booking payment fields when you are not using the ledger
-refund button:
-
-Admin → Bookings → Payment → **Record manual refund** (amount + BC reference).
-
-This writes booking `refund_*` fields only. Prefer section 1 for card payments
-so the ledger stays complete.
-
----
-
-## 4. Ambiguous payment-attempt reconciliation
-
-An `ambiguous` row in `payment_attempts` means the provider MAY have charged
-the guest but the system could not prove the outcome (timeout / unknown
-response), or the charge WAS approved but the booking/request update matched
-zero rows. It blocks new payment attempts for that subject. Never auto-release;
-resolve by hand. (Verified CyberSource webhooks auto-resolve most of these.)
-
-1. Find the attempt(s):
-
-   ```sql
-   select * from payment_attempts where status = 'ambiguous'
-   order by created_at desc;
-   ```
-
-2. Look the merchant reference / provider transaction id up in Business Center.
-
-3. If **no charge** exists → mark the attempt `failed`.
-
-4. If a **charge exists** and should stay → mark the attempt `recorded` and
-   ensure the payment request / booking ledger matches (use
-   `oraya_record_provider_payment` / ops reconciliation tools).
-
-5. If a **charge exists** and should be returned → use section 1 (or section 2
-   after refunding in Business Center), then mark the attempt terminal
-   (`failed` or `recorded` as appropriate).
-
-`/api/health` exposes stuck `claimed` / `ambiguous` counts for monitoring.
-
----
-
-## Activation test refund checklist
-
-1. Confirm the $1 payment appears under Ops → Payments as a card receipt with a
-   NetCommerce / CyberSource reference.
-2. Ensure `sql/phase-16b-provider-refund.sql` has been run once.
-3. Click **Refund card** → **Refund now**.
-4. Confirm:
-   - CyberSource Business Center shows the refund
-   - Oraya ledger shows a **Refund** row
-   - `payment_requests.amount_refunded` = `1.00`
+1. SQL applied
+2. Owner opens Ops → Payments
+3. Refund card on the $1 receipt
+4. Confirm BC + Oraya both show the refund

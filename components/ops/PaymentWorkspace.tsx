@@ -69,6 +69,9 @@ export default function PaymentWorkspace() {
   const [refundMode, setRefundMode] = useState<"provider" | "record">("provider");
   const [refundReference, setRefundReference] = useState("");
   const [refundIdempotencyKey, setRefundIdempotencyKey] = useState("");
+  const [refundPendingId, setRefundPendingId] = useState("");
+  const [refundProviderBlocked, setRefundProviderBlocked] = useState(false);
+  const [refundMax, setRefundMax] = useState(0);
 
   const load = useCallback(async () => {
     try {
@@ -197,21 +200,38 @@ export default function PaymentWorkspace() {
 
   function refundedAgainst(transactionId: string) {
     return ledger.transactions
-      .filter((row) => row.reverses_transaction_id === transactionId && row.transaction_type === "refund" && row.status === "confirmed")
+      .filter((row) =>
+        row.reverses_transaction_id === transactionId &&
+        row.transaction_type === "refund" &&
+        (row.status === "confirmed" || row.status === "pending"))
       .reduce((sum, row) => sum + Number(row.amount), 0);
   }
 
+  function pendingRefundFor(transactionId: string) {
+    return ledger.transactions.find((row) =>
+      row.reverses_transaction_id === transactionId &&
+      row.transaction_type === "refund" &&
+      row.status === "pending") ?? null;
+  }
+
   function openCardRefund(transaction: PaymentTransactionRow) {
+    const pending = pendingRefundFor(transaction.id);
     const remaining = remainingRefundableAmount({
       payment_amount: Number(transaction.amount),
       already_refunded: refundedAgainst(transaction.id),
     });
     setRefundFor(transaction);
-    setRefundAmount(String(remaining));
+    setRefundAmount(String(pending ? Number(pending.amount) : remaining));
+    setRefundMax(pending ? Number(pending.amount) : remaining);
     setRefundNotes("");
-    setRefundMode("provider");
     setRefundReference("");
-    setRefundIdempotencyKey(crypto.randomUUID());
+    setRefundIdempotencyKey(
+      pending?.idempotency_key ||
+      `oraya-rfnd-${transaction.id.slice(0, 8)}-${Date.now().toString(36)}`.slice(0, 50),
+    );
+    setRefundPendingId(pending?.id ?? "");
+    setRefundProviderBlocked(Boolean(pending));
+    setRefundMode(pending ? "record" : "provider");
     setError("");
   }
 
@@ -228,30 +248,37 @@ export default function PaymentWorkspace() {
         notes: refundNotes || null,
         provider_reference: refundMode === "record" ? refundReference : undefined,
         idempotency_key: refundIdempotencyKey,
+        refund_transaction_id: refundMode === "record" && refundPendingId ? refundPendingId : undefined,
       }),
     });
     const body = await response.json() as {
       error?: string;
       can_record_manual?: boolean;
+      provider_blocked?: boolean;
       provider_reference?: string;
+      refund_transaction_id?: string;
+      idempotency_key?: string;
       amount?: number;
       currency?: PaymentCurrency;
     };
     if (!response.ok) {
       setError(body.error ?? "Could not refund that card payment.");
-      if (body.can_record_manual) {
+      if (body.can_record_manual || body.provider_blocked) {
         setRefundMode("record");
         if (body.provider_reference) setRefundReference(body.provider_reference);
-        setRefundIdempotencyKey(crypto.randomUUID());
+        if (body.refund_transaction_id) setRefundPendingId(body.refund_transaction_id);
+        if (body.idempotency_key) setRefundIdempotencyKey(body.idempotency_key);
+        if (body.provider_blocked) setRefundProviderBlocked(true);
       }
       setBusy(false);
       return;
     }
     setRefundFor(null);
+    setRefundProviderBlocked(false);
     setFlash(
       refundMode === "provider"
-        ? `Card refund sent. ${formatPaymentAmount(Number(body.amount), body.currency ?? refundFor.currency)} is returning to the guest.`
-        : `Refund recorded. ${formatPaymentAmount(Number(body.amount), body.currency ?? refundFor.currency)} noted against this payment.`,
+        ? `Card refund sent. ${formatPaymentAmount(Number(body.amount ?? refundAmount), body.currency ?? refundFor.currency)} is returning to the guest.`
+        : `Refund recorded. ${formatPaymentAmount(Number(body.amount ?? refundAmount), body.currency ?? refundFor.currency)} noted against this payment.`,
     );
     await load();
     setBusy(false);
@@ -338,20 +365,27 @@ export default function PaymentWorkspace() {
               : transaction.transaction_type === "refund"
                 ? "Refund"
                 : "Received";
-            const remainingCardRefund = transaction.transaction_type === "payment"
+            const isCardPayment = transaction.transaction_type === "payment"
               && transaction.provider === "credit_libanais"
-              && (transaction.status === "confirmed" || transaction.status === "refunded")
+              && (transaction.status === "confirmed" || transaction.status === "refunded");
+            const remainingCardRefund = isCardPayment
               ? remainingRefundableAmount({
                 payment_amount: Number(transaction.amount),
                 already_refunded: refundedAgainst(transaction.id),
               })
               : 0;
+            const pendingCardRefund = isCardPayment ? pendingRefundFor(transaction.id) : null;
             return <div key={transaction.id} style={{ display: "flex", gap: 10, justifyContent: "space-between", alignItems: "center", flexWrap: "wrap" }}>
               <p style={{ margin: "5px 0", color: T.muted, fontSize: 12 }}>
                 {label} · {formatPaymentAmount(Number(transaction.amount), transaction.currency)} · {transaction.provider.replaceAll("_", " ")} · {transaction.provider_reference ?? transaction.receipt_reference ?? "—"}
+                {pendingCardRefund ? " · refund pending review" : ""}
               </p>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {remainingCardRefund > 0 && <Button small variant="primary" onClick={() => openCardRefund(transaction)}>Refund card</Button>}
+                {(remainingCardRefund > 0 || pendingCardRefund) && (
+                  <Button small variant="primary" onClick={() => openCardRefund(transaction)}>
+                    {pendingCardRefund ? "Resolve refund" : "Refund card"}
+                  </Button>
+                )}
                 {transaction.transaction_type === "payment" && transaction.status === "confirmed" && transaction.provider === "manual" && (
                   <Button small variant="danger" onClick={() => { setReverseFor(transaction); setReverseReason(""); }}>Reverse</Button>
                 )}
@@ -375,9 +409,13 @@ export default function PaymentWorkspace() {
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}><Button onClick={() => setReverseFor(null)}>Cancel</Button><Button variant="danger" disabled={busy || !reverseReason.trim()} onClick={() => void reverseReceipt()}>{busy ? "Reversing…" : "Reverse receipt"}</Button></div>
     </Card></div>}
     {refundFor && <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(10,15,20,.75)", display: "grid", placeItems: "center", padding: 18 }}><Card title="Refund card payment" style={{ width: "min(520px,100%)", background: T.navyLift }}>
-      {refundMode === "provider" ? (
+      {refundProviderBlocked ? (
+        <Banner tone="bad" title="Do not retry the card refund">
+          A refund attempt may already have moved money. Check Business Center, then record the refund reference below.
+        </Banner>
+      ) : refundMode === "provider" ? (
         <Banner tone="warn" title="This returns money to the guest">
-          Oraya sends the refund to NetCommerce / CyberSource, then records it here. Use this for the activation test and normal card refunds.
+          Owner-only. Oraya claims the refund, calls NetCommerce / CyberSource, then records it. If the outcome is unclear, Oraya will block another card retry.
         </Banner>
       ) : (
         <Banner tone="warn" title="Record only — money already moved">
@@ -386,8 +424,16 @@ export default function PaymentWorkspace() {
       )}
       <p style={{ color: T.muted, fontSize: 12, margin: "0 0 12px" }}>
         Original payment reference: {refundFor.provider_reference ?? "—"}
+        {refundMax > 0 ? ` · Max refundable ${formatPaymentAmount(refundMax, refundFor.currency)}` : ""}
       </p>
-      <Field label="Refund amount" type="number" min="0" value={refundAmount} onChange={(event) => setRefundAmount(event.target.value)} />
+      <Field
+        label="Refund amount"
+        type="number"
+        min="0"
+        value={refundAmount}
+        onChange={(event) => setRefundAmount(event.target.value)}
+        disabled={refundProviderBlocked && Boolean(refundPendingId)}
+      />
       <Field label="Note (optional)" value={refundNotes} onChange={(event) => setRefundNotes(event.target.value)} placeholder="e.g. Activation test refund" />
       {refundMode === "record" && (
         <Field
@@ -399,11 +445,13 @@ export default function PaymentWorkspace() {
         />
       )}
       <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-        <Button small onClick={() => setRefundMode((current) => current === "provider" ? "record" : "provider")}>
-          {refundMode === "provider" ? "Already refunded in Business Center?" : "Back to one-click card refund"}
-        </Button>
+        {!refundProviderBlocked ? (
+          <Button small onClick={() => setRefundMode((current) => current === "provider" ? "record" : "provider")}>
+            {refundMode === "provider" ? "Already refunded in Business Center?" : "Back to one-click card refund"}
+          </Button>
+        ) : <span />}
         <div style={{ display: "flex", gap: 8 }}>
-          <Button onClick={() => setRefundFor(null)}>Cancel</Button>
+          <Button onClick={() => { setRefundFor(null); setRefundProviderBlocked(false); }}>Cancel</Button>
           <Button
             variant="danger"
             disabled={
