@@ -16,6 +16,20 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-10 - Pending refund settle/fail bypasses fact immutability for settlement fields
+
+**Decision:** `oraya_protect_payment_transaction_facts` keeps money facts immutable, but when a **refund** row moves `pending → confirmed|failed` it may update `provider_reference`, `verified_source`, `effective_at`, `projection_before`, and `notes`. Failed→pending re-claim for the same idempotency key is also allowed. This unblocks Ops **Release refund lock** and **Record refund**.
+
+**Reason:** live activation refund release failed because fail RPC appends notes, and the protect trigger treated notes as immutable. Confirm/record was blocked the same way for provider_reference.
+
+**Impact:** [sql/phase-16b-provider-refund-settle-protect.sql](../../sql/phase-16b-provider-refund-settle-protect.sql) (human-run), [sql/phase-16b-f1-payment-ledger.sql](../../sql/phase-16b-f1-payment-ledger.sql), clearer Ops refund API errors.
+
+**Reversible?:** hard for production money paths — do not re-lock pending refund settlement fields.
+
+**Supersedes:** none (narrow exception to 2026-08-09 immutable ledger facts for pending refund lifecycle only).
+
+---
+
 ## 2026-08-10 - Ops Payments production desk (collect vs settings + resolve actions)
 
 **Decision:** Ops → Payments is a production money desk with two views: **Collect money** (ledger) and **Website settings** (mode/rails/live switch). Collect money lists **Collecting / Collected / Closed**. Cancelled unused links may be deleted; paid/closed links with ledger history are kept. Stuck card attempts are owner-resolvable (`mark_failed` / `mark_cleared`) without calling the gateway. Unfinished refunds support **Record BC ref** or **Release** (`fail`) when BC shows no refund. Ledger **Reverse** is hard-locked to `provider = manual` in API and SQL. Fresh `claimed` attempts (&lt;10 minutes) are not treated as incidents.

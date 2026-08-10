@@ -124,6 +124,16 @@ test("card refund route claims before provider and owner-gates live refunds", ()
   assert.match(refundRoute, /provider_blocked: true/);
   assert.match(refundRoute, /Do NOT retry/);
   assert.match(refundRoute, /mode === "fail"/);
+  assert.match(refundRoute, /payment_transaction_facts_are_immutable/);
+  assert.match(refundRoute, /phase-16b-provider-refund-settle-protect\.sql/);
+});
+
+test("pending refund settle/fail is allowed by ledger protect facts", () => {
+  const settleProtect = readFileSync("sql/phase-16b-provider-refund-settle-protect.sql", "utf8");
+  assert.match(settleProtect, /settling_pending_refund/);
+  assert.match(settleProtect, /new\.status in \('confirmed', 'failed'\)/);
+  assert.match(settleProtect, /old\.status = 'failed'/);
+  assert.match(settleProtect, /new\.status = 'pending'/);
 });
 
 test("provider ledger accepts Apple Pay only for an Apple-enabled request", () => {

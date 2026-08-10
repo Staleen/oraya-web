@@ -156,6 +156,28 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
           { status: 503 },
         );
       }
+      if (msg.includes("payment_transaction_facts_are_immutable")) {
+        return NextResponse.json(
+          {
+            error:
+              "Refund release is blocked by an outdated ledger protect rule. Run sql/phase-16b-provider-refund-settle-protect.sql in Supabase, then try Release again.",
+          },
+          { status: 503 },
+        );
+      }
+      if (msg.includes("refund_not_pending")) {
+        return NextResponse.json(
+          { error: "That refund attempt is no longer open. Refresh the page." },
+          { status: 409 },
+        );
+      }
+      if (msg.includes("refund_not_found")) {
+        return NextResponse.json(
+          { error: "That refund attempt no longer exists. Refresh the page." },
+          { status: 404 },
+        );
+      }
+      console.error("[ops/payments/refund] fail release failed", msg);
       return NextResponse.json(
         { error: "Could not release that refund attempt. Refresh and try again." },
         { status: 500 },
@@ -199,6 +221,15 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
             {
               error:
                 "Refund SQL is not applied yet. Run sql/phase-16b-provider-refund.sql in Supabase, then try again.",
+            },
+            { status: 503 },
+          );
+        }
+        if (msg.includes("payment_transaction_facts_are_immutable")) {
+          return NextResponse.json(
+            {
+              error:
+                "Recording is blocked by an outdated ledger protect rule. Run sql/phase-16b-provider-refund-settle-protect.sql in Supabase, then try again.",
             },
             { status: 503 },
           );
