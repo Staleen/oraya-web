@@ -78,7 +78,12 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     return NextResponse.json({ error: "Could not load that payment." }, { status: 503 });
   }
   if (!txn) return NextResponse.json({ error: "That payment no longer exists." }, { status: 404 });
-  if (txn.transaction_type !== "payment" || !["confirmed", "refunded"].includes(txn.status)) {
+  // Include 'reversed': Ops "Reverse" is ledger-only and does not return card
+  // money. A reversed card receipt with a CyberSource id must still be refundable.
+  if (
+    txn.transaction_type !== "payment" ||
+    !["confirmed", "refunded", "reversed"].includes(txn.status)
+  ) {
     return NextResponse.json({ error: "That payment cannot be refunded." }, { status: 409 });
   }
   if (txn.provider !== "credit_libanais" || !txn.provider_reference?.trim()) {

@@ -84,7 +84,10 @@ begin
   if not found then
     raise exception using errcode = 'P0001', message = 'transaction_not_found';
   end if;
-  if v_original.transaction_type <> 'payment' or v_original.status not in ('confirmed', 'refunded') then
+  -- 'reversed' is allowed for mistaken ledger Reverse on a card charge that was
+  -- never returned at the bank (Reverse ≠ refund). Still requires provider id.
+  if v_original.transaction_type <> 'payment'
+     or v_original.status not in ('confirmed', 'refunded', 'reversed') then
     raise exception using errcode = 'P0001', message = 'transaction_not_refundable';
   end if;
   if v_original.provider <> 'credit_libanais' then
