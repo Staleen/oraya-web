@@ -143,6 +143,7 @@ All routes verified against the current repo. Locked APIs are marked **locked** 
 | `/api/payments/webhook/stripe` | POST | Stripe dev/test compatibility shim onto the generic hosted-payment callback handler | payment |
 | `/api/ops/payments/requests` | GET/POST | Ops-auth canonical payment-request list/create; returns copyable opaque links only to authenticated operations | ops-auth |
 | `/api/ops/payments/requests/[id]` | PATCH | Cancel an active canonical payment request | ops-auth |
+| `/api/ops/payments/requests/[id]` | DELETE | Permanently remove a cancelled/expired/draft payment request only when it has no ledger transactions | ops-auth |
 | `/api/ops/payments/transactions` | POST | Record an operator-authoritative manual receipt through the atomic immutable ledger RPC | ops-auth |
 | `/api/ops/payments/transactions/[id]/reverse` | POST | Append a reasoned reversal and exactly restore request/booking projections | ops-auth |
 

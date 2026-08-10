@@ -72,6 +72,7 @@ export default function PaymentWorkspace() {
   const [refundPendingId, setRefundPendingId] = useState("");
   const [refundProviderBlocked, setRefundProviderBlocked] = useState(false);
   const [refundMax, setRefundMax] = useState(0);
+  const [showClosedLinks, setShowClosedLinks] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -108,18 +109,30 @@ export default function PaymentWorkspace() {
       event.verification_status !== "verified" || ["pending", "failed"].includes(event.processing_status)),
     [ledger.provider_events],
   );
-  const settlementTotals = useMemo(() => {
-    const totals = new Map<string, { gross: number; fees: number; net: number }>();
+  const pendingRefunds = useMemo(
+    () => ledger.transactions.filter((row) =>
+      row.transaction_type === "refund" && row.status === "pending"),
+    [ledger.transactions],
+  );
+  const attentionCount = attentionAttempts.length + attentionEvents.length + pendingRefunds.length;
+  const openRequests = useMemo(
+    () => ledger.requests.filter((request) =>
+      request.status === "active" || request.status === "partially_paid" || request.status === "paid"),
+    [ledger.requests],
+  );
+  const closedRequests = useMemo(
+    () => ledger.requests.filter((request) =>
+      request.status === "cancelled" || request.status === "expired" || request.status === "draft"),
+    [ledger.requests],
+  );
+  const visibleRequests = showClosedLinks ? [...openRequests, ...closedRequests] : openRequests;
+  const txnCountByRequest = useMemo(() => {
+    const counts = new Map<string, number>();
     for (const transaction of ledger.transactions) {
-      if (transaction.transaction_type !== "payment" || transaction.status !== "confirmed") continue;
-      const key = `${transaction.provider}:${transaction.currency}`;
-      const current = totals.get(key) ?? { gross: 0, fees: 0, net: 0 };
-      current.gross += Number(transaction.gross_amount ?? transaction.amount);
-      current.fees += Number(transaction.fee_amount ?? 0);
-      current.net += Number(transaction.net_amount ?? transaction.amount);
-      totals.set(key, current);
+      if (!transaction.payment_request_id) continue;
+      counts.set(transaction.payment_request_id, (counts.get(transaction.payment_request_id) ?? 0) + 1);
     }
-    return [...totals.entries()];
+    return counts;
   }, [ledger.transactions]);
   function chooseBooking(id: string) {
     setBookingId(id);
@@ -161,7 +174,19 @@ export default function PaymentWorkspace() {
     const response = await fetch(`/api/ops/payments/requests/${id}`, { method: "PATCH", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "cancel" }) });
     const body = await response.json() as { error?: string };
     if (!response.ok) setError(body.error ?? "Could not cancel that request.");
-    else { setFlash("Payment request cancelled."); await load(); }
+    else { setFlash("Payment link cancelled. It moved to Closed links."); await load(); }
+    setBusy(false);
+  }
+
+  async function deleteRequest(id: string) {
+    setBusy(true); setError("");
+    const response = await fetch(`/api/ops/payments/requests/${id}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    const body = await response.json() as { error?: string };
+    if (!response.ok) setError(body.error ?? "Could not delete that link.");
+    else { setFlash("Payment link removed from the list."); await load(); }
     setBusy(false);
   }
 
@@ -294,44 +319,73 @@ export default function PaymentWorkspace() {
       </div>
     </Card>
 
-    <Card title="Provider readiness and reconciliation" style={{ marginTop: 14 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 14 }}>
+    <Card style={{ marginTop: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
         <div>
-          <p style={{ margin: 0, fontSize: 14 }}>NetCommerce card checkout</p>
-          <Badge tone={ledger.checkout?.checkout_ready ? "ok" : "warn"}>{ledger.checkout?.checkout_ready ? "ready" : "not ready"}</Badge>
-          <p style={{ color: T.muted, fontSize: 12 }}>{ledger.checkout?.admin_message ?? "Checking provider setup…"}</p>
+          <p style={{ margin: 0, fontSize: 15 }}>Card payments on the website</p>
+          <p style={{ color: T.muted, fontSize: 12, margin: "6px 0 0", maxWidth: 520 }}>
+            {ledger.checkout?.checkout_ready
+              ? "Guests can pay by card through NetCommerce. Apple Pay stays off until enrollment is finished."
+              : (ledger.checkout?.admin_message ?? "Card checkout is not ready yet.")}
+          </p>
         </div>
-        <div>
-          <p style={{ margin: 0, fontSize: 14 }}>Apple Pay</p>
-          <Badge tone={ledger.checkout?.apple_pay_ready ? "ok" : "warn"}>{ledger.checkout?.apple_pay_ready ? "ready" : "provider-gated"}</Badge>
-          <p style={{ color: T.muted, fontSize: 12 }}>Enabled only after merchant enrollment, domain verification, and an Apple sandbox-device test.</p>
-        </div>
-        <div>
-          <p style={{ margin: 0, fontSize: 14 }}>Items needing reconciliation</p>
-          <Badge tone={attentionAttempts.length + attentionEvents.length > 0 ? "bad" : "ok"}>{attentionAttempts.length + attentionEvents.length}</Badge>
-          <p style={{ color: T.muted, fontSize: 12 }}>Ambiguous/in-flight attempts and unprocessed or rejected provider events.</p>
-        </div>
+        <Badge tone={ledger.checkout?.checkout_ready ? "ok" : "warn"}>
+          {ledger.checkout?.checkout_ready ? "Live" : "Not ready"}
+        </Badge>
       </div>
-      {(ledger.checkout?.missing_requirements?.length ?? 0) > 0 && <details style={{ marginTop: 12 }}>
-        <summary style={{ cursor: "pointer", color: T.muted, fontSize: 12 }}>Show provider setup checklist</summary>
-        <ul style={{ color: T.muted, fontSize: 12 }}>{ledger.checkout?.missing_requirements.map((item) => <li key={item}>{item}</li>)}</ul>
-      </details>}
-      {attentionAttempts.map((attempt) => <div key={attempt.id} style={{ borderTop: `1px solid ${T.borderFaint}`, paddingTop: 10, marginTop: 10 }}>
-        <Badge tone="bad">{attempt.status}</Badge>
-        <p style={{ color: T.muted, fontSize: 12, margin: "6px 0" }}>Attempt {attempt.id.slice(0, 8).toUpperCase()} · {formatPaymentAmount(Number(attempt.amount), attempt.currency)} · {new Date(attempt.updated_at).toLocaleString()}</p>
-        <p style={{ color: T.muted, fontSize: 12, margin: "6px 0" }}>Merchant reference: {attempt.provider_reference ?? attempt.idempotency_key}</p>
-        <p style={{ color: T.muted, fontSize: 12, margin: 0 }}>Check the matching merchant reference in CyberSource Business Center before allowing any retry.</p>
-      </div>)}
-      {attentionEvents.map((event) => <div key={event.id} style={{ borderTop: `1px solid ${T.borderFaint}`, paddingTop: 10, marginTop: 10 }}>
-        <Badge tone="bad">{event.verification_status} / {event.processing_status}</Badge>
-        <p style={{ color: T.muted, fontSize: 12, margin: "6px 0" }}>{event.provider.replaceAll("_", " ")} event {event.provider_event_id} · {new Date(event.received_at).toLocaleString()}</p>
-        {event.error_code && <p style={{ color: T.muted, fontSize: 12, margin: 0 }}>Error code: {event.error_code}</p>}
-      </div>)}
-      {attentionAttempts.length === 0 && attentionEvents.length === 0 && <p style={{ color: T.muted, fontSize: 12, margin: "12px 0 0" }}>No provider item currently needs attention.</p>}
-      {settlementTotals.length > 0 && <div style={{ borderTop: `1px solid ${T.borderFaint}`, marginTop: 14, paddingTop: 12 }}>
-        <p style={{ margin: "0 0 8px", fontSize: 14 }}>Recorded settlement totals</p>
-        {settlementTotals.map(([key, totals]) => { const [provider, currency] = key.split(":"); return <p key={key} style={{ color: T.muted, fontSize: 12, margin: "5px 0" }}>{provider.replaceAll("_", " ")} · gross {formatPaymentAmount(totals.gross, currency as PaymentCurrency)} · fees {formatPaymentAmount(totals.fees, currency as PaymentCurrency)} · net {formatPaymentAmount(totals.net, currency as PaymentCurrency)}</p>; })}
-      </div>}
+      {(ledger.checkout?.missing_requirements?.length ?? 0) > 0 && (
+        <details style={{ marginTop: 12 }}>
+          <summary style={{ cursor: "pointer", color: T.muted, fontSize: 12 }}>What still needs setup</summary>
+          <ul style={{ color: T.muted, fontSize: 12 }}>{ledger.checkout?.missing_requirements.map((item) => <li key={item}>{item}</li>)}</ul>
+        </details>
+      )}
+      {attentionCount > 0 && (
+        <div style={{ borderTop: `1px solid ${T.borderFaint}`, marginTop: 14, paddingTop: 12 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <p style={{ margin: 0, fontSize: 14 }}>Needs your attention</p>
+            <Badge tone="bad">{attentionCount}</Badge>
+          </div>
+          <p style={{ color: T.muted, fontSize: 12, margin: "6px 0 0" }}>
+            These are unfinished bank/card attempts. Check CyberSource Business Center before trying again — do not charge twice.
+          </p>
+          {pendingRefunds.map((refund) => (
+            <div key={refund.id} style={{ borderTop: `1px solid ${T.borderFaint}`, paddingTop: 10, marginTop: 10 }}>
+              <Badge tone="bad">Refund unfinished</Badge>
+              <p style={{ color: T.muted, fontSize: 12, margin: "6px 0" }}>
+                {formatPaymentAmount(Number(refund.amount), refund.currency)} · {new Date(refund.created_at).toLocaleString()}
+              </p>
+              <p style={{ color: T.muted, fontSize: 12, margin: 0 }}>
+                Open the payment below and use Resolve refund. If money already returned in Business Center, paste that refund reference — do not start a new card refund.
+              </p>
+            </div>
+          ))}
+          {attentionAttempts.map((attempt) => (
+            <div key={attempt.id} style={{ borderTop: `1px solid ${T.borderFaint}`, paddingTop: 10, marginTop: 10 }}>
+              <Badge tone="bad">
+                {attempt.status === "ambiguous" ? "Unclear outcome" : attempt.status === "claimed" ? "In progress" : "Authorized — finish check"}
+              </Badge>
+              <p style={{ color: T.muted, fontSize: 12, margin: "6px 0" }}>
+                {formatPaymentAmount(Number(attempt.amount), attempt.currency)} · {new Date(attempt.updated_at).toLocaleString()}
+              </p>
+              <p style={{ color: T.muted, fontSize: 12, margin: "6px 0" }}>
+                Look up this merchant reference in Business Center: {attempt.provider_reference ?? attempt.idempotency_key}
+              </p>
+              <p style={{ color: T.muted, fontSize: 12, margin: 0 }}>
+                If the charge succeeded there, Oraya should already show a receipt. If it failed or never appeared, do not retry until you confirm.
+              </p>
+            </div>
+          ))}
+          {attentionEvents.map((event) => (
+            <div key={event.id} style={{ borderTop: `1px solid ${T.borderFaint}`, paddingTop: 10, marginTop: 10 }}>
+              <Badge tone="bad">Bank message not finished</Badge>
+              <p style={{ color: T.muted, fontSize: 12, margin: "6px 0" }}>
+                {event.provider.replaceAll("_", " ")} · {new Date(event.received_at).toLocaleString()}
+              </p>
+              {event.error_code && <p style={{ color: T.muted, fontSize: 12, margin: 0 }}>Code: {event.error_code}</p>}
+            </div>
+          ))}
+        </div>
+      )}
     </Card>
 
     {showCreate && <Card title="New payment request" style={{ marginTop: 14 }}>
@@ -352,13 +406,47 @@ export default function PaymentWorkspace() {
       <Button variant="primary" disabled={busy || !payerName.trim() || !description.trim() || !amount || methods.length === 0} onClick={() => void createRequest()}>{busy ? "Creating…" : "Create secure link"}</Button>
     </Card>}
 
-    <div style={{ marginTop: 18, display: "grid", gap: 12 }}>
-      {loading ? <Card>Loading the payment ledger…</Card> : ledger.requests.length === 0 ? <Card>No payment links yet.</Card> : ledger.requests.map((request) => {
+    <div style={{ marginTop: 18, display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+      <p style={{ margin: 0, color: T.muted, fontSize: 13 }}>
+        {openRequests.length} open{closedRequests.length > 0 ? ` · ${closedRequests.length} closed` : ""}
+      </p>
+      {closedRequests.length > 0 && (
+        <Button small onClick={() => setShowClosedLinks((value) => !value)}>
+          {showClosedLinks ? "Hide closed links" : "Show closed links"}
+        </Button>
+      )}
+    </div>
+
+    <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
+      {loading ? <Card>Loading the payment ledger…</Card> : visibleRequests.length === 0 ? (
+        <Card>
+          {ledger.requests.length === 0
+            ? "No payment links yet."
+            : "No open payment links. Use Show closed links to see cancelled ones, or create a new link."}
+        </Card>
+      ) : visibleRequests.map((request) => {
         const requestTransactions = ledger.transactions.filter((transaction) => transaction.payment_request_id === request.id);
         const canReceive = request.status === "active" || request.status === "partially_paid";
+        const isClosed = request.status === "cancelled" || request.status === "expired" || request.status === "draft";
+        const hasMoneyHistory = (txnCountByRequest.get(request.id) ?? 0) > 0;
+        const canDelete = isClosed && !hasMoneyHistory;
         return <Card key={request.id}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 14, flexWrap: "wrap" }}><div><p style={{ margin: 0, fontSize: 17 }}>{request.description}</p><p style={{ margin: "4px 0 0", color: T.muted, fontSize: 13 }}>{request.payer_name} · {formatPaymentAmount(Number(request.amount), request.currency)}</p></div><Badge tone={paymentTone(request.status)}>{request.status.replaceAll("_", " ")}</Badge></div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 15 }}><Button small onClick={() => void copyLink(request.payment_url)}>Copy link</Button>{canReceive && <Button small variant="primary" onClick={() => openReceipt(request)}>Record receipt</Button>}{canReceive && <Button small variant="danger" disabled={busy} onClick={() => void cancelRequest(request.id)}>Cancel link</Button>}</div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 15 }}>
+            <Button small onClick={() => void copyLink(request.payment_url)}>Copy link</Button>
+            {canReceive && <Button small variant="primary" onClick={() => openReceipt(request)}>Record receipt</Button>}
+            {canReceive && <Button small variant="danger" disabled={busy} onClick={() => void cancelRequest(request.id)}>Cancel link</Button>}
+            {canDelete && (
+              <Button small variant="danger" disabled={busy} onClick={() => void deleteRequest(request.id)}>
+                Delete link
+              </Button>
+            )}
+            {isClosed && hasMoneyHistory && (
+              <p style={{ margin: 0, color: T.muted, fontSize: 12, alignSelf: "center" }}>
+                Kept for money history — cannot delete.
+              </p>
+            )}
+          </div>
           {requestTransactions.length > 0 && <div style={{ marginTop: 16, borderTop: `1px solid ${T.borderFaint}`, paddingTop: 12 }}>{requestTransactions.map((transaction) => {
             const label = transaction.transaction_type === "reversal"
               ? "Reversal"
