@@ -82,7 +82,11 @@ test("MLE decrypts an A256GCM compact JWE envelope", async () => {
     rawBody: await encryptPayload(payload),
     config: CONFIG,
   });
-  assert.deepEqual(decrypted, { signature_payload: payload, event_payload: payload });
+  assert.deepEqual(decrypted, {
+    signature_payload: payload,
+    event_payload: payload,
+    payload_encrypted: true,
+  });
 });
 
 test("MLE supports an encrypted payload nested inside notification metadata", async () => {
@@ -239,4 +243,77 @@ test("replay key is stable across provider delivery retries", () => {
 test("parse rejects non-JSON and non-object decrypted payloads", () => {
   assert.equal(parseCreditLibanaisWebhookEvent("not json"), null);
   assert.equal(parseCreditLibanaisWebhookEvent(JSON.stringify(["array"])), null);
+});
+
+// ---------------------------------------------------------------------------
+// Org-contract plaintext deliveries (payloadEncryption=false, 2026-08-10)
+// ---------------------------------------------------------------------------
+
+test("plaintext org-contract delivery is accepted as JSON and marked unencrypted", async () => {
+  const rawBody = JSON.stringify({
+    webhookId: "wh-1",
+    eventType: "uc.orders.transactionresults",
+    payload: JSON.stringify({
+      status: "AUTHORIZED",
+      clientReferenceInformation: { code: "oraya-att-1" },
+    }),
+  });
+  const decrypted = await decryptCreditLibanaisWebhookPayload({ rawBody, config: CONFIG });
+  assert.equal(decrypted.payload_encrypted, false);
+  assert.equal(decrypted.signature_payload, rawBody);
+  const event = JSON.parse(decrypted.event_payload);
+  assert.equal(event.payload.status, "AUTHORIZED");
+  assert.equal(event.payload.clientReferenceInformation.code, "oraya-att-1");
+});
+
+test("plaintext delivery signature verifies over the exact raw body", async () => {
+  const rawBody = JSON.stringify({ eventType: "uc.orders.transactionresults", payload: "{}" });
+  const decrypted = await decryptCreditLibanaisWebhookPayload({ rawBody, config: CONFIG });
+  const verification = verifyCreditLibanaisWebhookSignature({
+    payload: decrypted.signature_payload,
+    headers: signedHeaders(rawBody),
+    config: CONFIG,
+    now: NOW,
+  });
+  assert.equal(verification.ok, true);
+});
+
+test("plaintext delivery without a signature is still refused (missing_signature)", async () => {
+  const rawBody = JSON.stringify({ eventType: "uc.orders.transactionresults" });
+  const decrypted = await decryptCreditLibanaisWebhookPayload({ rawBody, config: CONFIG });
+  const verification = verifyCreditLibanaisWebhookSignature({
+    payload: decrypted.signature_payload,
+    headers: {},
+    config: CONFIG,
+    now: NOW,
+  });
+  assert.equal(verification.ok, false);
+  if (!verification.ok) assert.equal(verification.reason, "missing_signature");
+});
+
+test("plaintext delivery with a tampered body fails signature verification", async () => {
+  const rawBody = JSON.stringify({ eventType: "uc.orders.transactionresults", amount: "10.00" });
+  const tampered = rawBody.replace("10.00", "99.00");
+  const verification = verifyCreditLibanaisWebhookSignature({
+    payload: tampered,
+    headers: signedHeaders(rawBody),
+    config: CONFIG,
+    now: NOW,
+  });
+  assert.equal(verification.ok, false);
+  if (!verification.ok) assert.equal(verification.reason, "signature_mismatch");
+});
+
+test("non-JSON webhook bodies are still rejected", async () => {
+  await assert.rejects(
+    () => decryptCreditLibanaisWebhookPayload({ rawBody: "not-json-not-jwe", config: CONFIG }),
+    /webhook_mle_invalid_envelope/,
+  );
+});
+
+test("encrypted deliveries are marked payload_encrypted", async () => {
+  const payload = JSON.stringify({ eventType: "uc.orders.transactionresults", status: "AUTHORIZED" });
+  const rawBody = await encryptPayload(payload);
+  const decrypted = await decryptCreditLibanaisWebhookPayload({ rawBody, config: CONFIG });
+  assert.equal(decrypted.payload_encrypted, true);
 });

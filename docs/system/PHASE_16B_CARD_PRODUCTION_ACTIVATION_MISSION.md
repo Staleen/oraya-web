@@ -91,6 +91,8 @@ Required inventory:
 
 **Current evidence (2026-08-09):** PR #116 is merged and deployed. CyberSource accepted exactly one production `unifiedCheckout` / `uc.orders.transactionresults` subscription for Oraya and returned `PENDING_REVIEW`; the official status lookup still returns `PENDING_REVIEW`. Both `GET` and `POST` to `https://www.stayoraya.com/api/health` return HTTP 200. No delivered provider test notification exists yet, so this step remains incomplete and the live switch stays off.
 
+**Update (2026-08-10):** the subscription status lookup returned `ACTIVE`, and the provider-side subscription configuration test passed (`subscription_configuration_test=passed`, product `unifiedCheckout`, event `uc.orders.transactionresults`). Three real test deliveries reached the production webhook endpoint but were refused 401 `webhook_mle_missing_jwe`: CyberSource's product registry for org 06385000 reports `payloadEncryption: false` for this event and delivers signed plaintext, while the deployed receiver required JWE. NetCommerce's CTO confirmed nothing further is required provider-side. Per the owner's decision (DECISIONS_LOG 2026-08-10), the receiver now accepts signature-verified plaintext per the org contract. Remaining step-4 exit evidence: after that change deploys, re-run the configuration test and record one verified, replay-claimed delivery in `payment_provider_events`. The live switch stays off.
+
 ### 5. Run non-charging production-readiness verification
 
 **Status:** in progress; production capture-context smoke passed, full verification awaits step 4
@@ -145,4 +147,4 @@ Verify:
 
 ## Current next action
 
-Poll the existing CyberSource subscription without creating a duplicate. While it remains `PENDING_REVIEW`, keep the live switch off. When it becomes `ACTIVE` (or reaches the approved `INACTIVE` stage before health-check activation), run CyberSource's non-charging subscription configuration test and prove one encrypted, signed, replay-safe delivery in Oraya before opening any real-card test window.
+The subscription is `ACTIVE` (2026-08-10). Merge and deploy the org-contract webhook change (signature-verified plaintext acceptance, DECISIONS_LOG 2026-08-10), then re-run the helper's `verify-subscription` configuration test and confirm one verified, replay-claimed delivery row in `payment_provider_events` with `payload_encrypted` recorded. That completes step 4. Then finish step-5 verification and schedule the step-6 controlled real-card window with the owner present. The live switch stays off until that step-6 window is explicitly approved. Watch for retry-policy auto-deactivation from the earlier refused deliveries; if the subscription reports `INACTIVE`, reactivate the existing subscription — never create a duplicate.
