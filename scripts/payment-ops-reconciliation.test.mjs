@@ -4,6 +4,10 @@ import test from "node:test";
 
 const route = readFileSync("app/api/ops/payments/requests/route.ts", "utf8");
 const workspace = readFileSync("components/ops/PaymentWorkspace.tsx", "utf8");
+const paymentsPage = readFileSync("app/ops/payments/page.tsx", "utf8");
+const attemptRoute = readFileSync("app/api/ops/payments/attempts/[id]/route.ts", "utf8");
+const requestIdRoute = readFileSync("app/api/ops/payments/requests/[id]/route.ts", "utf8");
+const reverseRoute = readFileSync("app/api/ops/payments/transactions/[id]/reverse/route.ts", "utf8");
 const completion = readFileSync("app/api/payments/requests/unified-checkout-complete/route.ts", "utf8");
 const webhookHandler = readFileSync("lib/payments/credit-libanais-webhook-handler.ts", "utf8");
 const appleLedgerMigration = readFileSync("sql/phase-16b-apple-pay-provider-ledger.sql", "utf8");
@@ -18,14 +22,48 @@ test("operations receives provider attempts and events without secret payloads",
 test("operations preserves readiness data after loading the ledger", () => {
   assert.match(workspace, /checkout: body\.checkout/);
   assert.match(workspace, /missing_requirements/);
-  assert.match(workspace, /Provider readiness and reconciliation/);
+  assert.match(workspace, /Card checkout/);
+  assert.match(workspace, /Needs your attention/);
 });
 
 test("ambiguous attempts and failed provider events are visible for reconciliation", () => {
   assert.match(workspace, /\["claimed", "authorized", "ambiguous"\]/);
   assert.match(workspace, /\["pending", "failed"\]/);
-  assert.match(workspace, /Merchant reference:.*provider_reference.*idempotency_key/);
-  assert.match(workspace, /Check the matching merchant reference in CyberSource Business Center/);
+  assert.match(workspace, /Business Center reference:/);
+  assert.match(workspace, /provider_reference \?\? attempt\.idempotency_key/);
+  assert.match(workspace, /Check CyberSource Business Center first/);
+  assert.match(workspace, /No charge in BC/);
+  assert.match(workspace, /Charge already in Oraya/);
+  assert.match(workspace, /FRESH_CLAIM_MS/);
+});
+
+test("owner can resolve stuck attempts and release unfinished refunds", () => {
+  assert.match(attemptRoute, /requiredRole: "owner"/);
+  assert.match(attemptRoute, /mark_failed/);
+  assert.match(attemptRoute, /mark_cleared/);
+  assert.match(attemptRoute, /status: "failed"/);
+  assert.match(attemptRoute, /status: "recorded"/);
+  assert.match(workspace, /refundMode === "fail"/);
+  assert.match(workspace, /No refund in Business Center/);
+  assert.match(workspace, /Release refund lock/);
+});
+
+test("Ops Payments separates collect desk from website settings", () => {
+  assert.match(paymentsPage, /Collect money/);
+  assert.match(paymentsPage, /Website settings/);
+  assert.match(workspace, /Collecting/);
+  assert.match(workspace, /Collected/);
+  assert.match(workspace, /Closed/);
+  assert.match(requestIdRoute, /export async function DELETE/);
+  assert.match(requestIdRoute, /\["claimed", "authorized", "ambiguous"\]/);
+});
+
+test("Reverse is hard-locked to manual receipts", () => {
+  assert.match(reverseRoute, /provider !== "manual"/);
+  assert.match(reverseRoute, /use Refund card/);
+  const reverseSql = readFileSync("sql/phase-16b-reverse-manual-only.sql", "utf8");
+  assert.match(reverseSql, /card_use_refund_not_reverse/);
+  assert.match(reverseSql, /provider is distinct from 'manual'/);
 });
 
 test("Apple Pay remains independently gated from ordinary card readiness", () => {
@@ -69,6 +107,7 @@ test("card refund route claims before provider and owner-gates live refunds", ()
   assert.match(refundRoute, /failProviderRefund/);
   assert.match(refundRoute, /provider_blocked: true/);
   assert.match(refundRoute, /Do NOT retry/);
+  assert.match(refundRoute, /mode === "fail"/);
 });
 
 test("provider ledger accepts Apple Pay only for an Apple-enabled request", () => {
