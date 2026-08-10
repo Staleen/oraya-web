@@ -175,7 +175,25 @@ test("provider response classification only releases retry on an explicit termin
 
   assert.equal(classify(), "approved");
   assert.equal(classify({ status: "DECLINED", approval_verified: false }), "declined");
-  assert.equal(classify({ response_ok: false, status: "DECLINED" }), "unknown", "HTTP errors stay unknown");
+  assert.equal(
+    classify({ response_ok: false, status: "DECLINED" }),
+    "declined",
+    "explicit decline status releases retry even on non-2xx",
+  );
+  assert.equal(
+    classify({
+      response_ok: false,
+      status: "INVALID_REQUEST",
+      retry_safe_decline_statuses: ["DECLINED", "INVALID_REQUEST"],
+    }),
+    "declined",
+    "validation failures that never created a payment are retry-safe",
+  );
+  assert.equal(
+    classify({ response_ok: false, status: null }),
+    "unknown",
+    "bare HTTP errors with no parseable status stay unknown",
+  );
   assert.equal(classify({ status: null }), "unknown", "missing/malformed payload stays unknown");
   assert.equal(classify({ status: "PENDING", approval_verified: false }), "unknown");
   assert.equal(classify({ status: "REVIEW", approval_verified: false }), "unknown");

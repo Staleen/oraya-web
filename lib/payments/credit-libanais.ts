@@ -12,6 +12,8 @@ import {
   decryptCyberSourceResponse,
   encryptCyberSourceRequest,
 } from "@/lib/payments/cybersource-jwt-mle";
+import { buildTransientTokenPaymentRequest } from "@/lib/payments/transient-token-payment-request";
+export { buildTransientTokenPaymentRequest } from "@/lib/payments/transient-token-payment-request";
 import type {
   CreateCheckoutSessionInput,
   CreateCheckoutSessionResult,
@@ -396,54 +398,29 @@ function buildCaptureContextRequest(
   };
 }
 
-function splitGuestName(name: string | null | undefined) {
-  const parts = name?.trim().split(/\s+/).filter(Boolean) ?? [];
-  if (parts.length === 0) {
-    return { firstName: "Oraya", lastName: "Guest" };
-  }
-  if (parts.length === 1) {
-    return { firstName: parts[0], lastName: "Guest" };
-  }
-  return { firstName: parts[0], lastName: parts.slice(1).join(" ") };
+function readProviderStringId(value: unknown): string | null {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return null;
 }
 
-function buildPaymentRequest(
-  input: CreditLibanaisTransientTokenPaymentInput,
-  config: { country: string },
-) {
-  const { firstName, lastName } = splitGuestName(input.guest_name);
-  const billTo: Record<string, string> = {
-    firstName,
-    lastName,
-    country: config.country,
-  };
-  if (input.guest_email?.trim()) {
-    billTo.email = input.guest_email.trim();
+function readProviderStatus(payload: CyberSourcePaymentResponse): string | null {
+  if (typeof payload.status === "string" && payload.status.trim()) {
+    return payload.status.trim();
   }
-
-  return {
-    clientReferenceInformation: {
-      // The attempt-derived merchant reference (idempotency identifier) when
-      // provided; the provider session id remains the legacy fallback.
-      code: input.merchant_reference?.trim() || input.provider_session_id,
-      comments: `Oraya booking ${input.booking_id} session ${input.provider_session_id}`,
-    },
-    processingInformation: {
-      commerceIndicator: "internet",
-      capture: true,
-    },
-    tokenInformation: {
-      transientTokenJwt: input.transient_token,
-    },
-    orderInformation: {
-      amountDetails: {
-        totalAmount: roundMoney(input.amount_due).toFixed(2),
-        currency: input.currency,
-      },
-      billTo,
-    },
-  };
+  const reason = payload.errorInformation?.reason;
+  if (typeof reason === "string" && reason.trim()) return reason.trim();
+  return null;
 }
+
+/** Non-charge CyberSource statuses — safe to release the attempt for retry. */
+const RETRY_SAFE_PROVIDER_STATUSES = [
+  "DECLINED",
+  "INVALID_REQUEST",
+  "INVALID_DATA",
+  "VALIDATION_ERROR",
+  "MISSING_FIELD",
+] as const;
 
 function getUnifiedCheckoutLibraryUrl(apiBaseUrl: string) {
   return new URL(CYBERSOURCE_UNIFIED_CHECKOUT_LIBRARY_PATH, `${apiBaseUrl}/`).toString();
@@ -454,7 +431,7 @@ export async function authorizeCreditLibanaisTransientToken(
 ): Promise<CreditLibanaisTransientTokenPaymentResult> {
   const config = requireSessionConfig();
   const apiUrl = new URL(CYBERSOURCE_PAYMENTS_PATH, `${config.apiBaseUrl}/`);
-  const paymentRequest = JSON.stringify(buildPaymentRequest(input, { country: config.country }));
+  const paymentRequest = JSON.stringify(buildTransientTokenPaymentRequest(input));
   const body = await encryptCyberSourceRequest({
     payload: paymentRequest,
     requestMleCertificate: config.requestMleCertificate,
@@ -484,14 +461,15 @@ export async function authorizeCreditLibanaisTransientToken(
   });
 
   const responseBody = await response.text();
+  const correlationId = response.headers.get("v-c-correlation-id");
   const payload = await decryptCyberSourceResponse<CyberSourcePaymentResponse>({
     body: responseBody,
     expectedKeyId: config.responseMleKeyId,
     responseMlePrivateKey: config.responseMlePrivateKey,
   });
 
-  const status = typeof payload?.status === "string" ? payload.status : null;
-  const transactionId = typeof payload?.id === "string" ? payload.id : null;
+  const status = readProviderStatus(payload);
+  const transactionId = readProviderStringId(payload?.id);
   const apparentApproval = response.ok && (status === "AUTHORIZED" || status === "CAPTURED");
   let approvalVerified = false;
 
@@ -512,6 +490,7 @@ export async function authorizeCreditLibanaisTransientToken(
           booking_id: input.booking_id,
           provider_session_id: input.provider_session_id,
           transaction_id: transactionId,
+          correlation_id: correlationId,
         },
       );
     }
@@ -521,10 +500,26 @@ export async function authorizeCreditLibanaisTransientToken(
     response_ok: response.ok,
     status,
     approved_statuses: ["AUTHORIZED", "CAPTURED"],
-    // Only the provider's explicit terminal decline is proven retry-safe.
-    retry_safe_decline_statuses: ["DECLINED"],
+    // Explicit non-charge / decline statuses release the claim for retry.
+    retry_safe_decline_statuses: RETRY_SAFE_PROVIDER_STATUSES,
     approval_verified: approvalVerified,
   });
+
+  if (outcome !== "approved") {
+    console.error("[payments/credit-libanais] payment authorization not approved:", {
+      booking_id: input.booking_id,
+      provider_session_id: input.provider_session_id,
+      http_ok: response.ok,
+      http_status: response.status,
+      provider_status: status,
+      error_reason: payload?.errorInformation?.reason ?? null,
+      error_message: payload?.errorInformation?.message ?? null,
+      transaction_id: transactionId,
+      correlation_id: correlationId,
+      outcome,
+    });
+  }
+
   const approved = outcome === "approved";
   const message =
     outcome === "approved"
@@ -539,7 +534,9 @@ export async function authorizeCreditLibanaisTransientToken(
     outcome,
     status,
     transaction_id: transactionId,
-    reference: transactionId ?? input.provider_session_id,
+    // Prefer a real payment id; otherwise keep the correlation id so ops can
+    // search Business Center / support logs without implying a charge.
+    reference: transactionId ?? correlationId ?? input.provider_session_id,
     message,
   };
 }
