@@ -16,6 +16,20 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-10 - Do not request CyberSource response MLE on /pts/v2/payments for this org
+
+**Decision:** payment JWT authentication for `/pts/v2/payments` omits `v-c-response-mle-kid`. Response decryption still accepts an `encryptedResponse` if CyberSource later enables response MLE; plaintext JSON remains accepted per the earlier org-contract decision. HTTP 4xx responses with no payment `id` are classified as retry-safe declines.
+
+**Reason:** live attempt `6f6b2a03…` (2026-08-10 ~20:45 UTC) after the billTo fix still returned ambiguous with `provider_transaction_id` null but a real `v-c-correlation-id` (`13fe075d…`). That proves the gateway answered and no payment resource was created, while our JWT was still requesting response encryption on an organization whose product registry has response/payload encryption off. Requesting response MLE in that state yields non-payment error bodies that previously stranded guests. Correlation id + status/http diagnostics are now persisted on the attempt reference for Business Center / log search.
+
+**Impact:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) JWT build for payments; classifier helper [lib/payments/transient-token-payment-request.ts](../../lib/payments/transient-token-payment-request.ts); attempt persistence of status when no txn id. Stranded attempt `6f6b2a03…` is marked `failed` after merge once Business Center shows no authorization for that correlation (null payment id already implies none).
+
+**Reversible?:** yes — pass `responseMleKeyId` again when CyberSource enables response MLE for org 06385000.
+
+**Supersedes:** the payments-path portion of 2026-08-08 Phase 16B-2B1 that required requesting response MLE on every `/pts/v2/payments` call. Does not supersede request MLE or JWT auth.
+
+---
+
 ## 2026-08-10 - Transient-token /pts/v2/payments must not send a partial billTo
 
 **Decision:** the server-side CyberSource payment body built from a Unified Checkout transient token omits `orderInformation.billTo` entirely. Amount and currency remain server-authored. Name/email collected earlier in Oraya are not re-sent as a partial billTo.

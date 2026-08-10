@@ -12,7 +12,10 @@ import {
   decryptCyberSourceResponse,
   encryptCyberSourceRequest,
 } from "@/lib/payments/cybersource-jwt-mle";
-import { buildTransientTokenPaymentRequest } from "@/lib/payments/transient-token-payment-request";
+import {
+  buildTransientTokenPaymentRequest,
+  isRetrySafeNonChargeHttp,
+} from "@/lib/payments/transient-token-payment-request";
 import type {
   CreateCheckoutSessionInput,
   CreateCheckoutSessionResult,
@@ -25,7 +28,10 @@ import type {
 } from "@/lib/payments/provider";
 import { PaymentProviderConfigurationError } from "@/lib/payments/provider";
 
-export { buildTransientTokenPaymentRequest } from "@/lib/payments/transient-token-payment-request";
+export {
+  buildTransientTokenPaymentRequest,
+  isRetrySafeNonChargeHttp,
+} from "@/lib/payments/transient-token-payment-request";
 
 const CREDIT_LIBANAIS_DISPLAY_NAME = "Credit Libanais / NetCommerce Unified Checkout";
 const CYBERSOURCE_SESSIONS_PATH = "/uc/v1/sessions";
@@ -95,9 +101,15 @@ export interface CreditLibanaisTransientTokenPaymentResult {
 interface CyberSourcePaymentResponse {
   id?: string;
   status?: string;
+  reason?: string;
+  message?: string;
   errorInformation?: {
     reason?: string;
     message?: string;
+  };
+  /** Older/gateway auth failure shape — no payment resource is created. */
+  response?: {
+    rmsg?: string;
   };
   processorInformation?: {
     responseCode?: string;
@@ -409,8 +421,26 @@ function readProviderStatus(payload: CyberSourcePaymentResponse): string | null 
   if (typeof payload.status === "string" && payload.status.trim()) {
     return payload.status.trim();
   }
-  const reason = payload.errorInformation?.reason;
-  if (typeof reason === "string" && reason.trim()) return reason.trim();
+  const errorReason = payload.errorInformation?.reason;
+  if (typeof errorReason === "string" && errorReason.trim()) return errorReason.trim();
+  if (typeof payload.reason === "string" && payload.reason.trim()) return payload.reason.trim();
+  const rmsg = payload.response?.rmsg;
+  if (typeof rmsg === "string" && rmsg.trim()) {
+    // Gateway-level refusal (auth/MLE/parse) — never created a payment id.
+    return "INVALID_REQUEST";
+  }
+  return null;
+}
+
+function readProviderErrorMessage(payload: CyberSourcePaymentResponse): string | null {
+  const candidates = [
+    payload.errorInformation?.message,
+    payload.message,
+    payload.response?.rmsg,
+  ];
+  for (const value of candidates) {
+    if (typeof value === "string" && value.trim()) return value.trim().slice(0, 180);
+  }
   return null;
 }
 
@@ -438,13 +468,16 @@ export async function authorizeCreditLibanaisTransientToken(
     requestMleCertificate: config.requestMleCertificate,
     requestMleKeyId: config.requestMleKeyId,
   });
+  // Org contract 2026-08-10: response MLE is not enabled. Requesting
+  // v-c-response-mle-kid on a non-MLE org has produced plaintext error bodies
+  // without a payment id (live attempt 6f6b2a03, correlation 13fe075d…). Still
+  // decrypt when an encryptedResponse is present.
   const authorization = await buildCyberSourceJwtAuthorization({
     body,
     host: apiUrl.host,
     keyId: config.keyId,
     merchantId: config.merchantId,
     path: apiUrl.pathname,
-    responseMleKeyId: config.responseMleKeyId,
     sharedSecret: config.sharedSecret,
   });
 
@@ -469,8 +502,15 @@ export async function authorizeCreditLibanaisTransientToken(
     responseMlePrivateKey: config.responseMlePrivateKey,
   });
 
-  const status = readProviderStatus(payload);
+  let status = readProviderStatus(payload);
   const transactionId = readProviderStringId(payload?.id);
+  const errorMessage = readProviderErrorMessage(payload);
+  if (
+    !status &&
+    isRetrySafeNonChargeHttp({ http_status: response.status, transaction_id: transactionId })
+  ) {
+    status = "INVALID_REQUEST";
+  }
   const apparentApproval = response.ok && (status === "AUTHORIZED" || status === "CAPTURED");
   let approvalVerified = false;
 
@@ -513,11 +553,13 @@ export async function authorizeCreditLibanaisTransientToken(
       http_ok: response.ok,
       http_status: response.status,
       provider_status: status,
-      error_reason: payload?.errorInformation?.reason ?? null,
-      error_message: payload?.errorInformation?.message ?? null,
+      error_reason: payload?.errorInformation?.reason ?? payload?.reason ?? null,
+      error_message: errorMessage,
       transaction_id: transactionId,
       correlation_id: correlationId,
       outcome,
+      // Safe shape only — never log the full body (may contain PAN tokens).
+      body_keys: payload && typeof payload === "object" ? Object.keys(payload).slice(0, 12) : [],
     });
   }
 
@@ -529,15 +571,25 @@ export async function authorizeCreditLibanaisTransientToken(
         ? "Payment was declined by the gateway."
         : "Payment outcome could not be verified with the gateway.";
 
+  const diagnosticReference = [
+    correlationId,
+    status,
+    `http${response.status}`,
+    errorMessage,
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join("|")
+    .slice(0, 240);
+
   return {
     ok: response.ok,
     approved,
     outcome,
     status,
     transaction_id: transactionId,
-    // Prefer a real payment id; otherwise keep the correlation id so ops can
-    // search Business Center / support logs without implying a charge.
-    reference: transactionId ?? correlationId ?? input.provider_session_id,
+    // Prefer a real payment id; otherwise keep correlation + safe diagnostics
+    // so ops can search Business Center / Vercel without implying a charge.
+    reference: transactionId ?? (diagnosticReference || input.provider_session_id),
     message,
   };
 }

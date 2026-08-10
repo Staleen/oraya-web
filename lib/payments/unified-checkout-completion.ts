@@ -264,8 +264,10 @@ export async function runUnifiedCheckoutCompletion(
   }
 
   // 3. Persist provider identifiers immediately, before the booking write.
+  // When there is no payment id, keep the status (if any) in
+  // provider_request_id so ops can see why the attempt failed without Vercel.
   const providerIds = {
-    provider_request_id: provider.transaction_id,
+    provider_request_id: provider.transaction_id ?? provider.status,
     provider_transaction_id: provider.transaction_id,
     provider_reference: provider.reference,
   };

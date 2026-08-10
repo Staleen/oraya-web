@@ -7,7 +7,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { buildTransientTokenPaymentRequest } from "./transient-token-payment-request.ts";
+import {
+  buildTransientTokenPaymentRequest,
+  isRetrySafeNonChargeHttp,
+} from "./transient-token-payment-request.ts";
 
 test("transient-token payment request omits billTo so UC billing survives", () => {
   const body = buildTransientTokenPaymentRequest({
@@ -45,4 +48,12 @@ test("merchant reference falls back to the provider session id", () => {
   });
   assert.equal(body.clientReferenceInformation.code, "oraya_session_2");
   assert.equal(body.orderInformation.amountDetails.totalAmount, "240.50");
+});
+
+test("HTTP 4xx without a payment id is retry-safe; 5xx is not", () => {
+  assert.equal(isRetrySafeNonChargeHttp({ http_status: 400, transaction_id: null }), true);
+  assert.equal(isRetrySafeNonChargeHttp({ http_status: 401, transaction_id: null }), true);
+  assert.equal(isRetrySafeNonChargeHttp({ http_status: 500, transaction_id: null }), false);
+  assert.equal(isRetrySafeNonChargeHttp({ http_status: 400, transaction_id: "txn-1" }), false);
+  assert.equal(isRetrySafeNonChargeHttp({ http_status: 201, transaction_id: null }), false);
 });

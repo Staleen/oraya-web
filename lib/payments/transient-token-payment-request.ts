@@ -48,3 +48,15 @@ export function buildTransientTokenPaymentRequest(input: TransientTokenPaymentRe
     },
   };
 }
+
+/**
+ * When CyberSource answers without a payment resource id, HTTP 4xx means the
+ * charge was refused before creation — retry-safe. 5xx/2xx-without-id stay
+ * unknown (may still need Business Center reconciliation).
+ */
+export function isRetrySafeNonChargeHttp(input: {
+  http_status: number;
+  transaction_id: string | null;
+}): boolean {
+  return !input.transaction_id && input.http_status >= 400 && input.http_status < 500;
+}
