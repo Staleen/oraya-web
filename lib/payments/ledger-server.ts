@@ -98,3 +98,117 @@ export async function recordProviderPayment(input: {
     ? { ok: true as const, result }
     : { ok: false as const };
 }
+
+export async function claimProviderRefund(input: {
+  payment_transaction_id: string;
+  amount: number;
+  idempotency_key: string;
+  staff_id: string | null;
+  notes?: string | null;
+}) {
+  const { data, error } = await supabaseAdmin.rpc("oraya_claim_provider_refund", {
+    p_payment_transaction_id: input.payment_transaction_id,
+    p_amount: input.amount,
+    p_idempotency_key: input.idempotency_key,
+    p_staff_id: input.staff_id,
+    p_notes: input.notes ?? null,
+  });
+  if (error) {
+    console.error("[payment-requests] provider refund claim failed", {
+      payment_transaction_id: input.payment_transaction_id,
+      code: error.code,
+      message: error.message,
+    });
+    return { ok: false as const, error: error.message };
+  }
+  const result = Array.isArray(data) ? data[0] : data;
+  if (!result?.refund_transaction_id) {
+    return { ok: false as const, error: "refund_not_claimed" };
+  }
+  return {
+    ok: true as const,
+    result: {
+      refund_transaction_id: String(result.refund_transaction_id),
+      already_pending: Boolean(result.already_pending),
+      blocked_ambiguous: Boolean(result.blocked_ambiguous),
+    },
+  };
+}
+
+export async function confirmProviderRefund(input: {
+  refund_transaction_id: string;
+  provider_reference: string;
+  verified_source?: "provider" | "operator";
+}) {
+  const { data, error } = await supabaseAdmin.rpc("oraya_confirm_provider_refund", {
+    p_refund_transaction_id: input.refund_transaction_id,
+    p_provider_reference: input.provider_reference,
+    p_verified_source: input.verified_source ?? "provider",
+  });
+  if (error) {
+    console.error("[payment-requests] provider refund confirm failed", {
+      refund_transaction_id: input.refund_transaction_id,
+      code: error.code,
+      message: error.message,
+    });
+    return { ok: false as const, error: error.message };
+  }
+  const result = Array.isArray(data) ? data[0] : data;
+  return result?.refund_transaction_id
+    ? { ok: true as const, result }
+    : { ok: false as const, error: "refund_not_confirmed" };
+}
+
+export async function failProviderRefund(input: {
+  refund_transaction_id: string;
+  reason?: string | null;
+}) {
+  const { data, error } = await supabaseAdmin.rpc("oraya_fail_provider_refund", {
+    p_refund_transaction_id: input.refund_transaction_id,
+    p_reason: input.reason ?? null,
+  });
+  if (error) {
+    console.error("[payment-requests] provider refund fail mark failed", {
+      refund_transaction_id: input.refund_transaction_id,
+      code: error.code,
+      message: error.message,
+    });
+    return { ok: false as const, error: error.message };
+  }
+  const result = Array.isArray(data) ? data[0] : data;
+  return result?.refund_transaction_id
+    ? { ok: true as const, result }
+    : { ok: false as const, error: "refund_not_failed" };
+}
+
+export async function recordProviderRefund(input: {
+  payment_transaction_id: string;
+  amount: number;
+  provider_reference: string;
+  idempotency_key: string;
+  staff_id: string | null;
+  notes?: string | null;
+  verified_source?: "provider" | "operator";
+}) {
+  const { data, error } = await supabaseAdmin.rpc("oraya_record_provider_refund", {
+    p_payment_transaction_id: input.payment_transaction_id,
+    p_amount: input.amount,
+    p_provider_reference: input.provider_reference,
+    p_idempotency_key: input.idempotency_key,
+    p_staff_id: input.staff_id,
+    p_notes: input.notes ?? null,
+    p_verified_source: input.verified_source ?? "operator",
+  });
+  if (error) {
+    console.error("[payment-requests] provider refund projection failed", {
+      payment_transaction_id: input.payment_transaction_id,
+      code: error.code,
+      message: error.message,
+    });
+    return { ok: false as const, error: error.message };
+  }
+  const result = Array.isArray(data) ? data[0] : data;
+  return result?.refund_transaction_id
+    ? { ok: true as const, result }
+    : { ok: false as const, error: "refund_not_recorded" };
+}

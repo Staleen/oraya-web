@@ -18,6 +18,10 @@ import {
   readCyberSourcePaymentStatus,
 } from "@/lib/payments/provider-payment-status";
 import {
+  classifyProviderRefundOutcome,
+  verifyRefundAmountDetails,
+} from "@/lib/payments/provider-refund";
+import {
   buildTransientTokenPaymentRequest,
   isRetrySafeNonChargeHttp,
 } from "@/lib/payments/transient-token-payment-request";
@@ -135,6 +139,10 @@ interface CyberSourcePaymentResponse {
       amount?: string;
       currency?: string;
     };
+  };
+  creditAmountDetails?: {
+    creditAmount?: string;
+    currency?: string;
   };
 }
 
@@ -515,6 +523,164 @@ async function retrieveCyberSourcePayment(input: {
     });
     return null;
   }
+}
+
+export type CreditLibanaisRefundInput = {
+  payment_id: string;
+  amount: number;
+  currency: "USD" | "LBP";
+  merchant_reference: string;
+};
+
+export type CreditLibanaisRefundResult =
+  | {
+      ok: true;
+      outcome: "approved";
+      status: string;
+      refund_id: string;
+      reference: string;
+    }
+  | {
+      ok: false;
+      outcome: "declined" | "ambiguous";
+      status: string | null;
+      refund_id: string | null;
+      message: string;
+      correlation_id?: string | null;
+    };
+
+/**
+ * Execute a card refund against a CyberSource payment id.
+ * Uses the same JWT + plaintext default contract as /pts/v2/payments.
+ * Amount/currency must echo before outcome=approved (fail closed → ambiguous).
+ */
+export async function refundCreditLibanaisPayment(
+  input: CreditLibanaisRefundInput,
+): Promise<CreditLibanaisRefundResult> {
+  const config = requireSessionConfig();
+  const paymentId = input.payment_id.trim();
+  if (!paymentId) {
+    return {
+      ok: false,
+      outcome: "declined",
+      status: null,
+      refund_id: null,
+      message: "Missing provider payment id.",
+    };
+  }
+  const path = `${CYBERSOURCE_PAYMENTS_PATH}/${encodeURIComponent(paymentId)}/refunds`;
+  const apiUrl = new URL(path, `${config.apiBaseUrl}/`);
+  const paymentRequest = JSON.stringify({
+    clientReferenceInformation: {
+      code: input.merchant_reference.trim().slice(0, 50),
+    },
+    orderInformation: {
+      amountDetails: {
+        totalAmount: roundMoney(input.amount).toFixed(2),
+        currency: input.currency,
+      },
+    },
+  });
+  let body = paymentRequest;
+  if (config.requestMleEnabled) {
+    if (!config.requestMleCertificate || !config.requestMleKeyId) {
+      throw new PaymentProviderConfigurationError(
+        "Request MLE is enabled but certificate/key id are not configured.",
+      );
+    }
+    body = await encryptCyberSourceRequest({
+      payload: paymentRequest,
+      requestMleCertificate: config.requestMleCertificate,
+      requestMleKeyId: config.requestMleKeyId,
+    });
+  }
+  const authorization = await buildCyberSourceJwtAuthorization({
+    body,
+    host: apiUrl.host,
+    keyId: config.keyId,
+    merchantId: config.merchantId,
+    path: apiUrl.pathname,
+    sharedSecret: config.sharedSecret,
+  });
+  const response = await fetch(apiUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: authorization,
+    },
+    body,
+    cache: "no-store",
+    signal: AbortSignal.timeout(15_000),
+  });
+  const responseBody = await response.text();
+  const correlationId = response.headers.get("v-c-correlation-id");
+  let payload: CyberSourcePaymentResponse | null = null;
+  let decryptFailed = false;
+  try {
+    payload = await decryptCyberSourceResponse<CyberSourcePaymentResponse>({
+      body: responseBody,
+      expectedKeyId: config.responseMleKeyId,
+      responseMlePrivateKey: config.responseMlePrivateKey,
+    });
+  } catch (error) {
+    decryptFailed = true;
+    console.error("[payments/credit-libanais] refund response decrypt failed:", {
+      payment_id: paymentId,
+      http_status: response.status,
+      correlation_id: correlationId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+  const status = payload ? readProviderStatus(payload) : null;
+  const refundId = payload ? readProviderStringId(payload?.id) : null;
+  const errorMessage = payload ? readProviderErrorMessage(payload) : null;
+  const amountVerification = payload
+    ? verifyRefundAmountDetails({
+        requested_amount: input.amount,
+        requested_currency: input.currency,
+        payload,
+      })
+    : { ok: false as const, reason: "response_missing_amount_details" };
+  const outcome = classifyProviderRefundOutcome({
+    http_ok: response.ok,
+    http_status: response.status,
+    status,
+    refund_id: refundId,
+    amount_verified: amountVerification.ok,
+    decrypt_failed: decryptFailed,
+  });
+  if (outcome === "approved" && refundId) {
+    return {
+      ok: true,
+      outcome: "approved",
+      status: status ?? "PENDING",
+      refund_id: refundId,
+      reference: refundId,
+    };
+  }
+  console.error("[payments/credit-libanais] refund not approved:", {
+    payment_id: paymentId,
+    http_status: response.status,
+    provider_status: status,
+    refund_id: refundId,
+    error_message: errorMessage,
+    correlation_id: correlationId,
+    outcome,
+    amount_ok: amountVerification.ok,
+    amount_reason: amountVerification.ok ? null : amountVerification.reason,
+  });
+  const failureOutcome = outcome === "declined" ? "declined" as const : "ambiguous" as const;
+  return {
+    ok: false,
+    outcome: failureOutcome,
+    status,
+    refund_id: refundId,
+    correlation_id: correlationId,
+    message:
+      failureOutcome === "ambiguous"
+        ? "Refund outcome could not be confirmed. Do NOT retry — check Business Center and record the refund reference."
+        : errorMessage || "The gateway did not accept the refund.",
+  };
 }
 
 function readProviderErrorMessage(payload: CyberSourcePaymentResponse): string | null {

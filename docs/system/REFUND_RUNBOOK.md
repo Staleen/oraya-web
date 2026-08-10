@@ -1,119 +1,48 @@
-# Oraya — Refund Runbook (manual-first)
+# Oraya — Refund Runbook
 
-**Decision (David, 2026-07-24):** refunds are MANUAL-FIRST. Money is returned
-to the guest by executing the refund **by hand in the NetCommerce Business
-Center**; the Oraya admin UI only **records** that this happened. There is no
-provider-side refund automation — building it is a separate, later plan.
+**Decision (David, 2026-08-10):** card refunds are **one-click from Ops** for
+owners, with money-safe claim-before-provider semantics. Business Center remains
+the reconciliation path when the gateway outcome is unclear.
 
-This document is the single place for both money-back paths:
+## Preferred path — Refund card
 
-1. [Recording a manual refund](#1-manual-refund-business-center--admin-record)
-2. [Reconciling an `ambiguous` payment attempt](#2-ambiguous-payment-attempt-reconciliation)
+1. Apply once in Supabase SQL editor: `sql/phase-16b-provider-refund.sql`
+2. Open **Ops → Payments** as an **owner**
+3. Find the card receipt → **Refund card** → **Refund now**
 
----
+Oraya will:
 
-## 1. Manual refund (Business Center → admin record)
+1. Claim a `pending` refund row (blocks concurrent retries)
+2. Call CyberSource `POST /pts/v2/payments/{id}/refunds`
+3. Verify amount/currency on the response
+4. Confirm the ledger refund (or leave pending / fail safely)
 
-### Step A — find the original charge in the Business Center
+### Outcomes
 
-Look the transaction up in the NetCommerce / CyberSource Business Center using
-either of these identifiers from the booking / payment attempt:
+| Gateway result | Oraya behavior |
+|---|---|
+| Approved + amount verified | Confirm ledger; done |
+| Clear decline (4xx, no refund id) | Mark claim failed; you may retry |
+| Timeout / decrypt fail / amount mismatch / unknown | Leave pending; **do not retry**; record BC reference |
 
-- `payment_reference` on the booking (shown in the admin payment panel under
-  **References & timestamps → Reference**) — this is the CyberSource
-  transaction id for card payments.
-- `idempotency_key` on the `payment_attempts` row (format `oraya-att-<uuid>`)
-  — this was sent to CyberSource as `clientReferenceInformation.code`, so the
-  Business Center search finds the exact operation for that attempt:
+## Resolve / record path
 
-  ```sql
-  select id, idempotency_key, provider_transaction_id, status, amount, currency, created_at
-  from payment_attempts
-  where booking_id = '<booking-id>'
-  order by created_at desc;
-  ```
+If Oraya says do not retry:
 
-### Step B — execute the refund in the Business Center
+1. Check CyberSource Business Center
+2. Ops → **Resolve refund** (or Refund card → record mode)
+3. Paste the BC refund id → **Record refund**
 
-Issue the refund (full or partial) against that transaction **in the Business
-Center**. Note down the refund/transaction reference the Business Center gives
-you — the admin UI will refuse the record without it.
+This confirms the pending claim. It does not call the bank again.
 
-### Step C — record it in the Oraya admin UI
+## Booking admin legacy
 
-Admin → Bookings → the booking's **Payment** panel → **Record manual refund**:
+Admin → Bookings → **Record manual refund** still writes booking `refund_*`
+fields only. Prefer Ops → Refund card for card money so the ledger stays complete.
 
-1. Enter the refund amount.
-2. Enter the **Business Center refund reference** from Step B (required — the
-   record is rejected with a 400 without it).
-3. Optional note, then **Record manual refund**.
+## Activation test
 
-This sets `refund_status = refunded`, `refund_amount`, `refunded_at`, and
-stores the reference (`refund_provider_reference` column once
-`sql/plan4-refund-provider-reference.sql` has been run; the reference is also
-always appended to `payment_notes`). It does **not** move any money — Step B
-did that.
-
-### Refunding the go-live test charge
-
-The production go-live checklist ends with refunding the one real test
-booking: execute Step B for the test charge, then record it via Step C exactly
-as above.
-
----
-
-## 2. Ambiguous payment-attempt reconciliation
-
-An `ambiguous` row in `payment_attempts` means the provider MAY have charged
-the guest but the system could not prove the outcome (timeout / unknown
-response), or the charge WAS approved but the booking update matched zero
-rows. It blocks all new payment attempts for that booking. Never auto-release;
-resolve by hand. (Same steps as documented in
-`sql/plan3-payment-attempts.sql`; since Plan 4 Phase 2, a verified CyberSource
-webhook for the attempt auto-resolves most of these before you ever see them.)
-
-1. Find the attempt(s):
-
-   ```sql
-   select * from payment_attempts where status = 'ambiguous'
-   order by created_at desc;
-   ```
-
-2. Look the charge up in the CyberSource / NetCommerce Business Center using
-   `idempotency_key` (sent as `clientReferenceInformation.code`) and/or
-   `provider_transaction_id` if present.
-
-3. Resolve according to what you find:
-
-   **3a. Charge NOT found provider-side (nothing was charged):**
-
-   ```sql
-   update payment_attempts set status = 'failed',
-     updated_at = timezone('utc', now())
-   where id = '<attempt-id>' and status = 'ambiguous';
-   ```
-
-   The guest can now retry payment normally.
-
-   **3b. Charge FOUND and settled/authorized (guest paid):** record it on the
-   booking via the normal admin "Record payment" tooling (or verify the
-   booking row already shows the payment), then close the attempt:
-
-   ```sql
-   update payment_attempts set status = 'recorded',
-     provider_transaction_id = '<cybersource-transaction-id>',
-     updated_at = timezone('utc', now())
-   where id = '<attempt-id>' and status = 'ambiguous';
-   ```
-
-   **3c. Charge FOUND but should not stand (duplicate/error):** reverse/void
-   it in the Business Center first (there is no provider-side refund
-   automation — see section 1), then mark the attempt `failed` as in 3a. If
-   the guest already saw a "payment received" state, also record the manual
-   refund per section 1.
-
-### Monitoring
-
-`GET /api/health` reports the count of `payment_attempts` rows stuck in
-`claimed`/`ambiguous` for more than 1 hour (counts only — no amounts, no guest
-data). A non-zero `stuck_ambiguous` means this runbook's section 2 is needed.
+1. SQL applied
+2. Owner opens Ops → Payments
+3. Refund card on the $1 receipt
+4. Confirm BC + Oraya both show the refund

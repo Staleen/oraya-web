@@ -24,7 +24,7 @@ export async function GET(request: Request) {
   ] = await Promise.all([
     supabaseAdmin.from("payment_requests").select(PAYMENT_REQUEST_COLUMNS).order("created_at", { ascending: false }).limit(100),
     supabaseAdmin.from("payment_transactions")
-      .select("id, payment_request_id, booking_id, transaction_type, status, amount, currency, applied_amount, applied_currency, exchange_rate, method, provider, wallet_presentation, provider_reference, receipt_reference, gross_amount, fee_amount, net_amount, verified_source, effective_at, created_by, reverses_transaction_id, notes, created_at")
+      .select("id, payment_request_id, booking_id, transaction_type, status, amount, currency, applied_amount, applied_currency, exchange_rate, method, provider, wallet_presentation, provider_reference, receipt_reference, gross_amount, fee_amount, net_amount, verified_source, effective_at, created_by, reverses_transaction_id, idempotency_key, notes, created_at")
       .order("effective_at", { ascending: false }).limit(250),
     supabaseAdmin.from("payment_attempts")
       .select("id, booking_id, payment_request_id, idempotency_key, status, provider_transaction_id, provider_reference, amount, currency, created_at, updated_at")
