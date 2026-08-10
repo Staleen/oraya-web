@@ -144,6 +144,8 @@ All routes verified against the current repo. Locked APIs are marked **locked** 
 | `/api/ops/payments/requests` | GET/POST | Ops-auth canonical payment-request list/create; returns copyable opaque links only to authenticated operations | ops-auth |
 | `/api/ops/payments/requests/[id]` | PATCH | Cancel an active canonical payment request | ops-auth |
 | `/api/ops/payments/requests/[id]` | DELETE | Permanently remove a cancelled/expired/draft payment request only when it has no ledger transactions and no in-flight attempts | ops-auth |
+| `/api/ops/payments/requests/purge-closed` | POST | Bulk-delete unused closed payment requests (no ledger rows, no in-flight attempts) | ops-auth |
+| `/api/ops/payments/events/[id]` | PATCH | Dismiss a stuck provider event from Ops attention (`processing_status=ignored`) | ops-auth |
 | `/api/ops/payments/attempts/[id]` | PATCH | Owner-only reconcile stuck card attempts (`mark_failed` / `mark_cleared`) without calling the gateway | ops-auth (owner) |
 | `/api/ops/payments/transactions` | POST | Record an operator-authoritative manual receipt through the atomic immutable ledger RPC | ops-auth |
 | `/api/ops/payments/transactions/[id]/reverse` | POST | Append a reasoned reversal for **manual** receipts only; restores request/booking projections | ops-auth |

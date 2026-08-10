@@ -54,11 +54,15 @@ David cannot run the villa from that screen.
 | P1.6 | Page tabs: **Collect money** vs **Website settings** | One job per view | DONE |
 | P1.7 | Runbook covers ambiguous **charges** and refund release | Docs match the UI | DONE |
 
-### P2 — later (not blocking this mission)
+### P2 — polish (follow-up branch)
 
-- Search by guest / booking
-- Optional settlement totals toggle
-- Auto-reconcile from Business Center API (not available in current scope)
+| # | Item | Status |
+|---|---|---|
+| P2.1 | Search by guest / villa / email / description | DONE |
+| P2.2 | Optional settlement totals toggle | DONE |
+| P2.3 | Bulk clear unused closed links | DONE |
+| P2.4 | Dismiss unfinished provider events (`ignored`) | DONE |
+| P2.5 | Auto-reconcile from Business Center API | OUT OF SCOPE |
 
 ---
 

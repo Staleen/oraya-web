@@ -28,7 +28,9 @@ test("operations preserves readiness data after loading the ledger", () => {
 
 test("ambiguous attempts and failed provider events are visible for reconciliation", () => {
   assert.match(workspace, /\["claimed", "authorized", "ambiguous"\]/);
-  assert.match(workspace, /\["pending", "failed"\]/);
+  assert.match(workspace, /processing_status === "pending"/);
+  assert.match(workspace, /processing_status === "failed"/);
+  assert.match(workspace, /processing_status === "ignored"/);
   assert.match(workspace, /Business Center reference:/);
   assert.match(workspace, /provider_reference \?\? attempt\.idempotency_key/);
   assert.match(workspace, /Check CyberSource Business Center first/);
@@ -56,6 +58,20 @@ test("Ops Payments separates collect desk from website settings", () => {
   assert.match(workspace, /Closed/);
   assert.match(requestIdRoute, /export async function DELETE/);
   assert.match(requestIdRoute, /\["claimed", "authorized", "ambiguous"\]/);
+});
+
+test("Ops Payments polish: search, purge unused closed, dismiss events, settlement toggle", () => {
+  assert.match(workspace, /Search guest, villa, email, or description/);
+  assert.match(workspace, /purge-closed/);
+  assert.match(workspace, /Clear \{unusedClosedCount\} unused/);
+  assert.match(workspace, /Show settlement totals/);
+  assert.match(workspace, /\/api\/ops\/payments\/events\/\$\{dismissEventId\}/);
+  const purgeRoute = readFileSync("app/api/ops/payments/requests/purge-closed/route.ts", "utf8");
+  assert.match(purgeRoute, /export async function POST/);
+  assert.match(purgeRoute, /\["cancelled", "expired", "draft"\]/);
+  const eventRoute = readFileSync("app/api/ops/payments/events/[id]/route.ts", "utf8");
+  assert.match(eventRoute, /processing_status: "ignored"/);
+  assert.match(eventRoute, /action !== "ignore"/);
 });
 
 test("Reverse is hard-locked to manual receipts", () => {

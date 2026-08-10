@@ -136,6 +136,10 @@ export default function PaymentWorkspace() {
   const [attemptAction, setAttemptAction] = useState<"mark_failed" | "mark_cleared">("mark_failed");
   const [attemptReason, setAttemptReason] = useState("");
   const [highlightRequestId, setHighlightRequestId] = useState("");
+  const [search, setSearch] = useState("");
+  const [showSettlement, setShowSettlement] = useState(false);
+  const [dismissEventId, setDismissEventId] = useState("");
+  const [dismissEventReason, setDismissEventReason] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -204,11 +208,16 @@ export default function PaymentWorkspace() {
 
   const attentionEvents = useMemo(
     () =>
-      ledger.provider_events.filter(
-        (event) =>
+      ledger.provider_events.filter((event) => {
+        if (event.processing_status === "ignored" || event.processing_status === "processed") {
+          return false;
+        }
+        return (
           event.verification_status !== "verified" ||
-          ["pending", "failed"].includes(event.processing_status),
-      ),
+          event.processing_status === "pending" ||
+          event.processing_status === "failed"
+        );
+      }),
     [ledger.provider_events],
   );
 
@@ -242,7 +251,7 @@ export default function PaymentWorkspace() {
     [ledger.requests],
   );
 
-  const visibleRequests =
+  const tabRequests =
     listTab === "collecting"
       ? collectingRequests
       : listTab === "collected"
@@ -260,6 +269,67 @@ export default function PaymentWorkspace() {
     }
     return counts;
   }, [ledger.transactions]);
+
+  const openAttemptRequestIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const attempt of ledger.attempts) {
+      if (
+        attempt.payment_request_id &&
+        ["claimed", "authorized", "ambiguous"].includes(attempt.status)
+      ) {
+        ids.add(attempt.payment_request_id);
+      }
+    }
+    return ids;
+  }, [ledger.attempts]);
+
+  const unusedClosedCount = useMemo(
+    () =>
+      closedRequests.filter(
+        (request) =>
+          (txnCountByRequest.get(request.id) ?? 0) === 0 &&
+          !openAttemptRequestIds.has(request.id),
+      ).length,
+    [closedRequests, openAttemptRequestIds, txnCountByRequest],
+  );
+
+  const settlementTotals = useMemo(() => {
+    const totals = new Map<string, { gross: number; fees: number; net: number }>();
+    for (const transaction of ledger.transactions) {
+      if (transaction.transaction_type !== "payment" || transaction.status !== "confirmed") continue;
+      const key = `${transaction.provider}:${transaction.currency}`;
+      const current = totals.get(key) ?? { gross: 0, fees: 0, net: 0 };
+      current.gross += Number(transaction.gross_amount ?? transaction.amount);
+      current.fees += Number(transaction.fee_amount ?? 0);
+      current.net += Number(transaction.net_amount ?? transaction.amount);
+      totals.set(key, current);
+    }
+    return [...totals.entries()];
+  }, [ledger.transactions]);
+
+  const visibleRequests = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    if (!needle) return tabRequests;
+    return tabRequests.filter((request) => {
+      const booking = request.booking_id
+        ? bookings.find((item) => item.id === request.booking_id)
+        : null;
+      const haystack = [
+        request.payer_name,
+        request.payer_email,
+        request.payer_phone,
+        request.description,
+        request.id,
+        booking?.guest_name,
+        booking?.villa,
+        booking?.id,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(needle);
+    });
+  }, [bookings, search, tabRequests]);
 
   function chooseBooking(id: string) {
     setBookingId(id);
@@ -382,6 +452,56 @@ export default function PaymentWorkspace() {
       setFlash("Payment link removed.");
       await load();
     }
+    setBusy(false);
+  }
+
+  async function purgeUnusedClosed() {
+    if (
+      !window.confirm(
+        `Remove ${unusedClosedCount} unused cancelled/expired link${unusedClosedCount === 1 ? "" : "s"}? Links with money history stay.`,
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setError("");
+    const response = await fetch("/api/ops/payments/requests/purge-closed", {
+      method: "POST",
+      credentials: "include",
+    });
+    const body = await response.json() as { error?: string; deleted?: number; kept?: number };
+    if (!response.ok) setError(body.error ?? "Could not clear unused closed links.");
+    else {
+      setFlash(
+        body.deleted
+          ? `Removed ${body.deleted} unused closed link${body.deleted === 1 ? "" : "s"}.`
+          : "No unused closed links to remove.",
+      );
+      await load();
+    }
+    setBusy(false);
+  }
+
+  async function dismissProviderEvent() {
+    if (!dismissEventId) return;
+    setBusy(true);
+    setError("");
+    const response = await fetch(`/api/ops/payments/events/${dismissEventId}`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "ignore", reason: dismissEventReason }),
+    });
+    const body = await response.json() as { error?: string };
+    if (!response.ok) {
+      setError(body.error ?? "Could not dismiss that bank message.");
+      setBusy(false);
+      return;
+    }
+    setDismissEventId("");
+    setDismissEventReason("");
+    setFlash("Bank message dismissed from Needs your attention.");
+    await load();
     setBusy(false);
   }
 
@@ -661,10 +781,33 @@ export default function PaymentWorkspace() {
                 : (ledger.checkout?.admin_message ?? "Card checkout is not ready yet.")}
             </p>
           </div>
-          <Badge tone={ledger.checkout?.checkout_ready ? "ok" : "warn"}>
-            {ledger.checkout?.checkout_ready ? "Live" : "Not ready"}
-          </Badge>
-        </div>
+        <Badge tone={ledger.checkout?.checkout_ready ? "ok" : "warn"}>
+          {ledger.checkout?.checkout_ready ? "Live" : "Not ready"}
+        </Badge>
+      </div>
+
+        {settlementTotals.length > 0 && (
+          <div style={{ marginTop: 12 }}>
+            <Button small onClick={() => setShowSettlement((value) => !value)}>
+              {showSettlement ? "Hide settlement totals" : "Show settlement totals"}
+            </Button>
+            {showSettlement && (
+              <div style={{ marginTop: 10 }}>
+                {settlementTotals.map(([key, totals]) => {
+                  const [provider, currencyCode] = key.split(":");
+                  return (
+                    <p key={key} style={{ color: T.muted, fontSize: 12, margin: "5px 0" }}>
+                      {provider === "credit_libanais" ? "Card" : provider.replaceAll("_", " ")} · gross{" "}
+                      {formatPaymentAmount(totals.gross, currencyCode as PaymentCurrency)} · fees{" "}
+                      {formatPaymentAmount(totals.fees, currencyCode as PaymentCurrency)} · net{" "}
+                      {formatPaymentAmount(totals.net, currencyCode as PaymentCurrency)}
+                    </p>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         {attentionCount > 0 && (
           <div
@@ -800,11 +943,22 @@ export default function PaymentWorkspace() {
                   {new Date(event.received_at).toLocaleString()}
                   {event.error_code ? ` · ${event.error_code}` : ""}
                 </p>
-                {event.payment_request_id && (
-                  <Button small onClick={() => focusRequest(event.payment_request_id)}>
-                    Show link
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {event.payment_request_id && (
+                    <Button small onClick={() => focusRequest(event.payment_request_id)}>
+                      Show link
+                    </Button>
+                  )}
+                  <Button
+                    small
+                    onClick={() => {
+                      setDismissEventId(event.id);
+                      setDismissEventReason("");
+                    }}
+                  >
+                    Dismiss
                   </Button>
-                )}
+                </div>
               </div>
             ))}
           </div>
@@ -954,6 +1108,21 @@ export default function PaymentWorkspace() {
             {label}
           </Button>
         ))}
+        {listTab === "closed" && unusedClosedCount > 0 && (
+          <Button small variant="danger" disabled={busy} onClick={() => void purgeUnusedClosed()}>
+            Clear {unusedClosedCount} unused
+          </Button>
+        )}
+      </div>
+
+      <div style={{ marginTop: 12 }}>
+        <input
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search guest, villa, email, or description"
+          style={inputStyle}
+          aria-label="Search payment links"
+        />
       </div>
 
       <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
@@ -961,11 +1130,13 @@ export default function PaymentWorkspace() {
           <Card>Loading the payment ledger…</Card>
         ) : visibleRequests.length === 0 ? (
           <Card>
-            {listTab === "collecting"
-              ? "No open payment links. Create one to collect money."
-              : listTab === "collected"
-                ? "No fully paid links yet."
-                : "No cancelled or expired links."}
+            {search.trim()
+              ? "No payment links match that search."
+              : listTab === "collecting"
+                ? "No open payment links. Create one to collect money."
+                : listTab === "collected"
+                  ? "No fully paid links yet. Paid links appear here after a successful receipt."
+                  : "No cancelled or expired links. Cancelled test links land here, then you can clear unused ones."}
           </Card>
         ) : (
           visibleRequests.map((request) => {
@@ -1488,6 +1659,53 @@ export default function PaymentWorkspace() {
                 onClick={() => void submitAttemptAction()}
               >
                 {busy ? "Saving…" : "Confirm"}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {dismissEventId && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 100,
+            background: "rgba(10,15,20,.75)",
+            display: "grid",
+            placeItems: "center",
+            padding: 18,
+          }}
+        >
+          <Card
+            title="Dismiss bank message"
+            style={{ width: "min(500px,100%)", background: T.navyLift }}
+          >
+            <Banner tone="warn" title="This only hides the alert">
+              Dismiss after you have checked Business Center. It does not create or reverse money.
+            </Banner>
+            <Field
+              label="Why are you dismissing this?"
+              required
+              value={dismissEventReason}
+              onChange={(event) => setDismissEventReason(event.target.value)}
+              placeholder="e.g. Duplicate webhook already reconciled"
+            />
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <Button
+                onClick={() => {
+                  setDismissEventId("");
+                  setDismissEventReason("");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                disabled={busy || dismissEventReason.trim().length < 4}
+                onClick={() => void dismissProviderEvent()}
+              >
+                {busy ? "Saving…" : "Dismiss"}
               </Button>
             </div>
           </Card>
