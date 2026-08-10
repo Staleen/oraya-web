@@ -16,6 +16,20 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-10 - Easy one-click card refunds from Ops
+
+**Decision:** card refunds are executed from Ops → Payments with a **Refund card** action. Oraya calls CyberSource `POST /pts/v2/payments/{id}/refunds`, then records an immutable ledger `refund` via `oraya_record_provider_refund`. A secondary **Already refunded in Business Center?** path records an existing BC refund reference without calling the gateway. Manual Business Center–first refunds remain the fallback, not the default happy path.
+
+**Reason:** the owner required a very easy refund path after live card activation. The prior manual-first flow had no honest surface for standalone payment-request charges (including the $1 activation test), so activation evidence and day-to-day refunds were blocked on a Business Center + booking-only admin dance.
+
+**Impact:** [sql/phase-16b-provider-refund.sql](../../sql/phase-16b-provider-refund.sql) (human-run once), [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) `refundCreditLibanaisPayment`, [app/api/ops/payments/transactions/[id]/refund/route.ts](../../app/api/ops/payments/transactions/%5Bid%5D/refund/route.ts), Ops [PaymentWorkspace](../../components/ops/PaymentWorkspace.tsx), [docs/system/REFUND_RUNBOOK.md](REFUND_RUNBOOK.md). Cash/manual **Reverse** remains bookkeeping-only and is no longer shown on card receipts.
+
+**Reversible?:** yes — hide the provider button and keep record-only / Business Center. Do not remove ledger immutability.
+
+**Supersedes:** 2026-07-25 Plan 4 Phase 1 manual-first refunds **for card payments only**. Booking admin “Record manual refund” remains for legacy booking fields.
+
+---
+
 ## 2026-08-10 - Verified CyberSource approvals redirect guests to payment/booking success
 
 **Decision:** after a server-verified Credit Libanais / NetCommerce approval, Oraya records the payment and redirects the guest to a hospitality success surface. Standalone payment requests land on `/pay/{token}?payment=success` (“Payment received”). Booking-linked payment requests and booking payment links land on `/booking/view/{token}?payment=success`. Payment still never auto-confirms a stay. When a create-payment response has a payment id but incomplete amount/status proof, Oraya performs one authenticated `GET /pts/v2/payments/{id}` follow-up and re-verifies amount/currency before classifying `approved`; missing/mismatched amounts remain fail-closed/`unknown`. Approved provider statuses for recording align with webhook success statuses: `AUTHORIZED`, `CAPTURED`, `SETTLED`, `TRANSMITTED`. Status may be read from CyberSource `status` or `outcome`.
