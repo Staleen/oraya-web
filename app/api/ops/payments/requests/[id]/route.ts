@@ -4,10 +4,9 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { PAYMENT_REQUEST_COLUMNS } from "@/lib/payments/ledger-server";
 
 /**
- * PATCH: cancel an active/partial link, or restore a cancelled link that still
- * has no money history (unarchive is not needed — cancelled stays cancelled).
- * DELETE: permanently remove a cancelled/expired link with no ledger rows.
- * Money history is never destroyed.
+ * PATCH: cancel an active/partial link.
+ * DELETE: permanently remove a cancelled/expired/draft link with no ledger
+ * rows and no in-flight provider attempts.
  */
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const auth = await requireOps(request);
@@ -77,11 +76,24 @@ export async function DELETE(_request: Request, context: { params: Promise<{ id:
     );
   }
 
-  // Detach non-ledger rows that still point at the request (set-null FKs).
-  await Promise.all([
-    supabaseAdmin.from("payment_attempts").update({ payment_request_id: null }).eq("payment_request_id", id),
-    supabaseAdmin.from("payment_provider_events").update({ payment_request_id: null }).eq("payment_request_id", id),
-  ]);
+  const { count: openAttempts, error: attemptError } = await supabaseAdmin
+    .from("payment_attempts")
+    .select("id", { count: "exact", head: true })
+    .eq("payment_request_id", id)
+    .in("status", ["claimed", "authorized", "ambiguous"]);
+  if (attemptError) {
+    console.error("[ops/payment-requests] open attempt count failed", attemptError.message);
+    return NextResponse.json({ error: "Could not check open card attempts for that link." }, { status: 503 });
+  }
+  if ((openAttempts ?? 0) > 0) {
+    return NextResponse.json(
+      {
+        error:
+          "This link still has an unfinished card attempt. Resolve it under Needs your attention first.",
+      },
+      { status: 409 },
+    );
+  }
 
   const { error: deleteError } = await supabaseAdmin
     .from("payment_requests")

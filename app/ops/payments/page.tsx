@@ -60,8 +60,11 @@ function describeChanges(before: PaymentPublicSettings, after: PaymentPublicSett
   return out;
 }
 
+type PaymentsView = "collect" | "settings";
+
 export default function PaymentsPage() {
   const { data, loading, loadError, ownerOnly, reload } = useSetupData();
+  const [view, setView] = useState<PaymentsView>("collect");
   const [draft, setDraft] = useState<PaymentPublicSettings | null>(null);
   const [busy, setBusy] = useState(false);
   const [saveError, setSaveError] = useState("");
@@ -123,13 +126,35 @@ export default function PaymentsPage() {
 
   return (
     <>
-      <PageHead title="Payments" sub="How guests pay you" />
+      <PageHead
+        title="Payments"
+        sub={view === "collect" ? "Collect and track money" : "How guests pay on the website"}
+      />
 
-      <PaymentWorkspace />
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>
+        <Button
+          small
+          variant={view === "collect" ? "primary" : "secondary"}
+          onClick={() => setView("collect")}
+        >
+          Collect money
+        </Button>
+        <Button
+          small
+          variant={view === "settings" ? "primary" : "secondary"}
+          onClick={() => setView("settings")}
+        >
+          Website settings
+        </Button>
+      </div>
 
-      {flash && <Banner tone="ok" title="Live" onDismiss={() => setFlash("")}>{flash}</Banner>}
+      {view === "collect" && <PaymentWorkspace />}
 
-      {gate ?? (working && data && (
+      {view === "settings" && flash && (
+        <Banner tone="ok" title="Live" onDismiss={() => setFlash("")}>{flash}</Banner>
+      )}
+
+      {view === "settings" && (gate ?? (working && data && (
         <>
           {/* The switch itself, not a description of where the switch lives.
               /admin keeps its own copy while it is dormant — both write the
@@ -265,7 +290,7 @@ export default function PaymentsPage() {
             onDismissError={() => setSaveError("")}
           />
         </>
-      ))}
+      )))}
     </>
   );
 }

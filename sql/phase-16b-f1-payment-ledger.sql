@@ -401,6 +401,10 @@ begin
   if v_original.transaction_type not in ('payment','adjustment') or v_original.status <> 'confirmed' then
     raise exception using errcode = 'P0001', message = 'transaction_not_reversible';
   end if;
+  -- Money-safety: Reverse is bookkeeping for cash/manual rails only.
+  if v_original.provider is distinct from 'manual' then
+    raise exception using errcode = 'P0001', message = 'card_use_refund_not_reverse';
+  end if;
   if v_original.booking_id is not null and exists (
     select 1 from public.payment_transactions newer
       where newer.booking_id = v_original.booking_id
