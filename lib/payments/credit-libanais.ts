@@ -13,7 +13,6 @@ import {
   encryptCyberSourceRequest,
 } from "@/lib/payments/cybersource-jwt-mle";
 import { buildTransientTokenPaymentRequest } from "@/lib/payments/transient-token-payment-request";
-export { buildTransientTokenPaymentRequest } from "@/lib/payments/transient-token-payment-request";
 import type {
   CreateCheckoutSessionInput,
   CreateCheckoutSessionResult,
@@ -25,6 +24,8 @@ import type {
   WebhookVerificationResult,
 } from "@/lib/payments/provider";
 import { PaymentProviderConfigurationError } from "@/lib/payments/provider";
+
+export { buildTransientTokenPaymentRequest } from "@/lib/payments/transient-token-payment-request";
 
 const CREDIT_LIBANAIS_DISPLAY_NAME = "Credit Libanais / NetCommerce Unified Checkout";
 const CYBERSOURCE_SESSIONS_PATH = "/uc/v1/sessions";
