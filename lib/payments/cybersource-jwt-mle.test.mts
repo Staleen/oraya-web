@@ -118,12 +118,29 @@ test("payment response MLE decrypts only the expected key and algorithms", async
     }),
     /unexpected encryption metadata/,
   );
+  // Org contract 2026-08-10: response MLE is not enabled for Oraya's
+  // production organization — a plaintext JSON object IS the response.
+  const plaintext = await decryptCyberSourceResponse<typeof expected>({
+    body: JSON.stringify({ id: "payment-123", status: "AUTHORIZED" }),
+    expectedKeyId: "response-key",
+    responseMlePrivateKey: privateKeyPem,
+  });
+  assert.deepEqual(plaintext, expected);
+
   await assert.rejects(
     decryptCyberSourceResponse({
-      body: JSON.stringify({ status: "AUTHORIZED" }),
+      body: "not json",
       expectedKeyId: "response-key",
       responseMlePrivateKey: privateKeyPem,
     }),
-    /did not contain encryptedResponse/,
+    /not valid JSON/,
+  );
+  await assert.rejects(
+    decryptCyberSourceResponse({
+      body: JSON.stringify(["array"]),
+      expectedKeyId: "response-key",
+      responseMlePrivateKey: privateKeyPem,
+    }),
+    /not a JSON object/,
   );
 });

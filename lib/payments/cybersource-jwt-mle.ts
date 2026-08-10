@@ -115,12 +115,20 @@ export async function decryptCyberSourceResponse<T>({
   } catch {
     throw new Error("CyberSource MLE response was not valid JSON.");
   }
-  const encryptedResponse =
-    envelope && typeof envelope === "object" && !Array.isArray(envelope)
-      ? (envelope as Record<string, unknown>).encryptedResponse
-      : null;
+  if (!envelope || typeof envelope !== "object" || Array.isArray(envelope)) {
+    throw new Error("CyberSource MLE response was not a JSON object.");
+  }
+  const encryptedResponse = (envelope as Record<string, unknown>).encryptedResponse;
   if (typeof encryptedResponse !== "string" || !encryptedResponse.trim()) {
-    throw new Error("CyberSource MLE response did not contain encryptedResponse.");
+    // Org contract (2026-08-10, mirrors the webhook payloadEncryption=false
+    // decision): response MLE is not enabled for Oraya's production
+    // organization, so /pts/v2/payments answers with a plaintext JSON body.
+    // Live evidence: a real authorization response without encryptedResponse
+    // was refused here and marked an attempt ambiguous. The transport is the
+    // JWT-authenticated HTTPS channel; the plaintext object IS the response.
+    // When CyberSource later enables response MLE, the encrypted path below
+    // resumes automatically.
+    return envelope as T;
   }
 
   const privateKey = await importPKCS8(normalizePem(responseMlePrivateKey), "RSA-OAEP-256");
