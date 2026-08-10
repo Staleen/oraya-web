@@ -113,8 +113,13 @@ export type ProviderAuthorizationResult = {
 
 /**
  * Classifies the provider response without treating a merely non-approved
- * response as a decline. The adapter supplies explicit allow-lists; HTTP
- * errors, missing/unknown statuses, and unverified approvals stay unknown.
+ * response as a decline. The adapter supplies explicit allow-lists; missing
+ * statuses and unverified approvals stay unknown.
+ *
+ * Explicit retry-safe statuses (DECLINED, INVALID_REQUEST, …) release the
+ * claim even on non-2xx HTTP, because CyberSource returns HTTP 400 for
+ * validation failures that never created a payment resource. Bare HTTP
+ * errors with no parseable status stay unknown.
  */
 export function classifyProviderAuthorizationOutcome(input: {
   response_ok: boolean;
@@ -123,11 +128,13 @@ export function classifyProviderAuthorizationOutcome(input: {
   retry_safe_decline_statuses: readonly string[];
   approval_verified: boolean;
 }): ProviderAuthorizationOutcome {
+  if (input.status && input.retry_safe_decline_statuses.includes(input.status)) {
+    return "declined";
+  }
   if (!input.response_ok || !input.status) return "unknown";
   if (input.approved_statuses.includes(input.status)) {
     return input.approval_verified ? "approved" : "unknown";
   }
-  if (input.retry_safe_decline_statuses.includes(input.status)) return "declined";
   return "unknown";
 }
 

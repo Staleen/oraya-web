@@ -6,6 +6,10 @@ const source = readFileSync(
   new URL("../lib/payments/credit-libanais.ts", import.meta.url),
   "utf8",
 );
+const paymentRequestSource = readFileSync(
+  new URL("../lib/payments/transient-token-payment-request.ts", import.meta.url),
+  "utf8",
+);
 
 test("NetCommerce capture context disables saved-card consent", () => {
   assert.match(source, /requestSaveCredentials:\s*false/);
@@ -27,10 +31,13 @@ test("NetCommerce checkout does not request reusable token creation", () => {
 });
 
 test("NetCommerce payment authorization uses only transient payment tokens", () => {
-  assert.match(source, /tokenInformation\s*:\s*{\s*transientTokenJwt:/s);
-  assert.doesNotMatch(source, /paymentInstrument/);
-  assert.doesNotMatch(source, /instrumentIdentifier/);
-  assert.doesNotMatch(source, /consumerPreference/);
+  assert.match(paymentRequestSource, /tokenInformation\s*:\s*{\s*transientTokenJwt:/s);
+  assert.doesNotMatch(paymentRequestSource, /paymentInstrument/);
+  assert.doesNotMatch(paymentRequestSource, /instrumentIdentifier/);
+  assert.doesNotMatch(paymentRequestSource, /consumerPreference/);
+  // A partial billing override would supersede the UC token's full address.
+  assert.doesNotMatch(paymentRequestSource, /\bbillTo\s*:/);
+  assert.match(source, /buildTransientTokenPaymentRequest/);
 });
 
 test("NetCommerce production checkout is gated by the fail-closed live rollout switch (Plan 4 Phase 3)", () => {

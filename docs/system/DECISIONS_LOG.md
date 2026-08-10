@@ -16,6 +16,20 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-10 - Transient-token /pts/v2/payments must not send a partial billTo
+
+**Decision:** the server-side CyberSource payment body built from a Unified Checkout transient token omits `orderInformation.billTo` entirely. Amount and currency remain server-authored. Name/email collected earlier in Oraya are not re-sent as a partial billTo.
+
+**Reason:** CyberSource documents that request fields supersede the same fields on the transient token. Production evidence 2026-08-10: after origin and plaintext-response fixes, the card form rendered and guests submitted, but `/pts/v2/payments` returned parseable non-charge responses with no payment `id` (~200ms), leaving attempts `ambiguous` with `provider_transaction_id` null and no matching webhook. The request had been sending name + country only (`billingType: FULL` on the capture context collects a full address into the token). That incomplete override is the production-specific failure mode; sandbox had accepted the same path. Omitting billTo preserves the token's billing payload. Separately, explicit non-charge statuses (`INVALID_REQUEST`, `INVALID_DATA`, `VALIDATION_ERROR`, `MISSING_FIELD`, plus `DECLINED`) now release the attempt for retry even on HTTP 400, so validation failures no longer strand guests behind ambiguous blocking.
+
+**Impact:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) payment-body builder + authorization classification inputs; [lib/payments/unified-checkout-completion.ts](../../lib/payments/unified-checkout-completion.ts) classifier order; focused tests. Two stranded ambiguous attempts from the evidence window are manually marked `failed` per REFUND_RUNBOOK §2 (no provider transaction id, no webhook). The live switch decision remains the owner's.
+
+**Reversible?:** yes — a full billTo can be reintroduced only if every required AVS field is present and verified.
+
+**Supersedes:** none. Complements the 2026-08-10 plaintext payments-response and exact-target-origin decisions.
+
+---
+
 ## 2026-08-10 - Payments API responses follow the org contract: plaintext JSON accepted when CyberSource does not encrypt
 
 **Decision:** `decryptCyberSourceResponse` accepts a `/pts/v2/payments` response without an `encryptedResponse` field as the plaintext response object itself. When `encryptedResponse` is present, strict RSA-OAEP-256/A256GCM decryption with exact key-ID matching applies unchanged, so response MLE resumes automatically if CyberSource enables it for the org. Non-JSON and non-object bodies are still refused, and unverifiable outcomes still mark the attempt ambiguous.
