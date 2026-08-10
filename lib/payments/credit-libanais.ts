@@ -1,6 +1,5 @@
 import crypto from "crypto";
 import { roundMoney } from "@/lib/money";
-import { expandTargetOrigins } from "@/lib/payments/target-origin";
 import { verifyAuthorizedAmountDetails } from "@/lib/payments/authorized-amount";
 import {
   classifyProviderAuthorizationOutcome,
@@ -371,7 +370,10 @@ function buildCaptureContextRequest(
   }
 
   return {
-    targetOrigins: expandTargetOrigins(targetOrigin),
+    // Exactly the origin in use — the v2 client rejects unused origins
+    // (UNUSED_TARGET_ORIGINS) and mismatched origins alike. The session
+    // routes resolve this from the live request within the canonical family.
+    targetOrigins: [targetOrigin],
     country: config.country,
     locale: config.locale,
     allowedPaymentTypes,

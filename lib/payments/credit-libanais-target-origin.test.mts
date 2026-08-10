@@ -1,34 +1,60 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { expandTargetOrigins } from "./target-origin.ts";
+import { isCanonicalOriginFamily, resolveEffectiveCheckoutOrigin } from "./target-origin.ts";
 
-test("bare production origin also allows the www variant", () => {
-  assert.deepEqual(expandTargetOrigins("https://stayoraya.com"), [
-    "https://stayoraya.com",
+test("www request origin is trusted against the bare canonical origin", () => {
+  assert.equal(
+    resolveEffectiveCheckoutOrigin("https://www.stayoraya.com", "https://stayoraya.com"),
     "https://www.stayoraya.com",
-  ]);
+  );
 });
 
-test("www production origin also allows the bare variant", () => {
-  assert.deepEqual(expandTargetOrigins("https://www.stayoraya.com"), [
-    "https://www.stayoraya.com",
+test("bare request origin is trusted against a www canonical origin", () => {
+  assert.equal(
+    resolveEffectiveCheckoutOrigin("https://stayoraya.com", "https://www.stayoraya.com"),
     "https://stayoraya.com",
-  ]);
+  );
 });
 
-test("vercel preview origins stay exact", () => {
-  assert.deepEqual(expandTargetOrigins("https://oraya-abc123.vercel.app"), [
-    "https://oraya-abc123.vercel.app",
-  ]);
+test("exact canonical request origin passes through", () => {
+  assert.equal(
+    resolveEffectiveCheckoutOrigin("https://stayoraya.com", "https://stayoraya.com"),
+    "https://stayoraya.com",
+  );
 });
 
-test("localhost stays exact", () => {
-  assert.deepEqual(expandTargetOrigins("https://localhost:3000"), ["https://localhost:3000"]);
+test("foreign hosts fall back to the canonical origin", () => {
+  assert.equal(
+    resolveEffectiveCheckoutOrigin("https://evil.example.com", "https://stayoraya.com"),
+    "https://stayoraya.com",
+  );
+  assert.equal(
+    resolveEffectiveCheckoutOrigin("https://www.stayoraya.com.evil.com", "https://stayoraya.com"),
+    "https://stayoraya.com",
+  );
+  assert.equal(
+    resolveEffectiveCheckoutOrigin("https://staging.stayoraya.com", "https://stayoraya.com"),
+    "https://stayoraya.com",
+  );
 });
 
-test("deep subdomains are not guessed", () => {
-  assert.deepEqual(expandTargetOrigins("https://pay.eu.example.com"), [
-    "https://pay.eu.example.com",
-  ]);
+test("non-https and missing request origins fall back to canonical", () => {
+  assert.equal(
+    resolveEffectiveCheckoutOrigin("http://www.stayoraya.com", "https://stayoraya.com"),
+    "https://stayoraya.com",
+  );
+  assert.equal(
+    resolveEffectiveCheckoutOrigin(null, "https://stayoraya.com"),
+    "https://stayoraya.com",
+  );
+  assert.equal(
+    resolveEffectiveCheckoutOrigin("not a url", "https://stayoraya.com"),
+    "https://stayoraya.com",
+  );
+});
+
+test("family check itself is strict about ports", () => {
+  assert.equal(isCanonicalOriginFamily("https://www.stayoraya.com:8443", "https://stayoraya.com"), false);
+  assert.equal(isCanonicalOriginFamily("https://www.stayoraya.com", "https://stayoraya.com"), true);
 });

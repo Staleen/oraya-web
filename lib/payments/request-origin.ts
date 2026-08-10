@@ -1,4 +1,5 @@
 import { SITE_URL } from "@/lib/brand";
+import { resolveEffectiveCheckoutOrigin } from "@/lib/payments/target-origin";
 
 function normalizeOrigin(value: string | null | undefined) {
   if (!value?.trim()) return null;
@@ -60,5 +61,11 @@ export function resolvePaymentRequestOrigin(request: Request) {
     return requestOrigin;
   }
 
-  return configuredOrigin ?? SITE_URL;
+  // Production: CyberSource Unified Checkout v2 requires the capture context
+  // targetOrigin to be EXACTLY the origin the guest's page is on (observed
+  // 2026-08-10: bare-only context failed origin validation on www; listing
+  // both variants failed with UNUSED_TARGET_ORIGINS). Trust the live request
+  // origin only within the canonical www/bare family; anything else falls
+  // back to the canonical origin.
+  return resolveEffectiveCheckoutOrigin(requestOrigin, configuredOrigin ?? SITE_URL);
 }
