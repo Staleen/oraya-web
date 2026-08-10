@@ -51,6 +51,8 @@ interface NetCommerceConfig {
   apiBaseUrl: string | null;
   country: string | null;
   locale: string | null;
+  /** Exact opt-in. Default off — org contract has request MLE disabled. */
+  requestMleEnabled: boolean;
   requestMleCertificate: string | null;
   requestMleKeyId: string | null;
   responseMleKeyId: string | null;
@@ -147,6 +149,9 @@ function readNetCommerceConfig(): NetCommerceConfig {
     apiBaseUrl: readEnv("NETCOMMERCE_CYBERSOURCE_API_BASE_URL"),
     country: readEnv("NETCOMMERCE_CYBERSOURCE_COUNTRY"),
     locale: readEnv("NETCOMMERCE_CYBERSOURCE_LOCALE"),
+    // Exact opt-in only. Live evidence 2026-08-10: encrypting /pts/v2/payments
+    // while the org has request MLE off yields HTTP 401 UNAUTHORIZED_USER.
+    requestMleEnabled: readEnv("NETCOMMERCE_CYBERSOURCE_REQUEST_MLE_ENABLED") === "true",
     requestMleCertificate: readEnv("NETCOMMERCE_CYBERSOURCE_REQUEST_MLE_CERTIFICATE"),
     requestMleKeyId: readEnv("NETCOMMERCE_CYBERSOURCE_REQUEST_MLE_KEY_ID"),
     responseMleKeyId: readEnv("NETCOMMERCE_CYBERSOURCE_RESPONSE_MLE_KEY_ID"),
@@ -184,12 +189,17 @@ function getSessionMissingRequirements(config: NetCommerceConfig) {
   if (!config.apiBaseUrl) missing.push("NETCOMMERCE_CYBERSOURCE_API_BASE_URL is not configured");
   if (!config.country) missing.push("NETCOMMERCE_CYBERSOURCE_COUNTRY is not configured");
   if (!config.locale) missing.push("NETCOMMERCE_CYBERSOURCE_LOCALE is not configured");
-  if (!config.requestMleCertificate) {
-    missing.push("NETCOMMERCE_CYBERSOURCE_REQUEST_MLE_CERTIFICATE is not configured");
+  // Request MLE is opt-in only (org contract default: plaintext payment body).
+  if (config.requestMleEnabled) {
+    if (!config.requestMleCertificate) {
+      missing.push("NETCOMMERCE_CYBERSOURCE_REQUEST_MLE_CERTIFICATE is not configured");
+    }
+    if (!config.requestMleKeyId) {
+      missing.push("NETCOMMERCE_CYBERSOURCE_REQUEST_MLE_KEY_ID is not configured");
+    }
   }
-  if (!config.requestMleKeyId) {
-    missing.push("NETCOMMERCE_CYBERSOURCE_REQUEST_MLE_KEY_ID is not configured");
-  }
+  // Response MLE keys stay required so encryptedResponse can still be decrypted
+  // if CyberSource enables it later; plaintext responses ignore them.
   if (!config.responseMleKeyId) {
     missing.push("NETCOMMERCE_CYBERSOURCE_RESPONSE_MLE_KEY_ID is not configured");
   }
@@ -288,10 +298,9 @@ function requireSessionConfig() {
     !config.apiBaseUrl ||
     !config.country ||
     !config.locale ||
-    !config.requestMleCertificate ||
-    !config.requestMleKeyId ||
     !config.responseMleKeyId ||
-    !config.responseMlePrivateKey
+    !config.responseMlePrivateKey ||
+    (config.requestMleEnabled && (!config.requestMleCertificate || !config.requestMleKeyId))
   ) {
     throw new PaymentProviderConfigurationError(
       `Credit Libanais / NetCommerce Unified Checkout is not configured: ${missing.join("; ")}.`,
@@ -304,6 +313,7 @@ function requireSessionConfig() {
     apiBaseUrl: config.apiBaseUrl.replace(/\/+$/, ""),
     country: config.country,
     locale: config.locale,
+    requestMleEnabled: config.requestMleEnabled,
     requestMleCertificate: config.requestMleCertificate,
     requestMleKeyId: config.requestMleKeyId,
     responseMleKeyId: config.responseMleKeyId,
@@ -439,7 +449,22 @@ function readProviderErrorMessage(payload: CyberSourcePaymentResponse): string |
     payload.response?.rmsg,
   ];
   for (const value of candidates) {
-    if (typeof value === "string" && value.trim()) return value.trim().slice(0, 180);
+    if (typeof value !== "string" || !value.trim()) continue;
+    const trimmed = value.trim();
+    // CyberSource sometimes nests JSON in rmsg: {"error":"UNAUTHORIZED_USER",...}
+    try {
+      const nested = JSON.parse(trimmed) as { error?: unknown; error_description?: unknown };
+      if (nested && typeof nested === "object") {
+        const code = typeof nested.error === "string" ? nested.error : null;
+        const description =
+          typeof nested.error_description === "string" ? nested.error_description : null;
+        const joined = [code, description].filter(Boolean).join(": ");
+        if (joined) return joined.slice(0, 180);
+      }
+    } catch {
+      // plain string message
+    }
+    return trimmed.slice(0, 180);
   }
   return null;
 }
@@ -463,15 +488,26 @@ export async function authorizeCreditLibanaisTransientToken(
   const config = requireSessionConfig();
   const apiUrl = new URL(CYBERSOURCE_PAYMENTS_PATH, `${config.apiBaseUrl}/`);
   const paymentRequest = JSON.stringify(buildTransientTokenPaymentRequest(input));
-  const body = await encryptCyberSourceRequest({
-    payload: paymentRequest,
-    requestMleCertificate: config.requestMleCertificate,
-    requestMleKeyId: config.requestMleKeyId,
-  });
-  // Org contract 2026-08-10: response MLE is not enabled. Requesting
-  // v-c-response-mle-kid on a non-MLE org has produced plaintext error bodies
-  // without a payment id (live attempt 6f6b2a03, correlation 13fe075d…). Still
-  // decrypt when an encryptedResponse is present.
+  // Org contract 2026-08-10: request MLE is OFF unless explicitly enabled.
+  // Live attempt cb5c93bb returned HTTP 401 UNAUTHORIZED_USER while encrypting
+  // the body; /uc/v1/sessions with the same JWT shared-secret (plaintext body)
+  // succeeds. /pts/v2/payments MLE is optional per CyberSource. Still encrypt
+  // when NETCOMMERCE_CYBERSOURCE_REQUEST_MLE_ENABLED=true.
+  let body = paymentRequest;
+  if (config.requestMleEnabled) {
+    if (!config.requestMleCertificate || !config.requestMleKeyId) {
+      throw new PaymentProviderConfigurationError(
+        "Request MLE is enabled but certificate/key id are not configured.",
+      );
+    }
+    body = await encryptCyberSourceRequest({
+      payload: paymentRequest,
+      requestMleCertificate: config.requestMleCertificate,
+      requestMleKeyId: config.requestMleKeyId,
+    });
+  }
+  // Do not request response MLE (v-c-response-mle-kid) — org has it off.
+  // Still decrypt when an encryptedResponse is present.
   const authorization = await buildCyberSourceJwtAuthorization({
     body,
     host: apiUrl.host,
@@ -486,7 +522,6 @@ export async function authorizeCreditLibanaisTransientToken(
     headers: {
       "Content-Type": "application/json",
       Authorization: authorization,
-      Host: apiUrl.host,
     },
     body,
     cache: "no-store",
@@ -621,7 +656,6 @@ export async function createCreditLibanaisUnifiedCheckoutSession(
     headers: {
       "Content-Type": "application/json",
       Authorization: authorization,
-      Host: apiUrl.host,
     },
     body,
     cache: "no-store",
