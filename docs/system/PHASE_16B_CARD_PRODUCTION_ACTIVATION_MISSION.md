@@ -108,6 +108,8 @@ Required inventory:
 
 **Status:** pending steps 2-5 and owner presence
 
+**First attempt evidence (2026-08-10):** with the live switch opened for the approved window, a $1.00 standalone card request failed CLIENT-SIDE before any card entry: the capture context was minted with `targetOrigins: ["https://stayoraya.com"]` (canonical bare origin) while the checkout page serves on `https://www.stayoraya.com`, so Unified Checkout refused initialization ("secure checkout failed"; session `oraya_e1c57dd2…` created, zero attempts claimed, zero charges). Fixed by allowing both host variants in `targetOrigins` ([lib/payments/target-origin.ts](../../lib/payments/target-origin.ts)); preview/local hosts stay exact. The controlled window re-runs after this deploys.
+
 **Owner action:** authorize a small amount and enter the real card only inside the CyberSource-hosted fields. Card number, CVV, OTP, and banking credentials are never shared with Codex or Oraya.
 
 **Codex action:** open the live switch only for the approved test window, observe non-secret application/provider evidence, and close the switch immediately if any result is unknown or inconsistent.
