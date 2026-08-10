@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { roundMoney } from "@/lib/money";
+import { expandTargetOrigins } from "@/lib/payments/target-origin";
 import { verifyAuthorizedAmountDetails } from "@/lib/payments/authorized-amount";
 import {
   classifyProviderAuthorizationOutcome,
@@ -370,7 +371,7 @@ function buildCaptureContextRequest(
   }
 
   return {
-    targetOrigins: [targetOrigin],
+    targetOrigins: expandTargetOrigins(targetOrigin),
     country: config.country,
     locale: config.locale,
     allowedPaymentTypes,
