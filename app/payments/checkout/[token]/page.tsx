@@ -254,7 +254,7 @@ export default function PaymentCheckoutPage(props: {
           throw new Error("CyberSource payment client did not initialize.");
         }
 
-        const bookingViewUrl = payload.payment_request_url ?? payload.booking_view_url ?? bookingViewFallback;
+        const bookingViewUrl = payload.booking_view_url ?? payload.payment_request_url ?? bookingViewFallback;
         setState({
           status: "ready",
           bookingViewUrl,
@@ -307,9 +307,22 @@ export default function PaymentCheckoutPage(props: {
         if (cancelled) return;
 
         if (completionResponse.ok && completion.ok && completion.paid) {
-          window.location.assign(
-            completion.payment_request_url ?? completion.booking_view_url ?? payload.return_url,
-          );
+          // Booking-linked payment requests prefer the booking view; standalone
+          // payment requests land on /pay?payment=success.
+          const successUrl =
+            completion.booking_view_url ??
+            completion.payment_request_url ??
+            payload.return_url ??
+            bookingViewUrl;
+          if (typeof successUrl === "string" && successUrl.trim()) {
+            window.location.assign(successUrl);
+            return;
+          }
+          setState({
+            status: "blocked",
+            message: "Payment was received. Return below to view your confirmation.",
+            bookingViewUrl,
+          });
           return;
         }
 
@@ -319,7 +332,7 @@ export default function PaymentCheckoutPage(props: {
             typeof completion.message === "string" && completion.message.trim()
               ? completion.message.trim()
               : "We could not confirm the payment outcome. Do NOT retry or pay again; please contact Oraya.",
-          bookingViewUrl: completion.payment_request_url ?? completion.booking_view_url ?? bookingViewUrl,
+          bookingViewUrl: completion.booking_view_url ?? completion.payment_request_url ?? bookingViewUrl,
         });
       } catch {
         console.error("[payments/checkout] secure checkout failed.");
@@ -425,7 +438,13 @@ export default function PaymentCheckoutPage(props: {
             <div style={{ display: "grid", gap: "14px" }}>
               <p style={{ color: WHITE, lineHeight: 1.7, margin: 0 }}>{state.message}</p>
               <a href={state.bookingViewUrl ?? bookingViewFallback} style={buttonStyle}>
-                {isPaymentRequest ? "Return to payment request" : "Return to booking"}
+                {state.message.toLowerCase().includes("payment was received")
+                  ? isPaymentRequest
+                    ? "View payment confirmation"
+                    : "View your booking"
+                  : isPaymentRequest
+                    ? "Return to payment request"
+                    : "Return to booking"}
               </a>
             </div>
           ) : (

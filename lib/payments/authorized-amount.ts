@@ -10,6 +10,8 @@ import { roundMoney } from "../money.ts";
 export type AuthorizedAmountDetails = {
   totalAmount?: unknown;
   authorizedAmount?: unknown;
+  settlementAmount?: unknown;
+  amount?: unknown;
   currency?: unknown;
 } | null | undefined;
 
@@ -26,6 +28,20 @@ function parseAmount(value: unknown): number | null {
   return null;
 }
 
+/**
+ * Prefer authorization amount, then capture/sale totals CyberSource may echo
+ * under alternate field names on capture:true responses.
+ */
+export function readAuthorizedResponseAmount(details: AuthorizedAmountDetails): number | null {
+  if (!details || typeof details !== "object") return null;
+  return (
+    parseAmount(details.authorizedAmount) ??
+    parseAmount(details.totalAmount) ??
+    parseAmount(details.settlementAmount) ??
+    parseAmount(details.amount)
+  );
+}
+
 export function verifyAuthorizedAmountDetails(input: {
   requested_amount: number;
   requested_currency: string;
@@ -36,8 +52,7 @@ export function verifyAuthorizedAmountDetails(input: {
     return { ok: false, reason: "response_missing_amount_details" };
   }
 
-  const responseAmount =
-    parseAmount(details.authorizedAmount) ?? parseAmount(details.totalAmount);
+  const responseAmount = readAuthorizedResponseAmount(details);
   if (responseAmount === null) {
     return { ok: false, reason: "response_amount_unparsable" };
   }

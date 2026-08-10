@@ -91,7 +91,7 @@ test("browser return text cannot turn an unpaid state into payment success", () 
   });
   assert.deepEqual(
     paymentReturnMessage("success", present({ paymentStatus: "paid_in_full", amountPaid: 320 })),
-    { text: "Payment received successfully.", tone: "success" },
+    { text: "Thank you — your payment has been received.", tone: "success" },
   );
   assert.match(paymentReturnMessage("pending", present({}))?.text ?? "", /No payment has been collected/);
 });

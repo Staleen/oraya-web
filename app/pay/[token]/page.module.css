@@ -17,5 +17,15 @@
 .payButton:hover { background: #806039; }
 .closed { text-align: center; padding: 16px 0; }
 .closed h2 { font-family: var(--font-playfair), serif; font-weight: 400; font-size: 32px; }
+.returnSuccess, .returnNeutral {
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 14px;
+  line-height: 1.55;
+  text-align: center;
+}
+.returnSuccess { background: rgba(155, 119, 68, 0.14); color: #6f5228; border: 1px solid rgba(155, 119, 68, 0.35); }
+.returnNeutral { background: #f5f1eb; color: #4b5563; border: 1px solid #e6ded2; }
 .footer { text-align: center; margin: 20px 0 0; color: rgba(255,255,255,.62); font-size: 12px; }
 @media (max-width: 520px) { .amount { align-items: start; flex-direction: column; } .card { border-radius: 14px; } }

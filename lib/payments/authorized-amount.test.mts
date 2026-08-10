@@ -87,6 +87,25 @@ test("missing or unparsable amount details fail closed", () => {
   );
 });
 
+test("settlementAmount and amount are accepted when authorized/total are absent", () => {
+  assert.deepEqual(
+    verifyAuthorizedAmountDetails({
+      requested_amount: 1,
+      requested_currency: "USD",
+      response_amount_details: { settlementAmount: "1.00", currency: "USD" },
+    }),
+    { ok: true },
+  );
+  assert.deepEqual(
+    verifyAuthorizedAmountDetails({
+      requested_amount: 1,
+      requested_currency: "USD",
+      response_amount_details: { amount: "1.00", currency: "usd" },
+    }),
+    { ok: true },
+  );
+});
+
 test("authorizedAmount takes precedence over a differing totalAmount", () => {
   const r = verifyAuthorizedAmountDetails({
     requested_amount: 450,

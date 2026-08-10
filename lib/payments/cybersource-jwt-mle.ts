@@ -38,6 +38,7 @@ export async function buildCyberSourceJwtAuthorization({
   sharedSecret,
   issuedAt = Math.floor(Date.now() / 1000),
   jwtId = crypto.randomUUID(),
+  requestMethod = "post",
 }: {
   body: string;
   host: string;
@@ -48,6 +49,8 @@ export async function buildCyberSourceJwtAuthorization({
   sharedSecret: string;
   issuedAt?: number;
   jwtId?: string;
+  /** CyberSource JWT v2 request-method claim. Defaults to POST. */
+  requestMethod?: "get" | "post";
 }) {
   const claims: Record<string, string | number> = {
     digest: buildCyberSourceDigest(body),
@@ -57,7 +60,7 @@ export async function buildCyberSourceJwtAuthorization({
     iss: merchantId,
     jti: jwtId,
     "request-host": host,
-    "request-method": "post",
+    "request-method": requestMethod,
     "request-resource-path": path,
     "v-c-jwt-version": "2",
     "v-c-merchant-id": merchantId,
