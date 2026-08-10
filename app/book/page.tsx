@@ -1861,13 +1861,16 @@ function BookPageInner() {
         Boolean(form.villa && checkIn && checkOut && checkOut > checkIn) &&
         !dateConflict &&
         availabilityReadyForSelection;
+      // Owner decision 2026-08-10 (payments are live): hosted checkout is no
+      // longer restricted to instant-eligible stays — any valid plain stay
+      // request may pay now. Payment still never auto-confirms the booking.
+      // Add-ons and special requests keep the review-then-charge follow-up
+      // path because their final amount is confirmed by Oraya after review.
       const attemptingOnlineCheckout =
         intent === "pay_now" &&
         hostedCheckoutReady &&
         paymentPurposeAvailable &&
         availabilityValid &&
-        instantEligible &&
-        bookingTrustMode === "instant" &&
         selectedAddons.length === 0 &&
         !hasSpecialRequest &&
         !hasManualReviewAddonSelection;
