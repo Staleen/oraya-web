@@ -16,6 +16,20 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-10 - Payments API responses follow the org contract: plaintext JSON accepted when CyberSource does not encrypt
+
+**Decision:** `decryptCyberSourceResponse` accepts a `/pts/v2/payments` response without an `encryptedResponse` field as the plaintext response object itself. When `encryptedResponse` is present, strict RSA-OAEP-256/A256GCM decryption with exact key-ID matching applies unchanged, so response MLE resumes automatically if CyberSource enables it for the org. Non-JSON and non-object bodies are still refused, and unverifiable outcomes still mark the attempt ambiguous.
+
+**Reason:** live production evidence 2026-08-10 (~20:06 UTC): the first real controlled card authorization returned a response with no `encryptedResponse`; the code refused it and marked attempt `f932a0a9…` ambiguous with "CyberSource MLE response did not contain encryptedResponse", leaving a real payment outcome unknown. This mirrors the webhook `payloadEncryption: false` finding — response MLE is not enabled for Oraya's production organization, and the owner has decided Oraya adapts to the org contract rather than reopening provider communication. Transport security remains the JWT-authenticated HTTPS channel; request MLE is unaffected.
+
+**Impact:** [lib/payments/cybersource-jwt-mle.ts](../../lib/payments/cybersource-jwt-mle.ts) only; amount/currency verification, outcome classification, ambiguous blocking, and idempotency are unchanged. Focused suite extended; full `npm test` 407/407; `tsc` clean. The stranded ambiguous attempt from this evidence is reconciled manually per the runbook once Business Center confirms the true outcome.
+
+**Reversible?:** yes — the strict-only behavior can be restored if the org later guarantees response MLE.
+
+**Supersedes:** the response-MLE-mandatory reading of the 2026-08-08 Phase 16B-2B1 decision for this organization. It does not supersede 2B1's JWT authentication, request MLE, or ambiguous/do-not-retry protections.
+
+---
+
 ## 2026-08-10 - Hosted checkout on /book is open to every valid plain stay, not only instant-eligible stays
 
 **Decision:** the Reserve "Continue to secure payment" action attempts hosted card checkout for any valid stay request (villa, dates, availability, payment settings), removing the `instantEligible && bookingTrustMode === "instant"` requirement from the eligibility condition. Add-ons, typed special requests, and manual-review add-on selections still route pay-now to the pending-payment follow-up because their final amount is confirmed by Oraya after review. Payment continues to never auto-confirm a booking, and every checkout failure still falls back safely to the booking-request handoff.
