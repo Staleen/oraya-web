@@ -16,6 +16,20 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-10 - Webhook deliveries follow the org contract: signature-verified plaintext accepted when CyberSource does not encrypt
+
+**Decision:** the CyberSource webhook receiver accepts a non-JWE delivery body only when it is a valid JSON object AND the timestamped `v-c-signature` verifies against the separate digital-signature key within the five-minute tolerance. Signature verification and durable replay claiming in `payment_provider_events` remain mandatory for every delivery; encrypted (compact-JWE) payloads continue to be decrypted with strict algorithm and key-ID checks exactly as before. Each stored provider event now records `payload_encrypted` in its safe metadata.
+
+**Reason:** the production subscription (`unifiedCheckout` / `uc.orders.transactionresults`, org 06385000) went ACTIVE on 2026-08-10, and CyberSource's own product registry for the org reports `payloadEncryption: false` for this event, while its published Webhooks guide states Unified Checkout events require MLE. Live evidence: the provider configuration test passed provider-side, and three real deliveries reached `/api/payments/webhook/credit_libanais` as plaintext (~465-byte JSON bodies) and were correctly refused with `webhook_mle_missing_jwe` (fail closed, Vercel production logs 2026-08-10 ~18:31–18:34 UTC). NetCommerce's CTO confirmed in writing that nothing further is required provider-side, and the owner decided Oraya adapts its own side rather than reopening provider communication. Waiting for provider-side MLE enablement would block card activation indefinitely against a flag CyberSource itself reports as off.
+
+**Impact:** [lib/payments/credit-libanais-webhook.ts](../../lib/payments/credit-libanais-webhook.ts) classifies bodies as JWE vs plaintext-JSON (anything else still throws); [lib/payments/credit-libanais-webhook-handler.ts](../../lib/payments/credit-libanais-webhook-handler.ts) logs accepted plaintext deliveries and persists `payload_encrypted`. Confidentiality on the plaintext path is TLS-only by provider contract; authenticity, integrity, tolerance, and replay safety are unchanged. Focused webhook suite extended (17 tests); full `npm test` 401/401; `tsc --noEmit` clean. No schema, dependency, or activation change — the live switch remains off and step-4 delivery proof still requires a verified recorded delivery.
+
+**Reversible?:** yes at code level — if CyberSource later enables payload encryption for the org, JWE deliveries are already handled and the plaintext branch simply stops being exercised; it may then be removed in a follow-up.
+
+**Supersedes:** the JWE-only acceptance rule inside the 2026-08-09 "CyberSource webhook MLE and digital-signature keys are separate" entry. It does not supersede that entry's key-separation, signature, tolerance, or replay requirements, and it does not restore the banned raw-body HMAC-with-MLE-key scheme.
+
+---
+
 ## 2026-08-09 - The live card-payments switch also lives in /ops, confirmed by the owner's own password
 
 **Decision:** `POST /api/ops/setup/payments-live` becomes a second writer of the `payments_live_enabled` settings row. Enabling requires the signed-in **owner's own** password and shares the login throttle; disabling requires only an owner session. `/api/admin/payments/live-toggle` is left exactly as it is.

@@ -171,9 +171,16 @@ export async function handleCreditLibanaisWebhook(request: Request) {
   if (!verification.ok) {
     console.error(`${LOG_TAG} webhook REFUSED: unverifiable payload (fail closed):`, {
       reason: verification.reason,
+      payload_encrypted: decryptedPayload.payload_encrypted,
       body_length: rawBody.length,
     });
     return NextResponse.json({ error: "Invalid webhook signature." }, { status: 401 });
+  }
+  if (!decryptedPayload.payload_encrypted) {
+    console.log(
+      `${LOG_TAG} signature-verified plaintext delivery accepted (org contract payloadEncryption=false)`,
+      { body_length: rawBody.length },
+    );
   }
 
   const event = parseCreditLibanaisWebhookEvent(decryptedPayload.event_payload);
@@ -210,6 +217,7 @@ export async function handleCreditLibanaisWebhook(request: Request) {
         raw_status: event.raw_status,
         outcome: event.outcome,
         signature_key_id: verification.key_id,
+        payload_encrypted: decryptedPayload.payload_encrypted,
       },
     })
     .select("id")

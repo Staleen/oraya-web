@@ -3,9 +3,20 @@ import { compactDecrypt, decodeProtectedHeader, importPKCS8 } from "jose";
 
 /**
  * CyberSource webhook security follows the current Webhooks implementation
- * guide: payment/Unified Checkout payloads are compact JWE, and the
- * `v-c-signature` header signs `timestamp + "." + decryptedPayload` with a
- * separate Base64-encoded digital-signature secret.
+ * guide: payment/Unified Checkout payloads are compact JWE when the
+ * organization's product registry enables payload encryption, and the
+ * `v-c-signature` header signs `timestamp + "." + payload` with a separate
+ * Base64-encoded digital-signature secret.
+ *
+ * Org-contract exception (2026-08-10, owner-approved): CyberSource's product
+ * registry for Oraya's production organization reports
+ * `payloadEncryption: false` for `unifiedCheckout` /
+ * `uc.orders.transactionresults`, and live deliveries arrive as plaintext
+ * JSON notifications. A plaintext body is therefore accepted ONLY when it is
+ * a valid JSON object AND the timestamped `v-c-signature` verifies against
+ * the distinct digital-signature key. Signature verification and durable
+ * replay claiming remain mandatory for every delivery; encrypted (JWE)
+ * payloads continue to be decrypted and key-checked exactly as before.
  */
 
 export const WEBHOOK_SIGNATURE_HEADER = "v-c-signature";
@@ -57,10 +68,14 @@ function normalizePem(value: string) {
   return value.replace(/\\n/g, "\n").trim();
 }
 
-function readCompactJwe(rawBody: string) {
+type WebhookBody =
+  | { kind: "jwe"; compactJwe: string; envelope: Record<string, unknown> | null; nestedPayload: boolean }
+  | { kind: "plaintext"; envelope: Record<string, unknown> };
+
+function readWebhookBody(rawBody: string): WebhookBody {
   const trimmed = rawBody.trim();
   if (/^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]*){4}$/.test(trimmed)) {
-    return { compactJwe: trimmed, envelope: null, nestedPayload: false };
+    return { kind: "jwe", compactJwe: trimmed, envelope: null, nestedPayload: false };
   }
 
   let envelope: unknown;
@@ -76,14 +91,17 @@ function readCompactJwe(rawBody: string) {
   for (const key of ["encryptedPayload", "encryptedResponse", "encryptedRequest"]) {
     const value = record[key];
     if (typeof value === "string" && value.trim().split(".").length === 5) {
-      return { compactJwe: value.trim(), envelope: record, nestedPayload: false };
+      return { kind: "jwe", compactJwe: value.trim(), envelope: record, nestedPayload: false };
     }
   }
   const nestedPayload = record.payload;
   if (typeof nestedPayload === "string" && nestedPayload.trim().split(".").length === 5) {
-    return { compactJwe: nestedPayload.trim(), envelope: record, nestedPayload: true };
+    return { kind: "jwe", compactJwe: nestedPayload.trim(), envelope: record, nestedPayload: true };
   }
-  throw new Error("webhook_mle_missing_jwe");
+  // No JWE anywhere in a valid JSON-object body: this is the org-contract
+  // plaintext delivery (`payloadEncryption: false`). The caller MUST still
+  // verify the `v-c-signature` header before trusting it.
+  return { kind: "plaintext", envelope: record };
 }
 
 export async function decryptCreditLibanaisWebhookPayload({
@@ -93,7 +111,31 @@ export async function decryptCreditLibanaisWebhookPayload({
   rawBody: string;
   config: CreditLibanaisWebhookConfig;
 }) {
-  const encrypted = readCompactJwe(rawBody);
+  const body = readWebhookBody(rawBody);
+  if (body.kind === "plaintext") {
+    // Confidentiality is TLS-only on this path by provider contract; the
+    // signature over `timestamp + "." + rawBody` is the authentication
+    // boundary and is enforced by the caller before any state change.
+    const nested = body.envelope.payload;
+    if (typeof nested === "string") {
+      let nestedParsed: unknown;
+      try {
+        nestedParsed = JSON.parse(nested);
+      } catch {
+        nestedParsed = null;
+      }
+      if (nestedParsed && typeof nestedParsed === "object") {
+        return {
+          signature_payload: rawBody,
+          event_payload: JSON.stringify({ ...body.envelope, payload: nestedParsed }),
+          payload_encrypted: false,
+        };
+      }
+    }
+    return { signature_payload: rawBody, event_payload: rawBody, payload_encrypted: false };
+  }
+
+  const encrypted = body;
   const decodedHeader = decodeProtectedHeader(encrypted.compactJwe);
   if (decodedHeader.alg !== "RSA-OAEP" && decodedHeader.alg !== "RSA-OAEP-256") {
     throw new Error("webhook_mle_unexpected_algorithm");
@@ -115,7 +157,11 @@ export async function decryptCreditLibanaisWebhookPayload({
   }
   const signaturePayload = new TextDecoder().decode(plaintext);
   if (!encrypted.nestedPayload || !encrypted.envelope) {
-    return { signature_payload: signaturePayload, event_payload: signaturePayload };
+    return {
+      signature_payload: signaturePayload,
+      event_payload: signaturePayload,
+      payload_encrypted: true,
+    };
   }
 
   let decryptedNode: unknown;
@@ -127,6 +173,7 @@ export async function decryptCreditLibanaisWebhookPayload({
   return {
     signature_payload: signaturePayload,
     event_payload: JSON.stringify({ ...encrypted.envelope, payload: decryptedNode }),
+    payload_encrypted: true,
   };
 }
 
