@@ -46,6 +46,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     notes?: unknown;
     idempotency_key?: unknown;
     refund_transaction_id?: unknown;
+    reason?: unknown;
   };
   try {
     body = await request.json() as typeof body;
@@ -53,10 +54,11 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const mode = body.mode === "record" ? "record" : "provider";
+  const mode =
+    body.mode === "record" ? "record" : body.mode === "fail" ? "fail" : "provider";
   const auth = await requireOps(
     request,
-    mode === "provider" ? { requiredRole: "owner" } : undefined,
+    mode === "provider" || mode === "fail" ? { requiredRole: "owner" } : undefined,
   );
   if (!auth.ok) return auth.response;
 
@@ -95,7 +97,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
   const { data: priorRefunds, error: priorError } = await supabaseAdmin
     .from("payment_transactions")
-    .select("amount, status")
+    .select("id, amount, status")
     .eq("reverses_transaction_id", txn.id)
     .eq("transaction_type", "refund")
     .in("status", ["confirmed", "pending"]);
@@ -116,6 +118,56 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     typeof body.refund_transaction_id === "string" && body.refund_transaction_id.trim()
       ? body.refund_transaction_id.trim()
       : "";
+
+  if (mode === "fail") {
+    const failReason =
+      typeof body.reason === "string" && body.reason.trim().length >= 8
+        ? body.reason.trim().slice(0, 1000)
+        : typeof body.notes === "string" && body.notes.trim().length >= 8
+          ? body.notes.trim().slice(0, 1000)
+          : "";
+    if (!failReason) {
+      return NextResponse.json(
+        { error: "Add a short note confirming Business Center shows no refund." },
+        { status: 400 },
+      );
+    }
+
+    const targetPendingId =
+      pendingRefundId ||
+      (priorRefunds ?? []).find((row) => row.status === "pending")?.id ||
+      "";
+    if (!targetPendingId) {
+      return NextResponse.json({ error: "There is no open refund attempt to release." }, { status: 409 });
+    }
+
+    const failed = await failProviderRefund({
+      refund_transaction_id: targetPendingId,
+      reason: failReason,
+    });
+    if (!failed.ok) {
+      const msg = failed.error ?? "";
+      if (msg.includes("function") && msg.includes("does not exist")) {
+        return NextResponse.json(
+          {
+            error:
+              "Refund SQL is not applied yet. Run sql/phase-16b-provider-refund.sql in Supabase, then try again.",
+          },
+          { status: 503 },
+        );
+      }
+      return NextResponse.json(
+        { error: "Could not release that refund attempt. Refresh and try again." },
+        { status: 500 },
+      );
+    }
+    return NextResponse.json({
+      ok: true,
+      mode,
+      refund_transaction_id: targetPendingId,
+      result: failed.result,
+    });
+  }
 
   if (mode === "record") {
     const providerReference =
@@ -142,7 +194,22 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
             { status: 409 },
           );
         }
-        return NextResponse.json({ error: "Could not record that refund." }, { status: 500 });
+        if (msg.includes("function") && msg.includes("does not exist")) {
+          return NextResponse.json(
+            {
+              error:
+                "Refund SQL is not applied yet. Run sql/phase-16b-provider-refund.sql in Supabase, then try again.",
+            },
+            { status: 503 },
+          );
+        }
+        return NextResponse.json(
+          {
+            error:
+              "Could not record that refund. Check the Business Center reference and that refund SQL is applied.",
+          },
+          { status: 500 },
+        );
       }
       return NextResponse.json({
         ok: true,
@@ -278,6 +345,15 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     }
     if (msg.includes("refund_exceeds_payment")) {
       return NextResponse.json({ error: "This payment is already fully refunded." }, { status: 409 });
+    }
+    if (msg.includes("function") && msg.includes("does not exist")) {
+      return NextResponse.json(
+        {
+          error:
+            "Refund SQL is not applied yet. Run sql/phase-16b-provider-refund.sql in Supabase, then try again.",
+        },
+        { status: 503 },
+      );
     }
     return NextResponse.json({ error: "Could not start the refund safely." }, { status: 500 });
   }

@@ -16,6 +16,35 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-10 - Ops Payments production desk (collect vs settings + resolve actions)
+
+**Decision:** Ops → Payments is a production money desk with two views: **Collect money** (ledger) and **Website settings** (mode/rails/live switch). Collect money lists **Collecting / Collected / Closed**. Cancelled unused links may be deleted; paid/closed links with ledger history are kept. Stuck card attempts are owner-resolvable (`mark_failed` / `mark_cleared`) without calling the gateway. Unfinished refunds support **Record BC ref** or **Release** (`fail`) when BC shows no refund. Ledger **Reverse** is hard-locked to `provider = manual` in API and SQL. Fresh `claimed` attempts (&lt;10 minutes) are not treated as incidents.
+
+**Reason:** live activation left David with an engineer console — cancelled links forever, opaque “reconciliation”, and red ambiguous/refund states with no buttons.
+
+**Impact:** [docs/system/PHASE_16B_OPS_PAYMENTS_PRODUCTION_MISSION.md](PHASE_16B_OPS_PAYMENTS_PRODUCTION_MISSION.md), [PaymentWorkspace](../../components/ops/PaymentWorkspace.tsx), [app/ops/payments/page.tsx](../../app/ops/payments/page.tsx), attempt resolve route, refund `fail` mode, reverse manual-only SQL, [REFUND_RUNBOOK.md](REFUND_RUNBOOK.md).
+
+**Reversible?:** yes for tabs/list labels; do not reverse money-safety locks (manual-only reverse, no-delete-with-history, claim-before-provider, owner-gated resolve).
+
+**Supersedes:** 2026-08-10 Ops Payments list hides closed links and allows safe delete (expanded into full production desk).
+
+---
+
+## 2026-08-10 - Ops Payments list hides closed links and allows safe delete
+
+**Decision:** Ops → Payments shows **open** links by default (`active`, `partially_paid`, `paid`). Cancelled/expired/draft links move under **Show closed links**. Operators may **Delete** a closed link only when it has **no** `payment_transactions` rows. Links with money history cannot be deleted and remain in Closed for audit. The former “Provider readiness and reconciliation” block is replaced with a short card-status line plus a **Needs your attention** section that appears only when unfinished attempts, provider events, or pending refunds exist — using owner-facing language, not bank jargon.
+
+**Reason:** cancelled test links cluttered the page with no remove action, and readiness/reconciliation copy was unreadable for day-to-day villa operations.
+
+**Impact:** [components/ops/PaymentWorkspace.tsx](../../components/ops/PaymentWorkspace.tsx), [app/api/ops/payments/requests/[id]/route.ts](../../app/api/ops/payments/requests/%5Bid%5D/route.ts) `DELETE`, [ARCHITECTURE.md](ARCHITECTURE.md).
+
+**Reversible?:** yes for UI defaults; do not reverse the no-delete-with-ledger-history rule.
+
+**Supersedes:** none.
+**Follow-up:** superseded in scope by 2026-08-10 Ops Payments production desk.
+
+---
+
 ## 2026-08-10 - Easy one-click card refunds from Ops
 
 **Decision:** card refunds are executed from Ops → Payments with a **Refund card** action for **owners**. Oraya **claims a pending refund first**, then calls CyberSource `POST /pts/v2/payments/{id}/refunds`, verifies response amount/currency, and confirms the ledger row. Ambiguous outcomes leave the pending claim in place and **block another provider retry**. A record-only path confirms a pending claim (or records a BC refund) without calling the gateway again. Unique confirmed refund provider references prevent double-counting the same BC id.
