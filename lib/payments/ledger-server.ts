@@ -98,3 +98,35 @@ export async function recordProviderPayment(input: {
     ? { ok: true as const, result }
     : { ok: false as const };
 }
+
+export async function recordProviderRefund(input: {
+  payment_transaction_id: string;
+  amount: number;
+  provider_reference: string;
+  idempotency_key: string;
+  staff_id: string | null;
+  notes?: string | null;
+  verified_source?: "provider" | "operator";
+}) {
+  const { data, error } = await supabaseAdmin.rpc("oraya_record_provider_refund", {
+    p_payment_transaction_id: input.payment_transaction_id,
+    p_amount: input.amount,
+    p_provider_reference: input.provider_reference,
+    p_idempotency_key: input.idempotency_key,
+    p_staff_id: input.staff_id,
+    p_notes: input.notes ?? null,
+    p_verified_source: input.verified_source ?? "provider",
+  });
+  if (error) {
+    console.error("[payment-requests] provider refund projection failed", {
+      payment_transaction_id: input.payment_transaction_id,
+      code: error.code,
+      message: error.message,
+    });
+    return { ok: false as const, error: error.message };
+  }
+  const result = Array.isArray(data) ? data[0] : data;
+  return result?.refund_transaction_id
+    ? { ok: true as const, result }
+    : { ok: false as const, error: "refund_not_recorded" };
+}

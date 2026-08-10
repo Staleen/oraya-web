@@ -46,6 +46,16 @@ test("Apple-only browser and webhook reconciliation record the wallet presentati
   assert.match(webhookHandler, /return "failed"/);
 });
 
+test("operations exposes one-click card refund for NetCommerce receipts", () => {
+  assert.match(workspace, /Refund card/);
+  assert.match(workspace, /\/api\/ops\/payments\/transactions\/\$\{refundFor\.id\}\/refund/);
+  assert.match(workspace, /Refund now/);
+  assert.match(workspace, /Already refunded in Business Center\?/);
+  assert.match(workspace, /transaction\.provider === "credit_libanais"/);
+  // Cash/manual reverse stays available; card receipts use Refund card instead.
+  assert.match(workspace, /transaction\.provider === "manual"/);
+});
+
 test("provider ledger accepts Apple Pay only for an Apple-enabled request", () => {
   assert.match(appleLedgerMigration, /p_wallet_presentation = 'apple_pay'/);
   assert.match(appleLedgerMigration, /'apple_pay' = any\(v_request\.allowed_methods\)/);

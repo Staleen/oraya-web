@@ -17,6 +17,7 @@ import {
   isApprovedProviderPaymentStatus,
   readCyberSourcePaymentStatus,
 } from "@/lib/payments/provider-payment-status";
+import { isProviderRefundSuccessStatus } from "@/lib/payments/provider-refund";
 import {
   buildTransientTokenPaymentRequest,
   isRetrySafeNonChargeHttp,
@@ -515,6 +516,131 @@ async function retrieveCyberSourcePayment(input: {
     });
     return null;
   }
+}
+
+export type CreditLibanaisRefundInput = {
+  payment_id: string;
+  amount: number;
+  currency: "USD" | "LBP";
+  merchant_reference: string;
+};
+
+export type CreditLibanaisRefundResult =
+  | {
+      ok: true;
+      status: string;
+      refund_id: string;
+      reference: string;
+    }
+  | {
+      ok: false;
+      status: string | null;
+      refund_id: string | null;
+      message: string;
+    };
+
+/**
+ * Execute a card refund against a CyberSource payment id.
+ * Uses the same JWT + plaintext default contract as /pts/v2/payments.
+ */
+export async function refundCreditLibanaisPayment(
+  input: CreditLibanaisRefundInput,
+): Promise<CreditLibanaisRefundResult> {
+  const config = requireSessionConfig();
+  const paymentId = input.payment_id.trim();
+  if (!paymentId) {
+    return { ok: false, status: null, refund_id: null, message: "Missing provider payment id." };
+  }
+  const path = `${CYBERSOURCE_PAYMENTS_PATH}/${encodeURIComponent(paymentId)}/refunds`;
+  const apiUrl = new URL(path, `${config.apiBaseUrl}/`);
+  const paymentRequest = JSON.stringify({
+    clientReferenceInformation: {
+      code: input.merchant_reference.trim().slice(0, 50),
+    },
+    orderInformation: {
+      amountDetails: {
+        totalAmount: roundMoney(input.amount).toFixed(2),
+        currency: input.currency,
+      },
+    },
+  });
+  let body = paymentRequest;
+  if (config.requestMleEnabled) {
+    if (!config.requestMleCertificate || !config.requestMleKeyId) {
+      throw new PaymentProviderConfigurationError(
+        "Request MLE is enabled but certificate/key id are not configured.",
+      );
+    }
+    body = await encryptCyberSourceRequest({
+      payload: paymentRequest,
+      requestMleCertificate: config.requestMleCertificate,
+      requestMleKeyId: config.requestMleKeyId,
+    });
+  }
+  const authorization = await buildCyberSourceJwtAuthorization({
+    body,
+    host: apiUrl.host,
+    keyId: config.keyId,
+    merchantId: config.merchantId,
+    path: apiUrl.pathname,
+    sharedSecret: config.sharedSecret,
+  });
+  const response = await fetch(apiUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: authorization,
+    },
+    body,
+    cache: "no-store",
+    signal: AbortSignal.timeout(15_000),
+  });
+  const responseBody = await response.text();
+  let payload: CyberSourcePaymentResponse;
+  try {
+    payload = await decryptCyberSourceResponse<CyberSourcePaymentResponse>({
+      body: responseBody,
+      expectedKeyId: config.responseMleKeyId,
+      responseMlePrivateKey: config.responseMlePrivateKey,
+    });
+  } catch (error) {
+    console.error("[payments/credit-libanais] refund response decrypt failed:", {
+      payment_id: paymentId,
+      http_status: response.status,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return {
+      ok: false,
+      status: null,
+      refund_id: null,
+      message: "Refund response could not be verified with the gateway.",
+    };
+  }
+  const status = readProviderStatus(payload);
+  const refundId = readProviderStringId(payload?.id);
+  const errorMessage = readProviderErrorMessage(payload);
+  if (response.ok && refundId && isProviderRefundSuccessStatus(status)) {
+    return {
+      ok: true,
+      status: status ?? "PENDING",
+      refund_id: refundId,
+      reference: refundId,
+    };
+  }
+  console.error("[payments/credit-libanais] refund not approved:", {
+    payment_id: paymentId,
+    http_status: response.status,
+    provider_status: status,
+    refund_id: refundId,
+    error_message: errorMessage,
+    correlation_id: response.headers.get("v-c-correlation-id"),
+  });
+  return {
+    ok: false,
+    status,
+    refund_id: refundId,
+    message: errorMessage || "The gateway did not accept the refund.",
+  };
 }
 
 function readProviderErrorMessage(payload: CyberSourcePaymentResponse): string | null {
