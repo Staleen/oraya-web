@@ -16,6 +16,20 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-10 - /pts/v2/payments request body is plaintext unless request MLE is explicitly enabled
+
+**Decision:** Oraya sends `/pts/v2/payments` as JWT-authenticated plaintext JSON by default. Request MLE (`encryptedRequest` JWE) is used only when `NETCOMMERCE_CYBERSOURCE_REQUEST_MLE_ENABLED=true` and the SJC certificate/key id are present. Session capture-context creation remains JWT + plaintext (unchanged). Response decryption still accepts either plaintext or `encryptedResponse`.
+
+**Reason:** live attempt `cb5c93bb…` (2026-08-10 ~20:53 UTC) after prior origin/billTo/response-MLE fixes persisted diagnostics `http401|UNAUTHORIZED_USER`. The same merchant JWT shared-secret successfully creates Unified Checkout sessions. CyberSource marks `/pts/v2/payments` request MLE as optional; this org's webhook/response encryption is already off. Encrypting the payment body against that contract produced gateway auth refusal with no payment id (no charge). Defaulting to plaintext matches the working session auth path.
+
+**Impact:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) authorize path + readiness requirements; [.env.example](../../.env.example). No Vercel env change required for the default (off) path. Attempt `cb5c93bb…` is marked failed (already terminal / retry-safe).
+
+**Reversible?:** yes — set `NETCOMMERCE_CYBERSOURCE_REQUEST_MLE_ENABLED=true` with valid SJC material when the org enables request MLE.
+
+**Supersedes:** the payments request-MLE-always portion of 2026-08-08 Phase 16B-2B1 for this organization. Does not supersede JWT authentication.
+
+---
+
 ## 2026-08-10 - Do not request CyberSource response MLE on /pts/v2/payments for this org
 
 **Decision:** payment JWT authentication for `/pts/v2/payments` omits `v-c-response-mle-kid`. Response decryption still accepts an `encryptedResponse` if CyberSource later enables response MLE; plaintext JSON remains accepted per the earlier org-contract decision. HTTP 4xx responses with no payment `id` are classified as retry-safe declines.

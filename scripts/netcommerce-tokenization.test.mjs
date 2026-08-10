@@ -40,6 +40,12 @@ test("NetCommerce payment authorization uses only transient payment tokens", () 
   assert.match(source, /buildTransientTokenPaymentRequest/);
 });
 
+test("NetCommerce request MLE is an exact opt-in (default plaintext payment body)", () => {
+  assert.match(source, /NETCOMMERCE_CYBERSOURCE_REQUEST_MLE_ENABLED/);
+  assert.match(source, /requestMleEnabled:\s*readEnv\("NETCOMMERCE_CYBERSOURCE_REQUEST_MLE_ENABLED"\) === "true"/);
+  assert.match(source, /if \(config\.requestMleEnabled\)/);
+});
+
 test("NetCommerce production checkout is gated by the fail-closed live rollout switch (Plan 4 Phase 3)", () => {
   // The old hardcoded sandbox-only gate is gone ON PURPOSE — readiness now
   // delegates to the pure fail-closed decision (sandbox, or production +
