@@ -54,6 +54,8 @@ test("operations exposes one-click card refund for NetCommerce receipts", () => 
   assert.match(workspace, /provider_blocked/);
   assert.match(workspace, /Do not retry the card refund/);
   assert.match(workspace, /Resolve refund/);
+  assert.match(workspace, /ledger reversed \(card not refunded\)/);
+  assert.match(workspace, /status === "reversed"/);
   assert.match(workspace, /transaction\.provider === "credit_libanais"/);
   // Cash/manual reverse stays available; card receipts use Refund card instead.
   assert.match(workspace, /transaction\.provider === "manual"/);

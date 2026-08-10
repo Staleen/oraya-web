@@ -367,7 +367,8 @@ export default function PaymentWorkspace() {
                 : "Received";
             const isCardPayment = transaction.transaction_type === "payment"
               && transaction.provider === "credit_libanais"
-              && (transaction.status === "confirmed" || transaction.status === "refunded");
+              && Boolean(transaction.provider_reference)
+              && (transaction.status === "confirmed" || transaction.status === "refunded" || transaction.status === "reversed");
             const remainingCardRefund = isCardPayment
               ? remainingRefundableAmount({
                 payment_amount: Number(transaction.amount),
@@ -375,13 +376,15 @@ export default function PaymentWorkspace() {
               })
               : 0;
             const pendingCardRefund = isCardPayment ? pendingRefundFor(transaction.id) : null;
+            const showRefundCard = remainingCardRefund > 0 || Boolean(pendingCardRefund);
             return <div key={transaction.id} style={{ display: "flex", gap: 10, justifyContent: "space-between", alignItems: "center", flexWrap: "wrap" }}>
               <p style={{ margin: "5px 0", color: T.muted, fontSize: 12 }}>
                 {label} · {formatPaymentAmount(Number(transaction.amount), transaction.currency)} · {transaction.provider.replaceAll("_", " ")} · {transaction.provider_reference ?? transaction.receipt_reference ?? "—"}
+                {transaction.status === "reversed" && transaction.provider === "credit_libanais" ? " · ledger reversed (card not refunded)" : ""}
                 {pendingCardRefund ? " · refund pending review" : ""}
               </p>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {(remainingCardRefund > 0 || pendingCardRefund) && (
+                {showRefundCard && (
                   <Button small variant="primary" onClick={() => openCardRefund(transaction)}>
                     {pendingCardRefund ? "Resolve refund" : "Refund card"}
                   </Button>
@@ -404,7 +407,7 @@ export default function PaymentWorkspace() {
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}><Button onClick={() => setReceiptFor(null)}>Cancel</Button><Button variant="primary" disabled={busy || !receiptReference.trim() || Number(receiptAmount) <= 0} onClick={() => void recordReceipt()}>{busy ? "Recording…" : "Record receipt"}</Button></div>
     </Card></div>}
     {reverseFor && <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(10,15,20,.75)", display: "grid", placeItems: "center", padding: 18 }}><Card title="Reverse a receipt" style={{ width: "min(500px,100%)", background: T.navyLift }}>
-      <Banner tone="warn" title="History will be preserved">This creates a correcting entry. It does not delete the original receipt or return money to the guest.</Banner>
+      <Banner tone="warn" title="This is not a card refund">Reverse only corrects a cash/manual receipt in Oraya. It does not return money to a guest card — use Refund card for NetCommerce charges.</Banner>
       <Field label="Reason for reversal" required value={reverseReason} onChange={(event) => setReverseReason(event.target.value)} placeholder="e.g. Duplicate cash receipt" />
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}><Button onClick={() => setReverseFor(null)}>Cancel</Button><Button variant="danger" disabled={busy || !reverseReason.trim()} onClick={() => void reverseReceipt()}>{busy ? "Reversing…" : "Reverse receipt"}</Button></div>
     </Card></div>}
