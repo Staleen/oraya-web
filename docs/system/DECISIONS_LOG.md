@@ -16,6 +16,20 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-10 - Hosted checkout on /book is open to every valid plain stay, not only instant-eligible stays
+
+**Decision:** the Reserve "Continue to secure payment" action attempts hosted card checkout for any valid stay request (villa, dates, availability, payment settings), removing the `instantEligible && bookingTrustMode === "instant"` requirement from the eligibility condition. Add-ons, typed special requests, and manual-review add-on selections still route pay-now to the pending-payment follow-up because their final amount is confirmed by Oraya after review. Payment continues to never auto-confirm a booking, and every checkout failure still falls back safely to the booking-request handoff.
+
+**Reason:** the instant-only restriction was part of the dark-launch posture while production charging was blocked. With live card payments activated (2026-08-10), the owner requires that clients can pay from the website; a guest whose villa/dates are not in instant mode was being silently demoted to the request handoff even though checkout is fully operational.
+
+**Impact:** [app/book/page.tsx](../../app/book/page.tsx) eligibility condition only; server routes, checkout API gates, booking-state separation, and the safe fallback are unchanged. Instant-book UI behavior is untouched.
+
+**Reversible?:** yes — restore the two conditions.
+
+**Supersedes:** the instant-only portion of the narrow hosted-checkout eligibility path described in CURRENT_PHASE (Phase 16B NetCommerce workstream notes). The add-on/special-request follow-up routing remains in force.
+
+---
+
 ## 2026-08-10 - Webhook deliveries follow the org contract: signature-verified plaintext accepted when CyberSource does not encrypt
 
 **Decision:** the CyberSource webhook receiver accepts a non-JWE delivery body only when it is a valid JSON object AND the timestamped `v-c-signature` verifies against the separate digital-signature key within the five-minute tolerance. Signature verification and durable replay claiming in `payment_provider_events` remain mandatory for every delivery; encrypted (compact-JWE) payloads continue to be decrypted with strict algorithm and key-ID checks exactly as before. Each stored provider event now records `payload_encrypted` in its safe metadata.
