@@ -10,6 +10,10 @@ import {
 } from "@/lib/payments/ledger-server";
 import { isPublicRequestPayable, remainingRequestAmount } from "@/lib/payments/ledger";
 import { sendLedgerBookingReceipt } from "@/lib/payments/ledger-receipt";
+import {
+  buildPaymentRequestSuccessUrl,
+  mintBookingPaymentSuccessUrl,
+} from "@/lib/payments/payment-success-redirect";
 import { supabasePaymentAttemptStore } from "@/lib/payments/payment-attempts-store";
 import {
   deriveMerchantReference,
@@ -18,6 +22,27 @@ import {
 import { PaymentProviderConfigurationError } from "@/lib/payments/provider";
 import { resolvePaymentRequestOrigin } from "@/lib/payments/request-origin";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+
+async function resolvePaymentRequestSuccessUrls(origin: string, token: string, bookingId: string | null) {
+  const paymentRequestUrl = buildPaymentRequestSuccessUrl(origin, token);
+  if (!bookingId) {
+    return { payment_request_url: paymentRequestUrl, booking_view_url: null as string | null };
+  }
+  const { data: booking } = await supabaseAdmin
+    .from("bookings")
+    .select("check_out")
+    .eq("id", bookingId)
+    .maybeSingle();
+  const bookingViewUrl = mintBookingPaymentSuccessUrl({
+    origin,
+    booking_id: bookingId,
+    check_out: typeof booking?.check_out === "string" ? booking.check_out : null,
+  });
+  return {
+    payment_request_url: paymentRequestUrl,
+    booking_view_url: bookingViewUrl,
+  };
+}
 
 function readString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : "";
@@ -45,7 +70,14 @@ export async function POST(request: Request) {
     const origin = resolvePaymentRequestOrigin(request);
     const requestUrl = `${origin}/pay/${encodeURIComponent(token)}`;
     if (payment.status === "paid") {
-      return NextResponse.json({ ok: true, paid: true, idempotent: true, payment_request_url: `${requestUrl}?payment=success` });
+      const successUrls = await resolvePaymentRequestSuccessUrls(origin, token, payment.booking_id);
+      return NextResponse.json({
+        ok: true,
+        paid: true,
+        idempotent: true,
+        payment_request_url: successUrls.payment_request_url,
+        ...(successUrls.booking_view_url ? { booking_view_url: successUrls.booking_view_url } : {}),
+      });
     }
     if (!isPublicRequestPayable(payment)) {
       return NextResponse.json({ error: "This payment request is no longer payable." }, { status: 409 });
@@ -146,18 +178,21 @@ export async function POST(request: Request) {
           message: "Payment was approved but needs reconciliation. Do NOT retry or pay again; Oraya will confirm it.",
         }, { status: 500 });
       case "already_recorded":
-      case "approved_recorded":
+      case "approved_recorded": {
         if (payment.booking_id) {
           try { await sendLedgerBookingReceipt(payment.booking_id); }
           catch (emailError) { console.error("[payment-request/complete] receipt email failed", emailError); }
         }
+        const successUrls = await resolvePaymentRequestSuccessUrls(origin, token, payment.booking_id);
         return NextResponse.json({
           ok: true,
           paid: true,
           idempotent: outcome.kind === "already_recorded",
           reference: outcome.provider?.reference,
-          payment_request_url: `${requestUrl}?payment=success`,
+          payment_request_url: successUrls.payment_request_url,
+          ...(successUrls.booking_view_url ? { booking_view_url: successUrls.booking_view_url } : {}),
         });
+      }
     }
   } catch (error) {
     if (error instanceof PaymentProviderConfigurationError) {

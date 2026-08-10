@@ -6,6 +6,7 @@ import { formatPaymentAmount, remainingRequestAmount, type PaymentAllowedMethod 
 import { PAYMENT_PUBLIC_SETTINGS_KEY, parsePaymentPublicSettings } from "@/lib/payments/settings";
 import { getHostedCheckoutPublicStatus } from "@/lib/payments/runtime";
 import { getCreditLibanaisPaymentCapabilities } from "@/lib/payments/credit-libanais";
+import { paymentReturnMessage } from "@/lib/payments/guest-presentation";
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -15,8 +16,16 @@ const labels: Record<PaymentAllowedMethod, string> = {
   whish: "Whish", omt: "OMT Pay", western_union: "Western Union", suyool: "Suyool",
 };
 
-export default async function PaymentRequestPage({ params }: { params: Promise<{ token: string }> }) {
+export default async function PaymentRequestPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ token: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { token } = await params;
+  const query = searchParams ? await searchParams : {};
+  const paymentReturnState = typeof query.payment === "string" ? query.payment : null;
   const payment = await findPublicPaymentRequest(token).catch(() => null);
   if (!payment) notFound();
   const [{ data: settingRow }, checkoutStatus] = await Promise.all([
@@ -30,15 +39,26 @@ export default async function PaymentRequestPage({ params }: { params: Promise<{
   const onlineCheckoutAllowed =
     (payment.allowed_methods.includes("card") && cardCheckoutReady) ||
     (payment.allowed_methods.includes("apple_pay") && applePayReady);
+  const isPaid = payment.status === "paid";
+  const paymentReturn = paymentReturnMessage(paymentReturnState, { isPaid });
 
   return <main className={styles.page}>
     <div className={styles.shell}>
       <Image className={styles.logo} src="/logos/ORAYA_logo_full.png" width={160} height={160} alt="Oraya" priority />
       <section className={styles.card}>
+        {paymentReturn ? (
+          <p className={paymentReturn.tone === "success" ? styles.returnSuccess : styles.returnNeutral}>
+            {paymentReturn.text}
+          </p>
+        ) : null}
         {!payment.payable ? <div className={styles.closed}>
           <p className={styles.eyebrow}>Payment request</p>
-          <h2>{payment.status === "paid" ? "Payment received" : "This link is no longer active"}</h2>
-          <p className={styles.muted}>{payment.status === "paid" ? "Thank you. This request has been paid." : "Please contact Oraya if you still need to make this payment."}</p>
+          <h2>{isPaid ? "Payment received" : "This link is no longer active"}</h2>
+          <p className={styles.muted}>
+            {isPaid
+              ? "Thank you. Your payment has been received and recorded with Oraya."
+              : "Please contact Oraya if you still need to make this payment."}
+          </p>
         </div> : <>
           <p className={styles.eyebrow}>Secure Oraya payment request</p>
           <h1 className={styles.title}>{payment.description}</h1>

@@ -191,7 +191,7 @@ export function paymentReturnMessage(
   if (!state) return null;
   if (state === "success") {
     return payment.isPaid
-      ? { text: "Payment received successfully.", tone: "success" }
+      ? { text: "Thank you — your payment has been received.", tone: "success" }
       : { text: "Your payment was submitted. Oraya is verifying it now.", tone: "neutral" };
   }
   if (state === "cancelled") {

@@ -53,6 +53,29 @@ test("CyberSource JWT has the required v2 claims and signs the exact HTTP body",
   assert.equal(payload["v-c-response-mle-kid"], "response-mle-key-id");
 });
 
+test("GET payment retrieval JWT uses request-method get and empty-body digest", async () => {
+  const sharedSecret = Buffer.from("get retrieval test secret with enough bytes").toString("base64");
+  const authorization = await buildCyberSourceJwtAuthorization({
+    body: "",
+    host: "api.cybersource.com",
+    keyId: "test-key-id",
+    merchantId: "oraya_test",
+    path: "/pts/v2/payments/7863958223886680704897",
+    sharedSecret,
+    requestMethod: "get",
+    issuedAt: 1_700_000_000,
+    jwtId: "32345678-1234-4123-8123-123456789012",
+  });
+  const { payload } = await jwtVerify(
+    authorization.slice("Bearer ".length),
+    Buffer.from(sharedSecret, "base64"),
+    { currentDate: new Date(1_700_000_001_000) },
+  );
+  assert.equal(payload["request-method"], "get");
+  assert.equal(payload.digest, buildCyberSourceDigest(""));
+  assert.equal(payload["request-resource-path"], "/pts/v2/payments/7863958223886680704897");
+});
+
 test("Unified Checkout session JWT omits the response-MLE claim", async () => {
   const sharedSecret = Buffer.from("another deterministic test secret value").toString("base64");
   const authorization = await buildCyberSourceJwtAuthorization({

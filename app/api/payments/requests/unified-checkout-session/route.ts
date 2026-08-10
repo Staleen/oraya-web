@@ -7,6 +7,10 @@ import { findPaymentRequestByPublicToken } from "@/lib/payments/ledger-server";
 import { isPublicRequestPayable, remainingRequestAmount } from "@/lib/payments/ledger";
 import { PaymentProviderConfigurationError, type PaymentLinkPurpose } from "@/lib/payments/provider";
 import { getHostedCheckoutProviderByKey } from "@/lib/payments/runtime";
+import {
+  buildPaymentRequestSuccessUrl,
+  mintBookingPaymentSuccessUrl,
+} from "@/lib/payments/payment-success-redirect";
 import { resolvePaymentRequestOrigin } from "@/lib/payments/request-origin";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
@@ -57,12 +61,26 @@ export async function POST(request: Request) {
     const encodedToken = encodeURIComponent(token);
     const paymentPageUrl = `${origin}/payments/checkout/${encodedToken}?subject=request`;
     const requestUrl = `${origin}/pay/${encodedToken}`;
+    let bookingViewSuccessUrl: string | null = null;
+    if (payment.booking_id) {
+      const { data: booking } = await supabaseAdmin
+        .from("bookings")
+        .select("check_out")
+        .eq("id", payment.booking_id)
+        .maybeSingle();
+      bookingViewSuccessUrl = mintBookingPaymentSuccessUrl({
+        origin,
+        booking_id: payment.booking_id,
+        check_out: typeof booking?.check_out === "string" ? booking.check_out : null,
+      });
+    }
+    const successReturnUrl = bookingViewSuccessUrl ?? buildPaymentRequestSuccessUrl(origin, token);
     const session = await createCreditLibanaisUnifiedCheckoutSession({
       booking_id: payment.booking_id ?? payment.id,
       amount_due: amount,
       currency: payment.currency,
       purpose: providerPurpose(payment.purpose),
-      return_url: `${requestUrl}?payment=success`,
+      return_url: successReturnUrl,
       cancel_url: `${requestUrl}?payment=cancelled`,
       payment_page_url: paymentPageUrl,
       expires_at: payment.expires_at ?? undefined,
@@ -99,9 +117,10 @@ export async function POST(request: Request) {
       capture_context: session.capture_context,
       client_library: session.client_library,
       client_library_integrity: session.client_library_integrity,
-      return_url: `${requestUrl}?payment=success`,
+      return_url: successReturnUrl,
       cancel_url: `${requestUrl}?payment=cancelled`,
       payment_request_url: requestUrl,
+      ...(bookingViewSuccessUrl ? { booking_view_url: bookingViewSuccessUrl } : {}),
       payment_summary: {
         description: payment.description,
         payer_name: payment.payer_name,

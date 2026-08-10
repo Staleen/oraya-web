@@ -13,6 +13,11 @@ import {
   encryptCyberSourceRequest,
 } from "@/lib/payments/cybersource-jwt-mle";
 import {
+  APPROVED_PROVIDER_PAYMENT_STATUSES,
+  isApprovedProviderPaymentStatus,
+  readCyberSourcePaymentStatus,
+} from "@/lib/payments/provider-payment-status";
+import {
   buildTransientTokenPaymentRequest,
   isRetrySafeNonChargeHttp,
 } from "@/lib/payments/transient-token-payment-request";
@@ -103,6 +108,8 @@ export interface CreditLibanaisTransientTokenPaymentResult {
 interface CyberSourcePaymentResponse {
   id?: string;
   status?: string;
+  /** Unified Checkout sometimes echoes the decision here instead of/in addition to status. */
+  outcome?: string;
   reason?: string;
   message?: string;
   errorInformation?: {
@@ -124,6 +131,8 @@ interface CyberSourcePaymentResponse {
     amountDetails?: {
       totalAmount?: string;
       authorizedAmount?: string;
+      settlementAmount?: string;
+      amount?: string;
       currency?: string;
     };
   };
@@ -428,18 +437,84 @@ function readProviderStringId(value: unknown): string | null {
 }
 
 function readProviderStatus(payload: CyberSourcePaymentResponse): string | null {
-  if (typeof payload.status === "string" && payload.status.trim()) {
-    return payload.status.trim();
-  }
+  const fromPayments = readCyberSourcePaymentStatus(payload);
+  if (fromPayments) return fromPayments;
   const errorReason = payload.errorInformation?.reason;
-  if (typeof errorReason === "string" && errorReason.trim()) return errorReason.trim();
-  if (typeof payload.reason === "string" && payload.reason.trim()) return payload.reason.trim();
+  if (typeof errorReason === "string" && errorReason.trim()) {
+    return errorReason.trim().toUpperCase();
+  }
+  if (typeof payload.reason === "string" && payload.reason.trim()) {
+    return payload.reason.trim().toUpperCase();
+  }
   const rmsg = payload.response?.rmsg;
   if (typeof rmsg === "string" && rmsg.trim()) {
     // Gateway-level refusal (auth/MLE/parse) — never created a payment id.
     return "INVALID_REQUEST";
   }
   return null;
+}
+
+function verifyPaymentPayloadAmount(input: {
+  requested_amount: number;
+  requested_currency: string;
+  payload: CyberSourcePaymentResponse | null | undefined;
+}) {
+  return verifyAuthorizedAmountDetails({
+    requested_amount: input.requested_amount,
+    requested_currency: input.requested_currency,
+    response_amount_details: input.payload?.orderInformation?.amountDetails,
+  });
+}
+
+/**
+ * When the create-payment response is an apparent approval (or has a payment id
+ * but incomplete amount details), re-fetch GET /pts/v2/payments/{id} and
+ * re-verify amount/currency before classifying approved. Fail closed if the
+ * follow-up cannot prove the charge.
+ */
+async function retrieveCyberSourcePayment(input: {
+  config: ReturnType<typeof requireSessionConfig>;
+  transaction_id: string;
+}): Promise<CyberSourcePaymentResponse | null> {
+  const path = `${CYBERSOURCE_PAYMENTS_PATH}/${encodeURIComponent(input.transaction_id)}`;
+  const apiUrl = new URL(path, `${input.config.apiBaseUrl}/`);
+  const authorization = await buildCyberSourceJwtAuthorization({
+    body: "",
+    host: apiUrl.host,
+    keyId: input.config.keyId,
+    merchantId: input.config.merchantId,
+    path: apiUrl.pathname,
+    sharedSecret: input.config.sharedSecret,
+    requestMethod: "get",
+  });
+  const response = await fetch(apiUrl, {
+    method: "GET",
+    headers: { Authorization: authorization },
+    cache: "no-store",
+    signal: AbortSignal.timeout(10_000),
+  });
+  const responseBody = await response.text();
+  if (!response.ok) {
+    console.error("[payments/credit-libanais] payment retrieval follow-up failed:", {
+      transaction_id: input.transaction_id,
+      http_status: response.status,
+      correlation_id: response.headers.get("v-c-correlation-id"),
+    });
+    return null;
+  }
+  try {
+    return await decryptCyberSourceResponse<CyberSourcePaymentResponse>({
+      body: responseBody,
+      expectedKeyId: input.config.responseMleKeyId,
+      responseMlePrivateKey: input.config.responseMlePrivateKey,
+    });
+  } catch (error) {
+    console.error("[payments/credit-libanais] payment retrieval decrypt failed:", {
+      transaction_id: input.transaction_id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
 }
 
 function readProviderErrorMessage(payload: CyberSourcePaymentResponse): string | null {
@@ -537,28 +612,57 @@ export async function authorizeCreditLibanaisTransientToken(
     responseMlePrivateKey: config.responseMlePrivateKey,
   });
 
-  let status = readProviderStatus(payload);
-  const transactionId = readProviderStringId(payload?.id);
-  const errorMessage = readProviderErrorMessage(payload);
+  let workingPayload = payload;
+  let status = readProviderStatus(workingPayload);
+  let transactionId = readProviderStringId(workingPayload?.id);
+  const errorMessage = readProviderErrorMessage(workingPayload);
   if (
     !status &&
     isRetrySafeNonChargeHttp({ http_status: response.status, transaction_id: transactionId })
   ) {
     status = "INVALID_REQUEST";
   }
-  const apparentApproval = response.ok && (status === "AUTHORIZED" || status === "CAPTURED");
-  let approvalVerified = false;
 
   // Remediation 1.7: never record a payment whose authorized amount/currency
   // differs from the requested charge (fail closed on missing details too).
-  if (apparentApproval) {
-    const verification = verifyAuthorizedAmountDetails({
+  // When the create-payment body is incomplete but a payment id exists, GET
+  // the payment resource once and re-verify before classifying unknown.
+  let approvalVerified = false;
+  let apparentApproval = response.ok && isApprovedProviderPaymentStatus(status);
+  if (apparentApproval || (response.ok && Boolean(transactionId))) {
+    let verification = verifyPaymentPayloadAmount({
       requested_amount: input.amount_due,
       requested_currency: input.currency,
-      response_amount_details: payload?.orderInformation?.amountDetails,
+      payload: workingPayload,
     });
-    approvalVerified = verification.ok;
-    if (!verification.ok) {
+    const shouldRetrievePayment =
+      Boolean(transactionId) &&
+      (!apparentApproval ||
+        (!verification.ok &&
+          (verification.reason === "response_missing_amount_details" ||
+            verification.reason === "response_amount_unparsable" ||
+            verification.reason === "response_currency_missing")));
+    if (shouldRetrievePayment && transactionId) {
+      const retrieved = await retrieveCyberSourcePayment({
+        config,
+        transaction_id: transactionId,
+      });
+      if (retrieved) {
+        workingPayload = retrieved;
+        const retrievedStatus = readProviderStatus(retrieved);
+        if (retrievedStatus) status = retrievedStatus;
+        transactionId = readProviderStringId(retrieved.id) ?? transactionId;
+        apparentApproval = isApprovedProviderPaymentStatus(status);
+        verification = verifyPaymentPayloadAmount({
+          requested_amount: input.amount_due,
+          requested_currency: input.currency,
+          payload: workingPayload,
+        });
+      }
+    }
+    approvalVerified = apparentApproval && verification.ok;
+    if (apparentApproval && !verification.ok) {
+      const amountDetails = workingPayload?.orderInformation?.amountDetails;
       console.error(
         "[payments/credit-libanais] authorized amount verification failed - outcome is ambiguous:",
         {
@@ -567,6 +671,10 @@ export async function authorizeCreditLibanaisTransientToken(
           provider_session_id: input.provider_session_id,
           transaction_id: transactionId,
           correlation_id: correlationId,
+          amount_detail_keys:
+            amountDetails && typeof amountDetails === "object"
+              ? Object.keys(amountDetails).slice(0, 12)
+              : [],
         },
       );
     }
@@ -575,7 +683,7 @@ export async function authorizeCreditLibanaisTransientToken(
   const outcome = classifyProviderAuthorizationOutcome({
     response_ok: response.ok,
     status,
-    approved_statuses: ["AUTHORIZED", "CAPTURED"],
+    approved_statuses: APPROVED_PROVIDER_PAYMENT_STATUSES,
     // Explicit non-charge / decline statuses release the claim for retry.
     retry_safe_decline_statuses: RETRY_SAFE_PROVIDER_STATUSES,
     approval_verified: approvalVerified,
@@ -588,13 +696,16 @@ export async function authorizeCreditLibanaisTransientToken(
       http_ok: response.ok,
       http_status: response.status,
       provider_status: status,
-      error_reason: payload?.errorInformation?.reason ?? payload?.reason ?? null,
+      error_reason: workingPayload?.errorInformation?.reason ?? workingPayload?.reason ?? null,
       error_message: errorMessage,
       transaction_id: transactionId,
       correlation_id: correlationId,
       outcome,
       // Safe shape only — never log the full body (may contain PAN tokens).
-      body_keys: payload && typeof payload === "object" ? Object.keys(payload).slice(0, 12) : [],
+      body_keys:
+        workingPayload && typeof workingPayload === "object"
+          ? Object.keys(workingPayload).slice(0, 12)
+          : [],
     });
   }
 

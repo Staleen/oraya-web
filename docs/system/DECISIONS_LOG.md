@@ -16,6 +16,20 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-10 - Verified CyberSource approvals redirect guests to payment/booking success
+
+**Decision:** after a server-verified Credit Libanais / NetCommerce approval, Oraya records the payment and redirects the guest to a hospitality success surface. Standalone payment requests land on `/pay/{token}?payment=success` (“Payment received”). Booking-linked payment requests and booking payment links land on `/booking/view/{token}?payment=success`. Payment still never auto-confirms a stay. When a create-payment response has a payment id but incomplete amount/status proof, Oraya performs one authenticated `GET /pts/v2/payments/{id}` follow-up and re-verifies amount/currency before classifying `approved`; missing/mismatched amounts remain fail-closed/`unknown`. Approved provider statuses for recording align with webhook success statuses: `AUTHORIZED`, `CAPTURED`, `SETTLED`, `TRANSMITTED`. Status may be read from CyberSource `status` or `outcome`.
+
+**Reason:** live $1 activation charge (txn `7863958223886680704897`) succeeded at the gateway, but Oraya returned `provider_unknown` and showed “We could not confirm the outcome…” instead of redirecting to confirmation. That is the wrong hospitality display for a real charge. Guests must see payment received on the correct surface once Oraya can prove the approval.
+
+**Impact:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts), [lib/payments/provider-payment-status.ts](../../lib/payments/provider-payment-status.ts), [lib/payments/authorized-amount.ts](../../lib/payments/authorized-amount.ts), [lib/payments/payment-success-redirect.ts](../../lib/payments/payment-success-redirect.ts), payment-request complete/session routes, checkout client redirect preference, `/pay` return banner, guest success copy. Remediation 1.7 amount verification and ambiguous blocking remain.
+
+**Reversible?:** yes for redirect targets and GET follow-up; do not reverse fail-closed amount verification.
+
+**Supersedes:** none. Complements Phase 16B-2A outcome safety and the 2026-08-10 plaintext payments-response decision.
+
+---
+
 ## 2026-08-10 - /pts/v2/payments request body is plaintext unless request MLE is explicitly enabled
 
 **Decision:** Oraya sends `/pts/v2/payments` as JWT-authenticated plaintext JSON by default. Request MLE (`encryptedRequest` JWE) is used only when `NETCOMMERCE_CYBERSOURCE_REQUEST_MLE_ENABLED=true` and the SJC certificate/key id are present. Session capture-context creation remains JWT + plaintext (unchanged). Response decryption still accepts either plaintext or `encryptedResponse`.
