@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { NextResponse } from "next/server";
 import {
   getCreditLibanaisPaymentSettlement,
+  reconcileAmbiguousCreditLibanaisRefund,
   refundCreditLibanaisPayment,
 } from "@/lib/payments/credit-libanais";
 import {
@@ -44,6 +45,47 @@ type PaymentTxnRow = {
  * Never retries the provider after an ambiguous outcome. Pending claims block
  * concurrent provider refunds for the same payment.
  */
+
+/**
+ * An unverifiable refund response used to end here: pending claim, retry lock,
+ * and the operator sent to Business Center to copy a reference by hand. Oraya
+ * holds the API credentials, so it asks the provider itself first. Only a
+ * proven credit of the exact amount confirms the ledger; anything else falls
+ * back to the manual path unchanged.
+ */
+async function tryReconcileAmbiguousRefund(input: {
+  refund_transaction_id: string;
+  refund_id: string | null;
+  idempotency_key: string;
+  amount: number;
+  currency: "USD" | "LBP";
+}) {
+  const reconciled = await reconcileAmbiguousCreditLibanaisRefund({
+    refund_id: input.refund_id,
+    merchant_reference: input.idempotency_key,
+    amount: input.amount,
+    currency: input.currency,
+  });
+  if (!reconciled.ok) {
+    console.error("[ops/payments/refund] self-reconciliation did not prove the refund", {
+      reason: reconciled.reason,
+    });
+    return null;
+  }
+  const confirmed = await confirmProviderRefund({
+    refund_transaction_id: input.refund_transaction_id,
+    provider_reference: reconciled.refund_id,
+    verified_source: "provider",
+  });
+  if (!confirmed.ok) {
+    console.error("[ops/payments/refund] reconciled refund could not be recorded", {
+      error: confirmed.error,
+    });
+    return null;
+  }
+  return { provider_reference: reconciled.refund_id, result: confirmed.result };
+}
+
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
 
@@ -509,7 +551,27 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       );
     }
 
-    // Ambiguous — leave pending claim in place to block retries.
+    // Ambiguous — ask the provider directly before troubling a human.
+    const reconciled = await tryReconcileAmbiguousRefund({
+      refund_transaction_id: claimed.result.refund_transaction_id,
+      refund_id: refund.refund_id,
+      idempotency_key: idempotencyKey,
+      amount: amountCheck.amount,
+      currency: txn.currency,
+    });
+    if (reconciled) {
+      return NextResponse.json({
+        ok: true,
+        mode,
+        reconciled: true,
+        amount: amountCheck.amount,
+        currency: txn.currency,
+        provider_reference: reconciled.provider_reference,
+        result: reconciled.result,
+      });
+    }
+
+    // Still unproven — keep the pending claim so nothing is retried.
     return NextResponse.json(
       {
         error: refund.message,
@@ -535,7 +597,26 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       );
     }
     console.error("[ops/payments/refund] provider call failed", error);
-    // Timeout / network after claim: money may have moved — keep pending.
+    // Timeout / network after claim: money may have moved. This is exactly the
+    // case worth asking the provider about rather than a human.
+    const reconciled = await tryReconcileAmbiguousRefund({
+      refund_transaction_id: claimed.result.refund_transaction_id,
+      refund_id: null,
+      idempotency_key: idempotencyKey,
+      amount: amountCheck.amount,
+      currency: txn.currency,
+    });
+    if (reconciled) {
+      return NextResponse.json({
+        ok: true,
+        mode,
+        reconciled: true,
+        amount: amountCheck.amount,
+        currency: txn.currency,
+        provider_reference: reconciled.provider_reference,
+        result: reconciled.result,
+      });
+    }
     return NextResponse.json(
       {
         error:
