@@ -22,6 +22,11 @@ import {
   verifyRefundAmountDetails,
 } from "@/lib/payments/provider-refund";
 import {
+  buildRefundSearchQuery,
+  readRefundIdFromSearchResults,
+  reconcileRefundFromProviderRecord,
+} from "@/lib/payments/provider-refund-reconcile";
+import {
   classifyCardSettlementState,
   classifyProviderReversalOutcome,
   isDecisionManagerReject,
@@ -55,6 +60,9 @@ export {
 const CREDIT_LIBANAIS_DISPLAY_NAME = "Credit Libanais / NetCommerce Unified Checkout";
 const CYBERSOURCE_SESSIONS_PATH = "/uc/v1/sessions";
 const CYBERSOURCE_PAYMENTS_PATH = "/pts/v2/payments";
+/** Transaction Details / Transaction Search (TSS) — used only to reconcile. */
+const CYBERSOURCE_TSS_TRANSACTIONS_PATH = "/tss/v2/transactions";
+const CYBERSOURCE_TSS_SEARCH_PATH = "/tss/v2/searches";
 const CYBERSOURCE_UNIFIED_CHECKOUT_LIBRARY_PATH = "/uc/v1/assets/1.0.0/UnifiedCheckout.js";
 const DEFAULT_CAPTURE_CONTEXT_TTL_MINUTES = 20;
 const CYBERSOURCE_CARD_PAYMENT_TYPE = "PANENTRY" as const;
@@ -151,6 +159,12 @@ interface CyberSourcePaymentResponse {
     };
   };
   creditAmountDetails?: {
+    creditAmount?: string;
+    currency?: string;
+  };
+  /** Follow-on refund echo — POST /pts/v2/payments/{id}/refunds. */
+  refundAmountDetails?: {
+    refundAmount?: string;
     creditAmount?: string;
     currency?: string;
   };
@@ -1271,4 +1285,127 @@ export async function reverseCreditLibanaisAuthorization(
         ? "Void outcome could not be confirmed. Do NOT retry — check Business Center and record the reversal reference if the hold was released."
         : errorMessage || "The gateway did not accept the void.",
   };
+}
+
+
+// ---------------------------------------------------------------------------
+// Refund self-reconciliation (Transaction Details / Transaction Search)
+// ---------------------------------------------------------------------------
+
+/**
+ * Read-only TSS call. Returns null on any failure — the caller must treat a
+ * null as "still unproven" and keep the manual Business Center path.
+ */
+async function fetchCyberSourceJson(input: {
+  config: ReturnType<typeof requireSessionConfig>;
+  path: string;
+  method: "GET" | "POST";
+  body?: string;
+}): Promise<unknown | null> {
+  const apiUrl = new URL(input.path, `${input.config.apiBaseUrl}/`);
+  const body = input.method === "POST" ? (input.body ?? "{}") : "";
+  const authorization = await buildCyberSourceJwtAuthorization({
+    body,
+    host: apiUrl.host,
+    keyId: input.config.keyId,
+    merchantId: input.config.merchantId,
+    path: apiUrl.pathname,
+    sharedSecret: input.config.sharedSecret,
+    ...(input.method === "GET" ? { requestMethod: "get" as const } : {}),
+  });
+  try {
+    const response = await fetch(apiUrl, {
+      method: input.method,
+      headers: {
+        Authorization: authorization,
+        ...(input.method === "POST" ? { "Content-Type": "application/json" } : {}),
+      },
+      ...(input.method === "POST" ? { body } : {}),
+      cache: "no-store",
+      signal: AbortSignal.timeout(10_000),
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      // 403 here usually means Transaction Search is not enabled for the
+      // merchant account. That is a provider entitlement, not a bug.
+      console.error("[payments/credit-libanais] transaction lookup failed:", {
+        path: input.path,
+        http_status: response.status,
+        correlation_id: response.headers.get("v-c-correlation-id"),
+      });
+      return null;
+    }
+    return JSON.parse(text) as unknown;
+  } catch (error) {
+    console.error("[payments/credit-libanais] transaction lookup threw:", {
+      path: input.path,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
+}
+
+export type RefundReconcileResult =
+  | { ok: true; refund_id: string }
+  | { ok: false; reason: string };
+
+/**
+ * Ask CyberSource whether the refund we just attempted actually exists.
+ *
+ * Tried in order:
+ *   1. Transaction Details on the refund id the gateway returned, when it
+ *      returned one.
+ *   2. Transaction Search by the merchant reference we sent, when it did not.
+ *
+ * Never asserts a refund on its own: the pure reconciler must prove a credit
+ * of the exact amount and currency. Any doubt returns ok:false and the caller
+ * keeps the pending claim, the retry lock, and the manual path.
+ */
+export async function reconcileAmbiguousCreditLibanaisRefund(input: {
+  refund_id: string | null;
+  merchant_reference: string;
+  amount: number;
+  currency: "USD" | "LBP";
+}): Promise<RefundReconcileResult> {
+  let config: ReturnType<typeof requireSessionConfig>;
+  try {
+    config = requireSessionConfig();
+  } catch {
+    return { ok: false, reason: "provider_not_configured" };
+  }
+
+  let refundId = input.refund_id?.trim() || null;
+
+  if (!refundId) {
+    const search = await fetchCyberSourceJson({
+      config,
+      path: CYBERSOURCE_TSS_SEARCH_PATH,
+      method: "POST",
+      body: JSON.stringify({
+        query: buildRefundSearchQuery(input.merchant_reference),
+        offset: 0,
+        limit: 20,
+        sort: "submitTimeUtc:desc",
+      }),
+    });
+    refundId = search ? readRefundIdFromSearchResults(search) : null;
+    if (!refundId) return { ok: false, reason: "refund_not_found" };
+  }
+
+  const details = await fetchCyberSourceJson({
+    config,
+    path: `${CYBERSOURCE_TSS_TRANSACTIONS_PATH}/${encodeURIComponent(refundId)}`,
+    method: "GET",
+  });
+  if (!details) return { ok: false, reason: "details_unavailable" };
+
+  const reconciliation = reconcileRefundFromProviderRecord({
+    payload: details,
+    requested_amount: input.amount,
+    requested_currency: input.currency,
+    merchant_reference: input.merchant_reference,
+  });
+  return reconciliation.kind === "confirmed"
+    ? { ok: true, refund_id: reconciliation.refund_id }
+    : { ok: false, reason: reconciliation.reason };
 }
