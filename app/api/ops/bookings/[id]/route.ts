@@ -18,6 +18,7 @@ import {
 } from "@/lib/send-booking-payment-email";
 import { appendPaymentReminderNote } from "@/lib/payment-reminders";
 import { manualRailToLedger } from "@/lib/payments/ledger";
+import { decideManualPaymentAllowed } from "@/lib/payments/overpayment-guard";
 import { sendEventProposalEmail } from "@/lib/send-event-proposal-email";
 import { sendFeedbackRequestEmail } from "@/lib/send-feedback-request-email";
 import { isFeedbackEmailCooldownActive, isPastCheckoutForFeedbackEmail } from "@/lib/booking-feedback-eligibility";
@@ -165,6 +166,21 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       return NextResponse.json({ error: "This booking no longer exists." }, { status: 404 });
     }
     const row = rowData as unknown as PaymentRow;
+
+    // Money may not be added to a booking that is already settled. Correcting a
+    // mistake is Reverse, not a second payment. (Live incident 2026-08-11.)
+    const overpayment = decideManualPaymentAllowed({
+      amountPaid: row.amount_paid,
+      amountTotal: row.amount_total ?? getFoundationAmountTotal(row as never),
+      amount,
+      allowOverpayment: body.allow_overpayment === true,
+    });
+    if (!overpayment.allowed) {
+      return NextResponse.json(
+        { error: overpayment.message, code: overpayment.reason },
+        { status: 409 },
+      );
+    }
 
     const idempotencyKey = `legacy-${createHash("sha256")
       .update(`${id}|${expected}|${amount}|${method}|${reference}`)

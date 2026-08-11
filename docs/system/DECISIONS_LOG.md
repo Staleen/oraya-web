@@ -16,6 +16,22 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-11 - Money cannot be recorded onto a booking that is already paid in full
+
+**Decision:** the Ops booking payment dialog refuses a manual payment when the booking's recorded `amount_paid` already meets or exceeds `amount_total`, with copy naming the real figures and pointing at **Reverse**. A deliberate over-payment remains possible with an explicit `allow_overpayment` flag. An unknown or zero total never blocks — the guard refuses to guess. Part-paid bookings are untouched, including top-ups that overshoot.
+
+**Reason:** live incident 2026-08-11. A $240 card payment was recorded correctly at 17:28. The Ops bookings list shows "Awaiting your approval" for a pending stay and **never shows payment state**, so the operator believed it had not registered and recorded a manual $240 at 17:32. The booking then read **$480 against a $240 total**. Nothing objected: the ledger's `p_expected_booking_amount_paid` guard is optimistic concurrency, not an over-payment rule, and it was satisfied.
+
+**Correction to an earlier claim:** the Ops dialog does **not** bypass the ledger — it calls `oraya_record_manual_payment` like every other manual receipt. The `legacy-` prefix is only an idempotency-key naming convention. The defect was the missing rule, not a parallel write path.
+
+**Impact:** new [lib/payments/overpayment-guard.ts](../../lib/payments/overpayment-guard.ts) (pure) wired into `record_payment` in [app/api/ops/bookings/[id]/route.ts](../../app/api/ops/bookings/%5Bid%5D/route.ts). No schema change.
+
+**Still outstanding:** the underlying cause is that Ops hides payment state behind approval state (W5 in the production-grade mission). This guard stops the damage; it does not remove the confusion that produced it.
+
+**Reversible?:** yes, but reverting re-opens accidental double-recording.
+
+---
+
 ## 2026-08-11 - Guests can pay for themselves (self-serve payment on the booking view)
 
 **Decision:** the guest booking view now offers payment whenever Oraya can actually take one — online payment on, a mode that allows paying now, the stay not cancelled, and something still owed. A guest who reserved without paying gets **Pay now**; a guest who paid a deposit gets **Pay remaining balance**; an expired or failed link becomes a retry the guest can drive themselves. The button mints a checkout session with the guest's own booking view token via the existing `POST /api/payments/checkout` — no new auth, no operator step. `payment_purpose: "balance"` is unblocked and charges exactly what is outstanding.
