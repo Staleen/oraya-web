@@ -29,6 +29,46 @@ Durable architectural and operational decisions. Append-only - never edit a past
 **Safety:** `canPayNow` defaults to **false**, so any caller that does not opt in keeps the previous link-only behaviour. A fully paid booking and a payment awaiting verification are never offered a button — the second explicitly tells the guest not to pay again. The button never touches card data; it forwards to the hosted page.
 
 **Reversible?:** yes — stop passing `canPayNow`.
+## 2026-08-11 - Instant booking: a fully paid, add-on-free stay confirms itself (owner switch, default off)
+
+**Decision:** a new master switch `instant_booking_auto_confirm` (settings, default **off**, owner-only via Ops → Website) lets a booking confirm itself the moment money is recorded. Every gate must pass: switch on, villa instant flag on, booking still `pending`, not an event inquiry, **no add-ons**, **no special-request message**, stay not already over, and **paid in full** — a deposit never auto-confirms (owner decision 2026-08-11). Confirmation re-checks availability at payment time and uses the same row-count-verified conditional `update … .eq("status","pending")` as the human approve path, then calls the existing shared dispatcher so the confirmation email and the Phase 16C Arrival Guide are sent by the same code, with their existing at-most-once guards.
+
+**Reason:** the owner wants eligible guests to pay and arrive without a human in the loop. Instant Book had been UI-only since Phase 15I.10 — the badge changed the wording on `/book` and nothing else; every booking was inserted `pending` and only three human writers ever confirmed one.
+
+**Impact:** new [lib/bookings/instant-confirm.ts](../../lib/bookings/instant-confirm.ts) (pure gates) + [instant-confirm-server.ts](../../lib/bookings/instant-confirm-server.ts) (availability re-check, conditional confirm, dispatcher), called from all four money paths including the webhook. Ops → Website gains the switch with copy stating exactly what it does. No schema change: the flag is a `settings` row.
+
+**This is a deliberate exception to a standing non-negotiable.** "Money must never confirm, approve, or cancel a booking" still holds everywhere else — the ordinary card paths, the payment link, manual receipts and the webhook all still leave status untouched. Instant Book is the only path where payment confirms, it is off by default, and it is narrow by construction.
+
+**Risk:** an auto-confirmed guest receives the Arrival Guide with no human review. Physical access (gate/door PIN) is Phase 16D and does not exist, so "arrive in minutes" today means confirmed + arrival guide only. If the availability re-check or the confirm write fails for any reason, the booking is left `pending` — the same state as before instant booking, never a half-confirmed one.
+
+**Reversible?:** yes — switch off. Nothing already confirmed is affected.
+## 2026-08-11 - Root cause of stuck refunds: the wrong amount-echo field
+
+**Decision:** `readRefundResponseAmountDetails` reads **`refundAmountDetails`** first (`refundAmount`, falling back to `creditAmount`), then the previous `creditAmountDetails`, then generic `orderInformation.amountDetails`.
+
+**Reason:** `POST /pts/v2/payments/{id}/refunds` answers with `refundAmountDetails` — confirmed in the CyberSource REST model `PtsV2PaymentsRefundPost201Response`. `creditAmountDetails` belongs to standalone and PIN-debit credits, not to a follow-on refund. Oraya read only the latter, so **every successful refund failed amount verification**, `classifyProviderRefundOutcome` fell through to `ambiguous`, the ledger claim stayed pending, and the operator was told to open Business Center and paste a reference for a refund that had already worked. Observed twice in production on 2026-08-11: the $1 activation refund and the $240 booking refund.
+
+**Impact:** [lib/payments/provider-refund.ts](../../lib/payments/provider-refund.ts) and the response type in [credit-libanais.ts](../../lib/payments/credit-libanais.ts). One-click refunds now complete on the first attempt with no Business Center step. Fail-closed behaviour is unchanged: a wrong amount, a wrong currency, or a missing echo still classifies ambiguous and still blocks retries.
+
+**Relationship to self-reconciliation:** the reconcile path (same branch) stays as the safety net for genuinely unverifiable responses and post-claim timeouts. This fix means it should almost never be needed.
+
+**Reversible?:** yes, but reverting reinstates a manual Business Center step on every refund.
+
+---
+
+## 2026-08-11 - Refunds reconcile themselves against CyberSource instead of asking the operator
+
+**Decision:** when a card refund returns an outcome Oraya cannot verify — an unreadable response, a missing amount echo, or a timeout after the claim — Oraya now asks CyberSource directly whether the refund exists, using Transaction Details (`GET /tss/v2/transactions/{id}`) on the refund id the gateway returned, or Transaction Search (`POST /tss/v2/searches` on `clientReferenceInformation.code`) when no id came back. A refund is confirmed automatically **only** when the provider record proves a credit whose amount, currency and merchant reference all match. Anything else keeps today's behaviour exactly: pending claim, do-not-retry lock, and the manual Business Center path.
+
+**Reason:** the operator was being used as the integration. On 2026-08-11 a real $240 refund succeeded at the bank but returned an unverifiable response, so Ops told David to open Business Center, find the refund id and paste it back — for a value Oraya had already received in the gateway response and pre-filled for him. Oraya holds the API credentials; making a human copy identifiers between two systems for every refund is a design failure, and at volume it guarantees mistakes.
+
+**Impact:** new [lib/payments/provider-refund-reconcile.ts](../../lib/payments/provider-refund-reconcile.ts) (pure, fail-closed) + `reconcileAmbiguousCreditLibanaisRefund` in [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts), wired into both unproven branches of the Ops refund route. No schema change, no new dependency, no change to the claim-before-provider contract.
+
+**Risk:** Transaction Search/Details is a separate CyberSource entitlement. Business Center reports this organisation is "not enabled to access TransactionManagement/TransactionSearch", so these calls may return 403 — in which case every lookup fails softly and the manual path is unchanged. If so, ask NetCommerce to enable the Transaction Search and Details API for merchant `06385000`.
+
+**Reversible?:** yes — the reconcile step is additive and can be removed without touching the manual path.
+
+**Supersedes:** the "auto-reconcile via the Business Center transaction-search API" exclusion in [PHASE_16B_MONEY_TO_CONFIRMATION_AUDIT_AND_MISSION.md](PHASE_16B_MONEY_TO_CONFIRMATION_AUDIT_AND_MISSION.md) §7, which listed this as out of scope. David approved it on 2026-08-11 after hitting the manual path on a live refund.
 
 ---
 

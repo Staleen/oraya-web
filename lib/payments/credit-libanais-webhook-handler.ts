@@ -20,6 +20,7 @@ import {
 import { decideSetPaidUpdate, type SetPaidBookingState } from "@/lib/payments/webhook-set-paid";
 import { recordProviderPayment } from "@/lib/payments/ledger-server";
 import { notifyMoneyEvent } from "@/lib/payments/money-event-dispatch-server";
+import { maybeInstantConfirmBooking } from "@/lib/bookings/instant-confirm-server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 /**
@@ -344,6 +345,9 @@ export async function handleCreditLibanaisWebhook(request: Request) {
       provider_transaction_id: event.provider_transaction_id ?? attempt.provider_transaction_id,
       idempotency_key: attempt.idempotency_key,
     });
+    // The webhook is the only observer guaranteed to see the money, so it is
+    // also the backstop for instant confirmation.
+    await maybeInstantConfirmBooking(attempt.booking_id);
   } else if (attempt && (outcome.kind === "marked_failed" || outcome.kind === "conflict")) {
     // Failed and contradictory outcomes reach the operator, never the guest.
     await notifyMoneyEvent({

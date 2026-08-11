@@ -29,6 +29,8 @@ export interface SiteSettings {
   butler_checkin_guidance: string;
   instant_mechmech: boolean;
   instant_byblos: boolean;
+  /** Master switch: a fully paid, add-on-free instant stay confirms itself. */
+  instant_auto_confirm: boolean;
 }
 
 export interface SetupData {
