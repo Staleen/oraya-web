@@ -18,6 +18,11 @@ export type TransientTokenPaymentRequestInput = {
    * known to be healthy for the merchant account.
    */
   skip_decision_manager?: boolean;
+  /**
+   * true  = Sale (authorize + capture together, money moves now).
+   * false = authorize only; capture later. Operator-controlled.
+   */
+  capture_immediately?: boolean;
 };
 
 /**
@@ -60,6 +65,7 @@ export const DECISION_SKIP_ACTION = "DECISION_SKIP" as const;
  */
 export function buildTransientTokenPaymentRequest(input: TransientTokenPaymentRequestInput) {
   const skipDecisionManager = input.skip_decision_manager !== false;
+  const captureImmediately = input.capture_immediately !== false;
   return {
     clientReferenceInformation: {
       // The attempt-derived merchant reference (idempotency identifier) when
@@ -69,7 +75,7 @@ export function buildTransientTokenPaymentRequest(input: TransientTokenPaymentRe
     },
     processingInformation: {
       commerceIndicator: "internet",
-      capture: true,
+      capture: captureImmediately,
       ...(skipDecisionManager ? { actionList: [DECISION_SKIP_ACTION] } : {}),
     },
     tokenInformation: {

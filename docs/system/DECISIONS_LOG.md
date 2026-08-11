@@ -2181,3 +2181,19 @@ Without a backstop, a guest who closes the tab after 3DS leaves money taken and 
 **Impact:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) capture mandate + a contract test pinning it, so a future change to the checkout fields is a deliberate act rather than a silent regression.
 
 **Reversible?:** yes — flip the two flags.
+
+---
+
+## 2026-08-11 - Oraya owns the card-checkout controls, not Business Center
+
+**Decision:** the guest-facing checkout fields and the money-taking mode move out of hardcoded constants into a `card_checkout_behaviour` setting, edited from **Ops → Payments → Website settings**: ask for email, ask for phone, billing address (full / none), fraud screening (Decision Manager on / skipped), and capture mode (Sale now / hold and capture later). The capture context and the payment request are built from it.
+
+**Reason:** for this integration Business Center is decoration — proved three separate ways on 2026-08-11. Its fraud switch refused to turn off ("Decision Manager must be enabled to use Skip option"). Its email and phone toggles had no effect, because `captureMandate` in the capture-context request overrides them. Its only webhook event does not apply to our flow at all. Everything that actually governs a payment lives in the two requests Oraya sends, so the owner's controls belong on the owner's console.
+
+**Impact:** new pure [lib/payments/checkout-behaviour.ts](../../lib/payments/checkout-behaviour.ts) + [checkout-behaviour-server.ts](../../lib/payments/checkout-behaviour-server.ts), wired into the capture context and `buildTransientTokenPaymentRequest`, plus the Ops panel and its change summary. No schema change: one `settings` row.
+
+**Safety:** every default reproduces the live behaviour exactly, and any unreadable or malformed value falls back to those defaults — a corrupt row can never change how cards are charged. `requestSaveCredentials` stays hard-false and is deliberately **not** a toggle: saved cards remain a separately gated workstream. The panel states plainly that turning fraud screening back on will stop payments until NetCommerce fixes Decision Manager, and that removing the billing address disables address verification.
+
+**Not included:** 3-D Secure. Enabling it is a `processingInformation.actionList` change plus handling the issuer's step-up screen, and a toggle that silently breaks enrolled cards would be worse than no toggle. It stays engineering work until the step-up flow exists.
+
+**Reversible?:** yes — delete the settings row and the defaults resume.

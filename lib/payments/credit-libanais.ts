@@ -8,6 +8,12 @@ import {
 import { decideCreditLibanaisCheckoutReady } from "@/lib/payments/live-rollout";
 import { readPaymentsLiveSetting } from "@/lib/payments/live-rollout-setting";
 import {
+  DEFAULT_CHECKOUT_BEHAVIOUR,
+  buildCaptureMandate,
+  type CheckoutBehaviour,
+} from "@/lib/payments/checkout-behaviour";
+import { readCheckoutBehaviour } from "@/lib/payments/checkout-behaviour-server";
+import {
   buildCyberSourceJwtAuthorization,
   decryptCyberSourceResponse,
   encryptCyberSourceRequest,
@@ -427,6 +433,7 @@ function readUnifiedCheckoutContextData(payload: Record<string, unknown> | null)
 function buildCaptureContextRequest(
   input: CreateCheckoutSessionInput,
   config: { country: string; locale: string; applePayEnabled: boolean },
+  behaviour: CheckoutBehaviour = DEFAULT_CHECKOUT_BEHAVIOUR,
 ) {
   const targetOrigin = new URL(input.payment_page_url ?? input.return_url).origin;
   if (!targetOrigin.startsWith("https://")) {
@@ -466,20 +473,9 @@ function buildCaptureContextRequest(
     // Business Center — anything named here wins, which is why switching the
     // email and phone fields off in the dashboard had no effect (owner report,
     // confirmed 2026-08-11). The dashboard is not the control surface; this is.
-    //
-    // Oraya already holds the guest's email and phone from the booking form,
-    // so re-asking for them at the payment step is pure friction on the screen
-    // where abandonment costs the most. The billing address stays FULL: it is
-    // the only address the card network ever sees, it feeds AVS, and it is the
-    // one field the guest genuinely has to supply here.
-    captureMandate: {
-      billingType: "FULL",
-      requestEmail: false,
-      requestPhone: false,
-      requestShipping: false,
-      requestSaveCredentials: false,
-      showAcceptedNetworkIcons: true,
-    },
+    // Which is why it is now driven by Oraya's own setting rather than a
+    // constant only an engineer can move.
+    captureMandate: buildCaptureMandate(behaviour),
     data: {
       orderInformation: {
         amountDetails: {
@@ -781,7 +777,16 @@ export async function authorizeCreditLibanaisTransientToken(
 ): Promise<CreditLibanaisTransientTokenPaymentResult> {
   const config = requireSessionConfig();
   const apiUrl = new URL(CYBERSOURCE_PAYMENTS_PATH, `${config.apiBaseUrl}/`);
-  const paymentRequest = JSON.stringify(buildTransientTokenPaymentRequest(input));
+  // Operator-controlled: whether Decision Manager runs, and whether the money
+  // moves now (Sale) or is only held for later capture.
+  const behaviour = await readCheckoutBehaviour();
+  const paymentRequest = JSON.stringify(
+    buildTransientTokenPaymentRequest({
+      ...input,
+      skip_decision_manager: behaviour.skip_fraud_screening,
+      capture_immediately: behaviour.capture_immediately,
+    }),
+  );
   // Org contract 2026-08-10: request MLE is OFF unless explicitly enabled.
   // Live attempt cb5c93bb returned HTTP 401 UNAUTHORIZED_USER while encrypting
   // the body; /uc/v1/sessions with the same JWT shared-secret (plaintext body)
@@ -965,12 +970,18 @@ export async function createCreditLibanaisUnifiedCheckoutSession(
   const config = requireSessionConfig();
   const apiUrl = new URL(CYBERSOURCE_SESSIONS_PATH, `${config.apiBaseUrl}/`);
   const providerSessionId = `oraya_${crypto.randomUUID()}`;
+  // Operator-controlled: what the card form asks the guest for.
+  const behaviour = await readCheckoutBehaviour();
   const body = JSON.stringify(
-    buildCaptureContextRequest(input, {
-      country: config.country,
-      locale: config.locale,
-      applePayEnabled: config.applePayEnabled,
-    }),
+    buildCaptureContextRequest(
+      input,
+      {
+        country: config.country,
+        locale: config.locale,
+        applePayEnabled: config.applePayEnabled,
+      },
+      behaviour,
+    ),
   );
   const authorization = await buildCyberSourceJwtAuthorization({
     body,

@@ -4,6 +4,10 @@ import { requireOps } from "@/lib/ops-auth";
 import { INSTANT_BOOKING_SETTING_KEYS } from "@/lib/instant-booking-settings";
 import { INSTANT_AUTO_CONFIRM_SETTING_KEY } from "@/lib/bookings/instant-confirm";
 import { ARRIVAL_GUIDE_PAYMENT_GATE_SETTING_KEY } from "@/lib/whatsapp/arrival-guide-gate";
+import {
+  CHECKOUT_BEHAVIOUR_SETTING_KEY,
+  parseCheckoutBehaviour,
+} from "@/lib/payments/checkout-behaviour";
 
 export const dynamic = "force-dynamic";
 const LOG_TAG = "[api/ops/setup/site]";
@@ -30,6 +34,7 @@ export const SITE_SETTING_KEYS = [
   INSTANT_BOOKING_SETTING_KEYS["Villa Byblos"],
   INSTANT_AUTO_CONFIRM_SETTING_KEY,
   ARRIVAL_GUIDE_PAYMENT_GATE_SETTING_KEY,
+  CHECKOUT_BEHAVIOUR_SETTING_KEY,
 ] as const;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -103,6 +108,16 @@ export async function PUT(request: Request) {
     writes.push({
       key: ARRIVAL_GUIDE_PAYMENT_GATE_SETTING_KEY,
       value: body.arrival_guide_payment_gate === true ? "true" : "false",
+    });
+  }
+
+  // Card checkout behaviour — what the guest is asked for, whether Decision
+  // Manager runs, and whether money moves now or is only held. Parsed through
+  // the same defaults, so a malformed body cannot produce a dangerous setting.
+  if (Object.prototype.hasOwnProperty.call(body, "card_checkout_behaviour")) {
+    writes.push({
+      key: CHECKOUT_BEHAVIOUR_SETTING_KEY,
+      value: JSON.stringify(parseCheckoutBehaviour(body.card_checkout_behaviour)),
     });
   }
 

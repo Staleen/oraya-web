@@ -31,6 +31,14 @@ function describeChanges(before: SiteSettings, after: SiteSettings): string[] {
   if (before.instant_byblos !== after.instant_byblos) {
     out.push(after.instant_byblos ? "Villa Byblos offers instant booking" : "Villa Byblos no longer offers instant booking");
   }
+  const bc = before.card_checkout_behaviour, ac = after.card_checkout_behaviour;
+  if (bc && ac) {
+    if (bc.request_email !== ac.request_email) out.push(ac.request_email ? "Card form will ask for an email again" : "Card form no longer asks for an email");
+    if (bc.request_phone !== ac.request_phone) out.push(ac.request_phone ? "Card form will ask for a phone number again" : "Card form no longer asks for a phone number");
+    if (bc.billing_address !== ac.billing_address) out.push(ac.billing_address === "none" ? "Card form no longer asks for a billing address — address verification stops working" : "Card form asks for a full billing address");
+    if (bc.skip_fraud_screening !== ac.skip_fraud_screening) out.push(ac.skip_fraud_screening ? "Fraud screening OFF — Decision Manager skipped on every payment" : "Fraud screening ON — Decision Manager reviews every payment (it currently rejects them all)");
+    if (bc.capture_immediately !== ac.capture_immediately) out.push(ac.capture_immediately ? "Money is taken immediately when a guest pays" : "Cards are only HELD — you must capture the money yourself");
+  }
   if (before.arrival_guide_payment_gate !== after.arrival_guide_payment_gate) {
     out.push(after.arrival_guide_payment_gate
       ? "Arrival guide will be HELD until the deposit arrives"
@@ -120,6 +128,60 @@ export default function SitePage() {
               />
               <p style={{ margin: "6px 0 0", fontSize: "12px", color: T.faint }}>
                 Separate several with commas.
+              </p>
+            </Card>
+
+            <Card title="Card checkout — what guests are asked for">
+              <p style={{ margin: "0 0 14px", fontSize: "12px", color: T.faint, lineHeight: 1.6 }}>
+                CyberSource&apos;s own dashboard cannot change these for Oraya — the payment request
+                overrides it. So they live here.
+              </p>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: "12px", marginBottom: "14px" }}>
+                <label style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: T.muted }}>
+                  Ask for email
+                  <CellSelect style={{ marginTop: "6px" }} value={working.card_checkout_behaviour?.request_email ? "yes" : "no"}
+                    onChange={(e) => update({ card_checkout_behaviour: { ...working.card_checkout_behaviour, request_email: e.target.value === "yes" } })}>
+                    <option value="no">No — Oraya already has it</option>
+                    <option value="yes">Yes — ask again</option>
+                  </CellSelect>
+                </label>
+                <label style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: T.muted }}>
+                  Ask for phone
+                  <CellSelect style={{ marginTop: "6px" }} value={working.card_checkout_behaviour?.request_phone ? "yes" : "no"}
+                    onChange={(e) => update({ card_checkout_behaviour: { ...working.card_checkout_behaviour, request_phone: e.target.value === "yes" } })}>
+                    <option value="no">No — Oraya already has it</option>
+                    <option value="yes">Yes — ask again</option>
+                  </CellSelect>
+                </label>
+                <label style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: T.muted }}>
+                  Billing address
+                  <CellSelect style={{ marginTop: "6px" }} value={working.card_checkout_behaviour?.billing_address ?? "full"}
+                    onChange={(e) => update({ card_checkout_behaviour: { ...working.card_checkout_behaviour, billing_address: e.target.value === "none" ? "none" : "full" } })}>
+                    <option value="full">Ask for the full address</option>
+                    <option value="none">Don&apos;t ask — card details only</option>
+                  </CellSelect>
+                </label>
+                <label style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: T.muted }}>
+                  When to take the money
+                  <CellSelect style={{ marginTop: "6px" }} value={working.card_checkout_behaviour?.capture_immediately ? "now" : "later"}
+                    onChange={(e) => update({ card_checkout_behaviour: { ...working.card_checkout_behaviour, capture_immediately: e.target.value === "now" } })}>
+                    <option value="now">Immediately when they pay</option>
+                    <option value="later">Hold the card, capture later</option>
+                  </CellSelect>
+                </label>
+                <label style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: T.muted }}>
+                  Fraud screening
+                  <CellSelect style={{ marginTop: "6px" }} value={working.card_checkout_behaviour?.skip_fraud_screening ? "off" : "on"}
+                    onChange={(e) => update({ card_checkout_behaviour: { ...working.card_checkout_behaviour, skip_fraud_screening: e.target.value === "off" } })}>
+                    <option value="off">Off — skip Decision Manager</option>
+                    <option value="on">On — Decision Manager reviews payments</option>
+                  </CellSelect>
+                </label>
+              </div>
+              <p style={{ margin: 0, fontSize: "12px", color: T.warn, lineHeight: 1.6 }}>
+                Fraud screening is off because Decision Manager currently rejects <b>every</b> payment on
+                your merchant account with reason 481. Turning it on will stop card payments working until
+                NetCommerce fixes it. Without a billing address, address verification cannot run.
               </p>
             </Card>
 

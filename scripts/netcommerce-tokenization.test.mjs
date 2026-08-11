@@ -12,7 +12,12 @@ const paymentRequestSource = readFileSync(
 );
 
 test("NetCommerce capture context disables saved-card consent", () => {
-  assert.match(source, /requestSaveCredentials:\s*false/);
+  // The capture mandate moved into lib/payments/checkout-behaviour.ts so the
+  // operator can control the guest-facing fields. Saved credentials stay a
+  // hard false there — they are a separately gated workstream, never a toggle.
+  const behaviour = readFileSync("lib/payments/checkout-behaviour.ts", "utf8");
+  assert.match(behaviour, /requestSaveCredentials:\s*false/);
+  assert.doesNotMatch(behaviour, /requestSaveCredentials:\s*true/);
   assert.doesNotMatch(source, /requestSaveCredentials:\s*true/);
 });
 

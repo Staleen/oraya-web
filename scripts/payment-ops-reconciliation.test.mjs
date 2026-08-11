@@ -344,18 +344,22 @@ test("a held arrival guide does not consume its at-most-once claim", () => {
 });
 
 test("checkout does not re-ask the guest for details Oraya already holds", () => {
+  const behaviour = readFileSync("lib/payments/checkout-behaviour.ts", "utf8");
   const client = readFileSync("lib/payments/credit-libanais.ts", "utf8");
-  const mandate = client.slice(
-    client.indexOf("captureMandate: {"),
-    client.indexOf("captureMandate: {") + 320,
-  );
+
   // Oraya collects email and phone on the booking form; asking again at the
-  // payment step is friction where abandonment costs most.
-  assert.match(mandate, /requestEmail: false/);
-  assert.match(mandate, /requestPhone: false/);
-  // The billing address is the one thing the guest must supply here: it is
-  // what the card network sees and what AVS checks.
-  assert.match(mandate, /billingType: "FULL"/);
-  // Saved credentials remain a separately gated workstream.
-  assert.match(mandate, /requestSaveCredentials: false/);
+  // card step is friction where abandonment costs most. These are the
+  // DEFAULTS — the operator can change them from Ops, an engineer need not.
+  const defaults = behaviour.slice(
+    behaviour.indexOf("DEFAULT_CHECKOUT_BEHAVIOUR: CheckoutBehaviour = {"),
+    behaviour.indexOf("DEFAULT_CHECKOUT_BEHAVIOUR: CheckoutBehaviour = {") + 320,
+  );
+  assert.match(defaults, /request_email: false/);
+  assert.match(defaults, /request_phone: false/);
+  // Decision Manager stays skipped until NetCommerce fixes it.
+  assert.match(defaults, /skip_fraud_screening: true/);
+
+  // The capture context is built from the setting, not from a constant.
+  assert.match(client, /captureMandate: buildCaptureMandate\(behaviour\)/);
+  assert.match(client, /await readCheckoutBehaviour\(\)/);
 });

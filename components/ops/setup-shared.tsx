@@ -33,6 +33,14 @@ export interface SiteSettings {
   instant_auto_confirm: boolean;
   /** Hold the WhatsApp arrival guide until the deposit has arrived. */
   arrival_guide_payment_gate: boolean;
+  /** What the card form asks for, and how the money is taken. */
+  card_checkout_behaviour: {
+    request_email: boolean;
+    request_phone: boolean;
+    billing_address: "full" | "none";
+    skip_fraud_screening: boolean;
+    capture_immediately: boolean;
+  };
 }
 
 export interface SetupData {
