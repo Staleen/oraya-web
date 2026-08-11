@@ -1,4 +1,5 @@
 import "./arrival.css";
+import { accessCodeChipLabel, buildAccessCodeRequestUrl } from "@/lib/arrival/access-code-request";
 import OrayaLogoFull from "@/components/OrayaLogoFull";
 import {
   ARRIVAL_CONTENT,
@@ -15,8 +16,10 @@ import {
  * Renders ONLY for a verified, confirmed booking (enforced by the route).
  * ACCESS BOUNDARY: no gate PIN, no front-door PIN, no access codes — the
  * design's PIN merge fields are intentionally replaced with the safe
- * "provided by Oraya before arrival" state until Phase 16D ships an
- * approved access-code delivery system.
+ * "tap to get it now" WhatsApp request until Phase 16D ships an approved
+ * access-code delivery system. The guide never renders a code; it gives the
+ * guest a one-tap way to ask a human for one, because nothing in Oraya
+ * currently sends a PIN at all.
  */
 
 const SHARED = "/house-book/shared";
@@ -137,12 +140,20 @@ export default function ArrivalGuide({ villa, guestName, stayDates, bookingRefer
             <p style={{ fontSize: "11px", color: "var(--oraya-muted)", margin: "8px 0 0", textAlign: "center" }}>{c.gateCaption}</p>
           </div>
           <div style={{ display: "grid", gap: "14px" }}>
-            <Step n={1}>Enter the gate PIN on the keypad.</Step>
+            <Step n={1}>Enter the gate code on the keypad.</Step>
             <Step n={2}>Press the <strong>open</strong> button.</Step>
             <Step n={3}>The gate slides open — drive in.</Step>
           </div>
           <div style={{ textAlign: "center" }}>
-            <span className="m-chip">Gate access — provided by Oraya before arrival</span>
+            <a
+              className="m-chip"
+              href={buildAccessCodeRequestUrl({ whatsappUrl: WHATSAPP_URL, bookingReference, door: "gate" })}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ display: "inline-block", textDecoration: "none" }}
+            >
+              {accessCodeChipLabel("gate")}
+            </a>
           </div>
           <div className="m-panel m-fact">
             <div className="l">Parking</div>
@@ -162,11 +173,19 @@ export default function ArrivalGuide({ villa, guestName, stayDates, bookingRefer
           </div>
           <div style={{ display: "grid", gap: "14px" }}>
             <Step n={1}>Touch the keypad to wake it.</Step>
-            <Step n={2}>Enter the front-door PIN.</Step>
+            <Step n={2}>Enter the front-door code.</Step>
             <Step n={3}>Press the handle — <strong>you’re home.</strong></Step>
           </div>
           <div style={{ textAlign: "center" }}>
-            <span className="m-chip">Door access — provided by Oraya before arrival</span>
+            <a
+              className="m-chip"
+              href={buildAccessCodeRequestUrl({ whatsappUrl: WHATSAPP_URL, bookingReference, door: "front_door" })}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ display: "inline-block", textDecoration: "none" }}
+            >
+              {accessCodeChipLabel("front_door")}
+            </a>
           </div>
           <div className="m-panel m-fact">
             <div className="l">{c.doorPanelTitle}</div>

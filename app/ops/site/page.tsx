@@ -177,7 +177,23 @@ export default function SitePage() {
                     <option value="on">On — Decision Manager reviews payments</option>
                   </CellSelect>
                 </label>
+                <label style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: T.muted }}>
+                  3-D Secure
+                  <CellSelect style={{ marginTop: "6px" }} value={working.card_checkout_behaviour?.payer_authentication ?? "off"}
+                    onChange={(e) => update({ card_checkout_behaviour: { ...working.card_checkout_behaviour, payer_authentication: e.target.value === "required" ? "required" : e.target.value === "frictionless_only" ? "frictionless_only" : "off" } })}>
+                    <option value="off">Off — no bank verification</option>
+                    <option value="frictionless_only">On, silent only — never blocks a guest</option>
+                    <option value="required">On, strict — refuse what the bank won&apos;t verify</option>
+                  </CellSelect>
+                </label>
               </div>
+              <p style={{ margin: 0, fontSize: "12px", color: T.muted, lineHeight: 1.6 }}>
+                3-D Secure shifts chargeback liability to the card issuer. <b>Silent only</b> takes that
+                protection when the bank grants it without asking the guest anything, and lets the payment
+                through unverified when the bank wants to challenge them — so nobody is ever left stuck.
+                <b> Strict</b> refuses those payments instead: safest against chargebacks, and it will turn
+                away real cards until Oraya can show a bank challenge screen.
+              </p>
               <p style={{ margin: 0, fontSize: "12px", color: T.warn, lineHeight: 1.6 }}>
                 Fraud screening is off because Decision Manager currently rejects <b>every</b> payment on
                 your merchant account with reason 481. Turning it on will stop card payments working until

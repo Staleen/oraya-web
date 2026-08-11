@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import type { CheckoutSetupFailureAlert } from "./payments/checkout-setup-alert.ts";
 import { LOGO_URL } from "@/lib/brand";
 import { reportMissingResendKey } from "@/lib/email-config";
 import {
@@ -253,6 +254,52 @@ export async function sendOperatorMoneyAlertEmail(
     return true;
   } catch (error) {
     console.error("[sendOperatorMoneyAlertEmail] send failed:", error);
+    return false;
+  }
+}
+
+/**
+ * The guest asked to pay and no checkout could be opened.
+ *
+ * Deliberately NOT a money alert: no payment was attempted at the bank, so
+ * calling it "failed" would put a phantom attempt in the operator's mental
+ * ledger. This is a sales failure with an outstanding promise attached.
+ */
+export async function sendOperatorCheckoutSetupFailureEmail(payload: {
+  to: string[];
+  alert: CheckoutSetupFailureAlert;
+}): Promise<boolean> {
+  if (payload.to.length === 0) return false;
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    reportMissingResendKey("sendOperatorCheckoutSetupFailureEmail");
+    return false;
+  }
+  const [lead, ...rest] = payload.alert.lines;
+  const body = rest
+    .map(
+      (line) =>
+        `<p style="margin:0 0 10px;font-size:14px;line-height:1.7;color:${WHITE};">${escapeHtml(line)}</p>`,
+    )
+    .join("");
+  const html = shell("Guest could not pay", "Oraya operations", body, lead ?? "");
+
+  try {
+    const { error } = await new Resend(apiKey).emails.send({
+      from: FROM_EMAIL,
+      replyTo: REPLY_TO,
+      to: payload.to,
+      subject: payload.alert.subject,
+      html,
+      text: payload.alert.lines.join("\n"),
+    });
+    if (error) {
+      console.error("[sendOperatorCheckoutSetupFailureEmail] Resend error:", error);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error("[sendOperatorCheckoutSetupFailureEmail] send failed:", error);
     return false;
   }
 }

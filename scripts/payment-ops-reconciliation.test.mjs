@@ -363,3 +363,26 @@ test("checkout does not re-ask the guest for details Oraya already holds", () =>
   assert.match(client, /captureMandate: buildCaptureMandate\(behaviour\)/);
   assert.match(client, /await readCheckoutBehaviour\(\)/);
 });
+
+test("drift correction appends, and never edits or deletes history", () => {
+  const sweep = readFileSync("lib/payments/reconcile-sweep.ts", "utf8");
+
+  // Corrections go through the same claim-before-provider reversal RPCs as a
+  // manual void — a compensating entry beside the payment, not an edit.
+  assert.match(sweep, /claimProviderAuthorizationReversal\(/);
+  assert.match(sweep, /confirmProviderAuthorizationReversal\(/);
+  assert.doesNotMatch(sweep, /\.delete\(\)/);
+  // The only table this file updates is its own bookkeeping, never the ledger.
+  assert.doesNotMatch(sweep, /from\("payment_transactions"\)[\s\S]{0,120}\.update\(/);
+
+  // The in-flight reconciler must keep refusing to re-open terminal attempts;
+  // drift detection is a separate pass precisely so that stays true.
+  assert.match(sweep, /runProviderDriftSweep/);
+  assert.match(sweep, /POLLABLE_ATTEMPT_STATUSES/);
+
+  // Both passes run where an operator or the schedule will trigger them.
+  const cron = readFileSync("app/api/cron/payment-reconcile/route.ts", "utf8");
+  assert.match(cron, /runProviderDriftSweep\(/);
+  const desk = readFileSync("app/api/ops/payments/requests/route.ts", "utf8");
+  assert.match(desk, /runProviderDriftSweep\(/);
+});

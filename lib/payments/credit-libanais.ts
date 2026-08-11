@@ -14,6 +14,10 @@ import {
 } from "@/lib/payments/checkout-behaviour";
 import { readCheckoutBehaviour } from "@/lib/payments/checkout-behaviour-server";
 import {
+  decidePayerAuthentication,
+  readPayerAuthenticationResult,
+} from "@/lib/payments/payer-authentication";
+import {
   buildCyberSourceJwtAuthorization,
   decryptCyberSourceResponse,
   encryptCyberSourceRequest,
@@ -777,14 +781,17 @@ export async function authorizeCreditLibanaisTransientToken(
 ): Promise<CreditLibanaisTransientTokenPaymentResult> {
   const config = requireSessionConfig();
   const apiUrl = new URL(CYBERSOURCE_PAYMENTS_PATH, `${config.apiBaseUrl}/`);
-  // Operator-controlled: whether Decision Manager runs, and whether the money
-  // moves now (Sale) or is only held for later capture.
+  // Operator-controlled: whether Decision Manager runs, whether 3-D Secure is
+  // requested, and whether the money moves now (Sale) or is only held for
+  // later capture. All three are request fields — the Business Center
+  // switches for them are decoration on this integration.
   const behaviour = await readCheckoutBehaviour();
   const paymentRequest = JSON.stringify(
     buildTransientTokenPaymentRequest({
       ...input,
       skip_decision_manager: behaviour.skip_fraud_screening,
       capture_immediately: behaviour.capture_immediately,
+      payer_authentication: behaviour.payer_authentication,
     }),
   );
   // Org contract 2026-08-10: request MLE is OFF unless explicitly enabled.
@@ -904,7 +911,7 @@ export async function authorizeCreditLibanaisTransientToken(
     }
   }
 
-  const outcome = classifyProviderAuthorizationOutcome({
+  let outcome = classifyProviderAuthorizationOutcome({
     response_ok: response.ok,
     status,
     approved_statuses: APPROVED_PROVIDER_PAYMENT_STATUSES,
@@ -912,6 +919,53 @@ export async function authorizeCreditLibanaisTransientToken(
     retry_safe_decline_statuses: RETRY_SAFE_PROVIDER_STATUSES,
     approval_verified: approvalVerified,
   });
+
+  // 3-D Secure verdict. The ECI and CAVV only exist in the authorization
+  // RESPONSE, so this is the earliest possible moment to act on them. Strict
+  // mode is only permitted alongside deferred capture (enforced when the
+  // setting is saved), so refusing here releases a hold — it never has to
+  // claw back money the guest already paid.
+  let payerAuthDecision = decidePayerAuthentication(
+    behaviour.payer_authentication,
+    readPayerAuthenticationResult(workingPayload),
+  );
+  if (outcome !== "approved") {
+    // Nothing was approved, so there is no authentication verdict to enforce.
+    payerAuthDecision = { action: "proceed", authenticated: false };
+  }
+  if (payerAuthDecision.action === "refuse") {
+    console.error("[payments/credit-libanais] refused by strict 3-D Secure:", {
+      booking_id: input.booking_id,
+      provider_session_id: input.provider_session_id,
+      transaction_id: transactionId,
+      correlation_id: correlationId,
+      reason: payerAuthDecision.reason,
+    });
+    if (transactionId) {
+      // Release the hold. Best-effort: a failed reversal leaves an authorized
+      // amount the operator can void from Ops, which is strictly better than
+      // capturing a payment Oraya just refused.
+      try {
+        await reverseCreditLibanaisAuthorization({
+          payment_id: transactionId,
+          amount: input.amount_due,
+          currency: input.currency,
+          merchant_reference:
+            input.merchant_reference?.trim() || `oraya-3ds-void-${input.provider_session_id}`,
+          reason: `strict 3-D Secure: ${payerAuthDecision.reason}`,
+        });
+      } catch (reversalError) {
+        console.error(
+          "[payments/credit-libanais] could not release the hold after a 3-D Secure refusal — void it from Ops:",
+          { transaction_id: transactionId, error: String(reversalError) },
+        );
+      }
+    }
+    // A refused payment is a decline, not an approval. "declined" (rather than
+    // "ambiguous") because Oraya decided this deliberately and knows exactly
+    // what happened — the guest may safely try another card.
+    outcome = "declined";
+  }
 
   if (outcome !== "approved") {
     console.error("[payments/credit-libanais] payment authorization not approved:", {
@@ -935,11 +989,15 @@ export async function authorizeCreditLibanaisTransientToken(
 
   const approved = outcome === "approved";
   const message =
-    outcome === "approved"
-      ? "Payment was approved by the gateway."
-      : outcome === "declined"
-        ? "Payment was declined by the gateway."
-        : "Payment outcome could not be verified with the gateway.";
+    payerAuthDecision.action === "refuse"
+      // Say what actually happened. "Declined by the gateway" would send the
+      // guest to their bank about a decision Oraya made.
+      ? payerAuthDecision.guestMessage
+      : outcome === "approved"
+        ? "Payment was approved by the gateway."
+        : outcome === "declined"
+          ? "Payment was declined by the gateway."
+          : "Payment outcome could not be verified with the gateway.";
 
   const diagnosticReference = [
     correlationId,

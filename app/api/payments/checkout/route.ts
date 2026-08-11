@@ -1,4 +1,8 @@
 import { NextResponse } from "next/server";
+import { buildCheckoutSetupFailureAlert, type CheckoutSetupFailureStage } from "@/lib/payments/checkout-setup-alert";
+import { sendOperatorCheckoutSetupFailureEmail } from "@/lib/send-payment-notification-email";
+import { loadOperatorRecipients } from "@/lib/payments/money-event-dispatch-server";
+import { formatBookingReference } from "@/lib/booking-reference";
 import { createActionToken, verifyViewToken } from "@/lib/booking-action-token";
 import { roundMoney } from "@/lib/money";
 import { getMinimumDepositAmount, validatePaymentSelection } from "@/lib/payments/checkout-amount";
@@ -71,6 +75,38 @@ function readRequestedAmount(value: unknown): number | null {
   return null;
 }
 
+
+/**
+ * The guest asked to pay and Oraya could not open a checkout. `/book` has
+ * already told them "Oraya will send your secure payment link when it is
+ * ready" — a promise made in the operator's name. Before this, the only
+ * record was a console line nobody reads, so the guest waited for a link
+ * no human knew to send. Best-effort: never blocks or changes the response.
+ */
+async function alertOperatorCheckoutSetupFailed(
+  stage: CheckoutSetupFailureStage,
+  context: { bookingId?: string | null; guestName?: string | null; amount?: number | null },
+): Promise<void> {
+  try {
+    const to = await loadOperatorRecipients();
+    if (to.length === 0) {
+      console.error("[api/payments/checkout] no notification_emails configured — guest payment failure unreported");
+      return;
+    }
+    await sendOperatorCheckoutSetupFailureEmail({
+      to,
+      alert: buildCheckoutSetupFailureAlert({
+        stage,
+        booking_reference: context.bookingId ? formatBookingReference(context.bookingId) : null,
+        guest_name: context.guestName ?? null,
+        amount: context.amount ?? null,
+        currency: "USD",
+      }),
+    });
+  } catch (alertError) {
+    console.error("[api/payments/checkout] operator alert failed", alertError);
+  }
+}
 
 export async function POST(request: Request) {
   try {
@@ -204,6 +240,9 @@ export async function POST(request: Request) {
       .maybeSingle();
     if (existingRequestError) {
       console.error("[api/payments/checkout] canonical request lookup failed", existingRequestError.message);
+      await alertOperatorCheckoutSetupFailed("provider_unavailable", {
+        bookingId: booking.id, guestName: booking.guest_name, amount: selection.chargeAmount,
+      });
       return NextResponse.json({ error: "Secure payment link could not be prepared." }, { status: 503 });
     }
 
@@ -258,12 +297,18 @@ export async function POST(request: Request) {
             "[api/payments/checkout] concurrent canonical request recovery failed",
             concurrentRequestError?.message,
           );
+          await alertOperatorCheckoutSetupFailed("request_not_created", {
+            bookingId: booking.id, guestName: booking.guest_name, amount: selection.chargeAmount,
+          });
           return NextResponse.json({ error: "Secure payment link could not be created." }, { status: 503 });
         }
         paymentRequestId = String(concurrentRequest.id);
         paymentPageUrl = concurrentUrl;
       } else if (createRequestError || !createdRequest) {
         console.error("[api/payments/checkout] canonical request creation failed", createRequestError?.message);
+        await alertOperatorCheckoutSetupFailed("request_not_created", {
+          bookingId: booking.id, guestName: booking.guest_name, amount: selection.chargeAmount,
+        });
         return NextResponse.json({ error: "Secure payment link could not be created." }, { status: 503 });
       } else {
         paymentRequestId = createdRequest.id;
@@ -306,6 +351,9 @@ export async function POST(request: Request) {
 
     if (updateError) {
       console.error("[api/payments/checkout] booking update failed:", updateError);
+      await alertOperatorCheckoutSetupFailed("booking_not_updated", {
+        bookingId: booking.id, guestName: booking.guest_name, amount: selection.chargeAmount,
+      });
       if (createdNewRequest && paymentRequestId) {
         await supabaseAdmin.from("payment_requests")
           .update({ status: "cancelled", cancelled_at: new Date().toISOString(), updated_at: new Date().toISOString() })

@@ -2209,3 +2209,67 @@ Without a backstop, a guest who closes the tab after 3DS leaves money taken and 
 **Loop safety:** the checkout's cancel URL returns to the booking view, never to `/pay`, and any gateway return state (`?payment=…`) renders the page normally. Both are asserted by a contract test, because a redirect loop here would make paying impossible rather than merely annoying.
 
 **Reversible?:** yes — remove the redirect block.
+
+---
+
+## 2026-08-12 - Oraya detects money voided directly in Business Center
+
+**Decision:** a second reconciliation pass (`runProviderDriftSweep`) re-checks recently recorded card payments against CyberSource. When the provider reports the authorization as voided or reversed and Oraya still counts the money, it appends a **compensating reversal** through the same claim-before-provider RPCs the manual void uses. It runs from the scheduled job and whenever an operator opens the payments desk.
+
+**Reason:** nothing in Oraya could observe an action taken in Business Center. The webhook cannot fire for this integration, and the in-flight reconciler deliberately never re-examines a `recorded` attempt. Live proof: booking `52f5b602` — **a real guest, Mira Khalaf** — still read `paid_in_full`, $240, with no reversal, after the authorization was voided at the bank. Three of the four known false ledger entries have the same shape.
+
+**Why a separate pass:** `reconcileWebhookEvent` must keep refusing to touch terminal states — re-opening settled history is how ledgers get corrupted. Widening its query would have destroyed that guarantee. Drift detection is therefore its own sweep that only ever **adds** a row.
+
+**Safety:** fails closed in every direction. An unreachable provider, an unrecognised status, a payment already reversed or refunded in Oraya, a manual-rail payment, or anything not a confirmed card payment all mean do nothing. Only an explicit voided/reversed status on money Oraya still counts produces a correction, and the correction carries a note explaining itself. Nothing is edited or deleted — asserted by a contract test.
+
+**Not covered:** refunds issued in Business Center against a *settled* capture. Those need the credit to be matched to the payment, which is the Transaction Search entitlement this account does not have. Voids — the case that actually occurred — are covered.
+
+**Reversible?:** yes — remove the second pass; the first is unaffected.
+
+## 2026-08-12 — Six open points from the Phase 16B production-grade list
+
+**Member bookings displayed as "Guest".** `guest_name` is only set for anonymous
+bookers, so six Ops surfaces reading `guest_name ?? "Guest"` showed a stranger's
+name and hid a known customer's. Extended the existing `bookingGuestName()` in
+`lib/ops-queue.ts` (member email fallback; "Member" ≠ "Guest") and routed the
+payments desk, MoneyDialog, availability and operator money alerts through it.
+
+**`/book` audited as a guest.** Two defects fixed. (1) A guest who asks to pay
+and hits a 5xx is told "Oraya will send your secure payment link when it is
+ready" — a promise nobody was told to keep. Server-side checkout failures now
+alert the operator. (2) `/book` accepts a WhatsApp number OR an email, but only
+email is used to acknowledge, and no WhatsApp fires on booking create: a
+phone-only guest heard nothing at all. The operator's booking email now carries
+an explicit ACTION NEEDED line naming the number to message.
+
+**"Send anyway" for a held arrival guide.** The gate already accepted an
+override; there was no way to use it. Added an owner-only endpoint and an Ops
+control that appears only when a guide is genuinely held, requires a written
+reason, and appends it to `bookings.payment_notes`. Never marks anything paid.
+
+**Door codes.** The arrival guide instructs the guest to enter a gate PIN and a
+front-door PIN, then shows "provided by Oraya before arrival" — nothing in
+Oraya sends a PIN, and Phase 16D has not shipped. Replaced the dead end with a
+one-tap WhatsApp request quoting the booking reference. No code is stored or
+rendered; the PIN pool remains a 16D decision.
+
+**Four false ledger entries.** Built a read-only detector
+(`lib/payments/ledger-suspicion.ts`, `GET /api/ops/payments/ledger-health`) that
+names entries contradicted by the ledger's own contents and states the remedy
+for each. It does NOT append corrections: every remedy moves recorded money and
+needs Business Center confirmation first.
+
+**3-D Secure.** Requested through `processingInformation.actionList`
+(`CONSUMER_AUTHENTICATION`), alongside `DECISION_SKIP` — the Business Center
+switch is decoration here, same as the fraud switch was. Three states, not a
+boolean: `off` (unchanged), `frictionless_only` (take the liability shift when
+the bank grants it silently; never block a challenged guest), `required`
+(refuse what the bank will not verify). Strict mode is rejected at save time
+unless capture is deferred, because ECI/CAVV only arrive in the authorization
+response — refusing after an immediate capture would mean refunding rather than
+releasing a hold. A refusal voids the authorization and returns the guest a
+message about Oraya's decision, not a bank decline.
+
+**Business Center refunds.** Drift detection now covers `REFUNDED`/`CREDITED`
+as well as voids, with a distinct correction note. Full coverage still needs
+the Transaction Search entitlement, which merchant 06385000 does not have.

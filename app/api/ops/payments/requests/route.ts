@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { runPaymentAttemptReconciliation } from "@/lib/payments/reconcile-sweep";
+import {
+  runPaymentAttemptReconciliation,
+  runProviderDriftSweep,
+} from "@/lib/payments/reconcile-sweep";
 import { requireOps } from "@/lib/ops-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { parseCreatePaymentRequestInput } from "@/lib/payments/ledger";
@@ -21,6 +24,10 @@ export async function GET(request: Request) {
   // the provider. Capped, read-only, and it never throws — the desk must load
   // even when the provider is unreachable. See lib/payments/reconcile-sweep.ts.
   await runPaymentAttemptReconciliation({ limit: 5 });
+  // And catch money voided directly in Business Center, which nothing else
+  // can observe: no webhook fires, and the attempt sweep will not re-examine
+  // a payment it has already recorded.
+  await runProviderDriftSweep({ limit: 5, sinceDays: 30 });
 
   const [
     { data: requests, error: requestError },

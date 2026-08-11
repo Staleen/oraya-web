@@ -1,6 +1,9 @@
 import { timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
-import { runPaymentAttemptReconciliation } from "@/lib/payments/reconcile-sweep";
+import {
+  runPaymentAttemptReconciliation,
+  runProviderDriftSweep,
+} from "@/lib/payments/reconcile-sweep";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -34,5 +37,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const summary = await runPaymentAttemptReconciliation({ limit: 25 });
-  return NextResponse.json({ ok: true, ...summary });
+  // Second pass: money the provider says is gone that Oraya still counts —
+  // a void performed directly in Business Center is invisible otherwise.
+  const drift = await runProviderDriftSweep({ limit: 25, sinceDays: 30 });
+  return NextResponse.json({ ok: true, ...summary, drift });
 }
