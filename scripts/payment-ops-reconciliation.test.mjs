@@ -289,3 +289,41 @@ test("refunds reconcile themselves before troubling a human", () => {
   // Reconciliation may only confirm with a provider-verified reference.
   assert.match(refundRoute, /verified_source: "provider"/);
 });
+
+test("polled reconciliation reuses the webhook core and never writes to the provider", () => {
+  const cron = readFileSync("lib/payments/reconcile-sweep.ts", "utf8");
+
+  // Same reconciliation core as the webhook — no second state machine.
+  assert.match(cron, /reconcileWebhookEvent\(/);
+  assert.match(cron, /recordPaymentOnBooking/);
+  assert.match(cron, /supabasePaymentAttemptStore\.transitionAttempt/);
+
+  // Read-only against the provider: retrieval, never a charge or refund.
+  assert.match(cron, /retrieveCreditLibanaisPaymentForReconcile/);
+  for (const forbidden of [
+    /authorizeCreditLibanaisTransientToken/,
+    /refundCreditLibanaisPayment/,
+    /reverseCreditLibanaisAuthorization/,
+  ]) {
+    assert.doesNotMatch(cron, forbidden);
+  }
+
+  // The cron entry point is secret-gated, like the calendar sync.
+  const cronRoute = readFileSync("app/api/cron/payment-reconcile/route.ts", "utf8");
+  assert.match(cronRoute, /CRON_SECRET/);
+  assert.match(cronRoute, /timingSafeEqual/);
+
+  // Hobby allows one cron per day, so the desk also triggers the sweep.
+  const deskRoute = readFileSync("app/api/ops/payments/requests/route.ts", "utf8");
+  assert.match(deskRoute, /runPaymentAttemptReconciliation\(/);
+
+  // Downstream is the same as the webhook's: notify, then instant confirm.
+  assert.match(cron, /notifyMoneyEvent\(/);
+  assert.match(cron, /maybeInstantConfirmBooking\(/);
+
+  const vercel = JSON.parse(readFileSync("vercel.json", "utf8"));
+  const job = vercel.crons.find((c) => c.path === "/api/cron/payment-reconcile");
+  assert.ok(job, "the reconcile job must be scheduled");
+  // Vercel Hobby rejects anything more frequent than daily at deploy time.
+  assert.doesNotMatch(job.schedule, /^\*|\/\d/, "schedule must be at most once per day");
+});

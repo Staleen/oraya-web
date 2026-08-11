@@ -42,7 +42,7 @@ type ReconciliationBookingRow = SetPaidBookingState & { id: string };
 const BOOKING_COLUMNS =
   "id, payment_status, payment_stage, payment_method, payment_reference, payment_link_status, payment_provider_session_id, amount_paid, amount_total, amount_due, deposit_amount, event_type, message, proposal_total_amount, proposal_deposit_amount, pricing_subtotal, pricing_snapshot, addons_snapshot";
 
-async function recordPaymentOnBooking(
+export async function recordPaymentOnBooking(
   attempt: ReconciliationAttempt,
   event: ReconciliationEvent,
 ): Promise<"recorded" | "already_paid" | "failed"> {

@@ -2124,3 +2124,24 @@ No external consumer is locked in - WhatChimp can be unconfigured without affect
 ---
 
 <!-- New entries go above this line, newest first. Old entries never deleted. -->
+
+---
+
+## 2026-08-11 - Polled reconciliation replaces the webhook this account cannot deliver
+
+**Decision:** `/api/cron/payment-reconcile` (`CRON_SECRET`-gated) polls in-flight payment attempts older than 10 minutes, retrieves the payment from CyberSource, and feeds the result into the **same** reconciliation core the webhook uses. On a recorded payment it runs the same downstream the webhook does: the money-event dispatcher, then instant confirmation. Read-only against the provider — it never authorizes, refunds or reverses.
+
+**Reason:** confirmed in Business Center on 2026-08-11, merchant `06385000` offers exactly two webhook products, **Decision Manager** and **Unified Checkout**, and Unified Checkout exposes exactly one event: `uc.orders.transactionresults`, described by CyberSource as firing *"for payments processed through Unified Checkout's complete method."* Oraya deliberately does **not** use that method — it authorizes server-side with a transient token so the amount is verified against Oraya's own booking, the attempt is claimed before the bank is called, and the browser's return stays informational. That choice is why no payment can be faked or double-charged, and it is also why the only available event can never fire. Evidence: one delivery in the integration's entire history, and it was the manual test, against four real authorizations.
+
+Without a backstop, a guest who closes the tab after 3DS leaves money taken and nothing recorded — no ledger row, no receipt, no confirmation.
+
+**Why not the alternatives:** switching to Unified Checkout's complete method would rewrite the payment path that only started working hours earlier and would surrender server-side amount verification. Asking NetCommerce to enable a Payments webhook product is out of Oraya's control and the owner has deprioritised further provider contact.
+
+**Impact:** new pure [lib/payments/attempt-poll.ts](../../lib/payments/attempt-poll.ts), `retrieveCreditLibanaisPaymentForReconcile` in [credit-libanais.ts](../../lib/payments/credit-libanais.ts), `recordPaymentOnBooking` exported from the webhook handler so there is one recording path, the cron route, and a `vercel.json` schedule. No schema change, no new dependency.
+
+**Safety:** no new state machine — `reconcileWebhookEvent` keeps its monotonic transitions and its refusal to rewrite terminal states. An approved status whose amount cannot be verified is `unknown`, never success. Attempts younger than 10 minutes are left alone so polling cannot race the guest's own redirect. Attempts with no provider transaction id are left for a human. Terminal attempts are never re-examined.
+
+**Scheduling:** Vercel Hobby rejects any cron more frequent than daily *at deploy time*, so `vercel.json` carries a daily run as the guaranteed floor. The real cadence comes from the existing **cron-job.org** account (already used for `/api/cron/calendar-sync` every 10 minutes), which calls the same URL with `Authorization: Bearer <CRON_SECRET>`. The same sweep also runs opportunistically, capped at five attempts, whenever an operator opens the payments desk — so anyone looking at Payments reconciles within seconds. All three entry points share one implementation and are individually idempotent, so overlapping runs are harmless.
+
+**Reversible?:** yes — remove the cron entry and the desk call. Everything else is additive.
+

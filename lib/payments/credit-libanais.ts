@@ -1409,3 +1409,60 @@ export async function reconcileAmbiguousCreditLibanaisRefund(input: {
     ? { ok: true, refund_id: reconciliation.refund_id }
     : { ok: false, reason: reconciliation.reason };
 }
+
+
+export type PolledPaymentLookup = {
+  /** false when the provider could not be reached or is not configured. */
+  ok: boolean;
+  provider_status: string | null;
+  amount_verified: boolean;
+};
+
+/**
+ * Retrieve a payment and verify its amount/currency against what Oraya
+ * expected. Used by the scheduled reconciliation job, which stands in for the
+ * webhook this merchant account cannot deliver. Never throws.
+ */
+export async function retrieveCreditLibanaisPaymentForReconcile(input: {
+  payment_id: string;
+  amount: number;
+  currency: "USD" | "LBP";
+}): Promise<PolledPaymentLookup> {
+  const miss: PolledPaymentLookup = {
+    ok: false,
+    provider_status: null,
+    amount_verified: false,
+  };
+  const paymentId = input.payment_id.trim();
+  if (!paymentId) return miss;
+
+  let config: ReturnType<typeof requireSessionConfig>;
+  try {
+    config = requireSessionConfig();
+  } catch {
+    return miss;
+  }
+
+  let payload: CyberSourcePaymentResponse | null = null;
+  try {
+    payload = await retrieveCyberSourcePayment({ config, transaction_id: paymentId });
+  } catch (error) {
+    console.error("[payments/credit-libanais] polled retrieval threw:", {
+      payment_id: paymentId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return miss;
+  }
+  if (!payload) return miss;
+
+  const verification = verifyPaymentPayloadAmount({
+    requested_amount: input.amount,
+    requested_currency: input.currency,
+    payload,
+  });
+  return {
+    ok: true,
+    provider_status: readProviderStatus(payload),
+    amount_verified: verification.ok,
+  };
+}

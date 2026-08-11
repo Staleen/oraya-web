@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { runPaymentAttemptReconciliation } from "@/lib/payments/reconcile-sweep";
 import { requireOps } from "@/lib/ops-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { parseCreatePaymentRequestInput } from "@/lib/payments/ledger";
@@ -14,6 +15,12 @@ export async function GET(request: Request) {
   const auth = await requireOps(request);
   if (!auth.ok) return auth.response;
   await expireDuePaymentRequests();
+
+  // Vercel Hobby allows one cron per day, so the payments desk is also a
+  // reconciliation trigger: opening it polls a few in-flight attempts against
+  // the provider. Capped, read-only, and it never throws — the desk must load
+  // even when the provider is unreachable. See lib/payments/reconcile-sweep.ts.
+  await runPaymentAttemptReconciliation({ limit: 5 });
 
   const [
     { data: requests, error: requestError },
