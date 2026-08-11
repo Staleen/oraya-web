@@ -19,6 +19,7 @@ import {
 } from "@/lib/guest-testimonials";
 import { INSTANT_BOOKING_SETTING_KEYS } from "@/lib/instant-booking-settings";
 import { INSTANT_AUTO_CONFIRM_SETTING_KEY } from "@/lib/bookings/instant-confirm";
+import { ARRIVAL_GUIDE_PAYMENT_GATE_SETTING_KEY } from "@/lib/whatsapp/arrival-guide-gate";
 
 export const dynamic = "force-dynamic";
 const LOG_TAG = "[api/ops/setup]";
@@ -54,6 +55,7 @@ export async function GET(request: Request) {
         INSTANT_BOOKING_SETTING_KEYS["Villa Mechmech"],
         INSTANT_BOOKING_SETTING_KEYS["Villa Byblos"],
         INSTANT_AUTO_CONFIRM_SETTING_KEY,
+        ARRIVAL_GUIDE_PAYMENT_GATE_SETTING_KEY,
       ]),
     supabaseAdmin
       .from("addons")
@@ -100,6 +102,7 @@ export async function GET(request: Request) {
       instant_mechmech: byKey.get(INSTANT_BOOKING_SETTING_KEYS["Villa Mechmech"]) === "true",
       instant_byblos: byKey.get(INSTANT_BOOKING_SETTING_KEYS["Villa Byblos"]) === "true",
       instant_auto_confirm: byKey.get(INSTANT_AUTO_CONFIRM_SETTING_KEY) === "true",
+      arrival_guide_payment_gate: byKey.get(ARRIVAL_GUIDE_PAYMENT_GATE_SETTING_KEY) === "true",
     },
     readiness,
     // The fail-closed live switch is READ-ONLY here: its only writer is the

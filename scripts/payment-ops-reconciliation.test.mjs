@@ -289,3 +289,18 @@ test("refunds reconcile themselves before troubling a human", () => {
   // Reconciliation may only confirm with a provider-verified reference.
   assert.match(refundRoute, /verified_source: "provider"/);
 });
+
+test("a held arrival guide does not consume its at-most-once claim", () => {
+  const dispatcher = readFileSync("lib/whatsapp/confirmed-stay-notification.ts", "utf8");
+  const gateIndex = dispatcher.indexOf("decideArrivalGuideRelease({");
+  const claimIndex = dispatcher.indexOf("await claim(");
+  assert.ok(gateIndex > 0, "the payment gate must exist");
+  assert.ok(
+    claimIndex > gateIndex,
+    "the gate must be checked BEFORE the claim, or a held guide could never be sent later",
+  );
+  // Holding is an explicit, observable reason — never a silent no-op.
+  assert.match(dispatcher, /"awaiting_deposit"/);
+  // The confirmation email is a separate concern and must not be gated here.
+  assert.doesNotMatch(dispatcher, /sendBookingEmail|sendEventConfirmationEmail/);
+});

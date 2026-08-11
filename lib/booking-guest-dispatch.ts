@@ -3,6 +3,7 @@ import { sendBookingEmail } from "@/lib/send-booking-email";
 import { sendEventConfirmationEmail } from "@/lib/send-event-confirmation-email";
 import { dispatchConfirmedStayWhatsAppNotification } from "@/lib/whatsapp/confirmed-stay-notification";
 import { resolveBookingRecipient } from "@/lib/booking-recipient";
+import { ARRIVAL_GUIDE_PAYMENT_GATE_SETTING_KEY } from "@/lib/whatsapp/arrival-guide-gate";
 
 /**
  * The ONE copy of "message the guest about a booking status change".
@@ -35,6 +36,10 @@ export interface GuestDispatchBookingRow {
   pricing_subtotal?: number | string | null;
   pricing_snapshot?: { subtotal?: number | string | null } | null;
   proposal_total_amount?: number | string | null;
+  /** Money state — read only by the arrival-guide payment gate. */
+  amount_paid?: number | string | null;
+  amount_total?: number | string | null;
+  deposit_amount?: number | string | null;
 }
 
 export type GuestDispatchWhatsAppOutcome = { dispatched: boolean; reason?: string } | null;
@@ -131,6 +136,23 @@ export async function dispatchBookingStatusGuestMessages(
   let whatsappOutcome: GuestDispatchWhatsAppOutcome = null;
   if (status === "confirmed" && !isEventInquiry) {
     try {
+      // Payment gate (settings.payment_gated_arrival_guide, default off).
+      // Read here rather than inside the dispatcher so the dispatcher stays a
+      // pure-ish helper with injectable deps for its tests.
+      let paymentGateEnabled = false;
+      try {
+        const { data: gateRow } = await db
+          .from("settings")
+          .select("value")
+          .eq("key", ARRIVAL_GUIDE_PAYMENT_GATE_SETTING_KEY)
+          .maybeSingle();
+        const raw = (gateRow as { value?: unknown } | null)?.value;
+        paymentGateEnabled = String(raw ?? "").trim().toLowerCase() === "true";
+      } catch {
+        // Unreadable setting means OFF — never hold a guide on a guess.
+        paymentGateEnabled = false;
+      }
+
       whatsappOutcome = await dispatchConfirmedStayWhatsAppNotification({
         booking_id: bookingId,
         status: "confirmed",
@@ -142,7 +164,10 @@ export async function dispatchBookingStatusGuestMessages(
         guest_name: booking.guest_name ?? null,
         guest_phone: booking.guest_phone ?? null,
         member_id: booking.member_id ?? null,
-      });
+        amount_paid: booking.amount_paid == null ? null : Number(booking.amount_paid),
+        amount_total: booking.amount_total == null ? null : Number(booking.amount_total),
+        deposit_amount: booking.deposit_amount == null ? null : Number(booking.deposit_amount),
+      }, { arrivalGuidePaymentGateEnabled: paymentGateEnabled });
     } catch (whatsappErr) {
       console.error(`${logTag} whatsapp dispatch unexpected error:`, whatsappErr);
       whatsappOutcome = { dispatched: false, reason: "unexpected_error" };

@@ -31,6 +31,8 @@ export interface SiteSettings {
   instant_byblos: boolean;
   /** Master switch: a fully paid, add-on-free instant stay confirms itself. */
   instant_auto_confirm: boolean;
+  /** Hold the WhatsApp arrival guide until the deposit has arrived. */
+  arrival_guide_payment_gate: boolean;
 }
 
 export interface SetupData {

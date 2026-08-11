@@ -31,6 +31,11 @@ function describeChanges(before: SiteSettings, after: SiteSettings): string[] {
   if (before.instant_byblos !== after.instant_byblos) {
     out.push(after.instant_byblos ? "Villa Byblos offers instant booking" : "Villa Byblos no longer offers instant booking");
   }
+  if (before.arrival_guide_payment_gate !== after.arrival_guide_payment_gate) {
+    out.push(after.arrival_guide_payment_gate
+      ? "Arrival guide will be HELD until the deposit arrives"
+      : "Arrival guide goes out as soon as you approve, paid or not");
+  }
   if (before.instant_auto_confirm !== after.instant_auto_confirm) {
     out.push(after.instant_auto_confirm
       ? "Fully paid instant stays will CONFIRM THEMSELVES — no approval from you"
@@ -140,6 +145,21 @@ export default function SitePage() {
               <p style={{ margin: "-6px 0 18px", fontSize: "12px", color: T.muted, lineHeight: 1.6 }}>
                 This changes which lane the booking page <b>shows</b> for each villa. Whether a paid
                 stay confirms itself is the separate switch below.
+              </p>
+
+              <label style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: T.muted, display: "block", marginBottom: "10px" }}>
+                Hold the arrival guide until the deposit arrives
+                <CellSelect style={{ marginTop: "6px" }} value={working.arrival_guide_payment_gate ? "yes" : "no"}
+                  onChange={(e) => update({ arrival_guide_payment_gate: e.target.value === "yes" })}>
+                  <option value="no">No — send it as soon as I approve</option>
+                  <option value="yes">Yes — hold it until they have paid</option>
+                </CellSelect>
+              </label>
+              <p style={{ margin: "-6px 0 18px", fontSize: "12px", color: T.faint, lineHeight: 1.6 }}>
+                The arrival details are the product. With this on, an approved guest still gets the
+                confirmation email immediately, but the WhatsApp arrival guide waits until the deposit
+                lands — then goes out on its own, once. Twenty confirmed bookings are currently unpaid
+                and three of them already hold arrival guides.
               </p>
 
               <label style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: T.muted, display: "block", marginBottom: "10px" }}>

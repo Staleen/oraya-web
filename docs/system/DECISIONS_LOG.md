@@ -2124,3 +2124,19 @@ No external consumer is locked in - WhatChimp can be unconfigured without affect
 ---
 
 <!-- New entries go above this line, newest first. Old entries never deleted. -->
+
+---
+
+## 2026-08-11 - The arrival guide waits for the deposit (owner switch, default off)
+
+**Decision:** a new switch `payment_gated_arrival_guide` (settings, default **off**, owner-only via Ops → Website) holds the WhatsApp Arrival Guide until money arrives. The threshold is `deposit_amount` when one is set, otherwise `amount_total`; an unknown threshold never holds. The **confirmation email always sends** — only the arrival deliverable is gated. When money later lands on a confirmed booking, the money-event dispatcher releases the guide automatically.
+
+**Reason:** the arrival details are the product. Shipping them before the deposit removes the guest's reason to pay. Live evidence 2026-08-11: 20 confirmed bookings were unpaid, and three of them had already received the Arrival Guide having paid nothing.
+
+**The critical mechanic:** the gate is evaluated **before** the at-most-once claim on `bookings.whatsapp_confirmation_sent_at`, so a held guide does not burn its claim and remains sendable exactly once later. A contract test asserts that ordering, because reversing it would silently make held guides unsendable forever.
+
+**Impact:** new pure [lib/whatsapp/arrival-guide-gate.ts](../../lib/whatsapp/arrival-guide-gate.ts), a new `awaiting_deposit` skip reason in [confirmed-stay-notification.ts](../../lib/whatsapp/confirmed-stay-notification.ts), money fields carried through [booking-guest-dispatch.ts](../../lib/booking-guest-dispatch.ts), release from the money-event dispatcher via [arrival-guide-release-server.ts](../../lib/whatsapp/arrival-guide-release-server.ts), and the Ops → Website switch. No schema change.
+
+**Safety:** off by default, so merging changes nothing until David turns it on. Skips are explicit and logged (`awaiting_deposit`), never silent. Booking status, availability and the confirmation email are untouched. Release inherits the existing at-most-once claim, so several money paths observing one payment cannot produce two messages.
+
+**Reversible?:** yes — switch off.
