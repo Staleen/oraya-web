@@ -1,5 +1,5 @@
 "use client";
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { bookingGuestName, formatBookingRef, type QueueBooking } from "@/lib/ops-queue";
 import { bookingMoneyView, parseStaySetupMessage } from "@/lib/ops-booking-display";
@@ -161,10 +161,35 @@ function BookingDetail() {
   const [flash, setFlash] = useState("");
   const [actionError, setActionError] = useState("");
   const [feedbackBusy, setFeedbackBusy] = useState(false);
+  const [guideHeld, setGuideHeld] = useState(false);
+  const [overrideOpen, setOverrideOpen] = useState(false);
+  const [overrideReason, setOverrideReason] = useState("");
+  const [overrideBusy, setOverrideBusy] = useState(false);
 
   // Derived from the live array on every render, so the 45s refresh is
   // reflected immediately instead of freezing at click time (audit D-2).
   const booking = useMemo(() => bookings.find((b) => b.id === id), [bookings, id]);
+
+  // Whether the payment gate is holding this guest's arrival guide is a server
+  // question — it depends on the gate switch, which the browser never sees.
+  // Asking the server keeps the "Send it anyway" button from ever disagreeing
+  // with the gate itself. Hooks run before the not-found return below.
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const r = await fetch(`/api/ops/bookings/${id}/arrival-guide/send-anyway`, {
+          credentials: "include", cache: "no-store",
+        });
+        const body = (await r.json().catch(() => ({}))) as { ok?: boolean; available?: boolean };
+        if (!cancelled) setGuideHeld(Boolean(body.ok && body.available));
+      } catch {
+        if (!cancelled) setGuideHeld(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [id, bookings]);
 
   if (!booking) {
     return (
@@ -219,6 +244,41 @@ function BookingDetail() {
       setFlash("Arrival Guide link copied — paste it to the guest on WhatsApp.");
     } catch {
       setActionError("Couldn't reach Oraya.");
+    }
+  }
+
+  async function sendGuideAnyway() {
+    const reason = overrideReason.trim();
+    if (reason.length < 4) {
+      setActionError("Write why this guide is going out before the deposit.");
+      return;
+    }
+    setOverrideBusy(true);
+    setActionError("");
+    try {
+      const r = await fetch(`/api/ops/bookings/${bookingId}/arrival-guide/send-anyway`, {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason }),
+      });
+      const body = (await r.json().catch(() => ({}))) as { ok?: boolean; explanation?: string; dispatched?: boolean };
+      if (!r.ok || !body.ok) {
+        setFlash("");
+        setActionError(body.explanation ?? "Couldn't send the guide.");
+        return;
+      }
+      setOverrideOpen(false);
+      setOverrideReason("");
+      setGuideHeld(false);
+      setFlash(
+        body.dispatched
+          ? "Arrival Guide sent before the deposit. The reason is on the booking."
+          : "Override recorded, but WhatsApp did not accept the message. Send the link manually.",
+      );
+    } catch {
+      setActionError("Couldn't reach Oraya.");
+    } finally {
+      setOverrideBusy(false);
     }
   }
 
@@ -377,6 +437,38 @@ function BookingDetail() {
                     <Button wide onClick={() => void copyArrivalLink()}>
                       Copy their Arrival Guide link
                     </Button>
+                  )}
+                  {!isEvent && guideHeld && (
+                    <div style={{ border: `1px solid ${T.gold}`, padding: "12px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                      <p style={{ margin: 0, fontSize: "13px", color: T.ink }}>
+                        Arrival guide held — awaiting deposit. The guest has not received it.
+                      </p>
+                      {!overrideOpen ? (
+                        <Button wide onClick={() => setOverrideOpen(true)}>Send it anyway</Button>
+                      ) : (
+                        <>
+                          <label htmlFor="guide-override-reason" style={{ fontSize: "12px", color: T.muted }}>
+                            Why is this going out before the deposit?
+                          </label>
+                          <textarea
+                            id="guide-override-reason"
+                            value={overrideReason}
+                            onChange={(e) => setOverrideReason(e.target.value)}
+                            rows={2}
+                            placeholder="Bank transfer confirmed by phone, arriving tonight…"
+                            style={{ width: "100%", padding: "8px", fontSize: "13px", fontFamily: "inherit" }}
+                          />
+                          <div style={{ display: "flex", gap: "8px" }}>
+                            <Button wide disabled={overrideBusy} onClick={() => void sendGuideAnyway()}>
+                              {overrideBusy ? "Sending…" : "Send the guide now"}
+                            </Button>
+                            <Button wide disabled={overrideBusy} onClick={() => { setOverrideOpen(false); setOverrideReason(""); }}>
+                              Keep it held
+                            </Button>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   )}
                   {isPastStay && (
                     <>

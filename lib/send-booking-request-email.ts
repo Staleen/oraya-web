@@ -1,4 +1,5 @@
 import { reportMissingResendKey } from "@/lib/email-config";
+import { assessRequesterReachability } from "./booking/guest-reachability.ts";
 import { Resend } from "resend";
 import { LOGO_URL } from "@/lib/brand";
 import { formatBeirutDateTime } from "@/lib/format-date";
@@ -306,11 +307,18 @@ export async function sendBookingRequestEmail(
 
   const eventEstimate = isEventInquiry ? parseEventSetupEstimateFromMessage(payload.message) : null;
 
+  // A guest who left only a WhatsApp number receives no acknowledgement from
+  // Oraya at all — say so here rather than printing a blank Email cell.
+  const reach = assessRequesterReachability({
+    email: payload.requester_email,
+    phone: payload.requester_phone,
+  });
+
   const rows: [string, string][] = isEventInquiry
     ? [
         ["Reference", ref],
         ["Name", payload.requester_name],
-        ["Email", payload.requester_email],
+        ["Email", reach.email_line],
         ...(payload.requester_phone ? [["Phone", payload.requester_phone] as [string, string]] : []),
         ["Event type", payload.event_type ?? "—"],
         ["Villa", payload.villa],
@@ -322,7 +330,7 @@ export async function sendBookingRequestEmail(
     : [
         ["Reference", ref],
         ["Name", payload.requester_name],
-        ["Email", payload.requester_email],
+        ["Email", reach.email_line],
         ...(payload.requester_phone ? [["Phone", payload.requester_phone] as [string, string]] : []),
         ["Villa", payload.villa],
         ["Check-in", fmtDate(payload.check_in)],
@@ -584,6 +592,13 @@ export async function sendBookingRequestEmail(
           <div style="width:40px;height:1px;background-color:${GOLD};opacity:0.3;"></div>
         </td></tr>
 
+        ${reach.operator_action ? `<tr><td style="padding-bottom:16px;">
+          <div style="border:1px solid rgba(197,164,109,0.55);background-color:rgba(197,164,109,0.08);padding:14px 16px;">
+            <p style="margin:0 0 4px;font-size:9px;letter-spacing:3px;text-transform:uppercase;color:${GOLD};">Action needed</p>
+            <p style="margin:0;font-size:13px;line-height:1.6;color:#2E2E2E;">${escapeHtml(reach.operator_action)}</p>
+          </div>
+        </td></tr>` : ""}
+
         <!-- Details card -->
         <tr><td style="border:0.5px solid rgba(197,164,109,0.2);padding:28px;">
           <p style="margin:0 0 20px;font-size:9px;letter-spacing:3px;
@@ -614,6 +629,7 @@ export async function sendBookingRequestEmail(
   const text = [
     subject,
     "",
+    ...(reach.operator_action ? [`ACTION NEEDED: ${reach.operator_action}`, ""] : []),
     textIntro,
     "",
     ...rows.map(([label, value]) => `${label}: ${value.replace(/<[^>]+>/g, "")}`),

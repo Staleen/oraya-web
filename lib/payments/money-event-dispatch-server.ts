@@ -152,7 +152,7 @@ async function sendGuestReceipt(event: MoneyEvent): Promise<boolean> {
   });
 }
 
-async function loadOperatorRecipients(): Promise<string[]> {
+export async function loadOperatorRecipients(): Promise<string[]> {
   const { data, error } = await supabaseAdmin
     .from("settings")
     .select("value")
