@@ -14,6 +14,7 @@ import { resolvePaymentRequestOrigin } from "@/lib/payments/request-origin";
 import { computeFoundationAmountDue, derivePaymentFoundationStage, getFoundationAmountTotal } from "@/lib/payment-foundation";
 import { getChargeAmount } from "@/lib/payments/charge-amount";
 import { notifyMoneyEvent } from "@/lib/payments/money-event-dispatch-server";
+import { maybeInstantConfirmBooking } from "@/lib/bookings/instant-confirm-server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 type UnifiedCheckoutCompletionBookingRow = {
@@ -283,6 +284,9 @@ export async function POST(request: Request) {
           booking_id: booking.id,
           provider_transaction_id: outcome.provider?.reference ?? null,
         });
+        // Instant booking: a fully paid, add-on-free stay may confirm itself.
+        // Off by default; re-checks availability and never throws.
+        await maybeInstantConfirmBooking(booking.id);
         return NextResponse.json({
           ok: true,
           paid: true,

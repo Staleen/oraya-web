@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireOps } from "@/lib/ops-auth";
 import { INSTANT_BOOKING_SETTING_KEYS } from "@/lib/instant-booking-settings";
+import { INSTANT_AUTO_CONFIRM_SETTING_KEY } from "@/lib/bookings/instant-confirm";
 
 export const dynamic = "force-dynamic";
 const LOG_TAG = "[api/ops/setup/site]";
@@ -26,6 +27,7 @@ export const SITE_SETTING_KEYS = [
   BUTLER_GUIDANCE_KEY,
   INSTANT_BOOKING_SETTING_KEYS["Villa Mechmech"],
   INSTANT_BOOKING_SETTING_KEYS["Villa Byblos"],
+  INSTANT_AUTO_CONFIRM_SETTING_KEY,
 ] as const;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -84,6 +86,14 @@ export async function PUT(request: Request) {
     if (Object.prototype.hasOwnProperty.call(body, field)) {
       writes.push({ key, value: body[field] === true ? "true" : "false" });
     }
+  }
+
+  // Instant confirmation master switch. Off unless explicitly set to true.
+  if (Object.prototype.hasOwnProperty.call(body, "instant_auto_confirm")) {
+    writes.push({
+      key: INSTANT_AUTO_CONFIRM_SETTING_KEY,
+      value: body.instant_auto_confirm === true ? "true" : "false",
+    });
   }
 
   if (writes.length === 0) {
