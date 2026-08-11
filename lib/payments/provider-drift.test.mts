@@ -78,3 +78,46 @@ test("the correction explains itself in the ledger", () => {
   assert.match(note, /never received/i);
   assert.match(note, /original entry is kept/i);
 });
+
+/**
+ * A refund issued directly in Business Center over-counts money in Oraya the
+ * same way a void does — but for the opposite reason. The operator
+ * reconciling against a bank statement has to be able to tell them apart.
+ */
+test("a payment refunded in Business Center is drift, reported as a refund not a void", () => {
+  for (const status of ["REFUNDED", "CREDITED", "PARTIALLY_REFUNDED", "refunded"]) {
+    const d = detectProviderDrift({
+      transaction_type: "payment",
+      status: "confirmed",
+      provider: "credit_libanais",
+      has_reversal: false,
+      has_refund: false,
+      provider_status: status,
+      provider_reachable: true,
+    });
+    assert.deepEqual(d, { drifted: true, reason: "provider_refunded" }, status);
+  }
+});
+
+test("a Business Center refund already recorded in Oraya is left alone", () => {
+  const d = detectProviderDrift({
+    transaction_type: "payment",
+    status: "confirmed",
+    provider: "credit_libanais",
+    has_reversal: false,
+    has_refund: true,
+    provider_status: "REFUNDED",
+    provider_reachable: true,
+  });
+  assert.deepEqual(d, { drifted: false, reason: "already_refunded_in_oraya" });
+});
+
+test("the correction note says which of the two actually happened", () => {
+  const refunded = describeDriftCorrection("REFUNDED", "provider_refunded");
+  assert.match(refunded, /Business Center/);
+  assert.match(refunded, /already gone back to the guest/);
+
+  const voided = describeDriftCorrection("VOIDED", "provider_voided");
+  assert.match(voided, /never received/);
+  assert.doesNotMatch(voided, /gone back to the guest/);
+});

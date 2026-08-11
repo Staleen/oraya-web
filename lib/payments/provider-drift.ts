@@ -30,9 +30,32 @@ export const PROVIDER_UNDONE_STATUSES = [
   "AUTHORIZED_REVERSED",
 ] as const;
 
+/**
+ * Statuses that mean the capture SETTLED and was then credited back at the
+ * bank — a refund issued directly in Business Center rather than through Oraya.
+ *
+ * A void and a BC refund look nothing alike in the ledger. A void releases an
+ * authorization that never settled; a refund returns money that did. Oraya
+ * over-counts identically in both cases, so both produce a compensating entry,
+ * but the note has to say which one happened or the operator reconciling
+ * against a bank statement will not find it.
+ *
+ * Caveat, stated because it changes what this can promise: CyberSource does
+ * not surface a follow-on credit on the payment resource for every account.
+ * Where it does not, detecting a BC refund needs the Transaction Search
+ * entitlement, which merchant 06385000 does not currently have. These statuses
+ * cover the cases the payment resource does report; the rest stays invisible
+ * until that entitlement is enabled.
+ */
+export const PROVIDER_CREDITED_STATUSES = [
+  "REFUNDED",
+  "CREDITED",
+  "PARTIALLY_REFUNDED",
+] as const;
+
 export type DriftDecision =
   /** The provider says this money is gone and Oraya still counts it. */
-  | { drifted: true; reason: "provider_voided" }
+  | { drifted: true; reason: "provider_voided" | "provider_refunded" }
   /** No action. Either it still stands, or we cannot prove otherwise. */
   | { drifted: false; reason: DriftSkipReason };
 
@@ -90,6 +113,9 @@ export function detectProviderDrift(input: DriftInput): DriftDecision {
   if ((PROVIDER_UNDONE_STATUSES as readonly string[]).includes(status)) {
     return { drifted: true, reason: "provider_voided" };
   }
+  if ((PROVIDER_CREDITED_STATUSES as readonly string[]).includes(status)) {
+    return { drifted: true, reason: "provider_refunded" };
+  }
 
   // Anything the settlement classifier still recognises as live money stands.
   const settlement = classifyCardSettlementState({ status });
@@ -99,7 +125,18 @@ export function detectProviderDrift(input: DriftInput): DriftDecision {
 }
 
 /** Owner-facing note recorded on the compensating entry. */
-export function describeDriftCorrection(providerStatus: string | null): string {
+export function describeDriftCorrection(
+  providerStatus: string | null,
+  reason: "provider_voided" | "provider_refunded" = "provider_voided",
+): string {
+  if (reason === "provider_refunded") {
+    return (
+      "Corrected automatically: the provider reports this payment as " +
+      `${(providerStatus ?? "refunded").toLowerCase()} — it was refunded outside Oraya, in Business Center, ` +
+      "so the money recorded here has already gone back to the guest. " +
+      "The original entry is kept; this reversal is recorded beside it."
+    );
+  }
   return (
     "Corrected automatically: the provider reports this authorization as " +
     `${(providerStatus ?? "reversed").toLowerCase()}, so the money recorded in Oraya was never received. ` +

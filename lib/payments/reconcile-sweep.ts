@@ -273,7 +273,7 @@ export async function runProviderDriftSweep(
         payment_transaction_id: row.id,
         idempotency_key: idempotencyKey,
         staff_id: null,
-        notes: describeDriftCorrection(assessment.provider_status),
+        notes: describeDriftCorrection(assessment.provider_status, decision.reason),
       });
       if (!claimed.ok || claimed.result.blocked || !claimed.result.reversal_transaction_id) {
         console.error(`${DRIFT_LOG_TAG} could not open a correction`, {
