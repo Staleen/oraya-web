@@ -100,3 +100,76 @@ test("classifyProviderRefundOutcome is fail-closed for ambiguous money outcomes"
     "ambiguous",
   );
 });
+
+/**
+ * Root cause of the two stuck production refunds on 2026-08-11: CyberSource
+ * answers a follow-on refund with refundAmountDetails, and Oraya only read
+ * creditAmountDetails. Amount verification failed, the outcome was classified
+ * ambiguous, and the operator was sent to Business Center for a refund that
+ * had in fact succeeded.
+ */
+
+test("a real refund response verifies from refundAmountDetails", () => {
+  const verified = verifyRefundAmountDetails({
+    requested_amount: 240,
+    requested_currency: "USD",
+    payload: {
+      refundAmountDetails: { refundAmount: "240.00", currency: "USD" },
+    },
+  });
+  assert.equal(verified.ok, true);
+});
+
+test("that response now classifies as approved, not ambiguous", () => {
+  const outcome = classifyProviderRefundOutcome({
+    http_ok: true,
+    http_status: 201,
+    status: "PENDING",
+    refund_id: "7864700292896974704899",
+    amount_verified: verifyRefundAmountDetails({
+      requested_amount: 240,
+      requested_currency: "USD",
+      payload: { refundAmountDetails: { refundAmount: "240.00", currency: "USD" } },
+    }).ok,
+  });
+  assert.equal(outcome, "approved");
+});
+
+test("the old shape still verifies — PIN debit credits are unaffected", () => {
+  assert.equal(
+    verifyRefundAmountDetails({
+      requested_amount: 240,
+      requested_currency: "USD",
+      payload: { creditAmountDetails: { creditAmount: "240.00", currency: "USD" } },
+    }).ok,
+    true,
+  );
+});
+
+test("a wrong amount or currency still fails closed", () => {
+  assert.equal(
+    verifyRefundAmountDetails({
+      requested_amount: 240,
+      requested_currency: "USD",
+      payload: { refundAmountDetails: { refundAmount: "120.00", currency: "USD" } },
+    }).ok,
+    false,
+  );
+  assert.equal(
+    verifyRefundAmountDetails({
+      requested_amount: 240,
+      requested_currency: "USD",
+      payload: { refundAmountDetails: { refundAmount: "240.00", currency: "LBP" } },
+    }).ok,
+    false,
+  );
+  // A response with no amount at all must never verify.
+  assert.equal(
+    verifyRefundAmountDetails({
+      requested_amount: 240,
+      requested_currency: "USD",
+      payload: { refundAmountDetails: { currency: "USD" } },
+    }).ok,
+    false,
+  );
+});

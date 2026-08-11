@@ -44,12 +44,31 @@ export function validateRefundAmount(input: {
 }
 
 /**
- * Prefer CyberSource refund echo fields, then generic amountDetails.
+ * Read the amount CyberSource echoes back on a refund.
+ *
+ * `POST /pts/v2/payments/{id}/refunds` answers with **refundAmountDetails**
+ * (`refundAmount` + `currency`) — see the CyberSource REST model
+ * PtsV2PaymentsRefundPost201Response. `creditAmountDetails` belongs to
+ * standalone credits and PIN-debit credits, not to a follow-on refund.
+ *
+ * Reading only `creditAmountDetails` meant every successful refund failed
+ * amount verification and was classified **ambiguous**: the money went back to
+ * the guest, the ledger claim stayed pending, and the operator was sent to
+ * Business Center to copy a reference by hand. Observed twice in production on
+ * 2026-08-11 ($1 and $240). Both shapes are read now, refund first.
  */
 export function readRefundResponseAmountDetails(payload: {
+  refundAmountDetails?: { refundAmount?: unknown; creditAmount?: unknown; currency?: unknown } | null;
   creditAmountDetails?: { creditAmount?: unknown; currency?: unknown } | null;
   orderInformation?: { amountDetails?: AuthorizedAmountDetails } | null;
 } | null | undefined): AuthorizedAmountDetails {
+  const refund = payload?.refundAmountDetails;
+  if (refund && typeof refund === "object") {
+    const amount = refund.refundAmount ?? refund.creditAmount;
+    if (amount !== undefined && amount !== null) {
+      return { authorizedAmount: amount, totalAmount: amount, currency: refund.currency };
+    }
+  }
   const credit = payload?.creditAmountDetails;
   if (credit && typeof credit === "object") {
     return {
@@ -65,6 +84,7 @@ export function verifyRefundAmountDetails(input: {
   requested_amount: number;
   requested_currency: string;
   payload: {
+    refundAmountDetails?: { refundAmount?: unknown; creditAmount?: unknown; currency?: unknown } | null;
     creditAmountDetails?: { creditAmount?: unknown; currency?: unknown } | null;
     orderInformation?: { amountDetails?: AuthorizedAmountDetails } | null;
   } | null | undefined;

@@ -162,6 +162,12 @@ interface CyberSourcePaymentResponse {
     creditAmount?: string;
     currency?: string;
   };
+  /** Follow-on refund echo — POST /pts/v2/payments/{id}/refunds. */
+  refundAmountDetails?: {
+    refundAmount?: string;
+    creditAmount?: string;
+    currency?: string;
+  };
   /** Phase 16B M1 — authorization reversal echo + settlement/risk classification. */
   reversalAmountDetails?: {
     reversedAmount?: string;

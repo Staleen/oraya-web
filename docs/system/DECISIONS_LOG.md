@@ -16,6 +16,20 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-11 - Root cause of stuck refunds: the wrong amount-echo field
+
+**Decision:** `readRefundResponseAmountDetails` reads **`refundAmountDetails`** first (`refundAmount`, falling back to `creditAmount`), then the previous `creditAmountDetails`, then generic `orderInformation.amountDetails`.
+
+**Reason:** `POST /pts/v2/payments/{id}/refunds` answers with `refundAmountDetails` — confirmed in the CyberSource REST model `PtsV2PaymentsRefundPost201Response`. `creditAmountDetails` belongs to standalone and PIN-debit credits, not to a follow-on refund. Oraya read only the latter, so **every successful refund failed amount verification**, `classifyProviderRefundOutcome` fell through to `ambiguous`, the ledger claim stayed pending, and the operator was told to open Business Center and paste a reference for a refund that had already worked. Observed twice in production on 2026-08-11: the $1 activation refund and the $240 booking refund.
+
+**Impact:** [lib/payments/provider-refund.ts](../../lib/payments/provider-refund.ts) and the response type in [credit-libanais.ts](../../lib/payments/credit-libanais.ts). One-click refunds now complete on the first attempt with no Business Center step. Fail-closed behaviour is unchanged: a wrong amount, a wrong currency, or a missing echo still classifies ambiguous and still blocks retries.
+
+**Relationship to self-reconciliation:** the reconcile path (same branch) stays as the safety net for genuinely unverifiable responses and post-claim timeouts. This fix means it should almost never be needed.
+
+**Reversible?:** yes, but reverting reinstates a manual Business Center step on every refund.
+
+---
+
 ## 2026-08-11 - Refunds reconcile themselves against CyberSource instead of asking the operator
 
 **Decision:** when a card refund returns an outcome Oraya cannot verify — an unreadable response, a missing amount echo, or a timeout after the claim — Oraya now asks CyberSource directly whether the refund exists, using Transaction Details (`GET /tss/v2/transactions/{id}`) on the refund id the gateway returned, or Transaction Search (`POST /tss/v2/searches` on `clientReferenceInformation.code`) when no id came back. A refund is confirmed automatically **only** when the provider record proves a credit whose amount, currency and merchant reference all match. Anything else keeps today's behaviour exactly: pending claim, do-not-retry lock, and the manual Business Center path.
