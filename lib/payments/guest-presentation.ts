@@ -14,6 +14,12 @@ export type GuestPaymentPresentation = {
   actionLabel: string | null;
   rows: Array<[string, string]>;
   isPaid: boolean;
+  /**
+   * The guest may start (or resume) payment themselves from this page. The
+   * caller renders a button that mints a checkout session with the guest's own
+   * booking token — no operator has to send a link first.
+   */
+  selfServePay: { purpose: "deposit" | "full" | "balance"; label: string } | null;
 };
 
 export type GuestPaymentPresentationInput = {
@@ -30,6 +36,13 @@ export type GuestPaymentPresentationInput = {
   paymentReceivedAt: string | null;
   paymentMethod: string | null;
   paymentReference: string | null;
+  /**
+   * Whether Oraya can take a card payment for this booking right now: online
+   * payment switched on, a payment mode that allows paying now, and the
+   * booking neither cancelled nor already settled. Defaults to false so any
+   * caller that has not opted in keeps the previous, link-only behaviour.
+   */
+  canPayNow?: boolean;
 };
 
 function formatMoney(value: number): string {
@@ -79,6 +92,7 @@ export function buildGuestPaymentPresentation(
       actionLabel: null,
       rows,
       isPaid: true,
+      selfServePay: null,
     };
   }
 
@@ -96,38 +110,51 @@ export function buildGuestPaymentPresentation(
     appendPaymentDetail(rows, "Method", method);
     appendPaymentDetail(rows, "Reference", reference);
     appendPaymentDetail(rows, "Received on", input.paymentReceivedAt);
+    const balanceOutstanding =
+      typeof input.balanceDue === "number" && input.balanceDue > 0;
     return {
       label: "Deposit paid",
-      body: "Your deposit has been recorded. Oraya will confirm any remaining balance directly.",
+      body: balanceOutstanding && input.canPayNow
+        ? "Your deposit has been recorded. You can pay the remaining balance here whenever you are ready."
+        : "Your deposit has been recorded. Oraya will confirm any remaining balance directly.",
       tone: "deposit",
       actionUrl: null,
       actionLabel: null,
       rows,
       isPaid: true,
+      selfServePay: balanceOutstanding && input.canPayNow
+        ? { purpose: "balance", label: "Pay remaining balance" }
+        : null,
     };
   }
 
   if (input.paymentLinkStatus === "expired") {
     return {
       label: "Payment link expired",
-      body: "No payment has been collected yet. Oraya will send a fresh secure payment link when it is ready.",
+      body: input.canPayNow
+        ? "That payment link has expired. You can start a fresh secure payment here."
+        : "No payment has been collected yet. Oraya will send a fresh secure payment link when it is ready.",
       tone: "attention",
       actionUrl: null,
       actionLabel: null,
       rows,
       isPaid: false,
+      selfServePay: input.canPayNow ? { purpose: "deposit", label: "Pay now" } : null,
     };
   }
 
   if (input.paymentLinkStatus === "failed" || input.paymentLinkStatus === "cancelled") {
     return {
       label: "Payment could not be completed",
-      body: "No payment has been collected yet. Oraya will send a fresh secure payment link when it is ready.",
+      body: input.canPayNow
+        ? "That payment did not go through and no money was taken. You can try again here."
+        : "No payment has been collected yet. Oraya will send a fresh secure payment link when it is ready.",
       tone: "attention",
       actionUrl: null,
       actionLabel: null,
       rows,
       isPaid: false,
+      selfServePay: input.canPayNow ? { purpose: "deposit", label: "Try payment again" } : null,
     };
   }
 
@@ -141,25 +168,27 @@ export function buildGuestPaymentPresentation(
     appendPaymentDetail(rows, "Due date", input.paymentDueAt);
     appendPaymentDetail(rows, "Requested on", input.paymentRequestedAt);
     return {
-      label: "Payment pending",
+      label: "Ready to pay",
       body: "Your secure payment link is ready. You will complete payment on Oraya's hosted payment page.",
       tone: "pending",
       actionUrl: input.paymentLinkUrl,
       actionLabel: "Continue to secure payment",
       rows,
       isPaid: false,
+      selfServePay: null,
     };
   }
 
   if (input.paymentLinkStatus === "paid") {
     return {
-      label: "Payment pending",
-      body: "Your payment was submitted. Oraya will show it as received only after provider approval is recorded.",
+      label: "Payment being verified",
+      body: "Your payment was submitted. Oraya will show it as received only after provider approval is recorded. Please do not pay again.",
       tone: "pending",
       actionUrl: null,
       actionLabel: null,
       rows,
       isPaid: false,
+      selfServePay: null,
     };
   }
 
@@ -173,14 +202,28 @@ export function buildGuestPaymentPresentation(
     appendPaymentDetail(rows, "Requested on", input.paymentRequestedAt);
   }
 
+  if (input.canPayNow) {
+    return {
+      label: "Ready to pay",
+      body: "You can pay securely by card now — no need to wait for Oraya to send a link.",
+      tone: "pending",
+      actionUrl: null,
+      actionLabel: null,
+      rows,
+      isPaid: false,
+      selfServePay: { purpose: "deposit", label: "Pay now" },
+    };
+  }
+
   return {
-    label: "Payment pending",
+    label: "Not paid yet",
     body: "No payment has been collected yet. Oraya will send your secure payment link when it is ready.",
     tone: "pending",
     actionUrl: null,
     actionLabel: null,
     rows,
     isPaid: false,
+    selfServePay: null,
   };
 }
 
