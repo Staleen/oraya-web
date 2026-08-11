@@ -23,7 +23,11 @@ test("/book pay-now fallback creates a pending-payment booking handoff", () => {
 test("booking-view uses one guest-facing payment presentation vocabulary", () => {
   assert.match(bookingViewPage, /buildGuestPaymentPresentation/);
   for (const label of [
-    "Payment pending",
+    // 2026-08-11: "Payment pending" was retired — it meant four different
+    // things at once. Each guest situation now has its own words.
+    "Ready to pay",
+    "Payment being verified",
+    "Not paid yet",
     "Deposit paid",
     "Paid in full",
     "Payment link expired",
@@ -33,6 +37,7 @@ test("booking-view uses one guest-facing payment presentation vocabulary", () =>
   }
 
   for (const retiredCopy of [
+    "Payment pending",
     "Online payment portal (coming soon)",
     "Payment not requested yet.",
     "Payment link unavailable",

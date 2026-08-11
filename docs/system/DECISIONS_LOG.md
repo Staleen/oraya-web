@@ -16,6 +16,19 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-11 - Guests can pay for themselves (self-serve payment on the booking view)
+
+**Decision:** the guest booking view now offers payment whenever Oraya can actually take one — online payment on, a mode that allows paying now, the stay not cancelled, and something still owed. A guest who reserved without paying gets **Pay now**; a guest who paid a deposit gets **Pay remaining balance**; an expired or failed link becomes a retry the guest can drive themselves. The button mints a checkout session with the guest's own booking view token via the existing `POST /api/payments/checkout` — no new auth, no operator step. `payment_purpose: "balance"` is unblocked and charges exactly what is outstanding.
+
+**Reason:** guest-experience audit 2026-08-11. The only state that ever offered payment required an operator to mint a link first; every other state told the guest "Oraya will send your secure payment link when it is ready" with no button — while the checkout route already accepted the guest's own token. "Reserve now, pay later" therefore meant "pay whenever the operator gets to it", and a deposit balance could never be settled by the guest at all.
+
+**Also:** the label "Payment pending" was retired. It was returned for four different situations — no link yet, link ready, payment submitted awaiting verification, and payment requested — so a guest who had just paid read the same words as one who had not started. States are now **Ready to pay**, **Payment being verified** (with "please do not pay again"), **Not paid yet**, **Deposit paid**, **Paid in full**.
+
+**Impact:** [lib/payments/guest-presentation.ts](../../lib/payments/guest-presentation.ts) (new `canPayNow` input, new `selfServePay` output), new [components/BookingPayNowButton.tsx](../../components/BookingPayNowButton.tsx), [app/booking/view/[token]/page.tsx](../../app/booking/view/%5Btoken%5D/page.tsx), balance support in [lib/payments/checkout-amount.ts](../../lib/payments/checkout-amount.ts) and the checkout route. The guest contract test was updated deliberately for the vocabulary change.
+
+**Safety:** `canPayNow` defaults to **false**, so any caller that does not opt in keeps the previous link-only behaviour. A fully paid booking and a payment awaiting verification are never offered a button — the second explicitly tells the guest not to pay again. The button never touches card data; it forwards to the hosted page.
+
+**Reversible?:** yes — stop passing `canPayNow`.
 ## 2026-08-11 - Instant booking: a fully paid, add-on-free stay confirms itself (owner switch, default off)
 
 **Decision:** a new master switch `instant_booking_auto_confirm` (settings, default **off**, owner-only via Ops → Website) lets a booking confirm itself the moment money is recorded. Every gate must pass: switch on, villa instant flag on, booking still `pending`, not an event inquiry, **no add-ons**, **no special-request message**, stay not already over, and **paid in full** — a deposit never auto-confirms (owner decision 2026-08-11). Confirmation re-checks availability at payment time and uses the same row-count-verified conditional `update … .eq("status","pending")` as the human approve path, then calls the existing shared dispatcher so the confirmation email and the Phase 16C Arrival Guide are sent by the same code, with their existing at-most-once guards.

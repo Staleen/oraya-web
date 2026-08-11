@@ -2,6 +2,7 @@ import Link from "next/link";
 import PublicTrustShell from "@/components/PublicTrustShell";
 import { AddonIcon } from "@/components/addon-icon";
 import CopyValueButton from "@/components/CopyValueButton";
+import BookingPayNowButton from "@/components/BookingPayNowButton";
 import { BookingViewMemberLink } from "@/components/BookingViewMemberLink";
 import { buildProposalEmailLineItems } from "@/lib/event-proposal-line-items";
 import { extractEventInquiryGuestNotesLine, parseEventSetupEstimateFromMessage } from "@/lib/event-inquiry-message";
@@ -18,6 +19,12 @@ import type {
 } from "@/lib/payments/domain";
 import type { PaymentLinkProvider } from "@/lib/payments/provider";
 import { formatPaymentMethodLabel } from "@/lib/payment-method-labels";
+import {
+  PAYMENT_PUBLIC_SETTINGS_KEY,
+  parsePaymentPublicSettings,
+  paymentModeAllowsPayNow,
+} from "@/lib/payments/settings";
+import { getMinimumDepositAmount } from "@/lib/payments/checkout-amount";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { verifyViewToken } from "@/lib/booking-action-token";
 import {
@@ -412,7 +419,28 @@ export default async function BookingViewPage(
     Boolean(booking.payment_due_at) &&
     !Number.isNaN(new Date(booking.payment_due_at ?? "").getTime()) &&
     new Date(booking.payment_due_at ?? "").getTime() < Date.now();
+  // Guest self-serve payment capability. Oraya can take a card for this
+  // booking right now when online payment is on, the mode allows paying now,
+  // the stay is not cancelled, and something is still owed.
+  const { data: paymentSettingsRow } = await supabaseAdmin
+    .from("settings")
+    .select("value")
+    .eq("key", PAYMENT_PUBLIC_SETTINGS_KEY)
+    .maybeSingle<{ value: unknown }>();
+  const publicPaymentSettings = parsePaymentPublicSettings(paymentSettingsRow?.value ?? null);
+  const canPayNow =
+    publicPaymentSettings.online_payment_enabled &&
+    paymentModeAllowsPayNow(publicPaymentSettings.active_payment_mode) &&
+    booking.status !== "cancelled" &&
+    booking.payment_status !== "paid_in_full" &&
+    (estimatedTotal ?? 0) > 0;
+  const selfServeDepositAmount = getMinimumDepositAmount(
+    estimatedTotal ?? 0,
+    publicPaymentSettings.deposit_minimum_percentage,
+  );
+
   const stayPaymentPresentation = buildGuestPaymentPresentation({
+    canPayNow,
     paymentStatus: booking.payment_status,
     paymentLinkStatus,
     paymentLinkUrl: paymentLinkState.url,
@@ -1115,6 +1143,22 @@ export default async function BookingViewPage(
                 >
                   {stayPaymentPresentation.actionLabel}
                 </a>
+              )}
+
+              {stayPaymentPresentation.selfServePay && (
+                <BookingPayNowButton
+                  bookingId={booking.id}
+                  bookingToken={params.token}
+                  purpose={
+                    stayPaymentPresentation.selfServePay.purpose === "balance"
+                      ? "balance"
+                      : publicPaymentSettings.allow_full_payment
+                        ? "full"
+                        : "deposit"
+                  }
+                  amount={selfServeDepositAmount}
+                  label={stayPaymentPresentation.selfServePay.label}
+                />
               )}
             </div>
 

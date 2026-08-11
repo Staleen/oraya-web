@@ -10,6 +10,8 @@ export interface PaymentSelectionValidationInput {
   purpose: PaymentRequestPurpose;
   requestedAmount?: number | null;
   amountTotal: number;
+  /** Money already recorded on the booking — required for purpose "balance". */
+  amountPaid?: number | null;
   minimumDepositPercentage?: number;
 }
 
@@ -53,8 +55,26 @@ export function validatePaymentSelection(
     };
   }
 
+  // Balance: whatever is still owed after money already recorded. The guest
+  // must be able to settle the rest themselves instead of waiting for a link.
+  if (input.purpose === "balance") {
+    const alreadyPaid = roundMoney(input.amountPaid ?? 0);
+    const outstanding = roundMoney(Math.max(0, amountTotal - alreadyPaid));
+    if (!(outstanding > 0)) {
+      return { ok: false, error: "This booking has no remaining balance." };
+    }
+    return {
+      ok: true,
+      chargeAmount: outstanding,
+      depositAmount: alreadyPaid > 0 ? alreadyPaid : outstanding,
+      remainingBalance: 0,
+      amountTotal,
+      purpose: input.purpose,
+    };
+  }
+
   if (input.purpose !== "deposit") {
-    return { ok: false, error: "Only deposit or full payment is available right now." };
+    return { ok: false, error: "Only deposit, balance, or full payment is available right now." };
   }
 
   const requestedAmount = roundMoney(input.requestedAmount ?? 0);

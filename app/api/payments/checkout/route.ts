@@ -89,9 +89,6 @@ export async function POST(request: Request) {
     if (!purpose) {
       return NextResponse.json({ error: "Invalid payment purpose." }, { status: 400 });
     }
-    if (purpose === "balance") {
-      return NextResponse.json({ error: "Balance payment is not available yet." }, { status: 400 });
-    }
 
     const verifiedViewToken = verifyViewToken(bookingToken);
     if (!verifiedViewToken.ok || verifiedViewToken.booking_id !== bookingId) {
@@ -111,8 +108,14 @@ export async function POST(request: Request) {
     if (booking.status === "cancelled") {
       return NextResponse.json({ error: "Cancelled bookings cannot be paid." }, { status: 400 });
     }
-    if (booking.payment_status === "deposit_paid" || booking.payment_status === "paid_in_full") {
-      return NextResponse.json({ error: "This booking already has a recorded payment." }, { status: 400 });
+    if (booking.payment_status === "paid_in_full") {
+      return NextResponse.json({ error: "This booking is already paid in full." }, { status: 400 });
+    }
+    if (booking.payment_status === "deposit_paid" && purpose !== "balance") {
+      return NextResponse.json(
+        { error: "A deposit is already recorded for this booking. Pay the remaining balance instead." },
+        { status: 400 },
+      );
     }
 
     const { data: paymentSettingsRow } = await supabaseAdmin
@@ -157,6 +160,10 @@ export async function POST(request: Request) {
       purpose,
       requestedAmount,
       amountTotal,
+      amountPaid:
+        typeof booking.amount_paid === "number" && Number.isFinite(booking.amount_paid)
+          ? booking.amount_paid
+          : 0,
       minimumDepositPercentage: paymentSettings.deposit_minimum_percentage,
     });
 
