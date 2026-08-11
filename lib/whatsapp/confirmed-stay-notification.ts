@@ -53,6 +53,7 @@
  */
 
 import { buildArrivalGuideUrl } from "../arrival-guide-link.ts";
+import { decideArrivalGuideRelease } from "./arrival-guide-gate.ts";
 
 export const CONFIRMED_STAY_TEMPLATE_NAME = "oraya_arrival_guide_confirmed";
 
@@ -66,7 +67,13 @@ export type ConfirmedStayDispatchSkipReason =
   | "missing_reference"
   | "no_arrival_guide_url"
   | "already_claimed"
-  | "claim_failed";
+  | "claim_failed"
+  /**
+   * Payment gate (off by default): the stay is confirmed but the deposit has
+   * not arrived. The at-most-once claim is deliberately NOT consumed, so the
+   * guide can still be sent exactly once when the money lands.
+   */
+  | "awaiting_deposit";
 
 export type ConfirmedStayDispatchResult =
   | { dispatched: true; httpStatus: number }
@@ -84,6 +91,10 @@ export interface ConfirmedStayBookingInput {
   guest_name?: string | null;
   guest_phone?: string | null;
   member_id?: string | null;
+  /** Money state — only read by the payment gate. */
+  amount_paid?: number | null;
+  amount_total?: number | null;
+  deposit_amount?: number | null;
 }
 
 export interface ConfirmedStayWebhookPayload {
@@ -112,6 +123,10 @@ export interface ConfirmedStayDispatchDeps {
   formatReference?: (bookingId: string) => Promise<string | null>;
   /** Personalized Arrival Guide URL (lib/arrival-guide-link.ts). */
   mintArrivalGuideUrl?: (bookingId: string, checkOut: string | null) => string | null;
+  /** Payment gate master switch (settings.payment_gated_arrival_guide). */
+  arrivalGuidePaymentGateEnabled?: boolean;
+  /** Operator "send anyway" override for a held guide. */
+  overridePaymentGate?: boolean;
   /** POST the payload; secret is null when no shared secret is configured. */
   postWebhook?: (
     url: string,
@@ -313,6 +328,17 @@ export async function dispatchConfirmedStayWhatsAppNotification(
   // Gate 1 — only confirmed stay bookings (defensive re-check of the caller's state).
   if ((booking.status ?? "").trim().toLowerCase() !== "confirmed") return skip("not_confirmed");
   if (isEventInquiryStay(booking.event_type, booking.message)) return skip("event_inquiry");
+
+  // Gate 1b — payment gate. Off by default. Checked BEFORE the at-most-once
+  // claim so a held guide can still be sent exactly once when money lands.
+  const paymentGate = decideArrivalGuideRelease({
+    enabled: deps.arrivalGuidePaymentGateEnabled === true,
+    amountPaid: booking.amount_paid,
+    amountTotal: booking.amount_total,
+    depositAmount: booking.deposit_amount,
+    overrideSend: deps.overridePaymentGate === true,
+  });
+  if (!paymentGate.send) return skip(paymentGate.reason);
 
   // Gate 2 + 3 — activation switch and environment.
   const gate = resolveDispatchEnvironmentGate(env);

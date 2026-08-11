@@ -6,6 +6,7 @@ import {
   sendOperatorMoneyAlertEmail,
   sendStandalonePaymentReceiptEmail,
 } from "@/lib/send-payment-notification-email";
+import { maybeReleaseHeldArrivalGuide } from "@/lib/whatsapp/arrival-guide-release-server";
 import {
   buildMoneyNotificationKey,
   dispatchMoneyEvent,
@@ -227,6 +228,13 @@ export async function notifyMoneyEvent(
       payment_transaction_id: input.payment_transaction_id ?? null,
       provider_reference: input.provider_transaction_id ?? null,
     };
+    // Money landing is also what releases an arrival guide the payment gate
+    // held. Guarded by its own at-most-once claim, so several observers of the
+    // same payment cannot produce two messages.
+    if (input.outcome === "recorded" && input.booking_id) {
+      await maybeReleaseHeldArrivalGuide(input.booking_id);
+    }
+
     return await dispatchMoneyEvent(
       {
         claim,

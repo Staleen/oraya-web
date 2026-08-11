@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireOps } from "@/lib/ops-auth";
 import { INSTANT_BOOKING_SETTING_KEYS } from "@/lib/instant-booking-settings";
 import { INSTANT_AUTO_CONFIRM_SETTING_KEY } from "@/lib/bookings/instant-confirm";
+import { ARRIVAL_GUIDE_PAYMENT_GATE_SETTING_KEY } from "@/lib/whatsapp/arrival-guide-gate";
 
 export const dynamic = "force-dynamic";
 const LOG_TAG = "[api/ops/setup/site]";
@@ -28,6 +29,7 @@ export const SITE_SETTING_KEYS = [
   INSTANT_BOOKING_SETTING_KEYS["Villa Mechmech"],
   INSTANT_BOOKING_SETTING_KEYS["Villa Byblos"],
   INSTANT_AUTO_CONFIRM_SETTING_KEY,
+  ARRIVAL_GUIDE_PAYMENT_GATE_SETTING_KEY,
 ] as const;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -93,6 +95,14 @@ export async function PUT(request: Request) {
     writes.push({
       key: INSTANT_AUTO_CONFIRM_SETTING_KEY,
       value: body.instant_auto_confirm === true ? "true" : "false",
+    });
+  }
+
+  // Hold the arrival guide until the deposit arrives. Off unless set to true.
+  if (Object.prototype.hasOwnProperty.call(body, "arrival_guide_payment_gate")) {
+    writes.push({
+      key: ARRIVAL_GUIDE_PAYMENT_GATE_SETTING_KEY,
+      value: body.arrival_guide_payment_gate === true ? "true" : "false",
     });
   }
 

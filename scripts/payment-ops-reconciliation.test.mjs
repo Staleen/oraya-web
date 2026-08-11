@@ -326,4 +326,17 @@ test("polled reconciliation reuses the webhook core and never writes to the prov
   assert.ok(job, "the reconcile job must be scheduled");
   // Vercel Hobby rejects anything more frequent than daily at deploy time.
   assert.doesNotMatch(job.schedule, /^\*|\/\d/, "schedule must be at most once per day");
+test("a held arrival guide does not consume its at-most-once claim", () => {
+  const dispatcher = readFileSync("lib/whatsapp/confirmed-stay-notification.ts", "utf8");
+  const gateIndex = dispatcher.indexOf("decideArrivalGuideRelease({");
+  const claimIndex = dispatcher.indexOf("await claim(");
+  assert.ok(gateIndex > 0, "the payment gate must exist");
+  assert.ok(
+    claimIndex > gateIndex,
+    "the gate must be checked BEFORE the claim, or a held guide could never be sent later",
+  );
+  // Holding is an explicit, observable reason — never a silent no-op.
+  assert.match(dispatcher, /"awaiting_deposit"/);
+  // The confirmation email is a separate concern and must not be gated here.
+  assert.doesNotMatch(dispatcher, /sendBookingEmail|sendEventConfirmationEmail/);
 });
