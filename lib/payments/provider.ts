@@ -86,7 +86,7 @@ export interface CreateCheckoutSessionInput {
   payment_page_url?: string;
   expires_at?: string;
   /** Online methods that this canonical request is allowed to present. */
-  allowed_payment_methods?: readonly ("card" | "apple_pay")[];
+  allowed_payment_methods?: readonly ("card" | "apple_pay" | "google_pay" | "click_to_pay")[];
 }
 
 export interface CreateCheckoutSessionResult {

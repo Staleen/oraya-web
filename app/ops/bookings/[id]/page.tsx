@@ -2,7 +2,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { bookingGuestName, formatBookingRef, type QueueBooking } from "@/lib/ops-queue";
-import { bookingMoneyView, parseStaySetupMessage } from "@/lib/ops-booking-display";
+import { bookingMoneyView, describeRequestedAt, parseStaySetupMessage } from "@/lib/ops-booking-display";
 import { useOps } from "@/components/ops/OpsProvider";
 import MoneyDialog from "@/components/ops/MoneyDialog";
 import MessagePreviewDialog, { type PreviewAction } from "@/components/ops/MessagePreviewDialog";
@@ -230,6 +230,8 @@ function BookingDetail() {
   const isPastStay = booking.check_out ? booking.check_out.slice(0, 10) < new Date().toISOString().slice(0, 10) : false;
   // Captured so the async handlers below don't re-narrow the derived booking.
   const bookingId = booking.id;
+  // Quiet, not an alarm: how long the guest has been waiting.
+  const requestedLine = describeRequestedAt(booking.created_at);
 
   async function copyArrivalLink() {
     try {
@@ -327,6 +329,9 @@ function BookingDetail() {
       <div style={{ marginTop: "-18px", marginBottom: "22px", display: "flex", gap: "10px", alignItems: "center" }}>
         <Ref id={formatBookingRef(booking.id)} />
         {booking.member_id && <Badge tone="gold">Member</Badge>}
+        {requestedLine && (
+          <span style={{ color: T.muted, fontSize: "13px" }}>{requestedLine}</span>
+        )}
       </div>
 
       {flash && <Banner tone="ok" title="Done" onDismiss={() => setFlash("")}>{flash}</Banner>}
