@@ -57,3 +57,28 @@ test("HTTP 4xx without a payment id is retry-safe; 5xx is not", () => {
   assert.equal(isRetrySafeNonChargeHttp({ http_status: 400, transaction_id: "txn-1" }), false);
   assert.equal(isRetrySafeNonChargeHttp({ http_status: 201, transaction_id: null }), false);
 });
+
+test("Decision Manager is skipped by default (reason 481 blocks every live capture)", () => {
+  const body = buildTransientTokenPaymentRequest({
+    booking_id: "b1",
+    provider_session_id: "s1",
+    transient_token: "t1",
+    amount_due: 270,
+    currency: "USD",
+  }) as { processingInformation: { actionList?: string[]; capture?: boolean } };
+  assert.deepEqual(body.processingInformation.actionList, ["DECISION_SKIP"]);
+  // The skip must not disturb anything else about the request.
+  assert.equal(body.processingInformation.capture, true);
+});
+
+test("Decision Manager screening can be re-enabled with one flag", () => {
+  const body = buildTransientTokenPaymentRequest({
+    booking_id: "b1",
+    provider_session_id: "s1",
+    transient_token: "t1",
+    amount_due: 270,
+    currency: "USD",
+    skip_decision_manager: false,
+  }) as { processingInformation: { actionList?: string[] } };
+  assert.equal(body.processingInformation.actionList, undefined);
+});

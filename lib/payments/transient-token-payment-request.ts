@@ -12,7 +12,40 @@ export type TransientTokenPaymentRequestInput = {
   amount_due: number;
   currency: "USD" | "LBP";
   merchant_reference?: string | null;
+  /**
+   * Skip Decision Manager for this payment (default true — see
+   * DECISION_SKIP_ACTION below). Set false only when Decision Manager is
+   * known to be healthy for the merchant account.
+   */
+  skip_decision_manager?: boolean;
 };
+
+/**
+ * CyberSource `processingInformation.actionList` value that skips the
+ * Decision Manager service(s) for a payment. Documented in the CyberSource
+ * REST API field reference (Ptsv2paymentsProcessingInformation.actionList):
+ *
+ *   "DECISION_SKIP: Use this when you want to skip Decision Manager
+ *    service(s)."
+ *
+ * Why Oraya sends it by default (2026-08-11):
+ * Decision Manager on merchant 06385000 rejects EVERY live authorization with
+ * reason 481 after the issuer has already approved it, so settlement never
+ * runs and no card payment can ever complete. Evidence: request ids
+ * 7863958223886680704897, 7863969294066269704890, 7864119718386251604897 and
+ * 7864143490846095204899 — all Auth Success + DM REJECT 481 + Settlement
+ * "Not Run". The last of these carried a device fingerprint, a full billing
+ * address and a CVN match, and was still rejected, so the rejection is not
+ * caused by missing data. Business Center for this organisation exposes no
+ * Decision Manager or Case Management screen, so the rules cannot be read or
+ * tuned, and Unified Checkout refuses its own "Skip" setting with
+ * "Decision Manager must be enabled to use Skip option in Fraud Detection".
+ *
+ * This is therefore the only lever Oraya controls. Remove this single action
+ * (or pass skip_decision_manager: false) the moment NetCommerce confirms
+ * Decision Manager is fixed for the merchant account.
+ */
+export const DECISION_SKIP_ACTION = "DECISION_SKIP" as const;
 
 /**
  * Build the `/pts/v2/payments` body for a Unified Checkout transient token.
@@ -26,6 +59,7 @@ export type TransientTokenPaymentRequestInput = {
  * Amount/currency stay server-authoritative for verification.
  */
 export function buildTransientTokenPaymentRequest(input: TransientTokenPaymentRequestInput) {
+  const skipDecisionManager = input.skip_decision_manager !== false;
   return {
     clientReferenceInformation: {
       // The attempt-derived merchant reference (idempotency identifier) when
@@ -36,6 +70,7 @@ export function buildTransientTokenPaymentRequest(input: TransientTokenPaymentRe
     processingInformation: {
       commerceIndicator: "internet",
       capture: true,
+      ...(skipDecisionManager ? { actionList: [DECISION_SKIP_ACTION] } : {}),
     },
     tokenInformation: {
       transientTokenJwt: input.transient_token,
