@@ -140,3 +140,45 @@ export function parseStaySetupMessage(message: string | null | undefined): StayS
 
   return view;
 }
+
+/**
+ * "When did this come in?"
+ *
+ * The booking detail screen showed the stay dates and the money, but never the
+ * one thing an operator needs to judge urgency: how long the guest has been
+ * waiting. Reported 2026-08-12 while looking at a request with no visible age.
+ *
+ * Deliberately quiet — a date plus how long ago, not a warning. An old request
+ * is not automatically a problem, and dressing it as one trains the operator to
+ * ignore real alarms.
+ */
+export function describeRequestedAt(
+  createdAt: string | null | undefined,
+  nowMs: number = Date.now(),
+): string | null {
+  if (!createdAt) return null;
+  const then = Date.parse(createdAt);
+  if (!Number.isFinite(then)) return null;
+
+  const date = new Date(then).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "Asia/Beirut",
+  });
+
+  const minutes = Math.floor((nowMs - then) / 60_000);
+  // A request from the future is a clock problem, not an age. Show the date.
+  if (minutes < 0) return `Requested ${date}`;
+  if (minutes < 1) return `Requested ${date} · just now`;
+  if (minutes < 60) return `Requested ${date} · ${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `Requested ${date} · ${hours} hour${hours === 1 ? "" : "s"} ago`;
+
+  const days = Math.floor(hours / 24);
+  if (days < 31) return `Requested ${date} · ${days} day${days === 1 ? "" : "s"} ago`;
+
+  const months = Math.floor(days / 30);
+  return `Requested ${date} · ${months} month${months === 1 ? "" : "s"} ago`;
+}
