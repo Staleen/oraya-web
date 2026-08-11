@@ -16,6 +16,19 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-11 - Instant booking: a fully paid, add-on-free stay confirms itself (owner switch, default off)
+
+**Decision:** a new master switch `instant_booking_auto_confirm` (settings, default **off**, owner-only via Ops → Website) lets a booking confirm itself the moment money is recorded. Every gate must pass: switch on, villa instant flag on, booking still `pending`, not an event inquiry, **no add-ons**, **no special-request message**, stay not already over, and **paid in full** — a deposit never auto-confirms (owner decision 2026-08-11). Confirmation re-checks availability at payment time and uses the same row-count-verified conditional `update … .eq("status","pending")` as the human approve path, then calls the existing shared dispatcher so the confirmation email and the Phase 16C Arrival Guide are sent by the same code, with their existing at-most-once guards.
+
+**Reason:** the owner wants eligible guests to pay and arrive without a human in the loop. Instant Book had been UI-only since Phase 15I.10 — the badge changed the wording on `/book` and nothing else; every booking was inserted `pending` and only three human writers ever confirmed one.
+
+**Impact:** new [lib/bookings/instant-confirm.ts](../../lib/bookings/instant-confirm.ts) (pure gates) + [instant-confirm-server.ts](../../lib/bookings/instant-confirm-server.ts) (availability re-check, conditional confirm, dispatcher), called from all four money paths including the webhook. Ops → Website gains the switch with copy stating exactly what it does. No schema change: the flag is a `settings` row.
+
+**This is a deliberate exception to a standing non-negotiable.** "Money must never confirm, approve, or cancel a booking" still holds everywhere else — the ordinary card paths, the payment link, manual receipts and the webhook all still leave status untouched. Instant Book is the only path where payment confirms, it is off by default, and it is narrow by construction.
+
+**Risk:** an auto-confirmed guest receives the Arrival Guide with no human review. Physical access (gate/door PIN) is Phase 16D and does not exist, so "arrive in minutes" today means confirmed + arrival guide only. If the availability re-check or the confirm write fails for any reason, the booking is left `pending` — the same state as before instant booking, never a half-confirmed one.
+
+**Reversible?:** yes — switch off. Nothing already confirmed is affected.
 ## 2026-08-11 - Root cause of stuck refunds: the wrong amount-echo field
 
 **Decision:** `readRefundResponseAmountDetails` reads **`refundAmountDetails`** first (`refundAmount`, falling back to `creditAmount`), then the previous `creditAmountDetails`, then generic `orderInformation.amountDetails`.

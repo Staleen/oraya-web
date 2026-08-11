@@ -31,6 +31,11 @@ function describeChanges(before: SiteSettings, after: SiteSettings): string[] {
   if (before.instant_byblos !== after.instant_byblos) {
     out.push(after.instant_byblos ? "Villa Byblos offers instant booking" : "Villa Byblos no longer offers instant booking");
   }
+  if (before.instant_auto_confirm !== after.instant_auto_confirm) {
+    out.push(after.instant_auto_confirm
+      ? "Fully paid instant stays will CONFIRM THEMSELVES — no approval from you"
+      : "Instant stays go back to needing your approval");
+  }
   return out;
 }
 
@@ -132,10 +137,32 @@ export default function SitePage() {
                   </CellSelect>
                 </label>
               </div>
-              <p style={{ margin: "-6px 0 18px", fontSize: "12px", color: T.warn, lineHeight: 1.6 }}>
-                This changes what the booking page <b>shows</b>, not how a booking is made. Every
-                booking still arrives here for your approval — instant confirmation isn&apos;t built yet
-                (it waits on Phase 16B payments).
+              <p style={{ margin: "-6px 0 18px", fontSize: "12px", color: T.muted, lineHeight: 1.6 }}>
+                This changes which lane the booking page <b>shows</b> for each villa. Whether a paid
+                stay confirms itself is the separate switch below.
+              </p>
+
+              <label style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: T.muted, display: "block", marginBottom: "10px" }}>
+                Confirm instant stays automatically
+                <CellSelect style={{ marginTop: "6px" }} value={working.instant_auto_confirm ? "yes" : "no"}
+                  onChange={(e) => update({ instant_auto_confirm: e.target.value === "yes" })}>
+                  <option value="no">No — every booking waits for my approval</option>
+                  <option value="yes">Yes — a stay paid in full confirms itself</option>
+                </CellSelect>
+              </label>
+              <p style={{ margin: "-6px 0 18px", fontSize: "12px", color: working.instant_auto_confirm ? T.warn : T.faint, lineHeight: 1.6 }}>
+                {working.instant_auto_confirm ? (
+                  <>
+                    <b>On.</b> A guest who books an instant villa with <b>no add-ons</b>, <b>no special
+                    request</b>, and pays <b>the full amount</b> is confirmed the moment the money lands,
+                    and immediately receives the confirmation email and the WhatsApp arrival guide —
+                    without you seeing it first. Availability is re-checked at the moment of payment, so
+                    two guests paying for the same nights cannot both be confirmed. Anything with add-ons,
+                    a special request, a deposit-only payment, or an event still waits for you.
+                  </>
+                ) : (
+                  <>Off. Every booking arrives here for your approval, however it was paid.</>
+                )}
               </p>
 
               <label style={{ display: "block", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: T.muted, marginBottom: "6px" }}>

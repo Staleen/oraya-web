@@ -10,6 +10,7 @@ import {
 } from "@/lib/payments/ledger-server";
 import { isPublicRequestPayable, remainingRequestAmount } from "@/lib/payments/ledger";
 import { notifyMoneyEvent } from "@/lib/payments/money-event-dispatch-server";
+import { maybeInstantConfirmBooking } from "@/lib/bookings/instant-confirm-server";
 import {
   buildPaymentRequestSuccessUrl,
   mintBookingPaymentSuccessUrl,
@@ -192,6 +193,7 @@ export async function POST(request: Request) {
           payment_request_id: payment.id,
           provider_transaction_id: outcome.provider?.reference ?? null,
         });
+        await maybeInstantConfirmBooking(payment.booking_id);
         const successUrls = await resolvePaymentRequestSuccessUrls(origin, token, payment.booking_id);
         return NextResponse.json({
           ok: true,

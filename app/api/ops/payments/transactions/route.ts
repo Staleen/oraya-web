@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { manualRailToLedger, PAYMENT_CURRENCIES } from "@/lib/payments/ledger";
 import { roundMoney } from "@/lib/money";
 import { notifyMoneyEvent } from "@/lib/payments/money-event-dispatch-server";
+import { maybeInstantConfirmBooking } from "@/lib/bookings/instant-confirm-server";
 
 function amount(value: unknown) {
   const parsed = Number(value);
@@ -96,5 +97,6 @@ export async function POST(request: Request) {
     idempotency_key: idempotencyKey,
   });
   const emailSent = notified.kind === "sent" && notified.guest_receipt;
+  await maybeInstantConfirmBooking(bookingId);
   return NextResponse.json({ ok: true, result, recorded_by: auth.staff.full_name, email_sent: emailSent });
 }
