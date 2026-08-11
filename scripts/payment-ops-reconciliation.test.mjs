@@ -326,6 +326,8 @@ test("polled reconciliation reuses the webhook core and never writes to the prov
   assert.ok(job, "the reconcile job must be scheduled");
   // Vercel Hobby rejects anything more frequent than daily at deploy time.
   assert.doesNotMatch(job.schedule, /^\*|\/\d/, "schedule must be at most once per day");
+});
+
 test("a held arrival guide does not consume its at-most-once claim", () => {
   const dispatcher = readFileSync("lib/whatsapp/confirmed-stay-notification.ts", "utf8");
   const gateIndex = dispatcher.indexOf("decideArrivalGuideRelease({");
@@ -339,4 +341,21 @@ test("a held arrival guide does not consume its at-most-once claim", () => {
   assert.match(dispatcher, /"awaiting_deposit"/);
   // The confirmation email is a separate concern and must not be gated here.
   assert.doesNotMatch(dispatcher, /sendBookingEmail|sendEventConfirmationEmail/);
+});
+
+test("checkout does not re-ask the guest for details Oraya already holds", () => {
+  const client = readFileSync("lib/payments/credit-libanais.ts", "utf8");
+  const mandate = client.slice(
+    client.indexOf("captureMandate: {"),
+    client.indexOf("captureMandate: {") + 320,
+  );
+  // Oraya collects email and phone on the booking form; asking again at the
+  // payment step is friction where abandonment costs most.
+  assert.match(mandate, /requestEmail: false/);
+  assert.match(mandate, /requestPhone: false/);
+  // The billing address is the one thing the guest must supply here: it is
+  // what the card network sees and what AVS checks.
+  assert.match(mandate, /billingType: "FULL"/);
+  // Saved credentials remain a separately gated workstream.
+  assert.match(mandate, /requestSaveCredentials: false/);
 });

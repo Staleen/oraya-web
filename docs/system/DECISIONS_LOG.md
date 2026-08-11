@@ -2167,3 +2167,17 @@ Without a backstop, a guest who closes the tab after 3DS leaves money taken and 
 **Safety:** off by default, so merging changes nothing until David turns it on. Skips are explicit and logged (`awaiting_deposit`), never silent. Booking status, availability and the confirmation email are untouched. Release inherits the existing at-most-once claim, so several money paths observing one payment cannot produce two messages.
 
 **Reversible?:** yes — switch off.
+
+---
+
+## 2026-08-11 - The Unified Checkout capture context overrides Business Center, not the other way round
+
+**Decision:** the capture-context request stops asking the guest for an email and phone number Oraya already holds (`requestEmail: false`, `requestPhone: false`). `billingType: "FULL"` stays — it is the address the card network sees and what AVS checks.
+
+**Reason:** the owner reported that switching the email and name fields off in Business Center's "Customer information and payment flow" had no effect. It never could: `captureMandate` in the `/uc/v1/sessions` request **overrides** the dashboard, so anything Oraya names in code wins. Every guest was therefore re-asked at the payment step for details captured two screens earlier — friction at the exact point where abandonment is most expensive.
+
+**The wider lesson, which matters more than this change:** for this integration the Business Center UI is **not** the control surface. Oraya authorizes server-side against `/pts/v2/payments` with a transient token, so dashboard settings scoped to Unified Checkout's own *complete* method do not apply. This is the same root cause as the webhook that never fires (`uc.orders.transactionresults`) and, almost certainly, as **3-D Secure not authenticating** — the payer-authentication toggle was switched on in Business Center on 2026-08-11 and live transactions still return `ECI 7` with an empty CAVV. Enabling 3DS for this flow will require `processingInformation.actionList` (`CONSUMER_AUTHENTICATION` / `VALIDATE_CONSUMER_AUTHENTICATION`) and handling the step-up, not a dashboard switch.
+
+**Impact:** [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts) capture mandate + a contract test pinning it, so a future change to the checkout fields is a deliberate act rather than a silent regression.
+
+**Reversible?:** yes — flip the two flags.

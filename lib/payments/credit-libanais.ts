@@ -460,10 +460,22 @@ function buildCaptureContextRequest(
     country: config.country,
     locale: config.locale,
     allowedPaymentTypes,
+    // What Unified Checkout asks the guest for.
+    //
+    // This OVERRIDES the "Customer information and payment flow" settings in
+    // Business Center — anything named here wins, which is why switching the
+    // email and phone fields off in the dashboard had no effect (owner report,
+    // confirmed 2026-08-11). The dashboard is not the control surface; this is.
+    //
+    // Oraya already holds the guest's email and phone from the booking form,
+    // so re-asking for them at the payment step is pure friction on the screen
+    // where abandonment costs the most. The billing address stays FULL: it is
+    // the only address the card network ever sees, it feeds AVS, and it is the
+    // one field the guest genuinely has to supply here.
     captureMandate: {
       billingType: "FULL",
-      requestEmail: true,
-      requestPhone: true,
+      requestEmail: false,
+      requestPhone: false,
       requestShipping: false,
       requestSaveCredentials: false,
       showAcceptedNetworkIcons: true,
