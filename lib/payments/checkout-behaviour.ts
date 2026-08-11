@@ -18,6 +18,12 @@
  * Pure — relative .ts imports so node:test can load it.
  */
 
+import {
+  PAYER_AUTHENTICATION_COPY,
+  parsePayerAuthenticationMode,
+  type PayerAuthenticationMode,
+} from "./payer-authentication.ts";
+
 export const CHECKOUT_BEHAVIOUR_SETTING_KEY = "card_checkout_behaviour";
 
 export type CheckoutBillingCollection = "full" | "none";
@@ -43,6 +49,12 @@ export type CheckoutBehaviour = {
    * false = authorize only, hold the funds, capture later — the hotel pattern.
    */
   capture_immediately: boolean;
+  /**
+   * 3-D Secure. Three states rather than a boolean because a bare "on" would
+   * strand any guest whose bank wants to challenge them — Oraya has no
+   * step-up screen yet. See lib/payments/payer-authentication.ts.
+   */
+  payer_authentication: PayerAuthenticationMode;
 };
 
 export const DEFAULT_CHECKOUT_BEHAVIOUR: CheckoutBehaviour = {
@@ -51,6 +63,8 @@ export const DEFAULT_CHECKOUT_BEHAVIOUR: CheckoutBehaviour = {
   billing_address: "full",
   skip_fraud_screening: true,
   capture_immediately: true,
+  // Off reproduces today's live behaviour exactly.
+  payer_authentication: "off",
 };
 
 function readBoolean(value: unknown, fallback: boolean): boolean {
@@ -93,6 +107,10 @@ export function parseCheckoutBehaviour(value: unknown): CheckoutBehaviour {
       record.capture_immediately,
       DEFAULT_CHECKOUT_BEHAVIOUR.capture_immediately,
     ),
+    payer_authentication: parsePayerAuthenticationMode(
+      record.payer_authentication,
+      DEFAULT_CHECKOUT_BEHAVIOUR.payer_authentication,
+    ),
   };
 }
 
@@ -131,6 +149,7 @@ export function describeCheckoutBehaviour(behaviour: CheckoutBehaviour): string[
       ? "Fraud screening is OFF — Decision Manager is skipped."
       : "Fraud screening is ON — Decision Manager reviews every payment.",
   );
+  lines.push(PAYER_AUTHENTICATION_COPY[behaviour.payer_authentication]);
   if (behaviour.billing_address === "none") {
     lines.push("No billing address means address verification cannot run.");
   }

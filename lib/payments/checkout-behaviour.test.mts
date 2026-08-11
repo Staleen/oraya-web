@@ -19,6 +19,8 @@ test("defaults reproduce today's live behaviour exactly", () => {
     billing_address: "full",
     skip_fraud_screening: true,
     capture_immediately: true,
+    // Off is today's live behaviour: no 3-D Secure was ever requested.
+    payer_authentication: "off",
   });
 });
 
@@ -28,6 +30,8 @@ test("an unreadable setting can never change how money is taken", () => {
     assert.equal(parsed.skip_fraud_screening, true, String(value));
     assert.equal(parsed.capture_immediately, true, String(value));
     assert.equal(parsed.billing_address, "full", String(value));
+    // An unreadable setting must never silently switch 3-D Secure on.
+    assert.equal(parsed.payer_authentication, "off", String(value));
   }
 });
 
@@ -38,6 +42,7 @@ test("stored settings are honoured, from JSON or from an object", () => {
     billing_address: "none",
     skip_fraud_screening: false,
     capture_immediately: false,
+    payer_authentication: "required",
   };
   for (const value of [stored, JSON.stringify(stored)]) {
     assert.deepEqual(parseCheckoutBehaviour(value), stored);

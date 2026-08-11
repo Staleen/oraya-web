@@ -40,6 +40,8 @@ export interface SiteSettings {
     billing_address: "full" | "none";
     skip_fraud_screening: boolean;
     capture_immediately: boolean;
+    /** 3-D Secure. Three states: a bare boolean would strand challenged guests. */
+    payer_authentication: "off" | "frictionless_only" | "required";
   };
 }
 

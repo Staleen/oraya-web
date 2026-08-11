@@ -4,6 +4,7 @@ import { requireOps } from "@/lib/ops-auth";
 import { INSTANT_BOOKING_SETTING_KEYS } from "@/lib/instant-booking-settings";
 import { INSTANT_AUTO_CONFIRM_SETTING_KEY } from "@/lib/bookings/instant-confirm";
 import { ARRIVAL_GUIDE_PAYMENT_GATE_SETTING_KEY } from "@/lib/whatsapp/arrival-guide-gate";
+import { validatePayerAuthenticationSetting } from "@/lib/payments/payer-authentication";
 import {
   CHECKOUT_BEHAVIOUR_SETTING_KEY,
   parseCheckoutBehaviour,
@@ -115,9 +116,18 @@ export async function PUT(request: Request) {
   // Manager runs, and whether money moves now or is only held. Parsed through
   // the same defaults, so a malformed body cannot produce a dangerous setting.
   if (Object.prototype.hasOwnProperty.call(body, "card_checkout_behaviour")) {
+    const behaviour = parseCheckoutBehaviour(body.card_checkout_behaviour);
+    // Strict 3-D Secure refuses on the authorization RESPONSE. With capture in
+    // the same request the money has already moved by then, so the refusal
+    // would be a refund rather than a released hold. Refuse the combination
+    // instead of quietly shipping it.
+    const conflict = validatePayerAuthenticationSetting(behaviour);
+    if (!conflict.ok) {
+      return NextResponse.json({ error: conflict.message }, { status: 400 });
+    }
     writes.push({
       key: CHECKOUT_BEHAVIOUR_SETTING_KEY,
-      value: JSON.stringify(parseCheckoutBehaviour(body.card_checkout_behaviour)),
+      value: JSON.stringify(behaviour),
     });
   }
 

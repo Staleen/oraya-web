@@ -4,6 +4,7 @@
  */
 
 import { roundMoney } from "../money.ts";
+import { payerAuthenticationActions, type PayerAuthenticationMode } from "./payer-authentication.ts";
 
 export type TransientTokenPaymentRequestInput = {
   booking_id: string;
@@ -23,6 +24,12 @@ export type TransientTokenPaymentRequestInput = {
    * false = authorize only; capture later. Operator-controlled.
    */
   capture_immediately?: boolean;
+  /**
+   * 3-D Secure. Requested through the same actionList as DECISION_SKIP,
+   * because for this integration the Business Center switch is decoration.
+   * Defaults to "off" so an unset setting keeps today's behaviour.
+   */
+  payer_authentication?: PayerAuthenticationMode;
 };
 
 /**
@@ -66,6 +73,13 @@ export const DECISION_SKIP_ACTION = "DECISION_SKIP" as const;
 export function buildTransientTokenPaymentRequest(input: TransientTokenPaymentRequestInput) {
   const skipDecisionManager = input.skip_decision_manager !== false;
   const captureImmediately = input.capture_immediately !== false;
+  // One actionList carries both decisions; order does not matter to
+  // CyberSource, and an empty list must be omitted entirely rather than sent
+  // as [] — an empty actionList is not the same as no actionList.
+  const actionList = [
+    ...(skipDecisionManager ? [DECISION_SKIP_ACTION as string] : []),
+    ...payerAuthenticationActions(input.payer_authentication ?? "off"),
+  ];
   return {
     clientReferenceInformation: {
       // The attempt-derived merchant reference (idempotency identifier) when
@@ -76,7 +90,7 @@ export function buildTransientTokenPaymentRequest(input: TransientTokenPaymentRe
     processingInformation: {
       commerceIndicator: "internet",
       capture: captureImmediately,
-      ...(skipDecisionManager ? { actionList: [DECISION_SKIP_ACTION] } : {}),
+      ...(actionList.length > 0 ? { actionList } : {}),
     },
     tokenInformation: {
       transientTokenJwt: input.transient_token,
