@@ -144,3 +144,66 @@ test("provider ledger accepts Apple Pay only for an Apple-enabled request", () =
   assert.match(appleLedgerMigration, /wallet_presentation is distinct from p_wallet_presentation/);
   assert.match(appleLedgerMigration, /payment_requests_one_active_apple_pay_collection/);
 });
+
+test("M1: an unsettled authorization is voided, never refunded", () => {
+  const refundRoute = readFileSync(
+    "app/api/ops/payments/transactions/[id]/refund/route.ts",
+    "utf8",
+  );
+  const voidRoute = readFileSync(
+    "app/api/ops/payments/transactions/[id]/void/route.ts",
+    "utf8",
+  );
+
+  // The refund path asks the provider what happened BEFORE claiming or calling
+  // the bank, and refuses when the authorization never settled.
+  assert.match(refundRoute, /getCreditLibanaisPaymentSettlement/);
+  assert.match(refundRoute, /requires_void/);
+  const gateIndex = refundRoute.indexOf("getCreditLibanaisPaymentSettlement({");
+  const claimIndex = refundRoute.indexOf("await claimProviderRefund({");
+  assert.ok(gateIndex > 0 && claimIndex > gateIndex, "settlement gate must precede the refund claim");
+
+  // Void is owner-only, claim-before-provider, and never writes a refund.
+  assert.match(voidRoute, /requiredRole: "owner"/);
+  const voidClaimIndex = voidRoute.indexOf("claimProviderAuthorizationReversal({");
+  const providerCallIndex = voidRoute.indexOf("reverseCreditLibanaisAuthorization({");
+  assert.ok(
+    voidClaimIndex > 0 && providerCallIndex > voidClaimIndex,
+    "the void claim must precede the provider call",
+  );
+  assert.doesNotMatch(voidRoute, /ProviderRefund|transaction_type: "refund"/);
+
+  // Ambiguous void outcomes keep the claim and forbid a retry.
+  assert.match(voidRoute, /Do NOT retry/);
+
+  // Ops offers the void action with copy that says why.
+  assert.match(workspace, /Void authorization/);
+  assert.match(workspace, /Record void/);
+  assert.match(workspace, /Release void lock/);
+  assert.match(workspace, /hold on the guest's card/);
+});
+
+test("M1: Decision Manager reject 481 is classified, never treated as money in", () => {
+  const settlement = readFileSync("lib/payments/provider-settlement.ts", "utf8");
+  const webhookParser = readFileSync("lib/payments/credit-libanais-webhook.ts", "utf8");
+
+  assert.match(settlement, /DECISION_MANAGER_REJECT_REASON_CODE = "481"/);
+  // A DM rejection never becomes a webhook "success".
+  assert.match(webhookParser, /decisionManagerReject \? "unknown" : classifyOutcome/);
+  assert.match(webhookHandler, /decision_manager_reject: event\.decision_manager_reject/);
+  assert.match(workspace, /Decision Manager rejected \(481\)/);
+});
+
+test("M1: the void migration keeps Reverse manual-only and the ledger append-only", () => {
+  const voidSql = readFileSync("sql/phase-16b-provider-authorization-reversal.sql", "utf8");
+  // The manual Reverse lock is untouched by this migration.
+  assert.doesNotMatch(voidSql, /create or replace function public\.oraya_reverse_manual_payment/);
+  // The refund settle-protect exception survives verbatim alongside the new one.
+  assert.match(voidSql, /settling_pending_refund/);
+  assert.match(voidSql, /settling_pending_reversal/);
+  // Voids are recorded as reversals, never as refunds.
+  assert.match(voidSql, /'reversal', 'pending'/);
+  assert.doesNotMatch(voidSql, /transaction_type, 'refund'/);
+  // A recorded refund blocks a void rather than silently rewriting history.
+  assert.match(voidSql, /refund_already_recorded/);
+});

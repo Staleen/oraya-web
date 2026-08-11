@@ -22,6 +22,16 @@ import {
   verifyRefundAmountDetails,
 } from "@/lib/payments/provider-refund";
 import {
+  classifyCardSettlementState,
+  classifyProviderReversalOutcome,
+  isDecisionManagerReject,
+  readCapturePresent,
+  readProviderReasonCode,
+  readReversalResponseAmountDetails,
+  readRiskDecision,
+  type CardSettlementState,
+} from "@/lib/payments/provider-settlement";
+import {
   buildTransientTokenPaymentRequest,
   isRetrySafeNonChargeHttp,
 } from "@/lib/payments/transient-token-payment-request";
@@ -143,6 +153,23 @@ interface CyberSourcePaymentResponse {
   creditAmountDetails?: {
     creditAmount?: string;
     currency?: string;
+  };
+  /** Phase 16B M1 — authorization reversal echo + settlement/risk classification. */
+  reversalAmountDetails?: {
+    reversedAmount?: string;
+    currency?: string;
+  };
+  reasonCode?: string | number;
+  riskInformation?: {
+    profile?: { decision?: string };
+  };
+  applicationInformation?: {
+    reasonCode?: string | number;
+    applications?: Array<{
+      name?: string;
+      status?: string;
+      reasonCode?: string | number;
+    }>;
   };
 }
 
@@ -1017,3 +1044,231 @@ export const creditLibanaisPaymentProvider: HostedCheckoutProvider = {
     }
   },
 };
+
+// ---------------------------------------------------------------------------
+// Phase 16B M1 — settlement truth + authorization reversal (void)
+// ---------------------------------------------------------------------------
+
+export type CreditLibanaisSettlementAssessment = {
+  /** false when the provider could not be reached / is not configured. */
+  ok: boolean;
+  state: CardSettlementState;
+  provider_status: string | null;
+  reason_code: string | null;
+  decision_manager_reject: boolean;
+};
+
+/**
+ * Ask CyberSource what actually happened to an authorization before offering
+ * an owner a money-return action. Business Center is the source of truth for
+ * whether money moved; this is the API view of the same record.
+ *
+ * Never throws for provider-side failure: an unreadable answer is "unknown",
+ * and the caller must not assert either instrument on an unknown.
+ */
+export async function getCreditLibanaisPaymentSettlement(input: {
+  payment_id: string;
+}): Promise<CreditLibanaisSettlementAssessment> {
+  const unknown: CreditLibanaisSettlementAssessment = {
+    ok: false,
+    state: "unknown",
+    provider_status: null,
+    reason_code: null,
+    decision_manager_reject: false,
+  };
+  const paymentId = input.payment_id.trim();
+  if (!paymentId) return unknown;
+
+  let config: ReturnType<typeof requireSessionConfig>;
+  try {
+    config = requireSessionConfig();
+  } catch {
+    return unknown;
+  }
+
+  const payload = await retrieveCyberSourcePayment({ config, transaction_id: paymentId });
+  if (!payload) return unknown;
+
+  const status = readProviderStatus(payload);
+  const reasonCode = readProviderReasonCode(payload);
+  const decisionManagerReject = isDecisionManagerReject({
+    reason_code: reasonCode,
+    error_reason: payload.errorInformation?.reason ?? payload.reason ?? null,
+    risk_decision: readRiskDecision(payload),
+    status,
+  });
+  return {
+    ok: true,
+    state: classifyCardSettlementState({
+      status,
+      capture_present: readCapturePresent(payload),
+    }),
+    provider_status: status,
+    reason_code: reasonCode,
+    decision_manager_reject: decisionManagerReject,
+  };
+}
+
+export type CreditLibanaisReversalInput = {
+  payment_id: string;
+  amount: number;
+  currency: "USD" | "LBP";
+  merchant_reference: string;
+  reason?: string | null;
+};
+
+export type CreditLibanaisReversalResult =
+  | {
+      ok: true;
+      outcome: "approved";
+      status: string;
+      reversal_id: string;
+      reference: string;
+    }
+  | {
+      ok: false;
+      outcome: "declined" | "ambiguous";
+      status: string | null;
+      reversal_id: string | null;
+      message: string;
+      correlation_id?: string | null;
+    };
+
+/**
+ * Release an approved-but-unsettled card authorization
+ * (POST /pts/v2/payments/{id}/reversals).
+ *
+ * This is NOT a refund: no money ever left the guest's account, so nothing is
+ * returned — the hold is released. Same JWT + plaintext-by-default contract as
+ * /pts/v2/payments. Amount/currency must echo before outcome=approved.
+ */
+export async function reverseCreditLibanaisAuthorization(
+  input: CreditLibanaisReversalInput,
+): Promise<CreditLibanaisReversalResult> {
+  const config = requireSessionConfig();
+  const paymentId = input.payment_id.trim();
+  if (!paymentId) {
+    return {
+      ok: false,
+      outcome: "declined",
+      status: null,
+      reversal_id: null,
+      message: "Missing provider payment id.",
+    };
+  }
+  const path = `${CYBERSOURCE_PAYMENTS_PATH}/${encodeURIComponent(paymentId)}/reversals`;
+  const apiUrl = new URL(path, `${config.apiBaseUrl}/`);
+  const reversalRequest = JSON.stringify({
+    clientReferenceInformation: {
+      code: input.merchant_reference.trim().slice(0, 50),
+    },
+    reversalInformation: {
+      amountDetails: {
+        totalAmount: roundMoney(input.amount).toFixed(2),
+        currency: input.currency,
+      },
+      reason: (input.reason?.trim() || "Authorization reversed by Oraya").slice(0, 100),
+    },
+  });
+  let body = reversalRequest;
+  if (config.requestMleEnabled) {
+    if (!config.requestMleCertificate || !config.requestMleKeyId) {
+      throw new PaymentProviderConfigurationError(
+        "Request MLE is enabled but certificate/key id are not configured.",
+      );
+    }
+    body = await encryptCyberSourceRequest({
+      payload: reversalRequest,
+      requestMleCertificate: config.requestMleCertificate,
+      requestMleKeyId: config.requestMleKeyId,
+    });
+  }
+  const authorization = await buildCyberSourceJwtAuthorization({
+    body,
+    host: apiUrl.host,
+    keyId: config.keyId,
+    merchantId: config.merchantId,
+    path: apiUrl.pathname,
+    sharedSecret: config.sharedSecret,
+  });
+  const response = await fetch(apiUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: authorization,
+    },
+    body,
+    cache: "no-store",
+    signal: AbortSignal.timeout(15_000),
+  });
+  const responseBody = await response.text();
+  const correlationId = response.headers.get("v-c-correlation-id");
+  let payload: CyberSourcePaymentResponse | null = null;
+  let decryptFailed = false;
+  try {
+    payload = await decryptCyberSourceResponse<CyberSourcePaymentResponse>({
+      body: responseBody,
+      expectedKeyId: config.responseMleKeyId,
+      responseMlePrivateKey: config.responseMlePrivateKey,
+    });
+  } catch (error) {
+    decryptFailed = true;
+    console.error("[payments/credit-libanais] reversal response decrypt failed:", {
+      payment_id: paymentId,
+      http_status: response.status,
+      correlation_id: correlationId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+  const status = payload ? readProviderStatus(payload) : null;
+  const reversalId = payload ? readProviderStringId(payload?.id) : null;
+  const errorMessage = payload ? readProviderErrorMessage(payload) : null;
+  const amountVerification = payload
+    ? verifyAuthorizedAmountDetails({
+        requested_amount: input.amount,
+        requested_currency: input.currency,
+        response_amount_details: readReversalResponseAmountDetails(payload),
+      })
+    : { ok: false as const, reason: "response_missing_amount_details" };
+  const outcome = classifyProviderReversalOutcome({
+    http_ok: response.ok,
+    http_status: response.status,
+    status,
+    reversal_id: reversalId,
+    amount_verified: amountVerification.ok,
+    decrypt_failed: decryptFailed,
+  });
+
+  if (outcome === "approved" && reversalId) {
+    return {
+      ok: true,
+      outcome: "approved",
+      status: status ?? "REVERSED",
+      reversal_id: reversalId,
+      reference: reversalId,
+    };
+  }
+
+  console.error("[payments/credit-libanais] authorization reversal not approved:", {
+    payment_id: paymentId,
+    http_status: response.status,
+    provider_status: status,
+    reversal_id: reversalId,
+    error_message: errorMessage,
+    correlation_id: correlationId,
+    outcome,
+    amount_ok: amountVerification.ok,
+  });
+  const failureOutcome = outcome === "declined" ? ("declined" as const) : ("ambiguous" as const);
+  return {
+    ok: false,
+    outcome: failureOutcome,
+    status,
+    reversal_id: reversalId,
+    correlation_id: correlationId,
+    message:
+      failureOutcome === "ambiguous"
+        ? "Void outcome could not be confirmed. Do NOT retry — check Business Center and record the reversal reference if the hold was released."
+        : errorMessage || "The gateway did not accept the void.",
+  };
+}

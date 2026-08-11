@@ -51,12 +51,58 @@ When Ops shows **Unclear card outcome** / stuck attempt:
 
 Never mark cleared unless Oraya already shows the receipt. Never retry a charge while the attempt is still open.
 
+## Void (authorization reversal) — when the money was never taken
+
+**Decision (David, 2026-08-11):** a card that was authorized but never settled
+is **voided**, not refunded. A refund/credit against an unsettled authorization
+fails at CyberSource with reason **102 DINVALIDDATA** — it is the wrong
+instrument, not a transient error.
+
+Oraya now checks with the bank before offering an action:
+
+1. Apply once in Supabase SQL editor:
+   `sql/phase-16b-provider-authorization-reversal.sql`
+2. Open **Ops → Payments → Collect money** as an **owner**
+3. Find the card receipt → **Refund card**
+   - Oraya asks CyberSource what happened to that authorization
+   - If it never settled, the dialog becomes **Void card authorization** and
+     explains why. Refund is refused server-side for that receipt.
+4. **Void authorization** → the hold on the guest's card is released. **No money
+   moves** — nothing was ever taken.
+
+### Outcomes
+
+| Gateway result | Oraya behavior |
+|---|---|
+| Reversal accepted + amount verified | Confirm ledger `reversal` row; original receipt marked reversed; booking/request balances restored |
+| Clear decline (4xx, no reversal id) | Mark the claim failed; you may try again |
+| Timeout / decrypt fail / amount mismatch / unknown | Leave pending; **do not retry**; record the BC reversal reference **or** release the lock if the hold is still there |
+
+### Decision Manager reject 481
+
+Auth Success + **DM Reject 481** + Settlement "Not Run" means the bank approved
+the card but the gateway's fraud screen rejected the order. Settlement will
+never run. Ops labels it explicitly and offers **Void authorization**. The
+underlying 481 rejections on merchant `06385000` are a NetCommerce issue, not
+an Oraya one.
+
+### When Oraya refuses to void
+
+- **A refund is already recorded against this payment** — Oraya's ledger already
+  says money went back. Voiding on top would tell two different money stories.
+  Resolve the refund record first; Business Center is the source of truth.
+- **A newer payment exists on the same booking** — void the newer one first so
+  balances stay correct.
+- **A void attempt is already open** — check BC, then record the reversal
+  reference or release the lock. Never retry.
+
 ## Reverse vs Refund
 
 | Action | Use for | Moves bank money? |
 |---|---|---|
 | **Reverse** | Cash / manual receipt mistakes only | No |
-| **Refund card** | NetCommerce / CyberSource charges | Yes (when provider mode succeeds) |
+| **Void authorization** | Card authorized but never settled (incl. DM 481) | No — releases the hold |
+| **Refund card** | Settled NetCommerce / CyberSource charges | Yes (when provider mode succeeds) |
 
 Run once if needed: `sql/phase-16b-reverse-manual-only.sql` so Reverse is hard-locked to `provider = manual`.
 

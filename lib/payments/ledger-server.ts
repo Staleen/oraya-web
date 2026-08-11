@@ -212,3 +212,98 @@ export async function recordProviderRefund(input: {
     ? { ok: true as const, result }
     : { ok: false as const, error: "refund_not_recorded" };
 }
+
+/**
+ * Phase 16B M1 — authorization reversal (void) ledger helpers.
+ * A reversal is NOT a refund: no money moved, so these never touch the refund
+ * RPCs or write refund rows. See sql/phase-16b-provider-authorization-reversal.sql.
+ */
+export async function claimProviderAuthorizationReversal(input: {
+  payment_transaction_id: string;
+  idempotency_key: string;
+  staff_id: string | null;
+  notes?: string | null;
+}) {
+  const { data, error } = await supabaseAdmin.rpc(
+    "oraya_claim_provider_authorization_reversal",
+    {
+      p_payment_transaction_id: input.payment_transaction_id,
+      p_idempotency_key: input.idempotency_key,
+      p_staff_id: input.staff_id,
+      p_notes: input.notes ?? null,
+    },
+  );
+  if (error) {
+    console.error("[payment-requests] authorization reversal claim failed", {
+      payment_transaction_id: input.payment_transaction_id,
+      code: error.code,
+      message: error.message,
+    });
+    return { ok: false as const, error: error.message };
+  }
+  const result = Array.isArray(data) ? data[0] : data;
+  if (!result) return { ok: false as const, error: "reversal_not_claimed" };
+  return {
+    ok: true as const,
+    result: {
+      reversal_transaction_id: result.reversal_transaction_id
+        ? String(result.reversal_transaction_id)
+        : null,
+      already_pending: Boolean(result.already_pending),
+      blocked: Boolean(result.blocked),
+      block_reason: result.block_reason ? String(result.block_reason) : null,
+    },
+  };
+}
+
+export async function confirmProviderAuthorizationReversal(input: {
+  reversal_transaction_id: string;
+  provider_reference: string;
+  verified_source?: "provider" | "operator";
+}) {
+  const { data, error } = await supabaseAdmin.rpc(
+    "oraya_confirm_provider_authorization_reversal",
+    {
+      p_reversal_transaction_id: input.reversal_transaction_id,
+      p_provider_reference: input.provider_reference,
+      p_verified_source: input.verified_source ?? "provider",
+    },
+  );
+  if (error) {
+    console.error("[payment-requests] authorization reversal confirm failed", {
+      reversal_transaction_id: input.reversal_transaction_id,
+      code: error.code,
+      message: error.message,
+    });
+    return { ok: false as const, error: error.message };
+  }
+  const result = Array.isArray(data) ? data[0] : data;
+  return result?.reversal_transaction_id
+    ? { ok: true as const, result }
+    : { ok: false as const, error: "reversal_not_confirmed" };
+}
+
+export async function failProviderAuthorizationReversal(input: {
+  reversal_transaction_id: string;
+  reason?: string | null;
+}) {
+  const { data, error } = await supabaseAdmin.rpc(
+    "oraya_fail_provider_authorization_reversal",
+    {
+      p_reversal_transaction_id: input.reversal_transaction_id,
+      p_reason: input.reason ?? null,
+    },
+  );
+  if (error) {
+    console.error("[payment-requests] authorization reversal fail mark failed", {
+      reversal_transaction_id: input.reversal_transaction_id,
+      code: error.code,
+      message: error.message,
+    });
+    return { ok: false as const, error: error.message };
+  }
+  const result = Array.isArray(data) ? data[0] : data;
+  return result?.reversal_transaction_id
+    ? { ok: true as const, result }
+    : { ok: false as const, error: "reversal_not_failed" };
+}

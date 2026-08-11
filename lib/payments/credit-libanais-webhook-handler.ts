@@ -218,6 +218,10 @@ export async function handleCreditLibanaisWebhook(request: Request) {
         outcome: event.outcome,
         signature_key_id: verification.key_id,
         payload_encrypted: decryptedPayload.payload_encrypted,
+        // Phase 16B M1 — surfaced so Ops shows "Decision Manager rejected —
+        // void / auth reverse" instead of a generic unfinished bank message.
+        decision_manager_reject: event.decision_manager_reject,
+        provider_reason_code: event.provider_reason_code,
       },
     })
     .select("id")

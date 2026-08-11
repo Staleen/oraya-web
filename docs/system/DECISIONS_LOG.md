@@ -16,6 +16,20 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-11 - Unsettled card authorizations are voided, never refunded (Phase 16B M1)
+
+**Decision:** before Ops offers any card money-return action, Oraya asks CyberSource what actually happened to the authorization. When the authorization was approved but never settled, the offered action is **Authorization Reversal (void)**, not **Refund card**, and the refund route refuses the provider call outright (`requires_void`). A void is recorded as its own ledger outcome — a `reversal` row with `provider = 'credit_libanais'`, claim-before-provider, `pending → confirmed|failed` — and never as a refund. Decision Manager reject **481** is classified explicitly: in the webhook parser a DM rejection can never become a `success` outcome (it degrades to `unknown`, changing no state), and Ops shows the rejection with the void instruction instead of a generic unclear state. A refund the gateway refuses with **102 / DINVALIDDATA** returns copy pointing at void rather than inviting a retry.
+
+**Reason:** live evidence 2026-08-10 (merchant `06385000`): request ids `7863958223886680704897` and `7863969294066269704890` both returned Auth SUCCESS + Decision Manager REJECT 481 + Settlement "Not Run". A refund against the first failed with reason 102 because a credit is the wrong instrument for an unsettled authorization — Business Center's own guidance for those rows is Authorization Reversal. Without a settlement read, Ops funnels the operator into refund semantics and the ledger ends up asserting refunds that never happened.
+
+**Impact:** [lib/payments/provider-settlement.ts](../../lib/payments/provider-settlement.ts) (new, pure), `getCreditLibanaisPaymentSettlement` + `reverseCreditLibanaisAuthorization` in [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts), new `GET`/`POST` [app/api/ops/payments/transactions/[id]/void/route.ts](../../app/api/ops/payments/transactions/%5Bid%5D/void/route.ts), settlement gate + 102 copy in the refund route, void dialog in [PaymentWorkspace](../../components/ops/PaymentWorkspace.tsx), DM-reject flag on the webhook event + `safe_metadata`, and human-run [sql/phase-16b-provider-authorization-reversal.sql](../../sql/phase-16b-provider-authorization-reversal.sql). [REFUND_RUNBOOK.md](REFUND_RUNBOOK.md) gains the void procedure.
+
+**Reversible?:** hard for production money paths. Re-offering refund on an unsettled authorization reintroduces a guaranteed gateway failure and a false ledger entry.
+
+**Supersedes:** none. It narrows the 2026-08-10 one-click refund decision (refund stays exactly as-is for genuinely settled captures) and extends — without weakening — the 2026-08-10 pending-refund immutability exception to pending reversal rows.
+
+---
+
 ## 2026-08-10 - Pending refund settle/fail bypasses fact immutability for settlement fields
 
 **Decision:** `oraya_protect_payment_transaction_facts` keeps money facts immutable, but when a **refund** row moves `pending → confirmed|failed` it may update `provider_reference`, `verified_source`, `effective_at`, `projection_before`, and `notes`. Failed→pending re-claim for the same idempotency key is also allowed. This unblocks Ops **Release refund lock** and **Record refund**.

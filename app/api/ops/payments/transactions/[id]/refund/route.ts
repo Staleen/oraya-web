@@ -1,6 +1,9 @@
 import crypto from "crypto";
 import { NextResponse } from "next/server";
-import { refundCreditLibanaisPayment } from "@/lib/payments/credit-libanais";
+import {
+  getCreditLibanaisPaymentSettlement,
+  refundCreditLibanaisPayment,
+} from "@/lib/payments/credit-libanais";
 import {
   claimProviderRefund,
   confirmProviderRefund,
@@ -11,6 +14,11 @@ import {
   remainingRefundableAmount,
   validateRefundAmount,
 } from "@/lib/payments/provider-refund";
+import {
+  describeCardReturnAction,
+  explainRefundFailure,
+  type CardSettlementState,
+} from "@/lib/payments/provider-settlement";
 import { PaymentProviderConfigurationError } from "@/lib/payments/provider";
 import { roundMoney } from "@/lib/money";
 import { requireOps } from "@/lib/ops-auth";
@@ -355,6 +363,41 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     );
   }
 
+  // ── Settlement gate: a credit against an unsettled authorization is the
+  //    wrong instrument and fails at CyberSource with reason 102. Ask the
+  //    provider what actually happened BEFORE claiming or calling the bank.
+  //    An unreadable answer leaves today's behaviour untouched (fail-open to
+  //    the existing refund path); only a proven unsettled auth is refused.
+  let settlementState: CardSettlementState = "unknown";
+  try {
+    const assessment = await getCreditLibanaisPaymentSettlement({
+      payment_id: txn.provider_reference.trim(),
+    });
+    settlementState = assessment.state;
+    if (assessment.state === "authorized_only" || assessment.state === "reversed") {
+      const guidance = describeCardReturnAction({
+        state: assessment.state,
+        decision_manager_reject: assessment.decision_manager_reject,
+      });
+      return NextResponse.json(
+        {
+          error: guidance.copy,
+          requires_void: assessment.state === "authorized_only",
+          settlement_state: assessment.state,
+          provider_status: assessment.provider_status,
+          reason_code: assessment.reason_code,
+          decision_manager_reject: assessment.decision_manager_reject,
+          action: guidance.action,
+        },
+        { status: 409 },
+      );
+    }
+  } catch (error) {
+    if (!(error instanceof PaymentProviderConfigurationError)) {
+      console.error("[ops/payments/refund] settlement check failed", error);
+    }
+  }
+
   // ── Provider path: claim first, then call the bank ─────────────────────────
   const claimed = await claimProviderRefund({
     payment_transaction_id: txn.id,
@@ -449,12 +492,18 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         refund_transaction_id: claimed.result.refund_transaction_id,
         reason: refund.message,
       });
+      const explanation = explainRefundFailure({
+        message: refund.message,
+        settlement_state: settlementState,
+      });
+      const wrongInstrument = explanation !== (refund.message?.trim() || "");
       return NextResponse.json(
         {
-          error: refund.message || "The gateway did not accept the refund.",
+          error: explanation || "The gateway did not accept the refund.",
           provider_status: refund.status,
-          can_record_manual: true,
+          can_record_manual: !wrongInstrument,
           provider_blocked: false,
+          requires_void: wrongInstrument,
         },
         { status: 402 },
       );
