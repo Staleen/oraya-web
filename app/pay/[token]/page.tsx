@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { findPublicPaymentRequest } from "@/lib/payments/ledger-server";
 import { formatPaymentAmount, remainingRequestAmount, type PaymentAllowedMethod } from "@/lib/payments/ledger";
@@ -39,6 +39,28 @@ export default async function PaymentRequestPage({
   const onlineCheckoutAllowed =
     (payment.allowed_methods.includes("card") && cardCheckoutReady) ||
     (payment.allowed_methods.includes("apple_pay") && applePayReady);
+
+  // A card-only request has nothing else on this page worth reading, so the
+  // "Open secure checkout" button was a click that asked the guest to confirm
+  // they meant the thing they had already clicked a link to do. Go straight to
+  // the card form. Requests that also offer cash or bank transfer still render
+  // the page, because those instructions ARE the content.
+  //
+  // Loop-safe: the checkout's cancel URL returns to the booking view, never
+  // here, and any return state (?payment=...) renders the page normally.
+  // ?view=1 is a deliberate escape hatch for support.
+  const onlineOnlyRequest =
+    payment.allowed_methods.length > 0 &&
+    payment.allowed_methods.every((method) => method === "card" || method === "apple_pay");
+  if (
+    onlineCheckoutAllowed &&
+    onlineOnlyRequest &&
+    payment.payable &&
+    !paymentReturnState &&
+    query.view !== "1"
+  ) {
+    redirect(`/payments/checkout/${encodeURIComponent(token)}?subject=request`);
+  }
   const isPaid = payment.status === "paid";
   const paymentReturn = paymentReturnMessage(paymentReturnState, { isPaid });
 

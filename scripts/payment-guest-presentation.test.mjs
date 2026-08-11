@@ -107,3 +107,21 @@ test("booking pay-now retries cannot create two active card requests", () => {
   assert.match(checkoutRoute, /concurrent canonical request recovery failed/);
   assert.match(checkoutRoute, /createdNewRequest/);
 });
+
+test("a card-only payment link goes straight to the card form", () => {
+  const payPage = readFileSync("app/pay/[token]/page.tsx", "utf8");
+
+  // Straight through, no confirmation click.
+  assert.match(payPage, /redirect\(`\/payments\/checkout\//);
+
+  // Only when there is nothing else on the page worth reading. A request that
+  // also offers cash or bank transfer must still render those instructions.
+  assert.match(payPage, /method === "card" \|\| method === "apple_pay"/);
+  assert.match(payPage, /onlineCheckoutAllowed &&/);
+  assert.match(payPage, /payment\.payable &&/);
+
+  // Loop-safe: a return from the gateway renders the page, and support has an
+  // escape hatch to view it.
+  assert.match(payPage, /!paymentReturnState &&/);
+  assert.match(payPage, /query\.view !== "1"/);
+});

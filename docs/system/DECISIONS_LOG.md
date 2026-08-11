@@ -2197,3 +2197,15 @@ Without a backstop, a guest who closes the tab after 3DS leaves money taken and 
 **Not included:** 3-D Secure. Enabling it is a `processingInformation.actionList` change plus handling the issuer's step-up screen, and a toggle that silently breaks enrolled cards would be worse than no toggle. It stays engineering work until the step-up flow exists.
 
 **Reversible?:** yes — delete the settings row and the defaults resume.
+
+---
+
+## 2026-08-11 - A card-only payment link opens the card form directly
+
+**Decision:** `/pay/[token]` redirects straight to the card form when the request offers **only** card or Apple Pay, the provider is ready, and the request is still payable. Requests that also offer cash, bank transfer or a wallet still render the page, because those payment instructions are the content. `?view=1` shows the page regardless, for support.
+
+**Reason:** the guest had already clicked a link that said "pay". The page then showed the amount and a single button asking them to confirm they meant it — a click that added nothing and sat on the highest-abandonment screen in the funnel.
+
+**Loop safety:** the checkout's cancel URL returns to the booking view, never to `/pay`, and any gateway return state (`?payment=…`) renders the page normally. Both are asserted by a contract test, because a redirect loop here would make paying impossible rather than merely annoying.
+
+**Reversible?:** yes — remove the redirect block.
