@@ -1,5 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
+import { bookingGuestName } from "@/lib/ops-queue";
 import { useRouter } from "next/navigation";
 import { addDaysToDateOnly, getOperationalRange } from "@/lib/calendar/event-block";
 import { formatBookingRef, type QueueBooking } from "@/lib/ops-queue";
@@ -85,7 +86,7 @@ function buildOccupancy(
     paint(range.check_in, range.check_out, {
       kind: "stay",
       ref: formatBookingRef(b.id),
-      guest: b.guest_name ?? "Guest",
+      guest: bookingGuestName(b),
       bookingId: b.id,
       isEvent,
     });

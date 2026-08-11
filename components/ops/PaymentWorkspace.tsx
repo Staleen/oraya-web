@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { bookingGuestName } from "@/lib/ops-queue";
 import { describeBookingMoney } from "@/lib/ops/booking-state-line";
 import { useOps } from "@/components/ops/OpsProvider";
 import { Badge, Banner, Button, Card, Field, T } from "@/components/ops/ui";
@@ -362,7 +363,7 @@ export default function PaymentWorkspace() {
     const booking = bookings.find((item) => item.id === id);
     if (!booking) return;
     setCurrency("USD");
-    setPayerName(booking.guest_name ?? "Guest");
+    setPayerName(bookingGuestName(booking));
     setPayerEmail(booking.guest_email ?? "");
     setPayerPhone(booking.guest_phone ?? "");
     setDescription(`${booking.villa} payment`);
@@ -851,7 +852,7 @@ export default function PaymentWorkspace() {
       ? bookings.find((item) => item.id === attempt.booking_id)
       : null;
     if (request) return `${request.payer_name} · ${request.description}`;
-    if (booking) return `${booking.guest_name ?? "Guest"} · ${booking.villa}`;
+    if (booking) return `${bookingGuestName(booking)} · ${booking.villa}`;
     return "Unlinked card attempt";
   }
 
@@ -1136,7 +1137,7 @@ export default function PaymentWorkspace() {
                   return (
                     <option key={booking.id} value={booking.id}>
                       {[
-                        booking.guest_name ?? "Guest",
+                        bookingGuestName(booking),
                         booking.villa,
                         stay,
                         state,

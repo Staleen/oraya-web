@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { bookingGuestName } from "@/lib/ops-queue";
 import type { QueueBooking } from "@/lib/ops-queue";
 import { bookingMoneyView } from "@/lib/ops-booking-display";
 import { Banner, Button, Field, Row, Rows, T } from "@/components/ops/ui";
@@ -61,8 +62,8 @@ export default function MoneyDialog({
     outcomeTitle = mode === "payment" ? "Enter how much came in" : "Enter how much you returned";
   } else if (left === 0) {
     outcomeTitle = mode === "payment"
-      ? `${booking.guest_name ?? "The guest"} will be fully paid`
-      : `${booking.guest_name ?? "The guest"} will have been fully refunded`;
+      ? `${bookingGuestName(booking)} will be fully paid`
+      : `${bookingGuestName(booking)} will have been fully refunded`;
     outcomeDetail = mode === "payment"
       ? `${money(after)} of ${money(total)} received. Nothing left outstanding.`
       : `${money(after)} of the ${money(paid)} they paid has been returned.`;
@@ -122,7 +123,7 @@ export default function MoneyDialog({
             <h2 style={{ fontFamily: T.serif, fontWeight: 400, fontSize: "22px", margin: 0 }}>
               {mode === "payment" ? "Record a payment" : "Record a refund"}
             </h2>
-            <p style={{ margin: "4px 0 0", fontSize: "13px", color: T.muted }}>{booking.guest_name ?? "Guest"}</p>
+            <p style={{ margin: "4px 0 0", fontSize: "13px", color: T.muted }}>{bookingGuestName(booking)}</p>
           </div>
           <button onClick={onClose} aria-label="Close" style={{ background: "none", border: 0, color: T.muted, fontSize: "24px", lineHeight: 1, cursor: "pointer" }}>&times;</button>
         </div>

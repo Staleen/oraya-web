@@ -130,8 +130,33 @@ function money(n: number): string {
 }
 
 /** The person's name: booking guest fields first, then the member account. */
-export function bookingGuestName(b: Pick<QueueBooking, "guest_name" | "member_contact">): string {
-  return b.guest_name?.trim() || b.member_contact?.full_name?.trim() || "Guest";
+/**
+ * Who this booking belongs to, for an operator's eyes.
+ *
+ * `guest_name` is only set when the person was NOT signed in. A member who
+ * books while logged in leaves it null — their name lives on their member
+ * record. So reading `guest_name ?? "Guest"` shows an anonymous booker's real
+ * name and reduces a returning account holder to "Guest": exactly backwards,
+ * because the operator loses the identity of the customer they know most about.
+ * Reported from production 2026-08-12 (the payments booking picker listed every
+ * member booking as "Guest").
+ *
+ * "Member" is deliberately distinct from "Guest" — it tells the operator this
+ * person has an account even when no name is on file.
+ */
+export function bookingGuestName(
+  b: Pick<QueueBooking, "guest_name" | "member_contact"> & {
+    guest_email?: string | null;
+    member_id?: string | null;
+  },
+): string {
+  return (
+    b.guest_name?.trim() ||
+    b.member_contact?.full_name?.trim() ||
+    b.member_contact?.email?.trim() ||
+    b.guest_email?.trim() ||
+    (b.member_id ? "Member" : "Guest")
+  );
 }
 
 function daysBetween(from: number, to: number): number {

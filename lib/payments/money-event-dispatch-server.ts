@@ -98,19 +98,37 @@ type BookingSummary = {
   check_in: string | null;
   check_out: string | null;
   guest_name: string | null;
+  member_id: string | null;
 };
 
 async function loadBookingSummary(bookingId: string): Promise<BookingSummary | null> {
   const { data, error } = await supabaseAdmin
     .from("bookings")
-    .select("villa, check_in, check_out, guest_name")
+    .select("villa, check_in, check_out, guest_name, member_id")
     .eq("id", bookingId)
     .maybeSingle<BookingSummary>();
   if (error) {
     console.error(`${LOG_TAG} booking summary lookup failed`, { message: error.message });
     return null;
   }
-  return data ?? null;
+  if (!data) return null;
+  // A member who booked while signed in leaves guest_name null — their name is
+  // on the member record. Without this the operator's money alert says "Guest"
+  // for exactly the customers Oraya knows best. Enrichment is additive: a failed
+  // read leaves the alert as it was rather than suppressing it.
+  if (!data.guest_name?.trim() && data.member_id) {
+    const { data: member, error: memberError } = await supabaseAdmin
+      .from("members")
+      .select("full_name")
+      .eq("id", data.member_id)
+      .maybeSingle<{ full_name: string | null }>();
+    if (memberError) {
+      console.error(`${LOG_TAG} member name lookup failed`, { message: memberError.message });
+    } else if (member?.full_name?.trim()) {
+      return { ...data, guest_name: member.full_name.trim() };
+    }
+  }
+  return data;
 }
 
 /**

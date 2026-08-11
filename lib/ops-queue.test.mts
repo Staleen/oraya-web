@@ -10,6 +10,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  bookingGuestName,
   buildQueue,
   formatBookingRef,
   groupQueue,
@@ -329,4 +330,52 @@ test("groupQueue splits by group and loses nothing", () => {
     groups.attention.length + groups.money.length + groups.arriving.length,
     items.length,
   );
+});
+
+/**
+ * Reported from production 2026-08-12: the payments booking picker listed every
+ * member booking as "Guest" while anonymous bookings showed real names — the
+ * operator lost the identity of the customers Oraya knows most about.
+ */
+test("bookingGuestName shows the member's name when the booking carries no guest_name", () => {
+  assert.equal(
+    bookingGuestName({
+      guest_name: null,
+      member_id: "m-1",
+      member_contact: { full_name: "Mira Khalaf", email: "mira@example.com", phone: null },
+    } as never),
+    "Mira Khalaf",
+  );
+});
+
+test("bookingGuestName prefers the name typed on the booking over the member record", () => {
+  assert.equal(
+    bookingGuestName({
+      guest_name: "Booked for Nadia",
+      member_id: "m-1",
+      member_contact: { full_name: "Mira Khalaf", email: null, phone: null },
+    } as never),
+    "Booked for Nadia",
+  );
+});
+
+test("bookingGuestName falls back to an email before giving up on a member", () => {
+  assert.equal(
+    bookingGuestName({
+      guest_name: "   ",
+      member_id: "m-1",
+      member_contact: { full_name: null, email: "mira@example.com", phone: null },
+    } as never),
+    "mira@example.com",
+  );
+});
+
+test("bookingGuestName says Member, not Guest, when an account holder has no name on file", () => {
+  const label = bookingGuestName({ guest_name: null, member_id: "m-1", member_contact: null } as never);
+  assert.equal(label, "Member");
+  assert.notEqual(label, "Guest");
+});
+
+test("bookingGuestName still says Guest for a genuinely anonymous booking", () => {
+  assert.equal(bookingGuestName({ guest_name: null, member_id: null, member_contact: null } as never), "Guest");
 });
