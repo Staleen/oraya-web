@@ -1,5 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
+import { describeBookingState } from "@/lib/ops/booking-state-line";
 import { useRouter } from "next/navigation";
 import { bookingGuestName, formatBookingRef } from "@/lib/ops-queue";
 import { bookingMoneyView } from "@/lib/ops-booking-display";
@@ -53,14 +54,23 @@ export default function BookingsPage() {
     });
   }, [bookings, tab, q]);
 
+  /**
+   * One line that says BOTH things. Approval state used to be returned before
+   * money was even looked at, so a fully paid pending stay read exactly like an
+   * unpaid one — which is how a real $240 payment got recorded twice on
+   * 2026-08-11.
+   */
   function statusBadge(b: (typeof bookings)[number]): { tone: Tone; label: string } {
-    const s = (b.status ?? "").toLowerCase();
-    if (s === "pending") return { tone: "warn", label: "Awaiting your approval" };
-    if (s === "cancelled") return (b.amount_paid ?? 0) > 0 && !b.refunded_at
-      ? { tone: "bad", label: "Refund owed" } : { tone: "neutral", label: "Cancelled" };
-    const outstanding = (b.amount_total ?? 0) - (b.amount_paid ?? 0);
-    if (outstanding <= 0) return { tone: "ok", label: "Paid in full" };
-    return { tone: "info", label: `${money(outstanding)} outstanding` };
+    const state = describeBookingState({
+      status: b.status,
+      amountPaid: b.amount_paid,
+      amountTotal: b.amount_total,
+      refundedAt: b.refunded_at,
+    });
+    return {
+      tone: state.tone as Tone,
+      label: state.money ? `${state.label} · ${state.money}` : state.label,
+    };
   }
 
   return (
