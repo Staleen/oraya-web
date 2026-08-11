@@ -2209,3 +2209,19 @@ Without a backstop, a guest who closes the tab after 3DS leaves money taken and 
 **Loop safety:** the checkout's cancel URL returns to the booking view, never to `/pay`, and any gateway return state (`?payment=…`) renders the page normally. Both are asserted by a contract test, because a redirect loop here would make paying impossible rather than merely annoying.
 
 **Reversible?:** yes — remove the redirect block.
+
+---
+
+## 2026-08-12 - Oraya detects money voided directly in Business Center
+
+**Decision:** a second reconciliation pass (`runProviderDriftSweep`) re-checks recently recorded card payments against CyberSource. When the provider reports the authorization as voided or reversed and Oraya still counts the money, it appends a **compensating reversal** through the same claim-before-provider RPCs the manual void uses. It runs from the scheduled job and whenever an operator opens the payments desk.
+
+**Reason:** nothing in Oraya could observe an action taken in Business Center. The webhook cannot fire for this integration, and the in-flight reconciler deliberately never re-examines a `recorded` attempt. Live proof: booking `52f5b602` — **a real guest, Mira Khalaf** — still read `paid_in_full`, $240, with no reversal, after the authorization was voided at the bank. Three of the four known false ledger entries have the same shape.
+
+**Why a separate pass:** `reconcileWebhookEvent` must keep refusing to touch terminal states — re-opening settled history is how ledgers get corrupted. Widening its query would have destroyed that guarantee. Drift detection is therefore its own sweep that only ever **adds** a row.
+
+**Safety:** fails closed in every direction. An unreachable provider, an unrecognised status, a payment already reversed or refunded in Oraya, a manual-rail payment, or anything not a confirmed card payment all mean do nothing. Only an explicit voided/reversed status on money Oraya still counts produces a correction, and the correction carries a note explaining itself. Nothing is edited or deleted — asserted by a contract test.
+
+**Not covered:** refunds issued in Business Center against a *settled* capture. Those need the credit to be matched to the payment, which is the Transaction Search entitlement this account does not have. Voids — the case that actually occurred — are covered.
+
+**Reversible?:** yes — remove the second pass; the first is unaffected.
