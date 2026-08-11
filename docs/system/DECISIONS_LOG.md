@@ -16,6 +16,20 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-11 - One money-event dispatcher: every payment notifies exactly once (Phase 16B M2)
+
+**Decision:** every path that records money — the booking's own card link, an Ops payment link, an Ops manual receipt, and the CyberSource webhook — calls a single dispatcher ([lib/payments/money-event-dispatch.ts](../../lib/payments/money-event-dispatch.ts)) that sends the guest a receipt and the operator an alert **exactly once per payment**. At-most-once is enforced by a durable atomic claim: an INSERT against `payment_notifications.notification_key`, where the key is `"<outcome>:<provider transaction id | ledger transaction id>"` — the identity both the browser and the webhook agree on. Nothing is ever sent before the claim succeeds; a claim that cannot be made sends **nothing**. The receipt no longer requires a `booking_id` — an unlinked payment link falls back to the payer contact on the request. Failed and ambiguous outcomes produce an operator alert only, never a guest message. A notification failure never fails, blocks, or rolls back a payment, and the dispatcher writes no booking status, no payment state, and no ledger row.
+
+**Reason:** audit 2026-08-11 found three different notification behaviours and one silent hole. A guest paying the booking's own card link received **nothing**. A guest paying an Ops link received a receipt only if the operator had attached the booking. The webhook — the only observer guaranteed to see the money, because a guest who closes the tab after 3DS never reaches the completion route — had never messaged anybody. The predictable failure was a guest who pays, sees no confirmation, and pays again.
+
+**Impact:** new [lib/payments/money-event-dispatch.ts](../../lib/payments/money-event-dispatch.ts) (pure core) + [money-event-dispatch-server.ts](../../lib/payments/money-event-dispatch-server.ts) (Supabase/email wiring), new [lib/send-payment-notification-email.ts](../../lib/send-payment-notification-email.ts) (standalone guest receipt + operator money alert), the four call sites, and human-run [sql/phase-16b-money-event-notifications.sql](../../sql/phase-16b-money-event-notifications.sql). Booking-linked receipts keep the existing `sendBookingPaymentReceivedEmail` template. Operator recipients come from the existing `settings.notification_emails` row — no new configuration.
+
+**Reversible?:** hard for production money paths. Reverting reinstates the silent card-payment hole.
+
+**Supersedes:** none. It is the notification half of the money → confirmation chain; it deliberately does **not** confirm, cancel, or approve anything — booking approval remains an availability decision.
+
+---
+
 ## 2026-08-11 - Unsettled card authorizations are voided, never refunded (Phase 16B M1)
 
 **Decision:** before Ops offers any card money-return action, Oraya asks CyberSource what actually happened to the authorization. When the authorization was approved but never settled, the offered action is **Authorization Reversal (void)**, not **Refund card**, and the refund route refuses the provider call outright (`requires_void`). A void is recorded as its own ledger outcome — a `reversal` row with `provider = 'credit_libanais'`, claim-before-provider, `pending → confirmed|failed` — and never as a refund. Decision Manager reject **481** is classified explicitly: in the webhook parser a DM rejection can never become a `success` outcome (it degrades to `unknown`, changing no state), and Ops shows the rejection with the void instruction instead of a generic unclear state. A refund the gateway refuses with **102 / DINVALIDDATA** returns copy pointing at void rather than inviting a retry.

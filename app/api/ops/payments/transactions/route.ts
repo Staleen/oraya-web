@@ -3,7 +3,7 @@ import { requireOps } from "@/lib/ops-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { manualRailToLedger, PAYMENT_CURRENCIES } from "@/lib/payments/ledger";
 import { roundMoney } from "@/lib/money";
-import { sendLedgerBookingReceipt } from "@/lib/payments/ledger-receipt";
+import { notifyMoneyEvent } from "@/lib/payments/money-event-dispatch-server";
 
 function amount(value: unknown) {
   const parsed = Number(value);
@@ -81,10 +81,20 @@ export async function POST(request: Request) {
   }
 
   const result = Array.isArray(data) ? data[0] : data;
-  let emailSent = false;
-  if (bookingId) {
-    try { emailSent = await sendLedgerBookingReceipt(bookingId); }
-    catch (emailError) { console.error("[ops/payment-transactions] receipt email failed", emailError); }
-  }
+  // M2: same single money event as the card paths — guest receipt (booking or
+  // payer contact) plus the operator alert, at most once per transaction.
+  const notified = await notifyMoneyEvent({
+    outcome: "recorded",
+    source: "ops_manual",
+    amount: applied,
+    currency,
+    method: rail.method,
+    booking_id: bookingId,
+    payment_request_id: paymentRequestId,
+    payment_transaction_id: result?.transaction_id ? String(result.transaction_id) : null,
+    provider_transaction_id: null,
+    idempotency_key: idempotencyKey,
+  });
+  const emailSent = notified.kind === "sent" && notified.guest_receipt;
   return NextResponse.json({ ok: true, result, recorded_by: auth.staff.full_name, email_sent: emailSent });
 }

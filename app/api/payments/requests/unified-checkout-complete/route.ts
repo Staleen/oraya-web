@@ -9,7 +9,7 @@ import {
   recordProviderPayment,
 } from "@/lib/payments/ledger-server";
 import { isPublicRequestPayable, remainingRequestAmount } from "@/lib/payments/ledger";
-import { sendLedgerBookingReceipt } from "@/lib/payments/ledger-receipt";
+import { notifyMoneyEvent } from "@/lib/payments/money-event-dispatch-server";
 import {
   buildPaymentRequestSuccessUrl,
   mintBookingPaymentSuccessUrl,
@@ -179,10 +179,19 @@ export async function POST(request: Request) {
         }, { status: 500 });
       case "already_recorded":
       case "approved_recorded": {
-        if (payment.booking_id) {
-          try { await sendLedgerBookingReceipt(payment.booking_id); }
-          catch (emailError) { console.error("[payment-request/complete] receipt email failed", emailError); }
-        }
+        // M2: one money event — guest receipt + operator alert, at most once
+        // per payment, including when the webhook observed the same money.
+        // Works with no booking attached; never fails the payment.
+        await notifyMoneyEvent({
+          outcome: "recorded",
+          source: "payment_link",
+          amount,
+          currency: payment.currency,
+          method: "card",
+          booking_id: payment.booking_id,
+          payment_request_id: payment.id,
+          provider_transaction_id: outcome.provider?.reference ?? null,
+        });
         const successUrls = await resolvePaymentRequestSuccessUrls(origin, token, payment.booking_id);
         return NextResponse.json({
           ok: true,

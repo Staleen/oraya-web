@@ -13,6 +13,7 @@ import { PaymentProviderConfigurationError } from "@/lib/payments/provider";
 import { resolvePaymentRequestOrigin } from "@/lib/payments/request-origin";
 import { computeFoundationAmountDue, derivePaymentFoundationStage, getFoundationAmountTotal } from "@/lib/payment-foundation";
 import { getChargeAmount } from "@/lib/payments/charge-amount";
+import { notifyMoneyEvent } from "@/lib/payments/money-event-dispatch-server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 type UnifiedCheckoutCompletionBookingRow = {
@@ -269,22 +270,28 @@ export async function POST(request: Request) {
           { status: 500 },
         );
       case "already_recorded":
+      case "approved_recorded": {
+        // M2: this path used to send the guest NOTHING after a card payment.
+        // At-most-once per payment identity, so the webhook observing the same
+        // money produces no second receipt. Never fails the payment.
+        await notifyMoneyEvent({
+          outcome: "recorded",
+          source: "booking_link",
+          amount: chargeAmount,
+          currency: "USD",
+          method: "card",
+          booking_id: booking.id,
+          provider_transaction_id: outcome.provider?.reference ?? null,
+        });
         return NextResponse.json({
           ok: true,
           paid: true,
-          idempotent: true,
+          ...(outcome.kind === "already_recorded" ? { idempotent: true } : {}),
           status: outcome.provider?.status,
           reference: outcome.provider?.reference,
           booking_view_url: `${viewUrl}?payment=success`,
         });
-      case "approved_recorded":
-        return NextResponse.json({
-          ok: true,
-          paid: true,
-          status: outcome.provider.status,
-          reference: outcome.provider.reference,
-          booking_view_url: `${viewUrl}?payment=success`,
-        });
+      }
     }
   } catch (error) {
     if (error instanceof PaymentProviderConfigurationError) {

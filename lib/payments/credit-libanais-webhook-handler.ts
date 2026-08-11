@@ -19,6 +19,7 @@ import {
 } from "@/lib/payments/webhook-reconciliation";
 import { decideSetPaidUpdate, type SetPaidBookingState } from "@/lib/payments/webhook-set-paid";
 import { recordProviderPayment } from "@/lib/payments/ledger-server";
+import { notifyMoneyEvent } from "@/lib/payments/money-event-dispatch-server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 /**
@@ -323,6 +324,39 @@ export async function handleCreditLibanaisWebhook(request: Request) {
       error: eventUpdateError,
     });
     return NextResponse.json({ error: "Webhook event outcome could not be recorded." }, { status: 500 });
+  }
+
+  // ── M2: the webhook can now tell someone ────────────────────────────────
+  // It is the only path guaranteed to observe the money (a guest who closes
+  // the tab after 3DS never reaches the completion route). The claim is keyed
+  // on the provider transaction id, so when the browser and the webhook both
+  // see the same payment exactly one receipt and one alert exist.
+  if (attempt && (outcome.kind === "recorded" || outcome.kind === "already_final")) {
+    await notifyMoneyEvent({
+      outcome: "recorded",
+      source: "webhook",
+      amount: Number(attempt.amount),
+      currency: attempt.currency,
+      method: "card",
+      booking_id: attempt.booking_id,
+      payment_request_id: attempt.payment_request_id,
+      payment_transaction_id: paymentTransactionId,
+      provider_transaction_id: event.provider_transaction_id ?? attempt.provider_transaction_id,
+      idempotency_key: attempt.idempotency_key,
+    });
+  } else if (attempt && (outcome.kind === "marked_failed" || outcome.kind === "conflict")) {
+    // Failed and contradictory outcomes reach the operator, never the guest.
+    await notifyMoneyEvent({
+      outcome: outcome.kind === "marked_failed" ? "failed" : "ambiguous",
+      source: "webhook",
+      amount: Number(attempt.amount),
+      currency: attempt.currency,
+      method: "card",
+      booking_id: attempt.booking_id,
+      payment_request_id: attempt.payment_request_id,
+      provider_transaction_id: event.provider_transaction_id ?? attempt.provider_transaction_id,
+      idempotency_key: attempt.idempotency_key,
+    });
   }
 
   switch (outcome.kind) {
