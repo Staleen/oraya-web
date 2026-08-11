@@ -274,3 +274,18 @@ test("M2: the dispatcher sends nothing it has not claimed and changes no money s
   assert.match(migration, /notification_key\s+text not null unique/);
   assert.match(migration, /enable row level security/);
 });
+
+test("refunds reconcile themselves before troubling a human", () => {
+  const refundRoute = readFileSync(
+    "app/api/ops/payments/transactions/[id]/refund/route.ts",
+    "utf8",
+  );
+  // Both unproven paths — gateway ambiguity and post-claim network failure —
+  // ask the provider before returning the manual Business Center flow.
+  assert.equal(refundRoute.match(/tryReconcileAmbiguousRefund\(/g)?.length, 3);
+  // The pending claim and the do-not-retry lock survive a failed reconcile.
+  assert.match(refundRoute, /Still unproven — keep the pending claim/);
+  assert.match(refundRoute, /provider_blocked: true/);
+  // Reconciliation may only confirm with a provider-verified reference.
+  assert.match(refundRoute, /verified_source: "provider"/);
+});

@@ -16,6 +16,22 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-11 - Refunds reconcile themselves against CyberSource instead of asking the operator
+
+**Decision:** when a card refund returns an outcome Oraya cannot verify — an unreadable response, a missing amount echo, or a timeout after the claim — Oraya now asks CyberSource directly whether the refund exists, using Transaction Details (`GET /tss/v2/transactions/{id}`) on the refund id the gateway returned, or Transaction Search (`POST /tss/v2/searches` on `clientReferenceInformation.code`) when no id came back. A refund is confirmed automatically **only** when the provider record proves a credit whose amount, currency and merchant reference all match. Anything else keeps today's behaviour exactly: pending claim, do-not-retry lock, and the manual Business Center path.
+
+**Reason:** the operator was being used as the integration. On 2026-08-11 a real $240 refund succeeded at the bank but returned an unverifiable response, so Ops told David to open Business Center, find the refund id and paste it back — for a value Oraya had already received in the gateway response and pre-filled for him. Oraya holds the API credentials; making a human copy identifiers between two systems for every refund is a design failure, and at volume it guarantees mistakes.
+
+**Impact:** new [lib/payments/provider-refund-reconcile.ts](../../lib/payments/provider-refund-reconcile.ts) (pure, fail-closed) + `reconcileAmbiguousCreditLibanaisRefund` in [lib/payments/credit-libanais.ts](../../lib/payments/credit-libanais.ts), wired into both unproven branches of the Ops refund route. No schema change, no new dependency, no change to the claim-before-provider contract.
+
+**Risk:** Transaction Search/Details is a separate CyberSource entitlement. Business Center reports this organisation is "not enabled to access TransactionManagement/TransactionSearch", so these calls may return 403 — in which case every lookup fails softly and the manual path is unchanged. If so, ask NetCommerce to enable the Transaction Search and Details API for merchant `06385000`.
+
+**Reversible?:** yes — the reconcile step is additive and can be removed without touching the manual path.
+
+**Supersedes:** the "auto-reconcile via the Business Center transaction-search API" exclusion in [PHASE_16B_MONEY_TO_CONFIRMATION_AUDIT_AND_MISSION.md](PHASE_16B_MONEY_TO_CONFIRMATION_AUDIT_AND_MISSION.md) §7, which listed this as out of scope. David approved it on 2026-08-11 after hitting the manual path on a live refund.
+
+---
+
 ## 2026-08-11 - Oraya skips Decision Manager on card authorizations (DECISION_SKIP)
 
 **Decision:** every Unified Checkout authorization now sends `processingInformation.actionList: ["DECISION_SKIP"]`, the documented CyberSource action that skips Decision Manager service(s). It is on by default and removable with one flag (`skip_decision_manager: false`) or by deleting the single action from [lib/payments/transient-token-payment-request.ts](../../lib/payments/transient-token-payment-request.ts).
