@@ -16,6 +16,20 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-11 - Oraya skips Decision Manager on card authorizations (DECISION_SKIP)
+
+**Decision:** every Unified Checkout authorization now sends `processingInformation.actionList: ["DECISION_SKIP"]`, the documented CyberSource action that skips Decision Manager service(s). It is on by default and removable with one flag (`skip_decision_manager: false`) or by deleting the single action from [lib/payments/transient-token-payment-request.ts](../../lib/payments/transient-token-payment-request.ts).
+
+**Reason:** Decision Manager on merchant `06385000` rejects **every** live authorization with reason **481** *after* the issuer has approved it. Settlement never runs, so no card payment can complete — the account cannot take money at all. Four transactions prove it: `7863958223886680704897`, `7863969294066269704890`, `7864119718386251604897`, `7864143490846095204899`, all Auth Success + DM REJECT 481 + Settlement "Not Run". The last one carried a device fingerprint (`8255e12b…`), a full billing address and CVN match `M`, and was still rejected — so this is not missing-data starvation. Oraya's Business Center organisation exposes **no** Decision Manager or Case Management screen, so the rules cannot be read or tuned, and Unified Checkout refuses its own Skip setting with "Decision Manager must be enabled to use Skip option in Fraud Detection". Skipping DM in the API request is the only lever Oraya controls.
+
+**Impact:** [lib/payments/transient-token-payment-request.ts](../../lib/payments/transient-token-payment-request.ts) + its tests. No schema, no new dependency, no change to amount verification, attempt idempotency, or webhook handling. Fraud screening is **off** for card authorizations while this is in place; 3-D Secure (enabled in Unified Checkout on 2026-08-11) is the compensating control, and it must be verified as actually authenticating — the 2026-08-11 transactions still returned `ECI 7` with no CAVV, meaning no authentication occurred.
+
+**Reversible?:** yes — one flag. Revert as soon as NetCommerce confirms Decision Manager is healthy for the merchant account.
+
+**Supersedes:** none. Does not change the standing rule that booking approval is an availability decision.
+
+---
+
 ## 2026-08-11 - One money-event dispatcher: every payment notifies exactly once (Phase 16B M2)
 
 **Decision:** every path that records money — the booking's own card link, an Ops payment link, an Ops manual receipt, and the CyberSource webhook — calls a single dispatcher ([lib/payments/money-event-dispatch.ts](../../lib/payments/money-event-dispatch.ts)) that sends the guest a receipt and the operator an alert **exactly once per payment**. At-most-once is enforced by a durable atomic claim: an INSERT against `payment_notifications.notification_key`, where the key is `"<outcome>:<provider transaction id | ledger transaction id>"` — the identity both the browser and the webhook agree on. Nothing is ever sent before the claim succeeds; a claim that cannot be made sends **nothing**. The receipt no longer requires a `booking_id` — an unlinked payment link falls back to the payer contact on the request. Failed and ambiguous outcomes produce an operator alert only, never a guest message. A notification failure never fails, blocks, or rolls back a payment, and the dispatcher writes no booking status, no payment state, and no ledger row.

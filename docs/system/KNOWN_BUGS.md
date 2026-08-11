@@ -275,7 +275,7 @@ Living list of bugs, gaps, and operational pitfalls that are **known** but **not
 - **Severity:** 🟠 High
 - **Area:** Payments / provider (NetCommerce, outside Oraya code)
 - **Description:** Both live $1 activation authorizations returned Auth SUCCESS + Decision Manager REJECT 481 + Settlement "Not Run". Every real card would be authorized and then never captured. This is a provider-side configuration issue with NetCommerce / `creditlibanais_dm_acct`.
-- **Status:** open — escalation to NetCommerce is a David action (mission M0.4). Oraya's job is to represent the state correctly, which Phase 16B M1 does; it does not and must not work around Decision Manager.
+- **Status:** open at the provider. **Proven 2026-08-11 not to be a data problem:** transaction `7864143490846095204899` carried a device fingerprint (`8255e12b…`), a full billing address (Riyadh) and CVN match `M`, the issuer approved it (code `057263`), and Decision Manager rejected it anyway with 481. Business Center for this organisation has no Decision Manager or Case Management screen, and Unified Checkout refuses its own Skip setting ("Decision Manager must be enabled to use Skip option in Fraud Detection"). **Mitigated in Oraya** by sending `processingInformation.actionList: ["DECISION_SKIP"]` on every authorization (DECISIONS_LOG 2026-08-11) — this is a workaround, not a fix, and leaves card payments unscreened until NetCommerce repairs the account.
 - **Recommended fix path:** written reply from NetCommerce confirming DM is fixed for the merchant, then re-run the controlled real-card window.
 - **Discovered:** 2026-08-10 (Business Center transaction export), re-confirmed 2026-08-11
 
