@@ -1,5 +1,10 @@
 import crypto from "crypto";
 import { compactDecrypt, decodeProtectedHeader, importPKCS8 } from "jose";
+import {
+  isDecisionManagerReject,
+  readProviderReasonCode,
+  readRiskDecision,
+} from "./provider-settlement.ts";
 
 /**
  * CyberSource webhook security follows the current Webhooks implementation
@@ -292,6 +297,13 @@ export type CreditLibanaisWebhookEvent = {
   raw_status: string | null;
   occurred_at: string | null;
   transaction_trace_id: string | null;
+  /**
+   * Phase 16B M1 — Decision Manager rejected the order (reason 481). The bank
+   * may have approved the authorization, but settlement will never run, so the
+   * event must never be treated as money received.
+   */
+  decision_manager_reject: boolean;
+  provider_reason_code: string | null;
 };
 
 const SUCCESS_STATUSES = new Set(["AUTHORIZED", "CAPTURED", "TRANSMITTED", "SETTLED"]);
@@ -367,14 +379,28 @@ export function parseCreditLibanaisWebhookEvent(payload: string): CreditLibanais
     findFirstString(parsed, ["requestId"], 5) ??
     findFirstString(parsed, ["id"], 5);
 
+  const reasonCode =
+    readProviderReasonCode(parsed) ?? findFirstString(parsed, ["reasonCode"], 5);
+  const decisionManagerReject = isDecisionManagerReject({
+    reason_code: reasonCode,
+    error_reason: findFirstString(parsed, ["reason"], 5),
+    risk_decision: readRiskDecision(parsed) ?? findFirstString(parsed, ["decision"], 6),
+    status,
+  });
+
   return {
-    outcome: classifyOutcome(eventType, status),
+    // A Decision Manager rejection is never money received. Downgrade to
+    // "unknown" so reconciliation changes nothing rather than inventing either
+    // a payment or a decline from a payload this integration has not proven.
+    outcome: decisionManagerReject ? "unknown" : classifyOutcome(eventType, status),
     idempotency_key: idempotencyKey,
     provider_transaction_id: transactionId,
     event_type: eventType,
     raw_status: status,
     occurred_at: readTrimmedString(record.eventDate),
     transaction_trace_id: readTrimmedString(record.transactionTraceId),
+    decision_manager_reject: decisionManagerReject,
+    provider_reason_code: reasonCode,
   };
 }
 

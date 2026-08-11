@@ -14,6 +14,21 @@ import {
 import { remainingRefundableAmount } from "@/lib/payments/provider-refund";
 
 type RequestView = PaymentRequestRow & { payment_url: string | null };
+/**
+ * Phase 16B M1 — which money-return instrument a card receipt actually allows,
+ * read from the provider rather than assumed from the presence of a receipt.
+ */
+type CardReturnAssessment = {
+  action: "refund" | "void" | "none" | "unknown";
+  title: string;
+  copy: string;
+  state: "settled" | "authorized_only" | "reversed" | "unknown";
+  checked: boolean;
+  decision_manager_reject: boolean;
+  reason_code: string | null;
+  provider_status: string | null;
+};
+
 type AttemptView = {
   id: string;
   booking_id: string | null;
@@ -132,6 +147,16 @@ export default function PaymentWorkspace() {
   const [refundPendingId, setRefundPendingId] = useState("");
   const [refundProviderBlocked, setRefundProviderBlocked] = useState(false);
   const [refundMax, setRefundMax] = useState(0);
+  // Phase 16B M1 — settlement truth + authorization reversal (void).
+  const [settlement, setSettlement] = useState<CardReturnAssessment | null>(null);
+  const [settlementChecking, setSettlementChecking] = useState(false);
+  const [voidFor, setVoidFor] = useState<PaymentTransactionRow | null>(null);
+  const [voidMode, setVoidMode] = useState<"provider" | "record" | "fail">("provider");
+  const [voidNotes, setVoidNotes] = useState("");
+  const [voidReference, setVoidReference] = useState("");
+  const [voidIdempotencyKey, setVoidIdempotencyKey] = useState("");
+  const [voidPendingId, setVoidPendingId] = useState("");
+  const [voidProviderBlocked, setVoidProviderBlocked] = useState(false);
   const [attemptActionFor, setAttemptActionFor] = useState<AttemptView | null>(null);
   const [attemptAction, setAttemptAction] = useState<"mark_failed" | "mark_cleared">("mark_failed");
   const [attemptReason, setAttemptReason] = useState("");
@@ -592,6 +617,44 @@ export default function PaymentWorkspace() {
     );
   }
 
+  function openCardVoid(transaction: PaymentTransactionRow, preferMode: "provider" | "record" | "fail" = "provider") {
+    setRefundFor(null);
+    setVoidFor(transaction);
+    setVoidMode(preferMode);
+    setVoidNotes("");
+    setVoidReference("");
+    setVoidPendingId("");
+    setVoidProviderBlocked(false);
+    setVoidIdempotencyKey(
+      `oraya-void-${transaction.id.slice(0, 8)}-${Date.now().toString(36)}`.slice(0, 50),
+    );
+  }
+
+  /**
+   * Ask the bank what actually happened before offering a money-return action.
+   * An authorization that never settled cannot be refunded — it is voided.
+   */
+  async function assessCardReturn(transaction: PaymentTransactionRow) {
+    setSettlement(null);
+    setSettlementChecking(true);
+    try {
+      const response = await fetch(
+        `/api/ops/payments/transactions/${transaction.id}/void`,
+        { credentials: "include" },
+      );
+      const body = (await response.json()) as CardReturnAssessment & { error?: string };
+      if (!response.ok) return;
+      setSettlement(body);
+      if (body.action === "void" || body.action === "none") {
+        openCardVoid(transaction, body.action === "none" ? "record" : "provider");
+      }
+    } catch {
+      // Unreadable answer — leave the refund path exactly as it is today.
+    } finally {
+      setSettlementChecking(false);
+    }
+  }
+
   function openCardRefund(transaction: PaymentTransactionRow, preferFail = false) {
     const pending = pendingRefundFor(transaction.id);
     const remaining = remainingRefundableAmount({
@@ -611,6 +674,8 @@ export default function PaymentWorkspace() {
     setRefundProviderBlocked(Boolean(pending));
     setRefundMode(preferFail ? "fail" : pending ? "record" : "provider");
     setError("");
+    setSettlement(null);
+    if (!preferFail) void assessCardReturn(transaction);
   }
 
   function openPendingRefund(refund: PaymentTransactionRow) {
@@ -652,9 +717,31 @@ export default function PaymentWorkspace() {
       idempotency_key?: string;
       amount?: number;
       currency?: PaymentCurrency;
+      requires_void?: boolean;
+      settlement_state?: CardReturnAssessment["state"];
+      provider_status?: string | null;
+      reason_code?: string | null;
+      decision_manager_reject?: boolean;
     };
     if (!response.ok) {
       setError(body.error ?? "Could not refund that card payment.");
+      if (body.requires_void && refundFor) {
+        // The gateway (or the settlement check) proved there is nothing to
+        // refund — offer the correct instrument instead of a retry.
+        setSettlement({
+          action: "void",
+          title: "Void authorization",
+          copy: body.error ?? "",
+          state: body.settlement_state ?? "authorized_only",
+          checked: true,
+          decision_manager_reject: Boolean(body.decision_manager_reject),
+          reason_code: body.reason_code ?? null,
+          provider_status: body.provider_status ?? null,
+        });
+        openCardVoid(refundFor);
+        setBusy(false);
+        return;
+      }
       if (body.can_record_manual || body.provider_blocked) {
         if (refundMode !== "fail") setRefundMode("record");
         if (body.provider_reference) setRefundReference(body.provider_reference);
@@ -673,6 +760,56 @@ export default function PaymentWorkspace() {
         : refundMode === "fail"
           ? "Refund attempt released. You may try Refund card again if Business Center still shows no refund."
           : `Refund recorded. ${formatPaymentAmount(Number(body.amount ?? refundAmount), body.currency ?? refundFor.currency)} noted against this payment.`,
+    );
+    await load();
+    setBusy(false);
+  }
+
+  async function submitCardVoid() {
+    if (!voidFor) return;
+    setBusy(true);
+    setError("");
+    const response = await fetch(`/api/ops/payments/transactions/${voidFor.id}/void`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mode: voidMode,
+        notes: voidNotes || null,
+        reason: voidMode === "fail" ? voidNotes : undefined,
+        provider_reference: voidMode === "record" ? voidReference : undefined,
+        idempotency_key: voidIdempotencyKey,
+        reversal_transaction_id: voidPendingId || undefined,
+      }),
+    });
+    const body = (await response.json()) as {
+      error?: string;
+      can_record_manual?: boolean;
+      provider_blocked?: boolean;
+      provider_reference?: string;
+      reversal_transaction_id?: string;
+      idempotency_key?: string;
+    };
+    if (!response.ok) {
+      setError(body.error ?? "Could not void that authorization.");
+      if (body.can_record_manual || body.provider_blocked) {
+        if (voidMode !== "fail") setVoidMode("record");
+        if (body.provider_reference) setVoidReference(body.provider_reference);
+        if (body.reversal_transaction_id) setVoidPendingId(body.reversal_transaction_id);
+        if (body.idempotency_key) setVoidIdempotencyKey(body.idempotency_key);
+        if (body.provider_blocked) setVoidProviderBlocked(true);
+      }
+      setBusy(false);
+      return;
+    }
+    setVoidFor(null);
+    setVoidProviderBlocked(false);
+    setFlash(
+      voidMode === "provider"
+        ? "Authorization voided. The hold on the guest's card is released — no money moved."
+        : voidMode === "fail"
+          ? "Void attempt released. You may try Void authorization again if Business Center still shows the hold."
+          : "Void recorded. Oraya now matches Business Center — no money moved.",
     );
     await load();
     setBusy(false);
@@ -1307,6 +1444,10 @@ export default function PaymentWorkspace() {
                             transaction.provider === "credit_libanais"
                               ? " · ledger reversed (card not refunded)"
                               : ""}
+                            {transaction.transaction_type === "reversal" &&
+                            transaction.provider === "credit_libanais"
+                              ? " · authorization voided — hold released, no money moved"
+                              : ""}
                             {pendingCardRefund ? " · refund pending review" : ""}
                             {transaction.status === "pending" &&
                             transaction.transaction_type === "refund"
@@ -1468,6 +1609,17 @@ export default function PaymentWorkspace() {
             title="Refund card payment"
             style={{ width: "min(520px,100%)", background: T.navyLift }}
           >
+            {settlementChecking && (
+              <Banner tone="info" title="Checking with the bank">
+                Confirming whether this money was actually taken from the card before
+                offering a refund.
+              </Banner>
+            )}
+            {!settlementChecking && settlement && settlement.action === "unknown" && (
+              <Banner tone="warn" title="Could not confirm this with the bank">
+                {settlement.copy}
+              </Banner>
+            )}
             {refundMode === "fail" ? (
               <Banner tone="bad" title="Release only if Business Center shows no refund">
                 This clears the unfinished refund lock so you can try again later. If money
@@ -1578,6 +1730,7 @@ export default function PaymentWorkspace() {
                   variant="danger"
                   disabled={
                     busy ||
+                    (refundMode === "provider" && settlementChecking) ||
                     (refundMode === "provider" && Number(refundAmount) <= 0) ||
                     (refundMode === "record" &&
                       (Number(refundAmount) <= 0 || !refundReference.trim())) ||
@@ -1592,6 +1745,138 @@ export default function PaymentWorkspace() {
                       : refundMode === "fail"
                         ? "Release refund lock"
                         : "Record refund"}
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {voidFor && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 100,
+            background: "rgba(10,15,20,.75)",
+            display: "grid",
+            placeItems: "center",
+            padding: 18,
+          }}
+        >
+          <Card
+            title="Void card authorization"
+            style={{ width: "min(520px,100%)", background: T.navyLift }}
+          >
+            {voidMode === "fail" ? (
+              <Banner tone="bad" title="Release only if the hold is still there">
+                This clears the unfinished void lock so you can try again later. If the hold
+                was already released, switch to Record instead.
+              </Banner>
+            ) : voidProviderBlocked ? (
+              <Banner tone="bad" title="Do not retry the void">
+                A void attempt may already have released the hold. Check Business Center,
+                then record the reversal reference — or release the lock if the hold is
+                still there.
+              </Banner>
+            ) : (
+              <Banner tone="warn" title="No money is returned — the hold is released">
+                {settlement?.copy ??
+                  "The card was authorized but the money was never taken, so there is nothing to refund. Voiding releases the hold on the guest's card."}
+              </Banner>
+            )}
+            <p style={{ color: T.muted, fontSize: 12, margin: "0 0 12px" }}>
+              Original payment reference: {voidFor.provider_reference ?? "—"} ·{" "}
+              {formatPaymentAmount(Number(voidFor.amount), voidFor.currency)}
+              {settlement?.decision_manager_reject
+                ? " · Decision Manager rejected (481) — settlement never ran"
+                : settlement?.provider_status
+                  ? ` · bank status ${settlement.provider_status}`
+                  : ""}
+            </p>
+            <Field
+              label={
+                voidMode === "fail"
+                  ? "What did Business Center show?"
+                  : "Note (optional)"
+              }
+              value={voidNotes}
+              onChange={(event) => setVoidNotes(event.target.value)}
+              placeholder={
+                voidMode === "fail"
+                  ? "e.g. Hold still showing on the authorization"
+                  : "e.g. Activation test — releasing the hold"
+              }
+            />
+            {voidMode === "record" && (
+              <Field
+                label="Business Center reversal reference"
+                required
+                value={voidReference}
+                onChange={(event) => setVoidReference(event.target.value)}
+                placeholder="Paste the CyberSource reversal id"
+              />
+            )}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 8,
+                flexWrap: "wrap",
+                marginTop: 8,
+              }}
+            >
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {!voidProviderBlocked && voidMode !== "fail" && (
+                  <Button
+                    small
+                    onClick={() =>
+                      setVoidMode((current) => (current === "provider" ? "record" : "provider"))
+                    }
+                  >
+                    {voidMode === "provider"
+                      ? "Already voided in Business Center?"
+                      : "Back to one-click void"}
+                  </Button>
+                )}
+                {(voidProviderBlocked || voidPendingId) && (
+                  <Button
+                    small
+                    onClick={() =>
+                      setVoidMode((current) => (current === "fail" ? "record" : "fail"))
+                    }
+                  >
+                    {voidMode === "fail"
+                      ? "Back to record BC reversal"
+                      : "Hold still in Business Center"}
+                  </Button>
+                )}
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <Button
+                  onClick={() => {
+                    setVoidFor(null);
+                    setVoidProviderBlocked(false);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="danger"
+                  disabled={
+                    busy ||
+                    (voidMode === "record" && !voidReference.trim()) ||
+                    (voidMode === "fail" && voidNotes.trim().length < 8)
+                  }
+                  onClick={() => void submitCardVoid()}
+                >
+                  {busy
+                    ? "Working…"
+                    : voidMode === "provider"
+                      ? "Void authorization"
+                      : voidMode === "fail"
+                        ? "Release void lock"
+                        : "Record void"}
                 </Button>
               </div>
             </div>

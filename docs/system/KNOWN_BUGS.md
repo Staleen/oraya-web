@@ -245,3 +245,37 @@ Living list of bugs, gaps, and operational pitfalls that are **known** but **not
 ## Closed / wontfix
 
 (none yet)
+
+---
+
+### #17 — Live ledger asserts a card refund that Business Center says failed
+
+- **Severity:** 🟠 High
+- **Area:** Payments / ledger truth (live data, not code)
+- **Description:** Verified read-only on live Supabase `nxsdgjtqrhturlojtjlb` 2026-08-11. Payment transaction `99ba8ae6-e1ca-4b83-bd10-8c3bbdbd3e60` (CyberSource `7863958223886680704897`, $1) is `status = refunded`, and refund row `2f605db7-d435-45d7-9270-73861b45daba` is `status = confirmed` with `provider_reference` set to the **payment** id and `verified_source = operator`. Business Center shows the credit **failed** with reason 102 DINVALIDDATA and the authorization was never settled — so no refund exists. The pending claim appears to have been closed with **Record refund** (pasting the payment id) instead of **Release refund lock**. A second `reversal` row (`339bbbb0`, provider `credit_libanais`) from a mistaken Ops **Reverse** predates the manual-only lock. Net cash impact is zero (nothing was ever captured), but the ledger currently tells a false story about this $1.
+- **Status:** open — data-truth decision for David, not an automatic fix. Ledger history is append-only and must not be silently rewritten.
+- **Recommended fix path:** decide whether to leave the rows with an audit note or add a compensating, clearly-labelled correction entry. The Phase 16B M1 settlement gate prevents new occurrences by refusing refunds on unsettled authorizations before the claim is made.
+- **Discovered:** 2026-08-11 (Phase 16B M1 implementation, live read-only query)
+
+---
+
+### #18 — A payment attempt is marked `recorded` with no matching receipt
+
+- **Severity:** 🟡 Medium
+- **Area:** Payments / attempt reconciliation (live data, not code)
+- **Description:** Attempt `dc5055d8-06bc-428a-b579-eaaca34c7edb` (CyberSource `7863969294066269704890`, $1) is `status = recorded`, but no `payment_transactions` row exists with that provider reference. `recorded` is the terminal success state, so the attempt list now reads as "money accounted for" while the ledger holds nothing. The Ops action **Charge already in Oraya** is documented for use only when a matching receipt already exists ([REFUND_RUNBOOK.md](REFUND_RUNBOOK.md) "Unclear card charge").
+- **Status:** open — the authorization was DM-rejected 481 and never settled, so no money is missing; the state label is what is wrong.
+- **Recommended fix path:** consider making `mark_cleared` verify a matching confirmed receipt server-side before writing `recorded`, and default to `mark_failed` otherwise. Scoped separately — out of M1.
+- **Discovered:** 2026-08-11 (Phase 16B M1 implementation, live read-only query)
+
+---
+
+### #19 — Decision Manager rejects live authorizations on merchant `06385000` (reason 481)
+
+- **Severity:** 🟠 High
+- **Area:** Payments / provider (NetCommerce, outside Oraya code)
+- **Description:** Both live $1 activation authorizations returned Auth SUCCESS + Decision Manager REJECT 481 + Settlement "Not Run". Every real card would be authorized and then never captured. This is a provider-side configuration issue with NetCommerce / `creditlibanais_dm_acct`.
+- **Status:** open — escalation to NetCommerce is a David action (mission M0.4). Oraya's job is to represent the state correctly, which Phase 16B M1 does; it does not and must not work around Decision Manager.
+- **Recommended fix path:** written reply from NetCommerce confirming DM is fixed for the merchant, then re-run the controlled real-card window.
+- **Discovered:** 2026-08-10 (Business Center transaction export), re-confirmed 2026-08-11
+
