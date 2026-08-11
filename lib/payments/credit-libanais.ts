@@ -77,6 +77,9 @@ const CYBERSOURCE_UNIFIED_CHECKOUT_LIBRARY_PATH = "/uc/v1/assets/1.0.0/UnifiedCh
 const DEFAULT_CAPTURE_CONTEXT_TTL_MINUTES = 20;
 const CYBERSOURCE_CARD_PAYMENT_TYPE = "PANENTRY" as const;
 const CYBERSOURCE_APPLE_PAY_PAYMENT_TYPE = "APPLEPAY" as const;
+const CYBERSOURCE_GOOGLE_PAY_PAYMENT_TYPE = "GOOGLEPAY" as const;
+/** Click to Pay is Secure Remote Commerce in CyberSource's vocabulary. */
+const CYBERSOURCE_CLICK_TO_PAY_PAYMENT_TYPE = "CLICKTOPAY" as const;
 
 type NetCommerceEnvironment = "sandbox" | "production";
 
@@ -100,6 +103,8 @@ interface NetCommerceConfig {
   webhookSignatureKeyId: string | null;
   webhookSignatureSecret: string | null;
   applePayEnabled: boolean;
+  googlePayEnabled: boolean;
+  clickToPayEnabled: boolean;
 }
 
 export interface CreditLibanaisUnifiedCheckoutSession {
@@ -232,12 +237,26 @@ function readNetCommerceConfig(): NetCommerceConfig {
     // Exact opt-in only. Set this after Business Center enrollment, domain
     // verification, and a successful Apple sandbox-device test.
     applePayEnabled: readEnv("NETCOMMERCE_CYBERSOURCE_APPLE_PAY_ENABLED") === "true",
+    // Enabled in the Business Center on 2026-08-12 (business name "Oraya").
+    // Still exact opt-in here: enrolment at the provider and offering the
+    // button to a guest are two different decisions, and only the second one
+    // can strand somebody mid-checkout.
+    googlePayEnabled: readEnv("NETCOMMERCE_CYBERSOURCE_GOOGLE_PAY_ENABLED") === "true",
+    // Blocked at the account level on 2026-08-12: Business Center answers
+    // "Your organization is currently not enabled to access
+    // PaymentConfiguration/UnifiedPayments/SecureRemoteCommerce". Wired here
+    // so enabling it later is one environment variable, not a code change.
+    clickToPayEnabled: readEnv("NETCOMMERCE_CYBERSOURCE_CLICK_TO_PAY_ENABLED") === "true",
   };
 }
 
 export function getCreditLibanaisPaymentCapabilities() {
   const config = readNetCommerceConfig();
-  return { apple_pay_enabled: config.applePayEnabled } as const;
+  return {
+    apple_pay_enabled: config.applePayEnabled,
+    google_pay_enabled: config.googlePayEnabled,
+    click_to_pay_enabled: config.clickToPayEnabled,
+  } as const;
 }
 
 function toHostedEnvironment(environment: NetCommerceEnvironment | null): HostedCheckoutEnvironment {
@@ -387,6 +406,8 @@ function requireSessionConfig() {
     responseMleKeyId: config.responseMleKeyId,
     responseMlePrivateKey: config.responseMlePrivateKey,
     applePayEnabled: config.applePayEnabled,
+    googlePayEnabled: config.googlePayEnabled,
+    clickToPayEnabled: config.clickToPayEnabled,
   };
 }
 
@@ -436,7 +457,13 @@ function readUnifiedCheckoutContextData(payload: Record<string, unknown> | null)
 
 function buildCaptureContextRequest(
   input: CreateCheckoutSessionInput,
-  config: { country: string; locale: string; applePayEnabled: boolean },
+  config: {
+    country: string;
+    locale: string;
+    applePayEnabled: boolean;
+    googlePayEnabled: boolean;
+    clickToPayEnabled: boolean;
+  },
   behaviour: CheckoutBehaviour = DEFAULT_CHECKOUT_BEHAVIOUR,
 ) {
   const targetOrigin = new URL(input.payment_page_url ?? input.return_url).origin;
@@ -449,8 +476,11 @@ function buildCaptureContextRequest(
   const requestedMethods = input.allowed_payment_methods?.length
     ? [...new Set(input.allowed_payment_methods)]
     : ["card" as const];
-  const allowedPaymentTypes: Array<"PANENTRY" | "APPLEPAY"> = [];
+  const allowedPaymentTypes: Array<"PANENTRY" | "APPLEPAY" | "GOOGLEPAY" | "CLICKTOPAY"> = [];
   if (requestedMethods.includes("card")) allowedPaymentTypes.push(CYBERSOURCE_CARD_PAYMENT_TYPE);
+  // Each wallet fails LOUDLY when requested but not enrolled. Silently
+  // dropping it would show the guest a checkout missing the button they came
+  // for, and leave no trace of why.
   if (requestedMethods.includes("apple_pay")) {
     if (!config.applePayEnabled) {
       throw new PaymentProviderConfigurationError(
@@ -458,6 +488,22 @@ function buildCaptureContextRequest(
       );
     }
     allowedPaymentTypes.push(CYBERSOURCE_APPLE_PAY_PAYMENT_TYPE);
+  }
+  if (requestedMethods.includes("google_pay")) {
+    if (!config.googlePayEnabled) {
+      throw new PaymentProviderConfigurationError(
+        "Google Pay is not enabled for this CyberSource merchant.",
+      );
+    }
+    allowedPaymentTypes.push(CYBERSOURCE_GOOGLE_PAY_PAYMENT_TYPE);
+  }
+  if (requestedMethods.includes("click_to_pay")) {
+    if (!config.clickToPayEnabled) {
+      throw new PaymentProviderConfigurationError(
+        "Click to Pay (Secure Remote Commerce) is not enabled for this CyberSource organization.",
+      );
+    }
+    allowedPaymentTypes.push(CYBERSOURCE_CLICK_TO_PAY_PAYMENT_TYPE);
   }
   if (allowedPaymentTypes.length === 0) {
     throw new PaymentProviderConfigurationError("No enabled online payment method was requested.");
@@ -1037,6 +1083,8 @@ export async function createCreditLibanaisUnifiedCheckoutSession(
         country: config.country,
         locale: config.locale,
         applePayEnabled: config.applePayEnabled,
+        googlePayEnabled: config.googlePayEnabled,
+        clickToPayEnabled: config.clickToPayEnabled,
       },
       behaviour,
     ),

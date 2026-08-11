@@ -3,6 +3,7 @@ import {
   createCreditLibanaisUnifiedCheckoutSession,
   getCreditLibanaisPaymentCapabilities,
 } from "@/lib/payments/credit-libanais";
+import { resolveOnlineCheckoutMethods } from "@/lib/payments/online-methods";
 import { findPaymentRequestByPublicToken } from "@/lib/payments/ledger-server";
 import { isPublicRequestPayable, remainingRequestAmount } from "@/lib/payments/ledger";
 import { PaymentProviderConfigurationError, type PaymentLinkPurpose } from "@/lib/payments/provider";
@@ -35,11 +36,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "This payment request is no longer payable." }, { status: 409 });
     }
     const capabilities = getCreditLibanaisPaymentCapabilities();
-    const allowedOnlineMethods: Array<"card" | "apple_pay"> = [];
-    if (payment.allowed_methods.includes("card")) allowedOnlineMethods.push("card");
-    if (payment.allowed_methods.includes("apple_pay") && capabilities.apple_pay_enabled) {
-      allowedOnlineMethods.push("apple_pay");
-    }
+    const allowedOnlineMethods = resolveOnlineCheckoutMethods(
+      payment.allowed_methods,
+      capabilities,
+    );
     if (allowedOnlineMethods.length === 0) {
       return NextResponse.json({ error: "Online payment is not enabled for this request." }, { status: 400 });
     }

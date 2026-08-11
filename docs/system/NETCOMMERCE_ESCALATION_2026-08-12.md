@@ -31,18 +31,13 @@ position. Please confirm:
 - what the profile should be set to for a hotel/villa booking merchant;
 - when we can re-enable screening without losing every payment.
 
-## 2. Apple Pay enablement
+## 2. Apple Pay
 
-We want Apple Pay on Unified Checkout. Our integration already requests
-`APPLEPAY` in `allowedPaymentTypes` and is gated off until enrolment completes.
-Please provide, for `06385000`:
-
-- Apple Pay enrolment on the merchant profile (merchant identity certificate /
-  payment processing certificate as CyberSource requires);
-- the **domain association file** for `stayoraya.com`, which we will serve at
-  `/.well-known/apple-developer-merchantid-domain-association`;
-- confirmation of which domains you have registered, so preview and production
-  are both covered.
+Self-serviced in the Business Center on 2026-08-12 — display name set,
+certificate downloaded, domain verification for `stayoraya.com` in progress.
+Nothing needed from you unless verification fails. Noting it only because the
+active "Cybersource CAS Sign-Up Service Disruption" incident was showing on the
+account at the time.
 
 ## 3. Transaction Search entitlement
 
@@ -52,7 +47,19 @@ credits for this account. Please enable the **Transaction Search / Transaction
 Details API** entitlement on `06385000` so we can reconcile our ledger against
 your records automatically instead of by hand.
 
-## 4. Settlement confirmation
+## 4. Click to Pay entitlement
+
+Setting up Click to Pay in the Business Center returns:
+
+> Your organization is currently not enabled to access
+> `PaymentConfiguration/UnifiedPayments/SecureRemoteCommerce`.
+> Please contact a customer representative.
+
+Apple Pay and Google Pay were both self-serviceable on this account; Click to
+Pay was not. Please enable Secure Remote Commerce / Click to Pay for
+`06385000`.
+
+## 5. Settlement confirmation
 
 Separately, please confirm the settlement and payout schedule for this merchant:
 when a same-day capture joins the batch, and how long funds take to reach the
