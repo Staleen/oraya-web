@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { describeBookingMoney } from "@/lib/ops/booking-state-line";
 import { useOps } from "@/components/ops/OpsProvider";
 import { Badge, Banner, Button, Card, Field, T } from "@/components/ops/ui";
 import {
@@ -1119,12 +1120,33 @@ export default function PaymentWorkspace() {
                 onChange={(event) => chooseBooking(event.target.value)}
               >
                 <option value="">Standalone — no booking</option>
-                {bookings.map((booking) => (
-                  <option key={booking.id} value={booking.id}>
-                    {booking.guest_name ?? "Guest"} · {booking.villa} ·{" "}
-                    {booking.id.slice(0, 8).toUpperCase()}
-                  </option>
-                ))}
+                {bookings.map((booking) => {
+                  // A reference tells the operator nothing about which stay
+                  // this is. Dates and what is owed do.
+                  const stay = [booking.check_in, booking.check_out]
+                    .filter(Boolean)
+                    .map((d) => String(d).slice(0, 10))
+                    .join(" → ");
+                  const state = describeBookingMoney({
+                    status: booking.status,
+                    amountPaid: booking.amount_paid,
+                    amountTotal: booking.amount_total,
+                    refundedAt: null,
+                  });
+                  return (
+                    <option key={booking.id} value={booking.id}>
+                      {[
+                        booking.guest_name ?? "Guest",
+                        booking.villa,
+                        stay,
+                        state,
+                        booking.id.slice(0, 8).toUpperCase(),
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </option>
+                  );
+                })}
               </select>
             </label>
             <Field

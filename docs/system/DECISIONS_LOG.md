@@ -16,6 +16,18 @@ Durable architectural and operational decisions. Append-only - never edit a past
 
 ---
 
+## 2026-08-11 - Ops shows approval AND money in one line; "paid in full" needs a total
+
+**Decision:** `app/ops/bookings` renders a single state line built by [lib/ops/booking-state-line.ts](../../lib/ops/booking-state-line.ts): the approval half ("Awaiting your approval", "Confirmed", "Cancelled — refund owed") plus the money half ("Paid in full · USD 240", "USD 100 of USD 240 · USD 140 outstanding", "USD 240 received"). **"Paid in full" is never claimed when `amount_total` is NULL or zero** — money with no total to measure it against reads "received", not "settled". The payment-request booking picker now shows guest, villa, dates and what is owed instead of an eight-character reference.
+
+**Reason:** the list returned approval state *before* it read money, so a pending booking paid in full was indistinguishable from an unpaid one. That is how a real $240 card payment came to be recorded twice on 2026-08-11 — the operator trusted the screen, and the screen was hiding the payment. Separately, two live rows carry `payment_status = paid_in_full` with `amount_total` NULL, so any UI asserting "fully paid" from them states something the data cannot support.
+
+**Impact:** new pure [lib/ops/booking-state-line.ts](../../lib/ops/booking-state-line.ts) + [app/ops/bookings/page.tsx](../../app/ops/bookings/page.tsx) + the picker in [components/ops/PaymentWorkspace.tsx](../../components/ops/PaymentWorkspace.tsx). Presentation only — no money logic, no provider calls, no status writes.
+
+**Reversible?:** yes, but reverting restores the screen that caused the incident.
+
+---
+
 ## 2026-08-11 - Guests can pay for themselves (self-serve payment on the booking view)
 
 **Decision:** the guest booking view now offers payment whenever Oraya can actually take one — online payment on, a mode that allows paying now, the stay not cancelled, and something still owed. A guest who reserved without paying gets **Pay now**; a guest who paid a deposit gets **Pay remaining balance**; an expired or failed link becomes a retry the guest can drive themselves. The button mints a checkout session with the guest's own booking view token via the existing `POST /api/payments/checkout` — no new auth, no operator step. `payment_purpose: "balance"` is unblocked and charges exactly what is outstanding.
