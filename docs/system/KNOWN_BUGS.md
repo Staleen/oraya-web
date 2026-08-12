@@ -240,6 +240,17 @@ Living list of bugs, gaps, and operational pitfalls that are **known** but **not
 
 ---
 
+### #20 — A settings control with no `describeChanges()` comparison is silently uneditable
+
+- **Severity:** 🟠 High — an owner changes a live payment setting, is shown no error, and loses the change on navigation.
+- **Area:** Ops → Setup screens (`app/ops/{site,payments,pricing,extras}/page.tsx`)
+- **Description:** the Setup screens derive their save bar from `describeChanges()`: `PendingBar` returns `null` when that function produces an empty list ([components/ops/setup-shared.tsx:154](../../components/ops/setup-shared.tsx)). A field that has a control but no comparison therefore edits local draft state, produces zero described changes, renders no save bar, and is discarded on navigation — with no error and no visible difference from a working control. Reported live by the owner 2026-08-12: the 3-D Secure dropdown on Ops → Setup → Site could not be saved. `card_checkout_behaviour.payer_authentication` had a control (added with the three-state 3DS design, DECISIONS_LOG 2026-08-12) but was never added to the `card_checkout_behaviour` comparison block, which covered only `request_email`, `request_phone`, `billing_address`, `skip_fraud_screening` and `capture_immediately`.
+- **Status:** **FIXED 2026-08-12** (branch `claude/ops-settings-save-sweep`) — the `payer_authentication` comparison was added with a distinct operator-facing sentence per state. All four Setup screens were swept field-by-field against their settings types: `payer_authentication` was the only field in the codebase with a control and no comparison. Payments (9/9), Pricing (villa rates, minimum nights, and a deep-equality comparison over seasonal overrides) and Extras (17/17 rule fields plus label/price/model/enabled/add/remove) were already complete. `addons.currency` has a comparison gap by design — it is fixed to USD and has no control.
+- **Recurrence risk — not closed by this fix:** `describeChanges()` is defined inside `"use client"` page files and is not exported, so no test can reach it. Any future field added to a settings type and given a control can reintroduce this exact bug silently. See the proposal in the fixing PR; a durable guard is deliberately separate work.
+- **Discovered:** 2026-08-12 (owner, live on production Ops)
+
+---
+
 <!-- New entries go above this line, lowest # at the top. Closed entries can be moved to a "Closed" section below or stay in place with status: closed + date. -->
 
 ## Closed / wontfix
