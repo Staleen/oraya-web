@@ -263,6 +263,18 @@ Living list of bugs, gaps, and operational pitfalls that are **known** but **not
 
 ---
 
+### #22 — Instant auto-confirm was unreachable by construction: the machine Stay Setup summary counted as a guest special request
+
+- **Severity:** 🟠 High — a shipped, switched-on feature that had never once executed, with no error anywhere to indicate it.
+- **Area:** Instant booking (Phase 16B W3) / `lib/bookings/instant-confirm.ts`
+- **Description:** `hasSpecialRequest` treated any non-empty `bookings.message` as a guest special request. But every `/book` submission composes a machine summary into that column — `[Stay Setup]`, bedrooms, estimated guests, sleeping setup, `Guest Notes: …`, plus a `[Booking Protocol]` system section on the request path — so `message` is **never** empty. `has_special_request` was therefore true for every booking that has ever existed and no booking could ever auto-confirm. Reported live by the owner 2026-08-12: two fully paid, add-on-free Villa Mechmech bookings (one via `/book`, one via an operator payment link) both sat `pending` with `payment_status = paid_in_full`, while `instant_booking_auto_confirm` and `instant_booking_villa_mechmech` were both `true`. Verified live: all 7 bookings in the database carry a Stay Setup block; six read `Guest Notes: None`, one reads `Guest Notes: Decorate room`.
+- **Status:** **FIXED 2026-08-12** (branch `claude/instant-confirm-special-request`) — the gate now reads `guestNotes` out of the block via the existing `parseStaySetupMessage`, so only text the guest actually typed forces review. Both real production messages were replayed through the decision as proof. Fails closed: a message that is not a recognised Stay Setup block still counts as a special request. See DECISIONS_LOG 2026-08-12 "An auto-generated Stay Setup summary is not a special request".
+- **Refuted during the audit:** the suspected second defect — a completion route that never calls the decision — is not real. Both `app/api/payments/unified-checkout-complete` and `app/api/payments/requests/unified-checkout-complete` already call `maybeInstantConfirmBooking`; the owner's payment-link booking reached the decision and was rejected by this same gate.
+- **Residual, not fixed:** the shared parser's `meaningful()` also treats a note starting "Not specified" as absent, so a guest typing "Not specified yet, will call" would auto-confirm. Changing that helper would alter what /ops renders and is outside the fix's scope.
+- **Discovered:** 2026-08-12 (owner report; two live bookings)
+
+---
+
 <!-- New entries go above this line, lowest # at the top. Closed entries can be moved to a "Closed" section below or stay in place with status: closed + date. -->
 
 ## Closed / wontfix
