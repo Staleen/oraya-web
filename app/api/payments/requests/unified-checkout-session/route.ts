@@ -126,6 +126,11 @@ export async function POST(request: Request) {
         payer_name: payment.payer_name,
         amount,
         currency: payment.currency,
+        // Whether this link belongs to a stay decides whether the checkout
+        // page shows the booking step rail. An operator-sent link for a
+        // booking is still step four of that guest's booking; a standalone
+        // link has no earlier steps to tick.
+        for_booking: Boolean(payment.booking_id),
       },
     });
   } catch (error) {

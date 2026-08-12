@@ -71,6 +71,8 @@ interface SessionResponse {
     payer_name?: string;
     amount?: number;
     currency?: string;
+    /** True when the link is attached to a booking. */
+    for_booking?: boolean;
   };
 }
 
@@ -267,6 +269,16 @@ export default function PaymentCheckoutPage(props: {
   const isPaymentRequest = searchParams.subject === "request";
   const [state, setState] = useState<SessionState>({ status: "loading" });
   const [summary, setSummary] = useState<CheckoutSummary | null>(null);
+  /**
+   * Show the booking step rail whenever this payment belongs to a stay —
+   * including a link an operator sent by hand. Keyed on the booking, not on
+   * how the link was created: the first version keyed it on the link type and
+   * so hid the rail on a real booking payment (live, 2026-08-12).
+   */
+  const showBookingSteps = useMemo(() => {
+    if (!summary) return false;
+    return isPaymentRequestSummary(summary) ? summary.for_booking === true : true;
+  }, [summary]);
 
   const bookingViewFallback = useMemo(
     () => isPaymentRequest ? `/pay/${token}` : `/booking/view/${token}`,
@@ -435,12 +447,12 @@ export default function PaymentCheckoutPage(props: {
         <div style={{ marginBottom: "18px" }}>
           <OrayaEmblem style={{ width: "48px", height: "auto", display: "block" }} />
         </div>
-        {!isPaymentRequest && <CheckoutSteps />}
+        {showBookingSteps && <CheckoutSteps />}
         <p style={{ color: GOLD, fontFamily: LATO, fontSize: "11px", letterSpacing: "2.5px", textTransform: "uppercase", margin: "0 0 12px" }}>
           Oraya
         </p>
         <h1 style={{ fontFamily: PLAYFAIR, fontSize: "clamp(32px, 6vw, 56px)", fontWeight: 400, margin: "0 0 14px" }}>
-          Secure payment
+          {showBookingSteps ? "Secure payment" : "Payment request"}
         </h1>
         <p style={{ color: MUTED, fontFamily: LATO, fontSize: "15px", lineHeight: 1.7, maxWidth: "620px", margin: "0 0 28px" }}>
           Your card details are entered inside your bank&rsquo;s own secure interface — Oraya never sees them, and records your payment only once the bank confirms it.

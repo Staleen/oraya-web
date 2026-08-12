@@ -63,3 +63,21 @@ test("card leads, because it is the only button every guest can use", () => {
 test("no allowed methods produces nothing rather than a default", () => {
   assert.deepEqual(resolveOnlineCheckoutMethods([], ALL), []);
 });
+
+/**
+ * Which wallet buttons actually reach a guest also depends on their device:
+ * Apple Pay renders only in Safari on Apple hardware, Google Pay only where
+ * Google supports it. Enrolment decides what Oraya REQUESTS; the device
+ * decides what appears. Both were confirmed live on 2026-08-12 — Google Pay
+ * rendered in desktop Chrome, Apple Pay did not, which is correct.
+ */
+test("a card request with both wallets enrolled asks for all three", () => {
+  assert.deepEqual(
+    resolveOnlineCheckoutMethods(["card"], {
+      apple_pay_enabled: true,
+      google_pay_enabled: true,
+      click_to_pay_enabled: false,
+    }),
+    ["card", "apple_pay", "google_pay"],
+  );
+});
