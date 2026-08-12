@@ -125,8 +125,11 @@ test("operations exposes one-click card refund for NetCommerce receipts", () => 
 
 test("card refund route claims before provider and owner-gates live refunds", () => {
   const refundRoute = readFileSync("app/api/ops/payments/transactions/[id]/refund/route.ts", "utf8");
+  // The provider execution sequence now lives in one shared module so a second
+  // caller inherits claim-before-provider instead of re-implementing it.
+  const execution = readFileSync("lib/payments/execute-refund.ts", "utf8");
   assert.match(refundRoute, /requiredRole: "owner"/);
-  assert.match(refundRoute, /claimProviderRefund/);
+  assert.match(execution, /claimProviderRefund/);
   assert.match(refundRoute, /confirmProviderRefund/);
   assert.match(refundRoute, /failProviderRefund/);
   assert.match(refundRoute, /provider_blocked: true/);
@@ -164,11 +167,14 @@ test("M1: an unsettled authorization is voided, never refunded", () => {
   );
 
   // The refund path asks the provider what happened BEFORE claiming or calling
-  // the bank, and refuses when the authorization never settled.
-  assert.match(refundRoute, /getCreditLibanaisPaymentSettlement/);
+  // the bank, and refuses when the authorization never settled. That sequence
+  // lives in lib/payments/execute-refund.ts; the route maps its result.
+  const execution = readFileSync("lib/payments/execute-refund.ts", "utf8");
+  assert.match(execution, /getCreditLibanaisPaymentSettlement/);
+  assert.match(execution, /requires_void/);
   assert.match(refundRoute, /requires_void/);
-  const gateIndex = refundRoute.indexOf("getCreditLibanaisPaymentSettlement({");
-  const claimIndex = refundRoute.indexOf("await claimProviderRefund({");
+  const gateIndex = execution.indexOf("await deps.getSettlement({");
+  const claimIndex = execution.indexOf("await deps.claimRefund({");
   assert.ok(gateIndex > 0 && claimIndex > gateIndex, "settlement gate must precede the refund claim");
 
   // Void is owner-only, claim-before-provider, and never writes a refund.
@@ -289,13 +295,15 @@ test("refunds reconcile themselves before troubling a human", () => {
     "utf8",
   );
   // Both unproven paths — gateway ambiguity and post-claim network failure —
-  // ask the provider before returning the manual Business Center flow.
-  assert.equal(refundRoute.match(/tryReconcileAmbiguousRefund\(/g)?.length, 3);
+  // ask the provider before returning the manual Business Center flow. The
+  // sequence moved into the shared execution module; the route maps its result.
+  const execution = readFileSync("lib/payments/execute-refund.ts", "utf8");
+  assert.equal(execution.match(/tryReconcileAmbiguousRefund\(/g)?.length, 3);
   // The pending claim and the do-not-retry lock survive a failed reconcile.
-  assert.match(refundRoute, /Still unproven — keep the pending claim/);
+  assert.match(execution, /Still unproven — keep the pending claim/);
   assert.match(refundRoute, /provider_blocked: true/);
   // Reconciliation may only confirm with a provider-verified reference.
-  assert.match(refundRoute, /verified_source: "provider"/);
+  assert.match(execution, /verified_source: "provider"/);
 });
 
 test("polled reconciliation reuses the webhook core and never writes to the provider", () => {

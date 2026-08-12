@@ -1,12 +1,7 @@
 import crypto from "crypto";
 import { NextResponse } from "next/server";
+import { executeCardRefund } from "@/lib/payments/execute-refund";
 import {
-  getCreditLibanaisPaymentSettlement,
-  reconcileAmbiguousCreditLibanaisRefund,
-  refundCreditLibanaisPayment,
-} from "@/lib/payments/credit-libanais";
-import {
-  claimProviderRefund,
   confirmProviderRefund,
   failProviderRefund,
   recordProviderRefund,
@@ -18,9 +13,7 @@ import {
 import {
   describeCardReturnAction,
   explainRefundFailure,
-  type CardSettlementState,
 } from "@/lib/payments/provider-settlement";
-import { PaymentProviderConfigurationError } from "@/lib/payments/provider";
 import { roundMoney } from "@/lib/money";
 import { requireOps } from "@/lib/ops-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
@@ -45,46 +38,6 @@ type PaymentTxnRow = {
  * Never retries the provider after an ambiguous outcome. Pending claims block
  * concurrent provider refunds for the same payment.
  */
-
-/**
- * An unverifiable refund response used to end here: pending claim, retry lock,
- * and the operator sent to Business Center to copy a reference by hand. Oraya
- * holds the API credentials, so it asks the provider itself first. Only a
- * proven credit of the exact amount confirms the ledger; anything else falls
- * back to the manual path unchanged.
- */
-async function tryReconcileAmbiguousRefund(input: {
-  refund_transaction_id: string;
-  refund_id: string | null;
-  idempotency_key: string;
-  amount: number;
-  currency: "USD" | "LBP";
-}) {
-  const reconciled = await reconcileAmbiguousCreditLibanaisRefund({
-    refund_id: input.refund_id,
-    merchant_reference: input.idempotency_key,
-    amount: input.amount,
-    currency: input.currency,
-  });
-  if (!reconciled.ok) {
-    console.error("[ops/payments/refund] self-reconciliation did not prove the refund", {
-      reason: reconciled.reason,
-    });
-    return null;
-  }
-  const confirmed = await confirmProviderRefund({
-    refund_transaction_id: input.refund_transaction_id,
-    provider_reference: reconciled.refund_id,
-    verified_source: "provider",
-  });
-  if (!confirmed.ok) {
-    console.error("[ops/payments/refund] reconciled refund could not be recorded", {
-      error: confirmed.error,
-    });
-    return null;
-  }
-  return { provider_reference: reconciled.refund_id, result: confirmed.result };
-}
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
@@ -373,176 +326,105 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     });
   }
 
-  if (remaining <= 0) {
-    return NextResponse.json(
-      {
-        error: hasPending
-          ? "A refund is already in progress or needs reconciliation. Do NOT retry the card refund — check Business Center and record the reference if money already returned."
-          : "This payment is already fully refunded.",
-        provider_blocked: hasPending,
-        can_record_manual: hasPending,
-      },
-      { status: 409 },
-    );
-  }
 
+  // ── Provider mode: one shared execution sequence (claim before provider),
+  //    mapped back to this route's existing operator copy and status codes.
+  //    The sequence itself lives in lib/payments/execute-refund.ts so the
+  //    decline path can perform the same refund without duplicating it.
   const requestedAmount =
     typeof body.amount === "number"
       ? body.amount
       : typeof body.amount === "string"
         ? Number(body.amount)
         : remaining;
-  const amountCheck = validateRefundAmount({ amount: requestedAmount, remaining });
-  if (!amountCheck.ok) {
-    return NextResponse.json(
-      {
-        error:
-          amountCheck.reason === "refund_exceeds_payment"
-            ? `You can refund at most ${remaining.toFixed(2)} ${txn.currency}.`
-            : "Enter a valid refund amount.",
-      },
-      { status: 400 },
-    );
-  }
 
-  // ── Settlement gate: a credit against an unsettled authorization is the
-  //    wrong instrument and fails at CyberSource with reason 102. Ask the
-  //    provider what actually happened BEFORE claiming or calling the bank.
-  //    An unreadable answer leaves today's behaviour untouched (fail-open to
-  //    the existing refund path); only a proven unsettled auth is refused.
-  let settlementState: CardSettlementState = "unknown";
-  try {
-    const assessment = await getCreditLibanaisPaymentSettlement({
-      payment_id: txn.provider_reference.trim(),
-    });
-    settlementState = assessment.state;
-    if (assessment.state === "authorized_only" || assessment.state === "reversed") {
+  const execution = await executeCardRefund({
+    payment_transaction_id: txn.id,
+    amount: requestedAmount,
+    idempotency_key: idempotencyKey,
+    staff_id: auth.staff.id,
+    notes: notes || "Card refund via Oraya / NetCommerce",
+  });
+
+  switch (execution.kind) {
+    case "refunded":
+      return NextResponse.json({
+        ok: true,
+        mode,
+        ...(execution.reconciled ? { reconciled: true } : {}),
+        amount: execution.amount,
+        currency: execution.currency,
+        provider_reference: execution.provider_reference,
+        result: execution.result,
+      });
+
+    case "idempotent":
+      return NextResponse.json({
+        ok: true,
+        mode,
+        amount: execution.amount,
+        currency: execution.currency,
+        idempotent: true,
+      });
+
+    case "nothing_remaining":
+      if (execution.detected === "at_claim") {
+        return NextResponse.json(
+          { error: "This payment is already fully refunded." },
+          { status: 409 },
+        );
+      }
+      return NextResponse.json(
+        {
+          error: execution.has_pending_refund
+            ? "A refund is already in progress or needs reconciliation. Do NOT retry the card refund — check Business Center and record the reference if money already returned."
+            : "This payment is already fully refunded.",
+          provider_blocked: execution.has_pending_refund,
+          can_record_manual: execution.has_pending_refund,
+        },
+        { status: 409 },
+      );
+
+    case "invalid_amount":
+      return NextResponse.json(
+        {
+          error:
+            execution.reason === "refund_exceeds_payment"
+              ? `You can refund at most ${execution.remaining.toFixed(2)} ${execution.currency}.`
+              : "Enter a valid refund amount.",
+        },
+        { status: 400 },
+      );
+
+    case "requires_void": {
       const guidance = describeCardReturnAction({
-        state: assessment.state,
-        decision_manager_reject: assessment.decision_manager_reject,
+        state: execution.settlement_state,
+        decision_manager_reject: execution.decision_manager_reject,
       });
       return NextResponse.json(
         {
           error: guidance.copy,
-          requires_void: assessment.state === "authorized_only",
-          settlement_state: assessment.state,
-          provider_status: assessment.provider_status,
-          reason_code: assessment.reason_code,
-          decision_manager_reject: assessment.decision_manager_reject,
+          requires_void: execution.settlement_state === "authorized_only",
+          settlement_state: execution.settlement_state,
+          provider_status: execution.provider_status,
+          reason_code: execution.reason_code,
+          decision_manager_reject: execution.decision_manager_reject,
           action: guidance.action,
         },
         { status: 409 },
       );
     }
-  } catch (error) {
-    if (!(error instanceof PaymentProviderConfigurationError)) {
-      console.error("[ops/payments/refund] settlement check failed", error);
-    }
-  }
 
-  // ── Provider path: claim first, then call the bank ─────────────────────────
-  const claimed = await claimProviderRefund({
-    payment_transaction_id: txn.id,
-    amount: amountCheck.amount,
-    idempotency_key: idempotencyKey,
-    staff_id: auth.staff.id,
-    notes: notes || "Card refund via Oraya / NetCommerce",
-  });
-  if (!claimed.ok) {
-    const msg = claimed.error ?? "";
-    if (msg.includes("already_confirmed")) {
-      return NextResponse.json({
-        ok: true,
-        mode,
-        amount: amountCheck.amount,
-        currency: txn.currency,
-        idempotent: true,
-      });
-    }
-    if (msg.includes("refund_exceeds_payment")) {
-      return NextResponse.json({ error: "This payment is already fully refunded." }, { status: 409 });
-    }
-    if (msg.includes("function") && msg.includes("does not exist")) {
-      return NextResponse.json(
-        {
-          error:
-            "Refund SQL is not applied yet. Run sql/phase-16b-provider-refund.sql in Supabase, then try again.",
-        },
-        { status: 503 },
-      );
-    }
-    return NextResponse.json({ error: "Could not start the refund safely." }, { status: 500 });
-  }
-
-  if (claimed.result.blocked_ambiguous || claimed.result.already_pending) {
-    // Pending claim means a prior provider attempt may already have moved money.
-    return NextResponse.json(
-      {
-        error:
-          "A refund attempt is already open for this payment. Do NOT retry the card refund — check Business Center and record the refund reference if money returned.",
-        provider_blocked: true,
-        can_record_manual: true,
-        refund_transaction_id: claimed.result.refund_transaction_id,
-        idempotency_key: idempotencyKey,
-      },
-      { status: 409 },
-    );
-  }
-
-  let providerReference = "";
-  try {
-    const refund = await refundCreditLibanaisPayment({
-      payment_id: txn.provider_reference,
-      amount: amountCheck.amount,
-      currency: txn.currency,
-      merchant_reference: idempotencyKey,
-    });
-
-    if (refund.outcome === "approved") {
-      providerReference = refund.reference;
-      const confirmed = await confirmProviderRefund({
-        refund_transaction_id: claimed.result.refund_transaction_id,
-        provider_reference: providerReference,
-        verified_source: "provider",
-      });
-      if (!confirmed.ok) {
-        return NextResponse.json(
-          {
-            error:
-              "Money may have been refunded at the bank, but Oraya could not record it. Do NOT retry the card refund — record the Business Center reference instead.",
-            provider_reference: providerReference,
-            provider_blocked: true,
-            can_record_manual: true,
-            refund_transaction_id: claimed.result.refund_transaction_id,
-            idempotency_key: idempotencyKey,
-          },
-          { status: 500 },
-        );
-      }
-      return NextResponse.json({
-        ok: true,
-        mode,
-        amount: amountCheck.amount,
-        currency: txn.currency,
-        provider_reference: providerReference,
-        result: confirmed.result,
-      });
-    }
-
-    if (refund.outcome === "declined") {
-      await failProviderRefund({
-        refund_transaction_id: claimed.result.refund_transaction_id,
-        reason: refund.message,
-      });
+    case "declined": {
       const explanation = explainRefundFailure({
-        message: refund.message,
-        settlement_state: settlementState,
+        message: execution.message,
+        settlement_state: execution.settlement_state,
       });
-      const wrongInstrument = explanation !== (refund.message?.trim() || "");
+      const wrongInstrument = explanation !== (execution.message?.trim() || "");
       return NextResponse.json(
         {
           error: explanation || "The gateway did not accept the refund.",
-          provider_status: refund.status,
+          provider_status: execution.provider_status,
           can_record_manual: !wrongInstrument,
           provider_blocked: false,
           requires_void: wrongInstrument,
@@ -551,82 +433,98 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       );
     }
 
-    // Ambiguous — ask the provider directly before troubling a human.
-    const reconciled = await tryReconcileAmbiguousRefund({
-      refund_transaction_id: claimed.result.refund_transaction_id,
-      refund_id: refund.refund_id,
-      idempotency_key: idempotencyKey,
-      amount: amountCheck.amount,
-      currency: txn.currency,
-    });
-    if (reconciled) {
-      return NextResponse.json({
-        ok: true,
-        mode,
-        reconciled: true,
-        amount: amountCheck.amount,
-        currency: txn.currency,
-        provider_reference: reconciled.provider_reference,
-        result: reconciled.result,
-      });
-    }
+    case "ambiguous":
+      if (execution.stage === "claim_pending") {
+        // Pending claim means a prior provider attempt may already have moved money.
+        return NextResponse.json(
+          {
+            error:
+              "A refund attempt is already open for this payment. Do NOT retry the card refund — check Business Center and record the refund reference if money returned.",
+            provider_blocked: true,
+            can_record_manual: true,
+            refund_transaction_id: execution.refund_transaction_id,
+            idempotency_key: execution.idempotency_key,
+          },
+          { status: 409 },
+        );
+      }
+      if (execution.stage === "record_failed") {
+        return NextResponse.json(
+          {
+            error:
+              "Money may have been refunded at the bank, but Oraya could not record it. Do NOT retry the card refund — record the Business Center reference instead.",
+            provider_reference: execution.provider_reference,
+            provider_blocked: true,
+            can_record_manual: true,
+            refund_transaction_id: execution.refund_transaction_id,
+            idempotency_key: execution.idempotency_key,
+          },
+          { status: 500 },
+        );
+      }
+      if (execution.stage === "provider_unverified") {
+        return NextResponse.json(
+          {
+            error: execution.message,
+            provider_status: execution.provider_status,
+            provider_reference: execution.provider_reference,
+            correlation_id: execution.correlation_id,
+            provider_blocked: true,
+            can_record_manual: true,
+            refund_transaction_id: execution.refund_transaction_id,
+            idempotency_key: execution.idempotency_key,
+          },
+          { status: 502 },
+        );
+      }
+      return NextResponse.json(
+        {
+          error:
+            "Could not confirm the refund with NetCommerce. Do NOT retry — check Business Center and record the refund reference if money returned.",
+          provider_blocked: true,
+          can_record_manual: true,
+          refund_transaction_id: execution.refund_transaction_id,
+          idempotency_key: execution.idempotency_key,
+        },
+        { status: 502 },
+      );
 
-    // Still unproven — keep the pending claim so nothing is retried.
-    return NextResponse.json(
-      {
-        error: refund.message,
-        provider_status: refund.status,
-        provider_reference: refund.refund_id,
-        correlation_id: refund.correlation_id ?? null,
-        provider_blocked: true,
-        can_record_manual: true,
-        refund_transaction_id: claimed.result.refund_transaction_id,
-        idempotency_key: idempotencyKey,
-      },
-      { status: 502 },
-    );
-  } catch (error) {
-    if (error instanceof PaymentProviderConfigurationError) {
-      await failProviderRefund({
-        refund_transaction_id: claimed.result.refund_transaction_id,
-        reason: error.message,
-      });
+    case "provider_not_configured":
       return NextResponse.json(
         { error: "Card refunds are not configured right now.", can_record_manual: true },
-        { status: error.statusCode },
+        { status: execution.status_code },
       );
-    }
-    console.error("[ops/payments/refund] provider call failed", error);
-    // Timeout / network after claim: money may have moved. This is exactly the
-    // case worth asking the provider about rather than a human.
-    const reconciled = await tryReconcileAmbiguousRefund({
-      refund_transaction_id: claimed.result.refund_transaction_id,
-      refund_id: null,
-      idempotency_key: idempotencyKey,
-      amount: amountCheck.amount,
-      currency: txn.currency,
-    });
-    if (reconciled) {
-      return NextResponse.json({
-        ok: true,
-        mode,
-        reconciled: true,
-        amount: amountCheck.amount,
-        currency: txn.currency,
-        provider_reference: reconciled.provider_reference,
-        result: reconciled.result,
-      });
-    }
-    return NextResponse.json(
-      {
-        error:
-          "Could not confirm the refund with NetCommerce. Do NOT retry — check Business Center and record the refund reference if money returned.",
-        provider_blocked: true,
-        can_record_manual: true,
-        refund_transaction_id: claimed.result.refund_transaction_id,
-        idempotency_key: idempotencyKey,
-      },
-      { status: 502 },
-    );
+
+    // The checks above already rejected these before the sequence ran; they
+    // remain reachable only if the row changed underneath this request.
+    case "not_refundable":
+      if (execution.reason === "not_found") {
+        return NextResponse.json({ error: "That payment no longer exists." }, { status: 404 });
+      }
+      if (execution.reason === "unsupported_instrument") {
+        return NextResponse.json(
+          { error: "Only card payments with a NetCommerce reference can use this refund path." },
+          { status: 409 },
+        );
+      }
+      return NextResponse.json({ error: "That payment cannot be refunded." }, { status: 409 });
+
+    case "ledger_unavailable":
+      if (execution.reason === "sql_missing") {
+        return NextResponse.json(
+          {
+            error:
+              "Refund SQL is not applied yet. Run sql/phase-16b-provider-refund.sql in Supabase, then try again.",
+          },
+          { status: 503 },
+        );
+      }
+      if (execution.reason === "payment_read_failed") {
+        return NextResponse.json({ error: "Could not load that payment." }, { status: 503 });
+      }
+      if (execution.reason === "prior_refunds_read_failed") {
+        return NextResponse.json({ error: "Could not check existing refunds." }, { status: 503 });
+      }
+      return NextResponse.json({ error: "Could not start the refund safely." }, { status: 500 });
   }
 }
