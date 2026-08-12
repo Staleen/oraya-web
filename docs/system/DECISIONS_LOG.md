@@ -2663,3 +2663,71 @@ admin still *displays* recorded payments and refunds. Only writing is closed.
 deletes it in Batch 9; this is not that. It removes one capability from it.
 
 **Reversible?:** yes, but reverting reopens the double-count path.
+
+---
+
+## 2026-08-13 - A bank asking to verify the guest is not a decline, and not a lock
+
+**Decision:** CyberSource status `PENDING_AUTHENTICATION` (reason **475**) is
+classified as a **retry-safe non-charge**, alongside `DECLINED` and the
+validation failures. The attempt goes `claimed → failed`, releasing the claim so
+the guest can try again. It is NOT a decline in the guest's eyes: the
+authorization result carries a new optional `challenge_required` flag, and both
+completion routes use it to say the bank asked to verify the payment, nothing
+was charged, and to try another card or message Oraya.
+
+**Reason:** a 475 means CyberSource stopped **before** authorizing — no payment
+resource, no hold, no money. Oraya classified it `unknown`, which marks the
+attempt `ambiguous`; an ambiguous attempt is a blocking attempt, and only
+`recorded` or `failed` may follow it. So a guest whose bank merely wanted to ask
+them a question was locked out of paying Oraya permanently, awaiting manual
+reconciliation of a payment that never existed. With 3-D Secure `off` today this
+was unreachable; the moment anyone switched 3DS on it would have fired on real
+guests. `DECISION_SKIP` has made 3DS the only fraud control Oraya has, so
+switching it on is a matter of when.
+
+**Also:** `frictionless_only` is **retired**. Its promise — "never blocks a
+guest" — cannot be kept. `PENDING_AUTHENTICATION` is not an authorization Oraya
+can elect to accept, so there is nothing to let through; a challenged guest was
+turned away in that mode exactly as in `required`, while the operator was told
+nobody would ever be stopped. It is refused at save time with copy naming what
+to choose instead, and resolved to `off` at runtime so a legacy row cannot
+activate it. The runtime mapping is deliberately **not** in
+`parsePayerAuthenticationMode`: the save path parses before it validates, so
+downgrading there would make the refusal unreachable and turn an operator's
+explicit choice into a silent change — KNOWN_BUGS #20's failure mode, on the
+same payment surface.
+
+**Impact:** `RETRY_SAFE_PROVIDER_PAYMENT_STATUSES` moved to the pure
+[lib/payments/provider-payment-status.ts](../../lib/payments/provider-payment-status.ts)
+(its sibling `APPROVED_…` list already lived there) so the classification is
+testable; `challenge_required` on `ProviderAuthorizationResult` and the
+Credit Libanais result; the exported
+`PAYER_AUTHENTICATION_CHALLENGE_MESSAGE` shared by the adapter and both
+completion routes, which write their own guest copy rather than echoing
+`provider.message`; `resolveEffectivePayerAuthenticationMode` and the save-time
+refusal in [lib/payments/payer-authentication.ts](../../lib/payments/payer-authentication.ts).
+No schema change, no new dependency, no new provider call; the request builder
+is untouched.
+
+**Live impact: none.** Stored `card_checkout_behaviour.payer_authentication` is
+`off` (verified read-only against live Supabase 2026-08-13), so no live payment
+behaviour changes. This makes switching 3DS on survivable; it does not switch it
+on, and it does not make 3DS authenticate — that still needs the step-up screen.
+
+**Known gap:** `app/ops/**` was out of scope, so the Setup → Site dropdown still
+offers "On, silent only". Choosing it now fails the save with an explicit
+message rather than doing something silent, but the option should be removed
+when that file is next legitimately in scope.
+
+**Deferred:** the step-up screen itself (W7 slices 3–6), deferred by the owner
+2026-08-12 and specified in
+[PHASE_16B_W7_STEP_UP_PLAN.md](PHASE_16B_W7_STEP_UP_PLAN.md) — the two-call
+`CONSUMER_AUTHENTICATION` → `VALIDATE_CONSUMER_AUTHENTICATION` contract, why
+`DECISION_SKIP` must ride on both, the `pending_authentication` state and its
+TTL reaper, and the two risks that decide whether it is safe: never trust the
+browser's post-back, and never call the provider for an attempt the reaper has
+already released.
+
+**Reversible?:** yes for the copy; reverting the 475 classification restores a
+permanent lock on any guest whose bank asks to verify them.

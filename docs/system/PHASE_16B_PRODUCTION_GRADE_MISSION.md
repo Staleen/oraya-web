@@ -107,6 +107,10 @@ Payer authentication was switched on in Unified Checkout on 2026-08-11, yet both
 
 Fix: add `CONSUMER_AUTHENTICATION` / `VALIDATE_CONSUMER_AUTHENTICATION` to `processingInformation.actionList` and carry the results into the authorization. **Acceptance:** a live transaction returns `ECI 5` with a populated CAVV.
 
+**Slices 1–2 shipped 2026-08-13** (branch `claude/w7-slices-1-2`), and they do **not** meet that acceptance — they remove the two things that made attempting it unsafe. (1) Reason **475** (`PENDING_AUTHENTICATION`) is now a retry-safe non-charge instead of `unknown`: it used to mark the attempt `ambiguous`, which permanently locked out any guest whose bank asked to verify them (KNOWN_BUGS #29). A challenged guest is now released to try again and told the truth, not "payment was not approved". (2) `frictionless_only` is retired — its "never blocks a guest" promise cannot be kept, since there is no authorization to let through. Refused at save time, resolved to `off` at runtime. Live stored value is `off`, so no live behaviour changed.
+
+**Slices 3–6 — the step-up screen itself — are deferred** (owner, 2026-08-12) and specified in [PHASE_16B_W7_STEP_UP_PLAN.md](PHASE_16B_W7_STEP_UP_PLAN.md): the two-call contract threaded by `authenticationTransactionId`, why `DECISION_SKIP` must ride on **both** calls, the `pending_authentication` state and its TTL reaper, and the two decisive risks (never trust the browser's post-back; never call the provider for an attempt the reaper already released).
+
 ### W8 — Phase 16D access delivery
 
 The owner's stated goal is "pay and enter the house in minutes". That requires gate/door PIN delivery, which does not exist. Until W8 ships, instant booking ends at "confirmed with arrival details".

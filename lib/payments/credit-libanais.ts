@@ -16,6 +16,7 @@ import { readCheckoutBehaviour } from "@/lib/payments/checkout-behaviour-server"
 import {
   decidePayerAuthentication,
   readPayerAuthenticationResult,
+  PAYER_AUTHENTICATION_CHALLENGE_MESSAGE,
 } from "@/lib/payments/payer-authentication";
 import {
   buildCyberSourceJwtAuthorization,
@@ -24,6 +25,7 @@ import {
 } from "@/lib/payments/cybersource-jwt-mle";
 import {
   APPROVED_PROVIDER_PAYMENT_STATUSES,
+  RETRY_SAFE_PROVIDER_PAYMENT_STATUSES,
   isApprovedProviderPaymentStatus,
   readCyberSourcePaymentStatus,
 } from "@/lib/payments/provider-payment-status";
@@ -140,6 +142,8 @@ export interface CreditLibanaisTransientTokenPaymentResult {
   transaction_id: string | null;
   reference: string;
   message: string;
+  /** See ProviderAuthorizationResult.challenge_required. */
+  challenge_required?: boolean;
 }
 
 interface CyberSourcePaymentResponse {
@@ -809,15 +813,6 @@ function readProviderErrorMessage(payload: CyberSourcePaymentResponse): string |
   return null;
 }
 
-/** Non-charge CyberSource statuses — safe to release the attempt for retry. */
-const RETRY_SAFE_PROVIDER_STATUSES = [
-  "DECLINED",
-  "INVALID_REQUEST",
-  "INVALID_DATA",
-  "VALIDATION_ERROR",
-  "MISSING_FIELD",
-] as const;
-
 function getUnifiedCheckoutLibraryUrl(apiBaseUrl: string) {
   return new URL(CYBERSOURCE_UNIFIED_CHECKOUT_LIBRARY_PATH, `${apiBaseUrl}/`).toString();
 }
@@ -962,7 +957,7 @@ export async function authorizeCreditLibanaisTransientToken(
     status,
     approved_statuses: APPROVED_PROVIDER_PAYMENT_STATUSES,
     // Explicit non-charge / decline statuses release the claim for retry.
-    retry_safe_decline_statuses: RETRY_SAFE_PROVIDER_STATUSES,
+    retry_safe_decline_statuses: RETRY_SAFE_PROVIDER_PAYMENT_STATUSES,
     approval_verified: approvalVerified,
   });
 
@@ -971,9 +966,18 @@ export async function authorizeCreditLibanaisTransientToken(
   // mode is only permitted alongside deferred capture (enforced when the
   // setting is saved), so refusing here releases a hold — it never has to
   // claw back money the guest already paid.
+  const payerAuthResult = readPayerAuthenticationResult(workingPayload);
+  // Did the bank ask for its own verification screen? Read from the RESPONSE,
+  // not from the setting: the guest message has to be right even if the mode
+  // changed while this payment was in flight. `PENDING_AUTHENTICATION` is
+  // already classified above as a retry-safe non-charge, so this only decides
+  // what the guest is told — never whether the claim is released.
+  const challengeRequired =
+    (payerAuthResult.status ?? "").trim().toUpperCase() === "PENDING_AUTHENTICATION" ||
+    Boolean(payerAuthResult.stepUpUrl?.trim());
   let payerAuthDecision = decidePayerAuthentication(
     behaviour.payer_authentication,
-    readPayerAuthenticationResult(workingPayload),
+    payerAuthResult,
   );
   if (outcome !== "approved") {
     // Nothing was approved, so there is no authentication verdict to enforce.
@@ -1034,8 +1038,12 @@ export async function authorizeCreditLibanaisTransientToken(
   }
 
   const approved = outcome === "approved";
-  const message =
-    payerAuthDecision.action === "refuse"
+  const message = challengeRequired
+    // Not a decline. The bank asked a question Oraya cannot yet put on screen,
+    // and no authorization was created — "declined by the gateway" would send
+    // the guest to their bank about a card that is perfectly good.
+    ? PAYER_AUTHENTICATION_CHALLENGE_MESSAGE
+    : payerAuthDecision.action === "refuse"
       // Say what actually happened. "Declined by the gateway" would send the
       // guest to their bank about a decision Oraya made.
       ? payerAuthDecision.guestMessage
@@ -1065,6 +1073,7 @@ export async function authorizeCreditLibanaisTransientToken(
     // so ops can search Business Center / Vercel without implying a charge.
     reference: transactionId ?? (diagnosticReference || input.provider_session_id),
     message,
+    challenge_required: challengeRequired,
   };
 }
 

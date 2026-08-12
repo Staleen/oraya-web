@@ -11,14 +11,32 @@ import {
   parsePayerAuthenticationMode,
   payerAuthenticationActions,
   readPayerAuthenticationResult,
+  resolveEffectivePayerAuthenticationMode,
   validatePayerAuthenticationSetting,
 } from "./payer-authentication.ts";
+import {
+  RETRY_SAFE_PROVIDER_PAYMENT_STATUSES,
+  isApprovedProviderPaymentStatus,
+} from "./provider-payment-status.ts";
+import { classifyProviderAuthorizationOutcome } from "./unified-checkout-completion.ts";
 import { buildTransientTokenPaymentRequest } from "./transient-token-payment-request.ts";
 
-test("off requests nothing; both on-modes request authentication", () => {
+test("only strict mode requests authentication; the retired mode requests nothing", () => {
   assert.deepEqual(payerAuthenticationActions("off"), []);
-  assert.deepEqual(payerAuthenticationActions("frictionless_only"), [CONSUMER_AUTHENTICATION_ACTION]);
   assert.deepEqual(payerAuthenticationActions("required"), [CONSUMER_AUTHENTICATION_ACTION]);
+  assert.deepEqual(
+    payerAuthenticationActions("frictionless_only"),
+    [],
+    "retired: a legacy stored value must not activate 3DS at runtime",
+  );
+});
+
+test("the retired mode resolves to off, never to strict", () => {
+  assert.equal(resolveEffectivePayerAuthenticationMode("off"), "off");
+  assert.equal(resolveEffectivePayerAuthenticationMode("required"), "required");
+  // Resolving to "required" would start refusing real cards on a setting
+  // nobody deliberately chose.
+  assert.equal(resolveEffectivePayerAuthenticationMode("frictionless_only"), "off");
 });
 
 test("off leaves today's request byte-for-byte unchanged", () => {
@@ -73,8 +91,8 @@ test("a silently verified cardholder proceeds with liability shifted", () => {
 });
 
 test("ECI 7 with an empty CAVV — what Oraya sees live — is not authentication", () => {
-  const lenient = decidePayerAuthentication("frictionless_only", { eci: "07", cavv: "", status: "AUTHORIZED" });
-  assert.deepEqual(lenient, { action: "proceed", authenticated: false });
+  const off = decidePayerAuthentication("off", { eci: "07", cavv: "", status: "AUTHORIZED" });
+  assert.deepEqual(off, { action: "proceed", authenticated: false });
 
   const strict = decidePayerAuthentication("required", { eci: "07", cavv: "", status: "AUTHORIZED" });
   assert.equal(strict.action, "refuse");
@@ -86,7 +104,9 @@ test("an ECI without a CAVV proves nothing, whatever the ECI says", () => {
   assert.equal(d.action, "refuse");
 });
 
-test("a bank challenge never strands the guest in lenient mode", () => {
+test("the retired mode never reaches the challenge verdict at all", () => {
+  // It requests no authentication, so a step-up cannot arise; and if a stale
+  // response somehow carried one, the mode behaves as `off`.
   const d = decidePayerAuthentication("frictionless_only", {
     status: "PENDING_AUTHENTICATION",
     stepUpUrl: "https://issuer.example/step-up",
@@ -122,11 +142,51 @@ test("strict 3DS cannot be paired with immediate capture", () => {
     validatePayerAuthenticationSetting({ payer_authentication: "required", capture_immediately: false }),
     { ok: true },
   );
-  // The lenient mode never refuses, so it never needs to release a hold.
-  assert.deepEqual(
-    validatePayerAuthenticationSetting({ payer_authentication: "frictionless_only", capture_immediately: true }),
-    { ok: true },
+});
+
+test("the retired mode is refused at save time, not silently stored as off", () => {
+  for (const capture_immediately of [true, false]) {
+    const conflict = validatePayerAuthenticationSetting({
+      payer_authentication: "frictionless_only",
+      capture_immediately,
+    });
+    assert.equal(conflict.ok, false, `capture_immediately=${capture_immediately}`);
+    // The operator must be told what to pick instead, not just refused.
+    assert.match(conflict.ok === false ? conflict.message : "", /no longer available/i);
+    assert.match(conflict.ok === false ? conflict.message : "", /Off/);
+  }
+});
+
+test("the retired mode still parses, so the save path can see it and object", () => {
+  // If parsing swallowed it to "off", validate would never fire and an
+  // operator's explicit choice would vanish with nothing to see.
+  assert.equal(parsePayerAuthenticationMode("frictionless_only"), "frictionless_only");
+  assert.equal(
+    validatePayerAuthenticationSetting({
+      payer_authentication: parsePayerAuthenticationMode("frictionless_only"),
+      capture_immediately: true,
+    }).ok,
+    false,
   );
+});
+
+test("a 3-D Secure step-up releases the attempt instead of locking the booking", () => {
+  // Reason 475: CyberSource stopped before authorizing, so no money moved and
+  // the guest must be free to try again. Classifying it "unknown" left the
+  // booking behind an ambiguous attempt only a human could clear.
+  assert.ok(
+    (RETRY_SAFE_PROVIDER_PAYMENT_STATUSES as readonly string[]).includes("PENDING_AUTHENTICATION"),
+  );
+  assert.equal(isApprovedProviderPaymentStatus("PENDING_AUTHENTICATION"), false);
+
+  const outcome = classifyProviderAuthorizationOutcome({
+    response_ok: true,
+    status: "PENDING_AUTHENTICATION",
+    approved_statuses: ["AUTHORIZED", "CAPTURED"],
+    retry_safe_decline_statuses: RETRY_SAFE_PROVIDER_PAYMENT_STATUSES,
+    approval_verified: false,
+  });
+  assert.equal(outcome, "declined");
 });
 
 test("the result is read from either ECI field name", () => {

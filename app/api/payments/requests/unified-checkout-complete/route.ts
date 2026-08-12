@@ -16,6 +16,7 @@ import {
   mintBookingPaymentSuccessUrl,
 } from "@/lib/payments/payment-success-redirect";
 import { supabasePaymentAttemptStore } from "@/lib/payments/payment-attempts-store";
+import { PAYER_AUTHENTICATION_CHALLENGE_MESSAGE } from "@/lib/payments/payer-authentication";
 import {
   deriveMerchantReference,
   runUnifiedCheckoutCompletion,
@@ -163,7 +164,11 @@ export async function POST(request: Request) {
         return NextResponse.json({
           ok: false,
           paid: false,
-          message: "Payment was not approved. No payment was recorded. You may try again or contact Oraya.",
+          // See the booking route: a bank asking to verify the guest is not a
+          // declined card, even though both release the claim for a retry.
+          message: outcome.provider.challenge_required
+            ? PAYER_AUTHENTICATION_CHALLENGE_MESSAGE
+            : "Payment was not approved. No payment was recorded. You may try again or contact Oraya.",
           payment_request_url: `${requestUrl}?payment=failed`,
         }, { status: outcome.provider.ok ? 402 : 502 });
       case "provider_unknown":
