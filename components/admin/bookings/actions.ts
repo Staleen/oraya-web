@@ -21,9 +21,6 @@ export interface BookingCardActions {
 
   // Payment
   updatePaymentDraft: (bookingId: string, updates: Partial<PaymentDraft>) => void;
-  requestDeposit: (booking: Booking) => void;
-  recordPayment: (booking: Booking) => void;
-  issueRefund: (booking: Booking) => void;
   sendPaymentReminder: (booking: Booking) => void;
 
   // Proposal

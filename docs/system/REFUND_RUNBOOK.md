@@ -106,10 +106,26 @@ an Oraya one.
 
 Run once if needed: `sql/phase-16b-reverse-manual-only.sql` so Reverse is hard-locked to `provider = manual`.
 
-## Booking admin legacy
+## Booking admin legacy — closed 2026-08-12
 
-Admin → Bookings → **Record manual refund** still writes booking `refund_*`
-fields only. Prefer Ops → Refund card for card money so the ledger stays complete.
+Admin → Bookings no longer records money. **Record manual refund**, **Record
+payment** and **Request deposit** were removed from that console, and
+`PATCH /api/admin/bookings/[id]` now refuses any money-bearing field with
+`money_path_closed` (Phase 16B W2). It wrote booking money columns directly —
+no ledger row, no idempotency key — which is how a duplicate receipt was written
+on 2026-08-11.
+
+Where each one lives now, all through the ledger RPCs with deduplication:
+
+| Was | Now |
+|---|---|
+| Admin → Record manual refund | **Ops → Bookings → the booking → Money → Record refund** (requires the Business Center reference; refuses if someone else recorded one while you typed) |
+| Admin → Record payment | **Ops → Bookings → the booking → Money → Record payment** (`oraya_record_manual_payment`, idempotency key + expected-balance check) |
+| Admin → Request deposit | **Ops → Bookings → the booking → Money → Request deposit** |
+| Refunding a card charge | **Ops → Payments → Collect money → Refund card** (unchanged — see "Preferred path" above) |
+
+Admin still *displays* recorded payments and refunds. Only writing is closed;
+no stored history was altered.
 
 ## Activation test
 

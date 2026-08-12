@@ -297,6 +297,18 @@ Living list of bugs, gaps, and operational pitfalls that are **known** but **not
 
 ---
 
+### #23 — The legacy admin console could record money without the ledger, so the same payment could be counted twice
+
+- **Severity:** 🟠 High — real money miscounted on a live merchant account, with no error to indicate it.
+- **Area:** Legacy admin booking console / Phase 16B W2
+- **Description:** `PATCH /api/admin/bookings/[id]` accepted `amount_paid`, `payment_status`, `payment_received_at`, `refund_amount`, `refund_status`, `refund_provider_reference` and eighteen other money fields and wrote them straight onto the bookings row. No `payment_transactions` row was created, no idempotency key was claimed, no RPC was called, so nothing deduplicated the write. On 2026-08-11 this recorded a duplicate `$240` receipt on booking 53896156 with a `legacy-…` idempotency key and no `payment_request_id`. Three admin controls fed it: Request deposit, Record payment, Record manual refund.
+- **Status:** **FIXED 2026-08-12 by removal** (branch `claude/admin-money-path-close`) — the route now refuses any money-bearing field with 400 `money_path_closed` before it reads or writes anything, and the three controls are gone from the console. Money is recorded in Ops → Payments, which writes through `oraya_record_manual_payment` with an idempotency key and a compare-and-set. See DECISIONS_LOG 2026-08-12 "The legacy admin console can no longer record money".
+- **Why removal rather than re-plumbing:** the audit found an Ops equivalent for all three controls, and the Ops refund recorder is *stricter* than the one removed (admin had no concurrency guard; Ops returns 409 if someone else recorded a refund meanwhile). No operator capability was lost.
+- **Not affected:** status changes, event proposal fields, payment reminders, add-on approval, feedback and arrival-link actions all still work. **No stored history was altered** — admin still displays recorded payments and refunds; only writing is closed.
+- **Discovered:** 2026-08-11 (duplicate receipt on booking 53896156); catalogued as W2 in PHASE_16B_PRODUCTION_GRADE_MISSION.md
+
+---
+
 <!-- New entries go above this line, lowest # at the top. Closed entries can be moved to a "Closed" section below or stay in place with status: closed + date. -->
 
 ## Closed / wontfix

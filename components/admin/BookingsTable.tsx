@@ -470,132 +470,11 @@ export default function BookingsTable({
       .filter((line): line is BookingProposalIncludedService => line !== null);
   }
 
-  async function requestDeposit(booking: Booking) {
-    const draft = getPaymentDraft(booking);
-    const depositAmount = parseAmountInput(draft.depositAmount);
-    if (depositAmount === null) {
-      setError("Enter a valid deposit amount before requesting payment.");
-      return;
-    }
-
-    const dueAtIso = draft.dueAt ? new Date(draft.dueAt).toISOString() : null;
-    const nextNotes = draft.requestNote.trim() || booking.payment_notes || null;
-    const updated = await patchBookingRecord(
-      booking.id,
-      {
-        deposit_amount: depositAmount,
-        payment_method: draft.paymentMethod || null,
-        payment_due_at: dueAtIso,
-        payment_notes: nextNotes,
-        payment_status: "payment_requested",
-        payment_requested_at: new Date().toISOString(),
-      },
-      "request-deposit",
-    );
-
-    if (updated) {
-      updatePaymentDraft(booking.id, { requestNote: "" });
-    }
-  }
-
-  async function recordPayment(booking: Booking) {
-    const draft = getPaymentDraft(booking);
-    const receivedAmount = parseAmountInput(draft.paymentAmount);
-    if (receivedAmount === null) {
-      setError("Enter a valid payment amount before recording payment.");
-      return;
-    }
-    if (!draft.paymentMethod) {
-      setError("Select a payment method before recording payment.");
-      return;
-    }
-
-    const currentPaid = typeof booking.amount_paid === "number" && Number.isFinite(booking.amount_paid)
-      ? booking.amount_paid
-      : 0;
-    // Bug 8: for event inquiries with a proposal total, use that total as the paid-in-full basis,
-    // not the host stay nights.
-    const { totalRaw } = getBookingPaymentBasis(booking);
-    const nextAmountPaid = currentPaid + receivedAmount;
-    const nextPaymentStatus =
-      typeof totalRaw === "number" && nextAmountPaid >= totalRaw
-        ? "paid_in_full"
-        : "deposit_paid";
-    const nextNotes = draft.paymentNotes.trim() || booking.payment_notes || null;
-
-    const foundationTotal = getFoundationAmountTotal(booking);
-    const foundationDue = computeFoundationAmountDue(foundationTotal, nextAmountPaid);
-    const foundationStage = derivePaymentFoundationStage(nextAmountPaid, foundationTotal);
-    const recordedAt = new Date().toISOString();
-
-    const updated = await patchBookingRecord(
-      booking.id,
-      {
-        payment_method: draft.paymentMethod,
-        amount_paid: nextAmountPaid,
-        payment_reference: draft.paymentReference.trim() || null,
-        payment_notes: nextNotes,
-        payment_received_at: recordedAt,
-        payment_last_at: recordedAt,
-        amount_total: foundationTotal,
-        amount_due: foundationDue,
-        payment_stage: foundationStage,
-        payment_status: nextPaymentStatus,
-      },
-      "record-payment",
-    );
-
-    if (updated) {
-      updatePaymentDraft(booking.id, {
-        paymentAmount: "",
-        paymentNotes: "",
-        paymentReference: updated.payment_reference ?? draft.paymentReference,
-      });
-    }
-  }
-
-  async function issueRefund(booking: Booking) {
-    const draft = getPaymentDraft(booking);
-    const refundAmount = parseAmountInput(draft.refundAmount);
-    if (refundAmount === null) {
-      setError("Enter a valid refund amount before recording a refund.");
-      return;
-    }
-
-    // Plan 4 Phase 1 (KNOWN_BUGS #15): this action only RECORDS a refund the
-    // admin already executed in the NetCommerce Business Center — the Business
-    // Center refund/transaction reference is required for traceability.
-    const refundReference = draft.refundReference.trim();
-    if (!refundReference) {
-      setError(
-        "Enter the NetCommerce Business Center refund reference. Execute the refund in the Business Center first, then record it here.",
-      );
-      return;
-    }
-
-    const refundNoteLine = `Manual refund recorded — Business Center ref ${refundReference}${
-      draft.refundNote.trim() ? `: ${draft.refundNote.trim()}` : ""
-    }`;
-    const combinedNotes = [booking.payment_notes?.trim(), refundNoteLine]
-      .filter(Boolean)
-      .join("\n");
-
-    const updated = await patchBookingRecord(
-      booking.id,
-      {
-        refund_status: "refunded",
-        refund_amount: refundAmount,
-        refunded_at: new Date().toISOString(),
-        refund_provider_reference: refundReference,
-        payment_notes: combinedNotes || null,
-      },
-      "issue-refund",
-    );
-
-    if (updated) {
-      updatePaymentDraft(booking.id, { refundAmount: "", refundNote: "", refundReference: "" });
-    }
-  }
+  // Phase 16B W2: requestDeposit / recordPayment / issueRefund were removed.
+  // They PATCHed booking money columns directly through /api/admin/bookings/[id]
+  // with no ledger row and no idempotency key — the path that wrote a duplicate
+  // receipt on 2026-08-11. Money is recorded in Ops → Payments, through the
+  // ledger RPCs. The route now refuses money-bearing fields outright.
 
   async function sendPaymentReminder(booking: Booking) {
     if (getPaymentStatus(booking) !== "payment_requested") {
@@ -1338,9 +1217,6 @@ export default function BookingsTable({
         return { ...prev, [bookingId]: { ...prev[bookingId], [panel]: !isOpen } };
       }),
     updatePaymentDraft,
-    requestDeposit,
-    recordPayment,
-    issueRefund,
     sendPaymentReminder,
     updateProposalDraft,
     updateProposalLineItem,
@@ -1361,9 +1237,6 @@ export default function BookingsTable({
   const cardActions = useMemo<BookingCardActions>(() => ({
     toggleCardPanel: (...args) => cardActionsRef.current!.toggleCardPanel(...args),
     updatePaymentDraft: (...args) => cardActionsRef.current!.updatePaymentDraft(...args),
-    requestDeposit: (...args) => cardActionsRef.current!.requestDeposit(...args),
-    recordPayment: (...args) => cardActionsRef.current!.recordPayment(...args),
-    issueRefund: (...args) => cardActionsRef.current!.issueRefund(...args),
     sendPaymentReminder: (...args) => cardActionsRef.current!.sendPaymentReminder(...args),
     updateProposalDraft: (...args) => cardActionsRef.current!.updateProposalDraft(...args),
     updateProposalLineItem: (...args) => cardActionsRef.current!.updateProposalLineItem(...args),
