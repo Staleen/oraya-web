@@ -69,8 +69,8 @@ Everything downstream is built and waiting: M2 notifies from the webhook, W3 aut
 
 - Merge `claude/phase-16b-refund-selfreconcile`. Depends on W0.3 to actually help; harmless without it.
 - Exercise M1 once for real: a card authorization that never settles must offer **Void**, never Refund, and record a reversal that is not a refund anywhere in the ledger or UI.
-- **The legacy admin "record payment" path bypasses the ledger's deduplication.** It wrote the duplicate `$240` on 2026-08-11 with a `legacy-…` idempotency key and no `payment_request_id`. Route it through the ledger RPCs or remove it.
-- **Acceptance:** no path can record money twice against one booking without an explicit override.
+- ~~**The legacy admin "record payment" path bypasses the ledger's deduplication.**~~ **CLOSED 2026-08-12 by removal.** `PATCH /api/admin/bookings/[id]` now refuses every money-bearing field with `money_path_closed`, and the admin console's Request deposit / Record payment / Record manual refund controls are gone. Ops → Payments already recorded money through the ledger RPCs with an idempotency key and a compare-and-set, so the legacy writer was taken away rather than re-plumbed. Stored history untouched. See DECISIONS_LOG 2026-08-12 and KNOWN_BUGS #23.
+- **Acceptance:** no path can record money twice against one booking without an explicit override. **Met for the admin path.** The remaining writers are the ledger RPCs (deduplicated) and the provider completion/webhook paths (attempt-claimed).
 
 ### W3 — Instant booking
 

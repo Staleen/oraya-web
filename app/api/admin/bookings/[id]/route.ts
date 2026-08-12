@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminAuth } from "@/lib/admin-auth";
+import {
+  ADMIN_MONEY_REJECTION_MESSAGE,
+  findAdminMoneyFields,
+} from "@/lib/admin/money-field-guard";
 // Remediation 2.4: shared service-role client (carries the Data-Cache
 // no-store workaround) instead of a route-local createClient.
 import { supabaseAdmin } from "@/lib/supabase-admin";
@@ -96,6 +100,24 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
   const proposalUpdateProvided = proposalFieldNames.some((field) =>
     Object.prototype.hasOwnProperty.call(payload, field)
   );
+
+  // Phase 16B W2: this route may no longer record money. It wrote booking money
+  // columns directly — no payment_transactions row, no idempotency key, no RPC —
+  // which is how the duplicate $240 receipt on 53896156 happened (2026-08-11).
+  // Ops → Payments records through the ledger RPCs with deduplication. Refused
+  // before anything is read or written, so a payload never lands half-applied.
+  // Stored history is untouched; this is only about new writes.
+  const attemptedMoneyFields = findAdminMoneyFields(payload);
+  if (attemptedMoneyFields.length > 0) {
+    console.warn("[api/admin/bookings] refused a money-bearing PATCH (W2)", {
+      booking_id: bookingId,
+      fields: attemptedMoneyFields,
+    });
+    return NextResponse.json(
+      { error: ADMIN_MONEY_REJECTION_MESSAGE, fields: attemptedMoneyFields, code: "money_path_closed" },
+      { status: 400 },
+    );
+  }
 
   if (!statusUpdateProvided && !paymentUpdateProvided && !proposalUpdateProvided && !reminderRequested && !proposalSendRequested) {
     return NextResponse.json({ error: "No booking updates provided." }, { status: 400 });

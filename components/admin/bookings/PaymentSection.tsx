@@ -1,7 +1,7 @@
 "use client";
 import { memo } from "react";
 import type { Booking } from "../types";
-import { BORDER, fieldStyle, GOLD, LATO, MIDNIGHT, MUTED, WHITE } from "../theme";
+import { BORDER, GOLD, LATO, MIDNIGHT, MUTED, WHITE } from "../theme";
 import {
   computeDefaultPaymentPanelOpen,
   formatAdvisoryLabel,
@@ -15,7 +15,6 @@ import {
   renderRevenueEstimateRow,
   type PaymentDraft,
 } from "./helpers";
-import { buildInitialPaymentDraftFromBooking } from "./drafts";
 import type { BookingCardActions } from "./actions";
 import {
   computeFoundationAmountDue,
@@ -37,14 +36,14 @@ export type ActivePaymentAction = string | null;
  */
 function PaymentSectionImpl({
   booking,
-  draftSlice,
   activePaymentAction,
   panelOpenStored,
   isMobile,
   actions,
 }: {
   booking: Booking;
-  draftSlice: PaymentDraft | undefined;
+  /** Retained for prop compatibility; money drafts moved to Ops → Payments. */
+  draftSlice?: PaymentDraft | undefined;
   activePaymentAction: ActivePaymentAction;
   panelOpenStored: boolean | undefined;
   isMobile: boolean;
@@ -64,7 +63,6 @@ function PaymentSectionImpl({
       booking.payment_status === "paid_in_full");
   if (booking.status !== "confirmed" && !cancelledWithMoney) return null;
 
-  const draft = draftSlice ?? buildInitialPaymentDraftFromBooking(booking);
   const paymentStatus = getPaymentStatus(booking);
   const overdue = booking.status === "confirmed" && isPaymentOverdue(booking);
   const paymentTone = getPaymentStatusStyle(paymentStatus, overdue);
@@ -73,9 +71,6 @@ function PaymentSectionImpl({
   const receivedAt = formatDateTimeValue(booking.payment_received_at);
   const dueAt = formatDateTimeValue(booking.payment_due_at);
   const refundedAt = formatDateTimeValue(booking.refunded_at);
-  const isRequesting = activePaymentAction === "request-deposit";
-  const isRecording = activePaymentAction === "record-payment";
-  const isRefunding = activePaymentAction === "issue-refund";
   const isReminderSending = activePaymentAction === "send-reminder";
 
   const foundationStoredTotal =
@@ -292,10 +287,36 @@ function PaymentSectionImpl({
 
       {cancelledWithMoney && (
         <p style={{ fontFamily: LATO, fontSize: "11px", color: "#e2ab5a", margin: 0, lineHeight: 1.55 }}>
-          Cancelled booking with recorded guest money — execute the refund in the NetCommerce Business Center, then
-          record it below (see REFUND_RUNBOOK).
+          Cancelled booking with recorded guest money — the refund is recorded in Ops → Payments
+          (see REFUND_RUNBOOK).
         </p>
       )}
+
+      {/*
+        Phase 16B W2: recording money moved to Ops → Payments. This console wrote
+        booking money columns directly — no ledger row, no idempotency key — which
+        is how a duplicate receipt was written on 2026-08-11. The summaries above
+        stay: history is readable here, it just is not writable here.
+      */}
+      <div
+        style={{
+          border: `0.5px solid ${BORDER}`,
+          backgroundColor: "rgba(255,255,255,0.02)",
+          padding: "12px",
+          borderRadius: "8px",
+          display: "grid",
+          gap: "8px",
+        }}
+      >
+        <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: WHITE, margin: 0 }}>
+          Money is recorded in Ops
+        </p>
+        <p style={{ fontFamily: LATO, fontSize: "11px", color: MUTED, margin: 0, lineHeight: 1.55 }}>
+          Requesting a deposit, recording a payment and recording a refund all live in{" "}
+          <a href="/ops/payments" style={{ color: GOLD, textDecoration: "underline" }}>Ops → Payments</a>,
+          which writes through the payment ledger so the same payment cannot be counted twice.
+        </p>
+      </div>
 
       <div
         style={{
@@ -304,200 +325,6 @@ function PaymentSectionImpl({
           gap: "12px",
         }}
       >
-        {booking.status === "confirmed" && (
-        <>
-        <div
-          style={{
-            border: `0.5px solid ${BORDER}`,
-            backgroundColor: "rgba(255,255,255,0.02)",
-            padding: "12px",
-            borderRadius: "8px",
-            display: "grid",
-            gap: "10px",
-          }}
-        >
-          <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: WHITE, margin: 0 }}>
-            Request deposit
-          </p>
-          <input
-            value={draft.depositAmount}
-            onChange={(event) => actions.updatePaymentDraft(booking.id, { depositAmount: event.target.value })}
-            placeholder="Deposit amount"
-            inputMode="decimal"
-            style={fieldStyle}
-          />
-          <select
-            value={draft.paymentMethod}
-            onChange={(event) => actions.updatePaymentDraft(booking.id, { paymentMethod: event.target.value })}
-            style={{ ...fieldStyle, cursor: "pointer" }}
-          >
-            <option value="whish" style={{ backgroundColor: MIDNIGHT }}>Whish</option>
-            <option value="cash" style={{ backgroundColor: MIDNIGHT }}>Cash</option>
-            <option value="bank_transfer" style={{ backgroundColor: MIDNIGHT }}>Bank transfer</option>
-            <option value="card_manual" style={{ backgroundColor: MIDNIGHT }}>Card manual</option>
-            <option value="other" style={{ backgroundColor: MIDNIGHT }}>Other</option>
-          </select>
-          <input
-            type="datetime-local"
-            value={draft.dueAt}
-            onChange={(event) => actions.updatePaymentDraft(booking.id, { dueAt: event.target.value })}
-            style={fieldStyle}
-          />
-          <textarea
-            value={draft.requestNote}
-            onChange={(event) => actions.updatePaymentDraft(booking.id, { requestNote: event.target.value })}
-            placeholder="Optional note"
-            rows={3}
-            style={{ ...fieldStyle, resize: "vertical" }}
-          />
-          <button
-            type="button"
-            onClick={() => actions.requestDeposit(booking)}
-            disabled={isRequesting}
-            style={{
-              fontFamily: LATO,
-              fontSize: "10px",
-              letterSpacing: "1.5px",
-              textTransform: "uppercase",
-              color: MIDNIGHT,
-              backgroundColor: GOLD,
-              border: "none",
-              padding: "12px 14px",
-              borderRadius: "6px",
-              cursor: isRequesting ? "not-allowed" : "pointer",
-              opacity: isRequesting ? 0.7 : 1,
-            }}
-          >
-            {isRequesting ? "Saving..." : "Request deposit"}
-          </button>
-        </div>
-
-        <div
-          style={{
-            border: `0.5px solid ${BORDER}`,
-            backgroundColor: "rgba(255,255,255,0.02)",
-            padding: "12px",
-            borderRadius: "8px",
-            display: "grid",
-            gap: "10px",
-          }}
-        >
-          <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: WHITE, margin: 0 }}>
-            Record payment
-          </p>
-          <select
-            value={draft.paymentMethod}
-            onChange={(event) => actions.updatePaymentDraft(booking.id, { paymentMethod: event.target.value })}
-            style={{ ...fieldStyle, cursor: "pointer" }}
-          >
-            <option value="cash" style={{ backgroundColor: MIDNIGHT }}>Cash</option>
-            <option value="bank_transfer" style={{ backgroundColor: MIDNIGHT }}>Bank</option>
-            <option value="other" style={{ backgroundColor: MIDNIGHT }}>Other</option>
-            <option value="whish" style={{ backgroundColor: MIDNIGHT }}>Whish</option>
-            <option value="card_manual" style={{ backgroundColor: MIDNIGHT }}>Card manual</option>
-          </select>
-          <input
-            value={draft.paymentAmount}
-            onChange={(event) => actions.updatePaymentDraft(booking.id, { paymentAmount: event.target.value })}
-            placeholder="Add payment amount"
-            inputMode="decimal"
-            style={fieldStyle}
-          />
-          <input
-            value={draft.paymentReference}
-            onChange={(event) => actions.updatePaymentDraft(booking.id, { paymentReference: event.target.value })}
-            placeholder="Reference"
-            style={fieldStyle}
-          />
-          <textarea
-            value={draft.paymentNotes}
-            onChange={(event) => actions.updatePaymentDraft(booking.id, { paymentNotes: event.target.value })}
-            placeholder="Payment note"
-            rows={3}
-            style={{ ...fieldStyle, resize: "vertical" }}
-          />
-          <button
-            type="button"
-            onClick={() => actions.recordPayment(booking)}
-            disabled={isRecording}
-            style={{
-              fontFamily: LATO,
-              fontSize: "10px",
-              letterSpacing: "1.5px",
-              textTransform: "uppercase",
-              color: WHITE,
-              backgroundColor: "rgba(111,207,138,0.18)",
-              border: "0.5px solid rgba(111,207,138,0.34)",
-              padding: "12px 14px",
-              borderRadius: "6px",
-              cursor: isRecording ? "not-allowed" : "pointer",
-              opacity: isRecording ? 0.7 : 1,
-            }}
-          >
-            {isRecording ? "Saving..." : "Record payment"}
-          </button>
-        </div>
-        </>
-        )}
-
-        <div
-          style={{
-            border: `0.5px solid ${BORDER}`,
-            backgroundColor: "rgba(255,255,255,0.02)",
-            padding: "12px",
-            borderRadius: "8px",
-            display: "grid",
-            gap: "10px",
-          }}
-        >
-          <p style={{ fontFamily: LATO, fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: WHITE, margin: 0 }}>
-            Record manual refund
-          </p>
-          <p style={{ fontFamily: LATO, fontSize: "10px", color: MUTED, margin: 0, lineHeight: 1.45 }}>
-            Execute the refund in the NetCommerce Business Center first — this only records it. The Business Center refund reference is required.
-          </p>
-          <input
-            value={draft.refundAmount}
-            onChange={(event) => actions.updatePaymentDraft(booking.id, { refundAmount: event.target.value })}
-            placeholder="Refund amount"
-            inputMode="decimal"
-            style={fieldStyle}
-          />
-          <input
-            value={draft.refundReference}
-            onChange={(event) => actions.updatePaymentDraft(booking.id, { refundReference: event.target.value })}
-            placeholder="Business Center refund reference (required)"
-            style={fieldStyle}
-          />
-          <textarea
-            value={draft.refundNote}
-            onChange={(event) => actions.updatePaymentDraft(booking.id, { refundNote: event.target.value })}
-            placeholder="Refund note"
-            rows={3}
-            style={{ ...fieldStyle, resize: "vertical" }}
-          />
-          <button
-            type="button"
-            onClick={() => actions.issueRefund(booking)}
-            disabled={isRefunding}
-            style={{
-              fontFamily: LATO,
-              fontSize: "10px",
-              letterSpacing: "1.5px",
-              textTransform: "uppercase",
-              color: WHITE,
-              backgroundColor: "rgba(224,112,112,0.14)",
-              border: "0.5px solid rgba(224,112,112,0.32)",
-              padding: "12px 14px",
-              borderRadius: "6px",
-              cursor: isRefunding ? "not-allowed" : "pointer",
-              opacity: isRefunding ? 0.7 : 1,
-            }}
-          >
-            {isRefunding ? "Saving..." : "Record manual refund"}
-          </button>
-        </div>
-
         {booking.status === "confirmed" && (
         <div
           style={{

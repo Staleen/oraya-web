@@ -2507,3 +2507,57 @@ false until capture is deferred and the path is walked. See
 [REFUND_RUNBOOK.md](REFUND_RUNBOOK.md) "Void (authorization reversal)".
 
 **Reversible?:** n/a — this entry records evidence, not a code change.
+
+---
+
+## 2026-08-12 - The legacy admin console can no longer record money
+
+**Decision:** `PATCH /api/admin/bookings/[id]` refuses every money-bearing field
+with HTTP 400 and `code: "money_path_closed"`, and the admin booking console's
+**Request deposit**, **Record payment** and **Record manual refund** controls are
+removed. Money is recorded in Ops → Payments. This closes W2's last open item.
+
+**Removal, not re-plumbing.** The mission offered "route it through the ledger
+RPCs or remove it". Removal won because Ops already does the job properly and
+teaching a second surface to write money correctly is more risk than taking the
+ability away. The audit found an Ops equivalent for all three controls:
+
+| Admin control | Fields it wrote | Ops equivalent |
+|---|---|---|
+| Request deposit | `deposit_amount`, `payment_method`, `payment_notes`, `payment_status` | `request_deposit` |
+| Record payment | `amount_paid`, `amount_total`, `amount_due`, `payment_status`, `payment_method`, `payment_notes`, `payment_received_at` | `record_payment` → `oraya_record_manual_payment`, idempotency key + expected-balance compare-and-set |
+| Record manual refund | `refund_status`, `refund_amount`, `refund_provider_reference`, `payment_notes` | `record_refund` → compare-and-set on `refund_amount`, Business Center reference required |
+
+The Ops refund recorder is **stricter** than the one removed: admin had no
+concurrency guard at all, Ops returns 409 if someone else recorded a refund
+while you were typing. So this closes a path without losing a capability.
+
+**Reason:** the admin route wrote booking money columns directly — no
+`payment_transactions` row, no idempotency key, no RPC, no deduplication. On
+2026-08-11 it wrote a duplicate `$240` receipt on booking 53896156 with a
+`legacy-…` key and no `payment_request_id`. W2's acceptance is that no path can
+record money twice against one booking without an explicit override; while this
+route existed, that was false by construction.
+
+**Refused before anything is read or written**, so a rejected payload can never
+land half-applied. Presence is what counts, not value: `amount_paid: null` is
+still an attempt to write the money column.
+
+**Impact:** new pure [lib/admin/money-field-guard.ts](../../lib/admin/money-field-guard.ts)
+(+ tests) holding the field list and the rule; the guard called at the top of the
+admin PATCH; the three cards replaced in
+[PaymentSection.tsx](../../components/admin/bookings/PaymentSection.tsx) by a
+pointer to Ops → Payments; the three handlers and their card-actions contract
+entries deleted, so no admin code composes a money payload any more.
+[REFUND_RUNBOOK.md](REFUND_RUNBOOK.md) rewritten for the new location.
+
+**What did NOT change:** status (confirm/cancel), event proposal fields, the
+payment reminder, add-on approval, feedback and arrival-link actions all keep
+working exactly as before, each pinned by a test. **No stored history was
+altered** — every booking money column and every ledger row is untouched, and
+admin still *displays* recorded payments and refunds. Only writing is closed.
+
+**Note on scope:** `/admin` is still a live surface. `OPS_MIGRATION_PLAN.md`
+deletes it in Batch 9; this is not that. It removes one capability from it.
+
+**Reversible?:** yes, but reverting reopens the double-count path.
