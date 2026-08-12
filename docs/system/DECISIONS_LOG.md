@@ -2212,6 +2212,49 @@ Without a backstop, a guest who closes the tab after 3DS leaves money taken and 
 
 ---
 
+## 2026-08-12 - Payment is Step 4 of the guest's own flow, and it knows their name
+
+**Decision:** the guest-facing payment surfaces render in `/book`'s visual
+system — the shared `--oraya-book-*` tokens, a centred 560px column, the 160px
+wordmark, a Playfair 2rem heading, the step rail, bordered card sections on a
+20px rhythm — instead of each carrying its own shell. And the payer on a
+booking-linked payment request is resolved through the shared
+`resolveBookingRecipient` helper, not read straight off `bookings.guest_name`.
+
+**Reason (name):** `/book` deliberately sends **no** guest fields when someone
+is signed in — the member record is the identity — so `bookings.guest_name` is
+NULL on every member booking, by design and confirmed in the
+`/api/bookings` insert (`member_id ? guest_name : normGuestName`). Reading that
+column alone printed **"Oraya guest"** on the page where a guest types a card
+number, two screens after `/book` had greeted them by name. This is the same
+defect Ops hit on 2026-08-12 ("Member bookings displayed as Guest"), and it
+takes the same answer: resolve at read time. Back-filling the booking row was
+rejected — it would need the locked booking pipeline (or `/book` itself), and
+it would still leave every booking already in the database wrong.
+
+**Reason (layout):** the brand fix earlier the same day corrected the palette
+but not the shell. The site's default theme is **light** (`app/layout.tsx`
+falls back to `light`), so a guest walked out of a beige, centred, 560px Step 3
+into a hardcoded-midnight, left-aligned, 760px Step 4 — two applications, at
+the moment trust matters most. `/pay/[token]` was worse: a rounded white card
+in a near-miss palette (#9b7744 for gold, Tailwind's #6b7280 for grey). Both
+now follow the guest's theme because they use the same tokens `/book` uses.
+
+**Not changed:** nothing about what these pages do. No provider call, capture
+context, transient token, readiness gate, redirect, cancel URL or message text
+was touched; the step rail keeps its existing "Step 4 of 4 · Payment" wording
+and its existing booking-only visibility rule. The acquirer's seal stays and
+the acquirer's name stays absent.
+
+**Known residual:** a payment request created *before* this change keeps the
+`payer_name` it was stored with. Rows are not rewritten — that is recorded
+money-surface data and a correction is David's call.
+
+**Reversible?:** yes, entirely — the payer name reverts to the booking column
+and the pages revert to their own shells.
+
+---
+
 ## 2026-08-12 - Oraya detects money voided directly in Business Center
 
 **Decision:** a second reconciliation pass (`runProviderDriftSweep`) re-checks recently recorded card payments against CyberSource. When the provider reports the authorization as voided or reversed and Oraya still counts the money, it appends a **compensating reversal** through the same claim-before-provider RPCs the manual void uses. It runs from the scheduled job and whenever an operator opens the payments desk.
