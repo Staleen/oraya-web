@@ -2212,6 +2212,108 @@ Without a backstop, a guest who closes the tab after 3DS leaves money taken and 
 
 ---
 
+## 2026-08-12 - A click on a day never moves the calendar
+
+**Decision:** in `/book`, the month the calendar displays changes for exactly two
+reasons — the guest navigated it themselves, or dates arrived programmatically
+from the WhatsApp Butler handoff. **Clicking a day is not one of them.** The rule
+and its tests live in
+[lib/booking/calendar-month-anchor.ts](../../lib/booking/calendar-month-anchor.ts),
+and the click path routes through it rather than simply omitting the call, so
+re-introducing a shift has to argue with a test first.
+
+**Reason:** the calendar re-anchored to the check-in month *after* accepting the
+first click, which is the one moment it must not move. A guest looking at
+August | September who clicked 21 Sep in the right pane had the panes redrawn as
+September | October underneath them; the second click, aimed at the same place on
+screen, landed a month later. Live, 2026-08-12: **19 Oct instead of 22 Sep, 29
+nights instead of 1, $7,380 instead of $270**, announced nowhere but a summary
+line. A day the guest can click is a day already on screen, so there was never
+anything to bring into view — the re-anchor was pure harm. Prefilled dates are
+different: they arrive before any range exists, so they cannot fall between two
+clicks.
+
+**Impact:** `calendarMonth` is the single answer to "which month is shown". The
+`useEffect` on `dateRange?.from` and the derived `displayedCalendarMonth`
+override are gone, and with them `calendarMonthUserNavigated`, which existed only
+to feed that override. Butler prefill is unaffected — it already set the month
+explicitly before setting the range. Verified live at 1280px and 390px: clicking
+21 Sep leaves all 71 day cells on their existing dates.
+
+**Proposed and deliberately NOT built:** confirming an unusually long range
+before accepting it. A confirm step changes what a guest can select and would
+have to handle "confirmed, now re-open the calendar", which is not a small diff
+on a live booking surface — and with the re-anchor fixed, the cause of accidental
+29-night stays is gone. What shipped instead is display-only: at 14 nights or
+more the strip says "That is a long stay — 21 nights, 2 Sep 2026 to 23 Sep 2026.
+Please check the dates before continuing." Nothing is blocked. If the owner wants
+the guard, it is its own task.
+
+**Reversible?:** yes — restoring either re-anchor restores the defect, which is
+what the tests are for.
+
+---
+
+## 2026-08-12 - Cancelling a payment returns the guest to their booking
+
+**Decision:** "Cancel payment" on the checkout step goes to the **booking** when
+the payment belongs to one — including an operator-sent payment link — and keeps
+today's `/pay` destination only for a standalone request that has no booking. The
+booking-view URL is minted as a success URL, so the return state is rewritten
+from `payment=success` to `payment=cancelled` before the guest is sent there.
+
+**Reason:** a booking-linked operator link cancelled to `/pay/{token}`, whose only
+control is "Open secure checkout". Cancel and open-checkout were the two exits and
+neither one left. The booking already exists by that point — it is a pending
+request the guest can pay later — so the booking is the honest destination. The
+query rewrite is the load-bearing part: sending a guest who has just cancelled to
+a page that announces "Payment received" would be a worse defect than the dead
+end it replaces. The booking view already renders the cancelled state honestly
+("Payment was not completed. No payment has been collected yet.").
+
+**Impact:** one client-side helper in
+[app/payments/checkout/[token]/page.tsx](../../app/payments/checkout/%5Btoken%5D/page.tsx).
+No session route, provider call, capture context, attempt or ledger row is
+touched, and **no money state is read or written** — this changes a link. Booking
+checkouts are unaffected in practice: their existing cancel URL and the rewritten
+booking-view URL are the same address.
+
+**Reversible?:** yes — drop the helper and pass `cancel_url` straight through.
+
+---
+
+## 2026-08-12 - `bookings.message` is not the guest's words
+
+**Decision:** every guest-facing render of `bookings.message` goes through
+[lib/guest-visible-note.ts](../../lib/guest-visible-note.ts), which returns what
+the guest typed or `null` — and callers omit the section entirely on `null`. The
+module CONSUMES `parseStaySetupMessage` from `lib/ops-booking-display.ts` and does
+not modify it: that parser is load-bearing for instant confirmation.
+
+**Reason:** the column is a machine-composed block that *contains* the guest's
+words on one line. Rendered raw, the cancellation email posted Oraya's own system
+description back to the guest — "[Booking Protocol] System branch: Hosted checkout
+after booking creation / Supported online protocol targets: card/debit card, Apple
+Pay, Google Pay when enabled by the hosted provider" — and printed "Guest Notes:
+None" to guests who had written nothing at all. The separation already existed for
+Ops; it had simply never been applied to anything the guest reads.
+
+**Impact:** [lib/send-booking-email.ts](../../lib/send-booking-email.ts) (HTML and
+plain-text bodies). Fixed in the sender rather than at the call site so that
+`/api/booking-action`, which is locked, is covered too;
+`lib/booking-guest-dispatch.ts` needed no change and was verified rather than
+edited.
+
+**Not fixed here — same defect, outside the task's scope:**
+`lib/send-booking-pending-email.ts` (the receipt sent on **every** booking
+creation) and `app/booking/view/[token]/page.tsx:1222`, which renders the machine
+block under the heading "Your note". Both are one-line calls to the new module.
+Tracked as [KNOWN_BUGS.md](KNOWN_BUGS.md) #26.
+
+**Reversible?:** yes, but reverting re-sends internal text to guests.
+
+---
+
 ## 2026-08-12 - Payment is Step 4 of the guest's own flow, and it knows their name
 
 **Decision:** the guest-facing payment surfaces render in `/book`'s visual
