@@ -2383,3 +2383,84 @@ new dependency, no edit to either half being joined.
 
 **Reversible?:** yes — the orchestration is one call at the end of the decline
 branch; removing it restores manual refunds with the stay still cancelled.
+
+---
+
+## 2026-08-12 - An auto-generated Stay Setup summary is not a special request
+
+**Decision:** the instant-confirm special-request gate reads the guest's own
+words out of the machine `[Stay Setup]` block instead of treating the whole
+`bookings.message` column as guest text. Only text the guest actually typed
+forces operator review. Anything that is **not** a recognised Stay Setup block
+still counts as a special request — unknown means a person looks.
+
+**Reason:** instant auto-confirm had never fired for any booking, ever. Every
+`/book` submission composes a machine summary into `message` (`[Stay Setup]`,
+bedrooms, estimated guests, sleeping setup, `Guest Notes: …`, and a
+`[Booking Protocol]` system section on the request path), so the column is never
+empty. `hasSpecialRequest` returned true for **every booking that has ever
+existed**, and the feature was unreachable by construction. Verified live
+2026-08-12: all 7 bookings in the database carry a Stay Setup block; six read
+`Guest Notes: None`, one reads `Guest Notes: Decorate room`.
+
+**How the two are separated:** by reusing `parseStaySetupMessage`
+([lib/ops-booking-display.ts](../../lib/ops-booking-display.ts)) — the parser
+/ops already renders with, which extracts `guestNotes`, treats `None` /
+`Not specified…` as absent, and drops bracketed system sections. Reused rather
+than redefined, so the block format has exactly one definition. Both real
+production messages were replayed through the decision as proof: the paid
+notes-free booking returns `{confirm:true}`, the booking whose guest typed a
+three-line request returns `has_special_request`.
+
+**What did NOT change:** add-ons, event inquiries, not-paid-in-full, unknown
+total, past stays, the per-villa flag, the master switch, the payment-time
+availability re-check and the row-count-verified conditional update are all
+untouched, and a test pins each of them against a clean Stay Setup block.
+
+**Refuted while auditing:** the suspected second defect — a completion route that
+never calls the decision — is not real. Both
+`app/api/payments/unified-checkout-complete` and
+`app/api/payments/requests/unified-checkout-complete` already call
+`maybeInstantConfirmBooking`. The owner's payment-link booking reached the
+decision and was rejected by this gate, like every other booking.
+
+**Known limitation, deliberately not fixed:** `meaningful()` in the shared
+parser also treats a note beginning "Not specified" as absent. A guest typing
+"Not specified yet, will call" would auto-confirm. Changing that helper would
+alter what /ops renders, which is outside this scope.
+
+**Reversible?:** yes — restoring the old one-line check re-disables instant
+booking entirely.
+
+---
+
+## 2026-08-12 - Decline-refund proven on real cards; the requires_void branch is currently unreachable
+
+**Decision:** record the live verification of the decline-refund wiring
+(PR #156) and the capture-mode consequence that follows from it.
+
+**Verified on real cards, 2026-08-12.** Both decline branches returned money:
+
+- **Pending-request decline** — refunded, with its own CyberSource credit
+  reference and its own deterministic `oraya-dcl-…` merchant reference.
+- **Confirmed-stay cancel** — same, with a separate credit reference and a
+  separate `oraya-dcl-…` reference.
+
+Two distinct references on two distinct branches is the evidence that the
+per-charge, per-booking key derivation behaves as designed under real provider
+conditions, not just in tests.
+
+**Consequence for `requires_void`.** `capture_immediately` captures at
+authorization, so Authorization and Settlement both return Success on the same
+request. There is therefore no window in which an authorization exists
+un-captured, and **the `requires_void` branch of `executeCardRefund` is
+unreachable in production today**. It becomes reachable only if the money option
+is switched to hold-and-capture-later.
+
+**Impact:** the branch stays implemented and tested — it is correct, and the
+switch is an operator setting that can change at any time — but it must not be
+treated as exercised. Any claim that void handling is proven in production is
+false until capture is deferred and the path is walked. See
+[REFUND_RUNBOOK.md](REFUND_RUNBOOK.md) "Void (authorization reversal)".
+
+**Reversible?:** n/a — this entry records evidence, not a code change.

@@ -12,7 +12,11 @@
  * Pure decision core: no Supabase, no Next. The caller performs the
  * availability re-check and the row-count-verified conditional update, so a
  * "confirm" here is a candidate, never a completed confirmation.
+ *
+ * Relative .ts import so node:test can load this module (repo test convention).
  */
+
+import { parseStaySetupMessage } from "../ops-booking-display.ts";
 
 export const INSTANT_AUTO_CONFIRM_SETTING_KEY = "instant_booking_auto_confirm";
 
@@ -53,8 +57,34 @@ function hasAddons(snapshot: unknown): boolean {
   return Array.isArray(snapshot) && snapshot.length > 0;
 }
 
+/**
+ * Does the guest actually want something from a person?
+ *
+ * `bookings.message` is NOT the guest's words. Every /book submission composes
+ * a machine "[Stay Setup]" block (bedrooms, estimated guests, sleeping setup,
+ * "Guest Notes: …", and a "[Booking Protocol]" system section), so the column
+ * is never empty. Treating any non-empty message as a special request made
+ * instant confirmation unreachable by construction: verified 2026-08-12, every
+ * booking that has ever existed carries a Stay Setup block, and the feature had
+ * never fired once.
+ *
+ * The guest's own text is the "Guest Notes:" value, which reads "None" when
+ * they wrote nothing. `parseStaySetupMessage` already separates exactly that
+ * (it is what /ops renders), so this reuses it rather than defining the format
+ * a second time.
+ *
+ * Fails closed. A message that is NOT a recognised Stay Setup block is unknown
+ * text — a legacy row, another intake path, or a shape that changed — and
+ * unknown means a person looks at it.
+ */
 function hasSpecialRequest(message: string | null): boolean {
-  return typeof message === "string" && message.trim().length > 0;
+  if (typeof message !== "string" || message.trim().length === 0) return false;
+
+  const staySetup = parseStaySetupMessage(message);
+  // Not a Stay Setup block: unrecognised text stays a special request.
+  if (!staySetup) return true;
+
+  return staySetup.guestNotes !== null;
 }
 
 function isEventInquiry(booking: InstantConfirmBooking): boolean {
