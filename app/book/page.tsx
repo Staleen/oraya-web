@@ -9,6 +9,7 @@ import { getVillaBasePrice, getVillaEntryPrice, getVillaPricing } from "@/lib/ad
 import { buildBookedRangeList, normalizeSelectedRange, createStayCalendarRules } from "@/lib/booking/calendar-validity";
 import { fmtDate, formatUsd, nightCount, toISO } from "@/lib/guest-format";
 import { EMAIL_RE } from "@/lib/guest-validation";
+import { checkPhoneNumber, normalisePhoneInput, phonePlaceholder } from "@/lib/booking/phone-rules";
 import {
   nextBedroomCountAfterPrefill,
   nextFullNameAfterPrefill,
@@ -1456,6 +1457,15 @@ function BookPageInner() {
   const estimatedTotal = (staySubtotal ?? 0) + selectedAddonSubtotal;
   const guestEmail = guest.email.trim();
   const guestEmailInvalid = guestMode && guestEmail.length > 0 && !EMAIL_RE.test(guestEmail);
+  // Shown while typing, but only once there is something to judge — nagging a
+  // guest who has entered two digits so far is noise, not help.
+  const guestPhoneProblem = useMemo(() => {
+    if (!guestMode) return null;
+    const raw = guest.phoneNumber.trim();
+    if (raw.length < 4) return null;
+    const check = checkPhoneNumber(guest.dialCode, raw);
+    return check.ok ? null : check.message;
+  }, [guestMode, guest.dialCode, guest.phoneNumber]);
   const addonGroupMap = new Map<string, Addon[]>();
   for (const addon of availableAddons) {
     const category = normalizeAddonCategory(addon.category);
@@ -1894,6 +1904,16 @@ function BookPageInner() {
           focusGuestFieldAfterScroll(guestEmailInputRef.current);
           throw new Error("Please enter a valid email address.");
         }
+        // A wrong number is not cosmetic: for a guest who leaves no email it
+        // is the only way Oraya can reach them, and the booking would arrive
+        // uncontactable.
+        if (phoneT) {
+          const phoneCheck = checkPhoneNumber(guest.dialCode, phoneT);
+          if (!phoneCheck.ok) {
+            focusGuestFieldAfterScroll(guestPhoneInputRef.current);
+            throw new Error(phoneCheck.message);
+          }
+        }
       }
 
       const { data: { user }, error: authErr } = await supabase.auth.getUser();
@@ -1983,9 +2003,12 @@ function BookPageInner() {
         body.member_id = user.id;
       } else {
         const phoneT = guest.phoneNumber.trim();
+        // Normalised, so a pasted "+961 03 …" or "0096103…" is stored once, in
+        // one shape, and WhatsApp can actually dial it.
+        const nationalPhone = phoneT ? normalisePhoneInput(guest.dialCode, phoneT) : "";
         body.guest_name    = guest.fullName.trim();
         body.guest_email   = guest.email.trim() || null;
-        body.guest_phone   = phoneT ? `${guest.dialCode}${phoneT}` : null;
+        body.guest_phone   = nationalPhone ? `${guest.dialCode}${nationalPhone}` : null;
         body.guest_country = guest.country || null;
       }
       const butlerPrefillToken = readStoredButlerPrefillToken();
@@ -3356,9 +3379,16 @@ function BookPageInner() {
                   <div>
                     <label style={labelStyle} htmlFor="book-guest-phone">WhatsApp / phone number</label>
                     <div style={{ display: "flex" }}>
+                      {/*
+                        The dial code is a chip, not half the field. It used to
+                        carry minWidth:120px, which on a phone left the actual
+                        number a sliver — the important input was the smallest
+                        thing on screen (reported 2026-08-12). It only ever has
+                        to show a flag and up to four digits.
+                      */}
                       <select aria-label="Country dial code" name="dialCode" value={guest.dialCode} onChange={handleGuestChange}
                         onFocus={focusGold} onBlur={blurGold}
-                        style={{ ...inputStyle, width: "auto", flexShrink: 0, paddingRight: "10px", borderRight: "none", cursor: "pointer", minWidth: "120px" }}>
+                        style={{ ...inputStyle, width: "auto", flexShrink: 0, paddingLeft: "10px", paddingRight: "6px", borderRight: "none", cursor: "pointer", maxWidth: "104px" }}>
                         {DIAL_CODES.map((d, i) =>
                           d.code === "" ? (
                             <option key={`div-${i}`} disabled value="" style={{ backgroundColor: OPT_BG, color: MUTED }}>{d.label}</option>
@@ -3367,9 +3397,18 @@ function BookPageInner() {
                           )
                         )}
                       </select>
-                      <input id="book-guest-phone" ref={guestPhoneInputRef} name="phoneNumber" type="tel" value={guest.phoneNumber} onChange={handleGuestChange}
-                        placeholder="70 000 000" style={{ ...inputStyle, flex: 1 }} onFocus={focusGold} onBlur={blurGold} />
+                      <input id="book-guest-phone" ref={guestPhoneInputRef} name="phoneNumber" type="tel"
+                        inputMode="numeric" autoComplete="tel-national"
+                        value={guest.phoneNumber} onChange={handleGuestChange}
+                        placeholder={phonePlaceholder(guest.dialCode)}
+                        aria-invalid={guestPhoneProblem ? true : undefined}
+                        style={{ ...inputStyle, flex: 1, minWidth: 0 }} onFocus={focusGold} onBlur={blurGold} />
                     </div>
+                    {guestPhoneProblem && (
+                      <p style={{ margin: "6px 0 0", fontSize: "12px", color: GOLD, fontFamily: LATO }}>
+                        {guestPhoneProblem}
+                      </p>
+                    )}
                   </div>
 
                   <div>

@@ -96,7 +96,10 @@ export default async function PaymentRequestPage({
                 {method === "bank_transfer" && settings.bank_transfer_public_details
                   ? settings.bank_transfer_public_details
                   : method === "cash" ? "Arrange payment with the Oraya team. A receipt will be recorded against this request."
-                    : method === "card" && cardCheckoutReady ? "Pay securely through Credit Libanais / NetCommerce."
+                    // No acquirer name here. Oraya does not advertise its bank
+                    // on its own payment page — the seal inside the secure
+                    // checkout is the trust signal.
+                    : method === "card" && cardCheckoutReady ? "Card, Apple Pay and Google Pay — whichever your device supports."
                       : method === "apple_pay" && applePayReady ? "Apple Pay is available inside the secure checkout on supported Apple devices."
                       : method === "card" || method === "apple_pay" ? "Secure online checkout will appear here when the payment provider is enabled."
                       : `Contact the Oraya team to complete this payment through ${labels[method]}.`}
