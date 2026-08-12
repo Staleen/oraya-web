@@ -111,6 +111,38 @@ function isPaymentRequestSummary(
   return "description" in summary;
 }
 
+/**
+ * Where "Cancel payment" leaves the guest.
+ *
+ * A booking checkout already cancels to `/booking/view/…?payment=cancelled` —
+ * the stay, waiting, payable later. An **operator-sent link that belongs to a
+ * booking** cancelled to `/pay/…` instead, whose only control is "Open secure
+ * checkout" — so cancel and open-checkout were the two exits and neither left.
+ * The guest's booking exists by this point; the honest destination is the
+ * booking.
+ *
+ * `booking_view_url` is minted as a SUCCESS url (`?payment=success`, see
+ * lib/payments/payment-success-redirect.ts), so the return state is rewritten
+ * to `cancelled`. Sending a guest who cancelled to a page announcing "Payment
+ * received" would be a worse defect than the dead end. If that rewrite cannot
+ * be done safely for any reason, the existing cancel url is kept.
+ *
+ * A standalone payment request has no booking to return to and keeps today's
+ * behaviour. No money state is read or written here — this is a link.
+ */
+function resolveCancelDestination(payload: SessionResponse): string {
+  const cancelUrl = payload.cancel_url ?? "";
+  const preferred = payload.booking_view_url ?? payload.cancel_url;
+  if (!preferred) return cancelUrl;
+  try {
+    const url = new URL(preferred, window.location.origin);
+    url.searchParams.set("payment", "cancelled");
+    return `${url.pathname}${url.search}`;
+  } catch {
+    return cancelUrl;
+  }
+}
+
 function formatDate(value?: string) {
   if (!value) return "-";
   return value;
@@ -357,7 +389,7 @@ export default function PaymentCheckoutPage(props: {
         setState({
           status: "ready",
           bookingViewUrl,
-          cancelUrl: payload.cancel_url,
+          cancelUrl: resolveCancelDestination(payload),
         });
         await waitForCheckoutContainers();
         if (cancelled) return;

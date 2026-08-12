@@ -96,8 +96,10 @@ Every item here was hit in production on 2026-08-11:
 ### W6 — Guest experience
 
 - Merge `claude/guest-payment-ux` (self-serve pay, balance payment, honest state names).
-- **Not yet audited:** `/book` and `/pay/[token]`. Only the booking view has been walked.
-- The instant lane on `/book` advertises speed that only exists once W3 is switched on.
+- ~~**Not yet audited:** `/book` and `/pay/[token]`.~~ **AUDITED 2026-08-12** (branch `claude/guest-journey-w6`), walked as a guest at 1280px and 390px. Four defects fixed: the calendar re-anchoring between the two clicks of a range (**a money defect** — 21 Sep produced 19 Oct, $7,380 instead of $270), a button naming a screen instead of an action, cancelling payment stranding the guest on a page whose only exit reopens checkout, and the guest cancellation email posting Oraya's own `[Booking Protocol]` text back to the guest. Five further defects are reported and deliberately **not** fixed — KNOWN_BUGS #27, for the owner to prioritise. See DECISIONS_LOG 2026-08-12 (three entries) and KNOWN_BUGS #25/#26.
+- Still open from that audit, in the owner's order: villa change silently discards selected dates · an in-progress range absorbs the next click as a check-out · the instant lane's promise (below) · a failed checkout session cannot be told from a standalone payment request · an inactive payment link is a dead end with nothing to contact Oraya by.
+- Still open, same defect as the fixed email: `lib/send-booking-pending-email.ts` (sent on **every** booking creation) and `app/booking/view/[token]/page.tsx:1222` both render `bookings.message` raw — the latter under the heading "Your note". One-line calls to `lib/guest-visible-note.ts` each.
+- The instant lane on `/book` advertises speed that only exists once W3 is switched on. Confirmed live 2026-08-12: step 3 still promises "Instant confirmation available for eligible stays" while `instant_booking_auto_confirm` is off, so it is currently true for nobody.
 
 ### W7 — 3-D Secure is enabled but not authenticating
 

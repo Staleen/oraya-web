@@ -7,6 +7,7 @@ import "react-day-picker/dist/style.css";
 import OrayaLogoFull from "@/components/OrayaLogoFull";
 import { getVillaBasePrice, getVillaEntryPrice, getVillaPricing } from "@/lib/admin-pricing";
 import { buildBookedRangeList, normalizeSelectedRange, createStayCalendarRules } from "@/lib/booking/calendar-validity";
+import { nextCalendarMonth } from "@/lib/booking/calendar-month-anchor";
 import { fmtDate, formatUsd, nightCount, toISO } from "@/lib/guest-format";
 import { EMAIL_RE } from "@/lib/guest-validation";
 import { checkPhoneNumber, normalisePhoneInput, phonePlaceholder } from "@/lib/booking/phone-rules";
@@ -312,6 +313,9 @@ function parseSafeLocalISO(s: string): Date | null {
 function startOfLocalMonth(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), 1);
 }
+
+/** Nights at or above which the stay length is stated in words, not just digits. */
+const LONG_STAY_NIGHTS = 14;
 
 function readStoredButlerPrefill(): ButlerPrefillPayload | null {
   if (typeof window === "undefined") return null;
@@ -1034,11 +1038,13 @@ function BookPageInner() {
     d.setHours(0, 0, 0, 0);
     return startOfLocalMonth(d);
   });
-  const [calendarMonthUserNavigated, setCalendarMonthUserNavigated] = useState(false);
-
-  const syncCalendarMonthToSelection = useCallback((day: Date) => {
-    setCalendarMonth(startOfLocalMonth(day));
-    setCalendarMonthUserNavigated(false);
+  /**
+   * Bring a month into view for dates that arrived from OUTSIDE the calendar
+   * (the WhatsApp Butler handoff). Always called before the range is set, never
+   * between two clicks — see lib/booking/calendar-month-anchor.ts.
+   */
+  const anchorCalendarToPrefilledDates = useCallback((day: Date) => {
+    setCalendarMonth((current) => nextCalendarMonth(current, { kind: "dates_prefilled", from: day }));
   }, []);
 
   // Remediation 5.3 — decision logic lives in the pure module
@@ -1081,12 +1087,12 @@ function BookPageInner() {
         const to = parseSafeLocalISO(prefill.check_out);
         if (from && to && to > from) {
           pendingButlerDateRangeRef.current = { from, to };
-          syncCalendarMonthToSelection(from);
+          anchorCalendarToPrefilledDates(from);
           setButlerDateHydrationNonce((current) => current + 1);
         }
       }
     },
-    [syncCalendarMonthToSelection],
+    [anchorCalendarToPrefilledDates],
   );
 
   useEffect(() => {
@@ -1272,31 +1278,35 @@ function BookPageInner() {
   useEffect(() => {
     const pending = pendingButlerDateRangeRef.current;
     if (!pending?.from) return;
-    syncCalendarMonthToSelection(pending.from);
+    anchorCalendarToPrefilledDates(pending.from);
     setDateRange((current) => {
       pendingButlerDateRangeRef.current = null;
       if (current?.from || current?.to) return current;
       return pending;
     });
-  }, [form.villa, butlerDateHydrationNonce, syncCalendarMonthToSelection]);
+  }, [form.villa, butlerDateHydrationNonce, anchorCalendarToPrefilledDates]);
 
   // ── Derived values ────────────────────────────────────────────────────────
   const today = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; })();
 
   function handleCalendarMonthChange(month: Date) {
-    setCalendarMonth(startOfLocalMonth(month));
-    setCalendarMonthUserNavigated(true);
+    setCalendarMonth((current) => nextCalendarMonth(current, { kind: "user_navigated", month }));
   }
 
-  useEffect(() => {
-    if (!dateRange?.from) return;
-    syncCalendarMonthToSelection(dateRange.from);
-  }, [dateRange?.from, syncCalendarMonthToSelection]);
+  /*
+    Two mechanisms used to re-anchor the calendar to the check-in month the
+    moment a check-in was chosen — this effect, and a derived
+    `displayedCalendarMonth` that overrode `calendarMonth` whenever the guest
+    had not navigated by hand. Both fired BETWEEN the two clicks of a range: a
+    check-in picked in the right-hand pane redrew both panes a month forward,
+    and the check-out click then landed a month later than the guest aimed
+    (live 2026-08-12: 21 Sep → 19 Oct, 1 night → 29 nights, $270 → $7,380).
 
-  const displayedCalendarMonth =
-    !calendarMonthUserNavigated && dateRange?.from
-      ? startOfLocalMonth(dateRange.from)
-      : calendarMonth;
+    `calendarMonth` is now the only answer to "which month is shown", and the
+    only things that change it are the guest's own navigation and prefilled
+    dates. Both are routed through lib/booking/calendar-month-anchor.ts, which
+    holds the rule and its tests.
+  */
 
   /**
    * Remediation 5.3 — calendar validity rules now live in the pure module
@@ -1754,9 +1764,10 @@ function BookPageInner() {
     }
 
     setError("");
-    if (range?.from) {
-      syncCalendarMonthToSelection(range.from);
-    }
+    // A day the guest could click is a day already on screen, so there is
+    // nothing to bring into view. Routed through the rule rather than simply
+    // omitted, so that re-introducing a shift here has to argue with a test.
+    setCalendarMonth((current) => nextCalendarMonth(current, { kind: "day_clicked" }));
     setDateRange(range);
   }
 
@@ -2489,7 +2500,7 @@ function BookPageInner() {
                             disabled={disabledDays}
                             modifiers={{ deadCheckIn: isChoosingCheckout ? () => false : isDeadCheckInDate }}
                             modifiersClassNames={{ deadCheckIn: "rdp-day_deadCheckIn" }}
-                            month={displayedCalendarMonth}
+                            month={calendarMonth}
                             onMonthChange={handleCalendarMonthChange}
                             numberOfMonths={2}
                             startMonth={today}
@@ -2537,6 +2548,20 @@ function BookPageInner() {
                                 {nights} {nights === 1 ? "night" : "nights"}
                               </p>
                             </div>
+                            {/*
+                              A long stay is a large number, and a large number
+                              arrived at by accident looks exactly like one
+                              arrived at on purpose. State it in words rather
+                              than leaving the guest to notice the digit.
+                              Display only — nothing is blocked or changed.
+                            */}
+                            {nights >= LONG_STAY_NIGHTS && (
+                              <div style={{ flexBasis: "100%" }}>
+                                <p style={{ fontFamily: LATO, fontSize: "13px", color: GOLD, margin: 0, lineHeight: 1.6 }}>
+                                  That is a long stay — {nights} nights, {fmtDate(checkIn)} to {fmtDate(checkOut)}. Please check the dates before continuing.
+                                </p>
+                              </div>
+                            )}
                           </>
                         ) : (
                           <div style={{ display: "flex", alignItems: "center" }}>
@@ -3279,7 +3304,13 @@ function BookPageInner() {
                 <button type="button" onClick={goNext}
                   className="oraya-pressable oraya-cta-gold-hover"
                   style={{ fontFamily: LATO, fontSize: "13px", letterSpacing: "0.8px", color: GOLD_CTA, backgroundColor: GOLD, border: "none", padding: "14px 16px", flex: 1, cursor: "pointer", minHeight: "50px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  Review & Guest Details
+                  {/*
+                    Was "Review & Guest Details" — the name of the screen it
+                    opens, not the thing pressing it does. Its two siblings are
+                    "Continue to stay setup" and "Continue to secure payment";
+                    this one now finishes the sentence the same way.
+                  */}
+                  Continue to review
                 </button>
               </div>
 
