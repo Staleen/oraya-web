@@ -16,31 +16,67 @@
  * step-up screen. A bare "3DS: on" would therefore take a guest who was about
  * to pay and leave them on a dead page — worse than no 3DS at all.
  *
- * So the setting has three states, and none of them can strand a guest:
+ * So the setting has three states:
  *
  *   off               today's behaviour, byte for byte.
- *   frictionless_only request authentication; take the liability shift when
- *                     the issuer grants it silently, and continue WITHOUT it
- *                     when the issuer wants a challenge.
+ *   frictionless_only RETIRED 2026-08-13 — see below.
  *   required          request authentication and refuse the payment when it
  *                     cannot be completed without a challenge. Safest for
  *                     chargebacks, and it will decline real cards — an
  *                     operator choice, made with eyes open.
  *
- * `required` is honest but lossy until a step-up screen exists; that screen is
- * the next increment, and this module is shaped so adding it changes one
- * branch.
+ * ---
+ *
+ * Why `frictionless_only` is retired (W7 slice 2).
+ *
+ * Its promise was "never blocks a guest": take the liability shift when the
+ * issuer verifies silently, and continue WITHOUT it when the issuer wants a
+ * challenge. The second half cannot be delivered. `PENDING_AUTHENTICATION` is
+ * not an authorization Oraya can choose to accept — it means the authorization
+ * was never completed and no money moved. There is nothing to "continue" with.
+ * A challenged guest is therefore turned away in this mode exactly as they are
+ * in `required`; the only thing the mode really changed was the wording of the
+ * refusal, while telling the operator nobody would ever be stopped.
+ *
+ * So the mode is refused at save time (`validatePayerAuthenticationSetting`)
+ * and neutralised at runtime (`resolveEffectivePayerAuthenticationMode`), which
+ * keeps a hand-edited or legacy `settings` row from activating it. The stored
+ * production value is `off`, so nothing in live behaviour changes.
+ *
+ * The real fix is a step-up screen — slices 3–6, deferred by the owner on
+ * 2026-08-12. See docs/system/PHASE_16B_W7_STEP_UP_PLAN.md. This module is
+ * shaped so adding it changes one branch.
  *
  * Pure — relative .ts imports so node:test can load it.
  */
 
 export type PayerAuthenticationMode = "off" | "frictionless_only" | "required";
 
+/**
+ * The mode actually applied to a payment.
+ *
+ * `frictionless_only` is retired, so it can never reach the provider request or
+ * the response verdict. It resolves to `off` — the state that reproduces live
+ * behaviour byte for byte — rather than to `required`, which would start
+ * refusing real cards on a setting nobody deliberately chose.
+ *
+ * Deliberately NOT applied inside `parsePayerAuthenticationMode`: the save path
+ * parses before it validates, so swallowing the value there would turn an
+ * operator's explicit choice into a silent downgrade with nothing to see.
+ */
+export function resolveEffectivePayerAuthenticationMode(
+  mode: PayerAuthenticationMode,
+): "off" | "required" {
+  return mode === "required" ? "required" : "off";
+}
+
 /** CyberSource `processingInformation.actionList` value requesting 3DS. */
 export const CONSUMER_AUTHENTICATION_ACTION = "CONSUMER_AUTHENTICATION" as const;
 
 export function payerAuthenticationActions(mode: PayerAuthenticationMode): string[] {
-  return mode === "off" ? [] : [CONSUMER_AUTHENTICATION_ACTION];
+  return resolveEffectivePayerAuthenticationMode(mode) === "off"
+    ? []
+    : [CONSUMER_AUTHENTICATION_ACTION];
 }
 
 /**
@@ -70,8 +106,14 @@ export type PayerAuthenticationDecision =
   /** Do not take this payment. `guestMessage` is safe to show. */
   | { action: "refuse"; reason: "challenge_required" | "not_authenticated"; guestMessage: string };
 
-const CHALLENGE_MESSAGE =
+/**
+ * Shown whenever the bank asks for a step-up. Exported because three surfaces
+ * have to say the same thing: the adapter's result message and both completion
+ * routes, which write their own guest copy rather than echoing the provider.
+ */
+export const PAYER_AUTHENTICATION_CHALLENGE_MESSAGE =
   "Your bank asked to verify this payment in a way Oraya cannot show yet. Nothing was charged — please try another card, or message us and we will take the payment directly.";
+const CHALLENGE_MESSAGE = PAYER_AUTHENTICATION_CHALLENGE_MESSAGE;
 const NOT_AUTHENTICATED_MESSAGE =
   "Your bank could not verify this card. Nothing was charged — please try another card, or message us and we will take the payment directly.";
 
@@ -82,23 +124,27 @@ function normaliseEci(eci: string | null | undefined): string {
 /**
  * What to do with the authorization response.
  *
- * Fails toward NOT charging in `required`, and toward completing the sale in
- * `frictionless_only` — which is the whole difference between the two modes.
+ * Fails toward NOT charging in `required`. Every other mode proceeds — which,
+ * since `frictionless_only` was retired, means `off` alone.
  */
 export function decidePayerAuthentication(
   mode: PayerAuthenticationMode,
   result: PayerAuthenticationResult,
 ): PayerAuthenticationDecision {
-  if (mode === "off") return { action: "proceed", authenticated: false };
+  if (resolveEffectivePayerAuthenticationMode(mode) === "off") {
+    return { action: "proceed", authenticated: false };
+  }
 
   const status = (result.status ?? "").trim().toUpperCase();
   const challenged = status === "PENDING_AUTHENTICATION" || Boolean(result.stepUpUrl?.trim());
 
   if (challenged) {
     // Oraya has no step-up screen. Never leave the guest on a dead page.
-    return mode === "required"
-      ? { action: "refuse", reason: "challenge_required", guestMessage: CHALLENGE_MESSAGE }
-      : { action: "proceed", authenticated: false };
+    //
+    // In practice the authorization response carries PENDING_AUTHENTICATION,
+    // which the adapter has already classified as a retry-safe non-charge, so
+    // this branch is a belt-and-braces second reading of the same fact.
+    return { action: "refuse", reason: "challenge_required", guestMessage: CHALLENGE_MESSAGE };
   }
 
   const eci = normaliseEci(result.eci);
@@ -107,16 +153,14 @@ export function decidePayerAuthentication(
 
   if (authenticated) return { action: "proceed", authenticated: true };
 
-  return mode === "required"
-    ? { action: "refuse", reason: "not_authenticated", guestMessage: NOT_AUTHENTICATED_MESSAGE }
-    : { action: "proceed", authenticated: false };
+  return { action: "refuse", reason: "not_authenticated", guestMessage: NOT_AUTHENTICATED_MESSAGE };
 }
 
 /** Owner-facing description of each mode, for the switch panel. */
 export const PAYER_AUTHENTICATION_COPY: Record<PayerAuthenticationMode, string> = {
   off: "No 3-D Secure. Chargeback liability stays with Oraya.",
   frictionless_only:
-    "Ask the bank to verify the cardholder. When the bank verifies silently, liability shifts to them. When the bank wants to challenge the guest, the payment still goes through unverified — nobody gets stuck.",
+    "Unavailable. This setting promised that a guest is never stopped, and that promise cannot be kept: when the bank asks to challenge the guest, no payment is taken and there is nothing for Oraya to let through. Choose Off, or strict with the card held rather than charged.",
   required:
     "Ask the bank to verify, and refuse the payment when it cannot. Strongest protection, and it will turn away cards whose bank wants to challenge the guest.",
 };
@@ -151,6 +195,16 @@ export function validatePayerAuthenticationSetting(behaviour: {
   payer_authentication: PayerAuthenticationMode;
   capture_immediately: boolean;
 }): { ok: true } | PayerAuthenticationSettingConflict {
+  // Refuse the retired mode out loud. Silently storing it as "off" would be the
+  // same class of bug as the dropdown that saved nothing (KNOWN_BUGS #20): the
+  // operator picks a setting, sees no objection, and gets something else.
+  if (behaviour.payer_authentication === "frictionless_only") {
+    return {
+      ok: false,
+      message:
+        "“On, silent only” is no longer available. It promised that no guest is ever stopped, but when a bank asks to verify the guest there is no payment for Oraya to let through — that guest is turned away either way, until Oraya can show the bank’s verification screen. Choose Off, or strict 3-D Secure with the card held rather than charged.",
+    };
+  }
   if (behaviour.payer_authentication === "required" && behaviour.capture_immediately) {
     return {
       ok: false,

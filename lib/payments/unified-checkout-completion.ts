@@ -109,6 +109,14 @@ export type ProviderAuthorizationResult = {
   transaction_id: string | null;
   reference: string;
   message: string;
+  /**
+   * The bank wants to verify the cardholder on its own screen (3-D Secure
+   * step-up) and Oraya has no such screen yet. A `declined` outcome carrying
+   * this flag is NOT a bank decline: nothing was authorized and nothing was
+   * charged, so the guest is told to try another card rather than to argue with
+   * their bank. Optional — callers that never request 3DS simply omit it.
+   */
+  challenge_required?: boolean;
 };
 
 /**

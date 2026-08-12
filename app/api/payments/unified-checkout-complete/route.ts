@@ -8,6 +8,7 @@ import {
 } from "@/lib/payments/credit-libanais";
 import { supabasePaymentAttemptStore } from "@/lib/payments/payment-attempts-store";
 import { runUnifiedCheckoutCompletion } from "@/lib/payments/unified-checkout-completion";
+import { PAYER_AUTHENTICATION_CHALLENGE_MESSAGE } from "@/lib/payments/payer-authentication";
 import { isPaymentLinkExpired } from "@/lib/payments/link-state";
 import { PaymentProviderConfigurationError } from "@/lib/payments/provider";
 import { resolvePaymentRequestOrigin } from "@/lib/payments/request-origin";
@@ -243,7 +244,13 @@ export async function POST(request: Request) {
             ok: false,
             paid: false,
             status: outcome.provider.status,
-            message: "Payment was not approved. No booking payment was recorded. Please try again or contact Oraya.",
+            // A 3-D Secure step-up is retry-safe like a decline, but it is not
+            // one: the card was never declined and nothing was charged. Telling
+            // this guest "not approved" sends them to their bank about a
+            // working card.
+            message: outcome.provider.challenge_required
+              ? PAYER_AUTHENTICATION_CHALLENGE_MESSAGE
+              : "Payment was not approved. No booking payment was recorded. Please try again or contact Oraya.",
             booking_view_url: `${viewUrl}?payment=failed`,
           },
           { status: outcome.provider.ok ? 402 : 502 },

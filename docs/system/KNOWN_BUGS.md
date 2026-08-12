@@ -400,3 +400,15 @@ Living list of bugs, gaps, and operational pitfalls that are **known** but **not
 - **Recommended fix path:** written reply from NetCommerce confirming DM is fixed for the merchant, then re-run the controlled real-card window.
 - **Discovered:** 2026-08-10 (Business Center transaction export), re-confirmed 2026-08-11
 
+
+---
+
+### #29 — A 3-D Secure challenge locked the guest out of paying, permanently
+
+- **Severity:** 🔴 Critical *if 3DS is switched on* — unreachable while `payer_authentication` is `off`, which it is today. `DECISION_SKIP` has made 3DS the only fraud control Oraya has (W7), so switching it on is a matter of when.
+- **Area:** `lib/payments/credit-libanais.ts` authorization classification → `payment_attempts`
+- **Description:** CyberSource answers a 3-D Secure step-up with status `PENDING_AUTHENTICATION` (reason **475**). It stops *before* authorizing: no payment resource is created, no hold is placed, no money moves. That status was in neither the approved list nor the retry-safe list, so `classifyProviderAuthorizationOutcome` fell through to `unknown` and the attempt was marked `ambiguous`. An `ambiguous` attempt is a blocking attempt ([payment-attempts-store.ts:59](../../lib/payments/payment-attempts-store.ts)) and only `recorded` or `failed` may follow it — so a guest whose bank merely wanted to ask them a security question could never pay Oraya again, pending manual reconciliation of a payment that had never existed. The guest was also told "Payment was not approved", sending them to their bank about a perfectly good card.
+- **Status:** **FIXED 2026-08-13** (branch `claude/w7-slices-1-2`) — `PENDING_AUTHENTICATION` joins the retry-safe non-charge statuses, so the attempt goes `claimed → failed` and the claim is released; a new `challenge_required` flag on the authorization result drives honest guest copy on both completion routes. See DECISIONS_LOG 2026-08-13 and [PHASE_16B_W7_STEP_UP_PLAN.md](PHASE_16B_W7_STEP_UP_PLAN.md).
+- **Not fixed by this:** 3-D Secure still does not authenticate (`ECI 7`, empty CAVV). A challenged guest is now turned away cleanly instead of locked out; completing the challenge needs the step-up screen, W7 slices 3–6, deferred 2026-08-12.
+- **Watch for:** the same shape recurring in the new `pending_authentication` state slices 3–6 introduce. An abandoned bank challenge with no TTL reaper is this bug again under a different name.
+- **Discovered:** 2026-08-13 (W7 slices 1–2 audit)
