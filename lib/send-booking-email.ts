@@ -4,6 +4,7 @@ import { LOGO_URL, SITE_URL } from "@/lib/brand";
 import { createActionToken } from "@/lib/booking-action-token";
 import { transactionalEmailFooterHtmlBlock, transactionalEmailFooterTextSuffix } from "@/lib/transactional-email-footer";
 import { checkOutExpiryUnix } from "./checkout-expiry.ts";
+import { extractGuestVisibleNote } from "./guest-visible-note.ts";
 
 const GOLD = "#C5A46D";
 const MIDNIGHT = "#1F2B38";
@@ -247,14 +248,15 @@ export async function sendBookingEmail(payload: BookingEmailPayload): Promise<vo
       `).join("")}
     </td></tr></table>`;
 
-  const noteHtml = payload.message?.trim()
+  const guestNote = extractGuestVisibleNote(payload);
+  const noteHtml = guestNote
     ? `
       <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="border:0.5px solid rgba(197,164,109,0.18);padding:22px 24px;">
         <p style="margin:0 0 10px;font-size:9px;letter-spacing:3px;text-transform:uppercase;color:${GOLD};">
           Special Request / Notes
         </p>
         <p style="margin:0;font-size:13px;line-height:1.75;color:#ffffff;white-space:pre-line;">
-          ${escapeHtml(payload.message.trim())}
+          ${escapeHtml(guestNote)}
         </p>
       </td></tr></table>`
     : "";
@@ -431,7 +433,7 @@ export async function sendBookingEmail(payload: BookingEmailPayload): Promise<vo
     "",
     "Payment Summary:",
     ...paymentRows.map(([label, value]) => `${label}: ${value}`),
-    ...(payload.message?.trim() ? ["", `Special Request / Notes: ${payload.message.trim()}`] : []),
+    ...(guestNote ? ["", `Special Request / Notes: ${guestNote}`] : []),
     ...(arrivalUrl
       ? [
           "",
