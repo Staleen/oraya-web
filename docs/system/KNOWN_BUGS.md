@@ -275,6 +275,28 @@ Living list of bugs, gaps, and operational pitfalls that are **known** but **not
 
 ---
 
+### #23 — The card page called every signed-in member "Oraya guest", and Step 4 looked like another company's site
+
+- **Severity:** 🟠 High — both halves land on the screen where a guest decides whether to type a card number.
+- **Area:** `/payments/checkout/[token]`, `/pay/[token]`, `app/api/payments/checkout` payer resolution
+- **Description:** reported by the owner 2026-08-12 from live screenshots of `/book` Step 3 followed by the payment page. (1) **Name:** `app/api/payments/checkout/route.ts` stored `payer_name: booking.guest_name?.trim() || "Oraya guest"`. `/book` deliberately sends no guest fields for a signed-in member — the member record is the identity — so `bookings.guest_name` is NULL on every member booking and the fallback fired every time. (2) **Shell:** the checkout page was a left-aligned 760px column on a hardcoded midnight background while `/book` is a centred 560px column on `--oraya-book-bg`; because the site's default theme is **light**, the guest crossed from a beige Step 3 into a dark Step 4. `/pay/[token]` was further out still — a rounded white card in a near-miss palette (#9b7744 gold, #6b7280 grey).
+- **Status:** **FIXED 2026-08-12** (branch `claude/checkout-step4-parity`) — the payer is resolved through the shared `resolveBookingRecipient` helper (same answer as `bookingGuestName()` in Ops), and both payment surfaces now use `/book`'s tokens, column, type scale and section treatment. See DECISIONS_LOG 2026-08-12 "Payment is Step 4 of the guest's own flow, and it knows their name".
+- **Residual:** payment requests created before the fix keep their stored `payer_name`; recorded money-surface rows are not rewritten.
+- **Discovered:** 2026-08-12 (owner, live screenshots)
+
+---
+
+### #24 — A member who pays by card gets no receipt email, because the payment request has no payer_email
+
+- **Severity:** 🟠 High — the guest pays and hears nothing; the same root cause as #23, one field over.
+- **Area:** `app/api/payments/checkout/route.ts` → `payment_requests.payer_email` → `lib/payments/money-event-dispatch-server.ts`
+- **Description:** found while auditing #23, not fixed with it (the fix's scope was the payer *name*). The booking-linked payment request is created with `payer_email: booking.guest_email`. For a signed-in member that column is NULL for exactly the reason #23 describes — `/book` sends no guest fields — so the request carries no email. The money-event dispatcher then returns early: `if (!contact?.payer_email) return false;` ([lib/payments/money-event-dispatch-server.ts:143](../../lib/payments/money-event-dispatch-server.ts)). A member who completes a card payment therefore receives no receipt, and nothing errors. Anonymous bookers are unaffected. Note this is the guest receipt only — the operator alert is a separate recipient list.
+- **Status:** open — the one-line remedy is the same helper #23 now uses (`resolveBookingRecipient` returns `{ email, name }` from one call), but `payer_email` sits inside the payment-request insert and feeds the notification rail, so it wants its own scoped change and its own verification that a receipt actually arrives.
+- **Recommended fix path:** take the `email` from the same `resolveBookingRecipient` call already made for `payer_name`, then verify end-to-end that a member card payment produces exactly one guest receipt (the dispatcher's at-most-once claim is already in place).
+- **Discovered:** 2026-08-12 (audit for #23)
+
+---
+
 <!-- New entries go above this line, lowest # at the top. Closed entries can be moved to a "Closed" section below or stay in place with status: closed + date. -->
 
 ## Closed / wontfix

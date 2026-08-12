@@ -2,8 +2,8 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useState, use } from "react";
-import OrayaEmblem from "@/components/OrayaEmblem";
-import { GOLD, LATO, MIDNIGHT, PLAYFAIR } from "@/components/theme";
+import OrayaLogoFull from "@/components/OrayaLogoFull";
+import { GOLD, LATO, PLAYFAIR } from "@/components/theme";
 
 /**
  * Brand note (2026-08-12): this page used its own near-miss palette — gold
@@ -12,12 +12,28 @@ import { GOLD, LATO, MIDNIGHT, PLAYFAIR } from "@/components/theme";
  * look like a mistake, far enough to read as a different company at the exact
  * moment a guest is deciding whether to type a card number. It now uses the
  * shared tokens.
+ *
+ * Layout note (2026-08-12, second report): fixing the palette was not enough —
+ * the page was still a wide left-aligned column on a hardcoded midnight
+ * background, while `/book` is a centred 560px column on `--oraya-book-bg`.
+ * The site default theme is LIGHT (`app/layout.tsx`), so a guest walked from a
+ * beige, centred Step 3 into a dark, left-aligned Step 4: two applications.
+ * These are the same tokens `/book` uses — the documented constants, resolved
+ * per theme — so the two steps now move together instead of only agreeing in
+ * dark mode.
  */
-const WHITE = "#F8F3E7";
-const MUTED = "rgba(248, 243, 231, 0.72)";
-const BG = MIDNIGHT;
-const PANEL = "rgba(255,255,255,0.045)";
-const BORDER = "rgba(201,164,92,0.28)";
+const PAGE_BG = "var(--oraya-book-bg)";
+const HEADING = "var(--oraya-book-heading)";
+const BODY = "var(--oraya-book-p78)";
+const LABEL = "var(--oraya-book-p62)";
+const VALUE = "var(--oraya-book-text)";
+const MUTED = "var(--oraya-book-muted)";
+const GLASS1 = "var(--oraya-book-surface-1)";
+const GLASS3 = "var(--oraya-book-surface-3)";
+const CARD_BORDER = "0.5px solid rgba(197,164,109,0.2)";
+const ROW_BORDER = "var(--oraya-book-subtle-border)";
+const GOLD_CTA = "var(--oraya-gold-cta-text)";
+const STEP_INK = "var(--oraya-ink)";
 
 type SessionState =
   | { status: "loading" }
@@ -214,12 +230,17 @@ function readTransientToken(value: string | { transientTokenJwt?: string }) {
  * Payment is step four of Oraya's own flow, so the page says so. Shown only
  * for a booking checkout: a standalone payment link has no preceding steps,
  * and inventing three completed ones would be a lie told in ticks.
+ *
+ * Dimensions, colours and rhythm are `/book`'s own `StepIndicator` — 26px
+ * marks, a 52px rule between them, a gold caption 12px/2px above 2.5rem of
+ * air — so the rail does not visibly change size or position as the guest
+ * crosses from Step 3 into Step 4. The caption keeps its wording.
  */
 function CheckoutSteps() {
   const labels = ["Villa & Dates", "Stay Setup", "Guest Details", "Payment"];
   return (
-    <div style={{ marginBottom: "28px" }}>
-      <div style={{ display: "flex", alignItems: "center" }}>
+    <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
         {labels.map((label, i) => {
           const n = i + 1;
           const done = n < 4;
@@ -239,7 +260,7 @@ function CheckoutSteps() {
                   justifyContent: "center",
                   fontFamily: LATO,
                   fontSize: "10px",
-                  color: active ? MIDNIGHT : GOLD,
+                  color: active ? STEP_INK : GOLD,
                 }}
                 aria-current={active ? "step" : undefined}
               >
@@ -252,7 +273,7 @@ function CheckoutSteps() {
           );
         })}
       </div>
-      <p style={{ color: MUTED, fontFamily: LATO, fontSize: "12px", letterSpacing: "1.5px", textTransform: "uppercase", margin: "10px 0 0" }}>
+      <p style={{ fontFamily: LATO, fontSize: "12px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, marginTop: "12px", marginBottom: 0, fontWeight: 400 }}>
         Step 4 of 4 · Payment
       </p>
     </div>
@@ -431,91 +452,104 @@ export default function PaymentCheckoutPage(props: {
     };
   }, [bookingViewFallback, isPaymentRequest, token]);
 
+  const summaryRows: [string, string][] = summary
+    ? isPaymentRequestSummary(summary)
+      ? [
+          ["Payment for", summary.description ?? "Oraya payment"],
+          ["Prepared for", summary.payer_name ?? "Guest"],
+          ["Amount", formatMoney(summary.amount, summary.currency)],
+        ]
+      : [
+          ["Villa", summary.villa ?? "-"],
+          ["Check-in", formatDate(summary.check_in)],
+          ["Check-out", formatDate(summary.check_out)],
+          ["Amount", formatMoney(summary.amount, summary.currency)],
+        ]
+    : [];
+
+  /*
+    `/book`'s own shell: the page wash, a centred 560px column, the wordmark at
+    160px above 2.5rem of air, a centred Playfair heading, the step rail, then
+    bordered card sections stacked on a 20px rhythm. Step 3 and Step 4 are the
+    same page with different contents, which is what they always were.
+  */
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        background: BG,
-        color: WHITE,
-        padding: "32px 18px",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <section style={{ width: "100%", maxWidth: "760px" }}>
-        <div style={{ marginBottom: "18px" }}>
-          <OrayaEmblem style={{ width: "48px", height: "auto", display: "block" }} />
+    <main style={{ backgroundColor: PAGE_BG, minHeight: "100vh", padding: "80px 24px" }}>
+      <div style={{ width: "100%", maxWidth: "560px", margin: "0 auto" }}>
+
+        <div style={{ width: "160px", margin: "0 auto 2.5rem" }}>
+          <OrayaLogoFull />
         </div>
+
+        <div style={{ textAlign: "center", marginBottom: showBookingSteps ? "1.5rem" : "2.5rem" }}>
+          <h1 style={{ fontFamily: PLAYFAIR, fontSize: "2rem", fontWeight: 400, color: HEADING, margin: 0 }}>
+            {showBookingSteps ? "Secure payment" : "Payment request"}
+          </h1>
+        </div>
+
         {showBookingSteps && <CheckoutSteps />}
-        <p style={{ color: GOLD, fontFamily: LATO, fontSize: "11px", letterSpacing: "2.5px", textTransform: "uppercase", margin: "0 0 12px" }}>
-          Oraya
-        </p>
-        <h1 style={{ fontFamily: PLAYFAIR, fontSize: "clamp(32px, 6vw, 56px)", fontWeight: 400, margin: "0 0 14px" }}>
-          {showBookingSteps ? "Secure payment" : "Payment request"}
-        </h1>
-        <p style={{ color: MUTED, fontFamily: LATO, fontSize: "15px", lineHeight: 1.7, maxWidth: "620px", margin: "0 0 28px" }}>
-          Your card details are entered inside your bank&rsquo;s own secure interface — Oraya never sees them, and records your payment only once the bank confirms it.
-        </p>
 
-        {summary ? (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-              gap: "12px",
-              border: `1px solid ${BORDER}`,
-              background: PANEL,
-              padding: "16px",
-              marginBottom: "18px",
-            }}
-          >
-            {isPaymentRequestSummary(summary) ? <>
-              <Summary label="Payment for" value={summary.description ?? "Oraya payment"} />
-              <Summary label="Prepared for" value={summary.payer_name ?? "Guest"} />
-            </> : <>
-              <Summary label="Villa" value={summary.villa ?? "-"} />
-              <Summary label="Check-in" value={formatDate(summary.check_in)} />
-              <Summary label="Check-out" value={formatDate(summary.check_out)} />
-            </>}
-            <Summary label="Payment" value={formatMoney(summary.amount, summary.currency)} />
-          </div>
-        ) : null}
+        <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
 
-        <div style={{ border: `1px solid ${BORDER}`, background: PANEL, padding: "18px", minHeight: "260px" }}>
-          {state.status === "loading" ? (
-            <p style={{ color: MUTED, margin: 0 }}>Preparing secure payment...</p>
-          ) : state.status === "processing" ? (
-            <div style={{ display: "grid", gap: "14px" }}>
-              <p style={{ color: WHITE, lineHeight: 1.7, margin: 0 }}>
-                Verifying payment with the gateway...
+          {summaryRows.length > 0 && (
+            <div>
+              <p style={{ fontFamily: PLAYFAIR, fontSize: "20px", fontWeight: 400, color: HEADING, margin: "0 0 10px" }}>
+                {showBookingSteps ? "Your stay" : "This payment"}
               </p>
-              <a href={state.bookingViewUrl} style={{ ...buttonStyle, background: "transparent", color: GOLD, border: `1px solid ${GOLD}` }}>
-                {isPaymentRequest ? "Return to payment request" : "Return to booking"}
-              </a>
-            </div>
-          ) : state.status === "blocked" ? (
-            <div style={{ display: "grid", gap: "14px" }}>
-              <p style={{ color: WHITE, lineHeight: 1.7, margin: 0 }}>{state.message}</p>
-              <a href={state.bookingViewUrl ?? bookingViewFallback} style={buttonStyle}>
-                {state.message.toLowerCase().includes("payment was received")
-                  ? isPaymentRequest
-                    ? "View payment confirmation"
-                    : "View your booking"
-                  : isPaymentRequest
-                    ? "Return to payment request"
-                    : "Return to booking"}
-              </a>
-            </div>
-          ) : (
-            <div style={{ display: "grid", gap: "16px" }}>
-              <div id="oraya-payment-buttons" />
-              <div id="oraya-payment-screen" />
-              <a href={state.cancelUrl} style={{ ...buttonStyle, background: "transparent", color: GOLD, border: `1px solid ${GOLD}` }}>
-                Cancel payment
-              </a>
+              <div style={{ border: "0.5px solid rgba(197,164,109,0.18)", padding: "1.25rem", backgroundColor: GLASS3 }}>
+                {summaryRows.map(([label, value]) => (
+                  <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "10px 0", borderBottom: `0.5px solid ${ROW_BORDER}`, gap: "16px" }}>
+                    <span style={{ fontFamily: LATO, fontSize: "12px", letterSpacing: "1px", textTransform: "uppercase", color: LABEL, flexShrink: 0, paddingRight: "16px" }}>{label}</span>
+                    <span style={{ fontFamily: LATO, fontSize: "13px", color: VALUE, textAlign: "right", lineHeight: 1.5, maxWidth: "60%" }}>{value}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
+
+          <div style={{ border: CARD_BORDER, backgroundColor: GLASS1, padding: "1.5rem", display: "flex", flexDirection: "column", gap: "14px", minHeight: "260px" }}>
+            <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: GOLD, margin: 0 }}>
+              Card details
+            </p>
+
+            {state.status === "loading" ? (
+              <p style={{ fontFamily: LATO, fontSize: "13px", color: MUTED, lineHeight: 1.65, margin: 0 }}>Preparing secure payment...</p>
+            ) : state.status === "processing" ? (
+              <>
+                <p style={{ fontFamily: LATO, fontSize: "13px", color: BODY, lineHeight: 1.65, margin: 0 }}>
+                  Verifying payment with the gateway...
+                </p>
+                <a href={state.bookingViewUrl} style={secondaryButtonStyle}>
+                  {isPaymentRequest ? "Return to payment request" : "Return to booking"}
+                </a>
+              </>
+            ) : state.status === "blocked" ? (
+              <>
+                <p style={{ fontFamily: LATO, fontSize: "13px", color: BODY, lineHeight: 1.65, margin: 0 }}>{state.message}</p>
+                <a href={state.bookingViewUrl ?? bookingViewFallback} style={primaryButtonStyle}>
+                  {state.message.toLowerCase().includes("payment was received")
+                    ? isPaymentRequest
+                      ? "View payment confirmation"
+                      : "View your booking"
+                    : isPaymentRequest
+                      ? "Return to payment request"
+                      : "Return to booking"}
+                </a>
+              </>
+            ) : (
+              <>
+                <div id="oraya-payment-buttons" />
+                <div id="oraya-payment-screen" />
+                <a href={state.cancelUrl} style={secondaryButtonStyle}>
+                  Cancel payment
+                </a>
+              </>
+            )}
+          </div>
+
+          <p style={{ fontFamily: LATO, fontSize: "13px", color: BODY, lineHeight: 1.65, margin: 0, textAlign: "center" }}>
+            Your card details are entered inside your bank&rsquo;s own secure interface — Oraya never sees them, and records your payment only once the bank confirms it.
+          </p>
         </div>
 
         {/*
@@ -524,7 +558,7 @@ export default function PaymentCheckoutPage(props: {
           the trust signal; the sentence beside it was free advertising for
           somebody else, on the page where the guest is deciding to pay us.
         */}
-        <div style={{ marginTop: "28px", paddingTop: "18px", borderTop: `1px solid ${BORDER}` }}>
+        <div style={{ marginTop: "28px", paddingTop: "18px", borderTop: `0.5px solid ${ROW_BORDER}`, display: "flex", justifyContent: "center" }}>
           <Image
             src="/payment/NCseal_M.png"
             alt="Secure payment gateway"
@@ -533,33 +567,33 @@ export default function PaymentCheckoutPage(props: {
             style={{ width: "72px", height: "auto", display: "block", opacity: 0.6 }}
           />
         </div>
-      </section>
+      </div>
     </main>
   );
 }
 
-function Summary({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p style={{ color: MUTED, fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", margin: "0 0 6px" }}>
-        {label}
-      </p>
-      <p style={{ color: WHITE, fontSize: "14px", margin: 0 }}>{value}</p>
-    </div>
-  );
-}
-
-const buttonStyle = {
-  display: "inline-flex",
+/** `/book`'s Step 3 CTAs: gold solid for the way forward, gold outline beside it. */
+const primaryButtonStyle = {
+  display: "flex",
   justifyContent: "center",
   alignItems: "center",
-  width: "fit-content",
-  minHeight: "44px",
-  padding: "0 18px",
-  background: GOLD,
-  color: "#141414",
+  width: "100%",
+  minHeight: "50px",
+  padding: "14px 18px",
+  backgroundColor: GOLD,
+  color: GOLD_CTA,
+  border: "none",
   textDecoration: "none",
-  textTransform: "uppercase" as const,
-  letterSpacing: "1.8px",
-  fontSize: "11px",
+  fontFamily: LATO,
+  fontSize: "13px",
+  letterSpacing: "0.8px",
+};
+
+const secondaryButtonStyle = {
+  ...primaryButtonStyle,
+  minHeight: "46px",
+  padding: "12px 18px",
+  backgroundColor: "transparent",
+  color: GOLD,
+  border: "0.5px solid rgba(197,164,109,0.4)",
 };

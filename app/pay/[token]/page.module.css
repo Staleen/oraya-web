@@ -1,31 +1,141 @@
-.page { min-height: 100vh; background: #1f2b38; color: #fff; padding: 36px 18px; font-family: var(--font-lato), sans-serif; }
-.shell { width: min(680px, 100%); margin: 0 auto; }
-.logo { display: block; margin: 0 auto 24px; width: 118px; height: 118px; object-fit: contain; }
-.card { background: #fff; color: #1f2b38; border-radius: 18px; padding: clamp(24px, 5vw, 44px); box-shadow: 0 24px 70px rgba(0,0,0,.24); }
-.eyebrow { color: #9b7744; text-transform: uppercase; letter-spacing: .22em; font-size: 11px; margin: 0 0 10px; }
-.title { font-family: var(--font-playfair), serif; font-size: clamp(30px, 6vw, 44px); font-weight: 400; margin: 0 0 8px; }
-.for { color: #6b7280; margin: 0 0 28px; }
-.amount { border-top: 1px solid #e6ded2; border-bottom: 1px solid #e6ded2; padding: 24px 0; margin: 0 0 26px; display: flex; justify-content: space-between; gap: 20px; align-items: end; }
-.amountLabel { color: #6b7280; font-size: 12px; text-transform: uppercase; letter-spacing: .14em; }
-.amountValue { font-family: var(--font-playfair), serif; font-size: 32px; }
+/*
+  Same visual system as /book and the secure checkout step (2026-08-12).
+
+  This page was a rounded white card on a fixed dark wash, drawn in a near-miss
+  palette — #9b7744 against Oraya's #c5a46d, Tailwind's #6b7280 grey, 18px radii
+  and drop shadows Oraya uses nowhere else. Next to /book it read as a different
+  company's page. It now uses the shared --oraya-book-* tokens, so it follows
+  the guest's theme (the site default is light) instead of being a dark island,
+  and it keeps /book's proportions: a centred 560px column, the wordmark at
+  160px above 2.5rem of air, Playfair for display, Lato for everything else,
+  square-edged panels with 0.5px gold borders.
+
+  No acquirer branding here — see page.tsx.
+*/
+.page {
+  min-height: 100vh;
+  background: var(--oraya-book-bg);
+  color: var(--oraya-book-text);
+  padding: 80px 24px;
+  font-family: var(--font-lato), system-ui, sans-serif;
+}
+.shell { width: 100%; max-width: 560px; margin: 0 auto; }
+.logo { display: block; margin: 0 auto 2.5rem; width: 160px; height: auto; }
+.card {
+  background: var(--oraya-book-surface-1);
+  color: var(--oraya-book-text);
+  border: 0.5px solid rgba(197, 164, 109, 0.2);
+  padding: 1.5rem;
+}
+.eyebrow {
+  color: var(--oraya-gold);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  font-size: 11px;
+  margin: 0 0 10px;
+}
+.title {
+  font-family: var(--font-playfair), Georgia, serif;
+  font-size: 2rem;
+  font-weight: 400;
+  color: var(--oraya-book-heading);
+  margin: 0 0 8px;
+}
+.for { color: var(--oraya-book-p62); font-size: 13px; margin: 0 0 24px; }
+.amount {
+  border-top: 0.5px solid var(--oraya-book-subtle-border);
+  border-bottom: 0.5px solid var(--oraya-book-subtle-border);
+  padding: 20px 0;
+  margin: 0 0 20px;
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: end;
+}
+.amountLabel {
+  color: var(--oraya-book-p62);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.amountValue {
+  font-family: var(--font-playfair), Georgia, serif;
+  font-weight: 400;
+  font-size: 28px;
+  color: var(--oraya-book-heading);
+}
 .methods { display: grid; gap: 12px; }
-.method { border: 1px solid #ded5c7; border-radius: 10px; padding: 16px; }
-.methodTitle { font-weight: 700; margin: 0 0 5px; }
-.muted { color: #6b7280; font-size: 14px; line-height: 1.55; margin: 0; white-space: pre-wrap; }
-.secure { margin: 22px 0 0; color: #6b7280; text-align: center; font-size: 12px; }
-.payButton { display: flex; justify-content: center; align-items: center; min-height: 50px; margin-top: 18px; padding: 0 22px; border-radius: 8px; background: #9b7744; color: #fff; text-decoration: none; text-transform: uppercase; letter-spacing: .14em; font-size: 12px; font-weight: 700; }
-.payButton:hover { background: #806039; }
-.closed { text-align: center; padding: 16px 0; }
-.closed h2 { font-family: var(--font-playfair), serif; font-weight: 400; font-size: 32px; }
+.method {
+  border: 0.5px solid rgba(197, 164, 109, 0.18);
+  background: var(--oraya-book-surface-3);
+  padding: 1rem 1.25rem;
+}
+.methodTitle {
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--oraya-book-p62);
+  margin: 0 0 6px;
+}
+.muted {
+  color: var(--oraya-book-p78);
+  font-size: 13px;
+  line-height: 1.65;
+  margin: 0;
+  white-space: pre-wrap;
+}
+.secure {
+  margin: 20px 0 0;
+  color: var(--oraya-book-p78);
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.65;
+}
+.payButton {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 50px;
+  margin-top: 20px;
+  padding: 14px 18px;
+  background: var(--oraya-gold);
+  color: var(--oraya-gold-cta-text);
+  text-decoration: none;
+  letter-spacing: 0.8px;
+  font-size: 13px;
+}
+.payButton:hover { opacity: 0.9; }
+.closed { text-align: center; padding: 8px 0; }
+.closed h2 {
+  font-family: var(--font-playfair), Georgia, serif;
+  font-weight: 400;
+  font-size: 2rem;
+  color: var(--oraya-book-heading);
+  margin: 0 0 10px;
+}
 .returnSuccess, .returnNeutral {
   margin: 0 0 18px;
   padding: 12px 14px;
-  border-radius: 10px;
-  font-size: 14px;
-  line-height: 1.55;
+  font-size: 13px;
+  line-height: 1.65;
   text-align: center;
 }
-.returnSuccess { background: rgba(155, 119, 68, 0.14); color: #6f5228; border: 1px solid rgba(155, 119, 68, 0.35); }
-.returnNeutral { background: #f5f1eb; color: #4b5563; border: 1px solid #e6ded2; }
-.footer { text-align: center; margin: 20px 0 0; color: rgba(255,255,255,.62); font-size: 12px; }
-@media (max-width: 520px) { .amount { align-items: start; flex-direction: column; } .card { border-radius: 14px; } }
+.returnSuccess {
+  background: rgba(197, 164, 109, 0.12);
+  color: var(--oraya-book-text);
+  border: 0.5px solid rgba(197, 164, 109, 0.35);
+}
+.returnNeutral {
+  background: var(--oraya-book-surface-3);
+  color: var(--oraya-book-p78);
+  border: 0.5px solid var(--oraya-book-subtle-border);
+}
+.footer {
+  text-align: center;
+  margin: 2rem 0 0;
+  color: var(--oraya-book-p62);
+  font-size: 12px;
+}
+@media (max-width: 520px) {
+  .amount { flex-direction: column; align-items: start; gap: 8px; }
+}

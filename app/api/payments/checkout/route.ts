@@ -3,6 +3,7 @@ import { buildCheckoutSetupFailureAlert, type CheckoutSetupFailureStage } from "
 import { sendOperatorCheckoutSetupFailureEmail } from "@/lib/send-payment-notification-email";
 import { loadOperatorRecipients } from "@/lib/payments/money-event-dispatch-server";
 import { formatBookingReference } from "@/lib/booking-reference";
+import { resolveBookingRecipient } from "@/lib/booking-recipient";
 import { createActionToken, verifyViewToken } from "@/lib/booking-action-token";
 import { roundMoney } from "@/lib/money";
 import { getMinimumDepositAmount, validatePaymentSelection } from "@/lib/payments/checkout-amount";
@@ -255,6 +256,22 @@ export async function POST(request: Request) {
       const secret = process.env.ADMIN_SECRET?.trim();
       if (!secret) throw new PaymentProviderConfigurationError("ADMIN_SECRET is required for secure payment links.");
       const publicToken = createPaymentRequestToken();
+      /**
+       * Who is paying. `bookings.guest_name` is only written for anonymous
+       * bookers — `/book` sends no guest fields at all when someone is signed
+       * in, because the member record is the identity (see
+       * `app/api/bookings` insert: `member_id ? guest_name : normGuestName`).
+       * Reading the booking column alone therefore called every member "Oraya
+       * guest" on the page where they type a card number, while `/book` two
+       * screens earlier said "Booking as <their name>".
+       *
+       * Resolved the same way every other Oraya surface resolves it — the
+       * shared recipient helper, matching `bookingGuestName()` in Ops
+       * (DECISIONS_LOG 2026-08-12) — rather than back-filling the booking row,
+       * which would need the locked booking pipeline and would still leave
+       * every booking already in the database wrong.
+       */
+      const { name: payerName } = await resolveBookingRecipient(supabaseAdmin, booking);
       const { data: createdRequest, error: createRequestError } = await supabaseAdmin
         .from("payment_requests")
         .insert({
@@ -262,7 +279,7 @@ export async function POST(request: Request) {
           public_token_ciphertext: encryptPaymentRequestToken(publicToken, secret),
           booking_id: booking.id,
           member_id: booking.member_id,
-          payer_name: booking.guest_name?.trim() || "Oraya guest",
+          payer_name: payerName,
           payer_email: booking.guest_email,
           payer_phone: null,
           description: `${booking.villa} ${purpose === "deposit" ? "booking deposit" : "booking payment"}`,
