@@ -82,11 +82,19 @@ test("Reverse is hard-locked to manual receipts", () => {
   assert.match(reverseSql, /provider is distinct from 'manual'/);
 });
 
-test("Apple Pay remains independently gated from ordinary card readiness", () => {
-  assert.match(route, /apple_pay_ready/);
-  assert.match(route, /getCreditLibanaisPaymentCapabilities\(\)\.apple_pay_enabled/);
-  assert.match(workspace, /method !== "apple_pay" \|\| ledger\.checkout\?\.apple_pay_ready/);
-  assert.match(route, /Create separate card and Apple Pay links/);
+test("wallets are never an operator choice — they ride with card", () => {
+  // Reversed deliberately on 2026-08-12. Apple Pay used to be selectable on
+  // its own, which let a link be created with allowed_methods ["apple_pay"]
+  // and no card. Unified Checkout had no rail to render, and the guest saw
+  // "Secure card payment is not available for this request".
+  assert.doesNotMatch(workspace, /method !== "apple_pay" \|\| ledger\.checkout\?\.apple_pay_ready/);
+  assert.match(workspace, /method !== "apple_pay" &&/);
+  // Picking Card must say plainly what the guest will actually be offered.
+  assert.match(workspace, /card: "Card, Apple Pay & Google Pay"/);
+  // The resolver, not the operator, decides which wallet buttons appear.
+  const resolver = readFileSync("lib/payments/online-methods.ts", "utf8");
+  assert.match(resolver, /cardAllowed && capabilities\.apple_pay_enabled/);
+  assert.match(resolver, /cardAllowed && capabilities\.google_pay_enabled/);
 });
 
 test("Apple-only browser and webhook reconciliation record the wallet presentation", () => {

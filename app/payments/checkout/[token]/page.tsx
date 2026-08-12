@@ -2,11 +2,20 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useState, use } from "react";
+import OrayaEmblem from "@/components/OrayaEmblem";
+import { GOLD, LATO, MIDNIGHT, PLAYFAIR } from "@/components/theme";
 
-const GOLD = "#C9A45C";
+/**
+ * Brand note (2026-08-12): this page used its own near-miss palette — gold
+ * #C9A45C against Oraya's #C5A46D, a flat #141414 background instead of
+ * midnight, and a generic `serif` stack instead of Playfair. Close enough to
+ * look like a mistake, far enough to read as a different company at the exact
+ * moment a guest is deciding whether to type a card number. It now uses the
+ * shared tokens.
+ */
 const WHITE = "#F8F3E7";
 const MUTED = "rgba(248, 243, 231, 0.72)";
-const BG = "#141414";
+const BG = MIDNIGHT;
 const PANEL = "rgba(255,255,255,0.045)";
 const BORDER = "rgba(201,164,92,0.28)";
 
@@ -366,37 +375,24 @@ export default function PaymentCheckoutPage(props: {
       }}
     >
       <section style={{ width: "100%", maxWidth: "760px" }}>
-        <p style={{ color: GOLD, fontSize: "11px", letterSpacing: "2.5px", textTransform: "uppercase", margin: "0 0 12px" }}>
-          Credit Libanais / NetCommerce
+        <div style={{ marginBottom: "18px" }}>
+          <OrayaEmblem style={{ width: "48px", height: "auto", display: "block" }} />
+        </div>
+        <p style={{ color: GOLD, fontFamily: LATO, fontSize: "11px", letterSpacing: "2.5px", textTransform: "uppercase", margin: "0 0 12px" }}>
+          Oraya
         </p>
-        <h1 style={{ fontFamily: "serif", fontSize: "clamp(32px, 6vw, 56px)", fontWeight: 400, margin: "0 0 14px" }}>
+        <h1 style={{ fontFamily: PLAYFAIR, fontSize: "clamp(32px, 6vw, 56px)", fontWeight: 400, margin: "0 0 14px" }}>
           Secure payment
         </h1>
-        <p style={{ color: MUTED, fontSize: "15px", lineHeight: 1.7, maxWidth: "620px", margin: "0 0 28px" }}>
-          Card details are entered only inside the bank-controlled payment interface. Oraya records payment only after server-side verification from the gateway.
+        <p style={{ color: MUTED, fontFamily: LATO, fontSize: "15px", lineHeight: 1.7, maxWidth: "620px", margin: "0 0 28px" }}>
+          Your card details are entered inside your bank&rsquo;s own secure interface — Oraya never sees them, and records your payment only once the bank confirms it.
         </p>
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "12px",
-            border: `1px solid ${BORDER}`,
-            background: "rgba(255,255,255,0.03)",
-            padding: "10px 12px",
-            marginBottom: "18px",
-          }}
-        >
-          <Image
-            src="/payment/NCseal_M.png"
-            alt="NetCommerce Security Seal"
-            width={130}
-            height={72}
-            style={{ width: "130px", height: "72px", display: "block" }}
-          />
-          <span style={{ color: MUTED, fontSize: "12px", lineHeight: 1.5 }}>
-            Online payments are processed securely through NetCommerce Secure Payment Gateway.
-          </span>
-        </div>
+        {/*
+          The acquirer's trust mark stays — Credit Libanais / NetCommerce
+          require it to be shown — but it belongs at the bottom as a quiet
+          reassurance, not at the top as the page's identity. A guest arriving
+          from an Oraya link should see Oraya first.
+        */}
 
         {summary ? (
           <div
@@ -456,6 +452,29 @@ export default function PaymentCheckoutPage(props: {
               </a>
             </div>
           )}
+        </div>
+
+        {/* Acquirer trust mark — required, and correctly placed last. */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+            marginTop: "28px",
+            paddingTop: "18px",
+            borderTop: `1px solid ${BORDER}`,
+          }}
+        >
+          <Image
+            src="/payment/NCseal_M.png"
+            alt="NetCommerce Security Seal"
+            width={130}
+            height={72}
+            style={{ width: "84px", height: "auto", display: "block", opacity: 0.75 }}
+          />
+          <span style={{ color: MUTED, fontFamily: LATO, fontSize: "12px", lineHeight: 1.5 }}>
+            Payments processed securely by Credit Libanais / NetCommerce.
+          </span>
         </div>
       </section>
     </main>
