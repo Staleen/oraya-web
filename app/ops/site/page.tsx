@@ -38,6 +38,15 @@ function describeChanges(before: SiteSettings, after: SiteSettings): string[] {
     if (bc.billing_address !== ac.billing_address) out.push(ac.billing_address === "none" ? "Card form no longer asks for a billing address — address verification stops working" : "Card form asks for a full billing address");
     if (bc.skip_fraud_screening !== ac.skip_fraud_screening) out.push(ac.skip_fraud_screening ? "Fraud screening OFF — Decision Manager skipped on every payment" : "Fraud screening ON — Decision Manager reviews every payment (it currently rejects them all)");
     if (bc.capture_immediately !== ac.capture_immediately) out.push(ac.capture_immediately ? "Money is taken immediately when a guest pays" : "Cards are only HELD — you must capture the money yourself");
+    if (bc.payer_authentication !== ac.payer_authentication) {
+      out.push(
+        ac.payer_authentication === "required"
+          ? "3-D Secure STRICT — payments the bank will not verify are refused, and real cards will be turned away until Oraya can show a challenge screen"
+          : ac.payer_authentication === "frictionless_only"
+            ? "3-D Secure on, silent only — chargeback liability moves to the bank when it verifies quietly, and no guest is ever blocked"
+            : "3-D Secure OFF — no bank verification on any payment",
+      );
+    }
   }
   if (before.arrival_guide_payment_gate !== after.arrival_guide_payment_gate) {
     out.push(after.arrival_guide_payment_gate

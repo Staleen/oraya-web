@@ -2273,3 +2273,41 @@ message about Oraya's decision, not a bank decline.
 **Business Center refunds.** Drift detection now covers `REFUNDED`/`CREDITED`
 as well as voids, with a distinct correction note. Full coverage still needs
 the Transaction Search entitlement, which merchant 06385000 does not have.
+
+---
+
+## 2026-08-12 - A Setup control without a describeChanges() comparison is an uneditable setting
+
+**Decision:** on every Ops → Setup screen, a field that has a control MUST have a
+`describeChanges()` comparison. The comparison is not documentation of a save —
+it *is* the save gate, so omitting one makes the control silently inert.
+
+**Reason:** the owner reported that the 3-D Secure dropdown on Ops → Setup → Site
+did nothing: no save bar, no confirmation, choice lost on navigation. `PendingBar`
+returns `null` when `describeChanges()` yields an empty list
+([components/ops/setup-shared.tsx:154](../../components/ops/setup-shared.tsx)), and
+`card_checkout_behaviour.payer_authentication` had been given a control by the
+three-state 3DS work earlier the same day without being added to the comparison
+block. The control edited draft state, described nothing, and was discarded. There
+was no error to see — a broken setting is indistinguishable from a working one
+until you navigate away and check.
+
+This is the failure mode worth naming: the bug is invisible at the point of use,
+and it lands on payment settings.
+
+**Impact:** [app/ops/site/page.tsx](../../app/ops/site/page.tsx) gains the
+`payer_authentication` comparison, with a distinct plain-language sentence per
+state (off / silent-only / strict) in the voice already used in that block. All
+four Setup screens were swept field-by-field against their settings types;
+`payer_authentication` was the only field in the codebase with a control and no
+comparison. `addons.currency` remains uncompared by design — it is fixed to USD
+and has no control. No control, default, or save behaviour changed.
+
+**Not fixed here:** `describeChanges()` is defined inside `"use client"` page
+files and is not exported, so no test can reach it and this class of bug cannot
+currently be caught automatically. A durable guard is deliberately separate work —
+the fixing PR proposes options and implements none, so the sweep stays a minimal
+diff on a live payment surface. Tracked as the recurrence-risk note on
+[KNOWN_BUGS.md](KNOWN_BUGS.md) #20.
+
+**Reversible?:** yes — reverting restores an unsaveable 3-D Secure control.
