@@ -3,12 +3,12 @@ import { Resend } from "resend";
 import { LOGO_URL, SITE_URL } from "@/lib/brand";
 import { createActionToken } from "@/lib/booking-action-token";
 import {
-  extractEventInquiryGuestNotesLine,
   isEventInquiryPayload,
   parseEventSetupEstimateFromMessage,
 } from "@/lib/event-inquiry-message";
 import { transactionalEmailFooterHtmlBlock, transactionalEmailFooterTextSuffix } from "@/lib/transactional-email-footer";
 import { checkOutExpiryUnix } from "./checkout-expiry.ts";
+import { extractGuestVisibleNote } from "./guest-visible-note.ts";
 
 const GOLD     = "#C5A46D";
 const MIDNIGHT = "#1F2B38";
@@ -144,10 +144,18 @@ export async function sendBookingPendingEmail(payload: BookingPendingEmailPayloa
 
   const isEventInquiry = isEventInquiryPayload(payload.event_type, payload.message);
   const eventEstimate = isEventInquiry ? parseEventSetupEstimateFromMessage(payload.message) : null;
-  // Bug 3: only show free-text guest notes — never the raw [Event Inquiry] / [EventSetupEstimate] block.
-  const cleanGuestNote = isEventInquiry
-    ? extractEventInquiryGuestNotesLine(payload.message)?.trim() ?? ""
-    : (payload.message ?? "").trim();
+  /*
+    KNOWN_BUGS #26. The event-inquiry half was already handled; the STAY half
+    printed `bookings.message` raw — and that column is not the guest's words,
+    it is a machine block that contains them on one line. This email goes out on
+    EVERY booking creation, so it was the highest-volume instance of the leak:
+    guests were sent "[Booking Protocol] System branch: Hosted checkout after
+    booking creation …", and "Guest Notes: None" when they had written nothing.
+
+    `extractGuestVisibleNote` covers both shapes and returns null when the guest
+    typed nothing, so the section disappears instead of announcing their silence.
+  */
+  const cleanGuestNote = extractGuestVisibleNote(payload) ?? "";
   const subject = isEventInquiry ? "Oraya - Event inquiry received" : "Oraya - Booking Request Received";
 
   const summaryRows: Array<[string, string]> = isEventInquiry

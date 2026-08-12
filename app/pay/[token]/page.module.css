@@ -106,6 +106,14 @@
 }
 .payButton:hover { opacity: 0.9; }
 .closed { text-align: center; padding: 8px 0; }
+/* What the expired link was for, so the guest has something to quote. */
+.closedDetail {
+  border: 0.5px solid rgba(197, 164, 109, 0.18);
+  background: var(--oraya-book-surface-3);
+  padding: 1rem 1.25rem;
+  margin: 20px 0 0;
+  text-align: left;
+}
 .closed h2 {
   font-family: var(--font-playfair), Georgia, serif;
   font-weight: 400;
