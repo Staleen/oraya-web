@@ -78,7 +78,7 @@ const FRESH_CLAIM_MS = 10 * 60 * 1000;
 const methodLabels: Record<PaymentAllowedMethod, string> = {
   cash: "Cash",
   bank_transfer: "Bank transfer",
-  card: "Credit or debit card",
+  card: "Card, Apple Pay & Google Pay",
   apple_pay: "Apple Pay",
   whish: "Whish",
   omt: "OMT",
@@ -208,14 +208,20 @@ export default function PaymentWorkspace() {
     () => bookings.find((booking) => booking.id === bookingId),
     [bookings, bookingId],
   );
+  // Apple Pay is deliberately NOT offered here. It is not a payment method the
+  // operator chooses — Unified Checkout shows it on the same sheet as the card
+  // form, so it rides with "Card" automatically. Offering it separately let a
+  // link be created for the wallet with no card rail behind it, and the guest
+  // got "Secure card payment is not available for this request" (live,
+  // 2026-08-12). Choosing Card now offers the guest card, Apple Pay and Google
+  // Pay, whichever their device supports.
   const activeRequestMethods = useMemo(
     () =>
       PAYMENT_ALLOWED_METHODS.filter(
         (method) =>
-          (method !== "card" || ledger.checkout?.checkout_ready) &&
-          (method !== "apple_pay" || ledger.checkout?.apple_pay_ready),
+          method !== "apple_pay" && (method !== "card" || ledger.checkout?.checkout_ready),
       ),
-    [ledger.checkout?.apple_pay_ready, ledger.checkout?.checkout_ready],
+    [ledger.checkout?.checkout_ready],
   );
 
   const attentionAttempts = useMemo(() => {

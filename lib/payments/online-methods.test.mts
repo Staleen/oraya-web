@@ -22,24 +22,35 @@ test("Google Pay rides with card once enrolled — no per-request setting", () =
 });
 
 test("a card-backed wallet is never offered where card is refused", () => {
-  // The operator said no card on this request. Google Pay settles AS a card,
-  // so offering it would quietly overrule them.
+  // The operator said no card on this request. Every wallet settles AS a card,
+  // so offering one would quietly overrule them.
   assert.deepEqual(resolveOnlineCheckoutMethods(["cash", "bank_transfer"], ALL), []);
-  assert.deepEqual(resolveOnlineCheckoutMethods(["apple_pay"], ALL), ["apple_pay"]);
 });
 
-test("Apple Pay still needs to be asked for — it is a ledger method of its own", () => {
+test("Apple Pay rides with card too — the operator never picks it", () => {
+  // Live dead end 2026-08-12: a link created with ["apple_pay"] and no card
+  // showed the guest "Secure card payment is not available for this request".
   assert.deepEqual(
     resolveOnlineCheckoutMethods(["card"], { ...NONE, apple_pay_enabled: true }),
-    ["card"],
+    ["card", "apple_pay"],
   );
+});
+
+test("a legacy apple_pay-only request offers nothing — there is no card behind it", () => {
+  // Honest rather than convenient: inventing a card rail the operator did not
+  // grant would be worse than refusing. The Ops selector no longer lets this
+  // combination be created.
+  assert.deepEqual(resolveOnlineCheckoutMethods(["apple_pay"], ALL), []);
+});
+
+test("a legacy request carrying both card and apple_pay still works", () => {
   assert.deepEqual(
     resolveOnlineCheckoutMethods(["card", "apple_pay"], { ...NONE, apple_pay_enabled: true }),
     ["card", "apple_pay"],
   );
 });
 
-test("a wallet requested but not enrolled is simply absent, never assumed", () => {
+test("a wallet not enrolled is simply absent, never assumed", () => {
   assert.deepEqual(resolveOnlineCheckoutMethods(["card", "apple_pay"], NONE), ["card"]);
 });
 
