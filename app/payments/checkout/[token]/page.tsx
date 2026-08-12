@@ -200,6 +200,63 @@ function readTransientToken(value: string | { transientTokenJwt?: string }) {
   throw new Error("CyberSource did not return a transient payment token.");
 }
 
+/**
+ * The booking flow, continued.
+ *
+ * A guest who has just walked through Villa & Dates, Stay Setup and Guest
+ * Details arrives here and — before this — saw a page with a different
+ * palette, a bank's name at the top and no sign of where they were in the
+ * process. It read as being handed off to a third party at the exact moment
+ * trust matters most.
+ *
+ * Payment is step four of Oraya's own flow, so the page says so. Shown only
+ * for a booking checkout: a standalone payment link has no preceding steps,
+ * and inventing three completed ones would be a lie told in ticks.
+ */
+function CheckoutSteps() {
+  const labels = ["Villa & Dates", "Stay Setup", "Guest Details", "Payment"];
+  return (
+    <div style={{ marginBottom: "28px" }}>
+      <div style={{ display: "flex", alignItems: "center" }}>
+        {labels.map((label, i) => {
+          const n = i + 1;
+          const done = n < 4;
+          const active = n === 4;
+          return (
+            <div key={label} style={{ display: "flex", alignItems: "center" }}>
+              <div
+                style={{
+                  width: "26px",
+                  height: "26px",
+                  borderRadius: "50%",
+                  flexShrink: 0,
+                  border: `1px solid ${GOLD}`,
+                  backgroundColor: active ? GOLD : "transparent",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontFamily: LATO,
+                  fontSize: "10px",
+                  color: active ? MIDNIGHT : GOLD,
+                }}
+                aria-current={active ? "step" : undefined}
+              >
+                {done ? "✓" : n}
+              </div>
+              {i < 3 && (
+                <div style={{ width: "clamp(18px, 6vw, 52px)", height: "0.5px", backgroundColor: GOLD }} />
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <p style={{ color: MUTED, fontFamily: LATO, fontSize: "12px", letterSpacing: "1.5px", textTransform: "uppercase", margin: "10px 0 0" }}>
+        Step 4 of 4 · Payment
+      </p>
+    </div>
+  );
+}
+
 export default function PaymentCheckoutPage(props: {
   params: Promise<{ token: string }>;
   searchParams: Promise<{ subject?: string | string[] }>;
@@ -378,6 +435,7 @@ export default function PaymentCheckoutPage(props: {
         <div style={{ marginBottom: "18px" }}>
           <OrayaEmblem style={{ width: "48px", height: "auto", display: "block" }} />
         </div>
+        {!isPaymentRequest && <CheckoutSteps />}
         <p style={{ color: GOLD, fontFamily: LATO, fontSize: "11px", letterSpacing: "2.5px", textTransform: "uppercase", margin: "0 0 12px" }}>
           Oraya
         </p>
@@ -387,12 +445,6 @@ export default function PaymentCheckoutPage(props: {
         <p style={{ color: MUTED, fontFamily: LATO, fontSize: "15px", lineHeight: 1.7, maxWidth: "620px", margin: "0 0 28px" }}>
           Your card details are entered inside your bank&rsquo;s own secure interface — Oraya never sees them, and records your payment only once the bank confirms it.
         </p>
-        {/*
-          The acquirer's trust mark stays — Credit Libanais / NetCommerce
-          require it to be shown — but it belongs at the bottom as a quiet
-          reassurance, not at the top as the page's identity. A guest arriving
-          from an Oraya link should see Oraya first.
-        */}
 
         {summary ? (
           <div
@@ -454,27 +506,20 @@ export default function PaymentCheckoutPage(props: {
           )}
         </div>
 
-        {/* Acquirer trust mark — required, and correctly placed last. */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "12px",
-            marginTop: "28px",
-            paddingTop: "18px",
-            borderTop: `1px solid ${BORDER}`,
-          }}
-        >
+        {/*
+          The gateway's seal, and nothing else. Oraya is under no obligation to
+          advertise the acquirer by name on its own checkout — the mark carries
+          the trust signal; the sentence beside it was free advertising for
+          somebody else, on the page where the guest is deciding to pay us.
+        */}
+        <div style={{ marginTop: "28px", paddingTop: "18px", borderTop: `1px solid ${BORDER}` }}>
           <Image
             src="/payment/NCseal_M.png"
-            alt="NetCommerce Security Seal"
+            alt="Secure payment gateway"
             width={130}
             height={72}
-            style={{ width: "84px", height: "auto", display: "block", opacity: 0.75 }}
+            style={{ width: "72px", height: "auto", display: "block", opacity: 0.6 }}
           />
-          <span style={{ color: MUTED, fontFamily: LATO, fontSize: "12px", lineHeight: 1.5 }}>
-            Payments processed securely by Credit Libanais / NetCommerce.
-          </span>
         </div>
       </section>
     </main>
