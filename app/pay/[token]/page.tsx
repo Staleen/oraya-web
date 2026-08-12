@@ -7,6 +7,7 @@ import { PAYMENT_PUBLIC_SETTINGS_KEY, parsePaymentPublicSettings } from "@/lib/p
 import { getHostedCheckoutPublicStatus } from "@/lib/payments/runtime";
 import { getCreditLibanaisPaymentCapabilities } from "@/lib/payments/credit-libanais";
 import { paymentReturnMessage } from "@/lib/payments/guest-presentation";
+import { bookingWhatsAppChangePrefill, digitsOnlyPhone } from "@/lib/booking-trust-messaging";
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -28,10 +29,15 @@ export default async function PaymentRequestPage({
   const paymentReturnState = typeof query.payment === "string" ? query.payment : null;
   const payment = await findPublicPaymentRequest(token).catch(() => null);
   if (!payment) notFound();
-  const [{ data: settingRow }, checkoutStatus] = await Promise.all([
+  const [{ data: settingRow }, checkoutStatus, { data: whatsappRow }] = await Promise.all([
     supabaseAdmin.from("settings").select("value").eq("key", PAYMENT_PUBLIC_SETTINGS_KEY).maybeSingle(),
     getHostedCheckoutPublicStatus(),
+    // KNOWN_BUGS #27.5 — an inactive link said "contact Oraya" and gave the
+    // guest nothing to contact Oraya WITH. Same number, same helper and same
+    // wa.me pattern the booking pages already use; no new contact scheme.
+    supabaseAdmin.from("settings").select("value").eq("key", "whatsapp_number").maybeSingle(),
   ]);
+  const waDigits = digitsOnlyPhone(typeof whatsappRow?.value === "string" ? whatsappRow.value : null);
   const settings = parsePaymentPublicSettings(settingRow?.value ?? null);
   const remaining = remainingRequestAmount(payment.amount, payment.amount_paid);
   const cardCheckoutReady = checkoutStatus.online_checkout_ready && checkoutStatus.provider_key === "credit_libanais";
@@ -79,8 +85,32 @@ export default async function PaymentRequestPage({
           <p className={styles.muted}>
             {isPaid
               ? "Thank you. Your payment has been received and recorded with Oraya."
-              : "Please contact Oraya if you still need to make this payment."}
+              : "This payment link has expired or been cancelled. Message us and we will sort it out."}
           </p>
+          {/*
+            What the guest needs in order to do the thing they have just been
+            told to do: a way to reach Oraya, and something to quote when they
+            get there. The request's own description and amount are what this
+            link was for — the guest's booking reference is not exposed by the
+            public payment-request read, and reaching for it would mean editing
+            lib/payments/**, which is out of bounds here. See KNOWN_BUGS #30.
+          */}
+          {!isPaid ? <>
+            <div className={styles.closedDetail}>
+              <p className={styles.methodTitle}>{payment.description}</p>
+              <p className={styles.muted}>{formatPaymentAmount(payment.amount, payment.currency)} · Prepared for {payment.payer_name}</p>
+            </div>
+            {waDigits ? (
+              <a
+                className={styles.payButton}
+                href={`https://wa.me/${waDigits}?text=${encodeURIComponent(bookingWhatsAppChangePrefill("").trim())}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Message Oraya on WhatsApp
+              </a>
+            ) : null}
+          </> : null}
         </div> : <>
           <p className={styles.eyebrow}>Secure Oraya payment request</p>
           <h1 className={styles.title}>{payment.description}</h1>

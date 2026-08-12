@@ -2212,6 +2212,97 @@ Without a backstop, a guest who closes the tab after 3DS leaves money taken and 
 
 ---
 
+## 2026-08-12 - The dates belong to the guest; a half-finished one belongs to nobody
+
+**Decision:** on `/book`, a **complete** date range survives a villa change and is
+re-checked against the villa it was carried to; a **half-finished** one (check-in,
+no check-out) is dropped the moment the guest leaves the calendar. Neither ever
+happens silently. The rules live in
+[lib/booking/stay-selection.ts](../../lib/booking/stay-selection.ts) with tests.
+
+**Reason:** the two halves look like one problem and are opposites.
+
+Switching villa used to `setDateRange(undefined)` unconditionally — a 21-night
+selection and its $5,850 estimate vanished with nothing said (KNOWN_BUGS #27.1).
+A guest comparing two villas should not be re-picking September every time they
+look; the dates are their work, not the villa's.
+
+The half-finished range had the opposite fault: it survived *everything*, and the
+next click anywhere was read as its check-out. Live, a click meant as a fresh
+check-in produced a 4-night $990 stay nobody chose (#27.2). Carrying a check-in
+across a villa change or a failed step advance is carrying a half-typed sentence
+into a different conversation.
+
+**Impact:** [app/book/page.tsx](../../app/book/page.tsx). The villa-change effect
+now drops only an incomplete range; a second effect, keyed on
+`availabilitySettledKey`, judges the carried-over range against the NEW villa's
+availability once it has loaded — never on a stale or in-flight answer — and
+clears it only with a sentence naming the villa and the dates. `validateStep1Basics`
+drops a pending check-in when the guest tries to advance, replacing a generic
+error that left the date sitting there. The pending state is now a bordered
+"Choosing your check-out" panel stating which date is held and what the next click
+will do, with a "Choose a different check-in" way out.
+
+**Deliberately unchanged:** `normalizeSelectedRange`, every validity check inside
+`handleDateSelect`, the availability rules, the pricing call and the estimate
+panel. A click after a **complete** range still starts a new one — that behaviour
+was already correct and is pinned by a test. The only edit inside
+`handleDateSelect` is clearing the notice text; month navigation still keeps a
+pending check-in, because paging forward to reach a check-out is how you book
+across a month boundary, not leaving the calendar.
+
+**Reversible?:** yes — and reverting restores both defects, which is what the
+tests are there to prevent.
+
+---
+
+## 2026-08-12 - A promise nobody can verify is not made
+
+**Decision:** `/book` says "Instant confirmation available for eligible stays"
+only when it is true for the stay in front of the guest — master switch
+`instant_booking_auto_confirm` AND the selected villa's own flag AND the
+stay-level eligibility the page already computes
+([lib/booking/instant-promise.ts](../../lib/booking/instant-promise.ts)). The
+master switch is a **tri-state**, and `"unknown"` means silent.
+
+**Reason:** the line rendered unconditionally while the master switch was off, so
+it was true for nobody (KNOWN_BUGS #27.3). `/book` cannot currently read that
+switch — `GET /api/settings` serves an explicit allow-list and the key is not on
+it — and `app/api/**` was outside this task. Guessing `true` to keep the sentence
+would be the same defect with a different value, so the page says the honest
+thing instead: "Oraya reviews every request before confirming."
+
+**Cost, stated plainly:** with instant booking switched on, guests who genuinely
+qualify are still told their request will be reviewed. That is a withheld truth,
+not a false one, and it is one line to fix — tracked as KNOWN_BUGS #30.
+
+**Reversible?:** yes.
+
+---
+
+## 2026-08-12 - An expired payment link says how to reach a human
+
+**Decision:** the inactive state of `/pay/[token]` carries the same WhatsApp CTA
+the booking pages use — same number, same `digitsOnlyPhone` helper, same
+`wa.me` pattern, same "Help with my booking" prefill WhatChimp already triggers
+on — plus the request's description and amount so the guest has something to
+quote.
+
+**Reason:** it said "Please contact Oraya if you still need to make this payment"
+and gave the guest nothing to contact Oraya with: no link, no number, no
+reference (KNOWN_BUGS #27.5). Being told to make contact and handed no means to
+do it is a dead end with instructions.
+
+**Not included:** the 8-character booking reference. `findPublicPaymentRequest`
+does not return `booking_id`, and reaching for it means editing
+`lib/payments/**`, which was out of bounds. The prefill therefore carries the
+trigger phrase without a reference, and the WhatChimp flow asks for it as it
+already does for unknown subscribers (KNOWN_BUGS #7). Tracked as #30.
+
+**Reversible?:** yes.
+
+---
+
 ## 2026-08-12 - A click on a day never moves the calendar
 
 **Decision:** in `/book`, the month the calendar displays changes for exactly two

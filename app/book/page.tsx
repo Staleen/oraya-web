@@ -8,6 +8,13 @@ import OrayaLogoFull from "@/components/OrayaLogoFull";
 import { getVillaBasePrice, getVillaEntryPrice, getVillaPricing } from "@/lib/admin-pricing";
 import { buildBookedRangeList, normalizeSelectedRange, createStayCalendarRules } from "@/lib/booking/calendar-validity";
 import { nextCalendarMonth } from "@/lib/booking/calendar-month-anchor";
+import {
+  decideSelectionAfterVillaChange,
+  describeSelectionOutcome,
+  shouldClearOnLeavingCalendar,
+  type StaySelection,
+} from "@/lib/booking/stay-selection";
+import { canPromiseInstantConfirmation } from "@/lib/booking/instant-promise";
 import { fmtDate, formatUsd, nightCount, toISO } from "@/lib/guest-format";
 import { EMAIL_RE } from "@/lib/guest-validation";
 import { checkPhoneNumber, normalisePhoneInput, phonePlaceholder } from "@/lib/booking/phone-rules";
@@ -316,6 +323,12 @@ function startOfLocalMonth(d: Date): Date {
 
 /** Nights at or above which the stay length is stated in words, not just digits. */
 const LONG_STAY_NIGHTS = 14;
+
+/** The calendar's own range shape, as the pure selection rules want it. */
+function selectionFromRange(range: DateRange | undefined): StaySelection | null {
+  if (!range?.from) return null;
+  return { check_in: toISO(range.from), check_out: range.to ? toISO(range.to) : null };
+}
 
 function readStoredButlerPrefill(): ButlerPrefillPayload | null {
   if (typeof window === "undefined") return null;
@@ -997,6 +1010,14 @@ function BookPageInner() {
     "Villa Byblos": false,
   });
 
+  /**
+   * What happened to the guest's dates when they were not looking at them —
+   * cleared because they were half-finished, or because the villa they moved
+   * to cannot host them. Rendered next to the calendar. Empty means nothing
+   * happened; it is never used to hide something that did.
+   */
+  const [selectionNotice, setSelectionNotice] = useState("");
+
   /** Stay Setup — special requests textarea hidden until expanded (content preserved in form.message). */
   const [specialRequestsExpanded, setSpecialRequestsExpanded] = useState(false);
 
@@ -1266,14 +1287,46 @@ function BookPageInner() {
       .finally(() => setAddonsLoading(false));
   }, [step, bookingPath]);
 
-  // Clear stay dates when villa changes; availability is fetched after check-in is derived (see below).
+  /*
+    A villa change no longer throws the guest's dates away.
+
+    It used to `setDateRange(undefined)` unconditionally: a 21-night selection
+    and its $5,850 estimate vanished the moment a guest compared the other
+    villa, with nothing said (KNOWN_BUGS #27.1). The dates are the guest's work,
+    not the villa's.
+
+    What survives the change is decided in two halves, because the two halves
+    are different things:
+
+      · a HALF-FINISHED range (check-in, no check-out) is dropped here and now.
+        Carrying it is what let a later click land as the check-out of a stay
+        nobody chose (#27.2), so it goes before it can do that — with a
+        sentence, never silently.
+
+      · a COMPLETE range is kept and re-checked against the NEW villa's
+        availability once that availability has actually loaded — see the
+        effect keyed on `availabilitySettledKey` below. It cannot be judged
+        here: `confirmedRanges` still describes the villa the guest just left.
+  */
   useEffect(() => {
     if (skipNextVillaDateResetRef.current) {
       skipNextVillaDateResetRef.current = false;
       return;
     }
-    setDateRange(undefined);
+    setDateRange((current) => {
+      const selection = selectionFromRange(current);
+      if (!shouldClearOnLeavingCalendar(selection)) return current;
+      setSelectionNotice(
+        describeSelectionOutcome(
+          { kind: "cleared_incomplete", check_in: selection!.check_in },
+          form.villa,
+          fmtDate,
+        ),
+      );
+      return undefined;
+    });
   }, [form.villa]);
+
 
   useEffect(() => {
     const pending = pendingButlerDateRangeRef.current;
@@ -1386,6 +1439,27 @@ function BookPageInner() {
       cancelled = true;
     };
   }, [form.villa, checkIn, availabilityRetryNonce]);
+
+  /*
+    Fix 1, second half (KNOWN_BUGS #27.1): the complete range the guest carried
+    across a villa change is judged against the villa they carried it TO — and
+    only once that villa's availability has actually settled.
+    `availabilitySettledKey` is set by the fetch above and is null while it is
+    in flight or has failed, so a range is never dropped on a stale or missing
+    answer. Available → it stays, silently, because nothing happened to it. Not
+    available → it goes, and the guest is told which villa and which dates.
+  */
+  useEffect(() => {
+    if (!form.villa || !checkIn || !checkOut) return;
+    if (availabilitySettledKey !== `${form.villa}|${checkIn}`) return;
+    const outcome = decideSelectionAfterVillaChange(
+      { check_in: checkIn, check_out: checkOut },
+      (from, to) => isValidCheckoutFrom(parseLocalISO(from), parseLocalISO(to)),
+    );
+    if (outcome.kind !== "cleared_unavailable") return;
+    setSelectionNotice(describeSelectionOutcome(outcome, form.villa, fmtDate));
+    setDateRange(undefined);
+  }, [availabilitySettledKey, form.villa, checkIn, checkOut, isValidCheckoutFrom]);
   const sleepingGuestsCount = parseInt(form.sleepingGuests, 10) || 0;
   const selectedBedroomsCount = parseInt(form.bedroomCount, 10) || 3;
   const sleepingSetupLabel = getSleepingSetupLabel(sleepingGuestsCount);
@@ -1578,6 +1652,18 @@ function BookPageInner() {
     !hasOperationalWarningSelection &&
     bookingTrustMode === "instant" &&
     instantBookingEnabledForVilla(form.villa, instantBookingFlags);
+
+  /**
+   * The master switch `settings.instant_booking_auto_confirm`, which is what
+   * actually decides whether anything auto-confirms.
+   *
+   * `/book` cannot read it: `GET /api/settings` serves an explicit allow-list
+   * of public keys and this one is not on it. `app/api/**` is outside this
+   * task's scope, so the page reports the switch as unreadable and the promise
+   * stays silent rather than being guessed. Adding the key to
+   * `PUBLIC_SETTINGS_KEYS` and passing the real boolean here is the follow-up.
+   */
+  const autoConfirmSwitch = "unknown" as const;
   const trustCopyMode: BookingTrustMode = bookingPath === "instant" ? "instant" : "request";
 
   /**
@@ -1764,6 +1850,9 @@ function BookPageInner() {
     }
 
     setError("");
+    // The guest is choosing again, so whatever was cleared for them is now
+    // history. Validity checks above are untouched.
+    setSelectionNotice("");
     // A day the guest could click is a day already on screen, so there is
     // nothing to bring into view. Routed through the rule rather than simply
     // omitted, so that re-introducing a shift here has to argue with a test.
@@ -1774,7 +1863,24 @@ function BookPageInner() {
   function validateStep1Basics(): boolean {
     if (!form.villa)         { setError("Please select a villa before continuing.");                          return false; }
     if (!checkIn)            { setError("Please select your check-in and check-out dates to continue.");     return false; }
-    if (!checkOut)           { setError("Please select a check-out date to complete your stay details.");    return false; }
+    if (!checkOut) {
+      /*
+        KNOWN_BUGS #27.2. Pressing Continue with a half-finished range used to
+        leave the pending check-in sitting there behind a generic error. The
+        guest, told to "select your dates", clicked what they meant as a fresh
+        check-in — and it was read as the CHECK-OUT of the date still held.
+        Live, that produced a 4-night $990 stay nobody chose.
+
+        An attempt to leave the calendar is leaving the calendar: the pending
+        check-in is dropped here, so the next click can only start a new range,
+        and the guest is told plainly what went and why.
+      */
+      setSelectionNotice(
+        describeSelectionOutcome({ kind: "cleared_incomplete", check_in: checkIn }, form.villa, fmtDate),
+      );
+      setDateRange(undefined);
+      return false;
+    }
     if (checkOut <= checkIn) { setError("Your check-out date must be after your check-in date.");            return false; }
     if (dateConflict)        { setError(dateConflict);                                                        return false; }
     return true;
@@ -2518,6 +2624,30 @@ function BookPageInner() {
                         : undefined
                     }
                   >
+                    {/*
+                      What happened to the dates while the guest was not
+                      looking at them. Cleared-because-half-finished, or
+                      cleared-because-this-villa-cannot-host-them. Silence here
+                      is the defect (KNOWN_BUGS #27.1), so this sits above the
+                      strip where the dates used to be.
+                    */}
+                    {selectionNotice && (
+                      <div
+                        role="status"
+                        style={{
+                          marginTop: narrowStep1 ? 0 : "14px",
+                          marginBottom: "14px",
+                          border: `0.5px solid ${GOLD}`,
+                          backgroundColor: "rgba(197,164,109,0.10)",
+                          padding: narrowStep1 ? "10px 14px" : "12px 18px",
+                        }}
+                      >
+                        <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p82)", margin: 0, lineHeight: 1.6 }}>
+                          {selectionNotice}
+                        </p>
+                      </div>
+                    )}
+
                     {/* Selected-dates summary strip */}
                     {checkIn && (
                       <div
@@ -2564,8 +2694,43 @@ function BookPageInner() {
                             )}
                           </>
                         ) : (
-                          <div style={{ display: "flex", alignItems: "center" }}>
-                            <p style={{ fontFamily: LATO, fontSize: "14px", color: "var(--oraya-book-p78)", margin: 0 }}>Now select a check-out date</p>
+                          /*
+                            KNOWN_BUGS #27.2, second half. The only sign that
+                            the next click would be read as a CHECK-OUT was a
+                            quiet grey line here. It now says which date is
+                            held, what the next click will do, and offers the
+                            way out — so nobody discovers the mode by being
+                            given a stay they did not choose.
+                          */
+                          <div style={{ flexBasis: "100%", display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px" }}>
+                            <div
+                              aria-live="polite"
+                              style={{
+                                flex: "1 1 240px",
+                                border: `0.5px solid ${GOLD}`,
+                                backgroundColor: "rgba(197,164,109,0.10)",
+                                padding: "10px 14px",
+                              }}
+                            >
+                              <p style={{ fontFamily: LATO, fontSize: "11px", letterSpacing: "1.6px", textTransform: "uppercase", color: GOLD, margin: "0 0 4px" }}>
+                                Choosing your check-out
+                              </p>
+                              <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p82)", margin: 0, lineHeight: 1.6 }}>
+                                Check-in {fmtDate(checkIn)} is held. Your next date click sets the check-out.
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              className="oraya-pressable"
+                              onClick={() => {
+                                setDateRange(undefined);
+                                setSelectionNotice("");
+                                setError("");
+                              }}
+                              style={{ fontFamily: LATO, fontSize: "12px", letterSpacing: "0.8px", color: GOLD, backgroundColor: "transparent", border: "0.5px solid rgba(197,164,109,0.4)", padding: "10px 16px", minHeight: "40px", cursor: "pointer" }}
+                            >
+                              Choose a different check-in
+                            </button>
                           </div>
                         )}
                       </div>
@@ -3485,9 +3650,24 @@ function BookPageInner() {
 
               {estimatePanel}
 
+              {/*
+                KNOWN_BUGS #27.3 — this used to render for everyone, promising
+                instant confirmation while the master switch was off, i.e. to
+                nobody. It now says it only when it is true for THIS stay:
+                master switch, this villa's flag, and the stay-level gate the
+                page already computes. The switch is unreadable from the client
+                today, so the promise stays silent — see
+                lib/booking/instant-promise.ts.
+              */}
               {!hasAddonsOrSpecialRequestsForReview && (
                 <p style={{ fontFamily: LATO, fontSize: "13px", color: "var(--oraya-book-p78)", lineHeight: 1.65, margin: 0, textAlign: "center" }}>
-                  Instant confirmation available for eligible stays. Some requests may require review.
+                  {canPromiseInstantConfirmation({
+                    autoConfirmEnabled: autoConfirmSwitch,
+                    villaInstantEnabled: instantBookingEnabledForVilla(form.villa, instantBookingFlags),
+                    stayEligible: instantEligible,
+                  })
+                    ? "Instant confirmation available for eligible stays. Some requests may require review."
+                    : "Oraya reviews every request before confirming. We will be in touch shortly."}
                 </p>
               )}
 

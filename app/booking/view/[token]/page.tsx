@@ -6,6 +6,7 @@ import BookingPayNowButton from "@/components/BookingPayNowButton";
 import { BookingViewMemberLink } from "@/components/BookingViewMemberLink";
 import { buildProposalEmailLineItems } from "@/lib/event-proposal-line-items";
 import { extractEventInquiryGuestNotesLine, parseEventSetupEstimateFromMessage } from "@/lib/event-inquiry-message";
+import { extractGuestVisibleNote } from "@/lib/guest-visible-note";
 import { derivePaymentLinkState } from "@/lib/payments/link-state";
 import {
   buildGuestPaymentPresentation,
@@ -409,6 +410,15 @@ export default async function BookingViewPage(
     parseEventSetupEstimateFromMessage(booking.message),
   );
   const eventGuestNotes = isEventInquiry ? extractEventInquiryGuestNotesLine(booking.message) : null;
+  /*
+    KNOWN_BUGS #26. This page rendered `booking.message` raw under the heading
+    "Your note" — so the guest was shown Oraya's `[Booking Protocol]` machine
+    block labelled as something they had written. That column is not the guest's
+    words; it is a composed block containing them on one line. "Your note" must
+    never appear above anything the guest did not write, so the whole card is
+    driven by what they actually typed, and disappears when that is nothing.
+  */
+  const guestVisibleNote = extractGuestVisibleNote(booking);
   const showEventProposal = isEventInquiry && booking.proposal_status === "sent";
   const proposalExpired = isProposalExpired(booking.proposal_status, booking.proposal_valid_until);
   const canRespondToProposal = showEventProposal && !proposalExpired;
@@ -1213,13 +1223,13 @@ export default async function BookingViewPage(
         )}
 
         {/* Message card (if any) — event inquiries: guest text only (no structured estimate JSON). */}
-        {((isEventInquiry && eventGuestNotes) || (!isEventInquiry && booking.message)) && (
+        {((isEventInquiry && eventGuestNotes) || (!isEventInquiry && guestVisibleNote)) && (
           <div style={{ border: "0.5px solid var(--oraya-border)", padding: "1.75rem", marginBottom: "2.5rem", textAlign: "left" }}>
             <p style={{ fontFamily: LATO, fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: GOLD, marginBottom: "0.75rem" }}>
               Your note
             </p>
             <p style={{ fontFamily: LATO, fontSize: "13px", color: WHITE, lineHeight: 1.7, margin: 0, whiteSpace: "pre-wrap" }}>
-              {isEventInquiry ? eventGuestNotes : booking.message}
+              {isEventInquiry ? eventGuestNotes : guestVisibleNote}
             </p>
           </div>
         )}

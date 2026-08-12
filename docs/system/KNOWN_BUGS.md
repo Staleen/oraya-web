@@ -325,11 +325,11 @@ Living list of bugs, gaps, and operational pitfalls that are **known** but **not
 - **Severity:** 🟠 High — the guest receives Oraya's internal system description, addressed to them as if it were their own words.
 - **Area:** `lib/send-booking-email.ts` (fixed) · `lib/send-booking-pending-email.ts` and `app/booking/view/[token]/page.tsx` (still open)
 - **Description:** `bookings.message` is NOT the guest's words. It is a machine-composed block that CONTAINS them on one line — `/book` writes `[Stay Setup]` (bedrooms, estimated guests, sleeping setup, `Guest Notes:`) plus a `[Booking Protocol]` section on the request path. Rendered raw, the guest cancellation email posted the lot back: "[Booking Protocol] System branch: Hosted checkout after booking creation / Supported online protocol targets: card/debit card, Apple Pay, Google Pay when enabled by the hosted provider", and "Guest Notes: None" to guests who had written nothing at all.
-- **Status:** **PARTIALLY FIXED 2026-08-12** (branch `claude/guest-journey-w6`). The confirmed/cancelled guest email now routes through the new [lib/guest-visible-note.ts](../../lib/guest-visible-note.ts), which consumes `parseStaySetupMessage` (never modifies it — instant confirmation depends on that parser) and returns the guest's own words or `null`, so the section is omitted entirely when they typed nothing. Fixing it in the sender rather than the caller also covers `/api/booking-action`, which is locked.
-- **STILL OPEN — same defect, out of the fixing task's scope:**
-  1. [lib/send-booking-pending-email.ts:150](../../lib/send-booking-pending-email.ts) — `(payload.message ?? "").trim()` rendered raw. This is the "Booking Request Received" email sent on **every** booking creation, a far more common path than cancellation.
-  2. [app/booking/view/[token]/page.tsx:1222](../../app/booking/view/%5Btoken%5D/page.tsx) — `booking.message` rendered raw under the heading **"Your note"**, so the guest is shown the machine block labelled as something they wrote.
-- **Recommended fix path:** both are one-line changes to call `extractGuestVisibleNote` from `lib/guest-visible-note.ts`. Each needs its own scoped task because both files sit outside the guest-journey scope.
+- **Status:** **CLOSED 2026-08-12** — all three surfaces fixed. Originally **PARTIALLY FIXED 2026-08-12** (branch `claude/guest-journey-w6`). The confirmed/cancelled guest email now routes through the new [lib/guest-visible-note.ts](../../lib/guest-visible-note.ts), which consumes `parseStaySetupMessage` (never modifies it — instant confirmation depends on that parser) and returns the guest's own words or `null`, so the section is omitted entirely when they typed nothing. Fixing it in the sender rather than the caller also covers `/api/booking-action`, which is locked.
+- **The two remaining surfaces are now fixed (branch `claude/book-selection-truth`):**
+  1. [lib/send-booking-pending-email.ts](../../lib/send-booking-pending-email.ts) — the "Booking Request Received" email, sent on **every** booking creation and therefore the highest-volume instance of the leak, now takes its note from `extractGuestVisibleNote`. Its event-inquiry branch already behaved; the stay branch printed the raw column.
+  2. [app/booking/view/[token]/page.tsx](../../app/booking/view/%5Btoken%5D/page.tsx) — the whole "Your note" card is now driven by `extractGuestVisibleNote` and disappears when the guest wrote nothing, so that heading can no longer sit above machine text.
+- **Recommended fix path:** n/a — resolved. `lib/guest-visible-note.ts` is the single answer to "what did the guest actually write"; any future guest-facing render of `bookings.message` calls it.
 - **Discovered:** 2026-08-12 (owner, live cancellation email; siblings found in the W6 sweep)
 
 ---
@@ -345,7 +345,11 @@ Living list of bugs, gaps, and operational pitfalls that are **known** but **not
   4. **🟡 A failed checkout session titles a booking payment "Payment request" and drops the step rail.** `showBookingSteps` derives from `summary`, which is null when the session request fails, so a guest three steps into a booking cannot tell a booking checkout from a standalone link.
   5. **🟡 An inactive payment link is a dead end.** [app/pay/[token]/page.tsx](../../app/pay/%5Btoken%5D/page.tsx) renders "This link is no longer active. Please contact Oraya if you still need to make this payment." with no link, no WhatsApp CTA and no booking reference — the guest is told to make contact and given nothing to make it with.
   - Also noted: `/pay` card-only links redirect straight into the card form ([app/pay/[token]/page.tsx:52](../../app/pay/%5Btoken%5D/page.tsx)), so the amount is first seen inside checkout unless the guest knows the undocumented `?view=1`. Deliberate (DECISIONS_LOG 2026-08-11), listed for visibility, not as a defect.
-- **Status:** open — owner prioritises. None fixed.
+- **Status:** **FOUR OF FIVE FIXED 2026-08-12** (branch `claude/book-selection-truth`) — items 1, 2, 3 and 5. Item **4 remains open by decision**: keying the checkout title on `isPaymentRequest` is exactly what commit `43b1db4` abandoned, so it was left alone rather than re-introduced.
+  - **1 — FIXED.** A villa change now carries a complete range across and re-checks it against the new villa once that villa's availability has settled; available → kept (verified live: 27–30 Sep survived Mechmech → Byblos and re-priced $720 → $630), unavailable → cleared with a sentence naming the villa and the dates. Rules in [lib/booking/stay-selection.ts](../../lib/booking/stay-selection.ts).
+  - **2 — FIXED.** A half-finished range no longer survives leaving the calendar: it is dropped on a villa change and on any attempt to advance from step 1, each time with an explicit sentence. While one is pending the strip now says "Choosing your check-out — Check-in 23 Sep 2026 is held. Your next date click sets the check-out." and offers "Choose a different check-in". A completed range still starts a new one on the next click — unchanged.
+  - **3 — FIXED.** The instant-confirmation line is gated on [lib/booking/instant-promise.ts](../../lib/booking/instant-promise.ts): master switch AND villa flag AND stay-level eligibility. See #30 for the one remaining piece.
+  - **5 — FIXED.** An inactive payment link now carries the site's standard WhatsApp CTA plus what the link was for. The **booking reference** specifically is not available — see #30.
 - **Discovered:** 2026-08-12 (W6 guest-journey audit)
 
 ---
@@ -358,6 +362,21 @@ Living list of bugs, gaps, and operational pitfalls that are **known** but **not
 - **Status:** open — renumbering touches cross-references in the mission doc and DECISIONS_LOG, so it wants a deliberate docs pass rather than a drive-by edit inside a code PR.
 - **Recommended fix path:** keep the admin-money entry as #23 (it is the one cited elsewhere), renumber the card-page entry, and fix its back-references.
 - **Discovered:** 2026-08-12 (W6 branch, rebasing onto master after PR #159)
+
+---
+
+### #30 — Two guest-facing truths `/book` and `/pay` still cannot reach
+
+- **Severity:** 🟡 Medium — each is one line in a file the fixing task was not allowed to touch. Neither is a wrong statement now; both are a truth withheld.
+- **Area:** `app/api/settings/route.ts` (allow-list) · `lib/payments/ledger-server.ts` (public payment-request read)
+- **Description:** found while closing #27.3 and #27.5 on branch `claude/book-selection-truth`, which was scoped to the guest pages only.
+  1. **`/book` cannot read `instant_booking_auto_confirm`.** `GET /api/settings` serves an explicit `PUBLIC_SETTINGS_KEYS` allow-list and the master instant-booking switch is not on it — the two per-villa keys are. The instant-confirmation promise is therefore gated on a tri-state that is currently `"unknown"`, and unknown means silent: the page says "Oraya reviews every request before confirming" instead. That is honest but permanently pessimistic — with instant booking switched on, guests who genuinely qualify are still told their stay needs review.
+  2. **`/pay/[token]` cannot show a booking reference.** `findPublicPaymentRequest` does not return `booking_id`, so an expired link can offer the WhatsApp CTA and the request's own description and amount, but not the 8-character reference the rest of the site asks guests to quote. The WhatChimp flow asks for it, so the guest is asked for something the page could have shown them.
+- **Status:** open — both deliberately deferred; `app/api/**` and `lib/payments/**` were out of the fixing task's scope.
+- **Recommended fix path:**
+  1. Add `INSTANT_AUTO_CONFIRM_SETTING_KEY` to `PUBLIC_SETTINGS_KEYS`, then pass the real boolean into `canPromiseInstantConfirmation` in place of the `"unknown"` constant in `app/book/page.tsx`. The setting is guest-visible behaviour, not a secret. Verify with the switch on AND off.
+  2. Expose `booking_id` on `findPublicPaymentRequest`, then render `formatBookingReference(booking_id)` in the closed state of `/pay/[token]` and put it in the WhatsApp prefill via `bookingWhatsAppChangePrefill(ref)`, matching the booking-view CTAs exactly.
+- **Discovered:** 2026-08-12 (closing #26/#27)
 
 ---
 
