@@ -1,6 +1,8 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import type { QueueBooking } from "@/lib/ops-queue";
+import { describeDeclineRefund } from "@/lib/ops/decline-refund";
+import { decideDeclineRefundForBooking } from "@/lib/ops/decline-refund-execution";
 import { Banner, Button, Kicker, Row, Rows, T } from "@/components/ops/ui";
 
 /**
@@ -59,6 +61,42 @@ const WHATSAPP_SKIP_COPY: Record<string, string> = {
 export type PreviewAction =
   | { kind: "approve" }
   | { kind: "decline"; expectedStatus: "pending" | "confirmed" };
+
+/** What the decline branch reports back about the money. Display only. */
+type DeclineRefundResult = {
+  kind: string;
+  refunded_amount?: number;
+  currency?: string | null;
+  requires_void?: boolean;
+  operator_note?: string | null;
+};
+
+/**
+ * The stay is cancelled either way — this only says what happened to the money,
+ * and never claims a refund the server did not report.
+ */
+function describeRefundOutcome(refund: DeclineRefundResult | null | undefined): string {
+  if (!refund) return "";
+  const currency = refund.currency ?? "USD";
+  switch (refund.kind) {
+    case "completed":
+      return ` ${currency} ${(refund.refunded_amount ?? 0).toFixed(2)} refunded to the guest's card.`;
+    case "stopped":
+      return refund.requires_void
+        ? " The card was never actually charged — release the hold in Ops → Payments."
+        : ` The refund did not finish${refund.refunded_amount ? ` (${currency} ${refund.refunded_amount.toFixed(2)} returned so far)` : ""} — open Ops → Payments before retrying.`;
+    case "errored":
+      return ` The refund could not be completed${refund.refunded_amount ? ` (${currency} ${refund.refunded_amount.toFixed(2)} returned so far)` : ""} — check Ops → Payments before retrying.`;
+    case "no_charges_found":
+      return " No card charge was found to refund — return the money by hand.";
+    case "lookup_failed":
+      return " Oraya could not check this booking's payments — check Ops → Payments.";
+    case "not_attempted":
+      return refund.operator_note ? ` ${refund.operator_note}` : "";
+    default:
+      return "";
+  }
+}
 
 export default function MessagePreviewDialog({
   action, booking, onClose, onOpen, onDone,
@@ -121,6 +159,7 @@ export default function MessagePreviewDialog({
         error?: string;
         email_sent?: boolean;
         whatsapp?: { dispatched: boolean; reason?: string } | null;
+        refund?: DeclineRefundResult | null;
       };
       if (!r.ok) {
         setSendError(body.error ?? "That didn't go through. Nothing may have been sent.");
@@ -136,7 +175,7 @@ export default function MessagePreviewDialog({
           ? " WhatsApp arrival guide sent."
           : ` WhatsApp arrival guide not sent${body.whatsapp.reason && WHATSAPP_SKIP_COPY[body.whatsapp.reason] ? ` — ${WHATSAPP_SKIP_COPY[body.whatsapp.reason]}` : ""}.`;
       await onDone(
-        `${isApprove ? "Stay approved." : action.kind === "decline" && action.expectedStatus === "confirmed" ? "Stay cancelled." : "Request declined."} ${emailPart}${whatsappPart}`,
+        `${isApprove ? "Stay approved." : action.kind === "decline" && action.expectedStatus === "confirmed" ? "Stay cancelled." : "Request declined."} ${emailPart}${whatsappPart}${describeRefundOutcome(body.refund)}`,
       );
     } catch {
       setSendError("Couldn't reach Oraya — it may not have gone through. Check the booking before retrying.");
@@ -158,6 +197,24 @@ export default function MessagePreviewDialog({
 
   const email = preview?.email;
   const whatsapp = preview?.whatsapp;
+
+  // Preview-over-confirmation applies to the money too: what declining does to
+  // the guest's card is stated BEFORE anything is sent, from the same decision
+  // the server will act on.
+  const refundDecision = isApprove
+    ? null
+    : decideDeclineRefundForBooking({
+        amount_paid: booking.amount_paid,
+        refund_amount: booking.refund_amount,
+        refund_status: booking.refund_status,
+        payment_method: booking.payment_method,
+        payment_provider: booking.payment_link_provider,
+      });
+  const refundLine = refundDecision ? describeDeclineRefund(refundDecision) : "";
+  // Nothing was ever paid — there is no money consequence worth a banner.
+  const showRefundLine = Boolean(
+    refundDecision && (refundDecision.refund || refundDecision.reason !== "nothing_paid"),
+  );
 
   return (
     <div
@@ -181,6 +238,15 @@ export default function MessagePreviewDialog({
         <div style={{ padding: "20px 24px" }}>
           {sendError && <Banner tone="bad" title="Not sent">{sendError}</Banner>}
           {loadError && <Banner tone="bad" title="Preview unavailable" onRetry={() => void load()}>{loadError}</Banner>}
+
+          {showRefundLine && (
+            <Banner
+              tone={refundDecision?.refund ? "warn" : "info"}
+              title={refundDecision?.refund ? "This also returns money" : "The money needs you"}
+            >
+              {refundLine}
+            </Banner>
+          )}
           {!preview && !loadError && (
             <p style={{ color: T.faint, fontSize: "13px", margin: "8px 0" }}>Preparing the messages…</p>
           )}

@@ -2311,3 +2311,75 @@ diff on a live payment surface. Tracked as the recurrence-risk note on
 [KNOWN_BUGS.md](KNOWN_BUGS.md) #20.
 
 **Reversible?:** yes — reverting restores an unsaveable 3-D Secure control.
+
+---
+
+## 2026-08-12 - Declining a paid stay returns the money as part of declining
+
+**Decision:** when an operator declines or cancels a booking the guest already
+paid for by card, Oraya refunds it as part of the same action. The two halves
+that already existed — `decideDeclineRefund` (whether) and `executeCardRefund`
+(how) — are joined by [lib/ops/decline-refund-execution.ts](../../lib/ops/decline-refund-execution.ts),
+called by the `/api/ops/bookings/[id]` decline branch.
+
+Five sub-decisions, all David 2026-08-12:
+
+- **Order.** `cancelled` is written FIRST, then the money moves. A failed refund
+  never rolls the booking back to confirmed — that would re-block the calendar
+  and contradict what the guest was already told. It surfaces to the operator
+  and stays recoverable.
+- **Permission.** Any ops staff may decline, including when it refunds. No owner
+  gate on the decline branch (the standalone Refund card action keeps its own).
+- **Per charge.** Every confirmed card payment on the booking is refunded newest
+  first, each its own call with its own key. Execution stops at the first
+  non-success and records what actually happened rather than pressing on.
+- **Unsettled authorization.** `requires_void` is reported, never actioned. The
+  stay is cancelled and the operator releases the hold in Ops → Payments. An
+  unreleased authorization expires on its own; firing a second money instrument
+  on an unattended path is out of scope.
+- **Idempotency.** `oraya-dcl-` + the first 32 hex characters of
+  `sha256("decline:<bookingId>:<paymentTransactionId>")` — 42 characters, inside
+  the 50-character cap that applies because the key is also sent to CyberSource
+  as the merchant reference. Deterministic, so a double-clicked decline lands on
+  the same key and the ledger absorbs it.
+
+**Reason:** with instant booking off, a guest can pay and still wait for
+approval. If the owner then declines, the guest holds a cancelled booking and
+Oraya holds their money until somebody remembers to press Refund. That gap is
+where a guest gets cancelled and left out of pocket (reported 2026-08-12).
+
+**Two integration facts found while wiring, worth keeping:**
+
+1. **`bookings.payment_method` stores `card_manual`, not `card`.** It is what
+   `decideSetPaidUpdate` writes and what every live card booking carries, while
+   `decideDeclineRefund` recognises only `card`/`apple_pay`. Passed straight
+   through, the decision half would have refused to refund every genuine card
+   payment. The mapping is done at the call site
+   (`normalizeBookingPaymentMethod`), not by editing the decision module —
+   `card_manual` is a card payment through the provider, which is exactly what
+   that module documents as automatically refundable.
+2. **A card payment is linked to a booking two ways.** Both
+   `payment_transactions.booking_id` and `.payment_request_id` are nullable.
+   `oraya_record_provider_payment` copies `payment_requests.booking_id` onto the
+   transaction, so today every card payment carries `booking_id` directly (live
+   check 2026-08-12: 2 transaction rows, both linked both ways, zero orphans).
+   Nothing in the schema guarantees it, and missing a payment means a guest is
+   cancelled and not refunded, so the request path is queried as well and the
+   results unioned.
+
+**Guest messaging:** the cancellation email is sent immediately after the status
+write, before the refund outcome exists — unchanged. It is safe because
+`lib/send-booking-email.ts` contains no refund copy at all, so it cannot promise
+money that has not moved. Keeping it ahead of the refund means a slow or failing
+provider never delays telling the guest their stay is cancelled. Adding refund
+copy to that email would require moving the dispatch after the refund; that is
+deliberately not done here.
+
+**Impact:** new `lib/ops/decline-refund-execution.ts` + tests, the decline branch
+of [app/api/ops/bookings/[id]/route.ts](../../app/api/ops/bookings/[id]/route.ts),
+and the decline confirmation dialog, which now states the money consequence
+before anything is sent and reports the outcome afterwards. No schema change, no
+new dependency, no edit to either half being joined.
+
+**Reversible?:** yes — the orchestration is one call at the end of the decline
+branch; removing it restores manual refunds with the stay still cancelled.

@@ -251,6 +251,18 @@ Living list of bugs, gaps, and operational pitfalls that are **known** but **not
 
 ---
 
+### #21 — A declined booking left the guest cancelled and out of pocket until somebody remembered to refund
+
+- **Severity:** 🟠 High — a guest holds a cancelled booking and Oraya holds their money, with nothing in the system tracking the gap.
+- **Area:** Ops decline / Phase 16B refunds
+- **Description:** with instant booking off, a guest can pay and the stay still waits for approval. If the owner then declined, the booking was cancelled and the money stayed put — returning it was a separate manual errand in Ops → Payments that nothing prompted or recorded. `lib/ops/decline-refund.ts` (whether to refund) and `lib/payments/execute-refund.ts` (how) both existed and neither was wired to the other.
+- **Status:** **FIXED 2026-08-12** (branch `claude/decline-refund-wiring`) — the decline branch now cancels first and then refunds every confirmed card payment on the booking, newest first, stopping at the first non-success. The decline confirmation states the consequence before anything is sent, and the outcome is reported back. See DECISIONS_LOG 2026-08-12 "Declining a paid stay returns the money as part of declining".
+- **Two adjacent defects found and fixed with it:** (1) `bookings.payment_method` stores **`card_manual`**, while `decideDeclineRefund` recognises only `card`/`apple_pay` — passed straight through, the decision half would have refused to refund *every* genuine card payment. Normalised at the call site. (2) `payment_transactions` can be linked to a booking through `booking_id` **or** only through `payment_request_id`; both are nullable. Both paths are queried and unioned, because missing a payment is exactly the failure this fixes.
+- **Not covered:** an authorization that never settled (`requires_void`) is reported, not voided — the operator releases the hold by hand. A booking whose ledger holds no confirmed card charge reports `no_charges_found` rather than guessing. Cash and bank-transfer bookings are refused automatic refund by design.
+- **Discovered:** 2026-08-12 (owner report)
+
+---
+
 <!-- New entries go above this line, lowest # at the top. Closed entries can be moved to a "Closed" section below or stay in place with status: closed + date. -->
 
 ## Closed / wontfix

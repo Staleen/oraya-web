@@ -9,6 +9,11 @@ import {
   type GuestDispatchBookingRow,
 } from "@/lib/booking-guest-dispatch";
 import { findAvailabilityConflict } from "@/lib/calendar/availability";
+import { executeCardRefund } from "@/lib/payments/execute-refund";
+import {
+  runDeclineRefund,
+  type DeclineRefundCharge,
+} from "@/lib/ops/decline-refund-execution";
 import { isExclusionViolation } from "@/lib/db-errors";
 import { resolveBookingRecipient } from "@/lib/booking-recipient";
 import {
@@ -39,6 +44,74 @@ const RETURN_COLUMNS =
 /** Everything the shared guest dispatch reads, plus the lifecycle fields. */
 const DISPATCH_COLUMNS =
   "id, status, villa, check_in, check_out, event_type, message, guest_name, guest_email, guest_phone, member_id, sleeping_guests, day_visitors, addons, addons_snapshot, pricing_subtotal, pricing_snapshot, proposal_total_amount";
+
+/** What the decline branch needs to decide whether declining also refunds. */
+const DECLINE_MONEY_COLUMNS =
+  "amount_paid, refund_amount, refund_status, payment_method, payment_link_provider";
+
+/**
+ * Every confirmed card payment on a booking, found BOTH ways it can be linked.
+ *
+ * `payment_transactions.booking_id` and `payment_transactions.payment_request_id`
+ * are both nullable. The request-scoped card path records a transaction and
+ * copies `payment_requests.booking_id` onto it, so today every card payment on
+ * a booking carries `booking_id` directly — but nothing in the schema
+ * guarantees it, and missing a payment means a guest is cancelled and not
+ * refunded. So the request path is queried as well and the results unioned.
+ *
+ * Only `confirmed` payments are returned. A row already `refunded` or
+ * `reversed` is deliberately left to the operator rather than fed to a refund
+ * that would stop the whole sequence on "nothing remaining".
+ */
+async function loadDeclineCardCharges(
+  bookingId: string,
+): Promise<{ ok: true; charges: DeclineRefundCharge[] } | { ok: false; error?: string | null }> {
+  const { data: requests, error: requestError } = await supabaseAdmin
+    .from("payment_requests")
+    .select("id")
+    .eq("booking_id", bookingId);
+  if (requestError) {
+    console.error(`${LOG_TAG} decline refund: payment request lookup failed`, requestError.message);
+    return { ok: false, error: requestError.message };
+  }
+
+  const requestIds = (requests ?? []).map((row) => String((row as { id: string }).id));
+  const linkage = requestIds.length
+    ? `booking_id.eq.${bookingId},payment_request_id.in.(${requestIds.join(",")})`
+    : `booking_id.eq.${bookingId}`;
+
+  const { data, error } = await supabaseAdmin
+    .from("payment_transactions")
+    .select("id, amount, currency, effective_at")
+    .eq("transaction_type", "payment")
+    .eq("status", "confirmed")
+    .eq("provider", "credit_libanais")
+    .not("provider_reference", "is", null)
+    .or(linkage);
+  if (error) {
+    console.error(`${LOG_TAG} decline refund: card charge lookup failed`, error.message);
+    return { ok: false, error: error.message };
+  }
+
+  const seen = new Set<string>();
+  const charges: DeclineRefundCharge[] = [];
+  for (const row of (data ?? []) as Array<{
+    id: string;
+    amount: number | string;
+    currency: string;
+    effective_at: string;
+  }>) {
+    if (seen.has(row.id)) continue;
+    seen.add(row.id);
+    charges.push({
+      payment_transaction_id: row.id,
+      amount: Number(row.amount),
+      currency: row.currency === "LBP" ? "LBP" : "USD",
+      effective_at: row.effective_at,
+    });
+  }
+  return { ok: true, charges };
+}
 
 /** DISPATCH_COLUMNS plus what the 16B payment emails and ledger math read. */
 const PAYMENT_COLUMNS =
@@ -737,7 +810,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   if (action === "approve" || action === "decline") {
     const { data: booking, error: loadError } = await supabaseAdmin
       .from("bookings")
-      .select(`${DISPATCH_COLUMNS}, proposal_status`)
+      .select(`${DISPATCH_COLUMNS}, proposal_status, ${DECLINE_MONEY_COLUMNS}`)
       .eq("id", id)
       .maybeSingle();
 
@@ -862,6 +935,13 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     }
 
     // decline — pending → cancelled, or cancelling an already-confirmed stay.
+    //
+    // A declined stay the guest already paid for returns their money as part of
+    // declining. ORDER IS DELIBERATE (David, 2026-08-12): `cancelled` is written
+    // FIRST and the refund runs after. A failed refund never rolls the booking
+    // back to confirmed — that would re-block the calendar and contradict what
+    // the guest was already told. It surfaces to the operator and stays
+    // recoverable in Ops → Payments.
     const expectedStatus =
       typeof body.expected_status === "string" ? body.expected_status.trim().toLowerCase() : "";
     if (expectedStatus !== "pending" && expectedStatus !== "confirmed") {
@@ -902,6 +982,11 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       );
     }
 
+    // The cancellation email says nothing about money (lib/send-booking-email.ts
+    // contains no refund copy), so sending it before the refund outcome exists
+    // cannot promise money that has not moved. It stays here, ahead of the
+    // refund, so a slow or failing provider never delays telling the guest
+    // their stay is cancelled.
     const dispatch = await dispatchBookingStatusGuestMessages(
       supabaseAdmin,
       id,
@@ -910,11 +995,38 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       { logTag: LOG_TAG },
     );
 
+    const money = booking as unknown as {
+      amount_paid: number | null;
+      refund_amount: number | null;
+      refund_status: string | null;
+      payment_method: string | null;
+      payment_link_provider: string | null;
+    };
+
+    const refund = await runDeclineRefund(
+      {
+        booking_id: id,
+        amount_paid: money.amount_paid,
+        refund_amount: money.refund_amount,
+        refund_status: money.refund_status,
+        payment_method: money.payment_method,
+        payment_provider: money.payment_link_provider,
+        staff_id: auth.staff.id,
+      },
+      {
+        loadCardCharges: (bookingId) => loadDeclineCardCharges(bookingId),
+        executeRefund: (refundInput) => executeCardRefund(refundInput),
+        hash: (value) => createHash("sha256").update(value).digest("hex"),
+        log: (message, detail) => console.error(`${LOG_TAG} decline refund: ${message}`, detail ?? {}),
+      },
+    );
+
     return NextResponse.json({
       ok: true,
       booking: updated,
       email_sent: dispatch.emailSent,
       whatsapp: dispatch.whatsapp,
+      refund,
       acted_by: who,
     });
   }
