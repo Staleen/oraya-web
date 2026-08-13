@@ -43,6 +43,11 @@ type AttemptView = {
   currency: PaymentCurrency;
   created_at: string;
   updated_at: string;
+  /**
+   * W7 — when a parked 3-D Secure challenge stops being validatable. Null on
+   * every other attempt, and on rows written before the migration.
+   */
+  step_up_expires_at?: string | null;
 };
 type LedgerData = {
   requests: RequestView[];
@@ -198,6 +203,22 @@ export default function PaymentWorkspace() {
     void load();
   }, [load]);
 
+  /**
+   * A 15-minute deadline read once at render would keep saying "open" minutes
+   * after it shut — a stale row with no explanation is the thing KNOWN_BUGS #32
+   * asks to avoid. This ticks only while a challenge is actually open, and only
+   * moves a clock; it fetches nothing and writes nothing.
+   */
+  const [challengeClock, setChallengeClock] = useState(() => Date.now());
+  const hasOpenChallenges = ledger.attempts.some(
+    (attempt) => attempt.status === "pending_authentication",
+  );
+  useEffect(() => {
+    if (!hasOpenChallenges) return;
+    const timer = window.setInterval(() => setChallengeClock(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, [hasOpenChallenges]);
+
   const requestById = useMemo(() => {
     const map = new Map<string, RequestView>();
     for (const request of ledger.requests) map.set(request.id, request);
@@ -222,6 +243,32 @@ export default function PaymentWorkspace() {
           method !== "apple_pay" && (method !== "card" || ledger.checkout?.checkout_ready),
       ),
     [ledger.checkout?.checkout_ready],
+  );
+
+  /**
+   * W7 / KNOWN_BUGS #32 — guests currently standing in front of their bank.
+   *
+   * Kept OUT of `attentionAttempts` on purpose. That list carries "No charge in
+   * BC" and "Charge already in Oraya", and neither is a sane thing to press
+   * while a challenge is still open: nothing has been authorized yet, and the
+   * system releases the attempt itself. This is a read-only state line, and the
+   * only reason it exists is that a parked attempt silently blocks the guest
+   * from starting a second payment — an operator watching that happen deserves
+   * to know why.
+   *
+   * Soonest deadline first: the one about to lapse is the one worth reading.
+   */
+  const openChallenges = useMemo(
+    () =>
+      ledger.attempts
+        .filter((attempt) => attempt.status === "pending_authentication")
+        .slice()
+        .sort(
+          (a, b) =>
+            Date.parse(a.step_up_expires_at ?? a.created_at) -
+            Date.parse(b.step_up_expires_at ?? b.created_at),
+        ),
+    [ledger.attempts],
   );
 
   const attentionAttempts = useMemo(() => {
@@ -308,7 +355,11 @@ export default function PaymentWorkspace() {
     for (const attempt of ledger.attempts) {
       if (
         attempt.payment_request_id &&
-        ["claimed", "authorized", "ambiguous"].includes(attempt.status)
+        // `pending_authentication` belongs here for the same reason the others
+        // do: it is an in-flight attempt. A request whose guest is mid-challenge
+        // must not be offered for removal. The server-side purge guard has the
+        // same omission and is outside this task's scope — KNOWN_BUGS #33.
+        ["claimed", "authorized", "ambiguous", "pending_authentication"].includes(attempt.status)
       ) {
         ids.add(attempt.payment_request_id);
       }
@@ -951,6 +1002,82 @@ export default function PaymentWorkspace() {
                 })}
               </div>
             )}
+          </div>
+        )}
+
+        {/*
+          W7 / KNOWN_BUGS #32 — guests at their bank right now.
+
+          Its own block, above "Needs your attention", because it is not a
+          problem: it is the explanation for one. A parked challenge blocks the
+          guest from starting a second payment, and without this the operator
+          watches that happen with nothing on screen to say why.
+
+          Read-only by design. No release, retry, cancel or complete control —
+          releasing one by hand is a deliberate SQL operation, written down in
+          the operator notes of sql/phase-16b-w7-step-up-authentication.sql.
+        */}
+        {openChallenges.length > 0 && (
+          <div
+            style={{
+              borderTop: `1px solid ${T.borderFaint}`,
+              marginTop: 14,
+              paddingTop: 12,
+            }}
+          >
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <p style={{ margin: 0, fontSize: 14 }}>At the bank — verifying</p>
+              <Badge tone="info">{openChallenges.length}</Badge>
+            </div>
+            <p style={{ color: T.muted, fontSize: 12, margin: "6px 0 10px" }}>
+              Nothing has been charged. The guest cannot start another payment until this
+              finishes or the window shuts, which Oraya does on its own.
+            </p>
+
+            {openChallenges.map((attempt) => {
+              const deadline = attempt.step_up_expires_at
+                ? Date.parse(attempt.step_up_expires_at)
+                : Number.NaN;
+              // No readable deadline reads as expired: a row Oraya cannot date
+              // must not be shown as still live.
+              const expired = !Number.isFinite(deadline) || deadline <= challengeClock;
+              const minutesLeft = Number.isFinite(deadline)
+                ? Math.max(0, Math.ceil((deadline - challengeClock) / 60_000))
+                : null;
+              return (
+                <div
+                  key={attempt.id}
+                  style={{
+                    borderTop: `1px solid ${T.borderFaint}`,
+                    paddingTop: 10,
+                    marginTop: 10,
+                  }}
+                >
+                  <Badge tone={expired ? "neutral" : "info"}>
+                    {expired ? "Verification window closed" : "Waiting for the guest's bank"}
+                  </Badge>
+                  <p style={{ color: T.muted, fontSize: 13, margin: "8px 0 4px" }}>
+                    {labelForAttempt(attempt)}
+                  </p>
+                  <p style={{ color: T.muted, fontSize: 12, margin: "0 0 4px" }}>
+                    {formatPaymentAmount(Number(attempt.amount), attempt.currency)} · started{" "}
+                    {new Date(attempt.created_at).toLocaleString()}
+                  </p>
+                  <p style={{ color: T.muted, fontSize: 12, margin: "0 0 10px" }}>
+                    {!Number.isFinite(deadline)
+                      ? "No verification deadline recorded — treat as closed."
+                      : expired
+                        ? `Closed ${new Date(deadline).toLocaleString()}. Oraya releases it when the bank replies or the guest tries again; nothing to do here.`
+                        : `Closes ${new Date(deadline).toLocaleString()} · about ${minutesLeft} min left`}
+                  </p>
+                  {attempt.payment_request_id && (
+                    <Button small onClick={() => focusRequest(attempt.payment_request_id)}>
+                      Show link
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
 

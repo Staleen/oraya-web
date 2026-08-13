@@ -397,10 +397,22 @@ Living list of bugs, gaps, and operational pitfalls that are **known** but **not
 - **Severity:** 🟢 Low today (unreachable while 3DS is off, and the reaper clears them within 15 minutes); 🟡 Medium once 3DS is on.
 - **Area:** `app/ops/**` — deliberately out of the W7 slices 3–5 scope
 - **Description:** an attempt parked in `pending_authentication` blocks a second payment on the same booking or payment request, by design. Nothing in Ops shows that this is why: the payments desk and the booking screens do not know the state exists. An operator seeing a guest unable to start a payment has no surface that says "they are at their bank right now".
-- **Status:** open. The plan document listed Ops visibility as part of slice 6; the implementing task scoped `app/ops/**` out, so it did not ship with the rest.
-- **Workaround:** `select id, booking_id, payment_request_id, step_up_expires_at from payment_attempts where status = 'pending_authentication' order by step_up_expires_at;` — in the operator notes at the foot of `sql/phase-16b-w7-step-up-authentication.sql`, along with the safe by-hand release.
-- **Recommended fix path:** one honest state line wherever attempts are already surfaced, plus a count on the payments desk. Small, and it wants doing before the real-card window rather than after.
+- **Status:** **FIXED 2026-08-13** (branch `claude/ops-step-up-visibility`) — Ops → Payments gained an **"At the bank — verifying"** block above "Needs your attention", listing every parked challenge with who it belongs to, how much, when it started and when the window shuts, plus a live count. An expired one reads "Verification window closed" with the time it closed and an explicit "nothing to do here", rather than sitting there looking open. A 30-second clock runs only while a challenge is open, so a window that shuts while the operator is watching stops claiming to be live.
+- **Deliberately read-only.** No release, retry, cancel or complete control: nothing has been authorized at that point, and Oraya releases the attempt itself. Releasing by hand stays the deliberate SQL operation documented in the operator notes of `sql/phase-16b-w7-step-up-authentication.sql`. The block is kept OUT of `attentionAttempts` precisely so it cannot inherit that list's "No charge in BC" / "Charge already in Oraya" buttons.
+- **Live state at the time of the fix:** the W7 migration is applied (both columns exist on live `payment_attempts`), and no row holds `pending_authentication` — 3DS is off, so the new block renders nothing until the owner's real-card window.
+- **Workaround (still valid, and still the only way to release one):** `select id, booking_id, payment_request_id, step_up_expires_at from payment_attempts where status = 'pending_authentication' order by step_up_expires_at;`
 - **Discovered:** 2026-08-13 (W7 slices 3–5 implementation)
+
+---
+
+### #33 — The purge-closed guard does not know about parked 3-D Secure challenges
+
+- **Severity:** 🟡 Medium — not a money loss, but it can orphan an attempt row and erase the link that explains why a guest is blocked.
+- **Area:** [app/api/ops/payments/requests/purge-closed/route.ts](../../app/api/ops/payments/requests/purge-closed/route.ts)
+- **Description:** found while closing #32. The server-side safety check that decides which closed payment links may be deleted blocks on `status in ('claimed','authorized','ambiguous')` and does **not** include `pending_authentication` — the same omission the blocking list and the desk's own eligibility list had. The reachable sequence: a guest opens a challenge; the payment request expires on its own schedule while the challenge is still parked (the window is 15 minutes, and `expireDuePaymentRequests` runs on every desk load); the request is now closed with zero transactions, because call 1 authorizes nothing; purge deletes it. `payment_attempts.payment_request_id` is `on delete set null`, so the attempt survives — still blocking the booking, now with nothing to label it in Ops and no link to show.
+- **Status:** open. The client-side eligibility list in `components/ops/PaymentWorkspace.tsx` was corrected with #32 (a request with a parked challenge is no longer *offered* for removal), but the authoritative server guard was outside that task's scope and is unchanged, so a direct call still gets through.
+- **Recommended fix path:** add `'pending_authentication'` to the `.in("status", …)` list in the purge safety check. One word, strictly more conservative — it refuses more deletions, never fewer. Worth doing before the real-card window.
+- **Discovered:** 2026-08-13 (closing #32)
 
 ---
 
