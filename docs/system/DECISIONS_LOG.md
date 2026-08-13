@@ -2212,6 +2212,60 @@ Without a backstop, a guest who closes the tab after 3DS leaves money taken and 
 
 ---
 
+## 2026-08-13 - A guest at their bank is shown, never touched
+
+**Decision:** Ops → Payments shows open 3-D Secure challenges in their own
+read-only block, **"At the bank — verifying"**, above "Needs your attention".
+It carries no control that releases, retries, cancels or completes a challenge.
+
+**Reason:** a parked attempt silently blocks the guest from starting a second
+payment. That is correct behaviour, and until now it was invisible — an
+operator watching a guest fail to pay had nothing on screen saying "they are at
+their bank right now", and a hand-written SQL query was the only visibility
+(KNOWN_BUGS #32). The owner is about to run a controlled real-card window; that
+is the wrong moment to be reading the ledger by hand.
+
+**Why its own block, and not the existing attention list:** that list renders
+"No charge in BC" and "Charge already in Oraya" against every attempt in it.
+Neither is a sane thing to press while a challenge is open — nothing has been
+authorized yet, and the attempt releases itself. Putting the new state in that
+list would have inherited both buttons by construction. So it sits beside it,
+and it is not framed as a problem: it is the explanation for one.
+
+**Why read-only at all:** releasing a challenge by hand is a deliberate SQL
+operation with its own operator notes at the foot of
+`sql/phase-16b-w7-step-up-authentication.sql`. A button that does it is a button
+that gets pressed on a guest who is thirty seconds from finishing.
+
+**Expiry is stated, not implied.** The 15-minute deadline is stored on the row,
+so the block reads it directly: still open shows the closing time and roughly
+how long is left; a closed one says "Verification window closed", when it
+closed, and that Oraya releases it when the bank replies or the guest tries
+again. A missing or unparseable deadline reads as CLOSED — a row Oraya cannot
+date must not be shown as live. A 30-second clock ticks **only** while a
+challenge is open, so a window that shuts under the operator's eyes stops
+claiming otherwise; it fetches nothing and writes nothing.
+
+**Impact:** `components/ops/PaymentWorkspace.tsx` (the new block, the clock,
+and the in-flight list that gates which closed links are offered for removal),
+plus one column added to the attempts select in
+`app/api/ops/payments/requests/route.ts`. No schema change — the W7 migration is
+already applied on live, verified read-only before adding the column, because
+selecting a column that does not exist would have 503'd the whole payments desk.
+
+**Live impact: none today.** No row holds `pending_authentication` (3-D Secure
+is off), so the block renders nothing until the real-card window.
+
+**Found on the way, not fixed:** the server-side purge-closed guard has the same
+omission the desk's own list had — it does not count a parked challenge as
+in-flight, so an expired request with an open challenge could be deleted and
+orphan the attempt. The client list is corrected here; the authoritative guard
+is outside this task's scope. KNOWN_BUGS #33.
+
+**Reversible?:** yes — the block is display only.
+
+---
+
 ## 2026-08-13 - The bank's post-back is a doorbell, not a receipt
 
 **Decision:** 3-D Secure step-up (W7 slices 3–5) ships with two rules that

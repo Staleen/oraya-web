@@ -41,7 +41,12 @@ export async function GET(request: Request) {
       .select("id, payment_request_id, booking_id, transaction_type, status, amount, currency, applied_amount, applied_currency, exchange_rate, method, provider, wallet_presentation, provider_reference, receipt_reference, gross_amount, fee_amount, net_amount, verified_source, effective_at, created_by, reverses_transaction_id, idempotency_key, notes, created_at")
       .order("effective_at", { ascending: false }).limit(250),
     supabaseAdmin.from("payment_attempts")
-      .select("id, booking_id, payment_request_id, idempotency_key, status, provider_transaction_id, provider_reference, amount, currency, created_at, updated_at")
+      // `step_up_expires_at` (W7) is read so the desk can show a guest parked
+      // at their bank mid 3-D Secure challenge, and say when that window shuts.
+      // Read-only: releasing a challenge is a deliberate SQL operation, never a
+      // button (KNOWN_BUGS #32; operator notes in
+      // sql/phase-16b-w7-step-up-authentication.sql).
+      .select("id, booking_id, payment_request_id, idempotency_key, status, provider_transaction_id, provider_reference, amount, currency, created_at, updated_at, step_up_expires_at")
       .order("created_at", { ascending: false }).limit(250),
     supabaseAdmin.from("payment_provider_events")
       .select("id, provider, provider_event_id, payment_request_id, payment_transaction_id, received_at, occurred_at, verification_status, processing_status, processed_at, error_code")
