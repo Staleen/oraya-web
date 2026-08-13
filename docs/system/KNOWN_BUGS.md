@@ -380,6 +380,30 @@ Living list of bugs, gaps, and operational pitfalls that are **known** but **not
 
 ---
 
+### #31 — 3-D Secure step-up is built but has never run against a real card
+
+- **Severity:** 🟡 Medium while it stays off (nothing is reachable); 🟠 High the moment it is switched on, because the first real challenge is also the first end-to-end exercise of the path.
+- **Area:** W7 slices 3–5 — `lib/payments/{payer-authentication,transient-token-payment-request,step-up,step-up-resume,unified-checkout-completion,payment-attempts-store,credit-libanais}.ts`, both `unified-checkout-complete` routes, `app/api/payments/3ds-return/[token]`, the checkout page
+- **Description:** the enrolment/validation call split, the `pending_authentication` attempt state, its stored 15-minute deadline, the TTL reaper, the step-up iframe and the bank's post-back route all shipped on 2026-08-13 (branch `claude/w7-step-up`) and are covered by 25 stubbed tests, including mutation-checked proofs that a reaped attempt and a duplicate post-back reach the provider zero times. **No real card has been through any of it.** Everything the tests assert about CyberSource's shape — that `consumerAuthenticationInformation` carries `accessToken`, `stepUpUrl` and `authenticationTransactionId` on a 475, that the ACS accepts a form field named `JWT`, that the post-back lands on the baked return URL — is read from the API contract, not observed.
+- **Status:** open by design — it stays unproven until the owner runs the slice-6 real-card window. `payer_authentication` is `off` live, so nothing here executes.
+- **Specific unknowns to watch in that window:** whether the return URL must be `www.stayoraya.com` (the effective checkout host under the current redirect) rather than the bare origin; whether the ACS posts back with POST or GET (both are handled); whether the challenge completes inside the 15-minute window on a slow SMS; and whether `ECI 5` with a populated CAVV actually arrives on call 2, which is W7's acceptance and is still unmet.
+- **Recommended fix path:** run the window as described in the mission doc's W7 and in DECISIONS_LOG 2026-08-13, with the migration applied first. If anything is wrong, the failure mode is a guest turned away with nothing charged — not a charge — because call 1 authorizes nothing and call 2 only runs behind a compare-and-set.
+- **Discovered:** 2026-08-13 (W7 slices 3–5 implementation)
+
+---
+
+### #32 — Open 3-D Secure challenges are invisible in Ops
+
+- **Severity:** 🟢 Low today (unreachable while 3DS is off, and the reaper clears them within 15 minutes); 🟡 Medium once 3DS is on.
+- **Area:** `app/ops/**` — deliberately out of the W7 slices 3–5 scope
+- **Description:** an attempt parked in `pending_authentication` blocks a second payment on the same booking or payment request, by design. Nothing in Ops shows that this is why: the payments desk and the booking screens do not know the state exists. An operator seeing a guest unable to start a payment has no surface that says "they are at their bank right now".
+- **Status:** open. The plan document listed Ops visibility as part of slice 6; the implementing task scoped `app/ops/**` out, so it did not ship with the rest.
+- **Workaround:** `select id, booking_id, payment_request_id, step_up_expires_at from payment_attempts where status = 'pending_authentication' order by step_up_expires_at;` — in the operator notes at the foot of `sql/phase-16b-w7-step-up-authentication.sql`, along with the safe by-hand release.
+- **Recommended fix path:** one honest state line wherever attempts are already surfaced, plus a count on the payments desk. Small, and it wants doing before the real-card window rather than after.
+- **Discovered:** 2026-08-13 (W7 slices 3–5 implementation)
+
+---
+
 <!-- New entries go above this line, lowest # at the top. Closed entries can be moved to a "Closed" section below or stay in place with status: closed + date. -->
 
 ## Closed / wontfix

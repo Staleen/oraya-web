@@ -10,6 +10,7 @@ import assert from "node:assert/strict";
 
 import {
   classifyProviderAuthorizationOutcome,
+  IN_FLIGHT_ATTEMPT_STATUSES,
   deriveMerchantReference,
   isAllowedAttemptTransition,
   runUnifiedCheckoutCompletion,
@@ -28,7 +29,8 @@ type StoredAttempt = NewPaymentAttempt & {
   provider_reference?: string | null;
 };
 
-const IN_FLIGHT: PaymentAttemptStatus[] = ["claimed", "authorized", "ambiguous"];
+// Mirrors the partial unique indexes, including W7's parked-challenge state.
+const IN_FLIGHT: PaymentAttemptStatus[] = [...IN_FLIGHT_ATTEMPT_STATUSES];
 
 /**
  * In-memory store that enforces the same semantics as the partial unique
@@ -145,6 +147,7 @@ function makeDeps(
       state.recordCalls += 1;
       return { ok: true, matched: 1 };
     },
+    stepUpDeadlineIso: () => "2026-08-13T12:15:00.000Z",
     log() {},
     ...overrides,
   };

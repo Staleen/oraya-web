@@ -4,7 +4,11 @@
  */
 
 import { roundMoney } from "../money.ts";
-import { payerAuthenticationActions, type PayerAuthenticationMode } from "./payer-authentication.ts";
+import {
+  payerAuthenticationActions,
+  type PayerAuthenticationMode,
+  type PayerAuthenticationPhase,
+} from "./payer-authentication.ts";
 
 export type TransientTokenPaymentRequestInput = {
   booking_id: string;
@@ -30,6 +34,23 @@ export type TransientTokenPaymentRequestInput = {
    * Defaults to "off" so an unset setting keeps today's behaviour.
    */
   payer_authentication?: PayerAuthenticationMode;
+  /**
+   * Which half of the two-call 3-D Secure exchange this body is (W7 §2.1).
+   * Defaults to `enrolment`, so every existing caller keeps today's request.
+   * Ignored entirely when `payer_authentication` resolves to `off`.
+   */
+  payer_authentication_phase?: PayerAuthenticationPhase;
+  /**
+   * Call 1 only: where CyberSource must bake the bank's post-back. It is a
+   * claim inside the step-up JWT, not something the browser can choose later,
+   * so it has to be an absolute URL on the host that actually serves checkout.
+   */
+  step_up_return_url?: string | null;
+  /**
+   * Call 2 only: the id returned by call 1, threading the two together. Read
+   * from Oraya's own attempt row — never from the browser's post-back.
+   */
+  authentication_transaction_id?: string | null;
 };
 
 /**
@@ -73,14 +94,35 @@ export const DECISION_SKIP_ACTION = "DECISION_SKIP" as const;
 export function buildTransientTokenPaymentRequest(input: TransientTokenPaymentRequestInput) {
   const skipDecisionManager = input.skip_decision_manager !== false;
   const captureImmediately = input.capture_immediately !== false;
+  const mode = input.payer_authentication ?? "off";
+  const phase = input.payer_authentication_phase ?? "enrolment";
   // One actionList carries both decisions; order does not matter to
   // CyberSource, and an empty list must be omitted entirely rather than sent
   // as [] — an empty actionList is not the same as no actionList.
+  //
+  // DECISION_SKIP RIDES ON BOTH CALLS. Call 2 is the one that authorizes, so
+  // dropping it there hands the money-moving request to the Decision Manager
+  // that rejects every issuer-approved authorization on this merchant with
+  // reason 481 — a build that passes a challenge test and then declines every
+  // real payment. It comes from the same `skip_decision_manager` flag for both
+  // phases precisely so the two cannot drift apart.
   const actionList = [
     ...(skipDecisionManager ? [DECISION_SKIP_ACTION as string] : []),
-    ...payerAuthenticationActions(input.payer_authentication ?? "off"),
+    ...payerAuthenticationActions(mode, phase),
   ];
+  // Only ever populated when 3DS is actually requested: with the mode off this
+  // block is absent and the body is byte-identical to today's.
+  const authenticationInformation = (() => {
+    if (payerAuthenticationActions(mode, phase).length === 0) return null;
+    const returnUrl = input.step_up_return_url?.trim();
+    const authenticationTransactionId = input.authentication_transaction_id?.trim();
+    if (phase === "validation") {
+      return authenticationTransactionId ? { authenticationTransactionId } : null;
+    }
+    return returnUrl ? { returnUrl } : null;
+  })();
   return {
+    ...(authenticationInformation ? { consumerAuthenticationInformation: authenticationInformation } : {}),
     clientReferenceInformation: {
       // The attempt-derived merchant reference (idempotency identifier) when
       // provided; the provider session id remains the legacy fallback.

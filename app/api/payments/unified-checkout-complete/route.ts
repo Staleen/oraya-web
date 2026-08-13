@@ -6,7 +6,13 @@ import {
   authorizeCreditLibanaisTransientToken,
   getCreditLibanaisReadiness,
 } from "@/lib/payments/credit-libanais";
-import { supabasePaymentAttemptStore } from "@/lib/payments/payment-attempts-store";
+import {
+  findStepUpAttempt,
+  reapExpiredStepUpAttempts,
+  supabasePaymentAttemptStore,
+} from "@/lib/payments/payment-attempts-store";
+import { buildStepUpReturnUrl, stepUpDeadlineIso } from "@/lib/payments/step-up";
+import { resolveStepUpResume } from "@/lib/payments/step-up-resume";
 import { runUnifiedCheckoutCompletion } from "@/lib/payments/unified-checkout-completion";
 import { PAYER_AUTHENTICATION_CHALLENGE_MESSAGE } from "@/lib/payments/payer-authentication";
 import { isPaymentLinkExpired } from "@/lib/payments/link-state";
@@ -78,6 +84,9 @@ export async function POST(request: Request) {
     const body = (await request.json()) as Record<string, unknown>;
     const token = readString(body.booking_token);
     const transientToken = readTransientToken(body);
+    // The browser may ASK to resume a challenge; Oraya decides whether there
+    // is one. See resolveStepUpResume.
+    const wantsStepUpResume = body.resume_step_up === true;
 
     if (!token) {
       return NextResponse.json({ error: "booking_token is required." }, { status: 400 });
@@ -137,6 +146,21 @@ export async function POST(request: Request) {
     // exactly one provider operation, and every conditional booking update is
     // row-count verified. Missing payment_attempts table ⇒ fail closed (503).
     const providerSessionId = booking.payment_provider_session_id;
+    /*
+     * W7 slice 5 — is this a fresh payment, or the guest coming back from their
+     * bank's screen?
+     *
+     * `resume` is derived ENTIRELY from Oraya's own rows: the browser asks to
+     * resume, and Oraya decides whether there is a parked attempt to resume and
+     * what its authentication id is. Nothing from the request body reaches the
+     * provider. Only looked up when the browser asks, so an ordinary payment
+     * runs exactly the queries it ran before.
+     */
+    const resume = await resolveStepUpResume(wantsStepUpResume, {
+      booking_id: booking.id,
+      payment_request_id: null,
+    });
+    const attemptId = resume?.attempt_id ?? crypto.randomUUID();
     const outcome = await runUnifiedCheckoutCompletion(
       {
         store: supabasePaymentAttemptStore,
@@ -150,6 +174,20 @@ export async function POST(request: Request) {
             guest_name: booking.guest_name,
             guest_email: booking.guest_email,
             merchant_reference: merchantReference,
+            // Call 2 when resuming, call 1 otherwise. Both carry DECISION_SKIP;
+            // both are ignored while 3-D Secure resolves to off.
+            payer_authentication_phase: resume ? "validation" : "enrolment",
+            authentication_transaction_id: resume?.authentication_transaction_id ?? null,
+            step_up_return_url: resume
+              ? null
+              : buildStepUpReturnUrl(
+                  // Absolute, on the host that actually serves checkout —
+                  // CyberSource bakes this into the step-up JWT, so it cannot
+                  // be chosen at post-back time.
+                  resolvePaymentRequestOrigin(request),
+                  attemptId,
+                  process.env.ADMIN_SECRET ?? "",
+                ),
           }),
         recordApprovedPayment: async (payment) => {
           const nowIso = new Date().toISOString();
@@ -201,20 +239,56 @@ export async function POST(request: Request) {
             console.error("[api/payments/unified-checkout-complete] failed payment update failed:", updateError);
           }
         },
+        stepUpDeadlineIso,
+        releaseExpiredStepUps: () => reapExpiredStepUpAttempts(),
         log: (message, detail) => {
           console.error(`[api/payments/unified-checkout-complete] ${message}`, detail ?? {});
         },
       },
       {
-        attempt_id: crypto.randomUUID(),
+        attempt_id: attemptId,
         booking_id: booking.id,
         provider_session_id: providerSessionId,
         amount: chargeAmount,
         currency: "USD",
+        resume_step_up: resume
+          ? { authentication_transaction_id: resume.authentication_transaction_id }
+          : null,
       },
     );
 
     switch (outcome.kind) {
+      /*
+       * W7 slice 5 — hand the browser the bank's screen.
+       *
+       * `accessToken` has to reach the browser: it is the cardholder's ticket
+       * into the challenge and the protocol has no other way in. It is returned
+       * once, in a response body, and never logged, stored or put in a URL. The
+       * authentication id stays on the attempt row and is not sent at all.
+       *
+       * Nothing has been authorized at this point.
+       */
+      case "step_up_required":
+        return NextResponse.json(
+          {
+            ok: false,
+            paid: false,
+            step_up: { url: outcome.step_up.url, access_token: outcome.step_up.accessToken },
+            message: "Your bank needs to verify this payment.",
+          },
+          { status: 200 },
+        );
+      case "step_up_expired":
+        return NextResponse.json(
+          {
+            ok: false,
+            paid: false,
+            message:
+              "The verification window closed before your bank's answer reached us. Nothing was charged — please start the payment again.",
+            booking_view_url: `${viewUrl}?payment=failed`,
+          },
+          { status: 409 },
+        );
       case "store_unavailable":
         return NextResponse.json(
           { error: "Secure payment is temporarily unavailable. Please try again shortly or contact Oraya." },

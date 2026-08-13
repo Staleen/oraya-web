@@ -29,7 +29,19 @@ export type PaymentAttemptStatus =
   | "authorized"
   | "recorded"
   | "failed"
-  | "ambiguous";
+  | "ambiguous"
+  /**
+   * W7 slice 3 — parked at the cardholder's bank, mid 3-D Secure challenge.
+   *
+   * Call 1 authorized NOTHING, so an attempt sitting here holds no money: the
+   * TTL reaper may release it to `failed` without anything to reverse. It is
+   * still a BLOCKING state, so the guest cannot open a second payment while a
+   * challenge is open.
+   *
+   * Unreachable while `payer_authentication` is `off` — the enrolment call that
+   * produces it is never made.
+   */
+  | "pending_authentication";
 
 export type NewPaymentAttempt = {
   id: string;
@@ -57,6 +69,17 @@ export type PaymentAttemptPatch = {
   provider_request_id?: string | null;
   provider_transaction_id?: string | null;
   provider_reference?: string | null;
+  /**
+   * W7 slice 3. Threads call 1 to call 2. Stored on Oraya's own row so the
+   * post-back never has to be believed about it.
+   */
+  authentication_transaction_id?: string | null;
+  /**
+   * A hard deadline instant, not a query-time interval: the reaper and a late
+   * post-back must agree on exactly one expiry, and a compare-and-set on this
+   * row is what makes them agree.
+   */
+  step_up_expires_at?: string | null;
 };
 
 export type AttemptTransitionResult =
@@ -71,12 +94,39 @@ export type AttemptTransitionResult =
 const ALLOWED_ATTEMPT_TRANSITIONS: Readonly<
   Record<PaymentAttemptStatus, readonly PaymentAttemptStatus[]>
 > = {
-  claimed: ["authorized", "recorded", "failed", "ambiguous"],
+  claimed: ["authorized", "recorded", "failed", "ambiguous", "pending_authentication"],
+  /**
+   * `pending_authentication -> claimed` is the guarded hand-back that lets call
+   * 2 run, and it is the whole defence against W7 §3.2.
+   *
+   * The post-back does not authorize anything itself: it compare-and-sets the
+   * row back to `claimed` FIRST, and only a winning CAS may call the provider.
+   * A reaped attempt is already `failed` and `failed` leads nowhere, so the CAS
+   * loses and no provider call is made. A duplicate post-back loses for the
+   * same reason. Handing back to `claimed` rather than staying parked also
+   * takes the row out of the reaper's reach while call 2 is in flight.
+   *
+   * (The plan lists the terminal exits only; this adds the in-flight one it
+   * implies — "move the attempt OUT of pending_authentication before calling
+   * the provider" needs somewhere non-terminal to move it to.)
+   */
+  pending_authentication: ["claimed", "authorized", "recorded", "failed", "ambiguous"],
   authorized: ["recorded", "failed", "ambiguous"],
   ambiguous: ["recorded", "failed"],
   recorded: [],
   failed: [],
 };
+
+/**
+ * Attempts that block a second payment on the same subject. A parked challenge
+ * counts: the guest is at their bank, not free to start again.
+ */
+export const IN_FLIGHT_ATTEMPT_STATUSES: readonly PaymentAttemptStatus[] = [
+  "claimed",
+  "authorized",
+  "ambiguous",
+  "pending_authentication",
+];
 
 /** Durable state-ordering rule shared by the real store and its tests. */
 export function isAllowedAttemptTransition(
@@ -117,6 +167,16 @@ export type ProviderAuthorizationResult = {
    * their bank. Optional — callers that never request 3DS simply omit it.
    */
   challenge_required?: boolean;
+  /**
+   * W7 slice 4 — a challenge Oraya can actually run: the bank's screen URL, the
+   * JWT the browser posts to it, and the id that threads call 1 to call 2.
+   * Present only from the ENROLMENT call, and only while 3DS is `required`.
+   */
+  step_up?: {
+    url: string;
+    accessToken: string;
+    authenticationTransactionId: string;
+  };
 };
 
 /**
@@ -160,6 +220,23 @@ export type CompletionDeps = {
   ): Promise<{ ok: true; matched: number } | { ok: false }>;
   /** Best-effort booking touch on a decline (payment_last_at). May no-op. */
   touchDeclined?(): Promise<void>;
+  /**
+   * W7 slice 3 — the hard deadline stamped on a parked challenge. Injected so
+   * the reaper and its tests share one definition of "expired" and so no clock
+   * lives inside this pure core. Defaults to the shared 15-minute window.
+   */
+  stepUpDeadlineIso(): string;
+  /**
+   * W7 slice 3 — the TTL reaper, called ONLY when a claim was refused by a
+   * parked challenge. Returns how many it released.
+   *
+   * This is what stops an abandoned bank screen from becoming the permanent
+   * lock slice 1 just fixed: the guest comes back, their old challenge is past
+   * its deadline, it is released, and their new payment goes through on the
+   * same request. Never called on an ordinary payment, so the dark path does
+   * not gain a single query.
+   */
+  releaseExpiredStepUps?(): Promise<number>;
   log(message: string, detail?: Record<string, unknown>): void;
 };
 
@@ -170,6 +247,19 @@ export type CompletionInput = {
   provider_session_id: string;
   amount: number;
   currency: string;
+  /**
+   * W7 slice 5 — resume a 3-D Secure challenge instead of starting a payment.
+   *
+   * Set only when a parked attempt exists for this subject. `attempt_id` must
+   * be that attempt, so the deterministic merchant reference is unchanged and
+   * call 2 reconciles to the same provider operation as call 1.
+   *
+   * Absent on every ordinary payment, and unreachable while 3DS is off.
+   */
+  resume_step_up?: {
+    /** Read from Oraya's attempt row. NEVER from the bank's post-back. */
+    authentication_transaction_id: string;
+  } | null;
 };
 
 export type CompletionOutcome =
@@ -181,7 +271,23 @@ export type CompletionOutcome =
   | { kind: "provider_unknown"; attempt_id: string }
   | { kind: "already_recorded"; provider?: ProviderAuthorizationResult }
   | { kind: "approved_recorded"; provider: ProviderAuthorizationResult }
-  | { kind: "approved_unrecorded"; attempt_id: string; provider: ProviderAuthorizationResult };
+  | { kind: "approved_unrecorded"; attempt_id: string; provider: ProviderAuthorizationResult }
+  /**
+   * W7 slice 5 — the issuer wants to challenge the cardholder, and Oraya has
+   * everything needed to run it. The attempt is parked in
+   * `pending_authentication`; NOTHING has been authorized.
+   */
+  | {
+      kind: "step_up_required";
+      attempt_id: string;
+      step_up: { url: string; accessToken: string };
+    }
+  /**
+   * The challenge window closed before the post-back arrived — reaped, already
+   * validated, or won by a concurrent post-back. **The provider was not
+   * called.** No charge, no ambiguity: the guest starts again.
+   */
+  | { kind: "step_up_expired" };
 
 /**
  * Deterministic merchant reference for one attempt — sent to CyberSource as
@@ -208,6 +314,36 @@ export async function runUnifiedCheckoutCompletion(
   if (!subject.booking_id && !subject.payment_request_id) {
     deps.log("payment attempt has no booking or payment-request subject");
     return { kind: "store_error" };
+  }
+
+  /*
+   * 0. W7 §3.2 — the guard that stops a reaped attempt from taking money.
+   *
+   * Resuming a challenge does NOT claim a new attempt; it compare-and-sets the
+   * parked one back to `claimed`. Everything dangerous is decided here, before
+   * the provider exists in this function:
+   *
+   *   · the reaper already released it   -> row is `failed`, CAS loses
+   *   · a second post-back arrived       -> row is no longer parked, CAS loses
+   *   · the guest already completed      -> row is `recorded`, CAS loses
+   *
+   * A losing CAS returns `step_up_expired` and the provider is never called —
+   * no charge against an attempt Oraya has written off, and no ambiguity.
+   */
+  if (input.resume_step_up) {
+    const resumed = await deps.store.transitionAttempt(
+      input.attempt_id,
+      ["pending_authentication"],
+      { status: "claimed" },
+    );
+    if (!resumed.ok) {
+      deps.log("3-D Secure challenge could not be resumed — the provider was NOT called", {
+        attempt_id: input.attempt_id,
+        current_status: resumed.reason === "conflict" ? resumed.current_status : null,
+      });
+      return { kind: "step_up_expired" };
+    }
+    return runProviderPhase(deps, input, merchantReference);
   }
 
   // 1. Atomic claim BEFORE the provider call. A conflict means another
@@ -244,9 +380,56 @@ export async function runUnifiedCheckoutCompletion(
       });
       return { kind: "blocked_ambiguous" };
     }
+    /*
+     * W7 slice 3 — an abandoned bank screen must not become a permanent lock.
+     *
+     * The guest closed the tab, the SMS never came, the phone died: the old
+     * attempt is still parked and it is blocking this one. Release it if its
+     * deadline has passed (call 1 authorized nothing, so there is nothing to
+     * reverse) and let this payment through on the same request rather than
+     * making the guest fail once to heal the ledger.
+     *
+     * Only reachable from a claim conflict, so an ordinary payment never runs
+     * this — and with 3DS off there is nothing to find.
+     */
+    if (blocking?.status === "pending_authentication" && deps.releaseExpiredStepUps) {
+      const released = await deps.releaseExpiredStepUps();
+      if (released > 0) {
+        const retry = await deps.store.claimAttempt({
+          id: input.attempt_id,
+          booking_id: input.booking_id,
+          payment_request_id: input.payment_request_id ?? null,
+          provider_session_id: input.provider_session_id,
+          idempotency_key: merchantReference,
+          status: "claimed",
+          amount: input.amount,
+          currency: input.currency,
+        });
+        if (retry.ok) return runProviderPhase(deps, input, merchantReference);
+      }
+      deps.log("payment blocked by a 3-D Secure challenge that is still open", {
+        blocking_attempt_id: blocking.id,
+      });
+    }
     return { kind: "already_processing" };
   }
 
+  return runProviderPhase(deps, input, merchantReference);
+}
+
+/**
+ * Everything from the provider call onward. Shared by an ordinary payment and
+ * by a resumed 3-D Secure challenge, so call 2 travels the exact same
+ * classification, persistence and row-count-verified booking path as call 1 —
+ * there is no second, weaker way to record money.
+ *
+ * On entry the attempt is `claimed` and is this request's to move.
+ */
+async function runProviderPhase(
+  deps: CompletionDeps,
+  input: CompletionInput,
+  merchantReference: string,
+): Promise<CompletionOutcome> {
   // 2. Provider call. A throw (timeout / network / unknown) marks the attempt
   //    ambiguous: the guest MAY have been charged, so new attempts are
   //    blocked until a human reconciles against the provider.
@@ -294,6 +477,44 @@ export async function runUnifiedCheckoutCompletion(
       http_ok: provider.ok,
     });
     return { kind: "provider_unknown", attempt_id: input.attempt_id };
+  }
+
+  /*
+   * W7 slice 5 — park the attempt instead of failing it.
+   *
+   * This MUST come before the decline branch: `PENDING_AUTHENTICATION` is
+   * classified retry-safe (slice 1), so a runnable challenge arrives here as
+   * `declined`. Without this branch it would release the claim and tell a guest
+   * standing in front of their bank's screen that the payment was refused.
+   *
+   * `provider.step_up` is only ever populated by the enrolment call while the
+   * mode is `required`, so with 3DS off this branch cannot be entered.
+   *
+   * Nothing was authorized by call 1 — parking holds no money.
+   */
+  if (provider.step_up) {
+    const parked = await deps.store.transitionAttempt(input.attempt_id, ["claimed"], {
+      status: "pending_authentication",
+      authentication_transaction_id: provider.step_up.authenticationTransactionId,
+      step_up_expires_at: deps.stepUpDeadlineIso(),
+      // Deliberately no provider ids: call 1 created no payment resource.
+    });
+    if (!parked.ok) {
+      // Could not park it. Say nothing about a challenge the guest cannot be
+      // brought back from — fall through to the honest slice-1 refusal.
+      deps.log("could not park a 3-D Secure challenge — refusing instead of stranding the guest", {
+        attempt_id: input.attempt_id,
+        current_status: parked.reason === "conflict" ? parked.current_status : null,
+      });
+    } else {
+      return {
+        kind: "step_up_required",
+        attempt_id: input.attempt_id,
+        // The authentication id is NOT handed to the browser: it lives on the
+        // attempt row, and call 2 reads it from there.
+        step_up: { url: provider.step_up.url, accessToken: provider.step_up.accessToken },
+      };
+    }
   }
 
   if (provider.outcome === "declined") {

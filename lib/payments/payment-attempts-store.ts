@@ -1,10 +1,12 @@
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import {
+  IN_FLIGHT_ATTEMPT_STATUSES,
   isAllowedAttemptTransition,
   type NewPaymentAttempt,
   type PaymentAttemptStatus,
   type PaymentAttemptStore,
 } from "@/lib/payments/unified-checkout-completion";
+import { isStepUpExpired } from "@/lib/payments/step-up";
 import type { ReconciliationAttempt } from "@/lib/payments/webhook-reconciliation";
 
 /**
@@ -56,7 +58,9 @@ export const supabasePaymentAttemptStore: PaymentAttemptStore = {
     let query = supabaseAdmin
       .from("payment_attempts")
       .select("id, status")
-      .in("status", ["claimed", "authorized", "ambiguous"])
+      // Includes `pending_authentication` (W7 slice 3): a guest parked at their
+      // bank must not be able to open a second payment behind the challenge.
+      .in("status", [...IN_FLIGHT_ATTEMPT_STATUSES])
       .order("created_at", { ascending: false })
       .limit(1);
     query = subject.payment_request_id
@@ -121,6 +125,91 @@ export const supabasePaymentAttemptStore: PaymentAttemptStore = {
     };
   },
 };
+
+/**
+ * W7 slice 3 — the row a 3-D Secure post-back is about.
+ *
+ * Reads by attempt id ONLY, and the caller gets that id from a token Oraya
+ * signed itself (`verifyStepUpReturnToken`), never from the post-back body.
+ * Returns the stored `authentication_transaction_id` and deadline so call 2 is
+ * built from Oraya's own record of call 1.
+ */
+export type StepUpAttemptRow = {
+  id: string;
+  status: PaymentAttemptStatus;
+  booking_id: string | null;
+  payment_request_id: string | null;
+  provider_session_id: string | null;
+  idempotency_key: string | null;
+  amount: number | null;
+  currency: string | null;
+  authentication_transaction_id: string | null;
+  step_up_expires_at: string | null;
+};
+
+const STEP_UP_ATTEMPT_COLUMNS =
+  "id, status, booking_id, payment_request_id, provider_session_id, idempotency_key, amount, currency, authentication_transaction_id, step_up_expires_at";
+
+export async function findStepUpAttempt(attemptId: string): Promise<StepUpAttemptRow | null> {
+  const { data, error } = await supabaseAdmin
+    .from("payment_attempts")
+    .select(STEP_UP_ATTEMPT_COLUMNS)
+    .eq("id", attemptId)
+    .maybeSingle<StepUpAttemptRow>();
+  if (error) {
+    // No attempt id in the log line — it is the handle the post-back travels on.
+    console.error("[payments/attempts] step-up attempt lookup failed:", error.message);
+    return null;
+  }
+  return data ?? null;
+}
+
+/**
+ * W7 slice 3 — the TTL reaper.
+ *
+ * Bank challenge pages are abandoned constantly: the tab closes, the SMS never
+ * arrives, the phone dies. Without this, every abandonment is a permanent lock
+ * — precisely the bug slice 1 fixed, reintroduced in a new state.
+ *
+ * Releasing to `failed` is safe because call 1 authorizes nothing: there is no
+ * hold to void and no money to return. The transition is compare-and-set on
+ * `status = pending_authentication`, so an attempt that has already been handed
+ * back to `claimed` for call 2 is never yanked out from under an in-flight
+ * provider call.
+ *
+ * Returns how many it released. Never throws — a reaper that takes the caller
+ * down with it is worse than one that runs next time.
+ */
+export async function reapExpiredStepUpAttempts(now: Date = new Date()): Promise<number> {
+  const { data, error } = await supabaseAdmin
+    .from("payment_attempts")
+    .select("id, step_up_expires_at")
+    .eq("status", "pending_authentication")
+    .limit(200);
+  if (error) {
+    if (!isMissingTableError(error)) {
+      console.error("[payments/attempts] step-up reaper lookup failed:", error.message);
+    }
+    return 0;
+  }
+
+  const expired = (data ?? []).filter((row) =>
+    isStepUpExpired((row as { step_up_expires_at: string | null }).step_up_expires_at, now),
+  );
+  let released = 0;
+  for (const row of expired) {
+    const result = await supabasePaymentAttemptStore.transitionAttempt(
+      (row as { id: string }).id,
+      ["pending_authentication"],
+      { status: "failed" },
+    );
+    if (result.ok) released += 1;
+  }
+  if (released > 0) {
+    console.warn(`[payments/attempts] released ${released} expired 3-D Secure challenge(s)`);
+  }
+  return released;
+}
 
 const ATTEMPT_RECONCILIATION_COLUMNS =
   "id, booking_id, payment_request_id, status, amount, currency, idempotency_key, provider_transaction_id";
