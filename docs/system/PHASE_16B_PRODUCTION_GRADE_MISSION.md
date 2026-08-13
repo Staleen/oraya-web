@@ -105,13 +105,26 @@ Every item here was hit in production on 2026-08-11:
 
 Payer authentication was switched on in Unified Checkout on 2026-08-11, yet both subsequent live transactions returned `ECI 7` with empty `XID` and `CAVV` — no authentication took place. With `DECISION_SKIP` bypassing fraud screening, 3DS is now the **only** fraud control, and it is not running.
 
-Fix: add `CONSUMER_AUTHENTICATION` / `VALIDATE_CONSUMER_AUTHENTICATION` to `processingInformation.actionList` and carry the results into the authorization. **Acceptance:** a live transaction returns `ECI 5` with a populated CAVV.
+Fix: add `CONSUMER_AUTHENTICATION` / `VALIDATE_CONSUMER_AUTHENTICATION` to `processingInformation.actionList` and carry the results into the authorization.
+
+**Acceptance (corrected 2026-08-13 — the original wording was Visa-specific and unmeetable on a Mastercard):** a live transaction is authenticated by the issuer and Oraya proceeds with it. Authentication looks different per scheme, and the acceptance has to name both:
+
+| Scheme | ECI meaning "authenticated" | Authentication value | CyberSource response fields |
+|---|---|---|---|
+| Visa / Amex / JCB / Diners / Discover | `05` (`06` = attempted) | CAVV | `eciRaw`, `cavv` |
+| Mastercard Identity Check | `02` (`01` = attempted) | AAV | `eciRaw` or `ucafCollectionIndicator`, `ucafAuthenticationData` |
+
+Note what is *not* in that table. `eci` is documented as returned "only for Visa, American Express, JCB, Diners Club, and Discover transactions **when the card is not enrolled**", so it is absent on a successful authentication of any scheme. `ecommerceIndicator` is a commerce indicator whose values are words (`internet`, `spa`, `vbv_failure`, …) and never an ECI.
+
+**The 2026-08-13 real-card run met this acceptance at the provider, and Oraya refused its own success.** Request `7866300639876438904889` (Mastercard) returned Transaction Status `Y`, ECI `2`, a populated AAV, and authorization reason `100 Success` — then `readPayerAuthenticationResult` read only `eci` and `cavv`, found both absent, computed "not authenticated", and voided the authorization one second later. Fixed on branch `claude/mastercard-3ds-eci`; tracked as KNOWN_BUGS #35. The provider-side half of W7 is proven; the acceptance is met once a run completes end-to-end with the corrected reader.
 
 **Slices 1–2 shipped 2026-08-13** (branch `claude/w7-slices-1-2`), and they do **not** meet that acceptance — they remove the two things that made attempting it unsafe. (1) Reason **475** (`PENDING_AUTHENTICATION`) is now a retry-safe non-charge instead of `unknown`: it used to mark the attempt `ambiguous`, which permanently locked out any guest whose bank asked to verify them (KNOWN_BUGS #29). A challenged guest is now released to try again and told the truth, not "payment was not approved". (2) `frictionless_only` is retired — its "never blocks a guest" promise cannot be kept, since there is no authorization to let through. Refused at save time, resolved to `off` at runtime. Live stored value is `off`, so no live behaviour changed.
 
 **Slices 3–5 shipped 2026-08-13** (branch `claude/w7-step-up`), dark. The two-call split is built (`CONSUMER_AUTHENTICATION` then `VALIDATE_CONSUMER_AUTHENTICATION`, threaded by `authenticationTransactionId`, `DECISION_SKIP` on **both**), the `pending_authentication` attempt state exists with a stored 15-minute deadline and a TTL reaper, and the step-up iframe plus its post-back route are in place. The post-back is a doorbell: it calls nothing, parses nothing and decides nothing, and call 2 runs only after a compare-and-set that a reaped or already-validated attempt loses. Requires the human-run migration `sql/phase-16b-w7-step-up-authentication.sql`.
 
-**None of it is reachable yet.** `payer_authentication` is `off` in production, so the enrolment call is not made, the request body is byte-identical to today's (pinned by a test), and no attempt can enter the new state. **Slice 6 — the real-card window — is the owner's**: switch capture to hold-and-capture-later, switch 3DS to `required`, run one real card, confirm `ECI 5` with a populated CAVV, then switch both back. Acceptance is unchanged and still unmet until that run happens.
+**Slice 6 — the real-card window — ran on 2026-08-13**, and it earned its keep: the first real card through strict mode exposed the scheme-blind reader above. `payer_authentication` is `off` in production again. While off, the enrolment call is not made, the request body is byte-identical to today's (pinned by a test), and no attempt can enter the new state.
+
+**Before switching strict mode on again**, run the window a second time — switch capture to hold-and-capture-later, switch 3DS to `required`, run one real card, confirm the attempt reaches `succeeded` rather than being voided, then switch both back. Run it on a **Visa** as well as a Mastercard: the old reader's `eci` field is a not-enrolled field on the Visa family too, so a successfully authenticated Visa was very likely being refused by the same defect. That is inference from the field documentation, not something observed — the live evidence covers Mastercard only.
 
 **Not built:** Ops visibility of open challenges (`app/ops/**` was out of scope) — see the plan document.
 
