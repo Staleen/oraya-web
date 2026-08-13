@@ -198,8 +198,16 @@ test("the result is read from either ECI field name", () => {
     readPayerAuthenticationResult({ consumerAuthenticationInformation: { eci: "07", ecommerceIndicator: "05" } }).eci,
     "07",
   );
+  // W7 slice 4 added accessToken and authenticationTransactionId to the shape.
+  // Both were previously dropped on the floor; an absent payload yields null
+  // for every field, as before.
   assert.deepEqual(readPayerAuthenticationResult(null), {
-    eci: null, cavv: null, status: null, stepUpUrl: null,
+    eci: null,
+    cavv: null,
+    status: null,
+    stepUpUrl: null,
+    accessToken: null,
+    authenticationTransactionId: null,
   });
 });
 

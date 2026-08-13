@@ -16,7 +16,10 @@ import { readCheckoutBehaviour } from "@/lib/payments/checkout-behaviour-server"
 import {
   decidePayerAuthentication,
   readPayerAuthenticationResult,
+  readStepUpChallenge,
+  resolveEffectivePayerAuthenticationMode,
   PAYER_AUTHENTICATION_CHALLENGE_MESSAGE,
+  type PayerAuthenticationPhase,
 } from "@/lib/payments/payer-authentication";
 import {
   buildCyberSourceJwtAuthorization,
@@ -132,6 +135,16 @@ export interface CreditLibanaisTransientTokenPaymentInput {
    * reconciled against exactly one provider operation.
    */
   merchant_reference?: string | null;
+  /**
+   * W7 slice 4 — which half of the 3-D Secure exchange this is. Omitted (or
+   * `enrolment`) is today's single call. `validation` is call 2: it carries the
+   * authentication id from call 1 and it is the ONLY call that authorizes.
+   */
+  payer_authentication_phase?: PayerAuthenticationPhase;
+  /** Call 1 only: absolute return URL, baked by CyberSource into the step-up JWT. */
+  step_up_return_url?: string | null;
+  /** Call 2 only: read from Oraya's attempt row, never from the post-back. */
+  authentication_transaction_id?: string | null;
 }
 
 export interface CreditLibanaisTransientTokenPaymentResult {
@@ -144,6 +157,17 @@ export interface CreditLibanaisTransientTokenPaymentResult {
   message: string;
   /** See ProviderAuthorizationResult.challenge_required. */
   challenge_required?: boolean;
+  /**
+   * W7 slice 4 — present ONLY when the issuer asked for a challenge and every
+   * part needed to run and later validate it came back. `accessToken` has to
+   * reach the browser (it is the cardholder's ticket into the bank's screen) —
+   * it must never be logged, stored, or put in a URL.
+   */
+  step_up?: {
+    url: string;
+    accessToken: string;
+    authenticationTransactionId: string;
+  };
 }
 
 interface CyberSourcePaymentResponse {
@@ -833,6 +857,11 @@ export async function authorizeCreditLibanaisTransientToken(
       skip_decision_manager: behaviour.skip_fraud_screening,
       capture_immediately: behaviour.capture_immediately,
       payer_authentication: behaviour.payer_authentication,
+      // W7 slice 4. Both are ignored by the builder when 3DS resolves to off,
+      // so with the live setting this is the same body as before.
+      payer_authentication_phase: input.payer_authentication_phase ?? "enrolment",
+      step_up_return_url: input.step_up_return_url ?? null,
+      authentication_transaction_id: input.authentication_transaction_id ?? null,
     }),
   );
   // Org contract 2026-08-10: request MLE is OFF unless explicitly enabled.
@@ -975,6 +1004,24 @@ export async function authorizeCreditLibanaisTransientToken(
   const challengeRequired =
     (payerAuthResult.status ?? "").trim().toUpperCase() === "PENDING_AUTHENTICATION" ||
     Boolean(payerAuthResult.stepUpUrl?.trim());
+  /**
+   * W7 slice 4 — can this challenge actually be RUN?
+   *
+   * Gated on the effective mode being `required` as well as on the response, so
+   * the step-up branch is unreachable while 3-D Secure is off: with the mode
+   * off no enrolment action is sent, and even a surprise `PENDING_AUTHENTICATION`
+   * falls through to slice 1's honest refusal rather than parking an attempt.
+   *
+   * Also gated on the ENROLMENT phase. A `PENDING_AUTHENTICATION` coming back
+   * from call 2 means the challenge did not actually complete; re-parking it
+   * would loop the guest through the bank forever.
+   */
+  const stepUpPhase: PayerAuthenticationPhase = input.payer_authentication_phase ?? "enrolment";
+  const stepUp =
+    resolveEffectivePayerAuthenticationMode(behaviour.payer_authentication) === "required" &&
+    stepUpPhase === "enrolment"
+      ? readStepUpChallenge(payerAuthResult)
+      : null;
   let payerAuthDecision = decidePayerAuthentication(
     behaviour.payer_authentication,
     payerAuthResult,
@@ -1074,6 +1121,15 @@ export async function authorizeCreditLibanaisTransientToken(
     reference: transactionId ?? (diagnosticReference || input.provider_session_id),
     message,
     challenge_required: challengeRequired,
+    ...(stepUp
+      ? {
+          step_up: {
+            url: stepUp.stepUpUrl,
+            accessToken: stepUp.accessToken,
+            authenticationTransactionId: stepUp.authenticationTransactionId,
+          },
+        }
+      : {}),
   };
 }
 

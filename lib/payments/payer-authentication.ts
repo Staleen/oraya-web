@@ -72,10 +72,32 @@ export function resolveEffectivePayerAuthenticationMode(
 
 /** CyberSource `processingInformation.actionList` value requesting 3DS. */
 export const CONSUMER_AUTHENTICATION_ACTION = "CONSUMER_AUTHENTICATION" as const;
+/** Call 2: validate the finished challenge AND authorize, in one request. */
+export const VALIDATE_CONSUMER_AUTHENTICATION_ACTION = "VALIDATE_CONSUMER_AUTHENTICATION" as const;
 
-export function payerAuthenticationActions(mode: PayerAuthenticationMode): string[] {
-  return resolveEffectivePayerAuthenticationMode(mode) === "off"
-    ? []
+/**
+ * A 3-D Secure payment is two calls, not one (W7 §2.1).
+ *
+ *   enrolment  — call 1. Asks the issuer whether it wants to authenticate.
+ *                Either it verifies silently, or it answers
+ *                `PENDING_AUTHENTICATION` with a step-up URL. **Authorizes
+ *                nothing**, which is what makes an abandoned challenge safe.
+ *   validation — call 2. Sent after the cardholder finishes the bank's screen,
+ *                carrying the `authenticationTransactionId` from call 1. This
+ *                is the call that moves money.
+ *
+ * With the mode off there is one call and no 3DS action at all — today's
+ * request, byte for byte.
+ */
+export type PayerAuthenticationPhase = "enrolment" | "validation";
+
+export function payerAuthenticationActions(
+  mode: PayerAuthenticationMode,
+  phase: PayerAuthenticationPhase = "enrolment",
+): string[] {
+  if (resolveEffectivePayerAuthenticationMode(mode) === "off") return [];
+  return phase === "validation"
+    ? [VALIDATE_CONSUMER_AUTHENTICATION_ACTION]
     : [CONSUMER_AUTHENTICATION_ACTION];
 }
 
@@ -96,6 +118,18 @@ export type PayerAuthenticationResult = {
   status?: string | null;
   /** Present when the issuer wants to challenge the cardholder. */
   stepUpUrl?: string | null;
+  /**
+   * The JWT the BROWSER posts to `stepUpUrl` to open the bank's screen. It is
+   * the cardholder's ticket into the challenge and has to reach the browser —
+   * that is the protocol — but it must never be logged, stored, or put in a URL.
+   */
+  accessToken?: string | null;
+  /**
+   * Threads call 1 to call 2. Losing it means the challenge can never be
+   * validated and the payment can never complete. Read from Oraya's own attempt
+   * row on the way back — NEVER from the browser's post-back.
+   */
+  authenticationTransactionId?: string | null;
 };
 
 export type PayerAuthenticationDecision =
@@ -224,6 +258,7 @@ export function readPayerAuthenticationResult(payload: {
     cavv?: unknown;
     accessToken?: unknown;
     stepUpUrl?: unknown;
+    authenticationTransactionId?: unknown;
   } | null;
 } | null | undefined): PayerAuthenticationResult {
   const info = payload?.consumerAuthenticationInformation ?? null;
@@ -233,5 +268,34 @@ export function readPayerAuthenticationResult(payload: {
     cavv: str(info?.cavv),
     status: str(payload?.status),
     stepUpUrl: str(info?.stepUpUrl),
+    // Both were previously dropped on the floor: `accessToken` was destructured
+    // and discarded, and the transaction id was never read at all. Without them
+    // there is no challenge to show and no way to validate it afterwards.
+    accessToken: str(info?.accessToken),
+    authenticationTransactionId: str(info?.authenticationTransactionId),
   };
+}
+
+/**
+ * Is this response an issuer asking to challenge the cardholder, with
+ * everything Oraya needs to run the challenge and validate it afterwards?
+ *
+ * Deliberately demands all three parts. A `PENDING_AUTHENTICATION` missing the
+ * URL, the token or the transaction id is a challenge Oraya cannot finish — it
+ * falls through to slice 1's honest refusal instead of parking an attempt in a
+ * state nothing can ever move.
+ */
+export function readStepUpChallenge(result: PayerAuthenticationResult): {
+  stepUpUrl: string;
+  accessToken: string;
+  authenticationTransactionId: string;
+} | null {
+  const status = (result.status ?? "").trim().toUpperCase();
+  const stepUpUrl = (result.stepUpUrl ?? "").trim();
+  const accessToken = (result.accessToken ?? "").trim();
+  const authenticationTransactionId = (result.authenticationTransactionId ?? "").trim();
+  const challenged = status === "PENDING_AUTHENTICATION" || Boolean(stepUpUrl);
+  if (!challenged) return null;
+  if (!stepUpUrl || !accessToken || !authenticationTransactionId) return null;
+  return { stepUpUrl, accessToken, authenticationTransactionId };
 }

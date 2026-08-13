@@ -15,7 +15,9 @@ import {
   buildPaymentRequestSuccessUrl,
   mintBookingPaymentSuccessUrl,
 } from "@/lib/payments/payment-success-redirect";
-import { supabasePaymentAttemptStore } from "@/lib/payments/payment-attempts-store";
+import { reapExpiredStepUpAttempts, supabasePaymentAttemptStore } from "@/lib/payments/payment-attempts-store";
+import { buildStepUpReturnUrl, stepUpDeadlineIso } from "@/lib/payments/step-up";
+import { resolveStepUpResume } from "@/lib/payments/step-up-resume";
 import { PAYER_AUTHENTICATION_CHALLENGE_MESSAGE } from "@/lib/payments/payer-authentication";
 import {
   deriveMerchantReference,
@@ -64,6 +66,8 @@ export async function POST(request: Request) {
     const body = await request.json() as Record<string, unknown>;
     const token = readString(body.payment_request_token);
     const transientToken = readTransientToken(body);
+    // The browser may ASK to resume a challenge; Oraya decides whether there is one.
+    const wantsStepUpResume = body.resume_step_up === true;
     if (!token) return NextResponse.json({ error: "payment_request_token is required." }, { status: 400 });
     if (!transientToken) return NextResponse.json({ error: "transient_token is required." }, { status: 400 });
 
@@ -99,7 +103,13 @@ export async function POST(request: Request) {
     const amount = remainingRequestAmount(Number(payment.amount), Number(payment.amount_paid));
     if (amount <= 0) return NextResponse.json({ error: "This payment request has already been paid." }, { status: 409 });
 
-    const attemptId = crypto.randomUUID();
+    // W7 slice 5 — resume the parked challenge, or start a fresh payment. The
+    // attempt id and the authentication id come from Oraya's rows, never the body.
+    const resume = await resolveStepUpResume(wantsStepUpResume, {
+      booking_id: payment.booking_id,
+      payment_request_id: payment.id,
+    });
+    const attemptId = resume?.attempt_id ?? crypto.randomUUID();
     const merchantReference = deriveMerchantReference(attemptId);
     const providerSessionId = payment.payment_provider_session_id;
     const walletPresentation =
@@ -118,6 +128,12 @@ export async function POST(request: Request) {
           guest_name: payment.payer_name,
           guest_email: payment.payer_email,
           merchant_reference: reference,
+          // Call 2 when resuming, call 1 otherwise. DECISION_SKIP rides on both.
+          payer_authentication_phase: resume ? "validation" : "enrolment",
+          authentication_transaction_id: resume?.authentication_transaction_id ?? null,
+          step_up_return_url: resume
+            ? null
+            : buildStepUpReturnUrl(origin, attemptId, process.env.ADMIN_SECRET ?? ""),
         }),
         recordApprovedPayment: async (provider) => {
           const recorded = await recordProviderPayment({
@@ -137,6 +153,8 @@ export async function POST(request: Request) {
             .eq("payment_provider_session_id", providerSessionId);
           if (error) console.error("[payment-request/complete] decline touch failed", error.message);
         },
+        stepUpDeadlineIso,
+        releaseExpiredStepUps: () => reapExpiredStepUpAttempts(),
         log: (message, detail) => console.error(`[payment-request/complete] ${message}`, detail ?? {}),
       },
       {
@@ -146,10 +164,36 @@ export async function POST(request: Request) {
         provider_session_id: providerSessionId,
         amount,
         currency: payment.currency,
+        resume_step_up: resume
+          ? { authentication_transaction_id: resume.authentication_transaction_id }
+          : null,
       },
     );
 
     switch (outcome.kind) {
+      // W7 slice 5. The access token reaches the browser because the protocol
+      // requires it; it is never logged, stored or placed in a URL. The
+      // authentication id stays on the attempt row. Nothing is authorized yet.
+      case "step_up_required":
+        return NextResponse.json(
+          {
+            ok: false,
+            paid: false,
+            step_up: { url: outcome.step_up.url, access_token: outcome.step_up.accessToken },
+            message: "Your bank needs to verify this payment.",
+          },
+          { status: 200 },
+        );
+      case "step_up_expired":
+        return NextResponse.json(
+          {
+            ok: false,
+            paid: false,
+            message:
+              "The verification window closed before your bank's answer reached us. Nothing was charged — please start the payment again.",
+          },
+          { status: 409 },
+        );
       case "store_unavailable":
         return NextResponse.json({ error: "Secure payment is temporarily unavailable." }, { status: 503 });
       case "store_error":

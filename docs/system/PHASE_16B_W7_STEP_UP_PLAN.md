@@ -123,12 +123,43 @@ The reaper is also why the TTL must be a stored deadline on the row rather than 
 |---|---|---|
 | 1 | Reason 475 retry-safe; `challenge_required` guest copy on both completion routes | **Shipped** |
 | 2 | Retire `frictionless_only` (save-time refusal + runtime resolution) | **Shipped** |
-| 3 | `pending_authentication` attempt state + additive migration + TTL deadline | Deferred (2026-08-12) |
-| 4 | Call 1 / call 2 split, threaded by `authenticationTransactionId`, `DECISION_SKIP` on both | Deferred |
-| 5 | Step-up iframe page + post-back route (untrusted input; CAS before call 2) | Deferred |
-| 6 | TTL reaper + Ops visibility of open challenges | Deferred |
+| 3 | `pending_authentication` attempt state + additive migration + TTL deadline + reaper | **Shipped 2026-08-13** (`claude/w7-step-up`) |
+| 4 | Call 1 / call 2 split, threaded by `authenticationTransactionId`, `DECISION_SKIP` on both | **Shipped 2026-08-13** |
+| 5 | Step-up iframe page + post-back route (untrusted input; CAS before call 2) | **Shipped 2026-08-13** |
+| 6 | The real-card window: switch 3DS on, prove `ECI 5` + CAVV, switch back | Owner's — not built |
 
-Slices 3–6 must land together or not at all: 3 without 5 is a state nothing writes, and 5 without 6 is the permanent lock this document exists to prevent.
+Slices 3–5 landed together, as required: 3 without 5 is a state nothing writes,
+and 5 without a reaper is the permanent lock this document exists to prevent. The
+reaper moved from slice 6 into slice 3 with them, so nothing shipped that could
+strand a guest.
+
+**What shipped, and what it deliberately does not do:**
+
+- **The TTL is 15 minutes**, and it sits INSIDE the 20-minute capture-context
+  window rather than outside it. Call 2 re-presents the transient token that the
+  capture context minted, so a step-up window longer than the context would hand
+  the guest a challenge they can finish and a token that can no longer pay with
+  it. The residual case — a guest who idles on the card form before submitting,
+  pushing call 1 late enough that the deadline outlives the context — fails as a
+  retry-safe non-charge, never a lock and never a charge.
+- **`pending_authentication -> claimed` was added** to the transition list this
+  document specified. "Move the attempt out of `pending_authentication` before
+  calling the provider" needs a non-terminal destination; `claimed` is the state
+  that already means "in flight with the provider", and handing the row back to
+  it also takes it out of the reaper's reach while call 2 runs.
+- **The post-back route calls nothing and decides nothing.** It verifies an HMAC
+  token Oraya minted, reaps expired challenges, and posts one fixed message to
+  the parent window. It never parses the body, so there is no field in it that a
+  later change could mistake for authority. The parent then asks the completion
+  route to look, and call 2's server-side response is the only evidence.
+- **Ops visibility of open challenges is NOT built** — `app/ops/**` was out of
+  scope. Until it exists, `select … where status = 'pending_authentication'`
+  (the migration's operator notes) is how an operator sees them. In practice the
+  reaper clears them within 15 minutes.
+- **Everything is dark.** The mode is `off` in production; the enrolment action
+  is not sent, the request body is byte-identical to today's (pinned by a test),
+  the step-up branch in the adapter is gated on the effective mode being
+  `required`, and the new attempt state is unreachable.
 
 ## 5. Standing constraints that apply to slices 3–6
 

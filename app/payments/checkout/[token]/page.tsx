@@ -39,6 +39,12 @@ type SessionState =
   | { status: "loading" }
   | { status: "ready"; bookingViewUrl: string; cancelUrl: string }
   | { status: "processing"; bookingViewUrl: string }
+  /**
+   * W7 slice 5 — the cardholder's bank is asking them a question, inside an
+   * iframe. Unreachable while 3-D Secure is off: the server only ever returns a
+   * `step_up` payload from the enrolment call, which is not made in that mode.
+   */
+  | { status: "step_up"; url: string; accessToken: string; bookingViewUrl: string }
   | { status: "blocked"; message: string; bookingViewUrl: string | null };
 
 type UnifiedCheckoutWindow = Window & {
@@ -93,6 +99,8 @@ interface SessionResponse {
 }
 
 interface CompleteResponse {
+  /** W7 slice 5 — present only when the issuer wants to challenge the guest. */
+  step_up?: { url?: string; access_token?: string };
   ok?: boolean;
   paid?: boolean;
   error?: string;
@@ -142,6 +150,46 @@ function resolveCancelDestination(payload: SessionResponse): string {
     return cancelUrl;
   }
 }
+
+/**
+ * W7 slice 5 — wait for Oraya's own return route to ring the doorbell.
+ *
+ * Resolves true when the bank's screen finishes and the framed return page
+ * posts its one fixed message; false when the guest never finishes inside the
+ * step-up window. Either way this decides NOTHING about the payment: a true
+ * only means "ask the server to look", and the server answers from call 2.
+ *
+ * The message is accepted on shape alone and carries no data, so there is
+ * nothing here an origin check would protect — but the payload is still ignored
+ * beyond its literal marker, on principle.
+ */
+function waitForStepUp(timeoutMs = STEP_UP_WAIT_MS): Promise<boolean> {
+  return new Promise<boolean>((resolve) => {
+    let settled = false;
+    const finish = (done: boolean) => {
+      if (settled) return;
+      settled = true;
+      window.removeEventListener("message", onMessage);
+      window.clearTimeout(timer);
+      resolve(done);
+    };
+    function onMessage(event: MessageEvent) {
+      const data = event.data as { source?: unknown; done?: unknown } | null;
+      if (!data || typeof data !== "object") return;
+      if (data.source !== "oraya-3ds") return;
+      finish(data.done === true);
+    }
+    const timer = window.setTimeout(() => finish(false), timeoutMs);
+    window.addEventListener("message", onMessage);
+  });
+}
+
+/**
+ * Slightly longer than the server's 15-minute step-up deadline, so the server —
+ * which owns the compare-and-set — is always the thing that decides the window
+ * has closed, never this timer racing it.
+ */
+const STEP_UP_WAIT_MS = 16 * 60 * 1000;
 
 function formatDate(value?: string) {
   if (!value) return "-";
@@ -437,6 +485,69 @@ export default function PaymentCheckoutPage(props: {
         const completion = (await completionResponse.json()) as CompleteResponse;
         if (cancelled) return;
 
+        /*
+         * W7 slice 5 — the bank wants to verify the cardholder.
+         *
+         * Nothing has been authorized. The guest is shown the bank's own screen
+         * in an iframe; when it finishes, Oraya's return route posts a message
+         * to this window and we ask the server to look. The server is the only
+         * thing that decides whether the payment happened — this branch never
+         * marks anything paid.
+         */
+        const stepUpUrl = completion.step_up?.url?.trim();
+        const stepUpToken = completion.step_up?.access_token?.trim();
+        if (stepUpUrl && stepUpToken) {
+          setState({
+            status: "step_up",
+            url: stepUpUrl,
+            accessToken: stepUpToken,
+            bookingViewUrl,
+          });
+          const finished = await waitForStepUp();
+          if (cancelled) return;
+          if (!finished) {
+            setState({
+              status: "blocked",
+              message:
+                "Your bank did not finish verifying this payment. Nothing was charged — please start the payment again.",
+              bookingViewUrl,
+            });
+            return;
+          }
+          setState({ status: "processing", bookingViewUrl });
+          const resumed = await fetch(
+            isPaymentRequest
+              ? "/api/payments/requests/unified-checkout-complete"
+              : "/api/payments/unified-checkout-complete",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(
+                isPaymentRequest
+                  ? { payment_request_token: token, transient_token: transientToken, resume_step_up: true }
+                  : { booking_token: token, transient_token: transientToken, resume_step_up: true },
+              ),
+            },
+          );
+          const resumedBody = (await resumed.json()) as CompleteResponse;
+          if (cancelled) return;
+          if (resumed.ok && resumedBody.ok && resumedBody.paid) {
+            const url =
+              resumedBody.booking_view_url ?? resumedBody.payment_request_url ?? bookingViewUrl;
+            window.location.assign(url);
+            return;
+          }
+          setState({
+            status: "blocked",
+            message:
+              typeof resumedBody.message === "string" && resumedBody.message.trim()
+                ? resumedBody.message.trim()
+                : "We could not confirm the payment outcome. Do NOT retry or pay again; please contact Oraya.",
+            bookingViewUrl: resumedBody.booking_view_url ?? resumedBody.payment_request_url ?? bookingViewUrl,
+          });
+          return;
+        }
+
         if (completionResponse.ok && completion.ok && completion.paid) {
           // Booking-linked payment requests prefer the booking view; standalone
           // payment requests land on /pay?payment=success.
@@ -555,6 +666,20 @@ export default function PaymentCheckoutPage(props: {
                   {isPaymentRequest ? "Return to payment request" : "Return to booking"}
                 </a>
               </>
+            ) : state.status === "step_up" ? (
+              /*
+                W7 slice 5 — the bank's own verification screen.
+
+                A hidden form POSTs the access token as `JWT` to the ACS URL,
+                targeting the iframe below: that is the protocol's only entry
+                point. The return URL is NOT a field here — CyberSource baked it
+                into the token on call 1, so nothing on this page can redirect
+                the bank's answer anywhere else.
+
+                Unreachable while 3-D Secure is off: the server never returns a
+                step-up payload in that mode, so this state is never set.
+              */
+              <StepUpFrame url={state.url} accessToken={state.accessToken} />
             ) : state.status === "blocked" ? (
               <>
                 <p style={{ fontFamily: LATO, fontSize: "13px", color: BODY, lineHeight: 1.65, margin: 0 }}>{state.message}</p>
@@ -601,6 +726,36 @@ export default function PaymentCheckoutPage(props: {
         </div>
       </div>
     </main>
+  );
+}
+
+/**
+ * The bank's 3-D Secure challenge, framed.
+ *
+ * Submits once on mount and never again — a second submit would restart the
+ * bank's screen underneath a guest who is halfway through typing a code.
+ */
+function StepUpFrame({ url, accessToken }: { url: string; accessToken: string }) {
+  const [formEl, setFormEl] = useState<HTMLFormElement | null>(null);
+  useEffect(() => {
+    formEl?.submit();
+  }, [formEl]);
+  return (
+    <div style={{ display: "grid", gap: "12px" }}>
+      <p style={{ fontFamily: LATO, fontSize: "13px", color: BODY, lineHeight: 1.65, margin: 0 }}>
+        Your bank is verifying this payment. Nothing has been charged yet — please complete the
+        check below.
+      </p>
+      <form ref={setFormEl} method="POST" action={url} target="oraya-3ds-frame" style={{ display: "none" }}>
+        {/* The protocol's field name. The token is submitted, never rendered as text. */}
+        <input type="hidden" name="JWT" value={accessToken} readOnly />
+      </form>
+      <iframe
+        name="oraya-3ds-frame"
+        title="Bank verification"
+        style={{ width: "100%", minHeight: "420px", border: "0", background: "transparent" }}
+      />
+    </div>
   );
 }
 

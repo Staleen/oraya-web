@@ -2212,6 +2212,83 @@ Without a backstop, a guest who closes the tab after 3DS leaves money taken and 
 
 ---
 
+## 2026-08-13 - The bank's post-back is a doorbell, not a receipt
+
+**Decision:** 3-D Secure step-up (W7 slices 3–5) ships with two rules that
+override convenience everywhere they conflict with it.
+
+**One — nothing arriving through the guest's browser is evidence about money.**
+The ACS post-back lands on `/api/payments/3ds-return/[token]`, a route that by
+construction cannot require an Oraya session and whose every byte is
+attacker-controlled. That route therefore calls no provider, parses no body,
+touches no attempt status and cannot mark anything paid. It verifies an HMAC
+token Oraya minted for one attempt, releases expired challenges, and posts a
+single fixed message to the parent window. The parent then asks the completion
+route to look, and **call 2's server-side response is the only thing that
+decides whether a payment happened.** The body is deliberately never read, so
+there is no field in it that a later change could mistake for authority.
+
+**Two — the provider is not called until a compare-and-set says it may be.**
+The nastiest interleaving is not hypothetical: the TTL reaper releases an
+abandoned challenge, the claim frees, the guest starts again — and *then* the
+original post-back arrives. Validating at that point would authorize against an
+attempt Oraya has already written off, next to a second payment on the released
+claim. So resuming CAS-es `pending_authentication -> claimed` **first**, and a
+losing CAS returns without touching the provider at all. Reaped, duplicated, or
+already-recorded all lose the same way. Both properties are pinned by tests that
+were mutation-checked: disabling the guard makes them fail.
+
+**Reason for a sixth attempt state:** the five-state ledger could not express
+"waiting for a human at their bank". Slice 1 made a challenge `failed` because
+Oraya could not wait; now it can. `pending_authentication` blocks a second
+payment, and the reaper is what stops an abandoned bank screen from becoming the
+permanent lock slice 1 had just removed. Releasing it is safe because the
+enrolment call creates no payment resource — there is nothing to void.
+
+**The TTL is 15 minutes, deliberately INSIDE the 20-minute capture context**,
+not outside it. Call 2 re-presents the transient token the capture context
+minted; a longer window would hand a guest a finished challenge and a token that
+can no longer pay with it. The deadline is stored on the row rather than
+computed per query, because the reaper and a late post-back must agree on
+exactly one instant, and the CAS on that row is what makes them agree.
+
+**`DECISION_SKIP` rides on both calls.** Call 2 is the one that authorizes.
+Omitting it there would send every real authorization into the Decision Manager
+that rejects them all with 481 — a build that passes a challenge test and then
+declines every live payment. Both phases read the flag from the same source so
+they cannot drift, and a test asserts the action on both bodies.
+
+**Deviation from the plan document, stated:** the plan lists
+`pending_authentication -> authorized | recorded | failed | ambiguous`. A
+non-terminal destination was added, `-> claimed`, because "move the attempt out
+of the parked state before calling the provider" needs somewhere to move it to
+that is not a claim about money. It also takes the row out of the reaper's reach
+while call 2 is in flight.
+
+**Impact:** `lib/payments/{payer-authentication,transient-token-payment-request,
+step-up,step-up-resume,unified-checkout-completion,payment-attempts-store,
+credit-libanais}.ts`, both `unified-checkout-complete` routes, the checkout page,
+a new post-back route, and the additive human-run migration
+`sql/phase-16b-w7-step-up-authentication.sql`.
+
+**Live impact: none, by construction.** `payer_authentication` is `off`. The
+enrolment action is not sent, so the request body is byte-identical to today's
+(pinned by a test that supplies every new field and asserts the JSON is
+unchanged); the adapter's step-up branch is additionally gated on the effective
+mode being `required`; the new attempt state is unreachable; the iframe state is
+never set; and the resume lookup runs no query unless the browser asks for it,
+which it never does.
+
+**Not built:** Ops visibility of open challenges (`app/ops/**` was out of scope)
+— KNOWN_BUGS #32. And nothing here has met W7's acceptance: `ECI 5` with a
+populated CAVV requires the owner's real-card window (KNOWN_BUGS #31).
+
+**Reversible?:** yes. Setting `payer_authentication` back to `off` disables
+every path added here; the migration is additive and its rollback is written at
+the foot of the file.
+
+---
+
 ## 2026-08-12 - The dates belong to the guest; a half-finished one belongs to nobody
 
 **Decision:** on `/book`, a **complete** date range survives a villa change and is
