@@ -189,18 +189,99 @@ test("a 3-D Secure step-up releases the attempt instead of locking the booking",
   assert.equal(outcome, "declined");
 });
 
-test("the result is read from either ECI field name", () => {
+test("a real authenticated Mastercard is read as authenticated, not refused", () => {
+  // The live response Oraya refused on 2026-08-13 (KNOWN_BUGS #35): CyberSource
+  // request 7866300639876438904889, Transaction Status Y, authorization reason
+  // 100 Success — and Oraya voided it one second later.
+  //
+  // Mastercard Identity Check puts the ECI in ucafCollectionIndicator (numeric)
+  // and the authentication value in ucafAuthenticationData. There is no `cavv`
+  // and no `eci` in this payload AT ALL, which is exactly why the old reader
+  // computed cavv="" and refused.
+  const result = readPayerAuthenticationResult({
+    status: "AUTHORIZED",
+    consumerAuthenticationInformation: {
+      ucafAuthenticationData: "kBPpZXQ9d1FLggH03gbJJ4QBKtXI",
+      ucafCollectionIndicator: 2,
+      eciRaw: "02",
+      ecommerceIndicator: "spa",
+    },
+  });
+
+  assert.equal(result.eci, "02", "eciRaw is the cross-scheme field and wins");
+  assert.equal(result.cavv, "kBPpZXQ9d1FLggH03gbJJ4QBKtXI", "AAV is the Mastercard CAVV");
+
+  assert.deepEqual(decidePayerAuthentication("required", result), {
+    action: "proceed",
+    authenticated: true,
+  });
+});
+
+test("an authenticated Visa is read from eciRaw too, not from the not-enrolled eci field", () => {
+  // `eci` is documented as returned only WHEN THE CARD IS NOT ENROLLED, so a
+  // successfully authenticated Visa carries its ECI in eciRaw as well. Reading
+  // `eci` alone would have refused every enrolled Visa, not just Mastercards.
+  const result = readPayerAuthenticationResult({
+    status: "AUTHORIZED",
+    consumerAuthenticationInformation: {
+      cavv: "AAABCZIhcQAAAABZlyFxAAAAAAA=",
+      eciRaw: "05",
+    },
+  });
+
+  assert.equal(result.eci, "05");
+  assert.deepEqual(decidePayerAuthentication("required", result), {
+    action: "proceed",
+    authenticated: true,
+  });
+});
+
+test("ucafCollectionIndicator carries the ECI when eciRaw is absent", () => {
+  // Documented as numeric, so JSON hands back a number — which a string-only
+  // reader would drop, refusing an authenticated payment for a type mismatch.
+  const result = readPayerAuthenticationResult({
+    consumerAuthenticationInformation: {
+      ucafAuthenticationData: "kBPpZXQ9d1FLggH03gbJJ4QBKtXI",
+      ucafCollectionIndicator: 2,
+    },
+  });
+  assert.equal(result.eci, "2");
+  assert.equal(decidePayerAuthentication("required", result).action, "proceed");
+});
+
+test("the commerce indicator is never mistaken for an ECI", () => {
+  // `ecommerceIndicator` values are words — internet | js_attempted |
+  // js_failure | spa | vbv_attempted | vbv_failure — so it can never satisfy
+  // the numeric ECI sets. Keeping it in the chain only supplied "spa" where a
+  // digit was expected. It must contribute nothing.
   assert.equal(
-    readPayerAuthenticationResult({ consumerAuthenticationInformation: { ecommerceIndicator: "05" } }).eci,
-    "05",
+    readPayerAuthenticationResult({
+      consumerAuthenticationInformation: { ecommerceIndicator: "spa" },
+    }).eci,
+    null,
   );
   assert.equal(
-    readPayerAuthenticationResult({ consumerAuthenticationInformation: { eci: "07", ecommerceIndicator: "05" } }).eci,
-    "07",
+    readPayerAuthenticationResult({
+      consumerAuthenticationInformation: { ecommerceIndicator: "internet" },
+    }).eci,
+    null,
   );
+});
+
+test("the not-enrolled eci field is still read, and still refused on its merits", () => {
+  // Last in the chain, not removed: on a genuinely not-enrolled Visa it is the
+  // only ECI there is. 07 means no authentication happened, so strict mode
+  // refuses — on the value, not on a failure to find it.
+  const result = readPayerAuthenticationResult({
+    consumerAuthenticationInformation: { eci: "07", ecommerceIndicator: "vbv_failure" },
+  });
+  assert.equal(result.eci, "07");
+  assert.equal(decidePayerAuthentication("required", result).action, "refuse");
+});
+
+test("an absent payload yields null for every field", () => {
   // W7 slice 4 added accessToken and authenticationTransactionId to the shape.
-  // Both were previously dropped on the floor; an absent payload yields null
-  // for every field, as before.
+  // Both were previously dropped on the floor.
   assert.deepEqual(readPayerAuthenticationResult(null), {
     eci: null,
     cavv: null,

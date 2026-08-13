@@ -2953,3 +2953,53 @@ already released.
 
 **Reversible?:** yes for the copy; reverting the 475 classification restores a
 permanent lock on any guest whose bank asks to verify them.
+
+---
+
+## 2026-08-13 - The 3-D Secure response is read by scheme, not by Visa's field names
+
+**Decision:** `readPayerAuthenticationResult` reads the ECI from `eciRaw` →
+`ucafCollectionIndicator` → `eci`, and the authentication value from `cavv` →
+`ucafAuthenticationData`. `ecommerceIndicator` is removed from the ECI chain
+entirely rather than kept as a last resort. The ECI sets themselves are
+unchanged — they already contained Mastercard's `02`/`2`.
+
+**Reason:** the first real card through strict 3-D Secure was refused by Oraya
+*after the issuer authenticated it*. CyberSource request `7866300639876438904889`
+(Mastercard) came back Transaction Status `Y`, ECI `2`, AAV populated,
+authorization reason `100 Success`; Oraya read `eci` and `cavv`, found both
+absent, concluded "not authenticated", and voided the authorization 31 seconds
+later. Per CyberSource's own response model, `cavv` is a Visa-family field
+(Mastercard returns the AAV in `ucafAuthenticationData`) and `eci` is documented
+as returned only **when the card is not enrolled** — it is absent precisely when
+authentication succeeds. Those two fields cannot describe a successful
+Mastercard authentication at all, and `eci` cannot describe a successful
+enrolled Visa one either. Ordering is deliberate: the cross-scheme field first,
+the scheme-specific field second, and the not-enrolled field last, so a
+genuinely not-enrolled card is still judged on its real ECI rather than on a
+missing one.
+
+`ecommerceIndicator` is dropped rather than demoted because its documented
+values are `internet | js_attempted | js_failure | spa | vbv_attempted |
+vbv_failure` — words, never digits. It can never satisfy a numeric ECI set, so
+keeping it in the chain does not add a fallback; it only supplies `"spa"` where
+a digit is expected and hides the absence. A decoy is worse than nothing.
+
+**Impact:** [lib/payments/payer-authentication.ts](../../lib/payments/payer-authentication.ts)
+only — one function, one call site
+([credit-libanais.ts](../../lib/payments/credit-libanais.ts), the authorization
+response path). No request-shape change, no provider call change, no schema
+change. The test that asserted `ecommerceIndicator: "05"` yields `eci "05"` is
+deleted: it encoded a response shape CyberSource never returns, and it is why
+the defect survived review. Six tests replace it, built on the live payload
+above. KNOWN_BUGS #35; W7's acceptance in the mission doc is corrected from the
+Visa-specific "`ECI 5` with a populated CAVV" to a scheme-aware table.
+
+**Still unproven:** the fix has not been through a real card, and nothing has
+been observed on **Visa** — where the field documentation says the same refusal
+was likely happening. Run both schemes in the next real-card window before
+switching strict mode on. `payer_authentication` is `off` live in the meantime,
+so nothing here executes.
+
+**Reversible?:** yes, but reverting restores a reader that refuses good money
+from authenticated cards and tells the guest their bank declined them.
