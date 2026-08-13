@@ -35,7 +35,14 @@ export async function POST(request: Request) {
         .from("payment_attempts")
         .select("payment_request_id")
         .in("payment_request_id", ids)
-        .in("status", ["claimed", "authorized", "ambiguous"]),
+        // `pending_authentication` (W7) counts as in-flight here, because it
+        // is: the guest is mid 3-D Secure challenge. The enrolment call
+        // authorises nothing, so such a request closes with zero transactions
+        // and looks perfectly safe to delete — and the FK is
+        // `on delete set null`, so deleting it would leave the attempt alive,
+        // still blocking new payments on that booking, with nothing left in
+        // Ops to identify it. KNOWN_BUGS #33.
+        .in("status", ["claimed", "authorized", "ambiguous", "pending_authentication"]),
     ]);
 
   if (moneyError || attemptError) {
